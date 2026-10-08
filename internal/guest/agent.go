@@ -5,6 +5,7 @@ package guest
 import (
 	"bufio"
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,13 @@ const User = "agent"
 // Workdir is where new terminals start.
 const Workdir = "/workspace"
 
+// tmuxConf is the server config for terminal sessions, written to tmuxConfPath at startup.
+//
+//go:embed tmux.conf
+var tmuxConf []byte
+
+const tmuxConfPath = "/run/studio-agent/tmux.conf"
+
 // Agent serves host requests over the vsock channel.
 type Agent struct {
 	log  *slog.Logger
@@ -45,6 +53,12 @@ type Agent struct {
 func New(log *slog.Logger) (*Agent, error) {
 	acct, err := lookupAccount(User)
 	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll("/run/studio-agent", 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(tmuxConfPath, tmuxConf, 0o644); err != nil {
 		return nil, err
 	}
 	return &Agent{log: log, user: acct}, nil
@@ -132,6 +146,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.replySessions(st)
 	case agentproto.KindPorts:
 		err = replyPorts(st)
+	case agentproto.KindKill:
+		err = a.killSession(st, h.Session)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}
@@ -147,7 +163,7 @@ func (a *Agent) servePTY(st net.Conn, br *bufio.Reader, h agentproto.Header) err
 	if !validSessionName(name) {
 		return agentproto.WriteFrame(st, agentproto.FrameExit, []byte("invalid session name"))
 	}
-	cmd := a.command("tmux", "new-session", "-A", "-s", name)
+	cmd := a.command("tmux", "-f", tmuxConfPath, "new-session", "-A", "-s", name)
 	cmd.Dir = Workdir
 	size := &pty.Winsize{Cols: max(h.Cols, 20), Rows: max(h.Rows, 5)}
 	f, err := pty.StartWithSize(cmd, size)
@@ -233,6 +249,17 @@ func (a *Agent) replySessions(st net.Conn) error {
 		}
 	}
 	return agentproto.WriteJSONLine(st, sessions)
+}
+
+func (a *Agent) killSession(st net.Conn, name string) error {
+	if !validSessionName(name) {
+		return agentproto.WriteJSONLine(st, agentproto.Error{Error: "invalid session name"})
+	}
+	// "=" makes tmux match the name exactly instead of by prefix.
+	if out, err := a.command("tmux", "kill-session", "-t", "="+name).CombinedOutput(); err != nil {
+		return agentproto.WriteJSONLine(st, agentproto.Error{Error: strings.TrimSpace(string(out))})
+	}
+	return agentproto.WriteJSONLine(st, struct{}{})
 }
 
 // --- previews -------------------------------------------------------------------------

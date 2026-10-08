@@ -16,6 +16,7 @@ export default [
     },
   },
   {
-    ignores: ["eslint.config.js", ".prettierrc"],
+    // Vendored by `shadcn add`, which overwrites local edits.
+    ignores: ["eslint.config.js", ".prettierrc", "src/components/ui/**"],
   },
 ]

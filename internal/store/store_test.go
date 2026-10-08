@@ -20,7 +20,7 @@ func TestSandboxesAreEnvironmentScoped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: work.ID, Name: "dev", CPUs: 1}); err == nil {
+	if _, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: work.ID, Name: "dev", CPUs: 1}); !errors.Is(err, ErrExists) {
 		t.Fatal("duplicate name in one environment accepted")
 	}
 	if _, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: private.ID, Name: "dev", CPUs: 1}); err != nil {

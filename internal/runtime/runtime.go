@@ -141,7 +141,7 @@ func (r *Runtime) Statuses(ctx context.Context, prefix string) (map[string]Statu
 	out := map[string]Status{}
 	var cursor *string
 	for {
-		opts := []msb.SandboxListOption{msb.WithListLimit(200)}
+		opts := []msb.SandboxListOption{msb.WithListLimit(100)}
 		if cursor != nil {
 			opts = append(opts, msb.WithListCursor(*cursor))
 		}

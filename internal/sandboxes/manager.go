@@ -9,10 +9,14 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
+
+// ErrInvalidSpec is returned for resource requests outside the supported range.
+var ErrInvalidSpec = errors.New("resources out of range (≥1 CPU, ≥512 MiB memory, ≥1 GiB disks)")
 
 // VMPrefix prefixes every microsandbox VM name Studio owns.
 const VMPrefix = "ss-"
@@ -37,7 +41,7 @@ type Manager struct {
 // View is a sandbox as shown to clients: catalog record plus live state.
 type View struct {
 	store.Sandbox
-	Status runtime.Status `json:"status"`
+	Status runtime.Status `json:"status" enum:"absent,created,starting,running,draining,paused,stopped,crashed"`
 	Agent  *AgentInfo     `json:"agent,omitempty"`
 }
 
@@ -88,7 +92,7 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 		DockerMiB:     orDefault(req.DockerMiB, DefaultDockerMiB),
 	}
 	if rec.CPUs < 1 || rec.CPUs > 64 || rec.MemoryMiB < 512 || rec.WorkspaceMiB < 1024 || rec.DockerMiB < 1024 {
-		return View{}, errors.New("resources out of range (≥1 CPU, ≥512 MiB memory, ≥1 GiB disks)")
+		return View{}, ErrInvalidSpec
 	}
 	rec, err := m.Store.CreateSandbox(ctx, rec)
 	if err != nil {
@@ -192,6 +196,38 @@ func (m *Manager) WaitReady(ctx context.Context, id string, timeout time.Duratio
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return m.Hub.WaitConnected(ctx, id)
+}
+
+// Terminals lists the tmux sessions of a sandbox.
+func (m *Manager) Terminals(ctx context.Context, envID, id string) ([]agentproto.Session, error) {
+	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+		return nil, err
+	}
+	return m.Hub.Sessions(ctx, id)
+}
+
+// OpenTerminal attaches to the tmux session name, creating it if needed.
+func (m *Manager) OpenTerminal(ctx context.Context, envID, id, name string, cols, rows uint16) (*agentchan.PTY, error) {
+	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+		return nil, err
+	}
+	return m.Hub.OpenPTY(ctx, id, name, cols, rows)
+}
+
+// CloseTerminal ends a tmux session and every terminal attached to it.
+func (m *Manager) CloseTerminal(ctx context.Context, envID, id, name string) error {
+	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+		return err
+	}
+	return m.Hub.KillSession(ctx, id, name)
+}
+
+// Ports lists the TCP ports listening inside a sandbox.
+func (m *Manager) Ports(ctx context.Context, envID, id string) ([]agentproto.Port, error) {
+	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+		return nil, err
+	}
+	return m.Hub.Ports(ctx, id)
 }
 
 func (m *Manager) view(ctx context.Context, rec store.Sandbox) (View, error) {

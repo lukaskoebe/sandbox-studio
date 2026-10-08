@@ -24,6 +24,9 @@ var migrations embed.FS
 // ErrNotFound is returned when a row does not exist in the given environment.
 var ErrNotFound = errors.New("not found")
 
+// ErrExists is returned when a name is already taken.
+var ErrExists = errors.New("already exists")
+
 // Store wraps the catalog database.
 type Store struct{ db *sql.DB }
 
@@ -109,6 +112,9 @@ type Environment struct {
 func (s *Store) CreateEnvironment(ctx context.Context, name string) (Environment, error) {
 	e := Environment{ID: NewID(), Name: name, CreatedAt: time.Unix(now(), 0)}
 	_, err := s.db.ExecContext(ctx, "INSERT INTO environments (id, name, created_at) VALUES (?, ?, ?)", e.ID, e.Name, e.CreatedAt.Unix())
+	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+		return e, fmt.Errorf("an environment named %q: %w", name, ErrExists)
+	}
 	return e, err
 }
 
@@ -175,7 +181,7 @@ func (s *Store) CreateSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) 
 	_, err := s.db.ExecContext(ctx, "INSERT INTO sandboxes ("+sandboxCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		sb.ID, sb.EnvironmentID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix())
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
-		return sb, fmt.Errorf("a sandbox named %q already exists", sb.Name)
+		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}
 	return sb, err
 }

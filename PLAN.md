@@ -182,8 +182,9 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
 **Process model.** Studio runs as a normal user process; there is no system service.
 - **Runtime:** it starts microsandbox through the Go SDK. The SDK embeds an FFI library;
   `EnsureRuntime` installs `msb` and `libkrunfw` into `~/.microsandbox`.
-- **Shutdown:** sandboxes are stopped when Studio quits. Detached sandboxes outliving Studio
-  is a later option.
+- **Shutdown:** sandboxes run detached and keep running when Studio quits or restarts; on
+  start, Studio reconciles its records with microsandbox and the guest agents reconnect.
+  Stopping a sandbox is explicit.
 - **Long paths:** `MSB_HOME` must stay short because Unix socket paths are limited to 108
   bytes. The spike hit this limit.
 

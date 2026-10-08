@@ -1,7 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/lukaskoebe/sandbox-studio/internal/version.Version=$(VERSION)
 
-.PHONY: all web build agent test lint dev clean image
+.PHONY: all web build agent api test lint dev clean image
 
 all: web build
 
@@ -15,6 +15,11 @@ build: agent
 agent:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o internal/agentbin/dist/studio-agent-linux-amd64 ./cmd/studio-agent
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o internal/agentbin/dist/studio-agent-linux-arm64 ./cmd/studio-agent
+
+# Regenerates the web client's API types from the Go handlers.
+api:
+	go run ./cmd/studio openapi > web/openapi.json
+	cd web && pnpm exec openapi-typescript openapi.json -o src/lib/api/schema.gen.ts
 
 test:
 	go vet ./...

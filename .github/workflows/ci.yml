@@ -21,6 +21,9 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
       - run: go build ./cmd/studio
+      - name: API schema is up to date (make api)
+        if: runner.os == 'Linux'
+        run: go run ./cmd/studio openapi | diff -u web/openapi.json -
       - name: guest agent (linux)
         shell: bash
         run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/studio-agent
@@ -39,6 +42,8 @@ jobs:
         with:
           node-version: 22
       - run: pnpm install --frozen-lockfile
+      - name: API client types are up to date (make api)
+        run: pnpm exec openapi-typescript openapi.json -o "$RUNNER_TEMP/schema.gen.ts" && diff -u src/lib/api/schema.gen.ts "$RUNNER_TEMP/schema.gen.ts"
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm check

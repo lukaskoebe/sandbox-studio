@@ -7,7 +7,7 @@
 //   - KindHello (guest → host): the guest writes a Hello line, then closes.
 //   - KindPTY (host → guest): framed in both directions (see WriteFrame).
 //   - KindTCP (host → guest): raw bytes to a guest loopback port.
-//   - KindSessions, KindPorts (host → guest): one JSON reply line.
+//   - KindSessions, KindPorts, KindKill (host → guest): one JSON reply line.
 package agentproto
 
 import (
@@ -29,12 +29,13 @@ const (
 	KindTCP      = "tcp"
 	KindSessions = "sessions"
 	KindPorts    = "ports"
+	KindKill     = "kill" // ends the tmux session named in Header.Session
 )
 
 // Header opens every stream.
 type Header struct {
 	Kind    string `json:"kind"`
-	Session string `json:"session,omitempty"` // KindPTY: tmux session name
+	Session string `json:"session,omitempty"` // KindPTY, KindKill: tmux session name
 	Cols    uint16 `json:"cols,omitempty"`
 	Rows    uint16 `json:"rows,omitempty"`
 	Port    int    `json:"port,omitempty"` // KindTCP: guest loopback port

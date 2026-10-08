@@ -1,24 +1,21 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
-import { getJSON, type Health } from "@/lib/api"
+import { createFileRoute, redirect } from "@tanstack/react-router"
+import { $api } from "@/lib/api/client"
+import { lastEnvironment } from "@/lib/environment"
 
-export const Route = createFileRoute("/")({ component: Home })
-
-function Home() {
-  const health = useQuery({
-    queryKey: ["health"],
-    queryFn: () => getJSON<Health>("/api/health"),
-  })
-  return (
-    <main className="flex min-h-svh flex-col gap-2 p-6 text-sm">
-      <h1 className="font-medium">Sandbox Studio</h1>
-      <p className="text-muted-foreground">
-        {health.isPending
-          ? "Connecting…"
-          : health.isError
-            ? `API unavailable: ${health.error.message}`
-            : `API ${health.data.status} · ${health.data.version}`}
-      </p>
+// Studio always has at least one environment; open the last one used here, or the first.
+export const Route = createFileRoute("/")({
+  beforeLoad: async ({ context }) => {
+    const envs = await context.queryClient.ensureQueryData(
+      $api.queryOptions("get", "/api/environments")
+    )
+    const last = lastEnvironment()
+    const env = envs?.find((e) => e.id === last) ?? envs?.at(0)
+    if (env)
+      throw redirect({ to: "/e/$env", params: { env: env.id }, replace: true })
+  },
+  component: () => (
+    <main className="p-6 text-sm text-muted-foreground">
+      No environments yet.
     </main>
-  )
-}
+  ),
+})

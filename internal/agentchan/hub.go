@@ -220,6 +220,12 @@ func (h *Hub) Sessions(ctx context.Context, id string) ([]agentproto.Session, er
 	return out, err
 }
 
+// KillSession ends a tmux session in the guest, closing its terminals.
+func (h *Hub) KillSession(ctx context.Context, id, name string) error {
+	var ok struct{}
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindKill, Session: name}, &ok)
+}
+
 // Ports lists TCP ports listening in the guest.
 func (h *Hub) Ports(ctx context.Context, id string) ([]agentproto.Port, error) {
 	var out []agentproto.Port

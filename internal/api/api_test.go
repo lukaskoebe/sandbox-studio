@@ -1,22 +1,81 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-func TestHealth(t *testing.T) {
-	mux := http.NewServeMux()
-	Routes(mux)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, httptest.NewRequest("GET", "/api/health", nil))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status %d", rec.Code)
+func newTestServer(t *testing.T) http.Handler {
+	t.Helper()
+	st, err := store.Open(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatal(err)
 	}
-	var body map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body["status"] != "ok" {
-		t.Fatalf("body %q (%v)", rec.Body.String(), err)
+	t.Cleanup(func() { st.Close() })
+	mux := http.NewServeMux()
+	(&Server{Store: st, Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Addr: "127.0.0.1:7878"}).Register(mux)
+	return Guard(mux)
+}
+
+func do(h http.Handler, method, url, body string, header ...string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, url, strings.NewReader(body))
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for i := 0; i+1 < len(header); i += 2 {
+		req.Header.Set(header[i], header[i+1])
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestHealth(t *testing.T) {
+	rec := do(newTestServer(t), "GET", "http://localhost:7878/api/health", "")
+	var body Health
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != 200 || body.Status != "ok" {
+		t.Fatalf("%d %q (%v)", rec.Code, rec.Body.String(), err)
+	}
+}
+
+func TestEnvironments(t *testing.T) {
+	h := newTestServer(t)
+	if rec := do(h, "POST", "http://localhost:7878/api/environments", `{"name":"work"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", "http://localhost:7878/api/environments", `{"name":"work"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("duplicate: %d %s", rec.Code, rec.Body)
+	}
+	rec := do(h, "GET", "http://localhost:7878/api/environments", "")
+	var envs []store.Environment
+	if err := json.Unmarshal(rec.Body.Bytes(), &envs); err != nil || len(envs) != 1 || envs[0].Name != "work" {
+		t.Fatalf("list: %s (%v)", rec.Body, err)
+	}
+}
+
+func TestGuard(t *testing.T) {
+	h := newTestServer(t)
+	for _, tc := range []struct {
+		name, method, url string
+		header            []string
+		want              int
+	}{
+		{"rebound host", "GET", "http://evil.example:7878/api/health", nil, http.StatusMisdirectedRequest},
+		{"loopback ip", "GET", "http://127.0.0.1:7878/api/health", nil, http.StatusOK},
+		{"cross-site post", "POST", "http://localhost:7878/api/environments", []string{"Origin", "http://3000-x.localhost:7878"}, http.StatusForbidden},
+		{"same-origin post", "POST", "http://localhost:7878/api/environments", []string{"Origin", "http://localhost:7878"}, http.StatusCreated},
+		{"cli post", "POST", "http://localhost:7878/api/environments", nil, http.StatusConflict},
+	} {
+		if rec := do(h, tc.method, tc.url, `{"name":"x"}`, tc.header...); rec.Code != tc.want {
+			t.Errorf("%s: got %d, want %d (%s)", tc.name, rec.Code, tc.want, rec.Body)
+		}
 	}
 }
