@@ -3,3 +3,4 @@
 /internal/webui/static/app/
 *.test
 .DS_Store
+/internal/agentbin/dist/studio-agent-*

@@ -8,13 +8,13 @@ all: web build
 web:
 	cd web && pnpm install --frozen-lockfile && pnpm build
 
-build:
+build: agent
 	go build -ldflags "$(LDFLAGS)" -o bin/studio ./cmd/studio
 
-# The guest agent always targets Linux; both architectures ship inside the host binary later.
+# The guest agent always targets Linux; both architectures are embedded in the host binary.
 agent:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/studio-agent-linux-amd64 ./cmd/studio-agent
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/studio-agent-linux-arm64 ./cmd/studio-agent
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o internal/agentbin/dist/studio-agent-linux-amd64 ./cmd/studio-agent
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o internal/agentbin/dist/studio-agent-linux-arm64 ./cmd/studio-agent
 
 test:
 	go vet ./...
@@ -28,7 +28,7 @@ dev:
 	go run ./cmd/studio & cd web && pnpm dev
 
 clean:
-	rm -rf bin internal/webui/static/app
+	rm -rf bin internal/webui/static/app internal/agentbin/dist/studio-agent-*
 
 # Dev only: build the base image with the host Docker and load it into microsandbox.
 # Releases pull ghcr.io/lukaskoebe/sandbox-studio-base by digest instead.
