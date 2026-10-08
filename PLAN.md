@@ -726,7 +726,7 @@ sandbox-studio/
 Each milestone ends with a working, demoable build on Linux. The macOS and Windows checks
 are part of the acceptance criteria.
 
-**M0 — Foundations and spikes**
+**M0 — Foundations and spikes** (results: `docs/spikes.md`)
 - Repo skeleton, CI (lint and test on 3 OSes), the release-build matrix.
 - Spikes S1–S8 (section 9).
 - Accepted when: the spike report is written; the gateway and Docker-in-sandbox demo runs on

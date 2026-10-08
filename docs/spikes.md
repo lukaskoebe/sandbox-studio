@@ -1,0 +1,145 @@
+# M0 spike results
+
+Host for all Linux results: Ryzen 5 3450U laptop (4 cores/8 threads, 14 GiB RAM), Linux 7.0,
+microsandbox 0.7.7, Go 1.26. Spike code lives in `spikes/` and is not production code.
+
+| # | Topic | Linux | macOS | Windows |
+|---|---|---|---|---|
+| S1 | Gateway + Docker-in-sandbox | ✅ | ⏳ needs the Mac | ⏳ no machine |
+| S2 | Studio DNS resolver | ✅ (with caveats) | ⏳ | ⏳ |
+| S3 | vsock agent channel | ✅ | ⏳ | ⏳ (named pipes) |
+| S4 | CA injection / MITM | ✅ (Docker containers open) | n/a (guest-side) | n/a |
+| S5 | Volumes, snapshots, forks | ✅ (decision made, one upstream gap) | ⏳ | ⏳ |
+| S6 | Hold-and-ask client timeouts | ✅ | n/a (guest-side) | n/a |
+| S7 | Harness hooks | ⏳ | | |
+| S8 | Subscription auth | ⏳ needs your logins | | |
+| S9 | Local embeddings | ✅ | ⏳ | ⏳ |
+
+## S1 — Gateway and Docker in a sandbox
+
+`go run ./spikes/s1-gateway`
+
+- Sandbox boot about 1 s; `dockerd` ready about 1 s later (`docker:dind`, Docker data on an
+  owned 8 GiB disk).
+- Every TCP connection from the sandbox **and from containers inside its Docker** arrived at
+  the SOCKS5 gateway tagged with the sandbox's SOCKS username.
+- Hostnames recovered from TLS SNI and the HTTP Host header; denying `www.wikipedia.org`
+  worked in the sandbox and in a nested container. Docker Hub pulls worked through the gateway.
+- Gotcha: `MSB_HOME` must be short (Unix socket paths are limited to 108 bytes); the default
+  `~/.microsandbox` is fine.
+- Gotcha: microsandbox uses the host's resolver list by default, and the first resolver on this
+  host (`127.0.0.1`) refuses connections, so DNS failed until resolvers were pinned. Studio
+  always pins its own resolver (S2).
+
+## S2 — Studio DNS resolver
+
+`spikes/gw` + `msb run --dns-nameserver 127.0.0.1:15353 …`
+
+- A loopback nameserver is accepted; every guest lookup reached the Studio resolver.
+- NXDOMAIN for denied names works.
+- IP→name mapping from DNS answers identified a non-TLS connection (`github.com:22`).
+- microsandbox's rebind protection drops private answers (`10.1.2.3` never reached the guest),
+  but `198.18.0.1` passes and the connection reaches the gateway with the right Host header.
+  **Decision:** host services are virtual hosts under `*.studio.internal` resolving to
+  `198.18.0.1` and served by the gateway itself.
+- **Bug to avoid:** the spike waited 5 s for the client to speak before deciding; SSH servers
+  speak first. The gateway must decide immediately on non-HTTP ports when the DNS map already
+  knows the name (and use a short sniff timeout otherwise).
+- Open: a single resolver port can't tell sandboxes apart. Use one resolver port per sandbox
+  (cheap) so the name map and DNS-level decisions are per sandbox.
+
+## S3 — vsock agent channel
+
+`spikes/guest` (Linux, CGO off) mounted with `--mount-file`, `--vsock /path.sock:5000`
+
+- The guest dials CID 2 port 5000; the host accepts on a Unix socket; yamux runs on top.
+- Streams in both directions work: guest→host round trip about 5 ms, host→guest about 1.4 ms.
+- Mounting the agent binary as a single read-only file works, so updating Studio updates the
+  guest agent with no image rebuild.
+
+## S4 — CA injection and TLS interception
+
+`spikes/gw -mitm example.org,example.net -ca …`; the CA is copied into
+`/usr/local/share/ca-certificates/` and `update-ca-certificates` runs at boot.
+
+| Client | Result |
+|---|---|
+| curl | ✅ trusts the Studio CA |
+| git (https) | ✅ |
+| Python `urllib` | ✅ (upstream returned 403 to Python's user agent; TLS verified) |
+| pip | ✅ |
+| Node `fetch` with `NODE_EXTRA_CA_CERTS` | ✅ |
+| Node `fetch` without it | ❌ `SELF_SIGNED_CERT_IN_CHAIN` (expected; the env var is required) |
+| Containers inside the guest's Docker | ⏳ not covered: they have their own trust stores |
+
+Decisions: the base image sets `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`
+and `GIT_SSL_CAINFO` system-wide. Container registries default to passthrough (`allow`)
+rules so `docker pull` never needs the CA. For containers that call intercepted hosts, ship a
+documented helper (`studio-ca mount`) that adds `-v /etc/ssl/certs:/etc/ssl/certs:ro` and the
+env vars.
+
+## S5 — Volumes, snapshots and forks
+
+`msb volume`, `msb snap`, `msb fork` with an owned disk at `/owned` and a named disk at `/ws`.
+
+- Disk snapshots capture the root and **owned** volumes as a point-in-time copy; named
+  volumes are excluded entirely. A restore without an explicit binding doesn't mount them,
+  and a full restore refuses to start until they're bound or waived.
+- A full snapshot of a running sandbox took about 1 s. The restore resumed a running
+  background process from its captured state (counter continued 6 → 8).
+- Forking a running sandbox requires that its resources are inherited when it uses an
+  outbound proxy, TLS interception or secrets (`dangerously_inherit_resources`). The child
+  then shares the parent's SOCKS identity and vsock route.
+
+Decisions:
+- `/workspace` and `/var/lib/docker` are **owned disks**. Checkpoints, suspend/resume and
+  restores then capture everything consistently.
+- Restore-as-new-generation inherits resources; that is exactly right because it is the same
+  Studio sandbox.
+- Fork: until microsandbox can re-key the proxy and vsock route on fork, a forked child shares
+  its parent's network identity. Studio labels it as such in the UI, and the guest agent
+  re-registers with a new token written via `msb exec` (the exec channel is per sandbox and
+  trustworthy). **Upstream feature request:** allow overriding `outbound_proxy` credentials
+  and vsock routes when forking or restoring.
+- Rebase (new template) copies the workspace through the agent channel (tar stream);
+  measure in M3.
+
+## S6 — Hold-and-ask client timeouts
+
+The gateway held TLS connections without answering, and measured when each client gave up:
+
+| Client | Gives up after |
+|---|---|
+| Node `fetch` (undici) | 10 s (connect timeout includes TLS) |
+| pip | 15 s per attempt; about 110 s in total with its 5 retries |
+| apt | 30 s per connection, and `apt-get update` still exits 0 |
+| curl | 300 s (connect timeout) |
+| git over https | 300 s |
+| npm | about 5.5 min (`fetch-timeout` 5 min) |
+
+Decisions: hold for up to 60 s. That covers curl, git, npm and apt, and pip succeeds on a
+retry after approval. The base image sets `PIP_DEFAULT_TIMEOUT=60` and
+`Acquire::http::Timeout "60"`. Node `fetch` fails fast, so the UI popup must appear within a
+second or two, and the agent sees a clear 403 message on retry if it's still pending.
+
+## S9 — Local embeddings (yzma + llama.cpp + embeddinggemma-300m Q8_0)
+
+`go run ./spikes/s9-embed -dir <cache>`
+
+- Assets: llama.cpp CPU libraries (about 16 MiB) and the GGUF (334 MB, ungated on Hugging
+  Face) downloaded on first run.
+- Model load 0.8 s; 768 dimensions; process RSS about 450 MB.
+- About 128 ms per document embedding and about 70 ms per short query (CPU, no tuning).
+- Retrieval sanity check: 5/5 queries ranked the right note first, using embeddinggemma's
+  `task: search result | query:` / `title: none | text:` prompt formats.
+- yzma requires Go 1.26, so the module now targets Go 1.26.
+
+Follow-ups: tune threads and context size for query latency; measure on the Mac (Metal) and
+Windows.
+
+## Remaining M0 work
+
+- S1–S3 and S9 on the Mac; Windows needs a cloud VM with nested virtualization.
+- S7: verify hook payloads and context injection for OpenCode, Claude Code and Codex against
+  a fake model endpoint (no credentials needed).
+- S8: subscription logins — needs your Claude and ChatGPT accounts in an interactive session.
