@@ -1,0 +1,13 @@
+[Unit]
+Description=Sandbox Studio guest agent
+After=studio-ca.service
+Wants=studio-ca.service
+ConditionPathExists=/opt/studio/bin/studio-agent
+
+[Service]
+ExecStart=/opt/studio/bin/studio-agent connect
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

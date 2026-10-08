@@ -1,0 +1,5 @@
+version = 3
+# The owned Docker disk is mounted at /var/lib/docker; keep containerd on it too so
+# overlay snapshots never nest on the root overlay.
+root = "/var/lib/docker/containerd-root"
+disabled_plugins = ["io.containerd.grpc.v1.cri"]
