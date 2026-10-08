@@ -43,7 +43,11 @@ func main() {
 		msb.WithMounts(map[string]msb.MountConfig{
 			"/var/lib/docker": msb.Mount.Owned(msb.OwnedVolumeOptions{Kind: msb.VolumeKindDisk, SizeMiB: 8192}),
 		}),
-		msb.WithNetwork(func() *msb.NetworkConfig { n := msb.NetworkPolicy.FromProfiles(msb.NetworkProfilePublic); n.DNS = &msb.DNSConfig{Nameservers: []string{"1.1.1.1:53", "9.9.9.9:53"}}; return n }()),
+		msb.WithNetwork(func() *msb.NetworkConfig {
+			n := msb.NetworkPolicy.FromProfiles(msb.NetworkProfilePublic)
+			n.DNS = &msb.DNSConfig{Nameservers: []string{"1.1.1.1:53", "9.9.9.9:53"}}
+			return n
+		}()),
 		msb.WithProxy(msb.SOCKS5Proxy(ln.Addr().String()).Credentials("sbx-1234", msb.SecretSourceEnv("SPIKE_SOCKS_PW"))),
 		msb.WithReplace(),
 	)

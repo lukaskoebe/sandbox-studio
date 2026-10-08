@@ -101,10 +101,10 @@ func main() {
 		"Rust toolchain is pinned to 1.85 via rust-toolchain.toml.",
 	}
 	queries := map[string]int{
-		"which package manager should I use for node?": 0,
-		"how do I ship the backend to staging?":        1,
-		"database connection refused on 5432":          2,
-		"how should I write my commit message":         3,
+		"which package manager should I use for node?":      0,
+		"how do I ship the backend to staging?":             1,
+		"database connection refused on 5432":               2,
+		"how should I write my commit message":              3,
 		"can I push my changes straight to the main branch": 5,
 	}
 
