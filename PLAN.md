@@ -17,6 +17,7 @@ mediated by the host and approvable from a web UI.
 | 2026-10-09 | **Environments**: isolated top-level containers (e.g. "work", "private") that share no rules, secrets, providers, personas or memory; switched with a dropdown (§6.0) |
 | 2026-10-09 | **Subscription logins** (Claude Pro/Max, ChatGPT/Codex) are required, not only API keys (S8 is high priority) |
 | 2026-10-09 | **Utility model**: Claude → `haiku` alias (currently `claude-haiku-4-5`); OpenAI/Codex → `gpt-6-luna`; custom OpenAI-compatible endpoint → the single model chosen during onboarding (§6.6) |
+| 2026-10-09 | Open source under **Apache 2.0** at `github.com/lukaskoebe/sandbox-studio`; images at `ghcr.io/lukaskoebe/` |
 | 2026-10-09 | Test hardware: an Apple Silicon Mac is available; **no Windows machine**. Windows gets CI builds and unit tests; VM-level tests need a cloud VM with nested virtualization or community testers |
 
 ---
@@ -858,5 +859,3 @@ Other risks:
 3. **Private networks.** Should sandboxes be able to reach private-network hosts (e.g.
    company services over VPN) through `proxy` rules? This determines the outer fence's
    private-range allowance. Planned default: allowed only through explicit `proxy` rules.
-4. **License.** Not chosen yet. Code lives at `github.com/lukaskoebe/sandbox-studio` and
-   images at `ghcr.io/lukaskoebe/` (nothing pushed yet).
