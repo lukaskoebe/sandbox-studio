@@ -1,0 +1,5 @@
+/bin/
+/dist/
+/internal/webui/static/app/
+*.test
+.DS_Store
