@@ -43,7 +43,9 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { CheckpointsSheet } from "@/components/checkpoints-sheet"
 import { ConnectionsSheet } from "@/components/connections-sheet"
+import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { PageHeader } from "@/components/page-header"
+import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { StatusBadge, phase } from "@/components/status-badge"
 import { Terminal } from "@/components/terminal"
 import {
@@ -99,6 +101,8 @@ function SandboxPage() {
           <ConnectionsSheet env={env} sandbox={sb} />
           <CheckpointsSheet env={env} sandbox={sb} />
           {isReady(sb) && <Previews env={env} sandbox={sb} />}
+          <ForkSandboxDialog env={env} sandbox={sb} />
+          <RebaseSandboxDialog env={env} sandbox={sb} />
           <Lifecycle env={env} sandbox={sb} />
         </div>
       </PageHeader>
