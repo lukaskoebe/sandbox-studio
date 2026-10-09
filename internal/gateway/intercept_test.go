@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/tls"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"slices"
@@ -44,6 +46,8 @@ const (
 	apiValue          = "sk-live-1234567890"
 	pathPlaceholder   = "studio-cccccccccccccccccccccccccccccccc"
 	pathValue         = "tok/en with space"
+	shortPlaceholder  = "studio-ffffffffffffffffffffffffffffffff"
+	shortValue        = "Q!7"
 	otherPlaceholder  = "studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	headerValue       = "header-secret-value"
 	plainPlaceholder  = "studio-dddddddddddddddddddddddddddddddd"
@@ -51,8 +55,9 @@ const (
 )
 
 var testBindings = fakeSecrets{
-	{Name: "API_KEY", Placeholder: apiPlaceholder, Hosts: []string{"example.com"}, Value: []byte(apiValue)},
+	{Name: "API_KEY", Placeholder: apiPlaceholder, Hosts: []string{"example.com", "h1.example"}, Value: []byte(apiValue)},
 	{Name: "PATH_KEY", Placeholder: pathPlaceholder, Hosts: []string{"example.com"}, Value: []byte(pathValue)},
+	{Name: "SHORT_KEY", Placeholder: shortPlaceholder, Hosts: []string{"short.example"}, Value: []byte(shortValue)},
 	{Name: "OTHER_KEY", Placeholder: otherPlaceholder, Hosts: []string{"other.example"}, Value: []byte("other-secret-value")},
 	{Name: "HEADER_KEY", Placeholder: headerPlaceholder, Hosts: []string{"*.proxied.example", "proxied.example"}, Value: []byte(headerValue)},
 	{Name: "PLAIN_KEY", Placeholder: plainPlaceholder, Hosts: []string{"plain.example"}, Value: []byte("plain-secret-value")},
@@ -111,6 +116,13 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 			return
 		}
 		w.Header().Set("X-Echo-Auth", r.Header.Get("Authorization"))
+		if r.URL.Path == "/trailer" {
+			w.Header().Add("Trailer", "X-Echo-Secret")
+			w.WriteHeader(http.StatusOK)
+			io.WriteString(w, "response body")
+			w.Header().Set("X-Echo-Secret", r.Header.Get("Authorization"))
+			return
+		}
 		var out io.Writer = w
 		if r.URL.Path == "/gzip" && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			w.Header().Set("Content-Encoding", "gzip")
@@ -132,18 +144,30 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 	}}
 	tlsUp.StartTLS()
 	t.Cleanup(tlsUp.Close)
+	h1Up := httptest.NewUnstartedServer(echo)
+	h1Up.TLS = &tls.Config{
+		NextProtos: []string{"http/1.1"},
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			return authority.Leaf(hello.Context(), upEnv.ID, hello.ServerName)
+		},
+	}
+	h1Up.StartTLS()
+	t.Cleanup(h1Up.Close)
 	plainUp := httptest.NewServer(echo)
 	t.Cleanup(plainUp.Close)
 
 	h.harness = &harness{policy: &fakePolicy{rules: map[string]store.Rule{
-		"example.com":     {ID: "r1", Action: store.ActionAllow},
-		"plain.example":   {ID: "r2", Action: store.ActionAllow},
-		"denied.example":  {ID: "r3", Action: store.ActionDeny},
-		"splice.example":  {ID: "r4", Action: store.ActionAllow},
-		"proxied.example": {ID: "r5", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "Bearer {secret.HEADER_KEY}", "X-Static": "v1"}}},
-		"badref.example":  {ID: "r6", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "{secret.API_KEY}"}}},
-		"other.example":   {ID: "r7", Action: store.ActionAllow},
-		"caddy.example":   {ID: "r8", Action: store.ActionCaddy, Config: store.RuleConfig{Caddyfile: caddyRule}},
+		"example.com":        {ID: "r1", Action: store.ActionAllow},
+		"h1.example":         {ID: "r13", Action: store.ActionAllow},
+		"plain.example":      {ID: "r2", Action: store.ActionAllow},
+		"denied.example":     {ID: "r3", Action: store.ActionDeny},
+		"splice.example":     {ID: "r4", Action: store.ActionAllow},
+		"proxied.example":    {ID: "r5", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "Bearer {secret.HEADER_KEY}", "X-Static": "v1"}}},
+		"badref.example":     {ID: "r6", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "{secret.API_KEY}"}}},
+		"other.example":      {ID: "r7", Action: store.ActionAllow},
+		"short.example":      {ID: "r11", Action: store.ActionAllow},
+		"upgradable.example": {ID: "r12", Action: store.ActionProxy},
+		"caddy.example":      {ID: "r8", Action: store.ActionCaddy, Config: store.RuleConfig{Caddyfile: caddyRule}},
 		"caddy-unbound.example": {ID: "r9", Action: store.ActionCaddy, Config: store.RuleConfig{
 			Caddyfile: "reverse_proxy https://example.com {\n  header_up X-Api-Key {secret.OTHER_KEY}\n}",
 		}},
@@ -165,7 +189,9 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 			h.dialed = append(h.dialed, addr)
 			h.harness.mu.Unlock()
 			up := plainUp.Listener.Addr().String()
-			if strings.HasSuffix(addr, ":443") {
+			if strings.HasPrefix(addr, "h1.example:") {
+				up = h1Up.Listener.Addr().String()
+			} else if strings.HasSuffix(addr, ":443") {
 				up = tlsUp.Listener.Addr().String()
 			}
 			return (&net.Dialer{}).DialContext(ctx, network, up)
@@ -355,6 +381,43 @@ func TestProxyRuleHeaders(t *testing.T) {
 	}
 }
 
+func TestInterceptMasksShortSecrets(t *testing.T) {
+	h := newInterceptHarness(t)
+	c := h.client(t, h.envCA)
+	resp, body := get(t, c, "https://short.example/", "Authorization", shortPlaceholder)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("%d %q", resp.StatusCode, body)
+	}
+	if got := h.lastSeen(t).Header.Get("Authorization"); got != shortValue {
+		t.Errorf("upstream Authorization %q", got)
+	}
+	masked := strings.Repeat("*", len(shortValue))
+	if strings.Contains(body, shortValue) || !strings.Contains(body, "Authorization: "+masked) {
+		t.Errorf("short value not masked in body: %q", body)
+	}
+	if got := resp.Header.Get("X-Echo-Auth"); got != masked {
+		t.Errorf("short value not masked in response header: %q", got)
+	}
+}
+
+func TestInterceptSuppressesSecretResponseTrailers(t *testing.T) {
+	h := newInterceptHarness(t)
+	c := h.client(t, h.envCA)
+	resp, body := get(t, c, "https://h1.example/trailer", "Authorization", apiPlaceholder)
+	if resp.StatusCode != http.StatusOK || strings.Contains(body, apiValue) {
+		t.Fatalf("%d %q", resp.StatusCode, body)
+	}
+	if up := h.lastSeen(t); up.Proto != "HTTP/1.1" {
+		t.Fatalf("trailer regression did not use HTTP/1 upstream: %s", up.Proto)
+	}
+	if got := resp.Trailer.Get("X-Echo-Secret"); got != "" {
+		t.Errorf("secret response trailer was forwarded: %q", got)
+	}
+	if len(resp.Trailer) != 0 || resp.Header.Get("Trailer") != "" {
+		t.Errorf("trailers were not suppressed: header %v trailers %v", resp.Header, resp.Trailer)
+	}
+}
+
 func TestInterceptMasksCompressedResponses(t *testing.T) {
 	h := newInterceptHarness(t)
 	c := h.client(t, h.envCA)
@@ -367,17 +430,64 @@ func TestInterceptMasksCompressedResponses(t *testing.T) {
 	}
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
+func TestInterceptRefusesEncodedResponseWhenMasking(t *testing.T) {
+	var compressed bytes.Buffer
+	gz := gzip.NewWriter(&compressed)
+	if _, err := io.WriteString(gz, "upstream echoed "+apiValue); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ic := &interception{
+		host:   "example.com",
+		masked: [][]byte{[]byte(apiValue)},
+		log:    slog.New(slog.DiscardHandler),
+	}
+	ic.proxy = &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme = "https"
+			pr.Out.URL.Host = "example.com"
+		},
+		Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Header:        http.Header{"Content-Encoding": []string{"gzip"}},
+				Body:          io.NopCloser(bytes.NewReader(compressed.Bytes())),
+				ContentLength: int64(compressed.Len()),
+				Request:       r,
+			}, nil
+		}),
+		ModifyResponse: ic.maskResponse,
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			ic.refuse(w, http.StatusBadGateway, err.Error())
+		},
+	}
+	rec := httptest.NewRecorder()
+	ic.proxy.ServeHTTP(rec, httptest.NewRequest("GET", "http://example.com/", nil))
+	if rec.Code != http.StatusBadGateway || strings.Contains(rec.Body.String(), apiValue) {
+		t.Fatalf("encoded response was not safely refused: %d %q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestInterceptUpgrades(t *testing.T) {
 	h := newInterceptHarness(t)
 	d, _ := proxy.SOCKS5("tcp", h.addr, &proxy.Auth{User: "sb1", Password: Password([]byte("key"), "sb1")}, proxy.Direct)
-	raw, err := d.Dial("tcp", "example.com:443")
+	raw, err := d.Dial("tcp", "upgradable.example:443")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer raw.Close()
 	raw.SetDeadline(time.Now().Add(5 * time.Second))
-	c := tls.Client(raw, &tls.Config{ServerName: "example.com", RootCAs: h.envCA, NextProtos: []string{"http/1.1"}})
-	fmt.Fprintf(c, "GET /upgrade HTTP/1.1\r\nHost: example.com\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+	c := tls.Client(raw, &tls.Config{ServerName: "upgradable.example", RootCAs: h.envCA, NextProtos: []string{"http/1.1"}})
+	fmt.Fprintf(c, "GET /upgrade HTTP/1.1\r\nHost: upgradable.example\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
 	br := bufio.NewReader(c)
 	resp, err := http.ReadResponse(br, nil)
 	if err != nil || resp.StatusCode != http.StatusSwitchingProtocols {
@@ -387,6 +497,42 @@ func TestInterceptUpgrades(t *testing.T) {
 	buf := make([]byte, 4)
 	if _, err := io.ReadFull(br, buf); err != nil || string(buf) != "ping" {
 		t.Fatalf("echo %q %v", buf, err)
+	}
+}
+
+func TestInterceptRefusesUpgradesWhileMaskingSecrets(t *testing.T) {
+	h := newInterceptHarness(t)
+	for _, tc := range []struct {
+		host, authorization string
+	}{
+		{"example.com", "Bearer " + apiPlaceholder},
+		{"short.example", shortPlaceholder},
+	} {
+		t.Run(tc.host, func(t *testing.T) {
+			d, _ := proxy.SOCKS5("tcp", h.addr, &proxy.Auth{User: "sb1", Password: Password([]byte("key"), "sb1")}, proxy.Direct)
+			raw, err := d.Dial("tcp", net.JoinHostPort(tc.host, "443"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer raw.Close()
+			raw.SetDeadline(time.Now().Add(5 * time.Second))
+			c := tls.Client(raw, &tls.Config{ServerName: tc.host, RootCAs: h.envCA, NextProtos: []string{"http/1.1"}})
+			fmt.Fprintf(c, "GET /upgrade HTTP/1.1\r\nHost: %s\r\nAuthorization: %s\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n", tc.host, tc.authorization)
+			resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+			if err != nil {
+				t.Fatalf("upgrade response: %v", err)
+			}
+			if resp.StatusCode != http.StatusBadGateway || resp.Header.Get("X-Sandbox-Studio") != "refused" {
+				t.Fatalf("upgrade was not refused: %d", resp.StatusCode)
+			}
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(body), apiValue) || strings.Contains(string(body), shortValue) {
+				t.Errorf("refusal leaked a secret: %q", body)
+			}
+		})
 	}
 }
 
@@ -428,17 +574,39 @@ func TestUntrustedCAIsLogged(t *testing.T) {
 }
 
 func TestMasker(t *testing.T) {
-	values := [][]byte{[]byte("sk-live-1234567890"), []byte("abcabcab")}
-	in := "x sk-live-1234567890 y sk-live-12 abcabcabcab sk-live-1234567890"
-	want := "x ****************** y sk-live-12 ********cab ******************"
-	for name, r := range map[string]io.Reader{
-		"whole":     strings.NewReader(in),
-		"bytewise":  iotest.OneByteReader(strings.NewReader(in)),
-		"half-read": iotest.HalfReader(strings.NewReader(in)),
-	} {
-		got, err := io.ReadAll(&masker{r: io.NopCloser(r), values: values})
-		if err != nil || string(got) != want {
-			t.Errorf("%s: %q %v", name, got, err)
+	tests := []struct {
+		name   string
+		values [][]byte
+		in     string
+		want   string
+	}{
+		{
+			name:   "overlapping matches",
+			values: [][]byte{[]byte("sk-live-1234567890"), []byte("abcabcab")},
+			in:     "x sk-live-1234567890 y sk-live-12 abcabcabcab sk-live-1234567890",
+			want:   "x ****************** y sk-live-12 *********** ******************",
+		},
+		{
+			name:   "longer overlap split across reads",
+			values: [][]byte{[]byte("abcdefgh"), []byte("bcdefghXYZ")},
+			in:     "abcdefghXYZ",
+			want:   "***********",
+		},
+	}
+	readers := map[string]func(string) io.Reader{
+		"whole":     func(s string) io.Reader { return strings.NewReader(s) },
+		"bytewise":  func(s string) io.Reader { return iotest.OneByteReader(strings.NewReader(s)) },
+		"half-read": func(s string) io.Reader { return iotest.HalfReader(strings.NewReader(s)) },
+	}
+	for _, tc := range tests {
+		if got := (&interception{masked: tc.values}).mask(tc.in); got != tc.want {
+			t.Errorf("%s string mask: %q want %q", tc.name, got, tc.want)
+		}
+		for name, newReader := range readers {
+			got, err := io.ReadAll(&masker{r: io.NopCloser(newReader(tc.in)), values: tc.values})
+			if err != nil || string(got) != tc.want {
+				t.Errorf("%s %s: %q %v", tc.name, name, got, err)
+			}
 		}
 	}
 }

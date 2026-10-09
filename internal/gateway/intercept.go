@@ -95,10 +95,6 @@ func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (ma
 	return values, nil
 }
 
-// Values shorter than this are not masked in responses: they would mask innocent text, and
-// a value that short is no credential worth hiding.
-const minMasked = 8
-
 // intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
 // nil. It returns the bytes sent and received on c and the last refused request, if any.
 func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled) (sent, received int64, problem string) {
@@ -107,7 +103,7 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 	if caddy == nil {
 		ic.bound, ic.unbound = boundTo(all, host)
 		for _, b := range ic.bound {
-			if len(b.Value) >= minMasked {
+			if len(b.Value) > 0 {
 				ic.masked = append(ic.masked, b.Value)
 			}
 		}
@@ -134,7 +130,7 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 			ic.broken = err.Error()
 		}
 		for _, v := range values {
-			if len(v) >= minMasked {
+			if v != "" {
 				ic.masked = append(ic.masked, []byte(v))
 			}
 		}
@@ -366,10 +362,10 @@ func handshakeProblem(err error) string {
 
 // mask hides the host's secret values in s.
 func (ic *interception) mask(s string) string {
-	for _, v := range ic.masked {
-		s = strings.ReplaceAll(s, string(v), strings.Repeat("*", len(v)))
+	if len(ic.masked) == 0 || s == "" {
+		return s
 	}
-	return s
+	return string(maskBytes([]byte(s), ic.masked))
 }
 
 // maskResponse hides the values of the host's secrets in a response, in case the upstream
@@ -379,66 +375,135 @@ func (ic *interception) maskResponse(resp *http.Response) error {
 	if len(ic.masked) == 0 {
 		return nil
 	}
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		return errors.New("Sandbox Studio cannot safely proxy an upgrade while secret values are protected.")
+	}
+	for _, encoding := range resp.Header.Values("Content-Encoding") {
+		for _, coding := range strings.Split(encoding, ",") {
+			coding = strings.TrimSpace(coding)
+			if coding != "" && !strings.EqualFold(coding, "identity") {
+				return errors.New("Sandbox Studio cannot safely mask an encoded response.")
+			}
+		}
+	}
 	for _, values := range resp.Header {
 		for i, v := range values {
 			values[i] = ic.mask(v)
 		}
 	}
-	enc := resp.Header.Get("Content-Encoding")
-	if resp.StatusCode != http.StatusSwitchingProtocols && (enc == "" || enc == "identity") {
-		resp.Body = &masker{r: resp.Body, values: ic.masked}
+	// ReverseProxy sends trailers after it finishes copying the body. Secret-bearing
+	// responses suppress them rather than risk copying an unmasked value.
+	resp.Header.Del("Trailer")
+	for name := range resp.Header {
+		if strings.HasPrefix(strings.ToLower(name), strings.ToLower(http.TrailerPrefix)) {
+			delete(resp.Header, name)
+		}
 	}
+	resp.Trailer = nil
+	resp.Body = &masker{r: resp.Body, response: resp, values: ic.masked}
 	return nil
 }
 
-// masker masks values in a stream. It holds back only a tail that could be the start of a
-// value, so streamed responses still arrive as they are sent.
+// masker masks values in a stream. It holds back only a raw suffix that could start a value,
+// so matches crossing read boundaries can be resolved without buffering the whole response.
 type masker struct {
-	r      io.ReadCloser
-	values [][]byte
-	buf    []byte // read, masked, not yet returned; buf[:ready] is final
-	ready  int
-	err    error
-	chunk  [32 << 10]byte
+	r        io.ReadCloser
+	response *http.Response
+	values   [][]byte
+	buf      []byte // original bytes read but not yet returned
+	marked   []bool // bytes that belong to a complete match in buf
+	ready    []byte // masked prefix ready to return
+	err      error
+	chunk    [32 << 10]byte
 }
 
 func (m *masker) Read(p []byte) (int, error) {
-	for m.ready == 0 {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	for len(m.ready) == 0 {
 		if m.err != nil {
 			if len(m.buf) == 0 {
 				return 0, m.err
 			}
-			m.ready = len(m.buf) // nothing more can complete a value
+			markMaskSpans(m.marked, m.buf, m.values)
+			m.ready = maskedPrefix(m.buf, m.marked, len(m.buf))
+			m.buf, m.marked = nil, nil
 			break
 		}
 		n, err := m.r.Read(m.chunk[:])
-		m.buf, m.err = append(m.buf, m.chunk[:n]...), err
-		for _, v := range m.values {
-			for i := 0; ; {
-				j := bytes.Index(m.buf[i:], v)
-				if j < 0 {
-					break
-				}
-				copy(m.buf[i+j:], bytes.Repeat([]byte("*"), len(v)))
-				i += j + len(v)
-			}
+		if err == io.EOF && m.response != nil {
+			// HTTP/1 reads trailers at EOF and can repopulate Response.Trailer after
+			// maskResponse cleared it. Clear it again before ReverseProxy forwards it.
+			m.response.Trailer = nil
 		}
-		m.ready = len(m.buf) - partialTail(m.buf, m.values)
+		if n > 0 {
+			m.buf = append(m.buf, m.chunk[:n]...)
+			m.marked = append(m.marked, make([]bool, n)...)
+			markMaskSpans(m.marked, m.buf, m.values)
+		}
+		m.err = err
+		ready := len(m.buf) - partialTail(m.buf, m.values)
+		if m.err != nil {
+			ready = len(m.buf)
+		}
+		if ready > 0 {
+			m.ready = maskedPrefix(m.buf, m.marked, ready)
+			m.buf, m.marked = m.buf[ready:], m.marked[ready:]
+		}
+		if len(m.ready) == 0 && m.err != nil {
+			return 0, m.err
+		}
 	}
-	n := copy(p, m.buf[:m.ready])
-	m.buf, m.ready = m.buf[n:], m.ready-n
-	if len(m.buf) == 0 {
-		m.buf = nil
-	}
+	n := copy(p, m.ready)
+	m.ready = m.ready[n:]
 	return n, nil
 }
 
 func (m *masker) Close() error { return m.r.Close() }
 
-// partialTail returns the length of the longest suffix of b that a value starts with.
+// maskBytes masks the union of all value matches in original, finding every match before
+// changing a byte so overlapping secrets cannot expose one another's suffixes.
+func maskBytes(original []byte, values [][]byte) []byte {
+	marked := make([]bool, len(original))
+	markMaskSpans(marked, original, values)
+	return maskedPrefix(original, marked, len(original))
+}
+
+// markMaskSpans finds all matches against original bytes and marks their union.
+func markMaskSpans(marked []bool, original []byte, values [][]byte) {
+	events := make([]int, len(original)+1)
+	for _, v := range values {
+		if len(v) == 0 {
+			continue
+		}
+		for from := 0; from+len(v) <= len(original); {
+			i := bytes.Index(original[from:], v)
+			if i < 0 {
+				break
+			}
+			start := from + i
+			events[start]++
+			events[start+len(v)]--
+			from = start + 1 // also find overlapping occurrences of the same value
+		}
+	}
+	active := 0
+	for i := range original {
+		active += events[i]
+		if active > 0 {
+			marked[i] = true
+		}
+	}
+}
+
+// partialTail returns the longest suffix of b that is a proper prefix of a value.
 func partialTail(b []byte, values [][]byte) int {
 	tail := 0
 	for _, v := range values {
+		if len(v) == 0 {
+			continue
+		}
 		for i := max(0, len(b)-len(v)+1); i < len(b)-tail; i++ {
 			if b[i] == v[0] && bytes.HasPrefix(v, b[i:]) {
 				tail = len(b) - i
@@ -447,6 +512,17 @@ func partialTail(b []byte, values [][]byte) int {
 		}
 	}
 	return tail
+}
+
+// maskedPrefix returns a copy of original[:n] with marked bytes replaced by asterisks.
+func maskedPrefix(original []byte, marked []bool, n int) []byte {
+	out := append([]byte(nil), original[:n]...)
+	for i, shouldMask := range marked[:n] {
+		if shouldMask {
+			out[i] = '*'
+		}
+	}
+	return out
 }
 
 // --- serving -------------------------------------------------------------------------------

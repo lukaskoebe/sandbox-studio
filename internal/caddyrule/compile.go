@@ -75,9 +75,9 @@ func Compile(src string) (Compiled, error) {
 	for _, t := range tokens {
 		last = t.Line
 		switch {
+		case t.Quoted():
 		case t.Text == "import":
 			return Compiled{}, fmt.Errorf("line %d: import is not available", t.Line)
-		case t.Quoted():
 		case t.Text == "{":
 			depth++
 		case t.Text == "}":
@@ -289,6 +289,13 @@ func (c *compiler) handlers(v any) error {
 func (c *compiler) reverseProxy(h map[string]any) error {
 	if err := onlyKeys(h, allowedProxy, "reverse_proxy"); err != nil {
 		return err
+	}
+	if lb, ok := h["load_balancing"].(map[string]any); ok {
+		if retryMatch, ok := lb["retry_match"]; ok {
+			if err := c.matcherSets(retryMatch); err != nil {
+				return err
+			}
+		}
 	}
 	ups, _ := h["upstreams"].([]any)
 	if len(ups) == 0 {

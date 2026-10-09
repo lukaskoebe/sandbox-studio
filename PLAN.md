@@ -333,6 +333,10 @@ A small static Linux Go binary (in `cmd/studio-agent`), mounted into every sandb
      `header_up` values. Caddy never sees them: it gets a marker that Studio's transport fills
      in on the way out, for HTTPS upstreams the secret is bound to. Responses are masked as
      for `proxy`. WebSockets aren't passed through Caddy rules.
+     When a response needs secret masking, Studio masks all nonempty values, including
+     overlapping occurrences, suppresses trailers, and refuses protocol upgrades or
+     content encodings its upstream transport has not decoded. This masks literal values;
+     it does not detect an upstream transforming or encoding a credential in its content.
    - `deny`: close the connection. For HTTP or intercepted TLS, return a readable 403 that
      tells the agent what to do.
    - No match: **hold and ask.**

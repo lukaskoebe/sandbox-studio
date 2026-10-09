@@ -64,20 +64,25 @@ func TestCompileGitReadOnly(t *testing.T) {
 
 func TestCompileAccepts(t *testing.T) {
 	for name, src := range map[string]string{
-		"respond":        `respond "hello" 200`,
-		"quoted brace":   `respond "}" 200`,
-		"plain upstream": "reverse_proxy api.example.com:8080",
-		"handle_path":    "handle_path /v1/* {\n  reverse_proxy https://api.example.com\n}",
-		"headers":        "header X-Studio yes\nheader -Server",
-		"rewrite":        "rewrite /old /new\nuri strip_prefix /api",
-		"redir":          "redir https://example.com{uri}",
-		"not matcher":    "@w not method GET\nrespond @w 405",
-		"host matcher":   "@h host api.example.com\nrespond @h 204",
-		"header_down":    "reverse_proxy https://api.example.com {\n  header_down -Set-Cookie\n}",
+		"respond":               `respond "hello" 200`,
+		"quoted import literal": `respond "import" 200`,
+		"quoted brace":          `respond "}" 200`,
+		"plain upstream":        "reverse_proxy api.example.com:8080",
+		"handle_path":           "handle_path /v1/* {\n  reverse_proxy https://api.example.com\n}",
+		"headers":               "header X-Studio yes\nheader -Server",
+		"rewrite":               "rewrite /old /new\nuri strip_prefix /api",
+		"redir":                 "redir https://example.com{uri}",
+		"not matcher":           "@w not method GET\nrespond @w 405",
+		"host matcher":          "@h host api.example.com\nrespond @h 204",
+		"header_down":           "reverse_proxy https://api.example.com {\n  header_down -Set-Cookie\n}",
 		"handle_response": "reverse_proxy https://api.example.com {\n  @err status 5xx\n" +
 			"  handle_response @err {\n    respond \"upstream failed\" 502\n  }\n}",
 		"secret in added header": "reverse_proxy https://api.example.com {\n  header_up +X-Key {secret.KEY}\n}",
 		"two upstreams":          "reverse_proxy https://a.example.com https://b.example.com {\n  header_up X-Key {secret.KEY}\n}",
+		"safe retry matcher": "reverse_proxy https://api.example.com {\n" +
+			"  lb_retry_match {\n    method GET\n    expression `{http.request.method} == 'GET'`\n  }\n}",
+		"safe nested not retry matcher": "reverse_proxy https://api.example.com {\n" +
+			"  lb_retry_match {\n    not {\n      expression `{http.request.method} == 'GET'`\n    }\n  }\n}",
 		"timeouts": "reverse_proxy https://api.example.com {\n  transport http {\n    tls\n" +
 			"    dial_timeout 5s\n    response_header_timeout 30s\n  }\n}",
 	} {
@@ -123,6 +128,8 @@ func TestCompileRefuses(t *testing.T) {
 		{"env placeholder in an expression", "@e expression `{env.HOME} == 'x'`\nrespond @e 200", "{env.*}"},
 		{"ph", "@e expression `ph(req, 'env.' + 'HOME') == 'x'`\nrespond @e 200", "ph()"},
 		{"ph with a comment", "@e expression `ph // x\n(req, 'env.HOME') == 'x'`\nrespond @e 200", "ph()"},
+		{"ph in retry matcher", "reverse_proxy https://api.example.com {\n  lb_retry_match {\n    expression `ph(req, 'env.HOME') == 'x'`\n  }\n}", "ph()"},
+		{"ph in nested not retry matcher", "reverse_proxy https://api.example.com {\n  lb_retry_match {\n    not {\n      expression `ph(req, 'env.HOME') == 'x'`\n    }\n  }\n}", "ph()"},
 		{"secret in respond", "respond {secret.KEY}", "only be sent upstream"},
 		{"secret in a matcher", "@e expression `{secret.KEY}.startsWith('a')`\nrespond @e 200", "only be sent upstream"},
 		{"secret in a response header", "header X-Key {secret.KEY}", "only be sent upstream"},
