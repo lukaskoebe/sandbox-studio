@@ -9,6 +9,8 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -25,6 +27,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
+	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -42,8 +45,16 @@ type Gateway struct {
 	Log       *slog.Logger
 	// Dial connects upstream; nil uses a dialer that refuses non-public addresses.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// CA issues the certificates presented to sandboxes on intercepted connections.
+	CA interface {
+		Leaf(ctx context.Context, envID, host string) (*tls.Certificate, error)
+	}
+	Secrets interface {
+		Bindings(ctx context.Context, envID string) ([]secrets.Binding, error)
+	}
 
-	names func(sandboxID string) Names // replaces Resolvers.Names in tests
+	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
+	upstreamRoots *x509.CertPool               // replaces the system roots in tests
 }
 
 // ErrNoNetwork is returned for sandboxes created before Studio routed their traffic.
@@ -155,11 +166,11 @@ func (g *Gateway) handle(c net.Conn) {
 	switch {
 	case errors.Is(err, policy.ErrUndecided):
 		verdict = VerdictUndecided
-		refuse(c, proto, fmt.Sprintf("Connections to %s:%d are waiting for approval in Sandbox Studio. Retry once the user has allowed them.", host, port))
+		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("Connections to %s:%d are waiting for approval in Sandbox Studio. Retry once the user has allowed them.", host, port))
 		return
 	case errors.Is(err, policy.ErrDismissed):
 		verdict = VerdictDenied
-		refuse(c, proto, fmt.Sprintf("The user dismissed the request to connect to %s:%d.", host, port))
+		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("The user dismissed the request to connect to %s:%d.", host, port))
 		return
 	case err != nil:
 		problem = err.Error()
@@ -167,10 +178,32 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	case rule.Action == store.ActionDeny:
 		verdict = VerdictDenied
-		refuse(c, proto, fmt.Sprintf("Connections to %s:%d are blocked by a Sandbox Studio network rule.", host, port))
+		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("Connections to %s:%d are blocked by a Sandbox Studio network rule.", host, port))
 		return
-	case rule.Action != store.ActionAllow:
-		problem = rule.Action + " rules are not supported yet"
+	case rule.Action == store.ActionCaddy:
+		problem = "caddy rules are not supported yet"
+		return
+	}
+
+	all, err := g.bindings(sb.EnvironmentID)
+	if err != nil {
+		problem = err.Error()
+		g.Log.Error("secrets", "sandbox", sb.ID, "err", err)
+		return
+	}
+	web := proto == "tls" || proto == "http"
+	if bound, _ := boundTo(all, host); rule.Action == store.ActionProxy || len(bound) > 0 && web {
+		if !web {
+			problem = "proxy rules only handle HTTP and TLS connections"
+			return
+		}
+		if proto == "tls" && g.CA == nil {
+			problem = "no CA to intercept TLS with"
+			return
+		}
+		g.Conns.opened(entry, ruleID, true)
+		verdict = VerdictAllowed
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all)
 		return
 	}
 
@@ -188,7 +221,7 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 	defer up.Close()
-	g.Conns.opened(entry, ruleID)
+	g.Conns.opened(entry, ruleID, false)
 	verdict = VerdictAllowed
 	sent, received = splice(c, br, up)
 }
@@ -227,9 +260,20 @@ func closeWrite(c net.Conn) {
 	}
 }
 
-// refuse tells a plain-HTTP client why its request failed. TLS clients only see the
-// connection close until the gateway can terminate TLS.
-func refuse(c net.Conn, proto, msg string) {
+func (g *Gateway) bindings(envID string) ([]secrets.Binding, error) {
+	if g.Secrets == nil {
+		return nil, nil
+	}
+	return g.Secrets.Bindings(context.Background(), envID)
+}
+
+// refuse tells an HTTP or TLS client why its request failed. Other protocols only see the
+// connection close.
+func (g *Gateway) refuse(c net.Conn, br *bufio.Reader, envID, host, proto, msg string) {
+	if proto == "tls" && g.CA != nil {
+		g.refuseTLS(c, br, envID, host, msg)
+		return
+	}
 	if proto != "http" {
 		return
 	}

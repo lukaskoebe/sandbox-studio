@@ -21,6 +21,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/ca"
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
@@ -117,9 +118,10 @@ func run(addr, image string, log *slog.Logger) error {
 	resolvers := &gateway.Resolvers{Upstreams: dnsproxy.SystemUpstreams(), Log: log}
 	defer resolvers.Close()
 	conns := &gateway.ConnLog{}
+	authority := &ca.Authority{Store: st, Sealer: vault}
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
-		Resolvers: resolvers, Conns: conns, Log: log,
+		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault,
 	}
 	gl, err := net.Listen("tcp", gatewayAddr)
 	if err != nil {

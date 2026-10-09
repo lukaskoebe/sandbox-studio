@@ -97,6 +97,10 @@
             "minimum": 0,
             "type": "integer"
           },
+          "intercepted": {
+            "description": "Studio handled the HTTP requests (proxy rules and hosts with secrets)",
+            "type": "boolean"
+          },
           "port": {
             "format": "int64",
             "type": "integer"

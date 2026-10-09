@@ -315,6 +315,8 @@ export interface components {
             host: string;
             /** Format: int64 */
             id: number;
+            /** @description Studio handled the HTTP requests (proxy rules and hosts with secrets) */
+            intercepted?: boolean;
             /** Format: int64 */
             port: number;
             /**

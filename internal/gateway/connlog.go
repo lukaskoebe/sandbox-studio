@@ -17,18 +17,20 @@ const (
 
 // Conn is one connection in a sandbox's connection log.
 type Conn struct {
-	ID       uint64     `json:"id"`
-	Started  time.Time  `json:"started"`
-	Ended    *time.Time `json:"ended,omitempty"`
-	Host     string     `json:"host"`
-	Port     int        `json:"port"`
-	Address  string     `json:"address" doc:"The destination as the sandbox asked for it"`
-	Source   string     `json:"source" enum:"tls,http,dns,socks,ip" doc:"Where the host name came from"`
-	Verdict  string     `json:"verdict" enum:"pending,open,allowed,denied,undecided,failed"`
-	RuleID   string     `json:"ruleId,omitempty"`
-	Error    string     `json:"error,omitempty"`
-	Sent     int64      `json:"sent" doc:"Bytes sent by the sandbox"`
-	Received int64      `json:"received" doc:"Bytes received by the sandbox"`
+	ID      uint64     `json:"id"`
+	Started time.Time  `json:"started"`
+	Ended   *time.Time `json:"ended,omitempty"`
+	Host    string     `json:"host"`
+	Port    int        `json:"port"`
+	Address string     `json:"address" doc:"The destination as the sandbox asked for it"`
+	Source  string     `json:"source" enum:"tls,http,dns,socks,ip" doc:"Where the host name came from"`
+	Verdict string     `json:"verdict" enum:"pending,open,allowed,denied,undecided,failed"`
+	RuleID  string     `json:"ruleId,omitempty"`
+	// Intercepted connections are answered by Studio, which checks and rewrites each request.
+	Intercepted bool   `json:"intercepted,omitempty" doc:"Studio handled the HTTP requests (proxy rules and hosts with secrets)"`
+	Error       string `json:"error,omitempty"`
+	Sent        int64  `json:"sent" doc:"Bytes sent by the sandbox"`
+	Received    int64  `json:"received" doc:"Bytes received by the sandbox"`
 }
 
 // connLogSize is how many connections are kept per sandbox. The log lives in memory only.
@@ -61,10 +63,10 @@ func (l *ConnLog) add(sandboxID string, c Conn) *Conn {
 	return &c
 }
 
-func (l *ConnLog) opened(c *Conn, ruleID string) {
+func (l *ConnLog) opened(c *Conn, ruleID string, intercepted bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	c.Verdict, c.RuleID = VerdictOpen, ruleID
+	c.Verdict, c.RuleID, c.Intercepted = VerdictOpen, ruleID, intercepted
 }
 
 func (l *ConnLog) finish(c *Conn, verdict, ruleID, problem string, sent, received int64) {
