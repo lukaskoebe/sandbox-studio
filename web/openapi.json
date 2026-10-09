@@ -241,6 +241,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "maxMemoryMiB": {
+            "format": "int64",
+            "type": "integer"
+          },
           "memoryMiB": {
             "format": "int64",
             "type": "integer"
@@ -788,6 +792,10 @@
           "id": {
             "type": "string"
           },
+          "maxMemoryMiB": {
+            "format": "int64",
+            "type": "integer"
+          },
           "memoryMiB": {
             "format": "int64",
             "type": "integer"
@@ -822,6 +830,7 @@
           "generation",
           "cpus",
           "memoryMiB",
+          "maxMemoryMiB",
           "workspaceMiB",
           "dockerMiB",
           "createdAt"

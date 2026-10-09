@@ -55,9 +55,10 @@ GOMAXPROCS=2 go run -p=1 ./spikes/layer-export/roundtrip -agent "$agent_bin"
 
 **Run this only when you intend to create disposable test VMs.** The harness creates and
 removes its own two deny-all VMs; it does not attach to a user VM. It uses the local
-`sandbox-studio-base:dev` image with `PullPolicyNever`. Its registry is ephemeral and the
-dev-base cache must already be warm. The source VM is removed before the destination starts
-to fit the memory budget.
+`sandbox-studio-base:dev` image with `PullPolicyNever` and the production registry against
+a private temporary catalog. It reopens that catalog and registry on the same allocated
+port before the destination pulls. The dev-base cache must already be warm. The source
+VM is removed before the destination starts to fit the memory budget.
 
 On 2026-10-09, this full Go guest-export/`Hub.Export` source/import roundtrip passed on
 Linux amd64, microsandbox 0.7.7 and kernel 6.12.111. Owner SIGKILL after the first data
@@ -67,8 +68,9 @@ source/import validation covered regular files, modes, symlinks, hardlinks, whit
 opaque directories, untouched base state and exclusions. See the [full evidence and
 remaining qualifications](../../docs/spikes.md#layer-transfer-and-capture-foundations).
 
-The persistent authenticated registry, template builder/cache integration, API and UI are
-not wired. Remaining live qualifications are macOS and Windows hosts, an arm64 guest, and
+The persistent authenticated registry is implemented and qualified by this harness.
+Template builder/cache invocation, recovery jobs, API and UI are not wired. Remaining live
+qualifications are macOS and Windows hosts, an arm64 guest, and
 oversized or backpressured full captures. Userspace cannot guarantee automatic recovery if
 a kernel freeze/thaw call never returns; stopping or rebooting the VM remains possible.
 This roundtrip does not complete all M3 work.

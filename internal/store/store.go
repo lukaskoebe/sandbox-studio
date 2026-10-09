@@ -160,13 +160,14 @@ type Sandbox struct {
 	Generation    int       `json:"generation"`
 	CPUs          int       `json:"cpus"`
 	MemoryMiB     int       `json:"memoryMiB"`
+	MaxMemoryMiB  int       `json:"maxMemoryMiB"`
 	WorkspaceMiB  int       `json:"workspaceMiB"`
 	DockerMiB     int       `json:"dockerMiB"`
 	CreatedAt     time.Time `json:"createdAt"`
 	DNSPort       int       `json:"-"` // loopback port of the sandbox's Studio resolver
 }
 
-const sandboxCols = "id, environment_id, name, generation, cpus, memory_mib, workspace_mib, docker_mib, created_at, dns_port"
+const sandboxCols = "id, environment_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
 const firstDNSPort = 17100
@@ -174,21 +175,24 @@ const firstDNSPort = 17100
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created int64
-	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort)
+	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort)
 	sb.CreatedAt = time.Unix(created, 0)
 	return sb, err
 }
 
 // CreateSandbox inserts sb, assigning its ID, generation, DNS port and creation time.
 func (s *Store) CreateSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) {
+	if sb.MaxMemoryMiB == 0 {
+		sb.MaxMemoryMiB = sb.MemoryMiB
+	}
 	sb.ID, sb.Generation, sb.CreatedAt = NewID(), 1, time.Unix(now(), 0)
 	port, err := s.freeDNSPort(ctx)
 	if err != nil {
 		return sb, err
 	}
 	sb.DNSPort = port
-	_, err = s.db.ExecContext(ctx, "INSERT INTO sandboxes ("+sandboxCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		sb.ID, sb.EnvironmentID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort)
+	_, err = s.db.ExecContext(ctx, "INSERT INTO sandboxes ("+sandboxCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		sb.ID, sb.EnvironmentID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}

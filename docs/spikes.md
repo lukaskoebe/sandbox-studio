@@ -220,8 +220,8 @@ validated exported layer, and builds cache identity from normalized spec bytes, 
 platform and exporter version; catalog entries are environment-scoped. Missing, truncated
 or symlinked ready artifacts
 return explicit errors without silently replacing the ready record. Same-size corruption is
-checked by the OCI client's digest verification. The builder/cache invocation, base prewarm
-and recovery, API and UI remain unwired; templates still depend on base layers already being
+checked by the OCI client's digest verification. The builder/cache invocation, recovery
+jobs, API and UI remain unwired; templates still depend on base layers already being
 available in microsandbox's cache.
 
 The production registry passed a live roundtrip on Linux amd64 with microsandbox 0.7.7.
@@ -238,6 +238,40 @@ the derived image reference were removed; existing VMs were untouched. The sourc
 the development base first, so this does not qualify cold-cache recovery or the builder.
 Production race tests, registry lifecycle tests and the host build also pass.
 
+### Spec and base preparation foundations
+
+The strict YAML parser, deterministic canonical cache representation, shared resource
+validation and persisted `max_memory` ceiling are implemented. Existing records migrate
+with maximum memory equal to their initial memory. Inputs are validated before narrowing
+to SDK integer sizes. The parser rejects unsupported YAML constructs and bounds input,
+nesting and collection sizes; setup bytes are preserved except that NUL is rejected.
+
+`PrepareTemplateBase` uses only the configured Studio base: `Never` for the exact local
+dev alias and `IfMissing` for digest-pinned references. It creates a uniquely owned,
+deny-all 512 MiB VM and inspects the image through the SDK. Cleanup uses an independent
+context and checks VM identity and ownership before removal; ambiguous or unsuccessful
+cleanup is returned as an error with the recovery name. The SDK exposes a resolved digest
+and platform but no index resolution chain. Release digest selection, cold-cache pulls
+and startup recovery jobs still need integration/qualification.
+
+On 2026-10-09, `spikes/template-base` passed on Linux amd64 with msb 0.7.7 and the warm,
+five-layer dev base. The prewarm left no new VM. A subsequent disposable sandbox retained
+512 MiB initial memory and a 1 GiB ceiling in its SDK configuration. Production
+`ConfigureGuest` acknowledged installation before the probe checked the CA, placeholder
+file and login-shell environment. The probe removed its VM and private state; the three
+preexisting VMs were unchanged. No real keychain or secret was used. See the
+[qualification command and scope](../spikes/template-base/README.md).
+
+The configuration gate is synchronous and environment-scoped. Control requests bound
+pending streams and reply sizes and cancel without dropping the guest session. Real-yamux
+tests cover ACK waits, guest/provider errors, oversized replies, saturation and recovery.
+The review also exposed yamux's half-close behavior: closing a local stream alone does
+not interrupt its read. Control cancellation now expires the stream deadline, and export
+sources do the same on close. Tests with a peer that neither reads nor closes verify
+prompt cancellation and early archive rejection, no retained artifact, and subsequent
+export over the same agent session.
+This is groundwork for the template build worker, not a completed template-build API.
+
 ### Layer transfer and capture foundations
 
 The implemented Go guest exporter sends bounded data frames and a completion trailer with
@@ -245,8 +279,8 @@ version, byte count and SHA-256. `Hub.Export` validates and normalizes the tar i
 artifact without extracting it. It keeps the artifact only after framing, tar, gzip and
 file completion succeed; failures close the source and discard the partial file. The
 exporter and Hub API are implemented. The persistent authenticated registry and pure image
-composition/cache identity are implemented; the template builder, cache invocation, base
-prewarm/recovery, API and UI are not wired.
+composition/cache identity and base preparation helper are implemented; the template
+builder, cache invocation, recovery jobs, API and UI are not wired.
 
 The capture probe in `spikes/layer-export` runs **inside a disposable guest**. On Linux
 with msb 0.7.7, agentd retained descriptors to the hidden ext4 upper filesystem; their

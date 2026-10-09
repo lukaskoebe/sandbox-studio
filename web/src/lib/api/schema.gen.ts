@@ -433,6 +433,8 @@ export interface components {
             /** Format: int64 */
             dockerMiB?: number;
             /** Format: int64 */
+            maxMemoryMiB?: number;
+            /** Format: int64 */
             memoryMiB?: number;
             name: string;
             /** Format: int64 */
@@ -617,6 +619,8 @@ export interface components {
             /** Format: int64 */
             generation: number;
             id: string;
+            /** Format: int64 */
+            maxMemoryMiB: number;
             /** Format: int64 */
             memoryMiB: number;
             name: string;

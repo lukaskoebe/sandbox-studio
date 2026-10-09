@@ -289,6 +289,17 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
     corepack enable
   ```
 
+  The strict parser and versioned canonical cache representation are implemented.
+  Specs accept one mapping, decimal CPU counts, integer `MiB`/`GiB`/`G` sizes, quoted
+  numeric versions for node/python/go, apt package names, and a setup string. Unknown
+  keys, duplicates, aliases, merge keys and custom YAML tags are rejected; input size,
+  nesting and collection sizes are bounded. Canonicalization resolves defaults, sorts
+  tools and apt packages, and preserves decoded setup bytes (NUL is refused).
+  The create API and specs share resource validation before narrowing to SDK integers.
+  `max_memory` defaults to initial memory; it is stored and passed as the VM's memory
+  ceiling. Existing catalog records retain their previous initial-memory ceiling.
+  This does not expose live memory resizing yet.
+
 - **Template build:**
   1. Boot the base image with gateway networking, using a "template-build" scope that
      includes a curated, user-approved registry rule set.
@@ -298,8 +309,8 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
      fresh Studio networking and vsock routes; do not use snapshot restore while #1736
      remains unresolved. The persistent host registry and pure image composition/cache
      identity are implemented and qualified by a live Linux amd64 pull after a registry
-     and catalog restart. The template builder, cache invocation, base prewarm/recovery,
-     API and UI are not wired yet.
+     and catalog restart. The template builder, cache invocation, recovery jobs, API and
+     UI are not wired yet.
 
   The pure composer supports Studio's controlled base image, not arbitrary OCI images:
   the SDK's image inspection API does not preserve every image-config field. It preserves
@@ -308,14 +319,25 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   normalized spec bytes, base digest, platform and exporter version; registry records
   remain environment-scoped. The registry
   retains the derived manifest, config and layer blob. Base layers must already be
-  available in microsandbox's cache before pulling a template; prewarm and recovery are
-  not wired, so a missing base must be recovered from its pinned source or fail explicitly.
-  In the current SDK this can be checked by creating and removing a temporary deny-all
-  base sandbox: `IfMissing` for digest-pinned release images, `Never` for the local dev
-  base (with an instruction to rebuild it if absent). Do not silently pull a similarly
-  named remote image for the dev base. Registry credentials stay on the host.
+  available in microsandbox's cache before pulling a template. `PrepareTemplateBase`
+  creates and removes its own labeled, deny-all 512 MiB VM, then returns inspected base
+  metadata: `IfMissing` for digest-pinned references, `Never` for the exact local dev
+  alias. Mutable release tags are rejected; release digest wiring is still required.
+  Cleanup uses a separate bounded context and verifies ownership before removal. An
+  uncertain stop or cleanup failure reports the owned VM for recovery; it does not
+  silently discard the error. Cold-cache recovery and startup recovery jobs remain to
+  be qualified/wired. Registry credentials stay on the host.
   The builder must source base metadata from the approved Studio image, never from a
   browser request; registry publication checks internal consistency, not remote provenance.
+  The SDK resolves the configured reference; its inspected digest and platform are used
+  for cache identity. It does not expose an index-to-platform-manifest resolution chain,
+  so Studio does not independently verify that chain.
+
+  `ConfigureGuest` provides the builder's synchronous, environment-scoped configuration
+  gate after agent readiness. It waits for the guest to acknowledge CA and placeholder
+  installation and propagates guest/provider errors. Control requests honor cancellation,
+  cap replies at 1 MiB and bound simultaneous streams; cancelling a request keeps the
+  agent session available. The build worker must use this gate before running setup.
 
   Production Studio starts a read-only HTTP registry at `127.0.0.1:7880`. It accepts only
   exact-host-guarded GET/HEAD requests with environment-scoped Basic credentials derived
@@ -343,7 +365,7 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   amd64 source/import roundtrip on microsandbox 0.7.7 and kernel 6.12.111. See the
   [layer-export evidence and remaining qualifications](docs/spikes.md#layer-transfer-and-capture-foundations).
   The persistent authenticated registry and pure image composer are implemented; the
-  template builder/cache invocation, base prewarm/recovery, API and UI remain unwired. Live
+  template builder/cache invocation, recovery jobs, API and UI remain unwired. Live
   macOS/Windows hosts, arm64 guests, and oversized/backpressured captures remain to be
   qualified; unsupported overlay features and file types remain out of scope. This does
   not complete all M3 work. Userspace cannot

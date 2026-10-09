@@ -39,6 +39,7 @@ type Options struct {
 type Spec struct {
 	CPUs         uint8
 	MemoryMiB    uint32
+	MaxMemoryMiB uint32
 	WorkspaceMiB uint32
 	DockerMiB    uint32
 	Egress       Egress
@@ -72,6 +73,10 @@ func New(opts Options) *Runtime { return &Runtime{opts: opts} }
 // Create creates and boots a detached sandbox VM. agentSocket is the host Unix socket
 // that the guest agent reaches over vsock.
 func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocket string, labels map[string]string) error {
+	maxMemoryMiB := spec.MaxMemoryMiB
+	if maxMemoryMiB == 0 {
+		maxMemoryMiB = spec.MemoryMiB
+	}
 	// Only DNS to the host and TCP to public addresses leave the guest, and the TCP goes
 	// through the gateway. UDP and ICMP would bypass it; QUIC falls back to TCP.
 	network := &msb.NetworkConfig{
@@ -88,6 +93,7 @@ func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocke
 		msb.WithImage(r.opts.Image),
 		msb.WithCPUs(spec.CPUs),
 		msb.WithMemory(spec.MemoryMiB),
+		msb.WithMaxMemory(maxMemoryMiB),
 		msb.WithHostname(hostname(labels["studio.sandbox-name"])),
 		msb.WithMounts(map[string]msb.MountConfig{
 			"/workspace":      msb.Mount.Owned(msb.OwnedVolumeOptions{Kind: msb.VolumeKindDisk, SizeMiB: spec.WorkspaceMiB}),

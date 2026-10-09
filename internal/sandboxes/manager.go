@@ -3,7 +3,6 @@ package sandboxes
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -12,22 +11,23 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// ErrInvalidSpec is returned for resource requests outside the supported range.
-var ErrInvalidSpec = errors.New("resources out of range (≥1 CPU, ≥512 MiB memory, ≥1 GiB disks)")
+// ErrInvalidSpec remains the manager-facing alias used by API error mapping.
+var ErrInvalidSpec = resources.ErrInvalid
 
 // VMPrefix prefixes every microsandbox VM name Studio owns.
 const VMPrefix = "ss-"
 
 // Defaults for new sandboxes.
 const (
-	DefaultCPUs         = 2
-	DefaultMemoryMiB    = 4096
-	DefaultWorkspaceMiB = 20 * 1024
-	DefaultDockerMiB    = 20 * 1024
+	DefaultCPUs         = resources.DefaultCPUs
+	DefaultMemoryMiB    = resources.DefaultMemoryMiB
+	DefaultWorkspaceMiB = resources.DefaultWorkspaceMiB
+	DefaultDockerMiB    = resources.DefaultDockerMiB
 )
 
 // Manager coordinates the catalog, the runtime, the agent hub and the network gateway.
@@ -94,6 +94,7 @@ type CreateRequest struct {
 	Name         string `json:"name"`
 	CPUs         int    `json:"cpus,omitempty"`
 	MemoryMiB    int    `json:"memoryMiB,omitempty"`
+	MaxMemoryMiB int    `json:"maxMemoryMiB,omitempty"`
 	WorkspaceMiB int    `json:"workspaceMiB,omitempty"`
 	DockerMiB    int    `json:"dockerMiB,omitempty"`
 }
@@ -153,19 +154,21 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 
 // Create records and boots a new sandbox.
 func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (View, error) {
+	resolved := resolveResources(req)
+	if err := resolved.Validate(); err != nil {
+		return View{}, err
+	}
 	if err := runtime.ValidName(req.Name); err != nil {
 		return View{}, err
 	}
 	rec := store.Sandbox{
 		EnvironmentID: envID,
 		Name:          req.Name,
-		CPUs:          orDefault(req.CPUs, DefaultCPUs),
-		MemoryMiB:     orDefault(req.MemoryMiB, DefaultMemoryMiB),
-		WorkspaceMiB:  orDefault(req.WorkspaceMiB, DefaultWorkspaceMiB),
-		DockerMiB:     orDefault(req.DockerMiB, DefaultDockerMiB),
-	}
-	if rec.CPUs < 1 || rec.CPUs > 64 || rec.MemoryMiB < 512 || rec.WorkspaceMiB < 1024 || rec.DockerMiB < 1024 {
-		return View{}, ErrInvalidSpec
+		CPUs:          int(resolved.CPUs),
+		MemoryMiB:     int(resolved.MemoryMiB),
+		MaxMemoryMiB:  int(resolved.MaxMemoryMiB),
+		WorkspaceMiB:  int(resolved.WorkspaceMiB),
+		DockerMiB:     int(resolved.DockerMiB),
 	}
 	rec, err := m.Store.CreateSandbox(ctx, rec)
 	if err != nil {
@@ -183,7 +186,7 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 		return View{}, err
 	}
 	spec := runtime.Spec{
-		CPUs: uint8(rec.CPUs), MemoryMiB: uint32(rec.MemoryMiB),
+		CPUs: uint8(resolved.CPUs), MemoryMiB: uint32(resolved.MemoryMiB), MaxMemoryMiB: uint32(resolved.MaxMemoryMiB),
 		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
 		Egress: egress,
 	}
@@ -374,9 +377,25 @@ func (m *Manager) withAgent(v View) View {
 	return v
 }
 
-func orDefault(v, def int) int {
+func resolveResources(req CreateRequest) resources.Resources {
+	defaults := resources.Defaults()
+	memory := resourceOrDefault(req.MemoryMiB, defaults.MemoryMiB)
+	maxMemory := int64(req.MaxMemoryMiB)
+	if maxMemory == 0 {
+		maxMemory = memory
+	}
+	return resources.Resources{
+		CPUs:         resourceOrDefault(req.CPUs, defaults.CPUs),
+		MemoryMiB:    memory,
+		MaxMemoryMiB: maxMemory,
+		WorkspaceMiB: resourceOrDefault(req.WorkspaceMiB, defaults.WorkspaceMiB),
+		DockerMiB:    resourceOrDefault(req.DockerMiB, defaults.DockerMiB),
+	}
+}
+
+func resourceOrDefault(v int, def int64) int64 {
 	if v == 0 {
 		return def
 	}
-	return v
+	return int64(v)
 }
