@@ -100,7 +100,7 @@ function NetworkPage() {
                         {r.ports?.length ? r.ports.join(", ") : "any"}
                       </TableCell>
                       <TableCell>
-                        <RuleActionBadge action={r.action} />
+                        <RuleAction rule={r} />
                       </TableCell>
                       <TableCell>
                         {r.sandboxId
@@ -184,6 +184,27 @@ function NetworkPage() {
         }}
       />
     </>
+  )
+}
+
+/** A proxy rule names the headers it sets; their values stay hidden. */
+function RuleAction({ rule }: { rule: Rule }) {
+  const names =
+    rule.action === "proxy"
+      ? Object.keys(rule.config.headers ?? {}).join(", ")
+      : ""
+  return (
+    <div className="flex items-center gap-2">
+      <RuleActionBadge action={rule.action} />
+      {names && (
+        <span
+          className="max-w-40 truncate font-mono text-xs text-muted-foreground"
+          title={names}
+        >
+          {names}
+        </span>
+      )}
+    </div>
   )
 }
 

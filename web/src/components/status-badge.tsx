@@ -121,7 +121,7 @@ export function VerdictBadge({ conn }: { conn: Connection }) {
 const actionTones: Record<Rule["action"], string> = {
   allow: tones.green,
   deny: tones.red,
-  proxy: tones.muted,
+  proxy: tones.blue,
   caddy: tones.muted,
 }
 

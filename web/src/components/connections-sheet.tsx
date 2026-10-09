@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { PlugsConnectedIcon } from "@phosphor-icons/react"
+import { ArrowsLeftRightIcon, PlugsConnectedIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -25,9 +25,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { VerdictBadge } from "@/components/status-badge"
-import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
-import { formatBytes, hostPort } from "@/lib/utils"
+import {
+  $api,
+  errorMessage,
+  type Connection,
+  type Sandbox,
+} from "@/lib/api/client"
+import { cn, formatBytes, hostPort } from "@/lib/utils"
 
 /** The sandbox's recent connections, from a sheet in its header. */
 export function ConnectionsSheet({
@@ -119,7 +129,10 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
                 {hostPort(c.host, c.port)}
               </TableCell>
               <TableCell>
-                <VerdictBadge conn={c} />
+                <div className="flex items-center gap-1.5">
+                  <VerdictBadge conn={c} />
+                  {c.intercepted && <InterceptedMarker conn={c} />}
+                </div>
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {c.source}
@@ -137,5 +150,40 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
         </TableBody>
       </Table>
     </div>
+  )
+}
+
+/**
+ * Marks a connection Studio handled itself. A request Studio refused explains
+ * itself in the tooltip, unless the verdict badge already shows it.
+ */
+function InterceptedMarker({ conn }: { conn: Connection }) {
+  const reason = conn.verdict === "failed" ? undefined : conn.error
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className={cn(
+              "inline-flex",
+              reason
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground"
+            )}
+          />
+        }
+      >
+        <ArrowsLeftRightIcon className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent>
+        <span className="grid gap-1">
+          <span>
+            Studio handled the HTTP requests (a proxy rule, or a host with
+            secrets)
+          </span>
+          {reason && <span>{reason}</span>}
+        </span>
+      </TooltipContent>
+    </Tooltip>
   )
 }
