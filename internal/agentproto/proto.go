@@ -7,6 +7,7 @@
 //   - KindHello (guest → host): the guest writes a Hello line, then closes.
 //   - KindPTY (host → guest): framed in both directions (see WriteFrame).
 //   - KindTCP (host → guest): raw bytes to a guest loopback port.
+//   - KindExport (host → guest request, guest → host): a bounded framed export stream.
 //   - KindSessions, KindPorts, KindKill (host → guest): one JSON reply line.
 //   - KindConfig (host → guest): the host writes a Config line; the guest applies it and
 //     replies like KindKill: {} or an Error.
@@ -29,6 +30,7 @@ const (
 	KindHello    = "hello"
 	KindPTY      = "pty"
 	KindTCP      = "tcp"
+	KindExport   = "export" // reserved for the guest capture handler; framing is implemented
 	KindSessions = "sessions"
 	KindPorts    = "ports"
 	KindKill     = "kill" // ends the tmux session named in Header.Session
