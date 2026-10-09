@@ -693,6 +693,14 @@ memory can be moved to gbrain or qmd later.
 - Auth: the server binds to `127.0.0.1` with a per-install token in an HttpOnly cookie, set
   through a one-time URL opened at launch. This protects against other local users and
   against DNS-rebinding sites.
+  - The launch token is carried in a URL fragment, removed before loading application
+    data, and exchanged once within ten minutes. `studio login-url` obtains a fresh link
+    from the running server using a separate control credential from the local install key.
+  - Studio sessions last thirty days. Preview launch tickets last one minute and establish
+    separate eight-hour host-scoped cookies, stripped before proxying to a guest. Guest
+    responses cannot set Studio authentication cookies or cookies for sibling hosts.
+  - The LAN dev UI uses the same exchange and cookie checks through Vite's origin-checking
+    proxy; it does not receive the install key or a privileged proxy bypass.
 
 ### 6.13 Storage and configuration
 

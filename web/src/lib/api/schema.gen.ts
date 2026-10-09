@@ -166,6 +166,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/previews/{port}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["openPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/start": {
         parameters: {
             query?: never;
@@ -439,6 +455,9 @@ export interface components {
             /** Format: int64 */
             port: number;
             sandboxName: string;
+        };
+        PreviewOpenBody: {
+            url: string;
         };
         PreviewPort: {
             /** Format: int64 */
@@ -1040,6 +1059,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewPort"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    openPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+                /** @description Preview port */
+                port: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewOpenBody"];
                 };
             };
             /** @description Error */

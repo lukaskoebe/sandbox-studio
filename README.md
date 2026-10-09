@@ -5,7 +5,8 @@ Run coding agents (OpenCode, Claude Code, Codex) as persistent team members insi
 access, git pushes, browser actions, credential use — goes through the host and can be
 approved from a web UI.
 
-> **Status: early development (milestone M0/M1).** Nothing here is usable yet. See
+> **Status: early development (milestone M2).** Sandboxes, terminals, network approvals,
+> secrets, and Caddy rules are available for development use. See
 > [PLAN.md](PLAN.md) for the design and roadmap and [docs/spikes.md](docs/spikes.md) for the
 > results of the technical spikes.
 
@@ -32,10 +33,19 @@ make build    # bin/studio
 make agent    # bin/studio-agent-linux-{amd64,arm64}
 make test
 make image    # dev only: build the base image with Docker and load it into microsandbox
-./bin/studio  # http://127.0.0.1:7878
+./bin/studio  # prints a one-time login link for http://127.0.0.1:7878
 ```
 
 During UI work, run `go run ./cmd/studio` and `pnpm dev` in `web/` (Vite proxies `/api`).
+Paste the launch link into the UI's Connect screen. For a fresh link while Studio is
+running, use `./bin/studio login-url`. Links expire after ten minutes and can be used once;
+the browser keeps an HttpOnly session cookie. For the LAN development UI, run
+`pnpm dev:lan` and paste the same kind of launch link into that page. Authentication still
+passes through Studio; the dev proxy does not bypass it.
+
+Open sandbox previews through the **Previews** menu. Each preview gets its own host-scoped
+session, and Studio removes its authentication cookies before forwarding requests to the
+sandbox. Preview links use `.localhost`, so they open on the machine running Studio.
 
 ## License
 

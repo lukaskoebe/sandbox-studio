@@ -20,7 +20,7 @@ func Guard(next http.Handler) http.Handler {
 		switch r.Method {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 		default:
-			if o := r.Header.Get("Origin"); o != "" && !sameHost(o, r.Host) {
+			if o := r.Header.Get("Origin"); o != "" && !sameOrigin(o, r) {
 				http.Error(w, "cross-origin request refused", http.StatusForbidden)
 				return
 			}
@@ -42,7 +42,11 @@ func localHost(hostport string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func sameHost(origin, host string) bool {
+func sameOrigin(origin string, r *http.Request) bool {
 	u, err := url.Parse(origin)
-	return err == nil && strings.EqualFold(u.Host, host)
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return err == nil && u.Scheme == scheme && u.User == nil && u.Path == "" && u.RawQuery == "" && u.Fragment == "" && strings.EqualFold(u.Host, r.Host)
 }

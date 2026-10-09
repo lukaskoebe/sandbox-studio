@@ -6,6 +6,15 @@ export const fetchClient = createFetchClient<paths>({
   baseUrl: window.location.origin,
 })
 
+// Includes direct fetchClient calls (such as the secret dialog), not only query hooks.
+fetchClient.use({
+  onResponse({ response }) {
+    if (response.status === 401)
+      window.dispatchEvent(new Event("studio-auth-expired"))
+    return response
+  },
+})
+
 /** Typed TanStack Query hooks for every API operation. */
 export const $api = createClient(fetchClient)
 

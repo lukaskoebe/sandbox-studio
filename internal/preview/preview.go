@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
 
 // DialFunc connects to a loopback port inside a sandbox.
@@ -48,7 +50,12 @@ func Route(dial DialFunc, next http.Handler) http.Handler {
 			// The upstream "host" is only a key for dialing and connection pooling.
 			pr.SetURL(&url.URL{Scheme: "http", Host: net.JoinHostPort(id, strconv.Itoa(port))})
 			pr.Out.Host = pr.In.Host
+			stripStudioCookies(pr.Out.Header)
 			pr.SetXForwarded()
+		},
+		ModifyResponse: func(resp *http.Response) error {
+			filterGuestCookies(resp.Header)
+			return nil
 		},
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
@@ -79,4 +86,60 @@ func Route(dial DialFunc, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// stripStudioCookies keeps preview authentication credentials away from the guest while
+// leaving the preview application's own cookies intact.
+func stripStudioCookies(header http.Header) {
+	values := header.Values("Cookie")
+	if len(values) == 0 {
+		return
+	}
+	header.Del("Cookie")
+	for _, value := range values {
+		parts := strings.Split(value, ";")
+		kept := parts[:0]
+		for _, part := range parts {
+			cookieName, _, ok := strings.Cut(strings.TrimSpace(part), "=")
+			cookieName = strings.TrimSpace(cookieName)
+			if ok && cookieName != webauth.SessionCookie && cookieName != webauth.PreviewCookie {
+				kept = append(kept, part)
+			}
+		}
+		if len(kept) > 0 {
+			header.Add("Cookie", strings.Join(kept, ";"))
+		}
+	}
+}
+
+// filterGuestCookies prevents guest responses from setting Studio's authentication cookies
+// or cookies scoped to sibling preview/Studio hosts. Host-only application cookies pass
+// through unchanged.
+func filterGuestCookies(header http.Header) {
+	values := header.Values("Set-Cookie")
+	if len(values) == 0 {
+		return
+	}
+	header.Del("Set-Cookie")
+	for _, value := range values {
+		if !dropGuestCookie(value) {
+			header.Add("Set-Cookie", value)
+		}
+	}
+}
+
+func dropGuestCookie(value string) bool {
+	parts := strings.Split(value, ";")
+	name, _, hasValue := strings.Cut(strings.TrimSpace(parts[0]), "=")
+	name = strings.TrimSpace(name)
+	if hasValue && (name == webauth.SessionCookie || name == webauth.PreviewCookie) {
+		return true
+	}
+	for _, part := range parts[1:] {
+		attribute, _, _ := strings.Cut(strings.TrimSpace(part), "=")
+		if strings.EqualFold(strings.TrimSpace(attribute), "domain") {
+			return true
+		}
+	}
+	return false
 }

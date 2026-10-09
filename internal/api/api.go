@@ -25,6 +25,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
+	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
 
 // Server holds what the handlers need.
@@ -36,6 +37,7 @@ type Server struct {
 	Bus       *events.Bus
 	Conns     *gateway.ConnLog
 	Caddy     *caddyrule.Engine // checks Caddyfiles; without it, caddy rules are refused
+	Auth      *webauth.Auth
 	Log       *slog.Logger
 	Addr      string // the address Studio listens on, used to build preview URLs
 }
@@ -45,6 +47,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	api := humago.New(mux, config())
 	s.registerEnvironments(api)
 	s.registerSandboxes(api)
+	s.registerPreviews(api)
 	s.registerNetwork(api)
 	s.registerSecrets(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)

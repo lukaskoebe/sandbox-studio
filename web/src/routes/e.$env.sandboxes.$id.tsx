@@ -45,7 +45,13 @@ import { ConnectionsSheet } from "@/components/connections-sheet"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge, phase } from "@/components/status-badge"
 import { Terminal } from "@/components/terminal"
-import { $api, errorMessage, isReady, type Sandbox } from "@/lib/api/client"
+import {
+  $api,
+  errorMessage,
+  fetchClient,
+  isReady,
+  type Sandbox,
+} from "@/lib/api/client"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/sandboxes/$id")({
@@ -278,6 +284,65 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   )
   const list = ports.data ?? []
 
+  async function openPreview(port: number) {
+    let popup: Window | null = null
+    try {
+      popup = window.open("about:blank", "_blank")
+    } catch {
+      popup = null
+    }
+    if (!popup) {
+      toast.error("Could not open preview", {
+        description:
+          "Allow pop-ups for Studio, then select this preview again.",
+      })
+      return
+    }
+
+    try {
+      popup.opener = null
+      const { data, error, response } = await fetchClient.POST(
+        "/api/environments/{env}/sandboxes/{id}/previews/{port}/open",
+        { params: { path: { env, id: sb.id, port } } }
+      )
+      if (response.status === 401) {
+        try {
+          popup.close()
+        } catch {
+          // The browser may already have closed the blank tab.
+        }
+        toast.error("Studio login expired", {
+          description: "Reconnect, then open this preview again.",
+        })
+        return
+      }
+      if (error) {
+        throw new Error(errorMessage(error))
+      }
+      if (!data.url) {
+        throw new Error("Studio returned an invalid preview address.")
+      }
+
+      const target = new URL(data.url, window.location.origin)
+      if (target.protocol !== "http:" && target.protocol !== "https:") {
+        throw new Error("Studio returned an invalid preview address.")
+      }
+      popup.location.replace(target.href)
+    } catch (error) {
+      try {
+        popup.close()
+      } catch {
+        // The browser may already have closed the blank tab.
+      }
+      toast.error("Could not open preview", {
+        description:
+          error instanceof TypeError
+            ? "Could not reach Studio. Check the connection and try again."
+            : errorMessage(error),
+      })
+    }
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
@@ -301,7 +366,8 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           {list.map((p) => (
             <DropdownMenuItem
               key={p.port}
-              render={<a href={p.url} target="_blank" rel="noreferrer" />}
+              render={<button type="button" />}
+              onClick={() => void openPreview(p.port)}
             >
               :{p.port}
               <ArrowSquareOutIcon className="ml-auto" />

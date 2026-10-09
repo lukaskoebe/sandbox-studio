@@ -2,6 +2,7 @@
 //
 //	studio            run the server
 //	studio openapi    print the API description (used to generate the web client types)
+//	studio login-url  print a fresh one-time browser login link
 package main
 
 import (
@@ -35,6 +36,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
+	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 	"github.com/lukaskoebe/sandbox-studio/internal/webui"
 )
 
@@ -50,6 +52,15 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+		return
+	}
+	if flag.Arg(0) == "login-url" {
+		link, err := requestLoginURL(context.Background(), *addr)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println(link)
 		return
 	}
 
@@ -96,6 +107,17 @@ func run(addr, image string, log *slog.Logger) error {
 		return err
 	}
 	defer st.Close()
+	authKey, err := st.Secret(ctx, "web-auth-key", 32)
+	if err != nil {
+		return err
+	}
+	auth, err := webauth.New(authKey, func(host string) bool {
+		_, _, ok := preview.Parse(host)
+		return ok
+	})
+	if err != nil {
+		return err
+	}
 	// Studio must not run without its vault: without the key the stored secrets are lost.
 	vault, err := secrets.Open(ctx, st, p.Data, log)
 	if err != nil {
@@ -151,9 +173,9 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Log: log, Addr: addr}).Register(mux)
 	mux.Handle("/", webui.Handler())
-	handler := api.Guard(preview.Route(hub.DialTCP, mux))
+	handler := api.Guard(auth.Middleware(preview.Route(hub.DialTCP, mux)))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up
 	// the shutdown.
@@ -174,6 +196,7 @@ func run(addr, image string, log *slog.Logger) error {
 	// Sandboxes are detached VMs: they keep running when Studio stops, and their agents
 	// reconnect when it comes back.
 	log.Info("sandbox studio listening", "url", "http://"+addr, "version", version.Version, "data", p.Data, "image", image)
+	log.Info("open Studio with this one-time login link", "url", loginURL(addr, auth.IssueLogin()))
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

@@ -424,6 +424,18 @@
         ],
         "type": "object"
       },
+      "PreviewOpenBody": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
       "PreviewPort": {
         "additionalProperties": false,
         "properties": {
@@ -1513,6 +1525,71 @@
                     "array",
                     "null"
                   ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "previews"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/previews/{port}/open": {
+      "post": {
+        "operationId": "openPreview",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Preview port",
+            "in": "path",
+            "name": "port",
+            "required": true,
+            "schema": {
+              "description": "Preview port",
+              "format": "int64",
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOpenBody"
                 }
               }
             },
