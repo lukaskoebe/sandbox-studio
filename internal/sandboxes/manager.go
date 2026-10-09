@@ -29,13 +29,23 @@ const (
 	DefaultDockerMiB    = 20 * 1024
 )
 
-// Manager coordinates the catalog, the runtime and the agent hub.
+// Manager coordinates the catalog, the runtime, the agent hub and the network gateway.
 type Manager struct {
 	Store   *store.Store
 	Runtime *runtime.Runtime
 	Hub     *agentchan.Hub
+	Egress  Egress
 	Paths   paths.Paths
 	Log     *slog.Logger
+}
+
+// Egress is the host side of sandbox networking (internal/gateway).
+type Egress interface {
+	// Attach prepares a sandbox's resolver and gateway credentials. It must run before its
+	// VM is created or started.
+	Attach(sb store.Sandbox) (runtime.Egress, error)
+	// Detach releases them when the sandbox is deleted.
+	Detach(sandboxID string)
 }
 
 // View is a sandbox as shown to clients: catalog record plus live state.
@@ -74,6 +84,9 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 		if err := m.Hub.Listen(sb.ID, m.Paths.AgentSocket(sb.ID)); err != nil {
 			m.Log.Warn("agent listener", "sandbox", sb.ID, "err", err)
 		}
+		if _, err := m.Egress.Attach(sb); err != nil {
+			m.Log.Warn("sandbox network", "sandbox", sb.ID, "err", err)
+		}
 	}
 	return nil
 }
@@ -98,14 +111,21 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err != nil {
 		return View{}, err
 	}
+	egress, err := m.Egress.Attach(rec)
+	if err != nil {
+		m.Store.DeleteSandbox(ctx, envID, rec.ID)
+		return View{}, err
+	}
 	sock := m.Paths.AgentSocket(rec.ID)
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
+		m.Egress.Detach(rec.ID)
 		m.Store.DeleteSandbox(ctx, envID, rec.ID)
 		return View{}, err
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(rec.CPUs), MemoryMiB: uint32(rec.MemoryMiB),
 		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
+		Egress: egress,
 	}
 	labels := map[string]string{
 		"studio.sandbox-id":     rec.ID,
@@ -114,6 +134,7 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	}
 	if err := m.Runtime.Create(ctx, VMName(rec), spec, sock, labels); err != nil {
 		m.Hub.Close(rec.ID)
+		m.Egress.Detach(rec.ID)
 		m.Runtime.Remove(context.WithoutCancel(ctx), VMName(rec))
 		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
 		return View{}, err
@@ -157,6 +178,9 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
+	if _, err := m.Egress.Attach(rec); err != nil {
+		return View{}, err
+	}
 	if err := m.Hub.Listen(rec.ID, m.Paths.AgentSocket(rec.ID)); err != nil {
 		return View{}, err
 	}
@@ -188,6 +212,7 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 		return err
 	}
 	m.Hub.Close(rec.ID)
+	m.Egress.Detach(rec.ID)
 	return m.Store.DeleteSandbox(ctx, envID, id)
 }
 

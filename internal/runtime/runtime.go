@@ -31,17 +31,26 @@ const (
 
 // Options configure every sandbox Studio creates.
 type Options struct {
-	Image       string   // OCI reference of the base image
-	GuestDir    string   // host directory mounted read-only at /opt/studio
-	Nameservers []string // DNS resolvers for the guest
+	Image    string // OCI reference of the base image
+	GuestDir string // host directory mounted read-only at /opt/studio
 }
 
-// Spec is the per-sandbox resource configuration.
+// Spec is the per-sandbox configuration.
 type Spec struct {
 	CPUs         uint8
 	MemoryMiB    uint32
 	WorkspaceMiB uint32
 	DockerMiB    uint32
+	Egress       Egress
+}
+
+// Egress routes a sandbox's traffic through Studio: DNS to its own resolver, and every
+// TCP connection through the SOCKS5 gateway, which asks the network rules.
+type Egress struct {
+	Nameserver  string // host address of the sandbox's resolver
+	Proxy       string // host address of the gateway
+	User        string // the gateway user name
+	PasswordEnv string // the Studio environment variable holding the gateway password
 }
 
 // Runtime creates and controls sandbox VMs.
@@ -54,18 +63,23 @@ func Ensure(ctx context.Context) error {
 }
 
 // New returns a runtime with the given options.
-func New(opts Options) *Runtime {
-	if len(opts.Nameservers) == 0 {
-		opts.Nameservers = []string{"1.1.1.1:53", "9.9.9.9:53"}
-	}
-	return &Runtime{opts: opts}
-}
+func New(opts Options) *Runtime { return &Runtime{opts: opts} }
 
 // Create creates and boots a detached sandbox VM. agentSocket is the host Unix socket
 // that the guest agent reaches over vsock.
 func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocket string, labels map[string]string) error {
-	network := msb.NetworkPolicy.FromProfiles(msb.NetworkProfilePublic)
-	network.DNS = &msb.DNSConfig{Nameservers: r.opts.Nameservers}
+	// Only DNS to the host and TCP to public addresses leave the guest, and the TCP goes
+	// through the gateway. UDP and ICMP would bypass it; QUIC falls back to TCP.
+	network := &msb.NetworkConfig{
+		Rules: []msb.PolicyRule{
+			msb.Rule.AllowDNS(),
+			{Action: msb.PolicyActionAllow, Direction: msb.PolicyDirectionEgress, Destination: "public", Protocols: []msb.PolicyProtocol{msb.PolicyProtocolTCP}},
+		},
+		DefaultEgress:  msb.PolicyActionDeny,
+		DefaultIngress: msb.PolicyActionAllow,
+		DNS:            &msb.DNSConfig{Nameservers: []string{spec.Egress.Nameserver}},
+	}
+	proxy := msb.SOCKS5Proxy(spec.Egress.Proxy).Credentials(spec.Egress.User, msb.SecretSourceEnv(spec.Egress.PasswordEnv))
 	sb, err := msb.CreateSandbox(ctx, name,
 		msb.WithImage(r.opts.Image),
 		msb.WithInit(msb.Init.Auto()),
@@ -79,6 +93,7 @@ func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocke
 		}),
 		msb.WithVsock(msb.VsockRoute{HostSocket: agentSocket, Port: agentproto.VsockPort}),
 		msb.WithNetwork(network),
+		msb.WithProxy(proxy),
 		msb.WithLabels(labels),
 		msb.WithDetached(),
 	)

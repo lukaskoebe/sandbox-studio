@@ -15,6 +15,7 @@ require (
 	github.com/hybridgroup/yzma v1.29.1
 	github.com/mdlayher/vsock v1.3.0
 	github.com/superradcompany/microsandbox/sdk/go v0.7.7
+	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.60.0
 	modernc.org/sqlite v1.60.1
 )
@@ -88,7 +89,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.42.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.42.0 // indirect
 	go.opentelemetry.io/otel/trace v1.42.0 // indirect
-	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect

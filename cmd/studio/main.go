@@ -21,7 +21,11 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
+	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/preview"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -51,6 +55,9 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// gatewayAddr is where sandbox VMs reach the network gateway.
+const gatewayAddr = "127.0.0.1:7879"
 
 func defaultImage() string {
 	if version.Version == "dev" {
@@ -93,11 +100,34 @@ func run(addr, image string, log *slog.Logger) error {
 		return fmt.Errorf("microsandbox runtime: %w", err)
 	}
 
+	// Every sandbox connection goes through the gateway. Its address is stored in each VM's
+	// configuration, so it never changes.
+	key, err := st.Secret(ctx, "gateway-key", 32)
+	if err != nil {
+		return err
+	}
+	bus := &events.Bus{}
+	engine := &policy.Engine{Store: st, Bus: bus, Hold: 60 * time.Second}
+	resolvers := &gateway.Resolvers{Upstreams: dnsproxy.SystemUpstreams(), Log: log}
+	defer resolvers.Close()
+	conns := &gateway.ConnLog{}
+	gw := &gateway.Gateway{
+		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
+		Resolvers: resolvers, Conns: conns, Log: log,
+	}
+	gl, err := net.Listen("tcp", gatewayAddr)
+	if err != nil {
+		return fmt.Errorf("network gateway: %w", err)
+	}
+	defer gl.Close()
+	go gw.Serve(gl)
+
 	hub := agentchan.NewHub(log)
 	mgr := &sandboxes.Manager{
 		Store:   st,
 		Runtime: runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()}),
 		Hub:     hub,
+		Egress:  gw,
 		Paths:   p,
 		Log:     log,
 	}
@@ -106,11 +136,19 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Bus: bus, Conns: conns, Log: log, Addr: addr}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(preview.Route(hub.DialTCP, mux))
 
-	srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
+	// Long-lived requests (event streams, terminals) end with the server instead of holding up
+	// the shutdown.
+	base, cancelRequests := context.WithCancel(context.Background())
+	defer cancelRequests()
+	srv := &http.Server{
+		Addr: addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return base },
+	}
+	srv.RegisterOnShutdown(cancelRequests)
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
