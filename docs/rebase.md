@@ -35,9 +35,11 @@ Restore drops Studio's DNS and proxy egress
 7. Studio removes the old VM and ends the record.
 
 If a step before the commit fails, Studio removes the target, stops the source and ends
-the record. The sandbox stays stopped on its old template. At startup, a leftover record is
-resolved by generation: before the commit the target is removed, after it the source is
-removed. Lifecycle actions on that sandbox are refused until this succeeds.
+the record. A sandbox that was running is then started again through the normal start
+path. If that start fails, both errors are returned and the sandbox stays stopped. At
+startup, a leftover record is resolved by generation: before the commit the target is
+removed and the source stays stopped, after it the source is removed. Lifecycle actions on
+that sandbox are refused until this succeeds.
 
 Docker images, containers and volumes are lost. Tmux sessions end. Checkpoints stay with
 their generation.

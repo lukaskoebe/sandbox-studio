@@ -26,7 +26,7 @@ func (s *Server) registerTransfers(api huma.API) {
 		Description: "Copies /workspace into a new VM built from the template, with the template's resources. " +
 			"Docker images, containers and volumes are lost. Tmux sessions end. " +
 			"A running sandbox is stopped for the copy and started again; a stopped one stays stopped. " +
-			"If the rebase fails, the sandbox is left stopped on its old template.",
+			"If the rebase fails, the sandbox stays on its old template in the state it was in.",
 	}, func(ctx context.Context, in *rebaseIn) (*sandboxOut, error) {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), transferTimeout)
 		defer cancel()

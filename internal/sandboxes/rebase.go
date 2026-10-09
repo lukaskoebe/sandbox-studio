@@ -14,7 +14,7 @@ import (
 // workspace disks and the template's resources. Docker state and tmux sessions end. The
 // sandbox keeps its identity and egress, and its checkpoints stay with their generations.
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
-// catalog switches, any failure removes the new VM and leaves the source stopped.
+// catalog switches, any failure removes the new VM and returns the source to its state.
 func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
@@ -62,12 +62,13 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if err != nil {
 		return View{}, err
 	}
+	wasRunning := status == runtime.StatusRunning
 	if op.FromGeneration != sb.Generation {
-		return View{}, m.rollbackRebase(ctx, sb, op, errors.New("sandbox generation changed"))
+		return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
-	if err := m.rebaseInto(ctx, rt, sb, target, image, status == runtime.StatusRunning); err != nil {
-		return View{}, m.rollbackRebase(ctx, sb, op, err)
+	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning); err != nil {
+		return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 
 	if err := m.Store.CommitRebase(ctx, op); err != nil {
@@ -75,7 +76,7 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 		current, readErr := m.Store.Sandbox(cleanupCtx, envID, id)
 		cancel()
 		if readErr == nil && current.Generation == op.FromGeneration {
-			return View{}, m.rollbackRebase(ctx, sb, op, err)
+			return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, err)
 		}
 		// The switch may have taken effect. Recovery finishes it; the target is never removed.
 		return View{}, errors.Join(err, readErr)
@@ -133,8 +134,9 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 }
 
 // rollbackRebase removes the target VM, stops the source and ends the record. The record
-// stays for recovery if any step fails.
-func (m *Manager) rollbackRebase(ctx context.Context, sb store.Sandbox, op store.RebaseOperation, cause error) error {
+// stays for recovery if any of that fails. A source that was running is then started
+// again through the normal start path.
+func (m *Manager) rollbackRebase(ctx context.Context, sb store.Sandbox, op store.RebaseOperation, wasRunning bool, cause error) error {
 	cleanupCtx, cancel := cleanupContext(ctx)
 	defer cancel()
 	if err := m.Runtime.Remove(cleanupCtx, vmNameAtGeneration(sb, op.ToGeneration)); err != nil {
@@ -155,6 +157,15 @@ func (m *Manager) rollbackRebase(ctx context.Context, sb store.Sandbox, op store
 	}
 	if err := m.resetHub(sb.ID); err != nil {
 		return errors.Join(cause, fmt.Errorf("agent listener recovery failed: %w", err))
+	}
+	if !wasRunning {
+		return cause
+	}
+	if _, err := m.Egress.Attach(current); err != nil {
+		return errors.Join(cause, fmt.Errorf("source restart failed: %w", err))
+	}
+	if err := m.Runtime.Start(cleanupCtx, VMName(current)); err != nil {
+		return errors.Join(cause, fmt.Errorf("source restart failed: %w", err))
 	}
 	return cause
 }

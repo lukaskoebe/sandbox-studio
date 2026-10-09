@@ -198,43 +198,81 @@ func TestRebaseStoppedSandboxStaysStopped(t *testing.T) {
 	}
 }
 
-func TestRebaseFailureRemovesTargetAndKeepsSourceStopped(t *testing.T) {
-	for _, step := range []string{"create-transfer", "import", "export", "boot"} {
-		t.Run(step, func(t *testing.T) {
-			f := newCheckpointFixture(t)
-			tf := newTransferFake(f)
-			template := rebaseTemplate(t, f, rebaseResources)
-			source := VMName(f.sandbox)
-			target := vmNameAtGeneration(f.sandbox, f.sandbox.Generation+1)
-			tf.setStatus(source, runtime.StatusRunning)
-			tf.setWorkspace(source, "files")
-			if step == "export" {
-				tf.fail("export:"+source, errors.New("injected"))
-			} else {
-				tf.fail(step+":"+target, errors.New("injected"))
+func TestRebaseFailureRemovesTargetAndRestoresSource(t *testing.T) {
+	for _, running := range []bool{true, false} {
+		for _, step := range []string{"create-transfer", "import", "export", "boot"} {
+			if step == "boot" && !running {
+				continue
 			}
+			t.Run(fmt.Sprintf("%s/running=%t", step, running), func(t *testing.T) {
+				f := newCheckpointFixture(t)
+				tf := newTransferFake(f)
+				template := rebaseTemplate(t, f, rebaseResources)
+				source := VMName(f.sandbox)
+				target := vmNameAtGeneration(f.sandbox, f.sandbox.Generation+1)
+				want, wantStarts := runtime.StatusStopped, 0
+				if running {
+					tf.setStatus(source, runtime.StatusRunning)
+					want, wantStarts = runtime.StatusRunning, 1
+				}
+				tf.setWorkspace(source, "files")
+				if step == "export" {
+					tf.fail("export:"+source, errors.New("injected"))
+				} else {
+					tf.fail(step+":"+target, errors.New("injected"))
+				}
 
-			_, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
-			if err == nil {
-				t.Fatal("Rebase succeeded")
-			}
-			current, err := f.store.Sandbox(f.ctx, f.env.ID, f.sandbox.ID)
-			if err != nil || current.Generation != f.sandbox.Generation || current.TemplateID != "" || current.CPUs != f.sandbox.CPUs {
-				t.Fatalf("sandbox = %+v, %v", current, err)
-			}
-			if tf.hasVM(target) {
-				t.Fatal("target VM remains")
-			}
-			if status, _ := tf.Status(f.ctx, source); status != runtime.StatusStopped {
-				t.Fatalf("source is %s", status)
-			}
-			if ops, err := f.store.Rebases(f.ctx); err != nil || len(ops) != 0 {
-				t.Fatalf("rebase records = %+v, %v", ops, err)
-			}
-			if _, err := f.manager.Start(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
-				t.Fatalf("Start after failed rebase: %v", err)
-			}
-		})
+				_, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+				if err == nil {
+					t.Fatal("Rebase succeeded")
+				}
+				current, err := f.store.Sandbox(f.ctx, f.env.ID, f.sandbox.ID)
+				if err != nil || current.Generation != f.sandbox.Generation || current.TemplateID != "" || current.CPUs != f.sandbox.CPUs {
+					t.Fatalf("sandbox = %+v, %v", current, err)
+				}
+				if tf.hasVM(target) {
+					t.Fatal("target VM remains")
+				}
+				if status, _ := tf.Status(f.ctx, source); status != want {
+					t.Fatalf("source is %s, want %s", status, want)
+				}
+				// A running source comes back through the normal start path, with services.
+				if tf.countCall("start:"+source) != wantStarts {
+					t.Fatalf("calls = %v", tf.calls)
+				}
+				if ops, err := f.store.Rebases(f.ctx); err != nil || len(ops) != 0 {
+					t.Fatalf("rebase records = %+v, %v", ops, err)
+				}
+			})
+		}
+	}
+}
+
+func TestRebaseFailureReportsSourceRestartFailure(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	source := VMName(f.sandbox)
+	target := vmNameAtGeneration(f.sandbox, f.sandbox.Generation+1)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.setWorkspace(source, "files")
+	importErr, startErr := errors.New("import failed"), errors.New("start failed")
+	tf.fail("import:"+target, importErr)
+	tf.fail("start:"+source, startErr)
+
+	_, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	if !errors.Is(err, importErr) || !errors.Is(err, startErr) {
+		t.Fatalf("err = %v", err)
+	}
+	if tf.hasVM(target) {
+		t.Fatal("target VM remains")
+	}
+	if ops, err := f.store.Rebases(f.ctx); err != nil || len(ops) != 0 {
+		t.Fatalf("rebase records = %+v, %v", ops, err)
+	}
+	tf.clearFailure("start:" + source)
+	if _, err := f.manager.Start(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
+		t.Fatalf("Start after failed restart: %v", err)
 	}
 }
 

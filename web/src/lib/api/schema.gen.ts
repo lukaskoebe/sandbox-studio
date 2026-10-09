@@ -329,7 +329,7 @@ export interface paths {
         put?: never;
         /**
          * Move a sandbox onto another template
-         * @description Copies /workspace into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox is left stopped on its old template.
+         * @description Copies /workspace into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox stays on its old template in the state it was in.
          */
         post: operations["rebaseSandbox"];
         delete?: never;
