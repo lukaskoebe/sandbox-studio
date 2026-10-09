@@ -138,9 +138,10 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
 
   const mutationPending =
     create.isPending || remove.isPending || restore.isPending
-  const canCreateCheckpoint = sandbox.status === "stopped"
+  const canCreateCheckpoint =
+    sandbox.status === "running" || sandbox.status === "stopped"
   const canRestoreSandbox =
-    sandbox.checkpointRestoreSupported && canCreateCheckpoint
+    sandbox.checkpointRestoreSupported && sandbox.status === "stopped"
 
   function createCheckpoint(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -188,13 +189,15 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
         </p>
       )}
 
-      {!canCreateCheckpoint && (
+      {!canCreateCheckpoint ? (
         <p className="pt-4 text-xs text-muted-foreground">
-          {sandbox.checkpointRestoreSupported
-            ? "Stop the sandbox before creating or restoring checkpoints."
-            : "Stop the sandbox before saving checkpoints."}
+          Save checkpoints while the sandbox is running or stopped.
         </p>
-      )}
+      ) : sandbox.checkpointRestoreSupported && !canRestoreSandbox ? (
+        <p className="pt-4 text-xs text-muted-foreground">
+          Stop the sandbox to restore a checkpoint.
+        </p>
+      ) : null}
 
       {!checkpoints.isPending && !checkpoints.isError && list.length > 0 && (
         <p className="pt-4 text-xs text-muted-foreground">

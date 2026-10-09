@@ -63,7 +63,7 @@ type SandboxRuntime interface {
 	CreateCheckpoint(context.Context, string, string, string) error
 	RemoveCheckpoint(context.Context, string, string) error
 	CheckpointRestoreSupported() bool
-	RestoreCheckpoint(context.Context, string, string, string) error
+	RestoreCheckpoint(context.Context, string, string, string, runtime.Egress) error
 }
 
 // Egress is the host side of sandbox networking (internal/gateway).

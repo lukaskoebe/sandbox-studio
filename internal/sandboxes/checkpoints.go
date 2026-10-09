@@ -31,8 +31,7 @@ func (m *Manager) Checkpoints(ctx context.Context, envID, id string) ([]store.Ch
 	return m.Store.Checkpoints(ctx, envID, id)
 }
 
-// CreateCheckpoint captures the current sandbox disks. The source VM must be stopped
-// because SDK guest flushing cannot freeze all workloads in Studio's systemd PID 1 guest.
+// CreateCheckpoint captures the current sandbox disks, of a running or a stopped sandbox.
 func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) (store.Checkpoint, error) {
 	unlock, err := m.tryMutation(id)
 	if err != nil {
@@ -59,7 +58,7 @@ func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) 
 	if err != nil {
 		return store.Checkpoint{}, err
 	}
-	if status != runtime.StatusStopped {
+	if status != runtime.StatusStopped && status != runtime.StatusRunning {
 		return store.Checkpoint{}, ErrCheckpointState
 	}
 
@@ -199,13 +198,14 @@ func (m *Manager) RestoreCheckpoint(ctx context.Context, envID, id, checkpointID
 	candidateName := vmNameAtGeneration(sb, op.ToGeneration)
 
 	// Keep the sandbox's egress identity and the agent endpoint ready before restoring.
-	if _, err := m.Egress.Attach(sb); err != nil {
+	egress, err := m.Egress.Attach(sb)
+	if err != nil {
 		return View{}, m.rollbackRestore(ctx, sb, op, candidateName, err)
 	}
 	if err := m.resetHub(sb.ID); err != nil {
 		return View{}, m.rollbackRestore(ctx, sb, op, candidateName, err)
 	}
-	if err := m.Runtime.RestoreCheckpoint(ctx, sb.ID, checkpointID, candidateName); err != nil {
+	if err := m.Runtime.RestoreCheckpoint(ctx, sb.ID, checkpointID, candidateName, egress); err != nil {
 		return View{}, m.rollbackRestore(ctx, sb, op, candidateName, err)
 	}
 

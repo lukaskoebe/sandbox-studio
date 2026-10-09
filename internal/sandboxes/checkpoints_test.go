@@ -139,7 +139,19 @@ func TestRestoreUnavailablePreservesSourceAndDoesNotBeginOperation(t *testing.T)
 	}
 }
 
-func TestCheckpointCreationRequiresStoppedGuest(t *testing.T) {
+func TestRestoreCheckpointKeepsTheSandboxEgress(t *testing.T) {
+	f := newCheckpointFixture(t)
+	f.runtime.setStatus(VMName(f.sandbox), runtime.StatusStopped)
+	checkpoint := f.createReadyCheckpoint(t, "egress")
+	if _, err := f.manager.RestoreCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, checkpoint.ID); err != nil {
+		t.Fatal(err)
+	}
+	if want := (fakeEgress{}).egress(f.sandbox.ID); f.runtime.restoredEgress != want {
+		t.Fatalf("restored with egress %+v; want the sandbox's %+v", f.runtime.restoredEgress, want)
+	}
+}
+
+func TestCheckpointCreationRequiresRunningOrStoppedGuest(t *testing.T) {
 	f := newCheckpointFixture(t)
 	vmName := VMName(f.sandbox)
 	f.runtime.setStatus(vmName, runtime.StatusStopped)
@@ -150,7 +162,6 @@ func TestCheckpointCreationRequiresStoppedGuest(t *testing.T) {
 		status runtime.Status
 		name   string
 	}{
-		{status: runtime.StatusRunning, name: "running"},
 		{status: runtime.StatusPaused, name: "paused"},
 		{status: runtime.StatusStarting, name: "starting"},
 	} {
@@ -159,9 +170,11 @@ func TestCheckpointCreationRequiresStoppedGuest(t *testing.T) {
 			t.Errorf("capture while %s = %v; want ErrCheckpointState", tc.name, err)
 		}
 	}
-	f.runtime.setStatus(vmName, runtime.StatusStopped)
-	if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "stopped"); err != nil {
-		t.Fatalf("capture while stopped: %v", err)
+	for _, status := range []runtime.Status{runtime.StatusStopped, runtime.StatusRunning} {
+		f.runtime.setStatus(vmName, status)
+		if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, string(status)); err != nil {
+			t.Fatalf("capture while %s: %v", status, err)
+		}
 	}
 	f.runtime.setStatus(vmName, runtime.StatusDraining)
 	if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "draining"); !errors.Is(err, ErrCheckpointState) {
@@ -509,8 +522,12 @@ func (f *checkpointFixture) createReadyCheckpoint(t *testing.T, name string) sto
 
 type fakeEgress struct{}
 
-func (fakeEgress) Attach(store.Sandbox) (runtime.Egress, error) { return runtime.Egress{}, nil }
-func (fakeEgress) Detach(string)                                {}
+func (e fakeEgress) Attach(sb store.Sandbox) (runtime.Egress, error) { return e.egress(sb.ID), nil }
+func (fakeEgress) Detach(string)                                     {}
+
+func (fakeEgress) egress(id string) runtime.Egress {
+	return runtime.Egress{Nameserver: "127.0.0.1:53000", Proxy: "127.0.0.1:7879", User: id, PasswordEnv: "STUDIO_GW_" + id}
+}
 
 type fakeSandboxRuntime struct {
 	mu                 sync.Mutex
@@ -520,6 +537,7 @@ type fakeSandboxRuntime struct {
 	failures           map[string]error
 	calls              []string
 	restoreDisabled    bool
+	restoredEgress     runtime.Egress
 	onCreateCheckpoint func()
 	onRemove           func(string)
 }
@@ -633,9 +651,10 @@ func (f *fakeSandboxRuntime) RemoveCheckpoint(_ context.Context, sandboxID, chec
 	return nil
 }
 
-func (f *fakeSandboxRuntime) RestoreCheckpoint(_ context.Context, sandboxID, checkpointID, newVMName string) error {
+func (f *fakeSandboxRuntime) RestoreCheckpoint(_ context.Context, sandboxID, checkpointID, newVMName string, egress runtime.Egress) error {
 	f.record("restore-checkpoint:" + newVMName)
 	f.mu.Lock()
+	f.restoredEgress = egress
 	if f.checkpoints[sandboxID+"/"+checkpointID] {
 		f.statuses[newVMName] = runtime.StatusStopped
 	}

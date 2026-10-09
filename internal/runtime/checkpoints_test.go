@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -82,5 +83,43 @@ func TestCheckpointRemovalDoesNotMoveAnUnrelatedGroupHead(t *testing.T) {
 
 	if got := checkpointRemovalHead(records, group, "target", "", "same-group-member"); got != "" {
 		t.Fatalf("checkpointRemovalHead = %q; want no head change", got)
+	}
+}
+
+// storedConfig is msb 0.7.7's stored configuration of a sandbox Create made.
+const storedConfig = `{"init":null,"network":{
+ "policy":{"default_egress":"deny","default_ingress":"allow","rules":[
+  {"direction":"egress","destination":{"group":"host"},"protocols":["udp","tcp"],"ports":[{"start":53,"end":53}],"action":"allow"},
+  {"direction":"egress","destination":{"group":"public"},"protocols":["tcp"],"ports":[],"action":"allow"}]},
+ "dns":{"rebind_protection":true,"nameservers":["127.0.0.1:17102"],"query_timeout_ms":5000},
+ "outbound_proxy":{"protocol":"socks5","address":"127.0.0.1:7879",
+  "credentials":{"username":"cakcsogfdpwb4","password":{"kind":"env","var":"STUDIO_GW_CAKCSOGFDPWB4"}}}}}`
+
+func TestCheckEgress(t *testing.T) {
+	egress := Egress{Nameserver: "127.0.0.1:17102", Proxy: "127.0.0.1:7879", User: "cakcsogfdpwb4", PasswordEnv: "STUDIO_GW_CAKCSOGFDPWB4"}
+	if err := checkEgress(storedConfig, egress); err != nil {
+		t.Fatalf("Create's configuration refused: %v", err)
+	}
+	for name, edit := range map[string][2]string{
+		"no network":       {`"network":{`, `"network_gone":{`},
+		"default allow":    {`"default_egress":"deny"`, `"default_egress":"allow"`},
+		"public udp":       {`"protocols":["tcp"],"ports":[]`, `"protocols":["tcp","udp"],"ports":[]`},
+		"private tcp":      {`{"group":"public"}`, `{"group":"private"}`},
+		"no resolver":      {`"dns":{`, `"dns_gone":{`},
+		"other resolver":   {`127.0.0.1:17102`, `127.0.0.1:17103`},
+		"no proxy":         {`"outbound_proxy":{`, `"proxy_gone":{`},
+		"other proxy":      {`127.0.0.1:7879`, `127.0.0.1:7880`},
+		"other identity":   {`"username":"cakcsogfdpwb4"`, `"username":"someoneelse"`},
+		"other secret":     {`"var":"STUDIO_GW_CAKCSOGFDPWB4"`, `"var":"STUDIO_GW_OTHER"`},
+		"no credentials":   {`"credentials":{"username"`, `"creds":{"username"`},
+		"not socks5":       {`"protocol":"socks5"`, `"protocol":"http"`},
+		"dns to elsewhere": {`{"group":"host"},"protocols":["udp","tcp"],"ports":[{"start":53,"end":53}]`, `{"group":"public"},"protocols":["udp","tcp"],"ports":[{"start":53,"end":53}]`},
+	} {
+		if !strings.Contains(storedConfig, edit[0]) {
+			t.Fatalf("%s: the fixture has no %q", name, edit[0])
+		}
+		if err := checkEgress(strings.Replace(storedConfig, edit[0], edit[1], 1), egress); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

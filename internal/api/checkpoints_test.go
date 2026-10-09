@@ -20,6 +20,7 @@ type checkpointFakeRuntime struct {
 	statuses                   map[string]runtime.Status
 	checkpoints                map[string]bool
 	checkpointRestoreSupported bool
+	createCheckpointErr        error
 	removeCheckpointErr        error
 }
 
@@ -94,8 +95,17 @@ func (r *checkpointFakeRuntime) Statuses(_ context.Context, prefix string) (map[
 func (r *checkpointFakeRuntime) CreateCheckpoint(_ context.Context, _ string, sandboxID, checkpointID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.createCheckpointErr != nil {
+		return r.createCheckpointErr
+	}
 	r.checkpoints[sandboxID+"/"+checkpointID] = true
 	return nil
+}
+
+func (r *checkpointFakeRuntime) setCreateCheckpointError(err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.createCheckpointErr = err
 }
 
 func (r *checkpointFakeRuntime) RemoveCheckpoint(_ context.Context, sandboxID, checkpointID string) error {
@@ -114,7 +124,7 @@ func (r *checkpointFakeRuntime) setRemoveCheckpointError(err error) {
 	r.removeCheckpointErr = err
 }
 
-func (r *checkpointFakeRuntime) RestoreCheckpoint(_ context.Context, sandboxID, checkpointID, newVMName string) error {
+func (r *checkpointFakeRuntime) RestoreCheckpoint(_ context.Context, sandboxID, checkpointID, newVMName string, _ runtime.Egress) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.checkpoints[sandboxID+"/"+checkpointID] {
@@ -171,9 +181,9 @@ func TestCheckpointRoutes(t *testing.T) {
 		t.Fatalf("blank checkpoint name: %d %s", rec.Code, rec.Body)
 	}
 
-	rt.setStatus(vmName, runtime.StatusRunning)
+	rt.setStatus(vmName, runtime.StatusPaused)
 	if rec := do(h, http.MethodPost, base, `{"name":"before-edit"}`); rec.Code != http.StatusConflict {
-		t.Fatalf("create from running state: %d %s", rec.Code, rec.Body)
+		t.Fatalf("create from paused state: %d %s", rec.Code, rec.Body)
 	}
 	rt.setStatus(vmName, runtime.StatusStopped)
 
@@ -299,6 +309,18 @@ func TestCheckpointRestoreUnavailable(t *testing.T) {
 	}
 	if got.State != store.CheckpointStateReady {
 		t.Fatalf("checkpoint state changed: got %q, want %q", got.State, store.CheckpointStateReady)
+	}
+}
+
+func TestLiveCheckpointOfSystemdSandboxConflicts(t *testing.T) {
+	h, s, env, sb, rt := checkpointAPI(t)
+	rt.setCreateCheckpointError(runtime.ErrLiveCheckpointUnsupported)
+	base := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID + "/checkpoints"
+	if rec := do(h, http.MethodPost, base, `{"name":"live"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("live checkpoint of a systemd sandbox: %d %s", rec.Code, rec.Body)
+	}
+	if list, err := s.Store.Checkpoints(context.Background(), env.ID, sb.ID); err != nil || len(list) != 0 {
+		t.Fatalf("checkpoints after refused capture = %+v, %v; want none", list, err)
 	}
 }
 

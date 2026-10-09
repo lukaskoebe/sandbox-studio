@@ -2,32 +2,54 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
 	msb "github.com/superradcompany/microsandbox/sdk/go"
 )
 
-var ErrCheckpointRestoreUnavailable = errors.New("checkpoint restore is unavailable with this microsandbox version because it loses systemd initialization")
+var ErrCheckpointRestoreUnavailable = errors.New("checkpoint restore is unavailable with this microsandbox version because it can't keep the sandbox's network routed through Studio")
+
+// ErrLiveCheckpointUnsupported means a running sandbox was created with systemd as its init,
+// whose processes microsandbox can't freeze for a consistent snapshot.
+var ErrLiveCheckpointUnsupported = errors.New("this sandbox was created with systemd as its init, so it must be stopped before a checkpoint")
 
 // ErrCheckpointInUse means a newer indexed checkpoint depends on this one.
 // Delete dependent checkpoints first; Studio never forces removal of a parent.
 var ErrCheckpointInUse = errors.New("checkpoint has dependent newer checkpoints; delete those checkpoints first")
 
-// CheckpointRestoreSupported reports whether this runtime preserves systemd initialization
-// while restoring a disk snapshot. Keep restore disabled for SDK v0.7.7 until upstream
-// issue #1676 is fixed: https://github.com/superradcompany/microsandbox/issues/1676.
+// CheckpointRestoreSupported reports whether a restored sandbox can keep its egress. SDK
+// v0.7.7 restores a disk snapshot with msb's default network: restore accepts policy rules
+// and vsock routes but neither the resolver nor the gateway proxy, and inheriting resources
+// covers mounts only. Keep restore disabled until upstream issue #1736 is fixed:
+// https://github.com/superradcompany/microsandbox/issues/1736.
 func (*Runtime) CheckpointRestoreSupported() bool { return false }
 
 // CreateCheckpoint captures the disk state of a sandbox into its deterministic
-// snapshot group. The manager requires a stopped source because SDK guest flushing
-// cannot freeze all workloads in Studio's systemd PID 1 guest; automatic guest
-// flushing stays enabled.
+// snapshot group. A running sandbox is frozen while its filesystems are flushed, which
+// needs agentd as PID 1; sandboxes created with systemd must be stopped first.
 // Force is deliberately false so a retry cannot replace an existing artifact.
 func (r *Runtime) CreateCheckpoint(ctx context.Context, vmName, sandboxID, checkpointID string) error {
-	_, err := msb.Snapshot.Create(ctx, msb.SnapshotCreateOptions{
+	h, err := msb.GetSandbox(ctx, vmName)
+	if err != nil {
+		return fmt.Errorf("look up sandbox for checkpoint: %w", err)
+	}
+	if Status(h.Status()) == StatusRunning {
+		var config struct {
+			Init json.RawMessage `json:"init"`
+		}
+		if err := json.Unmarshal([]byte(h.ConfigJSON()), &config); err != nil {
+			return fmt.Errorf("read sandbox configuration: %w", err)
+		}
+		if len(config.Init) > 0 && string(config.Init) != "null" {
+			return ErrLiveCheckpointUnsupported
+		}
+	}
+	_, err = msb.Snapshot.Create(ctx, msb.SnapshotCreateOptions{
 		FromSandbox: vmName,
 		Group:       checkpointGroup(sandboxID),
 		Name:        checkpointID,
@@ -241,7 +263,11 @@ func restoreCheckpointGroupHead(ctx context.Context, group, selectedHeadID, prev
 // can only refer to the same Studio identity. RestoreSandbox returns detached
 // sandboxes; Stop observes their graceful transition to stopped before this
 // method reports success. The checkpoint source remains untouched.
-func (r *Runtime) RestoreCheckpoint(ctx context.Context, sandboxID, checkpointID, newVMName string) error {
+//
+// The candidate boots without an init even when the source had one (upstream #1676);
+// Start runs `studio-agent boot`, which starts its services either way. egress is what
+// the sandbox's traffic must go through: a candidate that lost it is refused.
+func (r *Runtime) RestoreCheckpoint(ctx context.Context, sandboxID, checkpointID, newVMName string, egress Egress) error {
 	if !r.CheckpointRestoreSupported() {
 		return ErrCheckpointRestoreUnavailable
 	}
@@ -262,18 +288,17 @@ func (r *Runtime) RestoreCheckpoint(ctx context.Context, sandboxID, checkpointID
 		return errors.New("restore checkpoint: SDK returned an empty sandbox")
 	}
 
-	// A disk restore must preserve the PID-1 handoff on subsequent cold starts.
-	// Do not let the manager adopt a VM that has silently lost systemd and its services.
+	// Without its network policy, resolver and gateway proxy the candidate would reach the
+	// internet directly. The manager removes a refused candidate.
 	restored, err := msb.GetSandbox(ctx, newVMName)
-	var config *msb.SandboxConfig
 	if err == nil {
-		config, err = restored.Config()
+		err = checkEgress(restored.ConfigJSON(), egress)
 	}
-	if err != nil || config == nil || config.Init == nil {
+	if err != nil {
 		detachCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		detachErr := sandbox.Detach(detachCtx)
 		cancel()
-		return errors.Join(errors.New("the runtime did not preserve systemd initialization; checkpoint restore was refused and the original sandbox is retained"), err, detachErr)
+		return errors.Join(fmt.Errorf("checkpoint restore was refused and the original sandbox is retained: %w", err), detachErr)
 	}
 
 	if err := sandbox.Stop(ctx); err != nil {
@@ -288,6 +313,73 @@ func (r *Runtime) RestoreCheckpoint(ctx context.Context, sandboxID, checkpointID
 	}
 	if err := sandbox.Close(); err != nil {
 		return fmt.Errorf("close stopped checkpoint candidate: %w", err)
+	}
+	return nil
+}
+
+// checkEgress verifies that msb's stored configuration of a sandbox sends its traffic
+// through egress, as Create configures it.
+func checkEgress(configJSON string, egress Egress) error {
+	var config struct {
+		Network struct {
+			Policy *struct {
+				DefaultEgress string `json:"default_egress"`
+				Rules         []struct {
+					Direction   string `json:"direction"`
+					Action      string `json:"action"`
+					Destination struct {
+						Group string `json:"group"`
+					} `json:"destination"`
+					Protocols []string `json:"protocols"`
+					Ports     []struct {
+						Start int `json:"start"`
+						End   int `json:"end"`
+					} `json:"ports"`
+				} `json:"rules"`
+			} `json:"policy"`
+			DNS *struct {
+				Nameservers []string `json:"nameservers"`
+			} `json:"dns"`
+			Proxy *struct {
+				Protocol    string `json:"protocol"`
+				Address     string `json:"address"`
+				Credentials *struct {
+					Username string `json:"username"`
+					Password struct {
+						Kind string `json:"kind"`
+						Var  string `json:"var"`
+					} `json:"password"`
+				} `json:"credentials"`
+			} `json:"outbound_proxy"`
+		} `json:"network"`
+	}
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil {
+		return fmt.Errorf("read sandbox configuration: %w", err)
+	}
+	n := config.Network
+	switch {
+	case n.Policy == nil || n.Policy.DefaultEgress != string(msb.PolicyActionDeny):
+		return errors.New("the sandbox lost its network policy")
+	}
+	// Only the two allowances Create makes: DNS to the host, which lands on the sandbox's
+	// resolver, and TCP to public addresses, which the proxy carries to the gateway.
+	for _, rule := range n.Policy.Rules {
+		if rule.Action != string(msb.PolicyActionAllow) || rule.Direction == string(msb.PolicyDirectionIngress) {
+			continue
+		}
+		dns := rule.Destination.Group == "host" && len(rule.Ports) == 1 && rule.Ports[0].Start == 53 && rule.Ports[0].End == 53
+		publicTCP := rule.Destination.Group == "public" && slices.Equal(rule.Protocols, []string{"tcp"})
+		if !dns && !publicTCP {
+			return errors.New("the sandbox's network policy allows more than Studio's")
+		}
+	}
+	switch {
+	case n.DNS == nil || !slices.Equal(n.DNS.Nameservers, []string{egress.Nameserver}):
+		return errors.New("the sandbox lost its resolver")
+	case n.Proxy == nil || n.Proxy.Protocol != "socks5" || n.Proxy.Address != egress.Proxy ||
+		n.Proxy.Credentials == nil || n.Proxy.Credentials.Username != egress.User ||
+		n.Proxy.Credentials.Password.Kind != "env" || n.Proxy.Credentials.Password.Var != egress.PasswordEnv:
+		return errors.New("the sandbox lost its gateway proxy")
 	}
 	return nil
 }

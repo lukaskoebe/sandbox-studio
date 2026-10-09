@@ -227,6 +227,7 @@ func apiError(err error) error {
 	case errors.Is(err, store.ErrExists):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, runtime.ErrCheckpointInUse), errors.Is(err, runtime.ErrCheckpointRestoreUnavailable),
+		errors.Is(err, runtime.ErrLiveCheckpointUnsupported),
 		errors.Is(err, store.ErrConflict),
 		errors.Is(err, sandboxes.ErrBusy),
 		errors.Is(err, sandboxes.ErrCheckpointState):

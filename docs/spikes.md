@@ -99,7 +99,7 @@ Decisions:
 - `/workspace` and `/var/lib/docker` are **owned disks**. Checkpoints, suspend/resume and
   restores then capture everything consistently.
 - Restore-as-new-generation inherits resources; that is exactly right because it is the same
-  Studio sandbox.
+  Studio sandbox. (Wrong for the network: see the M3 update below.)
 - Fork: until microsandbox can re-key the proxy and vsock route on fork, a forked child shares
   its parent's network identity. Studio labels it as such in the UI, and the guest agent
   re-registers with a new token written via `msb exec` (the exec channel is per sandbox and
@@ -121,6 +121,25 @@ The v0.7.7 SDK exposes neither a restore init option nor an init modification AP
 therefore gates restore off before modifying either the VM or catalog. The candidate
 adoption path additionally checks persisted init configuration as a regression guard.
 Catalog/recovery tests use a supported fake runtime; they do not qualify real restore.
+
+M3 update, guests without an init: with agentd as PID 1, microsandbox 0.7.7 freezes the guest
+for every capture, so Studio dropped systemd (see PLAN.md 6.1, Init). On the base image, a
+live disk checkpoint through Studio took 0.65 s (msb marks it crash-consistent), a full
+snapshot 3 to 6 s while the source kept running, and a fork of a running sandbox 2.8 s.
+#1676 no longer matters: Start runs `studio-agent boot` whether or not the VM has an init.
+
+Restore stays gated, for another reason: a restored VM doesn't keep the source's network.
+With `dangerously_inherit_resources`, a disk restore's stored config has no policy (msb's
+default), no resolver, no outbound proxy and no vsock route; inheriting covers host mounts
+only. The restore options take policy rules and vsock routes, but neither DNS nameservers nor
+a proxy ([upstream #1736](https://github.com/superradcompany/microsandbox/issues/1736), open;
+a maintainer says a fix is in progress). Started, such a VM would reach the internet without
+the gateway. Studio keeps restore disabled and, as a regression guard, refuses a candidate
+whose stored network config doesn't match Create's.
+
+A full restore has the same gap, so suspend/resume waits for #1736 as well. It also needs the
+source's vsock route: without one the device layout changes and the restore fails with
+`incompatible virtio state: saved IRQ Some(18) does not match destination IRQ Some(17)`.
 
 Checkpoint deletion must move a group head to a surviving member before removing it.
 Studio prefers the parent, keeps head changes within the sandbox's group, and always

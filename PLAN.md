@@ -243,18 +243,24 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   there.
 - Snapshot features, mapped to UX:
   - **Checkpoint:** a disk snapshot in snapshot group `sbx-<id>`.
-    Captures root, workspace and Docker disks. Stop the sandbox before capture: the
-    current microsandbox guest-flush path cannot freeze our systemd PID-1 workloads.
-    Studio does not bypass that flush check for live disk captures.
+    Captures root, workspace and Docker disks, of a running or a stopped sandbox. msb
+    freezes a running guest while it flushes the filesystems, so the capture is
+    crash-consistent. Sandboxes created with systemd must be stopped first: the freezer
+    can't own an init handoff, and Studio does not bypass that flush check.
     This is a filesystem checkpoint, not application-level database consistency or
     a saved process session. Stop applications first when their own recovery requires it.
   - **Suspend / Resume:** a full snapshot, then stop; restore resumes the processes,
-    including agent TUIs.
+    including agent TUIs. Blocked with microsandbox 0.7.7 like restore (below); a full
+    restore must also re-create the source's vsock route, or the device layout no longer
+    matches.
   - **Fork:** a running sandbox becomes a new sandbox, with copy-on-write memory.
   - **Restore checkpoint:** a new generation from the snapshot.
-    Currently gated off with microsandbox 0.7.7: disk restore loses the systemd init
-    configuration ([upstream #1676](https://github.com/superradcompany/microsandbox/issues/1676)).
-    Do not enable until the runtime preserves init and a real restore/restart passes.
+    Currently gated off with microsandbox 0.7.7: restore gives the VM msb's default network
+    (no resolver, no gateway proxy; inheriting resources covers mounts only) and its options
+    can't set either ([upstream #1736](https://github.com/superradcompany/microsandbox/issues/1736)).
+    Do not enable until restore takes Studio's egress and a real restore/restart passes.
+    Studio also refuses a candidate whose stored network config differs from Create's.
+    Losing the init on restore (#1676) no longer matters: Start runs `studio-agent boot`.
     Requires the sandbox to be stopped. Studio restores and stops a replacement VM,
     records the new generation, then removes the old VM. A durable operation record
     lets startup finish cleanup or discard an uncommitted replacement after interruption;
