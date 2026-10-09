@@ -43,6 +43,8 @@ type buildHarness struct {
 	configureErr   error
 	cleanupErr     error
 	resolveErr     error
+	exportErr      error
+	exportCtxLive  bool
 	runHook        func(context.Context, chan<- runtime.RunOutput) (runtime.RunResult, error)
 	beforePublish  func()
 	pending        atomic.Bool
@@ -165,6 +167,10 @@ func (h *buildHarness) PrepareBase(ctx context.Context, env string, base templat
 }
 func (h *buildHarness) Export(ctx context.Context, id, dir string, limits ocilayer.Limits) (templateexport.Layer, error) {
 	h.record("export")
+	h.exportCtxLive = ctx.Err() == nil
+	if h.exportErr != nil {
+		return templateexport.Layer{}, h.exportErr
+	}
 	path := filepath.Join(dir, ".oci-layer-test")
 	if err := os.WriteFile(path, []byte("layer"), 0600); err != nil {
 		return templateexport.Layer{}, err
@@ -298,6 +304,63 @@ func TestBuildOrdersConfigurationBeforeSetupAndPublishes(t *testing.T) {
 	second = h.job(t, second.ID)
 	if second.ID == job.ID || second.TemplateID != job.TemplateID || second.Status != store.BuildReady || h.runs != oldRuns || h.basePrepares != 1 || h.baseReleases != 1 {
 		t.Fatalf("cache hit: %+v runs %d", second, h.runs)
+	}
+}
+
+func TestExporterDeadlineWhileBuildContextIsLiveIsNotTotalBuildTimeout(t *testing.T) {
+	h := newBuildHarness(t)
+	h.exportErr = errors.Join(context.DeadlineExceeded, errors.New("open /tmp/private-export-layer"))
+	job := h.submit(t, testSource)
+	h.w.process(context.Background(), h.claim(t))
+
+	job = h.job(t, job.ID)
+	if !h.exportCtxLive {
+		t.Fatal("fake exporter context was already done")
+	}
+	if job.Status != store.BuildFailed || job.Error != "Template build failed; see the build log" {
+		t.Fatalf("nested exporter timeout classification: status=%q error=%q", job.Status, job.Error)
+	}
+	if strings.Contains(job.Error, "time limit") || strings.Contains(job.Error, "/tmp/private-export-layer") {
+		t.Fatalf("failure message exposed a total timeout or runtime detail: %q", job.Error)
+	}
+	logText, _, err := h.st.BuildLog(context.Background(), h.env, job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logText, "Template export failed") || strings.Contains(logText, "/tmp/private-export-layer") {
+		t.Fatalf("export failure log was not safely generic: %q", logText)
+	}
+}
+
+func TestBuildFailureMessageDeadlineAndShutdownPrecedence(t *testing.T) {
+	tests := []struct {
+		name            string
+		parentErr       error
+		buildContextErr error
+		want            string
+	}{
+		{
+			name:            "total build deadline",
+			buildContextErr: context.DeadlineExceeded,
+			want:            "Template build exceeded its time limit",
+		},
+		{
+			name:            "studio shutdown takes precedence",
+			parentErr:       context.Canceled,
+			buildContextErr: context.DeadlineExceeded,
+			want:            "Studio stopped during this build; setup was not replayed",
+		},
+		{
+			name: "live build context uses generic failure",
+			want: "Template build failed; see the build log",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := buildFailureMessage(tt.parentErr, tt.buildContextErr); got != tt.want {
+				t.Fatalf("buildFailureMessage() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

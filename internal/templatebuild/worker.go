@@ -328,18 +328,13 @@ func (w *Worker) process(ctx context.Context, job store.BuildJob) error {
 	w.changed(job)
 	logger := w.collectLog(job)
 	err := w.build(buildCtx, job, logger)
+	buildContextErr := buildCtx.Err()
 	cancel()
 	logger.close()
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	defer finishCancel()
 	if err != nil {
-		message := "Template build failed; see the build log"
-		if ctx.Err() != nil {
-			message = "Studio stopped during this build; setup was not replayed"
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			message = "Template build exceeded its time limit"
-		}
+		message := buildFailureMessage(ctx.Err(), buildContextErr)
 		if failErr := w.Store.FailBuildJob(finishCtx, job.EnvironmentID, job.ID, message); failErr != nil && !errors.Is(failErr, store.ErrConflict) {
 			return fmt.Errorf("recording build %s failure: %w", job.ID, failErr)
 		}
@@ -353,6 +348,17 @@ func (w *Worker) process(ctx context.Context, job store.BuildJob) error {
 	}
 	w.changed(latest)
 	return nil
+}
+
+func buildFailureMessage(parentErr, buildContextErr error) string {
+	switch {
+	case parentErr != nil:
+		return "Studio stopped during this build; setup was not replayed"
+	case errors.Is(buildContextErr, context.DeadlineExceeded):
+		return "Template build exceeded its time limit"
+	default:
+		return "Template build failed; see the build log"
+	}
 }
 
 func (w *Worker) build(ctx context.Context, job store.BuildJob, log *buildLog) error {
