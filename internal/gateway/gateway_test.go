@@ -180,10 +180,11 @@ func TestServerFirstProtocolUsesDNSName(t *testing.T) {
 
 func TestHTTPRefusals(t *testing.T) {
 	h := newHarness(t, "")
-	for host, want := range map[string]string{
-		"denied.example":  "blocked by a Sandbox Studio network rule",
-		"unknown.example": "waiting for approval",
+	for _, tc := range []struct{ host, want string }{
+		{"denied.example", "blocked by a Sandbox Studio network rule"},
+		{"unknown.example", "waiting for approval"},
 	} {
+		host, want := tc.host, tc.want
 		c, err := h.dial(t, Password([]byte("key"), "sb1"), "192.0.2.1:80")
 		if err != nil {
 			t.Fatal(err)
