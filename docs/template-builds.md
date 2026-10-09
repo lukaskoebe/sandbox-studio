@@ -58,6 +58,22 @@ Invalid specs return HTTP `422`; a missing environment or job returns `404`; a c
 state or non-equivalent active request returns `409`. The list limit defaults to 50 and is
 capped at 100.
 
+## Import and export YAML source
+
+In the Builds dialog, **Import YAML** reads one `.yaml` or `.yml` file into the draft; it
+does not submit or run a build. Files must be at most 65,536 bytes, contain strict UTF-8,
+and not be empty or contain NUL. A rejected or unreadable file leaves the existing draft
+unchanged. Import does not validate YAML: review the draft and select **Build template**
+explicitly to submit it for server validation.
+
+An unedited import retains its UTF-8 BOM, comments, and original line endings. **Download
+YAML** saves the current draft in the dialog, or the source submitted for that job in a job
+sheet, as `spec.yaml`. It does not export a normalized spec, logs, or template artifacts;
+the source can still contain literal secrets or other values entered by the user. To
+rebuild in another environment, import the source there, review it, and explicitly build
+it. The download does not include the environment's secret vault, built images, or
+persistent disks.
+
 ## Job lifecycle and cleanup
 
 The public states are `queued`, `preparing`, `setting_up`, `exporting`, `ready`, `failed`,
@@ -191,7 +207,7 @@ UI validation used mocked desktop/mobile workflows and web checks; no live-worke
 build or workflow was run. Earlier Linux amd64 registry and exporter/source-import
 qualifications remain in the [M3 spike report](spikes.md#persistent-registry-qualification-2026-10-09)
 and its [layer-transfer results](spikes.md#layer-transfer-and-capture-foundations).
-M3 remains incomplete: rebase, YAML file import/export, apt/mise network installs,
-cold-cache base pulls, macOS and Windows host VM runs, arm64, and the release template
-base digest pin remain open. Restore remains blocked by microsandbox
+M3 remains incomplete: rebase, apt/mise network installs, cold-cache base pulls, macOS and
+Windows host VM runs, arm64, the release template base digest pin, and oversized/backpressured
+capture qualification remain open. Restore remains blocked by microsandbox
 [#1736](https://github.com/superradcompany/microsandbox/issues/1736).

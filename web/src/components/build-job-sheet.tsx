@@ -27,6 +27,10 @@ import {
   fetchClient,
   type BuildJob,
 } from "@/lib/api/client"
+import {
+  downloadTemplateSource,
+  isTemplateSourceDownloadable,
+} from "@/lib/template-source"
 import { formatAge } from "@/lib/utils"
 
 export function BuildJobSheet({
@@ -116,6 +120,7 @@ function BuildJobContents({
   const queryClient = useQueryClient()
   const [cancelPending, setCancelPending] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
   const log = $api.useQuery(
     "get",
     "/api/environments/{env}/builds/{id}/log",
@@ -281,14 +286,36 @@ function BuildJobContents({
           <h3 id="build-source-heading" className="font-medium">
             Template spec
           </h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUseSpec(job.source)}
-          >
-            Use spec
-          </Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUseSpec(job.source)}
+            >
+              Use spec
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!isTemplateSourceDownloadable(job.source)}
+              onClick={() => {
+                setDownloadError(null)
+                try {
+                  downloadTemplateSource(job.source)
+                } catch {
+                  setDownloadError("Could not download the template spec.")
+                }
+              }}
+            >
+              Download YAML
+            </Button>
+          </div>
         </div>
+        {downloadError && (
+          <p role="alert" className="text-destructive">
+            {downloadError}
+          </p>
+        )}
         <pre className="max-h-80 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-[0.6875rem]/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
           {job.source}
         </pre>

@@ -317,8 +317,14 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   `GET /api/environments/{env}/templates/{id}`, and creates an instance with
   `POST /api/environments/{env}/templates/{id}/sandboxes` (`{name}`).
 
-  The Builds page passed TypeScript, lint, production-build, and desktop/mobile browser
-  checks with simulated jobs. YAML file import/export is still planned.
+  The Builds page imports one YAML source file into the draft only, enforcing a 64 KiB
+  limit, strict UTF-8, nonempty content, and no NUL; rejected imports preserve the draft.
+  An unedited import retains its BOM, comments, and original line endings. Download saves
+  the current draft or a job's submitted source as `spec.yaml`; source can include literal
+  secrets or other user-entered values. Users review the draft and explicitly select
+  **Build template** for server validation. The download does not include the environment's
+  secret vault, built images, or persistent disks; see the
+  [template build guide](docs/template-builds.md#import-and-export-yaml-source).
 
   The worker's durable states are `queued`, `preparing`, `setting_up`, `exporting`,
   `ready`, `failed` and `cancelled`. It takes the catalog's nonblocking OS worker lock
@@ -419,10 +425,12 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   state was removed after cleanup. See the
   [worker qualification record](spikes/template-jobs/README.md).
 
-  UI validation used mocked desktop/mobile workflows and web checks; no live-worker UI
-  build or workflow was run. These results do not complete M3. Remaining work includes
-  rebase, YAML file import/export, apt/mise network installs, cold-cache pulls, macOS and
-  Windows host VM runs, arm64, the release template base digest pin, and
+  Frontend checks passed; 2026-10-09 desktop/mobile browser probes with mocked build
+  requests verified byte-exact BOM/CRLF downloads, invalid-file draft retention, pending
+  guards, 422 draft retention, and submitted-job source download. No live-worker UI build
+  or workflow was run. These results do not complete M3. Remaining work includes rebase,
+  apt/mise network installs, cold-cache pulls, macOS and Windows host VM runs, arm64, the
+  release template base digest pin, and
   oversized/backpressured capture qualification. Unsupported overlay features and file
   types remain out of scope. Userspace cannot guarantee automatic recovery if a kernel
   freeze/thaw call never returns; stopping or rebooting the VM remains possible. Restore
