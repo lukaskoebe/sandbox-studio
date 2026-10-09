@@ -132,6 +132,14 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	for _, op := range ops {
 		pending[op.SandboxID] = op
 	}
+	rebases, err := m.Store.Rebases(ctx)
+	if err != nil {
+		return err
+	}
+	pendingRebases := make(map[string]store.RebaseOperation, len(rebases))
+	for _, op := range rebases {
+		pendingRebases[op.SandboxID] = op
+	}
 	seen := make(map[string]bool, len(all))
 	for _, sb := range all {
 		seen[sb.ID] = true
@@ -150,6 +158,14 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			}
 			delete(pending, sb.ID)
 		}
+		if op, ok := pendingRebases[sb.ID]; ok {
+			if err := m.recoverRebase(ctx, sb, op); err != nil {
+				m.Log.Warn("rebase recovery", "sandbox", sb.ID, "err", err)
+				m.Hub.Close(sb.ID)
+				continue // Fail closed for this sandbox, as for restores.
+			}
+			delete(pendingRebases, sb.ID)
+		}
 		if err := m.Hub.Listen(sb.ID, m.Paths.AgentSocket(sb.ID)); err != nil {
 			m.Log.Warn("agent listener", "sandbox", sb.ID, "err", err)
 		}
@@ -160,6 +176,11 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	for id := range pending {
 		if !seen[id] {
 			m.Log.Warn("restore recovery", "sandbox", id, "err", store.ErrNotFound)
+		}
+	}
+	for id := range pendingRebases {
+		if !seen[id] {
+			m.Log.Warn("rebase recovery", "sandbox", id, "err", store.ErrNotFound)
 		}
 	}
 	return nil
@@ -188,57 +209,72 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, nam
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
 	}
-	template, err := m.Store.Template(ctx, envID, templateID)
+	resolved, err := m.templateResources(ctx, envID, templateID)
 	if err != nil {
 		return View{}, err
 	}
-	if template.State != store.TemplateStateReady {
-		return View{}, store.ErrConflict
-	}
-	spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
-	if err != nil {
-		return View{}, errors.New("template specification is invalid")
-	}
-	resolved := spec.Resources
-	if err := resolved.Validate(); err != nil {
-		return View{}, errors.New("template resources are invalid")
-	}
-	if template.ExporterVersion != templateimage.ExporterVersion {
-		return View{}, errors.New("template exporter version is unsupported")
-	}
-	cacheKey, err := templateimage.CacheKey([]byte(template.Spec), template.BaseDigest, template.Platform, template.ExporterVersion)
-	if err != nil || cacheKey != template.CacheKey {
-		return View{}, errors.New("template metadata is invalid")
-	}
-	if !templatePlatformCompatible(template.Platform, goruntime.GOARCH) {
-		return View{}, errors.New("template platform is not supported on this host")
-	}
-	if m.Templates == nil {
-		return View{}, errors.New("template registry is unavailable")
-	}
-
 	rec, err := m.createSandboxRecord(ctx, envID, name, resolved, templateID)
 	if err != nil {
 		return View{}, err
 	}
-	ref, err := m.Templates.Resolve(ctx, envID, templateID)
+	image, err := m.templateImage(ctx, envID, templateID)
 	if err != nil {
 		if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, false); cleanupErr != nil {
 			return View{}, cleanupErr
 		}
+		return View{}, err
+	}
+	return m.bootSandbox(ctx, rec, resolved, image, true)
+}
+
+// templateResources checks that a template can back a sandbox on this host and returns
+// the resources its specification pins.
+func (m *Manager) templateResources(ctx context.Context, envID, templateID string) (resources.Resources, error) {
+	template, err := m.Store.Template(ctx, envID, templateID)
+	if err != nil {
+		return resources.Resources{}, err
+	}
+	if template.State != store.TemplateStateReady {
+		return resources.Resources{}, store.ErrConflict
+	}
+	spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
+	if err != nil {
+		return resources.Resources{}, errors.New("template specification is invalid")
+	}
+	resolved := spec.Resources
+	if err := resolved.Validate(); err != nil {
+		return resources.Resources{}, errors.New("template resources are invalid")
+	}
+	if template.ExporterVersion != templateimage.ExporterVersion {
+		return resources.Resources{}, errors.New("template exporter version is unsupported")
+	}
+	cacheKey, err := templateimage.CacheKey([]byte(template.Spec), template.BaseDigest, template.Platform, template.ExporterVersion)
+	if err != nil || cacheKey != template.CacheKey {
+		return resources.Resources{}, errors.New("template metadata is invalid")
+	}
+	if !templatePlatformCompatible(template.Platform, goruntime.GOARCH) {
+		return resources.Resources{}, errors.New("template platform is not supported on this host")
+	}
+	if m.Templates == nil {
+		return resources.Resources{}, errors.New("template registry is unavailable")
+	}
+	return resolved, nil
+}
+
+// templateImage resolves the registry image of a template. A catalog record must pin the
+// template first, so it cannot be deleted in the meantime.
+func (m *Manager) templateImage(ctx context.Context, envID, templateID string) (*runtime.ImageSource, error) {
+	ref, err := m.Templates.Resolve(ctx, envID, templateID)
+	if err != nil {
 		if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrConflict) {
-			return View{}, err
+			return nil, err
 		}
-		return View{}, errors.New("template image is unavailable")
+		return nil, errors.New("template image is unavailable")
 	}
 	if ref.Username != envID || ref.Password == "" || !templateImageReference(ref.Image, envID, templateID) {
-		if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, false); cleanupErr != nil {
-			return View{}, cleanupErr
-		}
-		return View{}, errors.New("template image is unavailable")
+		return nil, errors.New("template image is unavailable")
 	}
-	image := &runtime.ImageSource{Reference: ref.Image, Username: ref.Username, Password: ref.Password}
-	return m.bootSandbox(ctx, rec, resolved, image, true)
+	return &runtime.ImageSource{Reference: ref.Image, Username: ref.Username, Password: ref.Password}, nil
 }
 
 func (m *Manager) createSandboxRecord(ctx context.Context, envID, name string, resolved resources.Resources, templateID string) (store.Sandbox, error) {
@@ -406,7 +442,7 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
+	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
 	rec, err = m.PublicSandbox(ctx, envID, id)
@@ -439,7 +475,7 @@ func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
+	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
 	rec, err = m.PublicSandbox(ctx, envID, id)
@@ -466,7 +502,7 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 	if err != nil {
 		return err
 	}
-	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
+	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return err
 	}
 	rec, err = m.PublicSandbox(ctx, envID, id)
