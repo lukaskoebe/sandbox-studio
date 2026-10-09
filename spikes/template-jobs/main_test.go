@@ -9,8 +9,31 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
+
+func TestFindPrivateTemplateInstanceUsesUniqueCatalogOwnership(t *testing.T) {
+	rows := []store.Sandbox{
+		{ID: "other-env", EnvironmentID: "env-other", Name: "instance", TemplateID: "template"},
+		{ID: "other-name", EnvironmentID: "env", Name: "different", TemplateID: "template"},
+		{ID: "owned", EnvironmentID: "env", Name: "instance", TemplateID: "template"},
+	}
+	got, err := findPrivateTemplateInstance(rows, "env", "instance", "template")
+	if err != nil || got.ID != "owned" {
+		t.Fatalf("findPrivateTemplateInstance() = %+v, %v; want the unique private row", got, err)
+	}
+
+	rows = append(rows, store.Sandbox{ID: "duplicate", EnvironmentID: "env", Name: "instance", TemplateID: "template"})
+	if _, err := findPrivateTemplateInstance(rows, "env", "instance", "template"); err == nil {
+		t.Fatal("findPrivateTemplateInstance accepted multiple rows for one cleanup identity")
+	}
+
+	rows = []store.Sandbox{{ID: "wrong-template", EnvironmentID: "env", Name: "instance", TemplateID: "different"}}
+	if _, err := findPrivateTemplateInstance(rows, "env", "instance", "template"); err == nil {
+		t.Fatal("findPrivateTemplateInstance accepted a name pinned to a different template")
+	}
+}
 
 func TestBuildSourceVariantsHaveSameCanonicalSpec(t *testing.T) {
 	setup := "set -eu\necho TEMPLATE_BUILD_TEST\n"

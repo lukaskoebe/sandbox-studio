@@ -57,6 +57,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerEnvironments(api)
 	s.registerBuilds(api)
 	s.registerSandboxes(api)
+	s.registerTemplates(api)
 	s.registerCheckpoints(api)
 	s.registerPreviews(api)
 	s.registerNetwork(api)

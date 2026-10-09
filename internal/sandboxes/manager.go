@@ -3,9 +3,12 @@ package sandboxes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
+	goruntime "runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,6 +18,9 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateimage"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
+	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
 
 // ErrInvalidSpec remains the manager-facing alias used by API error mapping.
@@ -33,11 +39,14 @@ const (
 
 // Manager coordinates the catalog, the runtime, the agent hub and the network gateway.
 type Manager struct {
-	Store   *store.Store
-	Runtime SandboxRuntime
-	Hub     *agentchan.Hub
-	Egress  Egress
-	CA      interface {
+	Store     *store.Store
+	Runtime   SandboxRuntime
+	Templates interface {
+		Resolve(context.Context, string, string) (templateregistry.Reference, error)
+	}
+	Hub    *agentchan.Hub
+	Egress Egress
+	CA     interface {
 		CertPEM(ctx context.Context, envID string) ([]byte, error)
 	}
 	Secrets interface {
@@ -165,48 +174,185 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err := runtime.ValidName(req.Name); err != nil {
 		return View{}, err
 	}
-	rec := store.Sandbox{
+	rec, err := m.createSandboxRecord(ctx, envID, req.Name, resolved, "")
+	if err != nil {
+		return View{}, err
+	}
+	return m.bootSandbox(ctx, rec, resolved, nil, false)
+}
+
+// CreateFromTemplate starts a fresh sandbox from one ready, same-environment template.
+// The catalog row pins the template before registry metadata is resolved or the VM is
+// allocated. The runtime receives credentials only in its host-side image options.
+func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, name string) (View, error) {
+	if err := runtime.ValidName(name); err != nil {
+		return View{}, err
+	}
+	template, err := m.Store.Template(ctx, envID, templateID)
+	if err != nil {
+		return View{}, err
+	}
+	if template.State != store.TemplateStateReady {
+		return View{}, store.ErrConflict
+	}
+	spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
+	if err != nil {
+		return View{}, errors.New("template specification is invalid")
+	}
+	resolved := spec.Resources
+	if err := resolved.Validate(); err != nil {
+		return View{}, errors.New("template resources are invalid")
+	}
+	if template.ExporterVersion != templateimage.ExporterVersion {
+		return View{}, errors.New("template exporter version is unsupported")
+	}
+	cacheKey, err := templateimage.CacheKey([]byte(template.Spec), template.BaseDigest, template.Platform, template.ExporterVersion)
+	if err != nil || cacheKey != template.CacheKey {
+		return View{}, errors.New("template metadata is invalid")
+	}
+	if !templatePlatformCompatible(template.Platform, goruntime.GOARCH) {
+		return View{}, errors.New("template platform is not supported on this host")
+	}
+	if m.Templates == nil {
+		return View{}, errors.New("template registry is unavailable")
+	}
+
+	rec, err := m.createSandboxRecord(ctx, envID, name, resolved, templateID)
+	if err != nil {
+		return View{}, err
+	}
+	ref, err := m.Templates.Resolve(ctx, envID, templateID)
+	if err != nil {
+		if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, false); cleanupErr != nil {
+			return View{}, cleanupErr
+		}
+		if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrConflict) {
+			return View{}, err
+		}
+		return View{}, errors.New("template image is unavailable")
+	}
+	if ref.Username != envID || ref.Password == "" || !templateImageReference(ref.Image, envID, templateID) {
+		if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, false); cleanupErr != nil {
+			return View{}, cleanupErr
+		}
+		return View{}, errors.New("template image is unavailable")
+	}
+	image := &runtime.ImageSource{Reference: ref.Image, Username: ref.Username, Password: ref.Password}
+	return m.bootSandbox(ctx, rec, resolved, image, true)
+}
+
+func (m *Manager) createSandboxRecord(ctx context.Context, envID, name string, resolved resources.Resources, templateID string) (store.Sandbox, error) {
+	return m.Store.CreateSandbox(ctx, store.Sandbox{
 		EnvironmentID: envID,
-		Name:          req.Name,
+		TemplateID:    templateID,
+		Name:          name,
 		CPUs:          int(resolved.CPUs),
 		MemoryMiB:     int(resolved.MemoryMiB),
 		MaxMemoryMiB:  int(resolved.MaxMemoryMiB),
 		WorkspaceMiB:  int(resolved.WorkspaceMiB),
 		DockerMiB:     int(resolved.DockerMiB),
-	}
-	rec, err := m.Store.CreateSandbox(ctx, rec)
-	if err != nil {
-		return View{}, err
-	}
+	})
+}
+
+func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, retainOnUncertainBoot bool) (View, error) {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
-		m.Store.DeleteSandbox(ctx, envID, rec.ID)
+		if retainOnUncertainBoot {
+			if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, true); cleanupErr != nil {
+				return View{}, cleanupErr
+			}
+		} else {
+			m.Store.DeleteSandbox(ctx, rec.EnvironmentID, rec.ID)
+		}
 		return View{}, err
 	}
 	sock := m.Paths.AgentSocket(rec.ID)
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		m.Egress.Detach(rec.ID)
-		m.Store.DeleteSandbox(ctx, envID, rec.ID)
+		if retainOnUncertainBoot {
+			if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, false); cleanupErr != nil {
+				return View{}, cleanupErr
+			}
+		} else {
+			m.Store.DeleteSandbox(ctx, rec.EnvironmentID, rec.ID)
+		}
 		return View{}, err
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(resolved.CPUs), MemoryMiB: uint32(resolved.MemoryMiB), MaxMemoryMiB: uint32(resolved.MaxMemoryMiB),
 		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
-		Egress: egress,
+		Image: image, Egress: egress,
 	}
-	labels := map[string]string{
-		"studio.sandbox-id":     rec.ID,
-		"studio.environment-id": envID,
-		"studio.sandbox-name":   rec.Name,
-	}
+	labels := sandboxLabels(rec)
 	if err := m.Runtime.Create(ctx, VMName(rec), spec, sock, labels); err != nil {
+		if retainOnUncertainBoot {
+			m.cleanupFailedTemplateBoot(ctx, rec, labels)
+			// SDK errors can include private registry details. The catalog row remains
+			// available if exact VM absence could not be established.
+			return View{}, errors.New("sandbox creation from template failed")
+		}
 		m.Hub.Close(rec.ID)
 		m.Egress.Detach(rec.ID)
 		m.Runtime.Remove(context.WithoutCancel(ctx), VMName(rec))
-		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
+		m.Store.DeleteSandbox(context.WithoutCancel(ctx), rec.EnvironmentID, rec.ID)
 		return View{}, err
 	}
 	return m.view(ctx, rec)
+}
+
+func sandboxLabels(rec store.Sandbox) map[string]string {
+	labels := map[string]string{
+		"studio.sandbox-id":     rec.ID,
+		"studio.environment-id": rec.EnvironmentID,
+		"studio.sandbox-name":   rec.Name,
+	}
+	if rec.TemplateID != "" {
+		labels["studio.template-id"] = rec.TemplateID
+	}
+	return labels
+}
+
+func (m *Manager) removeUnstartedTemplateRecord(ctx context.Context, rec store.Sandbox, detach bool) error {
+	if detach {
+		m.Hub.Close(rec.ID)
+		m.Egress.Detach(rec.ID)
+	}
+	if err := m.Store.DeleteSandbox(context.WithoutCancel(ctx), rec.EnvironmentID, rec.ID); err != nil {
+		return fmt.Errorf("remove unstarted sandbox record: %w", err)
+	}
+	return nil
+}
+
+func (m *Manager) cleanupFailedTemplateBoot(ctx context.Context, rec store.Sandbox, labels map[string]string) {
+	remover, ok := m.Runtime.(interface {
+		RemoveOwned(context.Context, runtime.OwnedVM) error
+	})
+	if !ok {
+		return
+	}
+	owned := runtime.OwnedVM{Name: VMName(rec), Labels: labels}
+	if err := remover.RemoveOwned(context.WithoutCancel(ctx), owned); err != nil {
+		return
+	}
+	// RemoveOwned verifies absence. Only then is it safe to drop the template pin.
+	m.Hub.Close(rec.ID)
+	m.Egress.Detach(rec.ID)
+	_ = m.Store.DeleteSandbox(context.WithoutCancel(ctx), rec.EnvironmentID, rec.ID)
+}
+
+func templatePlatformCompatible(platform, arch string) bool {
+	parts := strings.Split(platform, "/")
+	return (len(parts) == 2 || len(parts) == 3) && parts[0] == "linux" && parts[1] == arch &&
+		(arch == "amd64" || arch == "arm64")
+}
+
+func templateImageReference(image, envID, templateID string) bool {
+	parts := strings.Split(image, "/")
+	if len(parts) != 4 || parts[0] == "" || parts[1] != "studio" || parts[2] != envID {
+		return false
+	}
+	repository, digest, ok := strings.Cut(parts[3], "@")
+	return ok && repository == templateID && !strings.Contains(digest, "@") && templateimage.ValidDigest(digest)
 }
 
 // Get returns one sandbox with its live state.

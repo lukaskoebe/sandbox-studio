@@ -145,6 +145,33 @@ cannot prove that it stopped: the runtime quarantines the slot and the worker re
 OS lock until SDK completion can be confirmed or the process restarts. There is no
 age-based lock expiry or automatic takeover of a possibly live worker.
 
+## Create a sandbox from a ready template
+
+The Builds page offers **Create sandbox** for a ready build that has a template. The
+dialog loads that same-environment ready template, displays its resource sizes, and sends
+only a sandbox name. Resource limits are fixed by the template's canonical spec; the
+instance API does not accept resource overrides.
+
+Creation pins the ready template to the new sandbox in the catalog. The template supplies
+the root image for a fresh sandbox instance, while the workspace and Docker disks are new
+and empty. Creation assigns the normal new sandbox and proxy identity, creates its agent
+socket, and follows the ordinary guest boot/configuration path, including the environment
+CA and placeholder push. It does not restore another sandbox's root, workspace, or Docker
+data.
+
+| Method | Route | Result |
+|---|---|---|
+| `GET` | `/api/environments/{env}/templates` | Ready templates in the environment |
+| `GET` | `/api/environments/{env}/templates/{id}` | Ready template details and resources |
+| `POST` | `/api/environments/{env}/templates/{id}/sandboxes` | Create from a ready same-environment template; body: `{ "name": "my-project" }`; HTTP 201 |
+
+On 2026-10-09, two sequential live Linux amd64 instances preserved the built root files,
+received current CA and placeholder configuration, and had independent fresh workspace
+and Docker data. The second instance did not inherit root or disk changes from the first.
+A live instance blocked template artifact deletion. Both instances and their catalog
+references were removed through verified owned cleanup. Desktop/mobile dialog checks
+used mocked creation responses; they did not launch VMs through the browser.
+
 ## Current qualification boundary
 
 On 2026-10-09, the production worker passed a live Linux amd64 qualification with a warm
@@ -164,8 +191,7 @@ UI validation used mocked desktop/mobile workflows and web checks; no live-worke
 build or workflow was run. Earlier Linux amd64 registry and exporter/source-import
 qualifications remain in the [M3 spike report](spikes.md#persistent-registry-qualification-2026-10-09)
 and its [layer-transfer results](spikes.md#layer-transfer-and-capture-foundations).
-M3 remains incomplete: the fresh-template instance API and rebase, YAML file
-import/export, apt/mise network installs, cold-cache base pulls, macOS and Windows host VM
-runs, arm64, and the release template base digest pin remain open. Future template
-instances will use fresh creation through the normal runtime path. Restore remains blocked
-by microsandbox [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
+M3 remains incomplete: rebase, YAML file import/export, apt/mise network installs,
+cold-cache base pulls, macOS and Windows host VM runs, arm64, and the release template
+base digest pin remain open. Restore remains blocked by microsandbox
+[#1736](https://github.com/superradcompany/microsandbox/issues/1736).

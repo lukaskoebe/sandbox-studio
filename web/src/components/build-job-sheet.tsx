@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { PlusIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -33,11 +34,13 @@ export function BuildJobSheet({
   id,
   onClose,
   onUseSpec,
+  onCreate,
 }: {
   env: string
   id: string
   onClose: () => void
   onUseSpec: (source: string) => void
+  onCreate: (templateId: string) => void
 }) {
   const job = $api.useQuery(
     "get",
@@ -87,6 +90,7 @@ export function BuildJobSheet({
             job={job.data}
             refreshMs={refreshMs}
             onUseSpec={onUseSpec}
+            onCreate={onCreate}
           />
         )}
       </SheetContent>
@@ -100,12 +104,14 @@ function BuildJobContents({
   job,
   refreshMs,
   onUseSpec,
+  onCreate,
 }: {
   env: string
   id: string
   job: BuildJob
   refreshMs: number
   onUseSpec: (source: string) => void
+  onCreate: (templateId: string) => void
 }) {
   const queryClient = useQueryClient()
   const [cancelPending, setCancelPending] = useState(false)
@@ -149,6 +155,7 @@ function BuildJobContents({
   }
 
   const canCancel = isBuildActive(job.status)
+  const readyTemplateId = job.status === "ready" ? job.templateId : undefined
   const updatedAt = new Date(job.updatedAt)
 
   return (
@@ -168,8 +175,8 @@ function BuildJobContents({
           </time>
         </div>
         <p className="text-xs/relaxed text-muted-foreground">
-          Ready means the template has been built. It does not mean a sandbox is
-          running.
+          A ready template can start a new sandbox with fresh workspace and
+          Docker disks.
         </p>
         {job.status === "cancelled" && (
           <p className="rounded-md bg-muted p-3 text-muted-foreground">
@@ -198,6 +205,15 @@ function BuildJobContents({
           </div>
         )}
       </section>
+
+      {readyTemplateId && (
+        <section className="border-b pb-4">
+          <Button onClick={() => onCreate(readyTemplateId)}>
+            <PlusIcon />
+            Create sandbox
+          </Button>
+        </section>
+      )}
 
       {(canCancel || cancelError) && (
         <section className="space-y-2 border-y py-4">

@@ -422,6 +422,20 @@
         ],
         "type": "object"
       },
+      "CreateTemplateSandboxInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "DecideInBody": {
         "additionalProperties": false,
         "properties": {
@@ -636,6 +650,39 @@
         "required": [
           "port",
           "url"
+        ],
+        "type": "object"
+      },
+      "Resources": {
+        "additionalProperties": false,
+        "properties": {
+          "cpus": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "dockerMiB": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "maxMemoryMiB": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "memoryMiB": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workspaceMiB": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cpus",
+          "memoryMiB",
+          "maxMemoryMiB",
+          "workspaceMiB",
+          "dockerMiB"
         ],
         "type": "object"
       },
@@ -871,6 +918,35 @@
         ],
         "type": "object"
       },
+      "TemplateView": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/Resources"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "platform",
+          "resources",
+          "createdAt"
+        ],
+        "type": "object"
+      },
       "UpdateSecretInBody": {
         "additionalProperties": false,
         "properties": {
@@ -953,6 +1029,9 @@
               "stopped",
               "crashed"
             ],
+            "type": "string"
+          },
+          "templateId": {
             "type": "string"
           },
           "workspaceMiB": {
@@ -2745,6 +2824,169 @@
         },
         "tags": [
           "secrets"
+        ]
+      }
+    },
+    "/api/environments/{env}/templates": {
+      "get": {
+        "operationId": "listTemplates",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/api/environments/{env}/templates/{id}": {
+      "get": {
+        "operationId": "getTemplate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Template ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Template ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/api/environments/{env}/templates/{id}/sandboxes": {
+      "post": {
+        "operationId": "createTemplateSandbox",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Template ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Template ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateSandboxInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "templates",
+          "sandboxes"
         ]
       }
     },

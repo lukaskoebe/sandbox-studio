@@ -4,6 +4,7 @@ import { ArrowClockwiseIcon, HammerIcon, PlusIcon } from "@phosphor-icons/react"
 import { BuildDialog, exampleTemplateSource } from "@/components/build-dialog"
 import { BuildJobSheet } from "@/components/build-job-sheet"
 import { BuildCleanupStatus, BuildStatusBadge } from "@/components/build-status"
+import { CreateTemplateSandboxDialog } from "@/components/create-template-sandbox-dialog"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,6 +37,9 @@ function BuildsPage() {
 
 function BuildsWorkspace({ env }: { env: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [creatingFromTemplateId, setCreatingFromTemplateId] = useState<
+    string | null
+  >(null)
   const [submission, setSubmission] = useState<{
     source: string
     key: number
@@ -68,8 +72,8 @@ function BuildsWorkspace({ env }: { env: string }) {
       </PageHeader>
       <div className="flex-1 space-y-5 overflow-auto p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          Build reusable sandbox templates from YAML. A ready build means the
-          template is built; it does not start a sandbox.
+          Build reusable sandbox templates from YAML, then start fresh sandboxes
+          from ready templates.
         </p>
 
         {builds.isPending ? (
@@ -189,6 +193,21 @@ function BuildsWorkspace({ env }: { env: string }) {
           onUseSpec={(source) => {
             setSelectedId(null)
             openSubmission(source)
+          }}
+          onCreate={(templateId) => {
+            setSelectedId(null)
+            setCreatingFromTemplateId(templateId)
+          }}
+        />
+      )}
+      {creatingFromTemplateId && (
+        <CreateTemplateSandboxDialog
+          key={creatingFromTemplateId}
+          env={env}
+          templateId={creatingFromTemplateId}
+          open
+          onOpenChange={(open) => {
+            if (!open) setCreatingFromTemplateId(null)
           }}
         />
       )}

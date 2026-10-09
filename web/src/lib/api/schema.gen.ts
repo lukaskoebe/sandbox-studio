@@ -397,6 +397,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTemplates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/templates/{id}/sandboxes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createTemplateSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -546,6 +594,9 @@ export interface components {
             /** @description The secret value. It is sealed on arrival and never returned. */
             value: string;
         };
+        CreateTemplateSandboxInBody: {
+            name: string;
+        };
         DecideInBody: {
             /**
              * @description allow or deny creates a rule; dismiss only closes the request
@@ -631,6 +682,18 @@ export interface components {
             port: number;
             url: string;
         };
+        Resources: {
+            /** Format: int64 */
+            cpus: number;
+            /** Format: int64 */
+            dockerMiB: number;
+            /** Format: int64 */
+            maxMemoryMiB: number;
+            /** Format: int64 */
+            memoryMiB: number;
+            /** Format: int64 */
+            workspaceMiB: number;
+        };
         Rule: {
             /** @enum {string} */
             action: "allow" | "proxy" | "caddy" | "deny";
@@ -700,6 +763,14 @@ export interface components {
             /** @description Template specification in YAML */
             source: string;
         };
+        TemplateView: {
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            id: string;
+            platform: string;
+            resources: components["schemas"]["Resources"];
+        };
         UpdateSecretInBody: {
             /** @description Host patterns the value may be sent to */
             hosts: string[] | null;
@@ -727,6 +798,7 @@ export interface components {
             name: string;
             /** @enum {string} */
             status: "absent" | "created" | "starting" | "running" | "draining" | "paused" | "stopped" | "crashed";
+            templateId?: string;
             /** Format: int64 */
             workspaceMiB: number;
         };
@@ -1858,6 +1930,110 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Template ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createTemplateSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Template ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTemplateSandboxInBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
             };
             /** @description Error */
             default: {

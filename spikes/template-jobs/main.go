@@ -11,7 +11,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base32"
+	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -33,16 +36,19 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/ocilayer"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatebuild"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
+	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
 
 const (
 	baseImage           = "sandbox-studio-base:dev"
 	dummyPlaceholder    = "studio-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	instancePlaceholder = "studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	proofPath           = "home/agent/template-build-proof"
 	totalTimeout        = 6 * time.Minute
 	workerStopTimeout   = 25 * time.Second
@@ -105,6 +111,7 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 	var initialVMs map[string]runtime.Status
 	var hub *agentchan.Hub
 	var egress *probeEgress
+	var templateInstanceCleanupPending bool
 
 	defer func() {
 		if workerProcess != nil {
@@ -126,6 +133,10 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 			// private registry stay open until process exit; the root is retained.
 			preserveRoot = true
 		} else {
+			if templateInstanceCleanupPending {
+				preserveRoot = true
+				retErr = errors.Join(retErr, errors.New("private template instance cleanup is not confirmed"))
+			}
 			if rt != nil && rt.PendingRun() {
 				preserveRoot = true
 				retErr = errors.Join(retErr, errors.New("runtime command cleanup is still pending"))
@@ -134,10 +145,10 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 				pending, pendingErr := privateOwnershipPending(cleanupCtx, st, privateEnv.ID)
 				if pendingErr != nil {
 					preserveRoot = true
-					retErr = errors.Join(retErr, fmt.Errorf("check private build ownership: %w", pendingErr))
+					retErr = errors.Join(retErr, fmt.Errorf("check private sandbox and template ownership: %w", pendingErr))
 				} else if pending {
 					preserveRoot = true
-					retErr = errors.Join(retErr, errors.New("private build or prewarm ownership is still pending"))
+					retErr = errors.Join(retErr, errors.New("private build, prewarm, or template-instance ownership is still pending"))
 				}
 			}
 			if egress != nil {
@@ -272,12 +283,16 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 	go func() { registryServeErr <- registryServer.Serve(registryListener) }()
 
 	hub = agentchan.NewHub(logger)
-	egress = &probeEgress{attached: make(map[string]probeCredential)}
+	egress = &probeEgress{
+		attached: make(map[string]probeCredential), seenEnvs: make(map[string]struct{}),
+		seenPasswords: make(map[string]struct{}),
+	}
 	manager := &sandboxes.Manager{
 		Store: st, Runtime: rt, Hub: hub, Egress: egress,
 		CA:      &ca.Authority{Store: st, Sealer: sealer},
 		Secrets: probeSecrets{env: map[string]string{"TOKEN": dummyPlaceholder}},
 		Paths:   privatePaths, Log: logger,
+		Templates: registry,
 	}
 	guests := &probeGuests{Manager: manager}
 	worker, err := templatebuild.New(templatebuild.Options{
@@ -379,6 +394,17 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 	}
 	fmt.Println("PASS canonical-equivalent request created a new job, reused the same TemplateID, and made no build-sandbox attach")
 
+	if err := runFreshTemplateInstanceProbe(ctx, manager, st, rt, registry, egress, privateEnv.ID, first, setupMarker, suffix, &templateInstanceCleanupPending); err != nil {
+		return fmt.Errorf("fresh-template instance probe: %w", err)
+	}
+	if err := assertNoOwnedRecords(ctx, st, privateEnv.ID); err != nil {
+		return fmt.Errorf("template instance probe retained private sandbox ownership: %w", err)
+	}
+	if err := egress.assertDetached(); err != nil {
+		return err
+	}
+	fmt.Println("PASS fresh-template instances: template lineage, resources, configured guest state, fresh data markers, and owned cleanup verified")
+
 	cancelMarker := "CANCEL_STARTED_" + suffix
 	cancelJob, created, err := worker.Submit(ctx, privateEnv.ID, buildSource(cancelSetup(cancelMarker), false))
 	if err != nil {
@@ -464,13 +490,415 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 		return errors.New("runtime command remains pending after worker shutdown")
 	}
 	if err := assertNoOwnedRecords(ctx, st, privateEnv.ID); err != nil {
-		return fmt.Errorf("private build ownership remains after worker shutdown: %w", err)
+		return fmt.Errorf("private build or template-instance ownership remains after worker shutdown: %w", err)
 	}
 	if err := egress.assertDetached(); err != nil {
 		return err
 	}
 	fmt.Println("PASS production worker stopped with no runtime command or owner cleanup pending")
 	return nil
+}
+
+func runFreshTemplateInstanceProbe(
+	ctx context.Context,
+	manager *sandboxes.Manager,
+	st *store.Store,
+	rt *runtime.Runtime,
+	registry *templateregistry.Registry,
+	egress *probeEgress,
+	envID string,
+	build store.BuildJob,
+	buildMarker, suffix string,
+	cleanupPending *bool,
+) (retErr error) {
+	if build.TemplateID == "" {
+		return errors.New("ready build has no template ID")
+	}
+	template, err := st.Template(ctx, envID, build.TemplateID)
+	if err != nil {
+		return fmt.Errorf("load private ready template: %w", err)
+	}
+	if template.State != store.TemplateStateReady || template.EnvironmentID != envID {
+		return errors.New("private instance source is not a ready same-environment template")
+	}
+	if template.Spec != build.Spec {
+		return errors.New("published template spec differs from the successful build spec")
+	}
+	spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
+	if err != nil {
+		return fmt.Errorf("parse private template resources: %w", err)
+	}
+	wantResources := resources.Resources{CPUs: 1, MemoryMiB: 512, MaxMemoryMiB: 1024, WorkspaceMiB: 1024, DockerMiB: 1024}
+	if spec.Resources != wantResources {
+		return fmt.Errorf("published template resources are %+v, want %+v", spec.Resources, wantResources)
+	}
+	if template.Platform != rt.TargetPlatform() {
+		return fmt.Errorf("published template platform is %q, want %q", template.Platform, rt.TargetPlatform())
+	}
+	caHash, err := currentCAHash(ctx, manager, envID)
+	if err != nil {
+		return fmt.Errorf("read private environment CA for guest assertion: %w", err)
+	}
+
+	originalSecrets := manager.Secrets
+	manager.Secrets = probeSecrets{env: map[string]string{"TOKEN": instancePlaceholder}}
+	defer func() { manager.Secrets = originalSecrets }()
+
+	firstName := "template-instance-one-" + suffix
+	secondName := "template-instance-two-" + suffix
+	firstOwner := &privateTemplateInstanceOwner{envID: envID, name: firstName, templateID: template.ID, manager: manager, store: st, runtime: rt}
+	secondOwner := &privateTemplateInstanceOwner{envID: envID, name: secondName, templateID: template.ID, manager: manager, store: st, runtime: rt}
+	owners := []*privateTemplateInstanceOwner{firstOwner, secondOwner}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		for i := len(owners) - 1; i >= 0; i-- {
+			owner := owners[i]
+			if !owner.armed {
+				continue
+			}
+			if cleanupErr := owner.cleanup(cleanupCtx); cleanupErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("deferred cleanup of %s could not be confirmed: %w", owner.name, cleanupErr))
+				continue
+			}
+			owner.armed = false
+		}
+		*cleanupPending = firstOwner.armed || secondOwner.armed
+	}()
+
+	firstOwner.armed = true
+	*cleanupPending = true
+	firstAttachCount := egress.attachCountValue()
+	first, err := createPrivateTemplateInstance(ctx, manager, envID, template.ID, firstName)
+	firstOwner.createReturned = true
+	firstOwner.createSucceeded = err == nil
+	if err != nil {
+		return errors.New("create first private template instance failed; provider details suppressed")
+	}
+	if err := assertTemplateInstanceView(first, envID, firstName, template.ID, spec.Resources); err != nil {
+		return fmt.Errorf("first instance catalog fields: %w", err)
+	}
+	if egress.attachCountValue() != firstAttachCount+1 {
+		return errors.New("first template instance did not receive exactly one new egress attachment")
+	}
+	firstCredential, err := egress.currentCredential(first.ID)
+	if err != nil {
+		return fmt.Errorf("first template instance egress credential: %w", err)
+	}
+	if err := assertInstanceStoreRow(ctx, st, firstOwner, first); err != nil {
+		return fmt.Errorf("first instance private catalog ownership: %w", err)
+	}
+	if err := waitAndConfigureTemplateInstance(ctx, manager, envID, first.ID, "first"); err != nil {
+		return err
+	}
+	if err := assertTemplatePinBlocksDelete(ctx, registry, envID, template.ID); err != nil {
+		return err
+	}
+	if err := runTemplateInstanceAssertions(ctx, rt, first, buildMarker, "TEMPLATE_INSTANCE_ONE_"+suffix, caHash); err != nil {
+		return fmt.Errorf("first instance guest assertions: %w", err)
+	}
+	if err := firstOwner.cleanup(ctx); err != nil {
+		return fmt.Errorf("delete first template instance before second creation: %w", err)
+	}
+	firstOwner.armed = false
+	*cleanupPending = false
+	if err := egress.assertDetached(); err != nil {
+		return fmt.Errorf("first template instance egress cleanup: %w", err)
+	}
+	if err := assertNoOwnedRecords(ctx, st, envID); err != nil {
+		return fmt.Errorf("first template instance row remains before second creation: %w", err)
+	}
+
+	secondOwner.armed = true
+	*cleanupPending = true
+	secondAttachCount := egress.attachCountValue()
+	second, err := createPrivateTemplateInstance(ctx, manager, envID, template.ID, secondName)
+	secondOwner.createReturned = true
+	secondOwner.createSucceeded = err == nil
+	if err != nil {
+		return errors.New("create second private template instance failed; provider details suppressed")
+	}
+	if err := assertTemplateInstanceView(second, envID, secondName, template.ID, spec.Resources); err != nil {
+		return fmt.Errorf("second instance catalog fields: %w", err)
+	}
+	if second.ID == first.ID {
+		return errors.New("sequential template instances reused the same sandbox ID")
+	}
+	if egress.attachCountValue() != secondAttachCount+1 {
+		return errors.New("second template instance did not receive exactly one new egress attachment")
+	}
+	secondCredential, err := egress.currentCredential(second.ID)
+	if err != nil {
+		return fmt.Errorf("second template instance egress credential: %w", err)
+	}
+	if secondCredential.env == firstCredential.env || secondCredential.password == firstCredential.password {
+		return errors.New("sequential template instances reused an egress credential")
+	}
+	if err := assertInstanceStoreRow(ctx, st, secondOwner, second); err != nil {
+		return fmt.Errorf("second instance private catalog ownership: %w", err)
+	}
+	if err := waitAndConfigureTemplateInstance(ctx, manager, envID, second.ID, "second"); err != nil {
+		return err
+	}
+	if err := runTemplateInstanceAssertions(ctx, rt, second, buildMarker, "TEMPLATE_INSTANCE_TWO_"+suffix, caHash); err != nil {
+		return fmt.Errorf("second instance guest assertions: %w", err)
+	}
+	if err := secondOwner.cleanup(ctx); err != nil {
+		return fmt.Errorf("delete second template instance: %w", err)
+	}
+	secondOwner.armed = false
+	*cleanupPending = false
+	if err := egress.assertDetached(); err != nil {
+		return fmt.Errorf("second template instance egress cleanup: %w", err)
+	}
+	return nil
+}
+
+func createPrivateTemplateInstance(ctx context.Context, manager *sandboxes.Manager, envID, templateID, name string) (sandboxes.View, error) {
+	createCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	return manager.CreateFromTemplate(createCtx, envID, templateID, name)
+}
+
+func assertTemplateInstanceView(view sandboxes.View, envID, name, templateID string, want resources.Resources) error {
+	if view.ID == "" || view.EnvironmentID != envID || view.Name != name || view.TemplateID != templateID || view.BuildJobID != "" {
+		return errors.New("returned view does not match the private environment, name, and template")
+	}
+	if view.Generation != 1 {
+		return fmt.Errorf("new template instance generation is %d, want 1", view.Generation)
+	}
+	got := resources.Resources{
+		CPUs: int64(view.CPUs), MemoryMiB: int64(view.MemoryMiB), MaxMemoryMiB: int64(view.MaxMemoryMiB),
+		WorkspaceMiB: int64(view.WorkspaceMiB), DockerMiB: int64(view.DockerMiB),
+	}
+	if got != want {
+		return fmt.Errorf("instance resources are %+v, want template resources %+v", got, want)
+	}
+	return nil
+}
+
+func waitAndConfigureTemplateInstance(ctx context.Context, manager *sandboxes.Manager, envID, sandboxID, label string) error {
+	if err := manager.WaitReady(ctx, sandboxID, 45*time.Second); err != nil {
+		return fmt.Errorf("wait for %s template instance readiness: %w", label, err)
+	}
+	if err := manager.ConfigureGuest(ctx, envID, sandboxID); err != nil {
+		return fmt.Errorf("explicitly configure %s template instance guest: %w", label, err)
+	}
+	return nil
+}
+
+func currentCAHash(ctx context.Context, manager *sandboxes.Manager, envID string) (string, error) {
+	caPEM, err := manager.CA.CertPEM(ctx, envID)
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(caPEM)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return "", errors.New("private environment CA is not a PEM certificate")
+	}
+	hash := sha256.Sum256(pem.EncodeToMemory(block))
+	return hex.EncodeToString(hash[:]), nil
+}
+
+func assertTemplatePinBlocksDelete(ctx context.Context, registry *templateregistry.Registry, envID, templateID string) error {
+	if err := registry.Delete(ctx, envID, templateID); !errors.Is(err, store.ErrConflict) {
+		if err == nil {
+			return errors.New("registry deleted a template while a private instance pinned it")
+		}
+		return errors.New("registry did not reject template deletion with store.ErrConflict")
+	}
+	reference, err := registry.Resolve(ctx, envID, templateID)
+	if err != nil {
+		return errors.New("template pin did not preserve resolvable registry artifacts")
+	}
+	if reference.Image == "" || reference.Username != envID || reference.Password == "" {
+		return errors.New("resolved private template reference is incomplete or outside its environment")
+	}
+	return nil
+}
+
+func runTemplateInstanceAssertions(ctx context.Context, rt *runtime.Runtime, view sandboxes.View, originalProof, marker, caHash string) error {
+	command := runtime.RunCommand{
+		Path: "/bin/bash",
+		Args: []string{
+			"--noprofile", "--norc", "-e", "-u", "-o", "pipefail", "-c",
+			templateInstanceAssertionScript, "studio-template-instance-probe", marker, originalProof, caHash,
+		},
+		User: "root", Cwd: "/", Env: map[string]string{"HOME": "/root", "PATH": "/usr/sbin:/usr/bin:/sbin:/bin"},
+		Timeout: 20 * time.Second,
+	}
+	result, runErr := rt.Run(ctx, runtime.OwnedVM{
+		Name:   sandboxes.VMName(view.Sandbox),
+		Labels: templateInstanceLabels(view.Sandbox, view.EnvironmentID, view.TemplateID),
+	}, command, nil)
+	pending := rt.PendingRun()
+	if runErr != nil {
+		return fmt.Errorf("root assertion command returned an SDK error (PendingRun=%t, ExitCodeKnown=%t; SDK details suppressed)", pending, result.ExitCodeKnown)
+	}
+	if result.CleanupPending || pending {
+		return fmt.Errorf("root assertion command cleanup is pending (CleanupPending=%t, PendingRun=%t)", result.CleanupPending, pending)
+	}
+	if !result.ExitCodeKnown {
+		return errors.New("root assertion command returned without a known SDK exit code")
+	}
+	if result.ExitCode != 0 {
+		return fmt.Errorf("root assertion command exited with known SDK status %d", result.ExitCode)
+	}
+	if result.OutputDropped {
+		return errors.New("root assertion command output was dropped by the SDK")
+	}
+	return nil
+}
+
+const templateInstanceAssertionScript = `set -euo pipefail
+marker="$1"
+original_proof="$2"
+expected_ca_hash="$3"
+test -n "$marker"
+test "$(cat /home/agent/template-build-proof)" = "$original_proof"
+test ! -e /workspace/template-instance-only
+test ! -e /var/lib/docker/template-instance-only
+test "$(cat /etc/sandbox-studio/env)" = 'TOKEN=studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+test -r /etc/sandbox-studio/ca.crt
+test -r /usr/local/share/ca-certificates/sandbox-studio.crt
+test -s /etc/ssl/certs/ca-certificates.crt
+file_hash() { sha256sum "$1" | cut -d ' ' -f 1; }
+test "$(file_hash /etc/sandbox-studio/ca.crt)" = "$expected_ca_hash"
+test "$(file_hash /usr/local/share/ca-certificates/sandbox-studio.crt)" = "$expected_ca_hash"
+ca_pem="$(cat /etc/sandbox-studio/ca.crt)"
+trusted_bundle="$(cat /etc/ssl/certs/ca-certificates.crt)"
+case "$trusted_bundle" in *"$ca_pem"*) ;; *) exit 41 ;; esac
+test -r /etc/profile.d/sandbox-studio-env.sh
+grep -Fq 'Written by the Sandbox Studio guest agent' /etc/profile.d/sandbox-studio-env.sh
+. /etc/profile.d/sandbox-studio-env.sh
+test "${TOKEN-}" = 'studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+profile_found=
+for profile in /home/agent/.profile /home/agent/.bash_profile /home/agent/.bash_login; do
+    if [ -r "$profile" ] && grep -Fq '# sandbox-studio managed mise login profile' "$profile" &&
+       grep -Fq 'mise activate bash' "$profile" && grep -Fq ". '/etc/profile.d/sandbox-studio-env.sh'" "$profile"; then
+        profile_found=1
+    fi
+done
+test "$profile_found" = 1
+printf '%s\n' "$marker" > /home/agent/template-build-proof
+mkdir -p /workspace /var/lib/docker
+printf '%s\n' "$marker" > /workspace/template-instance-only
+printf '%s\n' "$marker" > /var/lib/docker/template-instance-only
+`
+
+type privateTemplateInstanceOwner struct {
+	envID, name, templateID string
+	manager                 *sandboxes.Manager
+	store                   *store.Store
+	runtime                 *runtime.Runtime
+	record                  *store.Sandbox
+	createReturned          bool
+	createSucceeded         bool
+	armed                   bool
+}
+
+func (owner *privateTemplateInstanceOwner) cleanup(ctx context.Context) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	defer cancel()
+	rows, err := owner.store.Sandboxes(cleanupCtx, owner.envID)
+	if err != nil {
+		return fmt.Errorf("read private sandbox rows: %w", err)
+	}
+	record, err := findPrivateTemplateInstance(rows, owner.envID, owner.name, owner.templateID)
+	rowExists := err == nil
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	if rowExists {
+		if owner.record != nil && owner.record.ID != record.ID {
+			return errors.New("private cleanup identity now resolves to a different sandbox row")
+		}
+		copy := record
+		owner.record = &copy
+	} else if owner.record != nil {
+		record = *owner.record
+	} else if owner.createReturned && !owner.createSucceeded {
+		// CreateFromTemplate retains a catalog row whenever exact VM cleanup is
+		// uncertain. A failed call with no row therefore means it either failed
+		// before allocation or already verified its own partial-boot cleanup.
+		return nil
+	} else {
+		return errors.New("no matching private catalog row exists, so the VM owner cannot be confirmed")
+	}
+	if record.EnvironmentID != owner.envID || record.Name != owner.name || record.TemplateID != owner.templateID || record.BuildJobID != "" {
+		return errors.New("private cleanup row does not match the registered environment, name, and template")
+	}
+	if err := owner.runtime.RemoveOwned(cleanupCtx, runtime.OwnedVM{
+		Name: sandboxes.VMName(record), Labels: templateInstanceLabels(record, owner.envID, owner.templateID),
+	}); err != nil {
+		return errors.New("runtime could not confirm removal of the exact private template VM")
+	}
+	status, err := owner.runtime.Status(cleanupCtx, sandboxes.VMName(record))
+	if err != nil {
+		return errors.New("runtime status could not confirm private VM absence")
+	}
+	if status != runtime.StatusAbsent {
+		return fmt.Errorf("private VM remains in runtime status %q", status)
+	}
+	if rowExists {
+		if err := owner.manager.Delete(cleanupCtx, owner.envID, record.ID); err != nil {
+			return errors.New("manager.Delete could not remove the verified private template instance")
+		}
+	}
+	if _, err := owner.store.Sandbox(cleanupCtx, owner.envID, record.ID); !errors.Is(err, store.ErrNotFound) {
+		if err != nil {
+			return fmt.Errorf("verify private sandbox row deletion: %w", err)
+		}
+		return errors.New("private sandbox row remains after manager.Delete")
+	}
+	return nil
+}
+
+func findPrivateTemplateInstance(rows []store.Sandbox, envID, name, templateID string) (store.Sandbox, error) {
+	var match store.Sandbox
+	found := false
+	for _, row := range rows {
+		if row.EnvironmentID != envID || row.Name != name {
+			continue
+		}
+		if row.TemplateID != templateID || row.BuildJobID != "" {
+			return store.Sandbox{}, errors.New("private instance name resolves to a row with different template ownership")
+		}
+		if found {
+			return store.Sandbox{}, errors.New("multiple private sandbox rows match the registered instance identity")
+		}
+		match, found = row, true
+	}
+	if !found {
+		return store.Sandbox{}, store.ErrNotFound
+	}
+	return match, nil
+}
+
+func assertInstanceStoreRow(ctx context.Context, st *store.Store, owner *privateTemplateInstanceOwner, view sandboxes.View) error {
+	rows, err := st.Sandboxes(ctx, owner.envID)
+	if err != nil {
+		return err
+	}
+	record, err := findPrivateTemplateInstance(rows, owner.envID, owner.name, owner.templateID)
+	if err != nil {
+		return err
+	}
+	if record.ID != view.ID || record.Generation != view.Generation {
+		return errors.New("returned view does not match the unique private catalog row")
+	}
+	copy := record
+	owner.record = &copy
+	return nil
+}
+
+func templateInstanceLabels(sb store.Sandbox, envID, templateID string) map[string]string {
+	return map[string]string{
+		"studio.sandbox-id":     sb.ID,
+		"studio.environment-id": envID,
+		"studio.sandbox-name":   sb.Name,
+		"studio.template-id":    templateID,
+	}
 }
 
 func installAgent(source, destination string) error {
@@ -657,6 +1085,9 @@ func assertNoOwnedRecords(ctx context.Context, st *store.Store, envID string) er
 		if sandbox.BuildJobID != "" {
 			return fmt.Errorf("sandbox %s retains build-job ownership", sandbox.ID)
 		}
+		if sandbox.TemplateID != "" {
+			return fmt.Errorf("sandbox %s retains a public template instance pin", sandbox.ID)
+		}
 	}
 	return nil
 }
@@ -676,7 +1107,7 @@ func privateOwnershipPending(ctx context.Context, st *store.Store, envID string)
 		return true, err
 	}
 	for _, sandbox := range sandboxes {
-		if sandbox.BuildJobID != "" {
+		if sandbox.BuildJobID != "" || sandbox.TemplateID != "" {
 			return true, nil
 		}
 	}
@@ -920,10 +1351,12 @@ func (g *probeGuests) BootBuildSandbox(ctx context.Context, envID, jobID, sandbo
 }
 
 type probeEgress struct {
-	mu          sync.Mutex
-	attached    map[string]probeCredential
-	lastErr     error
-	attachCount int
+	mu            sync.Mutex
+	attached      map[string]probeCredential
+	seenEnvs      map[string]struct{}
+	seenPasswords map[string]struct{}
+	lastErr       error
+	attachCount   int
 }
 
 func (e *probeEgress) Attach(sb store.Sandbox) (runtime.Egress, error) {
@@ -944,10 +1377,18 @@ func (e *probeEgress) Attach(sb store.Sandbox) (runtime.Egress, error) {
 	if err != nil {
 		return runtime.Egress{}, fmt.Errorf("generate per-job probe password: %w", err)
 	}
+	if _, exists := e.seenEnvs[envName]; exists {
+		return runtime.Egress{}, errors.New("probe egress generated a repeated credential environment name")
+	}
+	if _, exists := e.seenPasswords[password]; exists {
+		return runtime.Egress{}, errors.New("probe egress generated a repeated password")
+	}
 	if err := os.Setenv(envName, password); err != nil {
 		return runtime.Egress{}, fmt.Errorf("set host-only per-job probe password: %w", err)
 	}
 	e.attached[sb.ID] = probeCredential{env: envName, password: password}
+	e.seenEnvs[envName] = struct{}{}
+	e.seenPasswords[password] = struct{}{}
 	e.attachCount++
 	return runtime.Egress{
 		Nameserver:  "127.0.0.1:9",
@@ -961,6 +1402,20 @@ func (e *probeEgress) attachCountValue() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.attachCount
+}
+
+func (e *probeEgress) currentCredential(sandboxID string) (probeCredential, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	credential, exists := e.attached[sandboxID]
+	if !exists || credential.env == "" || credential.password == "" {
+		return probeCredential{}, errors.New("no active private credential is recorded for the sandbox")
+	}
+	current, exists := os.LookupEnv(credential.env)
+	if !exists || current != credential.password {
+		return probeCredential{}, errors.New("active private credential does not match its recorded sandbox")
+	}
+	return credential, nil
 }
 
 func (e *probeEgress) Detach(sandboxID string) {

@@ -345,6 +345,13 @@ func (s *Store) SetTemplateDeleting(ctx context.Context, envID, id string) error
 	if err != nil {
 		return err
 	}
+	var referenced int
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM sandboxes WHERE template_id = ?)", id).Scan(&referenced); err != nil {
+		return err
+	}
+	if referenced != 0 {
+		return ErrConflict
+	}
 	if state == TemplateStateDeleting {
 		return tx.Commit()
 	}
@@ -377,6 +384,13 @@ func (s *Store) DeleteTemplate(ctx context.Context, envID, id string) error {
 	}
 	if err != nil {
 		return err
+	}
+	var referenced int
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM sandboxes WHERE template_id = ?)", id).Scan(&referenced); err != nil {
+		return err
+	}
+	if referenced != 0 {
+		return ErrConflict
 	}
 	if state != TemplateStateDeleting {
 		return ErrConflict

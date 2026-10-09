@@ -158,6 +158,51 @@ func CanonicalJSON(spec Spec) ([]byte, error) {
 	return encoded, nil
 }
 
+// ParseCanonicalJSON parses only the exact serialized form emitted by
+// CanonicalJSON. It is intended for persisted internal template records, not
+// for accepting arbitrary client-provided JSON metadata.
+func ParseCanonicalJSON(data []byte) (Spec, error) {
+	if len(data) == 0 || len(data) > maxCanonicalBytes {
+		return Spec{}, invalid("canonical spec must be between 1 byte and 1 MiB")
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var canonical canonicalSpec
+	if err := decoder.Decode(&canonical); err != nil {
+		return Spec{}, invalid("decode canonical spec: %v", err)
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return Spec{}, invalid("canonical spec must contain exactly one JSON value")
+		}
+		return Spec{}, invalid("decode trailing canonical spec data: %v", err)
+	}
+	if canonical.FormatVersion != canonicalVersion {
+		return Spec{}, invalid("unsupported canonical spec version %d", canonical.FormatVersion)
+	}
+
+	spec := Spec{
+		Resources: resources.Resources{
+			CPUs: canonical.Resources.CPUs, MemoryMiB: canonical.Resources.MemoryMiB,
+			MaxMemoryMiB: canonical.Resources.MaxMemoryMiB,
+			WorkspaceMiB: canonical.Resources.WorkspaceMiB, DockerMiB: canonical.Resources.DockerMiB,
+		},
+		Tools: canonical.Tools,
+		Apt:   canonical.Apt,
+		Setup: canonical.Setup,
+	}
+	encoded, err := CanonicalJSON(spec)
+	if err != nil {
+		return Spec{}, err
+	}
+	if !bytes.Equal(data, encoded) {
+		return Spec{}, invalid("canonical spec bytes do not match the supported representation")
+	}
+	return spec, nil
+}
+
 type canonicalSpec struct {
 	FormatVersion int                `json:"formatVersion"`
 	Resources     canonicalResources `json:"resources"`

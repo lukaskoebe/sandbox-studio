@@ -181,14 +181,15 @@ func run(addr, image string, log *slog.Logger) error {
 	hub := agentchan.NewHub(log)
 	rt := runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()})
 	mgr := &sandboxes.Manager{
-		Store:   st,
-		Runtime: rt,
-		Hub:     hub,
-		Egress:  gw,
-		CA:      authority,
-		Secrets: vault,
-		Paths:   p,
-		Log:     log,
+		Store:     st,
+		Runtime:   rt,
+		Templates: registry,
+		Hub:       hub,
+		Egress:    gw,
+		CA:        authority,
+		Secrets:   vault,
+		Paths:     p,
+		Log:       log,
 	}
 	hub.OnConnect = mgr.Configure
 	go mgr.FollowEnvironments(ctx, bus)

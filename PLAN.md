@@ -307,6 +307,16 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   Environment-scoped routes list jobs, read a job, cancel it, and retrieve its bounded log.
   See the [template build operator and developer guide](docs/template-builds.md).
 
+  **Fresh instances from ready templates passed warm-cache Linux amd64 live qualification.**
+  A ready build with a template exposes **Create sandbox**. The
+  new sandbox pins a ready template in the same environment, takes its fixed resources
+  from the template spec, and gets a fresh root instance plus empty workspace and Docker
+  disks. It follows ordinary creation for the new sandbox/proxy identity, agent socket,
+  guest boot, and CA/placeholder configuration. The API lists templates at
+  `GET /api/environments/{env}/templates`, reads one at
+  `GET /api/environments/{env}/templates/{id}`, and creates an instance with
+  `POST /api/environments/{env}/templates/{id}/sandboxes` (`{name}`).
+
   The Builds page passed TypeScript, lint, production-build, and desktop/mobile browser
   checks with simulated jobs. YAML file import/export is still planned.
 
@@ -411,12 +421,12 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
 
   UI validation used mocked desktop/mobile workflows and web checks; no live-worker UI
   build or workflow was run. These results do not complete M3. Remaining work includes
-  the fresh-template instance API and rebase, YAML file import/export, apt/mise network
-  installs, cold-cache pulls, macOS and Windows host VM runs, arm64, the release template
-  base digest pin, and oversized/backpressured capture qualification. Unsupported overlay
-  features and file types remain out of scope. Userspace cannot guarantee automatic
-  recovery if a kernel freeze/thaw call never returns; stopping or rebooting the VM remains
-  possible. Restore remains blocked by microsandbox
+  rebase, YAML file import/export, apt/mise network installs, cold-cache pulls, macOS and
+  Windows host VM runs, arm64, the release template base digest pin, and
+  oversized/backpressured capture qualification. Unsupported overlay features and file
+  types remain out of scope. Userspace cannot guarantee automatic recovery if a kernel
+  freeze/thaw call never returns; stopping or rebooting the VM remains possible. Restore
+  remains blocked by microsandbox
   [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
 - **Rebase:** moving an existing sandbox to a new template keeps its workspace. The mechanism
   depends on spike S5 (named disk volume vs. copying the workspace).
