@@ -29,6 +29,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/preview"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 	"github.com/lukaskoebe/sandbox-studio/internal/webui"
@@ -92,6 +93,11 @@ func run(addr, image string, log *slog.Logger) error {
 		return err
 	}
 	defer st.Close()
+	// Studio must not run without its vault: without the key the stored secrets are lost.
+	vault, err := secrets.Open(ctx, st, p.Data, log)
+	if err != nil {
+		return err
+	}
 	if err := ensureEnvironment(ctx, st); err != nil {
 		return err
 	}
@@ -136,7 +142,7 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Bus: bus, Conns: conns, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Log: log, Addr: addr}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(preview.Route(hub.DialTCP, mux))
 

@@ -231,6 +231,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The secrets of an environment. Sandboxes see each name as an environment variable holding its placeholder. */
+        get: operations["listSecrets"];
+        put?: never;
+        post: operations["createSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/secrets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The name is fixed at creation. Omitting value keeps the stored value. */
+        put: operations["updateSecret"];
+        post?: never;
+        delete: operations["deleteSecret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -317,6 +351,15 @@ export interface components {
             name: string;
             /** Format: int64 */
             workspaceMiB?: number;
+        };
+        CreateSecretInBody: {
+            /** @description Host patterns the value may be sent to, e.g. api.openai.com or *.example.com */
+            hosts: string[] | null;
+            /** @description Environment variable name sandboxes see, e.g. OPENAI_API_KEY */
+            name: string;
+            note?: string;
+            /** @description The secret value. It is sealed on arrival and never returned. */
+            value: string;
         };
         DecideInBody: {
             /**
@@ -432,6 +475,18 @@ export interface components {
             /** @description Limits the rule to one sandbox of this environment */
             sandboxId?: string;
         };
+        Secret: {
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            hosts: string[] | null;
+            id: string;
+            name: string;
+            note: string;
+            placeholder: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         Session: {
             /** Format: int64 */
             attached: number;
@@ -440,6 +495,13 @@ export interface components {
             name: string;
             /** Format: int64 */
             windows: number;
+        };
+        UpdateSecretInBody: {
+            /** @description Host patterns the value may be sent to */
+            hosts: string[] | null;
+            note?: string;
+            /** @description A new value. Omit it to keep the stored one. */
+            value?: string;
         };
         View: {
             agent?: components["schemas"]["AgentInfo"];
@@ -1089,6 +1151,144 @@ export interface operations {
                 /** @description Sandbox ID */
                 id: string;
                 name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listSecrets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Secret"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSecretInBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Secret"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Secret ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSecretInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Secret"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Secret ID */
+                id: string;
             };
             cookie?: never;
         };

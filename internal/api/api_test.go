@@ -14,6 +14,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -26,13 +27,19 @@ func newTestServer(t *testing.T) (http.Handler, *Server) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	vault, err := secrets.New(context.Background(), st, &memKeys{name: "keychain"}, &memKeys{name: "file"}, log)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bus := &events.Bus{}
 	s := &Server{
 		Store:  st,
 		Policy: &policy.Engine{Store: st, Bus: bus, Hold: 5 * time.Second},
+		Vault:  vault,
 		Bus:    bus,
 		Conns:  &gateway.ConnLog{},
-		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Log:    log,
 		Addr:   "127.0.0.1:7878",
 	}
 	mux := http.NewServeMux()

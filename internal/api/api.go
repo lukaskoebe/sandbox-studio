@@ -21,6 +21,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
@@ -30,6 +31,7 @@ type Server struct {
 	Store     *store.Store
 	Sandboxes *sandboxes.Manager
 	Policy    *policy.Engine
+	Vault     *secrets.Vault
 	Bus       *events.Bus
 	Conns     *gateway.ConnLog
 	Log       *slog.Logger
@@ -42,6 +44,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerEnvironments(api)
 	s.registerSandboxes(api)
 	s.registerNetwork(api)
+	s.registerSecrets(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api
@@ -220,7 +223,8 @@ func apiError(err error) error {
 	case errors.Is(err, agentchan.ErrNotConnected):
 		return huma.Error409Conflict("the sandbox is not running or still booting")
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
-		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern):
+		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern),
+		errors.Is(err, secrets.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, policy.ErrDecided):
 		return huma.Error409Conflict(err.Error())

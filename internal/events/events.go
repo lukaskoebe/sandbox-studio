@@ -8,6 +8,7 @@ import "sync"
 const (
 	TopicApprovals = "approvals"
 	TopicRules     = "rules"
+	TopicSecrets   = "secrets"
 )
 
 // Event is one change notification.

@@ -342,9 +342,10 @@ A small static Linux Go binary (in `cmd/studio-agent`), mounted into every sandb
   - macOS Keychain
   - Windows Credential Manager
   - Linux Secret Service, falling back to a 0600 key file on headless Linux
-- Each secret has bindings (`hosts: [...]`) and an optional guest placeholder env var
-  (`STUDIO_SECRET_<NAME>=studio-ph-<random>`). The gateway substitutes the placeholder only
-  in requests to bound hosts and blocks (and logs) attempts to send it anywhere else.
+- Each secret has bindings (`hosts: [...]`, at least one, never `*`). Sandboxes see its name
+  as an env var holding a placeholder (`OPENAI_API_KEY=studio-<random>`). The gateway
+  substitutes the placeholder only in requests to bound hosts and blocks (and logs) attempts
+  to send it anywhere else.
 - **LLM keys and harness auth use this mechanism**, so real provider keys never enter a
   sandbox.
 
