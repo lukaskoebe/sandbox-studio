@@ -129,6 +129,15 @@ func (h *Hub) serve(id string, nc net.Conn) {
 	c := &conn{sess: sess, hello: hello, since: time.Now(), exportOpen: make(chan struct{}, 1), requestOpen: make(chan struct{}, 32)}
 	h.mu.Lock()
 	old := h.sessions[id]
+	if old != nil && !old.sess.IsClosed() {
+		h.mu.Unlock()
+		h.log.Debug("rejected duplicate guest agent connection while current session is live", "sandbox", id)
+		_ = sess.Close()
+		// The guest retries with capped backoff. If the old session has not yet
+		// reported closed here, the newcomer is rejected and recovery waits for
+		// a later retry after the old session's closure is observed.
+		return
+	}
 	h.sessions[id] = c
 	waiters := h.waiters[id]
 	delete(h.waiters, id)
@@ -317,6 +326,9 @@ func (p *PTY) Read(b []byte) (int, error) {
 	for len(p.pend) == 0 {
 		typ, payload, err := agentproto.ReadFrame(p.st)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return 0, fmt.Errorf("terminal channel ended without exit frame: %w", io.ErrUnexpectedEOF)
+			}
 			return 0, err
 		}
 		switch typ {

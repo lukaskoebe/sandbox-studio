@@ -49,6 +49,7 @@ import { Terminal } from "@/components/terminal"
 import {
   $api,
   errorMessage,
+  errorStatus,
   fetchClient,
   isReady,
   type Sandbox,
@@ -74,7 +75,10 @@ function SandboxPage() {
   if (sandbox.isPending) {
     return <Spinner className="m-auto" />
   }
-  if (sandbox.isError) {
+  if (
+    sandbox.isError &&
+    (!sandbox.data || errorStatus(sandbox.error) === 404)
+  ) {
     return (
       <Empty>
         <EmptyHeader>
@@ -99,6 +103,15 @@ function SandboxPage() {
         </div>
       </PageHeader>
       <div className="flex min-h-0 flex-1 flex-col">
+        {sandbox.isRefetchError && (
+          <div
+            role="status"
+            className="flex shrink-0 items-center gap-2 border-b bg-amber-500/5 px-3 py-1 text-xs text-amber-700 dark:text-amber-400"
+          >
+            <WarningIcon className="size-3 shrink-0" />
+            Sandbox status refresh failed. Retrying…
+          </div>
+        )}
         <Body env={env} sandbox={sb} />
       </div>
     </>
