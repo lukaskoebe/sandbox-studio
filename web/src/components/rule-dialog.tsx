@@ -57,13 +57,19 @@ import {
 type Action = "allow" | "proxy" | "caddy" | "deny"
 const actions: Action[] = ["allow", "proxy", "caddy", "deny"]
 
-const caddyExample = `@read method GET HEAD
+/** Read-only access to the host: GET and HEAD go through, everything else is refused. */
+function caddyExample(host: string) {
+  const upstream = /^[a-z0-9.-]+\.[a-z]+$/i.test(host)
+    ? host
+    : "api.example.com"
+  return `@read method GET HEAD
 handle @read {
-  reverse_proxy https://httpbin.org
+  reverse_proxy https://${upstream}
 }
 handle {
   respond "Forbidden" 403
 }`
+}
 
 export function RuleDialog({
   env,
@@ -334,6 +340,7 @@ function RuleForm({
       {action === "caddy" && (
         <CaddyField
           env={env}
+          host={host.trim()}
           value={caddyfile}
           onChange={(value) => {
             setCaddyfile(value)
@@ -396,11 +403,13 @@ function RuleForm({
 /** A Caddyfile for handling the host's HTTP requests. */
 function CaddyField({
   env,
+  host,
   value,
   onChange,
   error,
 }: {
   env: string
+  host: string
   value: string
   onChange: (value: string) => void
   error?: string
@@ -410,12 +419,13 @@ function CaddyField({
     params: { path: { env } },
   })
 
+  const example = caddyExample(host)
   const insertExample = () => {
     if (value.length > 0) {
       setConfirmReplace(true)
       return
     }
-    onChange(caddyExample)
+    onChange(example)
   }
 
   return (
@@ -426,6 +436,7 @@ function CaddyField({
           type="button"
           variant="outline"
           size="sm"
+          className="text-foreground"
           onClick={insertExample}
         >
           Insert example
@@ -451,14 +462,14 @@ function CaddyField({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
-            {caddyExample}
+            {example}
           </pre>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               type="button"
               onClick={() => {
-                onChange(caddyExample)
+                onChange(example)
                 setConfirmReplace(false)
               }}
             >

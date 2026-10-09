@@ -144,8 +144,7 @@ const caddyfileLanguage = StreamLanguage.define<CaddyfileState>({
       return "meta"
     }
     if (stream.eatWhile(/[\w.-]/)) {
-      const word = stream.current()
-      return directives.has(word) ? "keyword" : "atom"
+      return directives.has(stream.current()) ? "keyword" : null
     }
     if (/[=<>|&!]/.test(next ?? "")) {
       stream.next()
@@ -154,7 +153,7 @@ const caddyfileLanguage = StreamLanguage.define<CaddyfileState>({
     }
 
     stream.next()
-    return "atom"
+    return null
   },
   indent(state, textAfter, { unit }) {
     const dedent = textAfter.trimStart().startsWith("}") ? 1 : 0
@@ -165,20 +164,21 @@ const caddyfileLanguage = StreamLanguage.define<CaddyfileState>({
 
 const caddyfileHighlight = HighlightStyle.define([
   { tag: tags.comment, color: "var(--muted-foreground)" },
-  { tag: tags.keyword, color: "var(--primary)", fontWeight: "600" },
-  { tag: tags.meta, color: "var(--chart-3)", fontWeight: "600" },
-  { tag: tags.string, color: "var(--chart-4)" },
+  { tag: tags.keyword, color: "var(--code-keyword)", fontWeight: "600" },
+  { tag: tags.meta, color: "var(--code-meta)", fontWeight: "600" },
+  { tag: tags.string, color: "var(--code-string)" },
   {
     tag: tags.special(tags.variableName),
-    color: "var(--chart-2)",
+    color: "var(--code-variable)",
     fontWeight: "500",
   },
-  { tag: tags.operator, color: "var(--chart-5)" },
+  { tag: tags.operator, color: "var(--code-operator)" },
   { tag: tags.punctuation, color: "var(--muted-foreground)" },
 ])
 
 const editorTheme = EditorView.theme({
   "&": {
+    borderRadius: "inherit",
     backgroundColor: "var(--background)",
     color: "var(--foreground)",
     fontSize: "0.75rem",
@@ -188,6 +188,7 @@ const editorTheme = EditorView.theme({
     outlineOffset: "-2px",
   },
   ".cm-scroller": {
+    borderRadius: "inherit",
     maxHeight: "24rem",
     overflow: "auto",
     fontFamily:
@@ -236,13 +237,20 @@ function secretCompletion(secretsRef: {
   current: readonly SecretName[]
 }): (context: CompletionContext) => CompletionResult | null {
   return (context) => {
-    const match = context.matchBefore(/\{secret\.[A-Za-z0-9_]*$/)
+    // Offer secrets from the first letter of {secret., not only once it's typed out.
+    const match = context.matchBefore(/\{[A-Za-z0-9_.]*$/)
     if (!match || secretsRef.current.length === 0) return null
+    const typed = match.text.slice(1)
+    if (!(
+      typed.startsWith("secret.") ||
+      (typed && "secret.".startsWith(typed))
+    ))
+      return null
 
     return {
       from: match.from,
       to: context.pos,
-      validFor: /^\{secret\.[A-Za-z0-9_]*$/,
+      validFor: /^\{(s|se|sec|secr|secre|secret|secret\.[A-Za-z0-9_]*)$/,
       options: secretsRef.current.map(({ name }) => {
         const placeholder = `{secret.${name}}`
         return {
@@ -462,6 +470,7 @@ export function CaddyfileEditor({
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="text-foreground"
                   aria-label="Insert secret"
                 />
               }
@@ -488,7 +497,7 @@ export function CaddyfileEditor({
       )}
       <div
         ref={hostRef}
-        className="w-full min-w-0 overflow-hidden rounded-md border border-input bg-background"
+        className="w-full min-w-0 rounded-md border border-input bg-background"
       />
     </div>
   )
