@@ -47,6 +47,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	api := humago.New(mux, config())
 	s.registerEnvironments(api)
 	s.registerSandboxes(api)
+	s.registerCheckpoints(api)
 	s.registerPreviews(api)
 	s.registerNetwork(api)
 	s.registerSecrets(api)
@@ -225,11 +226,18 @@ func apiError(err error) error {
 		return huma.Error404NotFound(err.Error())
 	case errors.Is(err, store.ErrExists):
 		return huma.Error409Conflict(err.Error())
+	case errors.Is(err, runtime.ErrCheckpointInUse), errors.Is(err, runtime.ErrCheckpointRestoreUnavailable),
+		errors.Is(err, store.ErrConflict),
+		errors.Is(err, sandboxes.ErrBusy),
+		errors.Is(err, sandboxes.ErrCheckpointState):
+		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, agentchan.ErrNotConnected):
 		return huma.Error409Conflict("the sandbox is not running or still booting")
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern),
 		errors.Is(err, secrets.ErrInvalid):
+		return huma.Error422UnprocessableEntity(err.Error())
+	case errors.Is(err, sandboxes.ErrCheckpointName):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, policy.ErrDecided):
 		return huma.Error409Conflict(err.Error())

@@ -41,6 +41,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
+import { CheckpointsSheet } from "@/components/checkpoints-sheet"
 import { ConnectionsSheet } from "@/components/connections-sheet"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge, phase } from "@/components/status-badge"
@@ -92,6 +93,7 @@ function SandboxPage() {
         <StatusBadge sandbox={sb} />
         <div className="ml-auto flex items-center gap-1">
           <ConnectionsSheet env={env} sandbox={sb} />
+          <CheckpointsSheet env={env} sandbox={sb} />
           {isReady(sb) && <Previews env={env} sandbox={sb} />}
           <Lifecycle env={env} sandbox={sb} />
         </div>
@@ -249,8 +251,8 @@ function Lifecycle({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {sb.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The VM, its workspace and its Docker images are deleted. This
-              can't be undone.
+              The VM, its workspace, Docker images, and checkpoints are deleted.
+              This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

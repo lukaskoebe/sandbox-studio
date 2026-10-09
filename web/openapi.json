@@ -75,6 +75,49 @@
         ],
         "type": "object"
       },
+      "Checkpoint": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "generation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "creating",
+              "ready",
+              "deleting"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "sandboxId",
+          "name",
+          "state",
+          "generation",
+          "createdAt"
+        ],
+        "type": "object"
+      },
       "Conn": {
         "additionalProperties": false,
         "properties": {
@@ -155,6 +198,21 @@
           "verdict",
           "sent",
           "received"
+        ],
+        "type": "object"
+      },
+      "CreateCheckpointInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "Human-readable checkpoint name",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -705,6 +763,9 @@
           "agent": {
             "$ref": "#/components/schemas/AgentInfo"
           },
+          "checkpointRestoreSupported": {
+            "type": "boolean"
+          },
           "cpus": {
             "format": "int64",
             "type": "integer"
@@ -754,6 +815,7 @@
         },
         "required": [
           "status",
+          "checkpointRestoreSupported",
           "id",
           "environmentId",
           "name",
@@ -1426,6 +1488,243 @@
         },
         "tags": [
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/checkpoints": {
+      "get": {
+        "operationId": "listCheckpoints",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Checkpoint"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "checkpoints"
+        ]
+      },
+      "post": {
+        "description": "Stop the sandbox first; checkpoint capture requires a stopped sandbox.",
+        "operationId": "createCheckpoint",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCheckpointInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Checkpoint"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create a disk checkpoint",
+        "tags": [
+          "checkpoints"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}": {
+      "delete": {
+        "operationId": "deleteCheckpoint",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Checkpoint ID",
+            "in": "path",
+            "name": "checkpoint",
+            "required": true,
+            "schema": {
+              "description": "Checkpoint ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "checkpoints"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}/restore": {
+      "post": {
+        "operationId": "restoreCheckpoint",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Checkpoint ID",
+            "in": "path",
+            "name": "checkpoint",
+            "required": true,
+            "schema": {
+              "description": "Checkpoint ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "checkpoints"
         ]
       }
     },

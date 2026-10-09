@@ -238,10 +238,22 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   units.
 - Snapshot features, mapped to UX:
   - **Checkpoint:** a disk snapshot in snapshot group `sbx-<id>`.
+    Captures root, workspace and Docker disks. Stop the sandbox before capture: the
+    current microsandbox guest-flush path cannot freeze our systemd PID-1 workloads.
+    Studio does not bypass that flush check for live disk captures.
+    This is a filesystem checkpoint, not application-level database consistency or
+    a saved process session. Stop applications first when their own recovery requires it.
   - **Suspend / Resume:** a full snapshot, then stop; restore resumes the processes,
     including agent TUIs.
   - **Fork:** a running sandbox becomes a new sandbox, with copy-on-write memory.
   - **Restore checkpoint:** a new generation from the snapshot.
+    Currently gated off with microsandbox 0.7.7: disk restore loses the systemd init
+    configuration ([upstream #1676](https://github.com/superradcompany/microsandbox/issues/1676)).
+    Do not enable until the runtime preserves init and a real restore/restart passes.
+    Requires the sandbox to be stopped. Studio restores and stops a replacement VM,
+    records the new generation, then removes the old VM. A durable operation record
+    lets startup finish cleanup or discard an uncommitted replacement after interruption;
+    unresolved cleanup blocks further lifecycle changes instead of risking both VMs running.
   - **Export/import:** a `.msb` archive.
 - Resource changes go through `modify`: live within the `max_*` limits set at boot, otherwise
   on the next start.

@@ -33,7 +33,7 @@ const (
 // Manager coordinates the catalog, the runtime, the agent hub and the network gateway.
 type Manager struct {
 	Store   *store.Store
-	Runtime *runtime.Runtime
+	Runtime SandboxRuntime
 	Hub     *agentchan.Hub
 	Egress  Egress
 	CA      interface {
@@ -45,7 +45,22 @@ type Manager struct {
 	Paths paths.Paths
 	Log   *slog.Logger
 
-	configuring sync.Map // sandbox ID → *sync.Mutex, see Configure
+	configuring sync.Map // sandbox ID → *sync.Mutex; shared locks stay for the Manager lifetime
+}
+
+// SandboxRuntime is the runtime surface the manager needs. Keeping it narrow makes
+// lifecycle transitions testable without an SDK or host runtime.
+type SandboxRuntime interface {
+	Create(context.Context, string, runtime.Spec, string, map[string]string) error
+	Start(context.Context, string) error
+	Stop(context.Context, string) error
+	Remove(context.Context, string) error
+	Status(context.Context, string) (runtime.Status, error)
+	Statuses(context.Context, string) (map[string]runtime.Status, error)
+	CreateCheckpoint(context.Context, string, string, string) error
+	RemoveCheckpoint(context.Context, string, string) error
+	CheckpointRestoreSupported() bool
+	RestoreCheckpoint(context.Context, string, string, string) error
 }
 
 // Egress is the host side of sandbox networking (internal/gateway).
@@ -60,8 +75,9 @@ type Egress interface {
 // View is a sandbox as shown to clients: catalog record plus live state.
 type View struct {
 	store.Sandbox
-	Status runtime.Status `json:"status" enum:"absent,created,starting,running,draining,paused,stopped,crashed"`
-	Agent  *AgentInfo     `json:"agent,omitempty"`
+	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,paused,stopped,crashed"`
+	CheckpointRestoreSupported bool           `json:"checkpointRestoreSupported"`
+	Agent                      *AgentInfo     `json:"agent,omitempty"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -82,6 +98,11 @@ type CreateRequest struct {
 // VMName is the microsandbox name of the current generation of sb.
 func VMName(sb store.Sandbox) string { return fmt.Sprintf("%s%s-g%d", VMPrefix, sb.ID, sb.Generation) }
 
+func vmNameAtGeneration(sb store.Sandbox, generation int) string {
+	sb.Generation = generation
+	return VMName(sb)
+}
+
 // Reconcile re-attaches agent listeners for every sandbox after Studio starts.
 // Detached VMs keep running across Studio restarts; their agents reconnect on their own.
 func (m *Manager) Reconcile(ctx context.Context) error {
@@ -89,12 +110,39 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	ops, err := m.Store.Restores(ctx)
+	if err != nil {
+		return err
+	}
+	pending := make(map[string]store.RestoreOperation, len(ops))
+	for _, op := range ops {
+		pending[op.SandboxID] = op
+	}
+	seen := make(map[string]bool, len(all))
 	for _, sb := range all {
+		seen[sb.ID] = true
+		if op, ok := pending[sb.ID]; ok {
+			if op.EnvironmentID != sb.EnvironmentID {
+				m.Log.Warn("restore recovery", "sandbox", sb.ID, "err", store.ErrNotFound)
+				m.Hub.Close(sb.ID)
+				continue
+			}
+			if err := m.recoverRestore(ctx, sb, op); err != nil {
+				m.Log.Warn("restore recovery", "sandbox", sb.ID, "err", err)
+				continue // Fail closed for this sandbox; other sandboxes can still reconcile.
+			}
+			delete(pending, sb.ID)
+		}
 		if err := m.Hub.Listen(sb.ID, m.Paths.AgentSocket(sb.ID)); err != nil {
 			m.Log.Warn("agent listener", "sandbox", sb.ID, "err", err)
 		}
 		if _, err := m.Egress.Attach(sb); err != nil {
 			m.Log.Warn("sandbox network", "sandbox", sb.ID, "err", err)
+		}
+	}
+	for id := range pending {
+		if !seen[id] {
+			m.Log.Warn("restore recovery", "sandbox", id, "err", store.ErrNotFound)
 		}
 	}
 	return nil
@@ -183,7 +231,19 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 
 // Start boots a stopped sandbox.
 func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
+	unlock, err := m.tryMutation(id)
+	if err != nil {
+		return View{}, err
+	}
+	defer unlock()
 	rec, err := m.Store.Sandbox(ctx, envID, id)
+	if err != nil {
+		return View{}, err
+	}
+	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
+		return View{}, err
+	}
+	rec, err = m.Store.Sandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
@@ -201,7 +261,19 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 
 // Stop shuts a sandbox down. Its disks and catalog record are kept.
 func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
+	unlock, err := m.tryMutation(id)
+	if err != nil {
+		return View{}, err
+	}
+	defer unlock()
 	rec, err := m.Store.Sandbox(ctx, envID, id)
+	if err != nil {
+		return View{}, err
+	}
+	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
+		return View{}, err
+	}
+	rec, err = m.Store.Sandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
@@ -213,8 +285,27 @@ func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
 
 // Delete stops a sandbox and removes its VM, disks and record.
 func (m *Manager) Delete(ctx context.Context, envID, id string) error {
+	unlock, err := m.tryMutation(id)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	rec, err := m.Store.Sandbox(ctx, envID, id)
 	if err != nil {
+		return err
+	}
+	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
+		return err
+	}
+	rec, err = m.Store.Sandbox(ctx, envID, id)
+	if err != nil {
+		return err
+	}
+	checkpoints, err := m.Store.Checkpoints(ctx, envID, id)
+	if err != nil {
+		return err
+	}
+	if err := m.deleteCheckpointsLocked(ctx, envID, id, checkpoints); err != nil {
 		return err
 	}
 	if err := m.Runtime.Remove(ctx, VMName(rec)); err != nil {
@@ -222,7 +313,6 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 	}
 	m.Hub.Close(rec.ID)
 	m.Egress.Detach(rec.ID)
-	m.configuring.Delete(rec.ID)
 	return m.Store.DeleteSandbox(ctx, envID, id)
 }
 
@@ -274,6 +364,7 @@ func (m *Manager) view(ctx context.Context, rec store.Sandbox) (View, error) {
 }
 
 func (m *Manager) withAgent(v View) View {
+	v.CheckpointRestoreSupported = m.Runtime.CheckpointRestoreSupported()
 	if hello, ok := m.Hub.Connected(v.ID); ok && v.Status.IsRunning() {
 		v.Agent = &AgentInfo{Version: hello.Version, Arch: hello.Arch}
 	}

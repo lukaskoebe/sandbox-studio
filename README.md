@@ -5,8 +5,8 @@ Run coding agents (OpenCode, Claude Code, Codex) as persistent team members insi
 access, git pushes, browser actions, credential use — goes through the host and can be
 approved from a web UI.
 
-> **Status: early development (milestone M2).** Sandboxes, terminals, network approvals,
-> secrets, and Caddy rules are available for development use. See
+> **Status: early development (milestone M3 in progress).** Sandboxes, terminals, network
+> approvals, secrets, Caddy rules, and disk checkpoints are available for development use. See
 > [PLAN.md](PLAN.md) for the design and roadmap and [docs/spikes.md](docs/spikes.md) for the
 > results of the technical spikes.
 
@@ -46,6 +46,13 @@ passes through Studio; the dev proxy does not bypass it.
 Open sandbox previews through the **Previews** menu. Each preview gets its own host-scoped
 session, and Studio removes its authentication cookies before forwarding requests to the
 sandbox. Preview links use `.localhost`, so they open on the machine running Studio.
+
+Stop a sandbox, then use **Checkpoints** to save its root, workspace and Docker disks.
+Checkpoints can depend on earlier ones; delete newer checkpoints before their parents.
+Restore is currently disabled: microsandbox 0.7.7 loses systemd initialization on disk
+restore ([upstream #1676](https://github.com/superradcompany/microsandbox/issues/1676)).
+Disk checkpoints do not preserve running processes. Quiesce applications first when they
+need application-level consistency; live memory suspend/resume is still planned.
 
 ## License
 

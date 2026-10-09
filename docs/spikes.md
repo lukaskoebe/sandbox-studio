@@ -108,6 +108,25 @@ Decisions:
 - Rebase (new template) copies the workspace through the agent channel (tar stream);
   measure in M3.
 
+M3 integration finding: disk-only capture with microsandbox 0.7.7's default guest flush
+rejects the systemd base image: `workload freezer is unavailable: PID 1 handoff workloads
+are not wholly owned by agentd's cgroup`. Studio therefore requires a stopped sandbox
+for disk checkpoints, and does not fall back to `GuestFlushSkip`. Full execution snapshots
+need separate validation with this base image before exposing suspend/resume.
+
+Disk restore also loses the `WithInit(Init.Auto())` configuration: the replacement boots
+with `init.krun` as PID 1, `systemctl` fails and the Studio agent does not reconnect. This
+matches open upstream [#1676](https://github.com/superradcompany/microsandbox/issues/1676).
+The v0.7.7 SDK exposes neither a restore init option nor an init modification API. Studio
+therefore gates restore off before modifying either the VM or catalog. The candidate
+adoption path additionally checks persisted init configuration as a regression guard.
+Catalog/recovery tests use a supported fake runtime; they do not qualify real restore.
+
+Checkpoint deletion must move a group head to a surviving member before removing it.
+Studio prefers the parent, keeps head changes within the sandbox's group, and always
+removes without force. Indexed child dependencies return a conflict; sandbox deletion
+removes children before retrying their parents. A singleton head can be removed directly.
+
 ## S6 — Hold-and-ask client timeouts
 
 The gateway held TLS connections without answering, and measured when each client gave up:
