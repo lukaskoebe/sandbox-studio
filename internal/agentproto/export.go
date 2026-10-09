@@ -14,7 +14,8 @@ import (
 	"unicode/utf8"
 )
 
-// Export framing is scoped to KindExport streams. It uses the same
+// Export framing is what `studio-agent export-layer` writes to stdout, which
+// Studio reads over msb exec. It uses the same
 // [type u8][length u32 BE][payload] layout as WriteFrame, with smaller limits.
 const (
 	// ExportVersion is the version in the completion frame.
@@ -148,7 +149,7 @@ func WriteExport(ctx context.Context, w io.Writer, r io.Reader, maxBytes int64) 
 	}
 }
 
-// ReadExport decodes a KindExport stream from r and writes its raw bytes to w.
+// ReadExport decodes an export stream from r and writes its raw bytes to w.
 // It returns success only after verifying the version, count, digest, and EOF
 // after the completion frame. It writes bytes as they arrive, so callers should
 // discard the destination unless this function returns nil error. ctx must not

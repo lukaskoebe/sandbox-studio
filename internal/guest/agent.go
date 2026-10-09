@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -28,7 +27,6 @@ import (
 	"github.com/mdlayher/vsock"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
-	"github.com/lukaskoebe/sandbox-studio/internal/guestcapture"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
@@ -47,11 +45,9 @@ const tmuxConfPath = "/run/studio-agent/tmux.conf"
 
 // Agent serves host requests over the vsock channel.
 type Agent struct {
-	log       *slog.Logger
-	user      *account
-	export    func(context.Context, io.Writer) error
-	exporting atomic.Bool
-	configMu  sync.Mutex
+	log      *slog.Logger
+	user     *account
+	configMu sync.Mutex
 }
 
 // New prepares an agent; it fails if the terminal user does not exist.
@@ -66,7 +62,7 @@ func New(log *slog.Logger) (*Agent, error) {
 	if err := os.WriteFile(tmuxConfPath, tmuxConf, 0o644); err != nil {
 		return nil, err
 	}
-	return &Agent{log: log, user: acct, export: guestcapture.Export}, nil
+	return &Agent{log: log, user: acct}, nil
 }
 
 // Run dials the host and serves sessions until ctx is done, reconnecting with backoff.
@@ -155,8 +151,6 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.killSession(st, h.Session)
 	case agentproto.KindConfig:
 		err = a.configure(st, br)
-	case agentproto.KindExport:
-		err = a.serveExport(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}

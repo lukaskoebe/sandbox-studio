@@ -196,7 +196,7 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
 	}
-	builds, err := templatebuild.New(templatebuild.Options{Store: st, Runtime: rt, Guests: mgr, Exporter: hub, Registry: registry, Bus: bus, Log: log})
+	builds, err := templatebuild.New(templatebuild.Options{Store: st, Runtime: rt, Guests: mgr, Registry: registry, Bus: bus, Log: log})
 	if err != nil {
 		return err
 	}

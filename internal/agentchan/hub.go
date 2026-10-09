@@ -45,7 +45,6 @@ type conn struct {
 	sess        *yamux.Session
 	hello       agentproto.Hello
 	since       time.Time
-	exportOpen  chan struct{}
 	requestOpen chan struct{}
 }
 
@@ -126,7 +125,7 @@ func (h *Hub) serve(id string, nc net.Conn) {
 	}
 	st.Close()
 
-	c := &conn{sess: sess, hello: hello, since: time.Now(), exportOpen: make(chan struct{}, 1), requestOpen: make(chan struct{}, 32)}
+	c := &conn{sess: sess, hello: hello, since: time.Now(), requestOpen: make(chan struct{}, 32)}
 	h.mu.Lock()
 	old := h.sessions[id]
 	if old != nil && !old.sess.IsClosed() {

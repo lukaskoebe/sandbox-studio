@@ -148,7 +148,7 @@ subprocess.Popen(['/opt/studio/studio-agent','connect'],stdin=subprocess.DEVNULL
 	if err != nil {
 		return fmt.Errorf("create registry receive directory: %w", err)
 	}
-	layer, err := hub.Export(ctx, id, staging, ocilayer.Limits{})
+	layer, err := exportOverExec(ctx, source, staging)
 	if err != nil {
 		return fmt.Errorf("export: %w", err)
 	}
@@ -266,8 +266,56 @@ func qualifyOwnerDeath(ctx context.Context, source *msb.Sandbox, dir string) err
 	return nil
 }
 
+// exportOverExec streams export-layer stdout into templateexport.Receive, as
+// the template builder does.
+func exportOverExec(ctx context.Context, source *msb.Sandbox, dir string) (templateexport.Layer, error) {
+	handle, err := source.ExecStream(ctx, "/opt/studio/studio-agent", []string{"export-layer"},
+		msb.WithExecUser("root"), msb.WithExecTimeout(ownerDeathExecTimeout))
+	if err != nil {
+		return templateexport.Layer{}, fmt.Errorf("start export-layer stream: %w", err)
+	}
+	defer handle.Close()
+	reader, writer := io.Pipe()
+	received := make(chan error, 1)
+	var layer templateexport.Layer
+	go func() {
+		var err error
+		layer, err = templateexport.Receive(ctx, dir, reader, ocilayer.Limits{})
+		received <- err
+	}()
+	var stderr []byte
+	exit := -1
+	for exit < 0 {
+		ev, err := handle.Recv(ctx)
+		if err != nil {
+			_ = writer.CloseWithError(err)
+			return templateexport.Layer{}, errors.Join(err, <-received)
+		}
+		switch ev.Kind {
+		case msb.ExecEventStdout:
+			if _, err := writer.Write(ev.Data); err != nil {
+				_ = handle.Kill(context.Background())
+			}
+		case msb.ExecEventStderr:
+			stderr = appendPrefix(stderr, ev.Data, 4<<10)
+		case msb.ExecEventExited:
+			exit = ev.ExitCode
+		case msb.ExecEventDone, msb.ExecEventFailed:
+			exit = max(exit, 255)
+		}
+	}
+	_ = writer.Close()
+	if err := <-received; err != nil || exit != 0 {
+		if layer.Path != "" {
+			_ = os.Remove(layer.Path)
+		}
+		return templateexport.Layer{}, errors.Join(err, fmt.Errorf("export-layer exited %d: %s", exit, stderr))
+	}
+	return layer, nil
+}
+
 // runCaptureFault streams export-layer output into the same artifact receiver
-// used by Hub.Export while retaining only a bounded diagnostic prefix. The
+// used by the template builder while retaining only a bounded diagnostic prefix. The
 // callback runs on the first stdout event, or the first data frame when asked.
 func runCaptureFault(ctx context.Context, source *msb.Sandbox, dir string, afterFirstDataFrame bool, fault func(*msb.ExecHandle, uint32) error) (faultProbeReport, error) {
 	var report faultProbeReport

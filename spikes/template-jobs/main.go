@@ -45,28 +45,24 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatebuild"
-	"github.com/lukaskoebe/sandbox-studio/internal/templateexport"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateimage"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
 
 const (
-	baseImage                  = "sandbox-studio-base:dev"
-	dummyPlaceholder           = "studio-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	instancePlaceholder        = "studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	proofPath                  = "home/agent/template-build-proof"
-	totalTimeout               = 6 * time.Minute
-	networkTimeout             = 20 * time.Minute
-	workerStopTimeout          = 25 * time.Second
-	serverStopTimeout          = 5 * time.Second
-	jobPollInterval            = 200 * time.Millisecond
-	logFlushTimeout            = 5 * time.Second
-	probePasswordPrefix        = "SS_TEMPLATE_JOBS_GATEWAY_"
-	maxFailureLogBytes         = 8 << 10
-	exportDiagnosticLimit      = 24 << 10
-	exportDiagnosticTimeout    = 20 * time.Second
-	exportDiagnosticRunTimeout = 8 * time.Second
+	baseImage           = "sandbox-studio-base:dev"
+	dummyPlaceholder    = "studio-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	instancePlaceholder = "studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	proofPath           = "home/agent/template-build-proof"
+	totalTimeout        = 6 * time.Minute
+	networkTimeout      = 20 * time.Minute
+	workerStopTimeout   = 25 * time.Second
+	serverStopTimeout   = 5 * time.Second
+	jobPollInterval     = 200 * time.Millisecond
+	logFlushTimeout     = 5 * time.Second
+	probePasswordPrefix = "SS_TEMPLATE_JOBS_GATEWAY_"
+	maxFailureLogBytes  = 8 << 10
 )
 
 func main() {
@@ -393,7 +389,7 @@ func qualify(ctx context.Context, agentPath, scratch string, networkInstalls boo
 	}
 	guests := &probeGuests{Manager: manager, suppressBootError: networkInstalls}
 	worker, err := templatebuild.New(templatebuild.Options{
-		Store: st, Runtime: rt, Guests: guests, Exporter: probeExporter{hub: hub, store: st, runtime: rt, environmentID: privateEnv.ID}, Registry: registry,
+		Store: st, Runtime: probeRunner{rt}, Guests: guests, Registry: registry,
 		Bus: bus, Log: logger, ExportLimits: exportLimits,
 	})
 	if err != nil {
@@ -2084,173 +2080,33 @@ type probeCredential struct {
 	password string
 }
 
-type probeExporter struct {
-	hub           *agentchan.Hub
-	store         *store.Store
-	runtime       *runtime.Runtime
-	environmentID string
-}
+// probeRunner reports the export stream's size and throughput.
+type probeRunner struct{ *runtime.Runtime }
 
-func (e probeExporter) Export(ctx context.Context, sandboxID, dir string, limits ocilayer.Limits) (templateexport.Layer, error) {
+func (r probeRunner) Run(ctx context.Context, owned runtime.OwnedVM, command runtime.RunCommand, output chan<- runtime.RunOutput) (runtime.RunResult, error) {
+	if command.Stdout == nil || len(command.Args) != 1 || command.Args[0] != "export-layer" {
+		return r.Runtime.Run(ctx, owned, command, output)
+	}
+	counter := &countingWriter{w: command.Stdout}
+	command.Stdout = counter
 	started := time.Now()
-	layer, err := e.hub.Export(ctx, sandboxID, dir, limits)
-	if err != nil {
-		elapsed := time.Since(started)
-		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export returned after %s: %v\n", elapsed, err)
-		e.diagnoseExportFailure(ctx, sandboxID)
-		return layer, err
-	}
-	fmt.Printf("PRIVATE TEMPLATE PROBE Export succeeded: elapsed=%s size=%d uncompressed_size=%d entries=%d\n",
-		time.Since(started), layer.Size, layer.UncompressedSize, layer.Entries)
-	return layer, err
+	result, err := r.Runtime.Run(ctx, owned, command, output)
+	elapsed := time.Since(started)
+	fmt.Printf("PRIVATE TEMPLATE PROBE export-layer stdout: bytes=%d elapsed=%s rate=%.1fMB/s exit=%d err=%v\n",
+		counter.n, elapsed.Round(time.Millisecond), float64(counter.n)/elapsed.Seconds()/1e6, result.ExitCode, err)
+	return result, err
 }
 
-type exportDiagnosticResult struct {
-	result runtime.RunResult
-	err    error
+type countingWriter struct {
+	w io.Writer
+	n int64
 }
 
-type exportDiagnosticCapture struct {
-	stdout  []byte
-	stderr  []byte
-	dropped bool
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
 }
-
-func (c *exportDiagnosticCapture) add(output runtime.RunOutput) {
-	remaining := exportDiagnosticLimit - len(c.stdout) - len(c.stderr)
-	if remaining <= 0 {
-		c.dropped = true
-		return
-	}
-	data := output.Data
-	if len(data) > remaining {
-		data = data[:remaining]
-		c.dropped = true
-	}
-	if output.Stderr {
-		c.stderr = append(c.stderr, data...)
-	} else {
-		c.stdout = append(c.stdout, data...)
-	}
-}
-
-func (e probeExporter) diagnoseExportFailure(parent context.Context, sandboxID string) {
-	diagCtx, cancel := context.WithTimeout(context.WithoutCancel(parent), exportDiagnosticTimeout)
-	defer cancel()
-
-	if e.store == nil || e.runtime == nil || e.environmentID == "" {
-		fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic skipped: private owner dependencies unavailable")
-		return
-	}
-	sb, err := e.store.Sandbox(diagCtx, e.environmentID, sandboxID)
-	if err != nil || sb.ID != sandboxID || sb.EnvironmentID != e.environmentID || sb.BuildJobID == "" {
-		fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic skipped: private builder ownership not verified")
-		return
-	}
-	job, err := e.store.BuildJob(diagCtx, e.environmentID, sb.BuildJobID)
-	if err != nil || job.ID != sb.BuildJobID || job.EnvironmentID != e.environmentID ||
-		job.SandboxID != sb.ID || job.Status != store.BuildExporting || !job.CleanupPending ||
-		job.PrewarmName != "" || job.PrewarmToken != "" {
-		fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic skipped: active exporting job ownership not verified")
-		return
-	}
-
-	owned := runtime.OwnedVM{
-		Name: sandboxes.VMName(sb),
-		Labels: map[string]string{
-			"studio.sandbox-id":     sb.ID,
-			"studio.environment-id": e.environmentID,
-			"studio.sandbox-name":   sb.Name,
-			"studio.build-job":      job.ID,
-		},
-	}
-	command := runtime.RunCommand{
-		Path: "/usr/bin/timeout",
-		Args: []string{
-			"--signal=TERM", "--kill-after=1s", "6s",
-			"/bin/bash", "--noprofile", "--norc", "-c", exportDiagnosticScript,
-			"studio-template-export-diagnostic",
-		},
-		User: "root", Cwd: "/", Env: map[string]string{"HOME": "/root", "PATH": "/usr/sbin:/usr/bin:/sbin:/bin"},
-		Timeout: 7 * time.Second,
-	}
-	runCtx, runCancel := context.WithTimeout(diagCtx, exportDiagnosticRunTimeout)
-	defer runCancel()
-	output := make(chan runtime.RunOutput, 16)
-	runDone := make(chan exportDiagnosticResult, 1)
-	go func() {
-		result, runErr := e.runtime.Run(runCtx, owned, command, output)
-		runDone <- exportDiagnosticResult{result: result, err: runErr}
-	}()
-
-	var capture exportDiagnosticCapture
-	for {
-		select {
-		case chunk := <-output:
-			capture.add(chunk)
-		case run := <-runDone:
-			for {
-				select {
-				case chunk := <-output:
-					capture.add(chunk)
-				default:
-					printExportDiagnosticResult(run, capture)
-					return
-				}
-			}
-		case <-diagCtx.Done():
-			fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic stopped at 20s bound; runtime result unavailable")
-			printExportDiagnosticOutput("stdout", capture.stdout)
-			printExportDiagnosticOutput("stderr", capture.stderr)
-			return
-		}
-	}
-}
-
-func printExportDiagnosticResult(run exportDiagnosticResult, capture exportDiagnosticCapture) {
-	if run.result.ExitCodeKnown {
-		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic complete: exit_code=%d cleanup_pending=%t output_truncated=%t runtime_error=%t\n",
-			run.result.ExitCode, run.result.CleanupPending, capture.dropped || run.result.OutputDropped, run.err != nil)
-	} else {
-		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic complete: exit_code=unknown cleanup_pending=%t output_truncated=%t runtime_error=%t\n",
-			run.result.CleanupPending, capture.dropped || run.result.OutputDropped, run.err != nil)
-	}
-	printExportDiagnosticOutput("stdout", capture.stdout)
-	printExportDiagnosticOutput("stderr", capture.stderr)
-}
-
-func printExportDiagnosticOutput(stream string, output []byte) {
-	if len(output) == 0 {
-		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic %s: [empty]\n", stream)
-		return
-	}
-	fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic %s (%d bytes):\n%s", stream, len(output), output)
-	if output[len(output)-1] != '\n' {
-		fmt.Fprintln(os.Stderr)
-	}
-}
-
-const exportDiagnosticScript = `
-set +e
-dump_log() {
-	label="$1"
-	file="$2"
-	fprintf_line="--- %s: last up to 60 lines ---\n"
-	printf -- "$fprintf_line" "$label"
-	if [ -r "$file" ]; then
-		/usr/bin/tail -n 60 -- "$file" 2>&1 | /usr/bin/tail -c 6144
-	else
-		printf '[unavailable]\n'
-	fi
-}
-dump_log agent.log /var/log/studio/agent.log
-dump_log supervisor.log /var/log/studio/supervisor.log
-printf '\n--- dmesg: last up to 60 lines ---\n'
-/usr/bin/dmesg 2>&1 | /usr/bin/tail -n 60 | /usr/bin/tail -c 8192
-printf '\n--- /proc/meminfo: first 8 lines ---\n'
-/usr/bin/head -n 8 /proc/meminfo 2>&1 | /usr/bin/head -c 2048
-exit 0
-`
 
 // probeGuests keeps production manager behavior intact while exposing the
 // underlying boot error for this private, dummy-credential qualification.
