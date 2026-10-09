@@ -7,6 +7,7 @@ import {
   CheckIcon,
   CubeIcon,
   GlobeIcon,
+  KeyIcon,
   PlusIcon,
   SquaresFourIcon,
 } from "@phosphor-icons/react"
@@ -94,6 +95,18 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <GlobeIcon />
                 <span>Network</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Secrets"
+                isActive={
+                  !!matchRoute({ to: "/e/$env/secrets", params: { env } })
+                }
+                render={<Link to="/e/$env/secrets" params={{ env }} />}
+              >
+                <KeyIcon />
+                <span>Secrets</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query"
 const stale: Record<string, string[]> = {
   approvals: ["/api/approvals", "/api/environments/{env}/approvals"],
   rules: ["/api/environments/{env}/rules"],
+  secrets: ["/api/environments/{env}/secrets"],
 }
 
 /**

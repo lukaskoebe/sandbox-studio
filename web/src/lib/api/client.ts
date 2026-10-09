@@ -17,6 +17,7 @@ export type PreviewPort = components["schemas"]["PreviewPort"]
 export type Approval = components["schemas"]["ApprovalView"]
 export type Rule = components["schemas"]["Rule"]
 export type Connection = components["schemas"]["Conn"]
+export type Secret = components["schemas"]["Secret"]
 
 /** The message of an API problem response, or of any thrown error. */
 export function errorMessage(err: unknown): string {
