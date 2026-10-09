@@ -569,7 +569,7 @@ func TestRunStartupCancellationPreservesLostHandleUncertainty(t *testing.T) {
 		t.Fatalf("stalled startup was not reported as pending: result=%+v err=%v pending=%v", result, err, runtime.PendingRun())
 	}
 	runtime.runMu.Lock()
-	task := runtime.runSlot
+	task := runtime.runSlots[fakeOwnedVM().Name]
 	runtime.runMu.Unlock()
 	if task == nil {
 		t.Fatal("pending startup lost its Runtime task before native ExecStream returned")

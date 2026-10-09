@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -43,6 +44,11 @@ type RunCommand struct {
 	Cwd     string
 	Env     map[string]string
 	Timeout time.Duration
+	// Stdin, if set, is streamed to the command's stdin, which is closed at EOF.
+	Stdin io.Reader
+	// Stdout, if set, receives every stdout chunk in order instead of the output
+	// channel. A write error ends the command.
+	Stdout io.Writer
 }
 
 // RunOutput is one stdout or stderr chunk. The caller owns the received bytes
@@ -227,11 +233,14 @@ func (r *Runtime) Run(ctx context.Context, owned OwnedVM, command RunCommand, ou
 		recvStartedSignal: make(chan struct{}), activityCh: make(chan struct{}),
 	}
 	r.runMu.Lock()
-	if r.runSlot != nil {
+	if r.runSlots[owned.Name] != nil {
 		r.runMu.Unlock()
 		return RunResult{}, ErrRunPending
 	}
-	r.runSlot = task
+	if r.runSlots == nil {
+		r.runSlots = map[string]*runTask{}
+	}
+	r.runSlots[owned.Name] = task
 	r.runMu.Unlock()
 
 	go task.execute()
@@ -320,8 +329,8 @@ func (t *runTask) execute() {
 	t.mu.Unlock()
 	if !quarantined {
 		t.runtime.runMu.Lock()
-		if t.runtime.runSlot == t {
-			t.runtime.runSlot = nil
+		if t.runtime.runSlots[t.owned.Name] == t {
+			delete(t.runtime.runSlots, t.owned.Name)
 		}
 		t.runtime.runMu.Unlock()
 	}
@@ -543,6 +552,10 @@ func (t *runTask) receive(exec runExec, ctx context.Context, cancel context.Canc
 		}
 		switch event.kind {
 		case runEventStdout:
+			if t.command.Stdout != nil {
+				t.writeStdout(event.data)
+				continue
+			}
 			t.emitOutput(false, event.data)
 		case runEventStderr:
 			t.emitOutput(true, event.data)
@@ -874,6 +887,22 @@ func (t *runTask) emitOutput(stderr bool, data []byte) {
 	}
 }
 
+// writeStdout writes one chunk synchronously. After a failed write the rest of the
+// output is discarded and the command is killed.
+// TODO(transport-merge): replaced by the transport branch's lossless stdout.
+func (t *runTask) writeStdout(data []byte) {
+	t.mu.Lock()
+	failed := t.streamErr != nil
+	t.mu.Unlock()
+	if failed || len(data) == 0 {
+		return
+	}
+	if _, err := t.command.Stdout.Write(data); err != nil {
+		t.setStreamError(fmt.Errorf("write stdout: %w", err))
+		t.requestCancellation()
+	}
+}
+
 func (t *runTask) setProcessError(err error) {
 	if err == nil {
 		return
@@ -1028,7 +1057,7 @@ func (r *Runtime) PendingRun() bool {
 		return false
 	}
 	r.runMu.Lock()
-	pending := r.runSlot != nil
+	pending := len(r.runSlots) > 0
 	r.runMu.Unlock()
 	return pending
 }
@@ -1176,12 +1205,27 @@ func (c sdkRunConnection) execStream(ctx context.Context, command RunCommand) (r
 	if command.Timeout > 0 {
 		options = append(options, msb.WithExecTimeout(command.Timeout))
 	}
+	if command.Stdin != nil {
+		options = append(options, msb.WithExecStdinPipe())
+	}
 	handle, err := c.sandbox.ExecStream(ctx, command.Path, append([]string(nil), command.Args...), options...)
 	if err != nil {
 		return nil, err
 	}
 	if handle == nil {
 		return nil, errors.New("microsandbox returned an empty exec handle")
+	}
+	if command.Stdin != nil {
+		// TODO(transport-merge): replaced by the transport branch's stdin streaming.
+		sink := handle.TakeStdin()
+		if sink == nil {
+			return nil, errors.Join(errors.New("microsandbox returned no stdin pipe"), handle.Kill(ctx), handle.Close())
+		}
+		go func() {
+			buf := make([]byte, 64<<10)
+			_, _ = io.CopyBuffer(sink, command.Stdin, buf)
+			_ = sink.Close()
+		}()
 	}
 	return sdkRunExec{handle: handle}, nil
 }

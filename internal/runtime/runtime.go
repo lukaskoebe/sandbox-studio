@@ -74,8 +74,9 @@ type Egress struct {
 type Runtime struct {
 	opts Options
 
-	runMu      sync.Mutex
-	runSlot    *runTask
+	runMu sync.Mutex
+	// TODO(transport-merge): one slot per VM name, so commands in two VMs can run at once.
+	runSlots   map[string]*runTask
 	runBackend runBackend
 	runLimits  runLimits
 }
@@ -118,6 +119,17 @@ func (r *Runtime) TargetPlatform() string {
 // Create creates and boots a detached sandbox VM. agentSocket is the host Unix socket
 // that the guest agent reaches over vsock.
 func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocket string, labels map[string]string) error {
+	return r.create(ctx, name, spec, agentSocket, labels, true)
+}
+
+// CreateForTransfer creates a detached sandbox VM like Create, but in transfer mode: it
+// does not run `studio-agent boot`, so no services and no agent run. Boot starts them
+// later. The network and egress configuration is the same as Create's.
+func (r *Runtime) CreateForTransfer(ctx context.Context, name string, spec Spec, agentSocket string, labels map[string]string) error {
+	return r.create(ctx, name, spec, agentSocket, labels, false)
+}
+
+func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocket string, labels map[string]string, bootGuest bool) error {
 	imageOptions, err := privateImageSourceOptions(spec.Image)
 	if err != nil {
 		return fmt.Errorf("create sandbox: %w", err)
@@ -159,6 +171,9 @@ func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocke
 	sb, err := msb.CreateSandbox(ctx, name, options...)
 	if err != nil {
 		return fmt.Errorf("create sandbox: %w", err)
+	}
+	if !bootGuest {
+		return sb.Detach(ctx)
 	}
 	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
@@ -236,6 +251,32 @@ func (r *Runtime) Start(ctx context.Context, name string) error {
 	sb, err := msb.StartSandboxDetached(ctx, name)
 	if err != nil {
 		return err
+	}
+	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
+}
+
+// StartForTransfer starts a stopped sandbox in transfer mode, without its services.
+func (r *Runtime) StartForTransfer(ctx context.Context, name string) error {
+	sb, err := msb.StartSandboxDetached(ctx, name)
+	if err != nil {
+		return err
+	}
+	return sb.Detach(ctx)
+}
+
+// Boot starts the services of a running sandbox that was created or started in
+// transfer mode.
+func (r *Runtime) Boot(ctx context.Context, name string) error {
+	h, err := msb.GetSandbox(ctx, name)
+	if err != nil {
+		return err
+	}
+	sb, err := h.Connect(ctx)
+	if err != nil {
+		return err
+	}
+	if sb == nil {
+		return errors.New("boot guest: SDK returned an empty sandbox")
 	}
 	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
