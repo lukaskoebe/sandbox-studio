@@ -258,8 +258,10 @@ func (m *Manager) RestoreCheckpoint(ctx context.Context, envID, id, checkpointID
 	return m.view(ctx, adopted)
 }
 
+// tryMutation claims a sandbox for one lifecycle change, or fails with ErrBusy. It is separate
+// from the configuration lock, so a slow configuration push never blocks Stop or Delete.
 func (m *Manager) tryMutation(id string) (func(), error) {
-	v, _ := m.configuring.LoadOrStore(id, new(sync.Mutex))
+	v, _ := m.mutating.LoadOrStore(id, new(sync.Mutex))
 	mu := v.(*sync.Mutex)
 	if !mu.TryLock() {
 		return nil, ErrBusy

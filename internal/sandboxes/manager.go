@@ -45,7 +45,10 @@ type Manager struct {
 	Paths paths.Paths
 	Log   *slog.Logger
 
-	configuring sync.Map // sandbox ID → *sync.Mutex; shared locks stay for the Manager lifetime
+	configuring sync.Map // sandbox ID → *sync.Mutex, see Configure
+	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
+	// the Manager's lifetime so a deleted sandbox's lock can't be swapped under a holder.
+	mutating sync.Map
 }
 
 // SandboxRuntime is the runtime surface the manager needs. Keeping it narrow makes

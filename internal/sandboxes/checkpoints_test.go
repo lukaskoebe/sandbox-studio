@@ -423,6 +423,17 @@ func TestSandboxMutationsUseIndependentTryLocks(t *testing.T) {
 	}
 }
 
+func TestConfigurationPushDoesNotBlockLifecycle(t *testing.T) {
+	f := newCheckpointFixture(t)
+	// Configure holds this lock while it waits on the guest agent, for up to configureTimeout.
+	mu, _ := f.manager.configuring.LoadOrStore(f.sandbox.ID, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
+	if _, err := f.manager.Stop(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
+		t.Fatalf("Stop during a configuration push: %v", err)
+	}
+}
+
 type checkpointFixture struct {
 	ctx     context.Context
 	store   *store.Store
