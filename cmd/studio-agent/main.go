@@ -35,6 +35,17 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: export-layer: %v\n", err)
 			os.Exit(1)
 		}
+	case "workspace-export":
+		// Studio runs these as root to copy a workspace between sandboxes.
+		if err := workspaceExport(os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: workspace-export: %v\n", err)
+			os.Exit(1)
+		}
+	case "workspace-import":
+		if err := workspaceImport(os.Stdin); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: workspace-import: %v\n", err)
+			os.Exit(1)
+		}
 	case "__capture-watchdog":
 		if err := captureWatchdog(); err != nil {
 			fmt.Fprintf(os.Stderr, "studio-agent: capture watchdog: %v\n", err)
@@ -67,7 +78,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|oci-runtime|export-layer]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|oci-runtime|export-layer|workspace-export|workspace-import]\n")
 		os.Exit(2)
 	}
 }

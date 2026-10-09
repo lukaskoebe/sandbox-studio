@@ -36,3 +36,11 @@ func exportLayer(context.Context, io.Writer) error {
 func captureWatchdog() error {
 	return errors.New("studio-agent capture watchdog only runs inside Linux sandboxes")
 }
+
+func workspaceExport(io.Writer, io.Writer) error {
+	return errors.New("studio-agent workspace-export only runs inside Linux sandboxes")
+}
+
+func workspaceImport(io.Reader) error {
+	return errors.New("studio-agent workspace-import only runs inside Linux sandboxes")
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"log/slog"
@@ -47,3 +48,15 @@ func exportLayer(ctx context.Context, dst io.Writer) error {
 }
 
 func captureWatchdog() error { return guestcapture.RunWatchdog() }
+
+func workspaceExport(dst, warn io.Writer) error {
+	w := bufio.NewWriterSize(dst, 1<<20)
+	if err := guest.ExportWorkspace(guest.Workdir, w, warn); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
+func workspaceImport(src io.Reader) error {
+	return guest.ImportWorkspace(guest.Workdir, bufio.NewReaderSize(src, 1<<20))
+}
