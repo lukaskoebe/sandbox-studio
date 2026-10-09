@@ -6,6 +6,8 @@ import (
 	"net/url"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 type previewOpenPath struct {
@@ -18,6 +20,23 @@ type previewOpenBody struct {
 	URL string `json:"url"`
 }
 
+// publicSandbox applies the sandbox visibility boundary to public API validation paths.
+// Some API tests exercise a Server without a manager, so the raw-store fallback preserves
+// the same owner check without dereferencing a nil Manager.
+func (s *Server) publicSandbox(ctx context.Context, envID, sandboxID string) (store.Sandbox, error) {
+	if s.Sandboxes != nil {
+		return s.Sandboxes.PublicSandbox(ctx, envID, sandboxID)
+	}
+	sb, err := s.Store.Sandbox(ctx, envID, sandboxID)
+	if err != nil {
+		return store.Sandbox{}, err
+	}
+	if sb.BuildJobID != "" {
+		return store.Sandbox{}, store.ErrNotFound
+	}
+	return sb, nil
+}
+
 func (s *Server) registerPreviews(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "openPreview", Method: http.MethodPost,
@@ -27,7 +46,7 @@ func (s *Server) registerPreviews(api huma.API) {
 		if in.Port < 1 || in.Port > 65535 {
 			return nil, huma.Error422UnprocessableEntity("preview port must be between 1 and 65535")
 		}
-		if _, err := s.Store.Sandbox(ctx, in.Env, in.ID); err != nil {
+		if _, err := s.publicSandbox(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}
 		if s.Auth == nil {

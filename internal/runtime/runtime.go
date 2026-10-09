@@ -6,12 +6,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	goruntime "runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	msb "github.com/superradcompany/microsandbox/sdk/go"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateimage"
 )
 
 // Status is the runtime state of a sandbox VM.
@@ -42,7 +47,18 @@ type Spec struct {
 	MaxMemoryMiB uint32
 	WorkspaceMiB uint32
 	DockerMiB    uint32
-	Egress       Egress
+	// Image selects a private, environment-scoped image source for internal
+	// builder VMs. It is host-side SDK configuration and is never serialized.
+	Image  *ImageSource `json:"-"`
+	Egress Egress
+}
+
+// ImageSource contains host-side credentials and a private immutable image
+// reference. Its fields must never be serialized into guest or job data.
+type ImageSource struct {
+	Reference string `json:"-"`
+	Username  string `json:"-"`
+	Password  string `json:"-"`
 }
 
 // Egress routes a sandbox's traffic through Studio: DNS to its own resolver, and every
@@ -55,7 +71,14 @@ type Egress struct {
 }
 
 // Runtime creates and controls sandbox VMs.
-type Runtime struct{ opts Options }
+type Runtime struct {
+	opts Options
+
+	runMu      sync.Mutex
+	runSlot    *runTask
+	runBackend runBackend
+	runLimits  runLimits
+}
 
 // guestShutdownExecTimeout allows the guest's three sequential 20-second service-stop
 // windows, its 5-second margin, and time for msb to start and return the command.
@@ -70,9 +93,35 @@ func Ensure(ctx context.Context) error {
 // New returns a runtime with the given options.
 func New(opts Options) *Runtime { return &Runtime{opts: opts} }
 
+// BaseReference returns the configured OCI image reference used for new VMs.
+func (r *Runtime) BaseReference() string {
+	if r == nil {
+		return ""
+	}
+	return r.opts.Image
+}
+
+// TargetPlatform returns the supported Linux host platform, or an empty string
+// when this host architecture is not supported by the runtime.
+func (r *Runtime) TargetPlatform() string {
+	if r == nil {
+		return ""
+	}
+	switch goruntime.GOARCH {
+	case "amd64", "arm64":
+		return "linux/" + goruntime.GOARCH
+	default:
+		return ""
+	}
+}
+
 // Create creates and boots a detached sandbox VM. agentSocket is the host Unix socket
 // that the guest agent reaches over vsock.
 func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocket string, labels map[string]string) error {
+	imageOptions, err := privateImageSourceOptions(spec.Image)
+	if err != nil {
+		return fmt.Errorf("create sandbox: %w", err)
+	}
 	maxMemoryMiB := spec.MaxMemoryMiB
 	if maxMemoryMiB == 0 {
 		maxMemoryMiB = spec.MemoryMiB
@@ -89,7 +138,7 @@ func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocke
 		DNS:            &msb.DNSConfig{Nameservers: []string{spec.Egress.Nameserver}},
 	}
 	proxy := msb.SOCKS5Proxy(spec.Egress.Proxy).Credentials(spec.Egress.User, msb.SecretSourceEnv(spec.Egress.PasswordEnv))
-	sb, err := msb.CreateSandbox(ctx, name,
+	options := []msb.SandboxOption{
 		msb.WithImage(r.opts.Image),
 		msb.WithCPUs(spec.CPUs),
 		msb.WithMemory(spec.MemoryMiB),
@@ -105,11 +154,81 @@ func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocke
 		msb.WithProxy(proxy),
 		msb.WithLabels(labels),
 		msb.WithDetached(),
-	)
+	}
+	options = append(options, imageOptions...)
+	sb, err := msb.CreateSandbox(ctx, name, options...)
 	if err != nil {
 		return fmt.Errorf("create sandbox: %w", err)
 	}
 	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
+}
+
+// privateImageSourceOptions validates and translates private registry
+// credentials into SDK host options. It never puts credentials in guest env,
+// vsock, or an error message.
+func privateImageSourceOptions(source *ImageSource) ([]msb.SandboxOption, error) {
+	if source == nil {
+		return nil, nil
+	}
+	if err := validatePrivateImageSource(*source); err != nil {
+		return nil, err
+	}
+	return []msb.SandboxOption{
+		msb.WithImage(source.Reference),
+		msb.WithRegistryAuth(msb.RegistryAuth{Username: source.Username, Password: source.Password}),
+		msb.WithRegistryInsecure(),
+		msb.WithPullPolicy(msb.PullPolicyIfMissing),
+	}, nil
+}
+
+func validatePrivateImageSource(source ImageSource) error {
+	if source.Password == "" {
+		return errors.New("private image source credentials are required")
+	}
+	if !validImageSourceID(source.Username) {
+		return errors.New("private image source has invalid environment scope")
+	}
+	if strings.TrimSpace(source.Reference) != source.Reference || strings.ContainsAny(source.Reference, "\\?# \t\r\n") {
+		return errors.New("private image reference is not canonical")
+	}
+	authority, imagePath, ok := strings.Cut(source.Reference, "/")
+	if !ok {
+		return errors.New("private image reference is not canonical")
+	}
+	host, port, err := net.SplitHostPort(authority)
+	if err != nil {
+		return errors.New("private image reference is not a loopback registry address")
+	}
+	address := net.ParseIP(host)
+	if address == nil || address.To4() == nil || !address.IsLoopback() || host != address.String() {
+		return errors.New("private image reference is not a canonical IPv4 loopback address")
+	}
+	portNumber, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNumber == 0 || strconv.FormatUint(portNumber, 10) != port {
+		return errors.New("private image reference has an invalid registry port")
+	}
+
+	parts := strings.Split(imagePath, "/")
+	if len(parts) != 3 || parts[0] != "studio" || !validImageSourceID(parts[1]) || parts[1] != source.Username {
+		return errors.New("private image reference has invalid environment scope")
+	}
+	repository, digest, ok := strings.Cut(parts[2], "@")
+	if !ok || (repository != "base" && !validImageSourceID(repository)) || !templateimage.ValidDigest(digest) {
+		return errors.New("private image reference must be a digest-pinned Studio image")
+	}
+	return nil
+}
+
+func validImageSourceID(id string) bool {
+	if len(id) != 13 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		if (id[i] < 'a' || id[i] > 'z') && (id[i] < '2' || id[i] > '7') {
+			return false
+		}
+	}
+	return true
 }
 
 // Start boots a stopped sandbox in detached mode.

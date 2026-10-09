@@ -6,6 +6,11 @@ const stale: Record<string, string[]> = {
   approvals: ["/api/approvals", "/api/environments/{env}/approvals"],
   rules: ["/api/environments/{env}/rules"],
   secrets: ["/api/environments/{env}/secrets"],
+  builds: [
+    "/api/environments/{env}/builds",
+    "/api/environments/{env}/builds/{id}",
+    "/api/environments/{env}/builds/{id}/log",
+  ],
 }
 
 /**

@@ -28,25 +28,31 @@ const cleanupTimeout = 30 * time.Second
 // Checkpoints lists the disk checkpoints of a sandbox. In-progress entries are visible so
 // callers can identify a create or delete that needs retrying.
 func (m *Manager) Checkpoints(ctx context.Context, envID, id string) ([]store.Checkpoint, error) {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return nil, err
+	}
 	return m.Store.Checkpoints(ctx, envID, id)
 }
 
 // CreateCheckpoint captures the current sandbox disks, of a running or a stopped sandbox.
 func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) (store.Checkpoint, error) {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return store.Checkpoint{}, err
+	}
 	unlock, err := m.tryMutation(id)
 	if err != nil {
 		return store.Checkpoint{}, err
 	}
 	defer unlock()
 
-	sb, err := m.Store.Sandbox(ctx, envID, id)
+	sb, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return store.Checkpoint{}, err
 	}
 	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
 		return store.Checkpoint{}, err
 	}
-	sb, err = m.Store.Sandbox(ctx, envID, id)
+	sb, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return store.Checkpoint{}, err
 	}
@@ -84,13 +90,16 @@ func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) 
 // DeleteCheckpoint removes the runtime snapshot before deleting its catalog record. A
 // failed runtime removal leaves the row in deleting state so the caller can retry.
 func (m *Manager) DeleteCheckpoint(ctx context.Context, envID, id, checkpointID string) error {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return err
+	}
 	unlock, err := m.tryMutation(id)
 	if err != nil {
 		return err
 	}
 	defer unlock()
 
-	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return err
 	}
 	if err := m.ensureNoRestore(ctx, envID, id, checkpointID); err != nil {
@@ -150,20 +159,23 @@ func (m *Manager) deleteCheckpointsLocked(ctx context.Context, envID, id string,
 // already be stopped; it remains intact until the stopped candidate is adopted in the
 // catalog.
 func (m *Manager) RestoreCheckpoint(ctx context.Context, envID, id, checkpointID string) (View, error) {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return View{}, err
+	}
 	unlock, err := m.tryMutation(id)
 	if err != nil {
 		return View{}, err
 	}
 	defer unlock()
 
-	sb, err := m.Store.Sandbox(ctx, envID, id)
+	sb, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
 	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
-	sb, err = m.Store.Sandbox(ctx, envID, id)
+	sb, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}

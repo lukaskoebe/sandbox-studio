@@ -166,7 +166,7 @@ func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.
 		return store.Rule{}, apiError(err)
 	}
 	if in.SandboxID != "" {
-		_, err := s.Store.Sandbox(ctx, env, in.SandboxID)
+		_, err := s.publicSandbox(ctx, env, in.SandboxID)
 		if errors.Is(err, store.ErrNotFound) {
 			return store.Rule{}, huma.Error422UnprocessableEntity(fmt.Sprintf("sandbox %s is not in this environment", in.SandboxID))
 		}
@@ -307,7 +307,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		OperationID: "listConnections", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/connections", Tags: []string{"network"},
 		Description: "The sandbox's most recent connections, newest first. The log is kept in memory only.",
 	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body []gateway.Conn }, error) {
-		if _, err := s.Store.Sandbox(ctx, in.Env, in.ID); err != nil {
+		if _, err := s.publicSandbox(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}
 		return &struct{ Body []gateway.Conn }{s.Conns.List(in.ID)}, nil

@@ -24,6 +24,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
@@ -31,6 +32,7 @@ import (
 // Server holds what the handlers need.
 type Server struct {
 	Store     *store.Store
+	Builds    BuildService
 	Sandboxes *sandboxes.Manager
 	Policy    *policy.Engine
 	Vault     *secrets.Vault
@@ -42,10 +44,18 @@ type Server struct {
 	Addr      string // the address Studio listens on, used to build preview URLs
 }
 
+// BuildService is the optional durable template-build backend. Keeping this
+// interface narrow lets the API depend on the worker's public operations only.
+type BuildService interface {
+	Submit(context.Context, string, string) (store.BuildJob, bool, error)
+	Cancel(context.Context, string, string) (store.BuildJob, error)
+}
+
 // Register adds the API operations and websocket endpoints to mux.
 func (s *Server) Register(mux *http.ServeMux) huma.API {
 	api := humago.New(mux, config())
 	s.registerEnvironments(api)
+	s.registerBuilds(api)
 	s.registerSandboxes(api)
 	s.registerCheckpoints(api)
 	s.registerPreviews(api)
@@ -237,6 +247,8 @@ func apiError(err error) error {
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern),
 		errors.Is(err, secrets.ErrInvalid):
+		return huma.Error422UnprocessableEntity(err.Error())
+	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, sandboxes.ErrCheckpointName):
 		return huma.Error422UnprocessableEntity(err.Error())

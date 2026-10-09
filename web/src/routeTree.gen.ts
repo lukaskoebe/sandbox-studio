@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EEnvRouteImport } from './routes/e.$env'
 import { Route as EEnvIndexRouteImport } from './routes/e.$env.index'
+import { Route as EEnvBuildsRouteImport } from './routes/e.$env.builds'
 import { Route as EEnvNetworkRouteImport } from './routes/e.$env.network'
 import { Route as EEnvSecretsRouteImport } from './routes/e.$env.secrets'
 import { Route as EEnvSandboxesIdRouteImport } from './routes/e.$env.sandboxes.$id'
@@ -29,6 +30,11 @@ const EEnvRoute = EEnvRouteImport.update({
 const EEnvIndexRoute = EEnvIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvBuildsRoute = EEnvBuildsRouteImport.update({
+  id: '/builds',
+  path: '/builds',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvNetworkRoute = EEnvNetworkRouteImport.update({
@@ -50,6 +56,7 @@ const EEnvSandboxesIdRoute = EEnvSandboxesIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/network': typeof EEnvNetworkRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/': typeof EEnvIndexRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/network': typeof EEnvNetworkRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env': typeof EEnvIndexRoute
@@ -66,6 +74,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/network': typeof EEnvNetworkRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/': typeof EEnvIndexRoute
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/e/$env'
+    | '/e/$env/builds'
     | '/e/$env/network'
     | '/e/$env/secrets'
     | '/e/$env/'
@@ -83,6 +93,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/e/$env/builds'
     | '/e/$env/network'
     | '/e/$env/secrets'
     | '/e/$env'
@@ -91,6 +102,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/e/$env'
+    | '/e/$env/builds'
     | '/e/$env/network'
     | '/e/$env/secrets'
     | '/e/$env/'
@@ -125,6 +137,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvIndexRouteImport
       parentRoute: typeof EEnvRoute
     }
+    '/e/$env/builds': {
+      id: '/e/$env/builds'
+      path: '/builds'
+      fullPath: '/e/$env/builds'
+      preLoaderRoute: typeof EEnvBuildsRouteImport
+      parentRoute: typeof EEnvRoute
+    }
     '/e/$env/network': {
       id: '/e/$env/network'
       path: '/network'
@@ -150,6 +169,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface EEnvRouteChildren {
+  EEnvBuildsRoute: typeof EEnvBuildsRoute
   EEnvNetworkRoute: typeof EEnvNetworkRoute
   EEnvSecretsRoute: typeof EEnvSecretsRoute
   EEnvIndexRoute: typeof EEnvIndexRoute
@@ -157,6 +177,7 @@ interface EEnvRouteChildren {
 }
 
 const EEnvRouteChildren: EEnvRouteChildren = {
+  EEnvBuildsRoute: EEnvBuildsRoute,
   EEnvNetworkRoute: EEnvNetworkRoute,
   EEnvSecretsRoute: EEnvSecretsRoute,
   EEnvIndexRoute: EEnvIndexRoute,

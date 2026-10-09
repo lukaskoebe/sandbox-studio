@@ -195,7 +195,7 @@ func parseArtifactRoute(path string) (artifactRoute, bool) {
 	if len(segments) != 7 || segments[0] != "" || segments[1] != "v2" || segments[2] != "studio" {
 		return artifactRoute{}, false
 	}
-	if !validID(segments[3]) || !validID(segments[4]) {
+	if !validID(segments[3]) || (segments[4] != "base" && !validID(segments[4])) {
 		return artifactRoute{}, false
 	}
 	kind := segments[5]

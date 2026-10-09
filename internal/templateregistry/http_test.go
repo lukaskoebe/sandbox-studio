@@ -328,6 +328,86 @@ func TestHandlerUnknownRoutesAndEnvironmentScope(t *testing.T) {
 	checkHTTPRegistryHeaders(t, recorder)
 }
 
+func TestHandlerServesOnlyLeasedBaseMetadata(t *testing.T) {
+	f := newRegistryFixture(t)
+	other, err := f.st.CreateEnvironment(f.ctx, "private")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := registryBase()
+	image, err := templateimage.ComposeBase(base)
+	if err != nil {
+		t.Fatalf("ComposeBase: %v", err)
+	}
+	ref, release, err := f.reg.PrepareBase(f.ctx, f.env.ID, base)
+	if err != nil {
+		t.Fatalf("PrepareBase: %v", err)
+	}
+	defer func() {
+		if err := release(); err != nil {
+			t.Errorf("release base lease: %v", err)
+		}
+	}()
+
+	handler := f.reg.Handler()
+	serve := func(method, path, host, username, password string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
+		req.Host = host
+		if username != "" {
+			req.SetBasicAuth(username, password)
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, req)
+		return recorder
+	}
+	basePath := "/v2/studio/" + f.env.ID + "/base/"
+
+	manifest := serve(http.MethodGet, basePath+"manifests/"+image.ManifestDescriptor.Digest,
+		registryTestAddress, ref.Username, ref.Password)
+	if manifest.Code != http.StatusOK || manifest.Body.String() != string(image.Manifest) ||
+		manifest.Header().Get("Docker-Content-Digest") != image.ManifestDescriptor.Digest {
+		t.Fatalf("base manifest response = %d %q, want exact leased manifest", manifest.Code, manifest.Body.String())
+	}
+	checkHTTPRegistryHeaders(t, manifest)
+
+	config := serve(http.MethodGet, basePath+"blobs/"+image.ConfigDescriptor.Digest,
+		registryTestAddress, ref.Username, ref.Password)
+	if config.Code != http.StatusOK || config.Body.String() != string(image.Config) ||
+		config.Header().Get("Docker-Content-Digest") != image.ConfigDescriptor.Digest {
+		t.Fatalf("base config response = %d %q, want exact leased config", config.Code, config.Body.String())
+	}
+	checkHTTPRegistryHeaders(t, config)
+
+	wrongDigest := templateimage.Digest([]byte("not leased"))
+	wrongManifest := serve(http.MethodGet, basePath+"manifests/"+wrongDigest,
+		registryTestAddress, ref.Username, ref.Password)
+	if wrongManifest.Code != http.StatusNotFound {
+		t.Errorf("unleased manifest status = %d, want 404", wrongManifest.Code)
+	}
+	for _, layer := range base.Layers {
+		missingLayer := serve(http.MethodGet, basePath+"blobs/"+layer.Digest,
+			registryTestAddress, ref.Username, ref.Password)
+		if missingLayer.Code != http.StatusNotFound {
+			t.Errorf("base layer response = %d, want 404", missingLayer.Code)
+		}
+	}
+	crossEnvironment := serve(http.MethodGet, "/v2/studio/"+other.ID+"/base/manifests/"+image.ManifestDescriptor.Digest,
+		registryTestAddress, ref.Username, ref.Password)
+	if crossEnvironment.Code != http.StatusNotFound {
+		t.Errorf("cross-environment base status = %d, want 404", crossEnvironment.Code)
+	}
+	unauthorized := serve(http.MethodGet, basePath+"manifests/"+image.ManifestDescriptor.Digest,
+		registryTestAddress, ref.Username, "wrong password")
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Errorf("wrong-password base status = %d, want 401", unauthorized.Code)
+	}
+	wrongHost := serve(http.MethodGet, basePath+"manifests/"+image.ManifestDescriptor.Digest,
+		"127.0.0.1:51890", ref.Username, ref.Password)
+	if wrongHost.Code != http.StatusBadRequest {
+		t.Errorf("wrong-host base status = %d, want 400", wrongHost.Code)
+	}
+}
+
 func TestHandlerServesArtifactsWithHeadAndRanges(t *testing.T) {
 	content := []byte("0123456789")
 	backend := newHTTPBackendStub()

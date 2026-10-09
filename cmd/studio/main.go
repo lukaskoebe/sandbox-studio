@@ -35,6 +35,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/templatebuild"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
@@ -178,9 +179,10 @@ func run(addr, image string, log *slog.Logger) error {
 	go gw.Serve(gl)
 
 	hub := agentchan.NewHub(log)
+	rt := runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()})
 	mgr := &sandboxes.Manager{
 		Store:   st,
-		Runtime: runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()}),
+		Runtime: rt,
 		Hub:     hub,
 		Egress:  gw,
 		CA:      authority,
@@ -193,11 +195,32 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
 	}
+	builds, err := templatebuild.New(templatebuild.Options{Store: st, Runtime: rt, Guests: mgr, Exporter: hub, Registry: registry, Bus: bus, Log: log})
+	if err != nil {
+		return err
+	}
+	buildCtx, cancelBuilds := context.WithCancel(ctx)
+	buildsDone := make(chan struct{})
+	go func() {
+		defer close(buildsDone)
+		if err := builds.Run(buildCtx); err != nil && buildCtx.Err() == nil {
+			log.Error("template build worker stopped", "err", err)
+			stop()
+		}
+	}()
+	defer func() {
+		cancelBuilds()
+		select {
+		case <-buildsDone:
+		case <-time.After(45 * time.Second):
+			log.Warn("template build cleanup remains recorded for the next start")
+		}
+	}()
 
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Log: log, Addr: addr}).Register(mux)
 	mux.Handle("/", webui.Handler())
-	handler := api.Guard(auth.Middleware(preview.Route(hub.DialTCP, mux)))
+	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up
 	// the shutdown.

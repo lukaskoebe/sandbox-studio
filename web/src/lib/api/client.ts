@@ -27,6 +27,10 @@ export type Approval = components["schemas"]["ApprovalView"]
 export type Rule = components["schemas"]["Rule"]
 export type Connection = components["schemas"]["Conn"]
 export type Secret = components["schemas"]["Secret"]
+export type BuildJobSummary = components["schemas"]["BuildJobSummary"]
+export type BuildJob = components["schemas"]["BuildJobView"]
+export type BuildJobLog = components["schemas"]["BuildJobLog"]
+export type BuildJobStatus = BuildJobSummary["status"]
 
 /** The message of an API problem response, or of any thrown error. */
 export function errorMessage(err: unknown): string {

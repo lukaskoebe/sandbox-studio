@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -45,7 +46,7 @@ type Manager struct {
 	Paths paths.Paths
 	Log   *slog.Logger
 
-	configuring sync.Map // sandbox ID → *sync.Mutex, see Configure
+	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
 	// the Manager's lifetime so a deleted sandbox's lock can't be swapped under a holder.
 	mutating sync.Map
@@ -125,6 +126,9 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	seen := make(map[string]bool, len(all))
 	for _, sb := range all {
 		seen[sb.ID] = true
+		if sb.BuildJobID != "" {
+			continue
+		}
 		if op, ok := pending[sb.ID]; ok {
 			if op.EnvironmentID != sb.EnvironmentID {
 				m.Log.Warn("restore recovery", "sandbox", sb.ID, "err", store.ErrNotFound)
@@ -207,7 +211,7 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 
 // Get returns one sandbox with its live state.
 func (m *Manager) Get(ctx context.Context, envID, id string) (View, error) {
-	rec, err := m.Store.Sandbox(ctx, envID, id)
+	rec, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
@@ -220,6 +224,13 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 	if err != nil {
 		return nil, err
 	}
+	public := recs[:0]
+	for _, rec := range recs {
+		if rec.BuildJobID == "" {
+			public = append(public, rec)
+		}
+	}
+	recs = public
 	statuses, err := m.Runtime.Statuses(ctx, VMPrefix)
 	if err != nil {
 		return nil, err
@@ -237,19 +248,22 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 
 // Start boots a stopped sandbox.
 func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return View{}, err
+	}
 	unlock, err := m.tryMutation(id)
 	if err != nil {
 		return View{}, err
 	}
 	defer unlock()
-	rec, err := m.Store.Sandbox(ctx, envID, id)
+	rec, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
 	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
-	rec, err = m.Store.Sandbox(ctx, envID, id)
+	rec, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
@@ -267,19 +281,22 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 
 // Stop shuts a sandbox down. Its disks and catalog record are kept.
 func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return View{}, err
+	}
 	unlock, err := m.tryMutation(id)
 	if err != nil {
 		return View{}, err
 	}
 	defer unlock()
-	rec, err := m.Store.Sandbox(ctx, envID, id)
+	rec, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
 	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
-	rec, err = m.Store.Sandbox(ctx, envID, id)
+	rec, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
@@ -291,19 +308,22 @@ func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
 
 // Delete stops a sandbox and removes its VM, disks and record.
 func (m *Manager) Delete(ctx context.Context, envID, id string) error {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return err
+	}
 	unlock, err := m.tryMutation(id)
 	if err != nil {
 		return err
 	}
 	defer unlock()
-	rec, err := m.Store.Sandbox(ctx, envID, id)
+	rec, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return err
 	}
 	if err := m.ensureNoRestore(ctx, envID, id, ""); err != nil {
 		return err
 	}
-	rec, err = m.Store.Sandbox(ctx, envID, id)
+	rec, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return err
 	}
@@ -331,7 +351,7 @@ func (m *Manager) WaitReady(ctx context.Context, id string, timeout time.Duratio
 
 // Terminals lists the tmux sessions of a sandbox.
 func (m *Manager) Terminals(ctx context.Context, envID, id string) ([]agentproto.Session, error) {
-	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return nil, err
 	}
 	return m.Hub.Sessions(ctx, id)
@@ -339,7 +359,7 @@ func (m *Manager) Terminals(ctx context.Context, envID, id string) ([]agentproto
 
 // OpenTerminal attaches to the tmux session name, creating it if needed.
 func (m *Manager) OpenTerminal(ctx context.Context, envID, id, name string, cols, rows uint16) (*agentchan.PTY, error) {
-	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return nil, err
 	}
 	return m.Hub.OpenPTY(ctx, id, name, cols, rows)
@@ -347,7 +367,7 @@ func (m *Manager) OpenTerminal(ctx context.Context, envID, id, name string, cols
 
 // CloseTerminal ends a tmux session and every terminal attached to it.
 func (m *Manager) CloseTerminal(ctx context.Context, envID, id, name string) error {
-	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return err
 	}
 	return m.Hub.KillSession(ctx, id, name)
@@ -355,10 +375,37 @@ func (m *Manager) CloseTerminal(ctx context.Context, envID, id, name string) err
 
 // Ports lists the TCP ports listening inside a sandbox.
 func (m *Manager) Ports(ctx context.Context, envID, id string) ([]agentproto.Port, error) {
-	if _, err := m.Store.Sandbox(ctx, envID, id); err != nil {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return nil, err
 	}
 	return m.Hub.Ports(ctx, id)
+}
+
+// PublicSandbox returns one sandbox that belongs to envID unless it is reserved for a
+// private build job. Builder sandboxes are catalogued for the worker and gateway, but are
+// not part of the user-facing sandbox API.
+func (m *Manager) PublicSandbox(ctx context.Context, envID, id string) (store.Sandbox, error) {
+	sb, err := m.Store.Sandbox(ctx, envID, id)
+	if err != nil {
+		return store.Sandbox{}, err
+	}
+	if sb.BuildJobID != "" {
+		return store.Sandbox{}, store.ErrNotFound
+	}
+	return sb, nil
+}
+
+// DialPreviewTCP connects to a public sandbox's loopback port over its guest-agent
+// channel. Build VMs remain private even when their IDs are supplied as preview hosts.
+func (m *Manager) DialPreviewTCP(ctx context.Context, sandboxID string, port int) (net.Conn, error) {
+	sb, err := m.Store.LookupSandbox(ctx, sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	if sb.BuildJobID != "" {
+		return nil, store.ErrNotFound
+	}
+	return m.Hub.DialTCP(ctx, sandboxID, port)
 }
 
 func (m *Manager) view(ctx context.Context, rec store.Sandbox) (View, error) {

@@ -122,6 +122,30 @@ type fakePrewarm struct {
 	engine          *fakeTemplateBaseEngine
 }
 
+type fakeBaseOwner struct {
+	engine         *fakeTemplateBaseEngine
+	events         []string
+	beginErr       error
+	finishErr      error
+	finishDeadline bool
+	finishErrCtx   error
+}
+
+func (f *fakeBaseOwner) Begin(_ context.Context, _, _ string) error {
+	f.events = append(f.events, "begin")
+	if f.engine != nil && len(f.engine.requests) != 0 {
+		return errors.New("prewarm VM creation began before ownership was recorded")
+	}
+	return f.beginErr
+}
+
+func (f *fakeBaseOwner) Finish(ctx context.Context, _, _ string) error {
+	f.events = append(f.events, "finish")
+	_, f.finishDeadline = ctx.Deadline()
+	f.finishErrCtx = ctx.Err()
+	return f.finishErr
+}
+
 func (f *fakePrewarm) id() string     { return f.vmID }
 func (f *fakePrewarm) name() string   { return f.vmName }
 func (f *fakePrewarm) status() string { return f.state }
@@ -335,6 +359,49 @@ func TestPrepareTemplateBaseUsesIndependentBoundedCleanupContext(t *testing.T) {
 	vm := engine.records[name]
 	if vm == nil || vm.cleanupErr != nil || !vm.cleanupDeadline || engine.cleanupErr != nil || !engine.cleanupDeadline {
 		t.Fatalf("cleanup did not use bounded independent context: vm=%+v engineErr=%v deadline=%v", vm, engine.cleanupErr, engine.cleanupDeadline)
+	}
+}
+
+func TestPrepareTemplateBaseOwnerOrderingAndIndependentFinish(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	engine := newFakeTemplateBaseEngine()
+	owner := &fakeBaseOwner{engine: engine}
+	engine.onCreate = func(*fakePrewarm) { owner.events = append(owner.events, "create") }
+	engine.onInspect = cancel
+
+	if _, err := prepareTemplateBaseOwned(ctx, developmentBaseReference, engine, owner); err == nil {
+		t.Fatal("expected canceled inspection to be returned")
+	}
+	if got, want := strings.Join(owner.events, ","), "begin,create,finish"; got != want {
+		t.Fatalf("owner and create order = %q, want %q", got, want)
+	}
+	if !owner.finishDeadline || owner.finishErrCtx != nil {
+		t.Fatalf("Finish did not receive an independent bounded context: deadline=%v err=%v", owner.finishDeadline, owner.finishErrCtx)
+	}
+}
+
+func TestPrepareTemplateBaseDoesNotFinishUnconfirmedCleanup(t *testing.T) {
+	engine := newFakeTemplateBaseEngine()
+	owner := &fakeBaseOwner{engine: engine}
+	engine.onCreate = func(vm *fakePrewarm) { vm.stopErr = errors.New("stop uncertain") }
+
+	if _, err := prepareTemplateBaseOwned(context.Background(), developmentBaseReference, engine, owner); err == nil {
+		t.Fatal("expected cleanup uncertainty")
+	}
+	if len(owner.events) != 1 || owner.events[0] != "begin" {
+		t.Fatalf("owner events = %v, want Begin without Finish", owner.events)
+	}
+}
+
+func TestPrepareTemplateBaseBeginFailurePreventsSDKCalls(t *testing.T) {
+	engine := newFakeTemplateBaseEngine()
+	owner := &fakeBaseOwner{engine: engine, beginErr: errors.New("owner store unavailable")}
+	if _, err := prepareTemplateBaseOwned(context.Background(), developmentBaseReference, engine, owner); err == nil {
+		t.Fatal("expected owner Begin failure")
+	}
+	if len(engine.requests) != 0 || engine.inspectCalls != 0 {
+		t.Fatalf("SDK calls after Begin failure: creates=%d inspections=%d", len(engine.requests), engine.inspectCalls)
 	}
 }
 

@@ -44,12 +44,13 @@ type Reference struct {
 }
 
 type Registry struct {
-	st   *store.Store
-	root *os.Root
-	dir  string
-	addr string
-	key  []byte
-	mu   sync.Mutex // publish, delete and recovery cannot race file opens
+	st         *store.Store
+	root       *os.Root
+	dir        string
+	addr       string
+	key        []byte
+	baseLeases map[baseLeaseKey]*baseArtifactLease
+	mu         sync.Mutex // catalog operations, base leases and file opens are serialized
 }
 
 // Open initializes a private artifact tree and recovers interrupted operations.
@@ -81,7 +82,7 @@ func Open(ctx context.Context, st *store.Store, dir, addr string, sealer Sealer)
 	if err != nil {
 		return nil, err
 	}
-	r := &Registry{st: st, root: root, dir: dir, addr: addr}
+	r := &Registry{st: st, root: root, dir: dir, addr: addr, baseLeases: make(map[baseLeaseKey]*baseArtifactLease)}
 	sealed, err := st.Setting(ctx, keySetting)
 	if errors.Is(err, store.ErrNotFound) {
 		seed := make([]byte, 32)
@@ -105,7 +106,11 @@ func Open(ctx context.Context, st *store.Store, dir, addr string, sealer Sealer)
 	return r, nil
 }
 
-func (r *Registry) Close() error          { return r.root.Close() }
+func (r *Registry) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.root.Close()
+}
 func (r *Registry) Handler() http.Handler { return &Handler{Backend: r, Addr: r.addr} }
 
 func (r *Registry) password(env string) string {
@@ -277,11 +282,23 @@ func artifactName(role string) string {
 
 func (r *Registry) OpenArtifact(ctx context.Context, env, id, kind, digest string) (*os.File, templateimage.Descriptor, error) {
 	var empty templateimage.Descriptor
-	if !validID(env) || !validID(id) || !templateimage.ValidDigest(digest) {
+	if ctx == nil {
+		return nil, empty, errors.New("open template artifact requires a context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, empty, err
+	}
+	if !validID(env) || (id != "base" && !validID(id)) || !templateimage.ValidDigest(digest) {
 		return nil, empty, store.ErrNotFound
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, empty, err
+	}
+	if id == "base" {
+		return r.openBaseArtifactLocked(env, kind, digest)
+	}
 	t, err := r.st.Template(ctx, env, id)
 	if err != nil {
 		return nil, empty, err

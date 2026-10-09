@@ -103,6 +103,17 @@ type manifest struct {
 // Compose builds OCI manifest and config metadata from a Studio-controlled
 // base and metadata for an exported gzip layer. It never reads layer.Path.
 func Compose(base Base, layer templateexport.Layer) (Image, error) {
+	return compose(base, &layer)
+}
+
+// ComposeBase builds OCI manifest and config metadata for a Studio-controlled
+// base without adding an exported layer. It does not claim support for
+// arbitrary OCI images.
+func ComposeBase(base Base) (Image, error) {
+	return compose(base, nil)
+}
+
+func compose(base Base, exportedLayer *templateexport.Layer) (Image, error) {
 	if !validPlatform(base.OS, base.Architecture, base.Variant) {
 		return Image{}, errors.New("base platform must be supported linux amd64 or arm64")
 	}
@@ -112,24 +123,30 @@ func Compose(base Base, layer templateexport.Layer) (Image, error) {
 	if len(base.Layers) == 0 {
 		return Image{}, errors.New("base must contain at least one layer")
 	}
-	if len(base.Layers) >= maxImageLayers {
-		return Image{}, errors.New("composed image exceeds the layer limit")
-	}
-	if !ValidDigest(layer.Digest) {
-		return Image{}, errors.New("exported layer digest must be lowercase sha256")
-	}
-	if layer.Size <= 0 {
-		return Image{}, errors.New("exported layer size must be positive")
-	}
-	if layer.UncompressedSize < 0 {
-		return Image{}, errors.New("exported layer uncompressed size must not be negative")
-	}
-	if !ValidDigest(layer.DiffID) {
-		return Image{}, errors.New("exported layer diff ID must be lowercase sha256")
+	extraLayerCount := 0
+	if exportedLayer != nil {
+		if len(base.Layers) >= maxImageLayers {
+			return Image{}, errors.New("composed image exceeds the layer limit")
+		}
+		if !ValidDigest(exportedLayer.Digest) {
+			return Image{}, errors.New("exported layer digest must be lowercase sha256")
+		}
+		if exportedLayer.Size <= 0 {
+			return Image{}, errors.New("exported layer size must be positive")
+		}
+		if exportedLayer.UncompressedSize < 0 {
+			return Image{}, errors.New("exported layer uncompressed size must not be negative")
+		}
+		if !ValidDigest(exportedLayer.DiffID) {
+			return Image{}, errors.New("exported layer diff ID must be lowercase sha256")
+		}
+		extraLayerCount = 1
+	} else if len(base.Layers) > maxImageLayers {
+		return Image{}, errors.New("base exceeds the layer limit")
 	}
 
-	imageLayers := make([]Descriptor, 0, len(base.Layers)+1)
-	diffIDs := make([]string, 0, len(base.Layers)+1)
+	imageLayers := make([]Descriptor, 0, len(base.Layers)+extraLayerCount)
+	diffIDs := make([]string, 0, len(base.Layers)+extraLayerCount)
 	for _, baseLayer := range base.Layers {
 		if !ValidDigest(baseLayer.Digest) {
 			return Image{}, errors.New("base layer digest must be lowercase sha256")
@@ -151,13 +168,16 @@ func Compose(base Base, layer templateexport.Layer) (Image, error) {
 		diffIDs = append(diffIDs, baseLayer.DiffID)
 	}
 
-	layerDescriptor := Descriptor{
-		MediaType: MediaLayer,
-		Digest:    layer.Digest,
-		Size:      layer.Size,
+	layerDescriptor := Descriptor{}
+	if exportedLayer != nil {
+		layerDescriptor = Descriptor{
+			MediaType: MediaLayer,
+			Digest:    exportedLayer.Digest,
+			Size:      exportedLayer.Size,
+		}
+		imageLayers = append(imageLayers, layerDescriptor)
+		diffIDs = append(diffIDs, exportedLayer.DiffID)
 	}
-	imageLayers = append(imageLayers, layerDescriptor)
-	diffIDs = append(diffIDs, layer.DiffID)
 
 	configBytes, err := json.Marshal(imageConfig{
 		Architecture: base.Architecture,

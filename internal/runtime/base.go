@@ -23,6 +23,7 @@ const (
 	prewarmKindLabel         = "studio.kind"
 	prewarmTokenLabel        = "studio.prewarm-token"
 	prewarmKindValue         = "template-prewarm"
+	prewarmStartupTimeout    = 45 * time.Second
 	prewarmCleanupTimeout    = 12 * time.Second
 	prewarmStopTimeout       = 5 * time.Second
 )
@@ -43,6 +44,14 @@ type prewarmRequest struct {
 	MaxCPUs        uint8
 	DefaultEgress  string
 	DefaultIngress string
+}
+
+// BaseOwner records durable ownership of the temporary VM used to inspect a base
+// image. Begin must persist the identity before the VM is created. Finish may only
+// clear it after the runtime has confirmed that the owned VM is gone.
+type BaseOwner interface {
+	Begin(ctx context.Context, name, token string) error
+	Finish(ctx context.Context, name, token string) error
 }
 
 // These narrow interfaces keep template-base preparation testable without a live VM.
@@ -88,13 +97,59 @@ type inspectedBaseLayer struct {
 // PrepareTemplateBase prewarms and inspects only the configured base image. It never
 // accepts browser or caller-supplied OCI metadata.
 func (r *Runtime) PrepareTemplateBase(ctx context.Context) (templateimage.Base, error) {
+	return r.PrepareTemplateBaseOwned(ctx, nil)
+}
+
+// PrepareTemplateBaseOwned prewarms and inspects the configured base image while
+// recording the temporary VM's identity with owner. The owner is begun before
+// any SDK create call and finished only after cleanup is confirmed.
+func (r *Runtime) PrepareTemplateBaseOwned(ctx context.Context, owner BaseOwner) (templateimage.Base, error) {
 	if r == nil {
 		return templateimage.Base{}, errors.New("prepare template base: nil runtime")
 	}
-	return prepareTemplateBase(ctx, r.opts.Image, sdkTemplateBaseEngine{})
+	return prepareTemplateBaseOwned(ctx, r.opts.Image, sdkTemplateBaseEngine{}, owner)
+}
+
+// RemovePrewarm stops and removes a temporary prewarm VM only when its exact
+// name and ownership token still match. A missing VM is already clean.
+func (r *Runtime) RemovePrewarm(ctx context.Context, name, token string) error {
+	if r == nil {
+		return errors.New("remove template base prewarm VM: nil runtime")
+	}
+	if ctx == nil {
+		return errors.New("remove template base prewarm VM: nil context")
+	}
+	if !validPrewarmIdentity(name, token) {
+		return errors.New("remove template base prewarm VM: invalid ownership identity")
+	}
+	engine := sdkTemplateBaseEngine{}
+	return cleanupOwnedPrewarmAndFinish(ctx, engine, name, token, nil, func(cleanupCtx context.Context) error {
+		return cleanupFailedPrewarm(cleanupCtx, engine, name, token)
+	})
+}
+
+func validPrewarmIdentity(name, token string) bool {
+	if len(name) != len(prewarmNamePrefix)+24 || !strings.HasPrefix(name, prewarmNamePrefix) || len(token) != 32 {
+		return false
+	}
+	if name[len(prewarmNamePrefix):] != token[:24] {
+		return false
+	}
+	for _, value := range []string{name[len(prewarmNamePrefix):], token} {
+		for i := 0; i < len(value); i++ {
+			if !((value[i] >= '0' && value[i] <= '9') || (value[i] >= 'a' && value[i] <= 'f')) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func prepareTemplateBase(ctx context.Context, reference string, engine templateBaseEngine) (templateimage.Base, error) {
+	return prepareTemplateBaseOwned(ctx, reference, engine, nil)
+}
+
+func prepareTemplateBaseOwned(ctx context.Context, reference string, engine templateBaseEngine, owner BaseOwner) (templateimage.Base, error) {
 	if ctx == nil {
 		return templateimage.Base{}, errors.New("prepare template base: nil context")
 	}
@@ -117,13 +172,22 @@ func prepareTemplateBase(ctx context.Context, reference string, engine templateB
 		CPUs: 1, MemoryMiB: 512, MaxMemoryMiB: 512, MaxCPUs: 1,
 		DefaultEgress: "deny", DefaultIngress: "deny",
 	}
+	if owner != nil {
+		if err := owner.Begin(ctx, name, token); err != nil {
+			return templateimage.Base{}, fmt.Errorf("record template base prewarm ownership %q: %w", name, err)
+		}
+	}
 
-	vm, createErr := engine.createPrewarm(ctx, request)
+	// The SDK's context cancels native work but may wait for the FFI call to return.
+	// This bounds the requested startup, not the time spent inside a stalled native call.
+	startCtx, cancelStart := context.WithTimeout(ctx, prewarmStartupTimeout)
+	vm, createErr := engine.createPrewarm(startCtx, request)
+	cancelStart()
 	if createErr != nil || vm == nil {
 		if createErr == nil {
 			createErr = errors.New("SDK returned no prewarm VM")
 		}
-		cleanupErr := withPrewarmCleanupContext(ctx, func(cleanupCtx context.Context) error {
+		cleanupErr := cleanupOwnedPrewarmAndFinish(ctx, engine, name, token, owner, func(cleanupCtx context.Context) error {
 			if vm != nil {
 				return cleanupCreatedPrewarm(cleanupCtx, engine, vm, name, token)
 			}
@@ -139,13 +203,49 @@ func prepareTemplateBase(ctx context.Context, reference string, engine templateB
 	} else {
 		inspectErr = fmt.Errorf("inspect configured base image: %w", inspectErr)
 	}
-	cleanupErr := withPrewarmCleanupContext(ctx, func(cleanupCtx context.Context) error {
+	cleanupErr := cleanupOwnedPrewarmAndFinish(ctx, engine, name, token, owner, func(cleanupCtx context.Context) error {
 		return cleanupCreatedPrewarm(cleanupCtx, engine, vm, name, token)
 	})
 	if inspectErr != nil || cleanupErr != nil {
 		return templateimage.Base{}, errors.Join(inspectErr, cleanupErr)
 	}
 	return base, nil
+}
+
+func cleanupOwnedPrewarmAndFinish(ctx context.Context, engine templateBaseEngine, name, token string, owner BaseOwner, cleanup func(context.Context) error) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), prewarmCleanupTimeout)
+	defer cancel()
+	if err := cleanup(cleanupCtx); err != nil {
+		return err
+	}
+	if err := verifyNoOwnedPrewarm(cleanupCtx, engine, name, token); err != nil {
+		return prewarmCleanupError(name, fmt.Errorf("verify cleanup: %w", err))
+	}
+	if owner == nil {
+		return nil
+	}
+	if err := owner.Finish(cleanupCtx, name, token); err != nil {
+		return prewarmCleanupError(name, fmt.Errorf("finish ownership record: %w", err))
+	}
+	return nil
+}
+
+func verifyNoOwnedPrewarm(ctx context.Context, engine templateBaseEngine, name, token string) error {
+	record, err := engine.lookupSandbox(ctx, name)
+	if errors.Is(err, errPrewarmNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	owned, err := prewarmRecordOwned(record, name, token, "")
+	if err != nil {
+		return err
+	}
+	if owned {
+		return errors.New("owned VM is still present")
+	}
+	return nil
 }
 
 func basePullPolicy(reference string) (string, error) {
@@ -363,7 +463,7 @@ func cleanupCreatedPrewarm(ctx context.Context, engine templateBaseEngine, vm pr
 		return prewarmCleanupError(name, errors.Join(stopErr, fmt.Errorf("VM remains in state %q; left for recovery", record.status()), detachErr))
 	}
 	closeErr := vm.close()
-	removeErr := engine.removeSandbox(ctx, name)
+	removeErr := removePrewarmRecord(ctx, engine, record, name)
 	return prewarmCleanupError(name, errors.Join(closeErr, removeErr))
 }
 
@@ -405,7 +505,14 @@ func cleanupOwnedPrewarmRecord(ctx context.Context, engine templateBaseEngine, r
 	if !prewarmTerminal(current.status()) {
 		return prewarmCleanupError(name, errors.Join(stopErr, fmt.Errorf("VM remains in state %q; left for recovery", current.status())))
 	}
-	return prewarmCleanupError(name, engine.removeSandbox(ctx, name))
+	return prewarmCleanupError(name, removePrewarmRecord(ctx, engine, current, name))
+}
+
+func removePrewarmRecord(ctx context.Context, engine templateBaseEngine, record prewarmRecord, name string) error {
+	if remover, ok := record.(interface{ remove(context.Context) error }); ok {
+		return remover.remove(ctx)
+	}
+	return engine.removeSandbox(ctx, name)
 }
 
 func prewarmRecordOwned(record prewarmRecord, name, token, id string) (bool, error) {
@@ -561,3 +668,4 @@ func (s sdkPrewarmRecord) labels() (map[string]string, error) {
 func (s sdkPrewarmRecord) stop(ctx context.Context) error {
 	return s.handle.StopWithTimeout(ctx, prewarmStopTimeout)
 }
+func (s sdkPrewarmRecord) remove(ctx context.Context) error { return s.handle.Remove(ctx) }

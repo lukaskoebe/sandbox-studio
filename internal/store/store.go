@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -28,7 +29,11 @@ var ErrNotFound = errors.New("not found")
 var ErrExists = errors.New("already exists")
 
 // Store wraps the catalog database.
-type Store struct{ db *sql.DB }
+type Store struct {
+	db                  *sql.DB
+	buildWorkerLockPath string
+	buildWorkerMu       sync.Mutex
+}
 
 // Open opens (and migrates) the database at path. Use ":memory:" in tests.
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -46,10 +51,15 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	s.buildWorkerLockPath, err = buildWorkerLockPath(ctx, db)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("resolve build worker lock path: %w", err)
+	}
 	return s, nil
 }
 
-// Close closes the database.
+// Close closes the database without releasing an outstanding build worker lease.
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) migrate(ctx context.Context) error {
@@ -156,6 +166,7 @@ func (s *Store) Environment(ctx context.Context, id string) (Environment, error)
 type Sandbox struct {
 	ID            string    `json:"id"`
 	EnvironmentID string    `json:"environmentId"`
+	BuildJobID    string    `json:"-"`
 	Name          string    `json:"name"`
 	Generation    int       `json:"generation"`
 	CPUs          int       `json:"cpus"`
@@ -167,7 +178,7 @@ type Sandbox struct {
 	DNSPort       int       `json:"-"` // loopback port of the sandbox's Studio resolver
 }
 
-const sandboxCols = "id, environment_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
 const firstDNSPort = 17100
@@ -175,7 +186,7 @@ const firstDNSPort = 17100
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created int64
-	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort)
+	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort)
 	sb.CreatedAt = time.Unix(created, 0)
 	return sb, err
 }
@@ -185,18 +196,32 @@ func (s *Store) CreateSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) 
 	if sb.MaxMemoryMiB == 0 {
 		sb.MaxMemoryMiB = sb.MemoryMiB
 	}
+	// Ordinary sandbox creation cannot claim build-job ownership. Build workers use
+	// ReserveBuildSandbox, which validates the job and inserts both sides atomically.
+	sb.BuildJobID = ""
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return sb, err
+	}
+	defer tx.Rollback()
 	sb.ID, sb.Generation, sb.CreatedAt = NewID(), 1, time.Unix(now(), 0)
-	port, err := s.freeDNSPort(ctx)
+	port, err := freeDNSPort(ctx, tx)
 	if err != nil {
 		return sb, err
 	}
 	sb.DNSPort = port
-	_, err = s.db.ExecContext(ctx, "INSERT INTO sandboxes ("+sandboxCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		sb.ID, sb.EnvironmentID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}
-	return sb, err
+	if err != nil {
+		return sb, err
+	}
+	if err := tx.Commit(); err != nil {
+		return sb, err
+	}
+	return sb, nil
 }
 
 // Sandboxes lists the sandboxes of an environment.
@@ -235,8 +260,12 @@ func (s *Store) AllSandboxes(ctx context.Context) ([]Sandbox, error) {
 	return out, rows.Err()
 }
 
-func (s *Store) freeDNSPort(ctx context.Context) (int, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT dns_port FROM sandboxes")
+type dnsPortQueryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func freeDNSPort(ctx context.Context, q dnsPortQueryer) (int, error) {
+	rows, err := q.QueryContext(ctx, "SELECT dns_port FROM sandboxes")
 	if err != nil {
 		return 0, err
 	}
@@ -277,12 +306,28 @@ func (s *Store) Sandbox(ctx context.Context, envID, id string) (Sandbox, error) 
 
 // DeleteSandbox removes a sandbox record.
 func (s *Store) DeleteSandbox(ctx context.Context, envID, id string) error {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM sandboxes WHERE environment_id = ? AND id = ?", envID, id)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	defer tx.Rollback()
+	var owner string
+	err = tx.QueryRowContext(ctx, "SELECT IFNULL(build_job_id, '') FROM sandboxes WHERE environment_id = ? AND id = ?", envID, id).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+	if owner != "" {
+		return ErrConflict
+	}
+	res, err := tx.ExecContext(ctx, "DELETE FROM sandboxes WHERE environment_id = ? AND id = ? AND build_job_id IS NULL", envID, id)
+	if err != nil {
+		return err
+	}
+	if err := exactlyOneRow(res); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

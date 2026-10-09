@@ -9,6 +9,7 @@ const (
 	TopicApprovals = "approvals"
 	TopicRules     = "rules"
 	TopicSecrets   = "secrets"
+	TopicBuilds    = "builds"
 )
 
 // Event is one change notification.

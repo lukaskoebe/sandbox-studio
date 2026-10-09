@@ -300,44 +300,76 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   ceiling. Existing catalog records retain their previous initial-memory ceiling.
   This does not expose live memory resizing yet.
 
-- **Template build:**
-  1. Boot the base image with gateway networking, using a "template-build" scope that
-     includes a curated, user-approved registry rule set.
-  2. Run `apt`, `mise install` and `setup`.
-  3. Export the root changes as an OCI layer and publish a derived image through a
-     stable, authenticated loopback registry. Create template instances normally, with
-     fresh Studio networking and vsock routes; do not use snapshot restore while #1736
-     remains unresolved. The persistent host registry and pure image composition/cache
-     identity are implemented and qualified by a live Linux amd64 pull after a registry
-     and catalog restart. The template builder, cache invocation, recovery jobs, API and
-     UI are not wired yet.
+- **Template build API and worker:** The API and backend worker are implemented. The
+  worker validates the existing strict spec format before persisting jobs; canonical
+  specs deduplicate active requests, while terminal requests may be submitted again.
+  `POST /api/environments/{env}/builds` accepts work asynchronously with HTTP 202.
+  Environment-scoped routes list jobs, read a job, cancel it, and retrieve its bounded log.
+  See the [template build operator and developer guide](docs/template-builds.md).
+
+  The Builds page passed TypeScript, lint, production-build, and desktop/mobile browser
+  checks with simulated jobs. YAML file import/export is still planned.
+
+  The worker's durable states are `queued`, `preparing`, `setting_up`, `exporting`,
+  `ready`, `failed` and `cancelled`. It takes the catalog's nonblocking OS worker lock
+  before startup recovery, so two processes cannot recover or claim the same queue at
+  once. It resumes queued work only. An interrupted setup is failed without replaying
+  user commands; if publication completed before interruption, recovery verifies the
+  ready cache entry and repairs the job to `ready` instead.
+
+  Cache hits skip builder creation and setup but still prepare and inspect the base. A
+  cache miss serves deterministic base-only metadata through an authenticated temporary
+  registry lease. The builder pulls this metadata by digest and reuses the prepared layers
+  in microsandbox's cache, without depending on the mutable development alias.
+
+  After the build agent is ready, `ConfigureGuest` waits for its acknowledgement that CA
+  and placeholder setup completed before any build command runs. The worker then runs
+  apt as root, mise installs as `agent`, and user `setup` as `agent` in `/home/agent`.
+  It exports the changed root layer, composes and publishes the derived image, then marks
+  the job ready. Cancellation is recorded before the active operation is signaled; it
+  does not wait on an unbounded SDK call. Logs drain nonblockingly and are capped at 1 MiB;
+  the API reports whether output was truncated.
+
+  Job status and temporary VM ownership are independent. A ready, failed or cancelled job
+  can still have pending prewarm/builder cleanup. Owner metadata stays durable until the
+  worker verifies removal, and pending cleanup blocks another build. `runtime.Run` tracks
+  native SDK work beyond Go context cancellation. A returned call releases its runtime
+  slot after cleanup; if canceled `ExecStream` may have registered a native handle without
+  returning it to Go, the runtime quarantines that slot and retains the worker lock until
+  proof of completion or process restart. There is no stale-age takeover.
+
+  A controlled default digest for release template builds is not configured yet. Release
+  wiring must supply one before release template builds are enabled; ordinary Studio
+  application releases are unaffected. The SDK exposes the inspected digest and platform
+  but not the index-to-platform-manifest resolution chain, so Studio does not independently
+  verify that chain.
 
   The pure composer supports Studio's controlled base image, not arbitrary OCI images:
   the SDK's image inspection API does not preserve every image-config field. It preserves
   base layer digests, sizes and diff IDs, normalizes their media types, copies the supported
   common config fields, and adds the validated exported layer. Cache identity uses
   normalized spec bytes, base digest, platform and exporter version; registry records
-  remain environment-scoped. The registry
+  remain environment-scoped. The worker uses the exact `sandbox-studio-base:dev` alias
+  only for development; other references require a digest-pinned OCI repository. The
+  registry
   retains the derived manifest, config and layer blob. Base layers must already be
-  available in microsandbox's cache before pulling a template. `PrepareTemplateBase`
-  creates and removes its own labeled, deny-all 512 MiB VM, then returns inspected base
-  metadata: `IfMissing` for digest-pinned references, `Never` for the exact local dev
-  alias. Mutable release tags are rejected; release digest wiring is still required.
+  available in microsandbox's cache before pulling a template. `PrepareTemplateBaseOwned`
+  persists ownership before creating its labeled, deny-all 512 MiB VM, then returns the
+  inspected base metadata. It uses `IfMissing` for pinned references and `Never` for the
+  exact dev alias. Mutable release tags are rejected.
   Cleanup uses a separate bounded context and verifies ownership before removal. An
   uncertain stop or cleanup failure reports the owned VM for recovery; it does not
-  silently discard the error. Cold-cache recovery and startup recovery jobs remain to
-  be qualified/wired. Registry credentials stay on the host.
-  The builder must source base metadata from the approved Studio image, never from a
-  browser request; registry publication checks internal consistency, not remote provenance.
+  silently discard the error. Cold-cache base recovery remains unqualified. Registry
+  credentials stay on the host. The worker sources base metadata from the configured
+  Studio image, never from a browser request; registry publication checks internal
+  consistency, not remote provenance.
   The SDK resolves the configured reference; its inspected digest and platform are used
   for cache identity. It does not expose an index-to-platform-manifest resolution chain,
   so Studio does not independently verify that chain.
 
-  `ConfigureGuest` provides the builder's synchronous, environment-scoped configuration
-  gate after agent readiness. It waits for the guest to acknowledge CA and placeholder
-  installation and propagates guest/provider errors. Control requests honor cancellation,
-  cap replies at 1 MiB and bound simultaneous streams; cancelling a request keeps the
-  agent session available. The build worker must use this gate before running setup.
+  The synchronous, environment-scoped guest configuration control path propagates
+  provider errors, honors cancellation, caps replies at 1 MiB and bounds simultaneous
+  streams; cancelling a request keeps the agent session available.
 
   Production Studio starts a read-only HTTP registry at `127.0.0.1:7880`. It accepts only
   exact-host-guarded GET/HEAD requests with environment-scoped Basic credentials derived
@@ -364,16 +396,28 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   The Go guest exporter and `Hub.Export` are implemented and qualified by a live Linux
   amd64 source/import roundtrip on microsandbox 0.7.7 and kernel 6.12.111. See the
   [layer-export evidence and remaining qualifications](docs/spikes.md#layer-transfer-and-capture-foundations).
-  The persistent authenticated registry and pure image composer are implemented; the
-  template builder/cache invocation, recovery jobs, API and UI remain unwired. Live
-  macOS/Windows hosts, arm64 guests, and oversized/backpressured captures remain to be
-  qualified; unsupported overlay features and file types remain out of scope. This does
-  not complete all M3 work. Userspace cannot
-  guarantee automatic recovery if a kernel freeze/thaw call never returns; stopping or
-  rebooting the VM remains possible.
+  On 2026-10-09, the production worker passed a live Linux amd64 qualification with a
+  warm cache, private isolated Store and registry, and a 512 MiB builder. It used no
+  package or tool network access. The fresh build verified setup environment, dummy
+  placeholder, persistent proof, login profile, and excluded runtime state; the private
+  loopback registry HTTP handler authenticated the private environment. A
+  canonical-equivalent request created a new job, reused the same `TemplateID`, and made
+  no build-sandbox attach.
+  Cancellation after observing its setup marker and an `exit 7` build that reached failed
+  status both completed owned sandbox cleanup. The worker stopped with no runtime command
+  or owner cleanup pending; no new prefixed VM names remained, and private qualification
+  state was removed after cleanup. See the
+  [worker qualification record](spikes/template-jobs/README.md).
 
-  Templates are cached by hash. Specs can be edited in the UI as YAML, and the same file can
-  be exported or imported.
+  UI validation used mocked desktop/mobile workflows and web checks; no live-worker UI
+  build or workflow was run. These results do not complete M3. Remaining work includes
+  the fresh-template instance API and rebase, YAML file import/export, apt/mise network
+  installs, cold-cache pulls, macOS and Windows host VM runs, arm64, the release template
+  base digest pin, and oversized/backpressured capture qualification. Unsupported overlay
+  features and file types remain out of scope. Userspace cannot guarantee automatic
+  recovery if a kernel freeze/thaw call never returns; stopping or rebooting the VM remains
+  possible. Restore remains blocked by microsandbox
+  [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
 - **Rebase:** moving an existing sandbox to a new template keeps its workspace. The mechanism
   depends on spike S5 (named disk volume vs. copying the workspace).
 

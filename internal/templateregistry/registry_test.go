@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -132,6 +133,192 @@ func assertMissing(t *testing.T, path string) {
 	t.Helper()
 	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("expected %q removed, Lstat error = %v", path, err)
+	}
+}
+
+func readLeasedBaseArtifact(t *testing.T, f *registryFixture, env, kind, digest string) ([]byte, templateimage.Descriptor) {
+	t.Helper()
+	file, descriptor, err := f.reg.OpenArtifact(f.ctx, env, "base", kind, digest)
+	if err != nil {
+		t.Fatalf("OpenArtifact(base, %s, %s): %v", kind, digest, err)
+	}
+	data, readErr := io.ReadAll(file)
+	closeErr := file.Close()
+	if readErr != nil || closeErr != nil {
+		t.Fatalf("read/close leased base artifact: read=%v close=%v", readErr, closeErr)
+	}
+	return data, descriptor
+}
+
+func TestRegistryPrepareBaseRefcountsAndScopesMetadata(t *testing.T) {
+	f := newRegistryFixture(t)
+	other, err := f.st.CreateEnvironment(f.ctx, "private")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := registryBase()
+	image, err := templateimage.ComposeBase(base)
+	if err != nil {
+		t.Fatalf("ComposeBase: %v", err)
+	}
+	ref, releaseFirst, err := f.reg.PrepareBase(f.ctx, f.env.ID, base)
+	if err != nil {
+		t.Fatalf("PrepareBase: %v", err)
+	}
+	refAgain, releaseSecond, err := f.reg.PrepareBase(f.ctx, f.env.ID, base)
+	if err != nil {
+		t.Fatalf("PrepareBase second lease: %v", err)
+	}
+	wantImage := registryTestAddress + "/studio/" + f.env.ID + "/base@" + image.ManifestDescriptor.Digest
+	if ref.Image != wantImage || refAgain != ref || ref.Username != f.env.ID || ref.Password == "" {
+		t.Fatalf("base references = %+v / %+v, want image %q and environment credentials", ref, refAgain, wantImage)
+	}
+	if env, err := f.reg.Authenticate(f.ctx, ref.Username, ref.Password); err != nil || env != f.env.ID {
+		t.Fatalf("base credentials authenticated as %q: %v", env, err)
+	}
+	if _, err := f.reg.Authenticate(f.ctx, other.ID, ref.Password); err == nil {
+		t.Fatal("accepted base credentials under another environment")
+	}
+
+	key := baseLeaseKey{environmentID: f.env.ID, manifestDigest: image.ManifestDescriptor.Digest}
+	lease := f.reg.baseLeases[key]
+	if lease == nil || lease.references != 2 {
+		t.Fatalf("base lease = %+v, want two references", lease)
+	}
+	files, err := os.ReadDir(filepath.Join(f.root, lease.directory))
+	if err != nil || len(files) != 2 {
+		t.Fatalf("base lease files = %v, %v; want manifest and config only", files, err)
+	}
+	directoryInfo, err := os.Stat(filepath.Join(f.root, lease.directory))
+	if err != nil {
+		t.Fatalf("stat base lease directory: %v", err)
+	}
+	if runtime.GOOS != "windows" && directoryInfo.Mode().Perm() != 0o700 {
+		t.Fatalf("base lease directory mode = %v, want 0700", directoryInfo.Mode())
+	}
+	for _, file := range files {
+		info, err := file.Info()
+		if err != nil {
+			t.Fatalf("stat base metadata file %q: %v", file.Name(), err)
+		}
+		if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+			t.Fatalf("base metadata file %q mode = %v, want 0600", file.Name(), info.Mode())
+		}
+	}
+
+	manifest, manifestDescriptor := readLeasedBaseArtifact(t, f, f.env.ID, "manifests", image.ManifestDescriptor.Digest)
+	if !bytes.Equal(manifest, image.Manifest) || manifestDescriptor != image.ManifestDescriptor {
+		t.Fatal("leased base manifest differs from composed metadata")
+	}
+	config, configDescriptor := readLeasedBaseArtifact(t, f, f.env.ID, "blobs", image.ConfigDescriptor.Digest)
+	if !bytes.Equal(config, image.Config) || configDescriptor != image.ConfigDescriptor {
+		t.Fatal("leased base config differs from composed metadata")
+	}
+	wrongDigest := templateimage.Digest([]byte("unleased manifest"))
+	if file, _, err := f.reg.OpenArtifact(f.ctx, f.env.ID, "base", "manifests", wrongDigest); file != nil || !errors.Is(err, store.ErrNotFound) {
+		if file != nil {
+			file.Close()
+		}
+		t.Fatalf("opened unleased manifest digest: %v", err)
+	}
+	if file, _, err := f.reg.OpenArtifact(f.ctx, other.ID, "base", "manifests", image.ManifestDescriptor.Digest); file != nil || !errors.Is(err, store.ErrNotFound) {
+		if file != nil {
+			file.Close()
+		}
+		t.Fatalf("opened another environment's base: %v", err)
+	}
+	for _, layer := range base.Layers {
+		if file, _, err := f.reg.OpenArtifact(f.ctx, f.env.ID, "base", "blobs", layer.Digest); file != nil || !errors.Is(err, store.ErrNotFound) {
+			if file != nil {
+				file.Close()
+			}
+			t.Fatalf("base layer %q was served: %v", layer.Digest, err)
+		}
+	}
+	if templates, err := f.st.Templates(f.ctx, f.env.ID); err != nil || len(templates) != 0 {
+		t.Fatalf("base lease created template rows %+v: %v", templates, err)
+	}
+
+	if err := releaseFirst(); err != nil {
+		t.Fatal(err)
+	}
+	if err := releaseFirst(); err != nil {
+		t.Fatalf("repeated first release: %v", err)
+	}
+	if lease.references != 1 {
+		t.Fatalf("references after first release = %d, want 1", lease.references)
+	}
+	readLeasedBaseArtifact(t, f, f.env.ID, "manifests", image.ManifestDescriptor.Digest)
+	unrelated := filepath.Join(f.root, f.env.ID, ".incoming", ".oci-layer-unrelated")
+	unrelatedBytes := []byte("separate active receive")
+	if err := os.WriteFile(unrelated, unrelatedBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := releaseSecond(); err != nil {
+		t.Fatal(err)
+	}
+	if file, _, err := f.reg.OpenArtifact(f.ctx, f.env.ID, "base", "manifests", image.ManifestDescriptor.Digest); file != nil || !errors.Is(err, store.ErrNotFound) {
+		if file != nil {
+			file.Close()
+		}
+		t.Fatalf("opened released base manifest: %v", err)
+	}
+	assertMissing(t, filepath.Join(f.root, lease.directory))
+	if data, err := os.ReadFile(unrelated); err != nil || !bytes.Equal(data, unrelatedBytes) {
+		t.Fatalf("base release removed or changed another incoming file: %v", err)
+	}
+	if err := os.Remove(unrelated); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRegistryPrepareBaseRejectsMissingEnvironmentAndInvalidBase(t *testing.T) {
+	f := newRegistryFixture(t)
+	missing := store.NewID()
+	if missing == f.env.ID {
+		missing = store.NewID()
+	}
+	if _, release, err := f.reg.PrepareBase(f.ctx, missing, registryBase()); !errors.Is(err, store.ErrNotFound) || release != nil {
+		t.Fatalf("PrepareBase for missing environment returned releasePresent=%t err=%v", release != nil, err)
+	}
+	base := registryBase()
+	base.Layers = nil
+	if _, release, err := f.reg.PrepareBase(f.ctx, f.env.ID, base); err == nil || release != nil {
+		t.Fatalf("PrepareBase accepted invalid base: releasePresent=%t err=%v", release != nil, err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, f.env.ID, ".incoming")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("invalid requests created incoming files: %v", err)
+	}
+	if templates, err := f.st.Templates(f.ctx, ""); err != nil || len(templates) != 0 {
+		t.Fatalf("invalid base request created template rows %+v: %v", templates, err)
+	}
+}
+
+func TestRegistryStartupReconcileRemovesUnreleasedBaseLease(t *testing.T) {
+	f := newRegistryFixture(t)
+	_, release, err := f.reg.PrepareBase(f.ctx, f.env.ID, registryBase())
+	if err != nil {
+		t.Fatalf("PrepareBase: %v", err)
+	}
+	if release == nil {
+		t.Fatal("PrepareBase returned nil release")
+	}
+	if err := f.reg.Close(); err != nil {
+		t.Fatal(err)
+	}
+	f.reg, err = Open(f.ctx, f.st, f.root, registryTestAddress, boundTestSealer{})
+	if err != nil {
+		t.Fatalf("reopen registry: %v", err)
+	}
+	assertMissing(t, filepath.Join(f.root, f.env.ID, ".incoming"))
+	if templates, err := f.st.Templates(f.ctx, f.env.ID); err != nil || len(templates) != 0 {
+		t.Fatalf("startup cleanup left template rows %+v: %v", templates, err)
+	}
+	if file, _, err := f.reg.OpenArtifact(f.ctx, f.env.ID, "base", "manifests", templateimage.Digest([]byte("controlled base manifest"))); file != nil || !errors.Is(err, store.ErrNotFound) {
+		if file != nil {
+			file.Close()
+		}
+		t.Fatalf("reopened registry served an unleased base: %v", err)
 	}
 }
 

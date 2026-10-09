@@ -7,6 +7,7 @@ import {
   CheckIcon,
   CubeIcon,
   GlobeIcon,
+  HammerIcon,
   KeyIcon,
   PlusIcon,
   SquaresFourIcon,
@@ -83,6 +84,18 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <SquaresFourIcon />
                 <span>Overview</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Builds"
+                isActive={
+                  !!matchRoute({ to: "/e/$env/builds", params: { env } })
+                }
+                render={<Link to="/e/$env/builds" params={{ env }} />}
+              >
+                <HammerIcon />
+                <span>Builds</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
