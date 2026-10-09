@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -39,6 +40,7 @@ func (f *fakeRunTrace) snapshot() []string {
 type fakeRunBackend struct {
 	mu      sync.Mutex
 	vm      *fakeRunVM
+	others  []*fakeRunVM
 	lookups int
 }
 
@@ -49,10 +51,12 @@ func (f *fakeRunBackend) lookup(ctx context.Context, name string) (runVM, error)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lookups++
-	if f.vm == nil || f.vm.name() != name {
-		return nil, errOwnedVMNotFound
+	for _, vm := range append([]*fakeRunVM{f.vm}, f.others...) {
+		if vm != nil && vm.name() == name {
+			return vm, nil
+		}
 	}
-	return f.vm, nil
+	return nil, errOwnedVMNotFound
 }
 
 type fakeRunVM struct {
@@ -174,6 +178,8 @@ type fakeRunExec struct {
 	killEntered      chan struct{}
 	killOnce         sync.Once
 	killActive       atomic.Int32
+	recvCalls        atomic.Int32
+	sink             *fakeRunStdin
 	ignoreRecvCancel bool
 	trace            *fakeRunTrace
 	mu               sync.Mutex
@@ -189,6 +195,7 @@ func newFakeRunExec(trace *fakeRunTrace) *fakeRunExec {
 func (e *fakeRunExec) recv(ctx context.Context) (runEvent, error) {
 	e.recvActive.Add(1)
 	defer e.recvActive.Add(-1)
+	e.recvCalls.Add(1)
 	e.recvOnce.Do(func() { close(e.recvEntered) })
 	if e.ignoreRecvCancel {
 		reply := <-e.replies
@@ -237,6 +244,44 @@ func (e *fakeRunExec) close() error {
 		<-gate
 	}
 	return err
+}
+
+func (e *fakeRunExec) stdin() runStdin {
+	if e.sink == nil {
+		return nil
+	}
+	return e.sink
+}
+
+// fakeRunStdin records stdin and, on close, lets the fake process exit.
+type fakeRunStdin struct {
+	exec     *fakeRunExec
+	mu       sync.Mutex
+	data     bytes.Buffer
+	writes   int
+	closed   bool
+	writeErr error
+}
+
+func (s *fakeRunStdin) write(_ context.Context, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.writes++
+	s.data.Write(data)
+	return nil
+}
+
+func (s *fakeRunStdin) close() error {
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+	s.exec.trace.add("stdin-close")
+	s.exec.replies <- fakeRunReply{event: runEvent{kind: runEventExited}}
+	s.exec.replies <- fakeRunReply{event: runEvent{kind: runEventDone}}
+	return nil
 }
 
 func newFakeRunRuntime(exec *fakeRunExec, labels map[string]string, limits runLimits) (*Runtime, *fakeRunBackend, *fakeRunVM, *fakeRunTrace) {
@@ -569,7 +614,7 @@ func TestRunStartupCancellationPreservesLostHandleUncertainty(t *testing.T) {
 		t.Fatalf("stalled startup was not reported as pending: result=%+v err=%v pending=%v", result, err, runtime.PendingRun())
 	}
 	runtime.runMu.Lock()
-	task := runtime.runSlot
+	task := runtime.runSlots[fakeOwnedVM().Name]
 	runtime.runMu.Unlock()
 	if task == nil {
 		t.Fatal("pending startup lost its Runtime task before native ExecStream returned")
@@ -653,6 +698,176 @@ func TestRunDetachesConnectionsOnEarlyErrors(t *testing.T) {
 			t.Fatalf("detach calls=%d, want 1", vm.connection.detachCalls)
 		}
 	})
+}
+
+func TestRunStreamsStdoutLosslesslyToWriter(t *testing.T) {
+	trace := &fakeRunTrace{}
+	exec := newFakeRunExec(trace)
+	var want bytes.Buffer
+	for index := range 10 {
+		chunk := bytes.Repeat([]byte{byte('a' + index)}, 1000+index)
+		want.Write(chunk)
+		exec.replies <- fakeRunReply{event: runEvent{kind: runEventStdout, data: chunk}}
+	}
+	exec.replies <- fakeRunReply{event: runEvent{kind: runEventStderr, data: []byte("log")}}
+	exec.replies <- fakeRunReply{event: runEvent{kind: runEventExited}}
+	exec.replies <- fakeRunReply{event: runEvent{kind: runEventDone}}
+	runtime, _, _, _ := newFakeRunRuntime(exec, fakeOwnedVM().Labels, quickRunLimits())
+	var got bytes.Buffer
+	output := make(chan RunOutput, 16)
+	result, err := runtime.Run(context.Background(), fakeOwnedVM(), RunCommand{Path: "/bin/cat", Stdout: &got}, output)
+	if err != nil || !result.ExitCodeKnown || result.CleanupPending {
+		t.Fatalf("Run result=%+v err=%v", result, err)
+	}
+	if !bytes.Equal(got.Bytes(), want.Bytes()) {
+		t.Fatalf("stdout writer got %d bytes, want %d exact bytes", got.Len(), want.Len())
+	}
+	if len(output) != 1 {
+		t.Fatalf("output channel has %d chunks, want only stderr", len(output))
+	}
+	if out := <-output; !out.Stderr {
+		t.Fatalf("stdout leaked into the output channel: %+v", out)
+	}
+}
+
+type gatedWriter struct {
+	entered chan struct{}
+	release chan struct{}
+	buf     bytes.Buffer
+}
+
+func (w *gatedWriter) Write(p []byte) (int, error) {
+	w.entered <- struct{}{}
+	<-w.release
+	return w.buf.Write(p)
+}
+
+func TestRunStdoutWriterAppliesBackpressure(t *testing.T) {
+	trace := &fakeRunTrace{}
+	exec := newFakeRunExec(trace)
+	exec.replies <- fakeRunReply{event: runEvent{kind: runEventStdout, data: []byte("one")}}
+	exec.replies <- fakeRunReply{event: runEvent{kind: runEventStdout, data: []byte("two")}}
+	exec.replies <- fakeRunReply{event: runEvent{kind: runEventDone}}
+	runtime, _, _, _ := newFakeRunRuntime(exec, fakeOwnedVM().Labels, quickRunLimits())
+	writer := &gatedWriter{entered: make(chan struct{}), release: make(chan struct{})}
+	resultCh := make(chan runOutcome, 1)
+	go func() {
+		result, err := runtime.Run(context.Background(), fakeOwnedVM(), RunCommand{Path: "/bin/cat", Stdout: writer}, nil)
+		resultCh <- runOutcome{result: result, err: err}
+	}()
+	<-writer.entered
+	time.Sleep(20 * time.Millisecond)
+	if calls := exec.recvCalls.Load(); calls != 1 {
+		t.Fatalf("Recv calls while stdout writer was blocked = %d, want 1", calls)
+	}
+	close(writer.release)
+	<-writer.entered
+	outcome := <-resultCh
+	if outcome.err != nil || outcome.result.CleanupPending || writer.buf.String() != "onetwo" {
+		t.Fatalf("outcome=%+v stdout=%q", outcome, writer.buf.String())
+	}
+}
+
+type failingWriter struct{ err error }
+
+func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestRunStdoutWriterErrorCancelsCommand(t *testing.T) {
+	trace := &fakeRunTrace{}
+	exec := newFakeRunExec(trace)
+	exec.doneOnKill = true
+	exec.replies <- fakeRunReply{event: runEvent{kind: runEventStdout, data: []byte("data")}}
+	runtime, _, _, _ := newFakeRunRuntime(exec, fakeOwnedVM().Labels, quickRunLimits())
+	writerErr := errors.New("receiver rejected stream")
+	result, err := runtime.Run(context.Background(), fakeOwnedVM(), RunCommand{Path: "/bin/cat", Stdout: failingWriter{err: writerErr}}, nil)
+	if !errors.Is(err, writerErr) {
+		t.Fatalf("Run error = %v, want writer error", err)
+	}
+	if result.CleanupPending || runtime.PendingRun() {
+		t.Fatalf("writer failure did not clean up: result=%+v pending=%v", result, runtime.PendingRun())
+	}
+	if eventIndex(trace.snapshot(), "exec-kill") < 0 {
+		t.Fatalf("writer failure did not kill the command: %v", trace.snapshot())
+	}
+}
+
+func TestRunStreamsStdinThenClosesBeforeExecClose(t *testing.T) {
+	trace := &fakeRunTrace{}
+	exec := newFakeRunExec(trace)
+	exec.sink = &fakeRunStdin{exec: exec}
+	runtime, _, vm, _ := newFakeRunRuntime(exec, fakeOwnedVM().Labels, quickRunLimits())
+	want := bytes.Repeat([]byte("0123456789abcdef"), runStdinChunk/8)
+	result, err := runtime.Run(context.Background(), fakeOwnedVM(), RunCommand{Path: "/usr/bin/sha256sum", Stdin: bytes.NewReader(want)}, nil)
+	if err != nil || result.CleanupPending {
+		t.Fatalf("Run result=%+v err=%v", result, err)
+	}
+	exec.sink.mu.Lock()
+	got, writes, closed := exec.sink.data.Bytes(), exec.sink.writes, exec.sink.closed
+	exec.sink.mu.Unlock()
+	if !bytes.Equal(got, want) || writes < 2 || !closed {
+		t.Fatalf("stdin got %d bytes in %d writes (closed %t), want %d bytes", len(got), writes, closed, len(want))
+	}
+	if vm.connection.streamArgs.Stdin == nil {
+		t.Fatal("stdin was not requested from the SDK")
+	}
+	events := trace.snapshot()
+	if eventIndex(events, "stdin-close") > eventIndex(events, "exec-close") {
+		t.Fatalf("stdin closed after exec Close: %v", events)
+	}
+}
+
+type failingReader struct{ err error }
+
+func (r failingReader) Read([]byte) (int, error) { return 0, r.err }
+
+func TestRunStdinReadErrorCancelsCommand(t *testing.T) {
+	trace := &fakeRunTrace{}
+	exec := newFakeRunExec(trace)
+	exec.doneOnKill = true
+	exec.sink = &fakeRunStdin{exec: exec}
+	runtime, _, _, _ := newFakeRunRuntime(exec, fakeOwnedVM().Labels, quickRunLimits())
+	readErr := errors.New("source VM failed")
+	result, err := runtime.Run(context.Background(), fakeOwnedVM(), RunCommand{Path: "/bin/tar", Stdin: failingReader{err: readErr}}, nil)
+	if !errors.Is(err, readErr) || result.CleanupPending || runtime.PendingRun() {
+		t.Fatalf("Run result=%+v err=%v pending=%v", result, err, runtime.PendingRun())
+	}
+	if eventIndex(trace.snapshot(), "stdin-close") >= 0 {
+		t.Fatal("stdin was closed with EOF after a read error")
+	}
+}
+
+func TestRunSlotsArePerVM(t *testing.T) {
+	trace := &fakeRunTrace{}
+	first := newFakeRunExec(trace)
+	runtime, backend, _, _ := newFakeRunRuntime(first, fakeOwnedVM().Labels, quickRunLimits())
+	second := newFakeRunExec(trace)
+	second.replies <- fakeRunReply{event: runEvent{kind: runEventDone}}
+	other := &fakeRunVM{
+		backend: backend, trace: trace, vmName: "build-job-2", vmID: "other-vm-id", vmStatus: StatusRunning,
+		vmLabels: fakeOwnedVM().Labels, connection: &fakeRunConnection{vmID: "other-vm-id", exec: second, trace: trace},
+	}
+	backend.others = append(backend.others, other)
+	resultCh := make(chan runOutcome, 1)
+	go func() {
+		result, err := runtime.Run(context.Background(), fakeOwnedVM(), RunCommand{Path: "/bin/sleep"}, nil)
+		resultCh <- runOutcome{result: result, err: err}
+	}()
+	<-first.recvEntered
+	if _, err := runtime.Run(context.Background(), fakeOwnedVM(), RunCommand{Path: "/bin/true"}, nil); !errors.Is(err, ErrRunPending) {
+		t.Fatalf("second Run in the same VM error = %v, want ErrRunPending", err)
+	}
+	otherVM := OwnedVM{Name: "build-job-2", Labels: fakeOwnedVM().Labels}
+	if result, err := runtime.Run(context.Background(), otherVM, RunCommand{Path: "/bin/true"}, nil); err != nil || result.CleanupPending {
+		t.Fatalf("Run in another VM result=%+v err=%v", result, err)
+	}
+	if !runtime.PendingRun() {
+		t.Fatal("PendingRun ignored the active run in the first VM")
+	}
+	first.replies <- fakeRunReply{event: runEvent{kind: runEventDone}}
+	if outcome := <-resultCh; outcome.err != nil {
+		t.Fatalf("first Run error = %v", outcome.err)
+	}
+	waitForRunSlotRelease(t, runtime)
 }
 
 func TestExpectedLabelsMatchRequiresPresentEmptyLabels(t *testing.T) {
