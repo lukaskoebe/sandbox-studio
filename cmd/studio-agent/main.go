@@ -28,6 +28,26 @@ func main() {
 			log.Error("studio-agent stopped", "err", err)
 			os.Exit(1)
 		}
+	case "boot":
+		// Studio runs this after every VM boot: see guest.Boot.
+		if err := boot(); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: %v\n", err)
+			os.Exit(1)
+		}
+	case "shutdown":
+		// Studio runs this before stopping the VM: see guest.Shutdown.
+		if err := shutdown(); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: %v\n", err)
+			os.Exit(1)
+		}
+	case "supervise":
+		log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := supervise(ctx, log); err != nil {
+			log.Error("supervisor stopped", "err", err)
+			os.Exit(1)
+		}
 	case "oci-runtime":
 		// Docker's runtime inside the sandbox: see guest.OCIRuntime.
 		if err := ociRuntime(os.Args[2:]); err != nil {
@@ -35,7 +55,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|version|oci-runtime]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|oci-runtime]\n")
 		os.Exit(2)
 	}
 }

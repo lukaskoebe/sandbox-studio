@@ -82,7 +82,6 @@ func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocke
 	proxy := msb.SOCKS5Proxy(spec.Egress.Proxy).Credentials(spec.Egress.User, msb.SecretSourceEnv(spec.Egress.PasswordEnv))
 	sb, err := msb.CreateSandbox(ctx, name,
 		msb.WithImage(r.opts.Image),
-		msb.WithInit(msb.Init.Auto()),
 		msb.WithCPUs(spec.CPUs),
 		msb.WithMemory(spec.MemoryMiB),
 		msb.WithHostname(hostname(labels["studio.sandbox-name"])),
@@ -100,7 +99,7 @@ func (r *Runtime) Create(ctx context.Context, name string, spec Spec, agentSocke
 	if err != nil {
 		return fmt.Errorf("create sandbox: %w", err)
 	}
-	return sb.Detach(ctx)
+	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
 
 // Start boots a stopped sandbox in detached mode.
@@ -109,11 +108,32 @@ func (r *Runtime) Start(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	return sb.Detach(ctx)
+	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
 
-// Stop shuts a sandbox down gracefully.
+// agentPath is the agent's path in the guest, under Options.GuestDir.
+const agentPath = "/opt/studio/bin/studio-agent"
+
+// boot starts the guest's services. Sandboxes have no init system, so that microsandbox
+// can freeze all of their processes; see guest.Boot.
+func boot(ctx context.Context, sb *msb.Sandbox) error {
+	out, err := sb.Exec(ctx, agentPath, []string{"boot"}, msb.WithExecUser("root"), msb.WithExecTimeout(30*time.Second))
+	if err != nil {
+		return fmt.Errorf("boot guest: %w", err)
+	}
+	if !out.Success() {
+		return fmt.Errorf("boot guest: exit code %d: %s", out.ExitCode(), strings.TrimSpace(out.Stderr()))
+	}
+	return nil
+}
+
+// Stop shuts a sandbox down gracefully: the guest stops Docker and its containers before
+// the VM goes down.
 func (r *Runtime) Stop(ctx context.Context, name string) error {
+	return r.stop(ctx, name, true)
+}
+
+func (r *Runtime) stop(ctx context.Context, name string, graceful bool) error {
 	h, err := msb.GetSandbox(ctx, name)
 	if err != nil {
 		if msb.IsKind(err, msb.ErrSandboxNotFound) {
@@ -121,15 +141,23 @@ func (r *Runtime) Stop(ctx context.Context, name string) error {
 		}
 		return err
 	}
-	if s := Status(h.Status()); s == StatusStopped || s == StatusCrashed || s == StatusCreated {
+	s := Status(h.Status())
+	if s == StatusStopped || s == StatusCrashed || s == StatusCreated {
 		return nil
+	}
+	if graceful && s == StatusRunning {
+		// Best effort: when the guest can't stop its services, the VM still stops.
+		if sb, err := h.Connect(ctx); err == nil {
+			sb.Exec(ctx, agentPath, []string{"shutdown"}, msb.WithExecUser("root"), msb.WithExecTimeout(35*time.Second))
+			sb.Detach(ctx)
+		}
 	}
 	return h.Stop(ctx, msb.WithStopTimeout(30*time.Second))
 }
 
 // Remove stops and deletes a sandbox and its owned disks. Missing sandboxes are fine.
 func (r *Runtime) Remove(ctx context.Context, name string) error {
-	if err := r.Stop(ctx, name); err != nil {
+	if err := r.stop(ctx, name, false); err != nil {
 		return err
 	}
 	err := msb.RemoveSandbox(ctx, name)

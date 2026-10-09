@@ -234,8 +234,13 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
     root's overlay. This was verified in the spike.
   - `/opt/studio/studio-agent`: a read-only file mount of the Linux guest-agent binary
     shipped inside Studio, so updating Studio updates every guest.
-- Init: `--init auto` with systemd from the base image. dockerd, tmux and studio-agent run as
-  units.
+- Init: none. microsandbox's agentd stays PID 1, which is what lets it freeze every guest
+  process for full snapshots, forks and live disk snapshots; with an init handoff (systemd)
+  msb 0.7.7 refuses all three. After each VM boot Studio runs `studio-agent boot`, which
+  starts a supervisor for containerd, dockerd and the agent (restarting them with backoff).
+  Before a stop Studio runs `studio-agent shutdown`, because msb gives the guest two seconds
+  before it kills every process. Sandboxes created with systemd keep it; `boot` is a no-op
+  there.
 - Snapshot features, mapped to UX:
   - **Checkpoint:** a disk snapshot in snapshot group `sbx-<id>`.
     Captures root, workspace and Docker disks. Stop the sandbox before capture: the
@@ -264,7 +269,7 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   - Multi-arch: amd64 and arm64.
   - Built by GitHub Actions with buildx and pinned by digest in each Studio release.
   - Contents:
-    - Debian stable, systemd, docker-ce, git, tmux, mise
+    - Debian stable, docker-ce, git, tmux, mise (no init system; see 6.1)
     - node (for the harnesses), ripgrep, jq, curl
     - pinned **OpenCode, Claude Code and Codex**
   - Optional extra: Nix (single-user, `/nix` on the root) for projects that use flakes or devenv.

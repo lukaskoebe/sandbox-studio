@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/guest"
 )
@@ -13,6 +15,25 @@ func connect(ctx context.Context, log *slog.Logger) error {
 		return err
 	}
 	return a.Run(ctx)
+}
+
+func boot() error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return guest.Boot(self)
+}
+
+func shutdown() error { return guest.Shutdown(25 * time.Second) }
+
+// supervise runs the supervisor boot started; it inherits the supervisor lock as fd 3.
+func supervise(ctx context.Context, log *slog.Logger) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return guest.Supervise(ctx, log, self, os.NewFile(3, "supervisor.lock"))
 }
 
 func ociRuntime(args []string) error { return guest.OCIRuntime(args) }

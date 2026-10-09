@@ -1,5 +1,8 @@
-# Sandbox Studio base image: Debian + systemd + Docker + dev tooling.
+# Sandbox Studio base image: Debian + Docker + dev tooling.
 # The guest agent binary is not baked in; Studio mounts it at /opt/studio/bin/studio-agent.
+# There is no init system: microsandbox's agentd stays PID 1 so that it can freeze every
+# process for snapshots and forks, and `studio-agent boot` starts containerd, dockerd and
+# the agent after each VM boot.
 ARG DEBIAN_VERSION=trixie
 FROM debian:${DEBIAN_VERSION}
 
@@ -7,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        systemd systemd-sysv dbus ca-certificates \
+        ca-certificates \
         curl wget git tmux sudo jq ripgrep fd-find less vim-tiny openssh-client \
         gnupg procps iproute2 iputils-ping dnsutils unzip xz-utils zstd file \
         build-essential pkg-config python3 python3-venv locales \
@@ -30,11 +33,5 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash --groups sudo,docker agen
 
 COPY rootfs/ /
 
-# Units that make no sense in a microVM, plus first-boot noise.
-RUN systemctl mask getty@tty1.service serial-getty@ttyS0.service systemd-logind.service \
-        systemd-timesyncd.service apt-daily.timer apt-daily-upgrade.timer e2scrub_reap.service \
-        systemd-modules-load.service systemd-sysctl.service \
-    && systemctl enable docker.service containerd.service studio-agent.service
-
 ENV LANG=en_US.UTF-8
-CMD ["/lib/systemd/systemd"]
+CMD ["/bin/bash"]
