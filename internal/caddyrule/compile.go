@@ -75,9 +75,11 @@ func Compile(src string) (Compiled, error) {
 	for _, t := range tokens {
 		last = t.Line
 		switch {
-		case t.Quoted():
+		// Caddy's parser imports on the token's text, quoted or not, so even a quoted import
+		// would read files on the host.
 		case t.Text == "import":
 			return Compiled{}, fmt.Errorf("line %d: import is not available", t.Line)
+		case t.Quoted():
 		case t.Text == "{":
 			depth++
 		case t.Text == "}":
