@@ -16,6 +16,9 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -26,6 +29,9 @@ import (
 type Server struct {
 	Store     *store.Store
 	Sandboxes *sandboxes.Manager
+	Policy    *policy.Engine
+	Bus       *events.Bus
+	Conns     *gateway.ConnLog
 	Log       *slog.Logger
 	Addr      string // the address Studio listens on, used to build preview URLs
 }
@@ -35,6 +41,8 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	api := humago.New(mux, config())
 	s.registerEnvironments(api)
 	s.registerSandboxes(api)
+	s.registerNetwork(api)
+	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api
 }
@@ -211,8 +219,11 @@ func apiError(err error) error {
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, agentchan.ErrNotConnected):
 		return huma.Error409Conflict("the sandbox is not running or still booting")
-	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec):
+	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
+		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern):
 		return huma.Error422UnprocessableEntity(err.Error())
+	case errors.Is(err, policy.ErrDecided):
+		return huma.Error409Conflict(err.Error())
 	}
 	return huma.Error500InternalServerError(err.Error())
 }

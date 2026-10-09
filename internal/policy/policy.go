@@ -128,6 +128,9 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 		e.changed(envID, false)
 		return e.Store.Approval(ctx, envID, id)
 	}
+	if d.Action != store.ActionAllow && d.Action != store.ActionDeny {
+		return a, fmt.Errorf("unsupported decision %q", d.Action)
+	}
 	var req NetworkRequest
 	if err := json.Unmarshal(a.Payload, &req); err != nil {
 		return a, fmt.Errorf("approval %s: %w", id, err)

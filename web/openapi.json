@@ -17,6 +17,143 @@
         ],
         "type": "object"
       },
+      "ApprovalView": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "network": {
+            "$ref": "#/components/schemas/NetworkRequest"
+          },
+          "ruleId": {
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "dismissed"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "kind",
+          "subject",
+          "attempts",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Conn": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "The destination as the sandbox asked for it",
+            "type": "string"
+          },
+          "ended": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "port": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "received": {
+            "description": "Bytes received by the sandbox",
+            "format": "int64",
+            "type": "integer"
+          },
+          "ruleId": {
+            "type": "string"
+          },
+          "sent": {
+            "description": "Bytes sent by the sandbox",
+            "format": "int64",
+            "type": "integer"
+          },
+          "source": {
+            "description": "Where the host name came from",
+            "enum": [
+              "tls",
+              "http",
+              "dns",
+              "socks",
+              "ip"
+            ],
+            "type": "string"
+          },
+          "started": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "pending",
+              "open",
+              "allowed",
+              "denied",
+              "undecided",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started",
+          "host",
+          "port",
+          "address",
+          "source",
+          "verdict",
+          "sent",
+          "received"
+        ],
+        "type": "object"
+      },
       "CreateEnvBody": {
         "additionalProperties": false,
         "properties": {
@@ -56,6 +193,50 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "DecideInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "allow or deny creates a rule; dismiss only closes the request",
+            "enum": [
+              "allow",
+              "deny",
+              "dismiss"
+            ],
+            "type": "string"
+          },
+          "host": {
+            "description": "Host pattern the rule covers; empty means the requested host",
+            "type": "string"
+          },
+          "ports": {
+            "description": "Ports the rule covers; omitted means the default ports for the request, empty means any port",
+            "items": {
+              "format": "int64",
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "scope": {
+            "default": "environment",
+            "description": "Whether the rule covers only the requesting sandbox",
+            "enum": [
+              "sandbox",
+              "environment"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
         ],
         "type": "object"
       },
@@ -171,6 +352,38 @@
         ],
         "type": "object"
       },
+      "NetworkRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "patterns": {
+            "description": "Suggested host patterns, most specific first",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "port": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sandboxName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "port",
+          "sandboxName",
+          "patterns"
+        ],
+        "type": "object"
+      },
       "PreviewPort": {
         "additionalProperties": false,
         "properties": {
@@ -185,6 +398,123 @@
         "required": [
           "port",
           "url"
+        ],
+        "type": "object"
+      },
+      "Rule": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "allow",
+              "proxy",
+              "caddy",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "config": {
+            "$ref": "#/components/schemas/RuleConfig"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "host": {
+            "description": "example.com, *.example.com (includes example.com), or an IP address",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "ports": {
+            "description": "Empty means any port",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sandboxId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "host",
+          "ports",
+          "action",
+          "config",
+          "note",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "RuleConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "caddyfile": {
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "RuleInput": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "host": {
+            "description": "example.com, *.example.com (includes example.com), or an IP address",
+            "minLength": 1,
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "ports": {
+            "description": "Empty or omitted means any port",
+            "items": {
+              "format": "int64",
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sandboxId": {
+            "description": "Limits the rule to one sandbox of this environment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "action"
         ],
         "type": "object"
       },
@@ -290,6 +620,63 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/approvals": {
+      "get": {
+        "description": "Approvals of every environment, newest first. Pending ones feed the approval inbox.",
+        "operationId": "listApprovals",
+        "parameters": [
+          {
+            "description": "Statuses to list; all lists every status",
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "default": "pending",
+              "description": "Statuses to list; all lists every status",
+              "enum": [
+                "pending",
+                "approved",
+                "denied",
+                "dismissed",
+                "all"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
     "/api/environments": {
       "get": {
         "operationId": "listEnvironments",
@@ -361,6 +748,337 @@
         },
         "tags": [
           "environments"
+        ]
+      }
+    },
+    "/api/environments/{env}/approvals": {
+      "get": {
+        "operationId": "listEnvironmentApprovals",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Statuses to list; all lists every status",
+            "explode": false,
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "default": "all",
+              "description": "Statuses to list; all lists every status",
+              "enum": [
+                "pending",
+                "approved",
+                "denied",
+                "dismissed",
+                "all"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
+    "/api/environments/{env}/approvals/{id}/decide": {
+      "post": {
+        "operationId": "decideApproval",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Approval ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Approval ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
+    "/api/environments/{env}/rules": {
+      "get": {
+        "operationId": "listRules",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Rule"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "post": {
+        "operationId": "createRule",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rule"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      }
+    },
+    "/api/environments/{env}/rules/{id}": {
+      "delete": {
+        "operationId": "deleteRule",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rule ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Rule ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "put": {
+        "operationId": "updateRule",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Rule ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Rule ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rule"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
         ]
       }
     },
@@ -554,6 +1272,65 @@
         },
         "tags": [
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/connections": {
+      "get": {
+        "description": "The sandbox's most recent connections, newest first. The log is kept in memory only.",
+        "operationId": "listConnections",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Conn"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
         ]
       }
     },

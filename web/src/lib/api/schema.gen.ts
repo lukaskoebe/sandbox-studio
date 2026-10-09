@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Approvals of every environment, newest first. Pending ones feed the approval inbox. */
+        get: operations["listApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments": {
         parameters: {
             query?: never;
@@ -15,6 +32,70 @@ export interface paths {
         put?: never;
         post: operations["createEnvironment"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listEnvironmentApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/approvals/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRules"];
+        put?: never;
+        post: operations["createRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateRule"];
+        post?: never;
+        delete: operations["deleteRule"];
         options?: never;
         head?: never;
         patch?: never;
@@ -47,6 +128,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["deleteSandbox"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The sandbox's most recent connections, newest first. The log is kept in memory only. */
+        get: operations["listConnections"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -157,6 +255,55 @@ export interface components {
             arch: string;
             version: string;
         };
+        ApprovalView: {
+            /** Format: int64 */
+            attempts: number;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            id: string;
+            kind: string;
+            network?: components["schemas"]["NetworkRequest"];
+            ruleId?: string;
+            sandboxId?: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "denied" | "dismissed";
+            subject: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        Conn: {
+            /** @description The destination as the sandbox asked for it */
+            address: string;
+            /** Format: date-time */
+            ended?: string;
+            error?: string;
+            host: string;
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            port: number;
+            /**
+             * Format: int64
+             * @description Bytes received by the sandbox
+             */
+            received: number;
+            ruleId?: string;
+            /**
+             * Format: int64
+             * @description Bytes sent by the sandbox
+             */
+            sent: number;
+            /**
+             * @description Where the host name came from
+             * @enum {string}
+             */
+            source: "tls" | "http" | "dns" | "socks" | "ip";
+            /** Format: date-time */
+            started: string;
+            /** @enum {string} */
+            verdict: "pending" | "open" | "allowed" | "denied" | "undecided" | "failed";
+        };
         CreateEnvBody: {
             name: string;
         };
@@ -170,6 +317,23 @@ export interface components {
             name: string;
             /** Format: int64 */
             workspaceMiB?: number;
+        };
+        DecideInBody: {
+            /**
+             * @description allow or deny creates a rule; dismiss only closes the request
+             * @enum {string}
+             */
+            action: "allow" | "deny" | "dismiss";
+            /** @description Host pattern the rule covers; empty means the requested host */
+            host?: string;
+            /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
+            ports?: number[] | null;
+            /**
+             * @description Whether the rule covers only the requesting sandbox
+             * @default environment
+             * @enum {string}
+             */
+            scope: "sandbox" | "environment";
         };
         Environment: {
             /** Format: date-time */
@@ -223,10 +387,50 @@ export interface components {
             status: "ok";
             version: string;
         };
+        NetworkRequest: {
+            host: string;
+            /** @description Suggested host patterns, most specific first */
+            patterns: string[] | null;
+            /** Format: int64 */
+            port: number;
+            sandboxName: string;
+        };
         PreviewPort: {
             /** Format: int64 */
             port: number;
             url: string;
+        };
+        Rule: {
+            /** @enum {string} */
+            action: "allow" | "proxy" | "caddy" | "deny";
+            config: components["schemas"]["RuleConfig"];
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            /** @description example.com, *.example.com (includes example.com), or an IP address */
+            host: string;
+            id: string;
+            note: string;
+            /** @description Empty means any port */
+            ports: number[] | null;
+            sandboxId?: string;
+        };
+        RuleConfig: {
+            caddyfile?: string;
+            headers?: {
+                [key: string]: string;
+            };
+        };
+        RuleInput: {
+            /** @enum {string} */
+            action: "allow" | "deny";
+            /** @description example.com, *.example.com (includes example.com), or an IP address */
+            host: string;
+            note?: string;
+            /** @description Empty or omitted means any port */
+            ports?: number[] | null;
+            /** @description Limits the rule to one sandbox of this environment */
+            sandboxId?: string;
         };
         Session: {
             /** Format: int64 */
@@ -266,6 +470,38 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listApprovals: {
+        parameters: {
+            query?: {
+                /** @description Statuses to list; all lists every status */
+                status?: "pending" | "approved" | "denied" | "dismissed" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listEnvironments: {
         parameters: {
             query?: never;
@@ -316,6 +552,217 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Environment"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listEnvironmentApprovals: {
+        parameters: {
+            query?: {
+                /** @description Statuses to list; all lists every status */
+                status?: "pending" | "approved" | "denied" | "dismissed" | "all";
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    decideApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Rule ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rule"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Rule ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -450,6 +897,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conn"][] | null;
+                };
             };
             /** @description Error */
             default: {
