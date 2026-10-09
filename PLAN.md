@@ -437,7 +437,9 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   remains blocked by microsandbox
   [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
 - **Rebase:** moving an existing sandbox to a new template keeps its workspace. The mechanism
-  depends on spike S5 (named disk volume vs. copying the workspace).
+  follows S5's agent-channel workspace copy. The next slice qualifies a bounded archive
+  transfer between disposable guests; the product lifecycle and Docker-data contract
+  remain gated. See the [rebase implementation and qualification plan](docs/rebase.md).
 
 ### 6.3 Guest agent (`studio-agent`)
 
