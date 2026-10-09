@@ -253,7 +253,15 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
     including agent TUIs. Blocked with microsandbox 0.7.7 like restore (below); a full
     restore must also re-create the source's vsock route, or the device layout no longer
     matches.
-  - **Fork:** a running sandbox becomes a new sandbox, with copy-on-write memory.
+  - **Fork:** a new sandbox with a new ID and egress identity, the same template and
+    resources, and a copy of `/workspace`. Not msb fork: Studio copies the workspace as a
+    tar stream between two VMs. A running source keeps running, so the copy may be
+    inconsistent. Docker data and processes are not copied. A failed fork is removed.
+  - **Rebase:** moves a sandbox to another ready template and keeps `/workspace`. Studio
+    stops the source, starts it and generation `n+1` without guest services, streams the
+    workspace across, then switches generation, template and resources in one catalog
+    update. Docker data is lost, tmux sessions end, and checkpoints stay with their
+    generation. A durable record lets rollback or startup recovery leave one VM.
   - **Restore checkpoint:** a new generation from the snapshot.
     Currently gated off with microsandbox 0.7.7: restore gives the VM msb's default network
     (no resolver, no gateway proxy; inheriting resources covers mounts only) and its options
@@ -480,9 +488,9 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   remains blocked by microsandbox
   [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
 - **Rebase:** moving an existing sandbox to a new template keeps its workspace. The mechanism
-  follows S5's agent-channel workspace copy. The next slice qualifies a bounded archive
-  transfer between disposable guests; the product lifecycle and Docker-data contract
-  remain gated. See the [rebase implementation and qualification plan](docs/rebase.md).
+  copies `/workspace` as a gzip tar over msb exec from the old VM to a new generation, with
+  no staging on the host. Docker data is not kept. Fork uses the same copy. Restore and
+  suspend stay gated. See [docs/rebase.md](docs/rebase.md).
 
 ### 6.3 Guest agent (`studio-agent`)
 
