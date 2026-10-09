@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -30,6 +31,8 @@ import (
 // environment's CA, then HTTP. Each request is checked and rewritten, and sent on over a
 // new connection to the same host. Proxy rules intercept, and so does any connection to a
 // host a secret is bound to, since only then can its placeholder be swapped for the value.
+// Caddy rules intercept too, and hand the requests to the rule instead; such a rule sets
+// credentials itself, and the sandbox's placeholders are not swapped.
 //
 // Placeholders are swapped in request headers, the path and the query, where credentials
 // travel, and never in bodies: an upstream may store a body and hand it back, value and all.
@@ -43,6 +46,8 @@ type interception struct {
 	bound   []secrets.Binding // secrets that may be sent to host
 	unbound []secrets.Binding
 	masked  [][]byte // values to mask in responses
+	caddy   bool     // requests go through a caddy rule
+	broken  string   // why every request is refused
 	proxy   *httputil.ReverseProxy
 	log     *slog.Logger
 
@@ -53,14 +58,7 @@ type interception struct {
 // boundTo splits an environment's secrets by whether they may be sent to host.
 func boundTo(all []secrets.Binding, host string) (bound, unbound []secrets.Binding) {
 	for _, b := range all {
-		ok := false
-		for _, p := range b.Hosts {
-			if policy.Covers(p, host) {
-				ok = true
-				break
-			}
-		}
-		if ok {
+		if covers(b, host) {
 			bound = append(bound, b)
 		} else {
 			unbound = append(unbound, b)
@@ -69,36 +67,79 @@ func boundTo(all []secrets.Binding, host string) (bound, unbound []secrets.Bindi
 	return bound, unbound
 }
 
+func covers(b secrets.Binding, host string) bool {
+	for _, p := range b.Hosts {
+		if policy.Covers(p, host) {
+			return true
+		}
+	}
+	return false
+}
+
+// caddySecrets collects the values of the secrets a caddy rule for host sends upstream.
+// Each must be bound to every host the rule sends it to.
+func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (map[string]string, error) {
+	values := map[string]string{}
+	for name, upstreams := range c.Secrets {
+		b, ok := named(all, name)
+		if !ok {
+			return nil, fmt.Errorf("The Sandbox Studio Caddy rule for %s sends the secret %s, which does not exist.", host, name)
+		}
+		for _, u := range upstreams {
+			if !covers(b, u) {
+				return nil, fmt.Errorf("The Sandbox Studio Caddy rule for %s sends the secret %s to %s, which it is not bound to.", host, name, u)
+			}
+		}
+		values[name] = string(b.Value)
+	}
+	return values, nil
+}
+
 // Values shorter than this are not masked in responses: they would mask innocent text, and
 // a value that short is no credential worth hiding.
 const minMasked = 8
 
-// intercept serves the sandbox's requests on c until it hangs up. It returns the bytes
-// sent and received on c and the last refused request, if any.
-func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding) (sent, received int64, problem string) {
+// intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
+// nil. It returns the bytes sent and received on c and the last refused request, if any.
+func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled) (sent, received int64, problem string) {
 	ic := &interception{host: host, tls: isTLS, headers: rule.Config.Headers, log: g.Log}
-	ic.bound, ic.unbound = boundTo(all, host)
-	for _, b := range ic.bound {
-		if len(b.Value) >= minMasked {
-			ic.masked = append(ic.masked, b.Value)
+	var transport http.RoundTripper
+	if caddy == nil {
+		ic.bound, ic.unbound = boundTo(all, host)
+		for _, b := range ic.bound {
+			if len(b.Value) >= minMasked {
+				ic.masked = append(ic.masked, b.Value)
+			}
 		}
+		dial := g.Dial
+		if dial == nil {
+			dial = publicDialer.DialContext
+		}
+		t := &http.Transport{
+			// Every request goes to host, whatever address the sandbox connected to.
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return dial(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+			},
+			TLSClientConfig:     &tls.Config{ServerName: host, RootCAs: g.upstreamRoots},
+			ForceAttemptHTTP2:   true,
+			TLSHandshakeTimeout: 15 * time.Second,
+			IdleConnTimeout:     90 * time.Second,
+		}
+		defer t.CloseIdleConnections()
+		transport = t
+	} else {
+		ic.caddy, ic.unbound = true, all
+		values, err := caddySecrets(host, caddy, all)
+		if err != nil {
+			ic.broken = err.Error()
+		}
+		for _, v := range values {
+			if len(v) >= minMasked {
+				ic.masked = append(ic.masked, []byte(v))
+			}
+		}
+		transport = g.Caddy.Transport(rule.ID, *caddy, values, isTLS)
 	}
-
-	dial := g.Dial
-	if dial == nil {
-		dial = publicDialer.DialContext
-	}
-	transport := &http.Transport{
-		// Every request goes to host, whatever address the sandbox connected to.
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return dial(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
-		},
-		TLSClientConfig:     &tls.Config{ServerName: host, RootCAs: g.upstreamRoots},
-		ForceAttemptHTTP2:   true,
-		TLSHandshakeTimeout: 15 * time.Second,
-		IdleConnTimeout:     90 * time.Second,
-	}
-	defer transport.CloseIdleConnections()
 	scheme := "http"
 	if isTLS {
 		scheme = "https"
@@ -142,6 +183,10 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// would otherwise reach it through a shared front end (domain fronting).
 	if name := hostOnly(r.Host); name != "" && name != ic.host {
 		ic.refuse(w, http.StatusMisdirectedRequest, fmt.Sprintf("This connection is to %s. Open a new connection for %s.", ic.host, name))
+		return
+	}
+	if ic.broken != "" {
+		ic.refuse(w, http.StatusForbidden, ic.broken)
 		return
 	}
 	out := r.Clone(r.Context())
@@ -211,6 +256,10 @@ func (ic *interception) substitute(s, where string, escape func(string) string) 
 		return s, nil
 	}
 	for _, b := range ic.unbound {
+		if strings.Contains(s, b.Placeholder) && ic.caddy {
+			return "", fmt.Errorf("%s holds the placeholder of the secret %s. Requests to %s go through a Sandbox Studio Caddy rule, which sets credentials itself and doesn't swap placeholders.",
+				where, b.Name, ic.host)
+		}
 		if strings.Contains(s, b.Placeholder) {
 			return "", fmt.Errorf("%s holds the placeholder of the secret %s, which Sandbox Studio only sends to %s, not to %s. Bind the secret to %s in Sandbox Studio if it belongs there.",
 				where, b.Name, strings.Join(b.Hosts, ", "), ic.host, ic.host)

@@ -518,6 +518,11 @@
       "RuleConfigInput": {
         "additionalProperties": false,
         "properties": {
+          "caddyfile": {
+            "description": "caddy rules only: the routes of a Caddy site, in Caddyfile syntax, that handle the requests. reverse_proxy may send secrets upstream in header_up as {secret.NAME}, over HTTPS to hosts the secret is bound to.",
+            "maxLength": 32768,
+            "type": "string"
+          },
           "headers": {
             "additionalProperties": {
               "type": "string"
@@ -533,10 +538,11 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers",
+            "description": "allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile",
             "enum": [
               "allow",
               "proxy",
+              "caddy",
               "deny"
             ],
             "type": "string"

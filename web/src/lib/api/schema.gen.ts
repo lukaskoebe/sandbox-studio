@@ -467,6 +467,8 @@ export interface components {
             };
         };
         RuleConfigInput: {
+            /** @description caddy rules only: the routes of a Caddy site, in Caddyfile syntax, that handle the requests. reverse_proxy may send secrets upstream in header_up as {secret.NAME}, over HTTPS to hosts the secret is bound to. */
+            caddyfile?: string;
             /** @description proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to. */
             headers?: {
                 [key: string]: string;
@@ -474,10 +476,10 @@ export interface components {
         };
         RuleInput: {
             /**
-             * @description allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers
+             * @description allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile
              * @enum {string}
              */
-            action: "allow" | "proxy" | "deny";
+            action: "allow" | "proxy" | "caddy" | "deny";
             config?: components["schemas"]["RuleConfigInput"];
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;

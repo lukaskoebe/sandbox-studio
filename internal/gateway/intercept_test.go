@@ -12,6 +12,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +25,7 @@ import (
 	"golang.org/x/net/proxy"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
+	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -139,6 +143,11 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 		"proxied.example": {ID: "r5", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "Bearer {secret.HEADER_KEY}", "X-Static": "v1"}}},
 		"badref.example":  {ID: "r6", Action: store.ActionProxy, Config: store.RuleConfig{Headers: map[string]string{"X-Api-Key": "{secret.API_KEY}"}}},
 		"other.example":   {ID: "r7", Action: store.ActionAllow},
+		"caddy.example":   {ID: "r8", Action: store.ActionCaddy, Config: store.RuleConfig{Caddyfile: caddyRule}},
+		"caddy-unbound.example": {ID: "r9", Action: store.ActionCaddy, Config: store.RuleConfig{
+			Caddyfile: "reverse_proxy https://example.com {\n  header_up X-Api-Key {secret.OTHER_KEY}\n}",
+		}},
+		"caddy-broken.example": {ID: "r10", Action: store.ActionCaddy, Config: store.RuleConfig{Caddyfile: "respond {env.HOME}"}},
 	}}}
 	h.gw = &Gateway{
 		Key:    []byte("key"),
@@ -162,6 +171,7 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 			return (&net.Dialer{}).DialContext(ctx, network, up)
 		},
 		upstreamRoots: h.upCA,
+		Caddy:         sharedCaddy(),
 	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -451,4 +461,123 @@ func waitFor(t *testing.T, cond func() bool, state func() string) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// --- caddy rules ---------------------------------------------------------------------------
+
+// caddyRule passes GET and POST on to example.com with the API key, and refuses the rest.
+const caddyRule = `@ok method GET POST
+handle @ok {
+  reverse_proxy https://example.com {
+    header_up Host example.com
+    header_up X-Api-Key "Bearer {secret.API_KEY}"
+  }
+}
+respond "read only" 403
+`
+
+// Caddy's state is global, so the tests share a Caddy engine, and its upstream: a TLS
+// server for example.com (httptest's certificate) that echoes requests.
+var (
+	caddyOnce   sync.Once
+	caddyEngine *caddyrule.Engine
+	caddyMu     sync.Mutex
+	caddySeen   []seen
+)
+
+func sharedCaddy() *caddyrule.Engine {
+	caddyOnce.Do(func() {
+		up := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			caddyMu.Lock()
+			caddySeen = append(caddySeen, seen{Host: r.Host, Path: r.URL.Path, Header: r.Header.Clone()})
+			caddyMu.Unlock()
+			fmt.Fprintf(w, "%s %s %q\nX-Api-Key: %s\n", r.Method, r.URL.Path, body, r.Header.Get("X-Api-Key"))
+		}))
+		roots := x509.NewCertPool()
+		roots.AddCert(up.Certificate())
+		caddyEngine = &caddyrule.Engine{
+			Dir:     filepath.Join(os.TempDir(), "sandbox-studio-gateway-test-caddy"), // never written
+			RootCAs: roots,
+			Dial: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				if addr != "example.com:443" {
+					return nil, fmt.Errorf("refusing to connect to %s", addr)
+				}
+				return (&net.Dialer{}).DialContext(ctx, network, up.Listener.Addr().String())
+			},
+		}
+	})
+	return caddyEngine
+}
+
+func caddyRequests() []seen {
+	caddyMu.Lock()
+	defer caddyMu.Unlock()
+	return slices.Clone(caddySeen)
+}
+
+func TestCaddyRule(t *testing.T) {
+	h := newInterceptHarness(t)
+	c := h.client(t, h.envCA)
+	before := len(caddyRequests())
+
+	resp, body := get(t, c, "https://caddy.example/repos", "X-Api-Key", "the sandbox's own")
+	if resp.StatusCode != 200 {
+		t.Fatalf("%d %q", resp.StatusCode, body)
+	}
+	seen := caddyRequests()
+	if len(seen) != before+1 {
+		t.Fatalf("the upstream got %d requests", len(seen)-before)
+	}
+	if up := seen[len(seen)-1]; up.Header.Get("X-Api-Key") != "Bearer "+apiValue || up.Host != "example.com" || up.Path != "/repos" {
+		t.Errorf("upstream saw %+v", up)
+	}
+	// The echo carries the key back; the sandbox must not see it.
+	if strings.Contains(body, apiValue) || !strings.Contains(body, "X-Api-Key: Bearer "+strings.Repeat("*", len(apiValue))) {
+		t.Errorf("response not masked: %q", body)
+	}
+
+	req, _ := http.NewRequest("POST", "https://caddy.example/items", strings.NewReader("payload"))
+	if resp, body := do(t, c, req); resp.StatusCode != 200 || !strings.Contains(body, `POST /items "payload"`) {
+		t.Errorf("POST: %d %q", resp.StatusCode, body)
+	}
+	// The sandbox spoke plain HTTP; the rule still sends the key over HTTPS.
+	if resp, body := get(t, c, "http://caddy.example/plain"); resp.StatusCode != 200 || strings.Contains(body, apiValue) {
+		t.Errorf("plain HTTP: %d %q", resp.StatusCode, body)
+	}
+
+	before = len(caddyRequests())
+	for _, tc := range []struct {
+		name, method, url, header string
+		code                      int
+		want                      string
+	}{
+		{"refused by the rule", "DELETE", "https://caddy.example/items", "", 403, "read only"},
+		{"a placeholder", "GET", "https://caddy.example/", apiPlaceholder, 403, "go through a Sandbox Studio Caddy rule"},
+		{"a secret the rule may not send", "GET", "https://caddy-unbound.example/", "", 403, "sends the secret OTHER_KEY to example.com, which it is not bound to"},
+		{"a broken rule", "GET", "https://caddy-broken.example/", "", 403, "Caddy rule for caddy-broken.example doesn't work: {env.*}"},
+	} {
+		req, _ := http.NewRequest(tc.method, tc.url, nil)
+		req.Header.Set("X-Key", tc.header)
+		if resp, body := do(t, c, req); resp.StatusCode != tc.code || !strings.Contains(body, tc.want) {
+			t.Errorf("%s: %d %q", tc.name, resp.StatusCode, body)
+		}
+	}
+	if n := len(caddyRequests()) - before; n != 0 {
+		t.Errorf("%d refused requests reached the upstream", n)
+	}
+
+	c.CloseIdleConnections()
+	waitFor(t, func() bool {
+		var intercepted, broken bool
+		for _, e := range h.gw.Conns.List("sb1") {
+			switch e.Host {
+			case "caddy.example":
+				intercepted = e.Intercepted && e.RuleID == "r8"
+			case "caddy-broken.example":
+				broken = e.Verdict == VerdictFailed && strings.HasPrefix(e.Error, "caddy rule: ")
+			}
+		}
+		return intercepted && broken
+	}, func() string { return fmt.Sprintf("%+v", h.gw.Conns.List("sb1")) })
 }

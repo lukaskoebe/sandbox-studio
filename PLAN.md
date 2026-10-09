@@ -319,8 +319,20 @@ A small static Linux Go binary (in `cmd/studio-agent`), mounted into every sandb
      - substitute secret placeholders
      - override the upstream, Host, SNI or upstream CA
      - apply request-level approval patterns (method + path → `network.request` approval)
-   - `caddy`: terminate TLS and hand the plaintext request to an **embedded Caddy** instance
-     configured from the rule's Caddyfile snippet. This is the v1 editor, kept as is.
+   - `caddy`: terminate TLS and hand the plaintext request to an **embedded Caddy**,
+     configured from the rule's Caddyfile snippet (the v1 editor). Caddy runs as a library:
+     no listeners, no admin endpoint, its storage in Studio's data dir. Each rule is the
+     routes of one site, compiled against an allowlist of matchers, handlers and
+     `reverse_proxy` options. That allowlist:
+     - refuses `{env.*}`, `{file.*}`, `{system.*}`, `{$VAR}` and `import`, so a rule can't
+       read the host
+     - requires fixed upstreams, dialed through the gateway's public-only dialer
+     - refuses TLS options and forward proxies
+
+     Secrets are written `{secret.NAME}` (v1 used `{env.NAME}`) and may only appear in
+     `header_up` values. Caddy never sees them: it gets a marker that Studio's transport fills
+     in on the way out, for HTTPS upstreams the secret is bound to. Responses are masked as
+     for `proxy`. WebSockets aren't passed through Caddy rules.
    - `deny`: close the connection. For HTTP or intercepted TLS, return a readable 403 that
      tells the agent what to do.
    - No match: **hold and ask.**

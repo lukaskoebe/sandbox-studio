@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	goruntime "runtime"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
+	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
@@ -119,9 +121,10 @@ func run(addr, image string, log *slog.Logger) error {
 	defer resolvers.Close()
 	conns := &gateway.ConnLog{}
 	authority := &ca.Authority{Store: st, Sealer: vault}
+	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialPublic}
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
-		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault,
+		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
 	}
 	gl, err := net.Listen("tcp", gatewayAddr)
 	if err != nil {
@@ -148,7 +151,7 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Log: log, Addr: addr}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(preview.Route(hub.DialTCP, mux))
 

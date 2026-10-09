@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
@@ -52,6 +53,8 @@ type Gateway struct {
 	Secrets interface {
 		Bindings(ctx context.Context, envID string) ([]secrets.Binding, error)
 	}
+	// Caddy runs the caddy rules. Its Dial must refuse what Dial refuses.
+	Caddy *caddyrule.Engine
 
 	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
 	upstreamRoots *x509.CertPool               // replaces the system roots in tests
@@ -180,8 +183,8 @@ func (g *Gateway) handle(c net.Conn) {
 		verdict = VerdictDenied
 		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("Connections to %s:%d are blocked by a Sandbox Studio network rule.", host, port))
 		return
-	case rule.Action == store.ActionCaddy:
-		problem = "caddy rules are not supported yet"
+	case rule.Action == store.ActionCaddy && g.Caddy == nil:
+		problem = "caddy rules are not available"
 		return
 	}
 
@@ -192,18 +195,29 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 	web := proto == "tls" || proto == "http"
-	if bound, _ := boundTo(all, host); rule.Action == store.ActionProxy || len(bound) > 0 && web {
+	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy
+	if bound, _ := boundTo(all, host); handled || len(bound) > 0 && web {
 		if !web {
-			problem = "proxy rules only handle HTTP and TLS connections"
+			problem = rule.Action + " rules only handle HTTP and TLS connections"
 			return
 		}
 		if proto == "tls" && g.CA == nil {
 			problem = "no CA to intercept TLS with"
 			return
 		}
+		var caddy *caddyrule.Compiled
+		if rule.Action == store.ActionCaddy {
+			compiled, err := g.Caddy.Ensure(rule)
+			if err != nil {
+				problem = "caddy rule: " + err.Error()
+				g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("The Sandbox Studio Caddy rule for %s doesn't work: %v", host, err))
+				return
+			}
+			caddy = &compiled
+		}
 		g.Conns.opened(entry, ruleID, true)
 		verdict = VerdictAllowed
-		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all)
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy)
 		return
 	}
 
@@ -414,6 +428,11 @@ var publicDialer = &net.Dialer{
 		}
 		return nil
 	},
+}
+
+// DialPublic connects the way the gateway does, to public addresses only.
+func DialPublic(ctx context.Context, network, addr string) (net.Conn, error) {
+	return publicDialer.DialContext(ctx, network, addr)
 }
 
 var nonPublic = []netip.Prefix{

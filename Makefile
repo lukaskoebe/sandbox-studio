@@ -1,5 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/lukaskoebe/sandbox-studio/internal/version.Version=$(VERSION)
+# Leaves out the databases of Caddy's PKI app, which Studio doesn't use.
+TAGS := nobadger,nomysql,nopgx
 
 .PHONY: all web build agent api test lint dev clean image
 
@@ -9,7 +11,7 @@ web:
 	cd web && pnpm install --frozen-lockfile && pnpm build
 
 build: agent
-	go build -ldflags "$(LDFLAGS)" -o bin/studio ./cmd/studio
+	go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o bin/studio ./cmd/studio
 
 # The guest agent always targets Linux; both architectures are embedded in the host binary.
 agent:

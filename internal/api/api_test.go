@@ -3,14 +3,20 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -39,6 +45,7 @@ func newTestServer(t *testing.T) (http.Handler, *Server) {
 		Vault:  vault,
 		Bus:    bus,
 		Conns:  &gateway.ConnLog{},
+		Caddy:  testCaddy(),
 		Log:    log,
 		Addr:   "127.0.0.1:7878",
 	}
@@ -46,6 +53,17 @@ func newTestServer(t *testing.T) (http.Handler, *Server) {
 	s.Register(mux)
 	return Guard(mux), s
 }
+
+// Caddy's state is global, so the tests share an engine. Checking a Caddyfile never dials
+// or writes to the engine's directory.
+var testCaddy = sync.OnceValue(func() *caddyrule.Engine {
+	return &caddyrule.Engine{
+		Dir: filepath.Join(os.TempDir(), "sandbox-studio-api-test-caddy"),
+		Dial: func(context.Context, string, string) (net.Conn, error) {
+			return nil, errors.New("tests don't connect")
+		},
+	}
+})
 
 func do(h http.Handler, method, url, body string, header ...string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, url, strings.NewReader(body))

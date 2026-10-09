@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/textproto"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -63,7 +65,7 @@ func (s *Server) checkEnvironment(ctx context.Context, env string) error {
 type RuleInput struct {
 	Host      string          `json:"host" minLength:"1" doc:"example.com, *.example.com (includes example.com), or an IP address"`
 	Ports     []int           `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
-	Action    string          `json:"action" enum:"allow,proxy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers"`
+	Action    string          `json:"action" enum:"allow,proxy,caddy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile"`
 	Config    RuleConfigInput `json:"config,omitempty"`
 	SandboxID string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
 	Note      string          `json:"note,omitempty" maxLength:"500"`
@@ -71,7 +73,8 @@ type RuleInput struct {
 
 // RuleConfigInput is the editable part of a rule's config.
 type RuleConfigInput struct {
-	Headers map[string]string `json:"headers,omitempty" maxProperties:"32" doc:"proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to."`
+	Headers   map[string]string `json:"headers,omitempty" maxProperties:"32" doc:"proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to."`
+	Caddyfile string            `json:"caddyfile,omitempty" maxLength:"32768" doc:"caddy rules only: the routes of a Caddy site, in Caddyfile syntax, that handle the requests. reverse_proxy may send secrets upstream in header_up as {secret.NAME}, over HTTPS to hosts the secret is bound to."`
 }
 
 // headersNotSet are managed by the HTTP machinery or describe the connection, not the
@@ -83,6 +86,9 @@ var headersNotSet = []string{
 
 // ruleConfigFrom validates the config of a rule with action in environment env.
 func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in RuleConfigInput) (store.RuleConfig, error) {
+	if action == store.ActionCaddy || in.Caddyfile != "" {
+		return s.caddyConfigFrom(ctx, env, action, in)
+	}
 	if len(in.Headers) == 0 {
 		return store.RuleConfig{}, nil
 	}
@@ -119,6 +125,41 @@ func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in Rule
 }
 
 // ruleFrom validates in and returns the rule it describes in environment env.
+// caddyConfigFrom validates the config of a caddy rule: a Caddyfile that Caddy accepts and
+// only sends secrets of the environment to hosts they are bound to.
+func (s *Server) caddyConfigFrom(ctx context.Context, env, action string, in RuleConfigInput) (store.RuleConfig, error) {
+	switch {
+	case action != store.ActionCaddy:
+		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only caddy rules have a Caddyfile")
+	case len(in.Headers) > 0:
+		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules set headers; a Caddyfile sets them with header_up")
+	case strings.TrimSpace(in.Caddyfile) == "":
+		return store.RuleConfig{}, huma.Error422UnprocessableEntity("caddy rules need a Caddyfile")
+	case s.Caddy == nil:
+		return store.RuleConfig{}, huma.Error422UnprocessableEntity("caddy rules are not available")
+	}
+	compiled, err := s.Caddy.Check(in.Caddyfile)
+	if err != nil {
+		return store.RuleConfig{}, huma.Error422UnprocessableEntity("Caddyfile: " + err.Error())
+	}
+	secrets, err := s.Store.Secrets(ctx, env)
+	if err != nil {
+		return store.RuleConfig{}, apiError(err)
+	}
+	for _, name := range slices.Sorted(maps.Keys(compiled.Secrets)) {
+		i := slices.IndexFunc(secrets, func(s store.Secret) bool { return s.Name == name })
+		if i < 0 {
+			return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("the Caddyfile refers to {secret.%s}, but this environment has no secret %s", name, name))
+		}
+		for _, host := range compiled.Secrets[name] {
+			if !slices.ContainsFunc(secrets[i].Hosts, func(p string) bool { return policy.Covers(p, host) }) {
+				return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("the Caddyfile sends {secret.%s} to %s, but the secret is not bound to %s", name, host, host))
+			}
+		}
+	}
+	return store.RuleConfig{Caddyfile: in.Caddyfile}, nil
+}
+
 func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.Rule, error) {
 	host, err := policy.ValidPattern(in.Host)
 	if err != nil {

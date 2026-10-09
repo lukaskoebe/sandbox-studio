@@ -16,6 +16,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -34,6 +35,7 @@ type Server struct {
 	Vault     *secrets.Vault
 	Bus       *events.Bus
 	Conns     *gateway.ConnLog
+	Caddy     *caddyrule.Engine // checks Caddyfiles; without it, caddy rules are refused
 	Log       *slog.Logger
 	Addr      string // the address Studio listens on, used to build preview URLs
 }
