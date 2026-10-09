@@ -452,6 +452,22 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   successful retry and its approval, cache, and fresh-instance checks remain valid; they do not
   establish reliable export. Network-install export transport qualification remains unresolved.
 
+  Follow-up probes separate transport symptoms from the export failure. The earlier uncapped
+  raw-vsock/yamux probe failed with runtime `BufDescTooSmall`; this is evidence about that
+  probe, not the template-export cause. The full template-worker run with 16 KiB writes also
+  failed at EOF with a guest write timeout and remains unresolved.
+
+  In the earlier uncapped diagnostic, an 8-second guest stack capture showed a raw-vsock
+  `Write` call length of 32,728 bytes; a separate 15-second host stack showed 204 bytes left
+  in a yamux DATA frame. These do not establish an 8-second block or place those 204 bytes in
+  the raw `Write`. The later capped two-phase bulk probe failed too, but it changed both write
+  cap and ACK order from the ACK-after-FIN baseline, so it does not isolate a cap effect. See
+  the [vsock bulk probe record](spikes/vsock-bulk/README.md) and the
+  [template worker record](spikes/template-jobs/README.md). Production transport is unchanged.
+  Focused and full Go race tests and `go vet` passed, but
+  the diagnostic transfer failures are not acceptance passes. Owned VM cleanup was verified;
+  three protected VMs remain.
+
   Frontend checks passed; 2026-10-09 desktop/mobile browser probes with mocked build
   requests verified byte-exact BOM/CRLF downloads, invalid-file draft retention, pending
   guards, 422 draft retention, and submitted-job source download. No live-worker UI build

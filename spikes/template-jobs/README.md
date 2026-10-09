@@ -83,6 +83,33 @@ the failure and did not establish a fix. The captured kernel tail contains no OO
 entry, but does not prove the absence of OOM. The earlier pass remains valid, but does not
 establish reliable export.
 
+## Follow-up transport probes — 2026-10-09
+
+An unfrozen 128 MiB raw-vsock/yamux probe failed in both modes: raw delivered 0 bytes to the
+host after the guest sent 262,112 bytes, yamux delivered 12 payload bytes, and runtime logs
+reported `BufDescTooSmall`. This demonstrates a lower-transport failure in that large-call
+probe, not the full template-export cause. Evidence: `/tmp/studio-m3-next/vsock-bulk-live.log`
+and `/tmp/studio-m3-next/vsock-bulk-runtime.log`.
+
+The earlier uncapped diagnostic had separate stack captures. At the 8-second guest capture, a
+raw-vsock `Write` call length was 32,728 bytes; this does not show that the call blocked for
+8 seconds. At the 15-second host capture, a yamux DATA frame had 204 bytes remaining; those
+bytes were not remaining in the raw guest `Write`. These captures are from the uncapped
+diagnostic, not the subsequent 16 KiB cap run.
+
+The separate full-worker export with raw writes capped at 16 KiB still ended with host EOF at
+37.788s and a guest write timeout. Its 5,364-byte runtime log capture had no `WARN`,
+`ERROR`, or `BufDescTooSmall` entries. Evidence:
+`/tmp/studio-m3-next/network-chunks-runtime-live.log` and
+`/tmp/studio-m3-next/network-chunks-runtime.log`.
+
+The later capped two-phase bulk diagnostic failed in both raw and yamux modes. It changes both
+the write cap and ACK order from the earlier ACK-after-FIN baseline, so it does not isolate a
+cap effect; detailed counts and logs are in the [vsock bulk probe record](../vsock-bulk/README.md).
+This is separate from the full template-worker 16 KiB cap failure above, which remains
+unresolved. Production transport is unchanged. The private probe VMs were removed, and no
+existing user VM was targeted.
+
 ```sh
 set -eu
 agent_tmpdir="$(mktemp -d)"
