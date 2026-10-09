@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { TemplateResources } from "@/components/template-resources"
 import { $api, errorMessage } from "@/lib/api/client"
 
 const namePattern = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/
@@ -129,38 +130,7 @@ export function CreateTemplateSandboxDialog({
             </div>
           ) : (
             <>
-              <section
-                className="rounded-md border p-3"
-                aria-label="Template resources"
-              >
-                <h3 className="mb-2 font-medium">Template resources</h3>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <div>
-                    <dt className="text-muted-foreground">CPU</dt>
-                    <dd>
-                      {template.data.resources.cpus}{" "}
-                      {plural(template.data.resources.cpus, "CPU")}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Memory</dt>
-                    <dd>
-                      {formatMiB(template.data.resources.memoryMiB)}
-                      {template.data.resources.maxMemoryMiB !==
-                        template.data.resources.memoryMiB &&
-                        ` (up to ${formatMiB(template.data.resources.maxMemoryMiB)})`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Workspace disk</dt>
-                    <dd>{formatMiB(template.data.resources.workspaceMiB)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Docker disk</dt>
-                    <dd>{formatMiB(template.data.resources.dockerMiB)}</dd>
-                  </div>
-                </dl>
-              </section>
+              <TemplateResources resources={template.data.resources} />
 
               <Field data-invalid={invalid || undefined}>
                 <FieldLabel htmlFor="template-sandbox-name">Name</FieldLabel>
@@ -222,12 +192,4 @@ export function CreateTemplateSandboxDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-function plural(count: number, word: string) {
-  return count === 1 ? word : `${word}s`
-}
-
-function formatMiB(mib: number) {
-  return mib % 1024 === 0 ? `${mib / 1024} GiB` : `${mib} MiB`
 }
