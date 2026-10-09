@@ -163,23 +163,32 @@ type Sandbox struct {
 	WorkspaceMiB  int       `json:"workspaceMiB"`
 	DockerMiB     int       `json:"dockerMiB"`
 	CreatedAt     time.Time `json:"createdAt"`
+	DNSPort       int       `json:"-"` // loopback port of the sandbox's Studio resolver
 }
 
-const sandboxCols = "id, environment_id, name, generation, cpus, memory_mib, workspace_mib, docker_mib, created_at"
+const sandboxCols = "id, environment_id, name, generation, cpus, memory_mib, workspace_mib, docker_mib, created_at, dns_port"
+
+// firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
+const firstDNSPort = 17100
 
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created int64
-	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created)
+	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort)
 	sb.CreatedAt = time.Unix(created, 0)
 	return sb, err
 }
 
-// CreateSandbox inserts sb, assigning its ID, generation and creation time.
+// CreateSandbox inserts sb, assigning its ID, generation, DNS port and creation time.
 func (s *Store) CreateSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) {
 	sb.ID, sb.Generation, sb.CreatedAt = NewID(), 1, time.Unix(now(), 0)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO sandboxes ("+sandboxCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		sb.ID, sb.EnvironmentID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix())
+	port, err := s.freeDNSPort(ctx)
+	if err != nil {
+		return sb, err
+	}
+	sb.DNSPort = port
+	_, err = s.db.ExecContext(ctx, "INSERT INTO sandboxes ("+sandboxCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		sb.ID, sb.EnvironmentID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}
@@ -220,6 +229,37 @@ func (s *Store) AllSandboxes(ctx context.Context) ([]Sandbox, error) {
 		out = append(out, sb)
 	}
 	return out, rows.Err()
+}
+
+func (s *Store) freeDNSPort(ctx context.Context) (int, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT dns_port FROM sandboxes")
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	taken := map[int]bool{}
+	for rows.Next() {
+		var p int
+		if err := rows.Scan(&p); err != nil {
+			return 0, err
+		}
+		taken[p] = true
+	}
+	port := firstDNSPort
+	for taken[port] {
+		port++
+	}
+	return port, rows.Err()
+}
+
+// LookupSandbox finds a sandbox in any environment. Only the gateway uses it, to identify
+// a sandbox that has already authenticated with its own credentials.
+func (s *Store) LookupSandbox(ctx context.Context, id string) (Sandbox, error) {
+	sb, err := scanSandbox(s.db.QueryRowContext(ctx, "SELECT "+sandboxCols+" FROM sandboxes WHERE id = ?", id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return sb, ErrNotFound
+	}
+	return sb, err
 }
 
 // Sandbox returns one sandbox of an environment.
