@@ -3,15 +3,101 @@
 package guest
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
+
+func TestReadSupervisorPIDRequiresCompleteRecord(t *testing.T) {
+	pid, ready, err := readSupervisorPID(bytes.NewReader([]byte("123")))
+	if err != nil || ready {
+		t.Fatalf("partial PID record = (%d, %v, %v); want pending", pid, ready, err)
+	}
+
+	pid, ready, err = readSupervisorPID(bytes.NewReader([]byte("123\n")))
+	if err != nil || !ready || pid != 123 {
+		t.Fatalf("complete PID record = (%d, %v, %v); want (123, true, nil)", pid, ready, err)
+	}
+}
+
+func lockedSupervisorFile(t *testing.T) (*os.File, *os.File) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "supervisor.lock")
+	owner, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Flock(int(owner.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		owner.Close()
+		t.Fatal(err)
+	}
+	reader, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		owner.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		reader.Close()
+		owner.Close()
+	})
+	return owner, reader
+}
+
+func TestShutdownSupervisorWaitsForPIDPublication(t *testing.T) {
+	owner, reader := lockedSupervisorFile(t)
+	publishErr := make(chan error, 1)
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_, err := owner.WriteAt([]byte("4321\n"), 0)
+		publishErr <- err
+	}()
+
+	var signaledPID int
+	err := shutdownSupervisor(reader, time.Second, func(pid int) error {
+		signaledPID = pid
+		return syscall.Flock(int(owner.Fd()), syscall.LOCK_UN)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-publishErr; err != nil {
+		t.Fatal(err)
+	}
+	if signaledPID != 4321 {
+		t.Fatalf("signaled PID = %d; want 4321", signaledPID)
+	}
+}
+
+func TestShutdownSupervisorReturnsWhenLockReleasesWithoutPID(t *testing.T) {
+	owner, reader := lockedSupervisorFile(t)
+	releaseErr := make(chan error, 1)
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		releaseErr <- syscall.Flock(int(owner.Fd()), syscall.LOCK_UN)
+	}()
+
+	signaled := false
+	err := shutdownSupervisor(reader, time.Second, func(int) error {
+		signaled = true
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := <-releaseErr; err != nil {
+		t.Fatal(err)
+	}
+	if signaled {
+		t.Fatal("signal callback ran without a published PID")
+	}
+}
 
 func TestServiceRestartsAfterExit(t *testing.T) {
 	dir := t.TempDir()

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -101,9 +102,25 @@ func TestCheckEgress(t *testing.T) {
 		t.Fatalf("Create's configuration refused: %v", err)
 	}
 	for name, edit := range map[string][2]string{
-		"no network":       {`"network":{`, `"network_gone":{`},
-		"default allow":    {`"default_egress":"deny"`, `"default_egress":"allow"`},
-		"public udp":       {`"protocols":["tcp"],"ports":[]`, `"protocols":["tcp","udp"],"ports":[]`},
+		"no network":        {`"network":{`, `"network_gone":{`},
+		"default allow":     {`"default_egress":"deny"`, `"default_egress":"allow"`},
+		"public udp":        {`"protocols":["tcp"],"ports":[]`, `"protocols":["tcp","udp"],"ports":[]`},
+		"legacy public udp": {`{"group":"public"},"protocols":["tcp"]`, `{"group":"public"},"protocol":"udp","protocols":["tcp"]`},
+		"missing DNS allowance": {
+			`{"direction":"egress","destination":{"group":"host"},"protocols":["udp","tcp"],"ports":[{"start":53,"end":53}],"action":"allow"},`,
+			``,
+		},
+		"missing public TCP allowance": {
+			`,
+  {"direction":"egress","destination":{"group":"public"},"protocols":["tcp"],"ports":[],"action":"allow"}`,
+			``,
+		},
+		"empty rules": {
+			`"rules":[
+  {"direction":"egress","destination":{"group":"host"},"protocols":["udp","tcp"],"ports":[{"start":53,"end":53}],"action":"allow"},
+  {"direction":"egress","destination":{"group":"public"},"protocols":["tcp"],"ports":[],"action":"allow"}]`,
+			`"rules":[]`,
+		},
 		"private tcp":      {`{"group":"public"}`, `{"group":"private"}`},
 		"no resolver":      {`"dns":{`, `"dns_gone":{`},
 		"other resolver":   {`127.0.0.1:17102`, `127.0.0.1:17103`},
@@ -118,7 +135,11 @@ func TestCheckEgress(t *testing.T) {
 		if !strings.Contains(storedConfig, edit[0]) {
 			t.Fatalf("%s: the fixture has no %q", name, edit[0])
 		}
-		if err := checkEgress(strings.Replace(storedConfig, edit[0], edit[1], 1), egress); err == nil {
+		config := strings.Replace(storedConfig, edit[0], edit[1], 1)
+		if !json.Valid([]byte(config)) {
+			t.Fatalf("%s: generated invalid JSON: %s", name, config)
+		}
+		if err := checkEgress(config, egress); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}

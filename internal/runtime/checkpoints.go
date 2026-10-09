@@ -330,7 +330,9 @@ func checkEgress(configJSON string, egress Egress) error {
 					Destination struct {
 						Group string `json:"group"`
 					} `json:"destination"`
+					Protocol  string   `json:"protocol"`
 					Protocols []string `json:"protocols"`
+					Port      string   `json:"port"`
 					Ports     []struct {
 						Start int `json:"start"`
 						End   int `json:"end"`
@@ -362,16 +364,33 @@ func checkEgress(configJSON string, egress Egress) error {
 		return errors.New("the sandbox lost its network policy")
 	}
 	// Only the two allowances Create makes: DNS to the host, which lands on the sandbox's
-	// resolver, and TCP to public addresses, which the proxy carries to the gateway.
+	// resolver, and TCP to public addresses, which the proxy carries to the gateway. The
+	// stored ConfigJSON shape uses protocols/ports arrays; reject legacy singular fields too,
+	// since the SDK accepts them as additional values on FFI input.
+	var hasDNS, hasPublicTCP bool
 	for _, rule := range n.Policy.Rules {
-		if rule.Action != string(msb.PolicyActionAllow) || rule.Direction == string(msb.PolicyDirectionIngress) {
+		if rule.Action != string(msb.PolicyActionAllow) {
 			continue
 		}
-		dns := rule.Destination.Group == "host" && len(rule.Ports) == 1 && rule.Ports[0].Start == 53 && rule.Ports[0].End == 53
-		publicTCP := rule.Destination.Group == "public" && slices.Equal(rule.Protocols, []string{"tcp"})
+		if rule.Direction == string(msb.PolicyDirectionIngress) {
+			continue
+		}
+		if rule.Direction != string(msb.PolicyDirectionEgress) || rule.Protocol != "" || rule.Port != "" {
+			return errors.New("the sandbox's network policy allows more than Studio's")
+		}
+		dns := rule.Destination.Group == "host" &&
+			slices.Equal(rule.Protocols, []string{"udp", "tcp"}) &&
+			len(rule.Ports) == 1 && rule.Ports[0].Start == 53 && rule.Ports[0].End == 53
+		publicTCP := rule.Destination.Group == "public" &&
+			slices.Equal(rule.Protocols, []string{"tcp"}) && len(rule.Ports) == 0
 		if !dns && !publicTCP {
 			return errors.New("the sandbox's network policy allows more than Studio's")
 		}
+		hasDNS = hasDNS || dns
+		hasPublicTCP = hasPublicTCP || publicTCP
+	}
+	if !hasDNS || !hasPublicTCP {
+		return errors.New("the sandbox lost a required egress allowance")
 	}
 	switch {
 	case n.DNS == nil || !slices.Equal(n.DNS.Nameservers, []string{egress.Nameserver}):

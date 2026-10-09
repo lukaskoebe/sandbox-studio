@@ -25,7 +25,9 @@ func boot() error {
 	return guest.Boot(self)
 }
 
-func shutdown() error { return guest.Shutdown(25 * time.Second) }
+const shutdownTimeout = 65 * time.Second // three 20-second service stops plus the guest margin
+
+func shutdown() error { return guest.Shutdown(shutdownTimeout) }
 
 // supervise runs the supervisor boot started; it inherits the supervisor lock as fd 3.
 func supervise(ctx context.Context, log *slog.Logger) error {

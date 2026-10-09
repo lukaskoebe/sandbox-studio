@@ -56,6 +56,10 @@ type Egress struct {
 // Runtime creates and controls sandbox VMs.
 type Runtime struct{ opts Options }
 
+// guestShutdownExecTimeout allows the guest's three sequential 20-second service-stop
+// windows, its 5-second margin, and time for msb to start and return the command.
+const guestShutdownExecTimeout = 70 * time.Second
+
 // Ensure installs the msb runtime if needed. It is idempotent.
 func Ensure(ctx context.Context) error {
 	_, err := msb.EnsureRuntime(ctx, msb.RuntimeConfig{}, msb.InstallOptions{})
@@ -145,14 +149,37 @@ func (r *Runtime) stop(ctx context.Context, name string, graceful bool) error {
 	if s == StatusStopped || s == StatusCrashed || s == StatusCreated {
 		return nil
 	}
+	var shutdownErr error
 	if graceful && s == StatusRunning {
-		// Best effort: when the guest can't stop its services, the VM still stops.
-		if sb, err := h.Connect(ctx); err == nil {
-			sb.Exec(ctx, agentPath, []string{"shutdown"}, msb.WithExecUser("root"), msb.WithExecTimeout(35*time.Second))
-			sb.Detach(ctx)
-		}
+		// Best effort: report a graceful shutdown failure, but still stop the VM below.
+		shutdownErr = shutdownGuest(ctx, h)
 	}
-	return h.Stop(ctx, msb.WithStopTimeout(30*time.Second))
+	stopErr := h.Stop(ctx, msb.WithStopTimeout(30*time.Second))
+	return errors.Join(shutdownErr, stopErr)
+}
+
+func shutdownGuest(ctx context.Context, h *msb.SandboxHandle) error {
+	sb, err := h.Connect(ctx)
+	if err != nil {
+		return fmt.Errorf("connect for graceful guest shutdown: %w", err)
+	}
+	if sb == nil {
+		return errors.New("connect for graceful guest shutdown: SDK returned an empty sandbox")
+	}
+	out, execErr := sb.Exec(ctx, agentPath, []string{"shutdown"},
+		msb.WithExecUser("root"), msb.WithExecTimeout(guestShutdownExecTimeout))
+	detachErr := sb.Detach(ctx)
+	if execErr != nil {
+		execErr = fmt.Errorf("run graceful guest shutdown: %w", execErr)
+	} else if out == nil {
+		execErr = errors.New("run graceful guest shutdown: SDK returned no command result")
+	} else if !out.Success() {
+		execErr = fmt.Errorf("run graceful guest shutdown: exit code %d: %s", out.ExitCode(), strings.TrimSpace(out.Stderr()))
+	}
+	if detachErr != nil {
+		detachErr = fmt.Errorf("detach after graceful guest shutdown: %w", detachErr)
+	}
+	return errors.Join(execErr, detachErr)
 }
 
 // Remove stops and deletes a sandbox and its owned disks. Missing sandboxes are fine.

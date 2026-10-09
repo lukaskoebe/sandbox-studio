@@ -30,7 +30,9 @@ const (
 	serviceLogMax  = 8 << 20
 	containerdSock = "/run/containerd/containerd.sock"
 	// stopTimeout leaves dockerd the time it needs to stop containers (15 s by default).
-	stopTimeout = 20 * time.Second
+	stopTimeout     = 20 * time.Second
+	pidPollInterval = 100 * time.Millisecond
+	pidRecordMax    = 32
 )
 
 // serviceEnv is the environment of every service. /usr/local/bin comes first so that
@@ -101,11 +103,20 @@ func Shutdown(timeout time.Duration) error {
 		return err
 	}
 	defer lock.Close()
-	pidText, err := io.ReadAll(lock)
-	if err != nil {
+	return shutdownSupervisor(lock, timeout, func(pid int) error {
+		err := syscall.Kill(pid, syscall.SIGTERM)
+		if errors.Is(err, syscall.ESRCH) {
+			return nil
+		}
 		return err
-	}
+	})
+}
+
+// shutdownSupervisor polls lock ownership and PID publication together. The supervisor
+// can exit before publishing its PID, in which case acquiring the lock ends shutdown early.
+func shutdownSupervisor(lock *os.File, timeout time.Duration, signal func(int) error) error {
 	deadline := time.Now().Add(timeout)
+	signaled := false
 	for {
 		err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
@@ -114,21 +125,55 @@ func Shutdown(timeout time.Duration) error {
 		if !errors.Is(err, syscall.EWOULDBLOCK) {
 			return fmt.Errorf("lock supervisor: %w", err)
 		}
-		if pidText != nil {
-			pid, err := strconv.Atoi(strings.TrimSpace(string(pidText)))
-			if err != nil || pid <= 1 {
-				return fmt.Errorf("supervisor lock holds no PID: %q", pidText)
+		if !signaled {
+			pid, ready, err := readSupervisorPID(lock)
+			if err != nil {
+				return err
 			}
-			if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
-				return fmt.Errorf("signal supervisor: %w", err)
+			if ready {
+				if signal == nil {
+					return errors.New("signal supervisor: no signal callback")
+				}
+				if err := signal(pid); err != nil {
+					return fmt.Errorf("signal supervisor: %w", err)
+				}
+				signaled = true
 			}
-			pidText = nil
 		}
-		if time.Now().After(deadline) {
-			return errors.New("supervisor did not stop in time")
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			if signaled {
+				return errors.New("supervisor did not stop in time")
+			}
+			return errors.New("supervisor did not publish PID in time")
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(min(pidPollInterval, remaining))
 	}
+}
+
+// readSupervisorPID treats an empty or not-yet-terminated record as pending. Requiring the
+// newline written by Supervise avoids mistaking a partially published PID for a process ID.
+func readSupervisorPID(r io.ReaderAt) (int, bool, error) {
+	var record [pidRecordMax]byte
+	n, err := r.ReadAt(record[:], 0)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return 0, false, err
+	}
+	if n == 0 {
+		return 0, false, nil
+	}
+	if n == len(record) && record[n-1] != '\n' {
+		return 0, false, errors.New("supervisor PID record is too long")
+	}
+	if record[n-1] != '\n' {
+		return 0, false, nil
+	}
+	text := string(record[:n])
+	pid, err := strconv.Atoi(strings.TrimSpace(text))
+	if err != nil || pid <= 1 {
+		return 0, false, fmt.Errorf("supervisor lock holds no PID: %q", text)
+	}
+	return pid, true, nil
 }
 
 // service is a long-running process the supervisor keeps alive.
