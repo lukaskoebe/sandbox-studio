@@ -160,7 +160,7 @@ func checkpointRemovalParent(records []checkpointRecord, group, targetID string)
 	}
 	for _, record := range records {
 		if record.id != targetID && record.parentID == targetID {
-			return "", fmt.Errorf("%w: %q", ErrCheckpointInUse, targetID)
+			return "", ErrCheckpointInUse // The snapshot ID means nothing to the user.
 		}
 	}
 	if !targetFound {

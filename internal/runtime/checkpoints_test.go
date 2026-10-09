@@ -29,8 +29,8 @@ func TestCheckpointRemovalErrorClassifiesChildAddedAfterPreflight(t *testing.T) 
 	if !errors.Is(err, ErrCheckpointInUse) {
 		t.Fatalf("checkpointRemovalError = %v; want ErrCheckpointInUse", err)
 	}
-	if got := err.Error(); got != ErrCheckpointInUse.Error()+": \"older\"" {
-		t.Fatalf("checkpointRemovalError message = %q; want actionable dependency message", got)
+	if got := err.Error(); got != ErrCheckpointInUse.Error() {
+		t.Fatalf("checkpointRemovalError message = %q; want the plain dependency message", got)
 	}
 }
 
