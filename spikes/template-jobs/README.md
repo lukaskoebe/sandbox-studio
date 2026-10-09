@@ -74,41 +74,10 @@ name remains.
 
 The opt-in path preserves the default no-network path and requires explicit
 `-network-installs`. A full Linux amd64 warm-cache retry passed; its apt/mise approvals,
-published layer, cache reuse, and fresh-instance checks are recorded below. Subsequent live
-runs installed tree and Node but failed during export: the host received
-`read export frame: unexpected EOF` after 38.959, 38.287, and 35.802 seconds. Captured guest
-diagnostics identify `write guest export: write export data frame: connection write timeout
-(watchdog cleanup: exit status 1)`. An experimental normalized-tar staging change reproduced
-the failure and did not establish a fix. The captured kernel tail contains no OOM-killer
-entry, but does not prove the absence of OOM. The earlier pass remains valid, but does not
-establish reliable export.
-
-## Follow-up transport probes — 2026-10-09
-
-An unfrozen 128 MiB raw-vsock/yamux probe failed in both modes: raw delivered 0 bytes to the
-host after the guest sent 262,112 bytes, yamux delivered 12 payload bytes, and runtime logs
-reported `BufDescTooSmall`. This demonstrates a lower-transport failure in that large-call
-probe, not the full template-export cause. Evidence: `/tmp/studio-m3-next/vsock-bulk-live.log`
-and `/tmp/studio-m3-next/vsock-bulk-runtime.log`.
-
-The earlier uncapped diagnostic had separate stack captures. At the 8-second guest capture, a
-raw-vsock `Write` call length was 32,728 bytes; this does not show that the call blocked for
-8 seconds. At the 15-second host capture, a yamux DATA frame had 204 bytes remaining; those
-bytes were not remaining in the raw guest `Write`. These captures are from the uncapped
-diagnostic, not the subsequent 16 KiB cap run.
-
-The separate full-worker export with raw writes capped at 16 KiB still ended with host EOF at
-37.788s and a guest write timeout. Its 5,364-byte runtime log capture had no `WARN`,
-`ERROR`, or `BufDescTooSmall` entries. Evidence:
-`/tmp/studio-m3-next/network-chunks-runtime-live.log` and
-`/tmp/studio-m3-next/network-chunks-runtime.log`.
-
-The later capped two-phase bulk diagnostic failed in both raw and yamux modes. It changes both
-the write cap and ACK order from the earlier ACK-after-FIN baseline, so it does not isolate a
-cap effect; detailed counts and logs are in the [vsock bulk probe record](../vsock-bulk/README.md).
-This is separate from the full template-worker 16 KiB cap failure above, which remains
-unresolved. Production transport is unchanged. The private probe VMs were removed, and no
-existing user VM was targeted.
+published layer, cache reuse, and fresh-instance checks are recorded below. Later runs installed tree and Node but failed during export because guest→host bulk data
+over a vsock route stalls on msb 0.7.7 and 0.7.8. The worker now streams `studio-agent
+export-layer` over msb exec instead; this path still needs a live network-install run.
+The driver prints the export stream's byte count and rate.
 
 ```sh
 set -eu
@@ -165,8 +134,8 @@ canonical warm-cache repeat made no build-sandbox attach. A fresh instance ran b
 the current private CA and placeholder, and no gateway TCP connection was observed from it.
 This assertion does not claim that the instance produced no network traffic; DNS forwarding
 via `dnsproxy.SystemUpstreams()` is outside the approval flow and was not qualified. Cleanup
-completed, no new VM names remained, and private state was removed. Later failures are
-described above; the successful run does not establish reliable export.
+completed, no new VM names remained, and private state was removed. Later export
+failures are described above.
 
 There are no wildcard or all-host grants. In this probe, an unlisted outbound TCP destination
 through the gateway fails qualification: its pending approval is not granted, the private
@@ -206,7 +175,7 @@ accepted current CA and placeholder configuration. The second instance inherited
 the first instance's root changes nor its workspace/Docker markers. A live instance pin
 blocked registry deletion, and both instances completed owned cleanup.
 
-Rebase, apt/mise network-install export-transport qualification, cold-cache pulls,
+Rebase, live qualification of the exec export path (including apt/mise network installs), cold-cache pulls,
 macOS and Windows host VM runs, arm64, and the release template base digest pin remain
 open, so M3 is incomplete. UI validation used mocked desktop/mobile workflows and web checks;
 no live-worker UI build or workflow was run. Restore remains blocked by microsandbox

@@ -397,7 +397,8 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   truncated or symlinked ready artifacts return errors and do not silently overwrite the
   ready record; same-size content corruption is left to the OCI client's digest check.
 
-  The Go guest exporter and `Hub.Export` are implemented. Export uses bounded frames with
+  The worker runs `studio-agent export-layer` as root in the build VM over msb exec and
+  streams its stdout into `templateexport.Receive`. Export uses bounded frames with
   an explicit byte count and SHA-256 completion trailer. The host validates and rewrites
   the untrusted tar without extracting it, compresses it to a private temporary artifact,
   and keeps it only after both wire and archive validation succeed. Interrupted and
@@ -409,8 +410,7 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   Normal completion, disconnect, worker death and watchdog timeout must all thaw the root.
   This is filesystem consistency, not an application-level transaction boundary.
 
-  The Go guest exporter and `Hub.Export` are implemented and qualified by a live Linux
-  amd64 source/import roundtrip on microsandbox 0.7.7 and kernel 6.12.111. See the
+  The Go guest exporter was qualified by a live Linux amd64 source/import roundtrip on microsandbox 0.7.7 and kernel 6.12.111. See the
   [layer-export evidence and remaining qualifications](docs/spikes.md#layer-transfer-and-capture-foundations).
   On 2026-10-09, the production worker passed a live Linux amd64 qualification with a
   warm cache, private isolated Store and registry, and a 512 MiB builder. It used no
@@ -444,35 +444,22 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   host keychain. Guest resource, capture-size, and runtime-duration bounds do not qualify
   host-gateway connection or traffic resource limits under adversarial load.
 
-  Later warm-cache runs installed apt `tree` and pinned Node and observed the required
-  approvals, then failed during export with host `read export frame: unexpected EOF` and a
-  captured guest write timeout followed by watchdog cleanup (`exit status 1`). An experimental
-  normalized-tar staging change reproduced the failure and did not establish a fix. The
-  captured kernel tail contains no OOM-killer entry, but is not complete no-OOM evidence. The
-  successful retry and its approval, cache, and fresh-instance checks remain valid; they do not
-  establish reliable export. Network-install export transport qualification remains unresolved.
-
-  Follow-up probes separate transport symptoms from the export failure. The earlier uncapped
-  raw-vsock/yamux probe failed with runtime `BufDescTooSmall`; this is evidence about that
-  probe, not the template-export cause. The full template-worker run with 16 KiB writes also
-  failed at EOF with a guest write timeout and remains unresolved.
-
-  In the earlier uncapped diagnostic, an 8-second guest stack capture showed a raw-vsock
-  `Write` call length of 32,728 bytes; a separate 15-second host stack showed 204 bytes left
-  in a yamux DATA frame. These do not establish an 8-second block or place those 204 bytes in
-  the raw `Write`. The later capped two-phase bulk probe failed too, but it changed both write
-  cap and ACK order from the ACK-after-FIN baseline, so it does not isolate a cap effect. See
-  the [vsock bulk probe record](spikes/vsock-bulk/README.md) and the
-  [template worker record](spikes/template-jobs/README.md). Production transport is unchanged.
-  Focused and full Go race tests and `go vet` passed, but
-  the diagnostic transfer failures are not acceptance passes. Owned VM cleanup was verified;
-  three protected VMs remain.
+  Export transport: guest→host bulk data over a vsock route stalls after roughly
+  128–256 KiB on msb 0.7.7 and 0.7.8 (later network-install exports failed this way), so
+  bulk data goes over msb exec instead, which delivered stdout at about 6.3 MB/s.
+  `runtime.Run` streams a command's stdin and stdout losslessly with backpressure; the
+  export has a 60 s idle timeout and an overall cap allowing the export byte limit at
+  2 MB/s. The vsock channel carries only terminals, port forwards and control requests.
+  Live qualification of the exec export path is still pending (see
+  [spikes/exec-stream](spikes/exec-stream/main.go) and the
+  [worker record](spikes/template-jobs/README.md)).
 
   Frontend checks passed; 2026-10-09 desktop/mobile browser probes with mocked build
   requests verified byte-exact BOM/CRLF downloads, invalid-file draft retention, pending
   guards, 422 draft retention, and submitted-job source download. No live-worker UI build
   or workflow was run. These results do not complete M3. Remaining work includes rebase,
-  apt/mise network-install export-transport qualification, cold-cache pulls, macOS and
+  live qualification of the exec export path including apt/mise network installs,
+  cold-cache pulls, macOS and
   Windows host VM runs, arm64, the release template base digest pin, and
   oversized/backpressured capture qualification. Unsupported overlay features and file
   types remain out of scope. Userspace cannot guarantee automatic recovery if a kernel

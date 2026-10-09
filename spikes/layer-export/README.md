@@ -60,8 +60,8 @@ a private temporary catalog. It reopens that catalog and registry on the same al
 port before the destination pulls. The dev-base cache must already be warm. The source
 VM is removed before the destination starts to fit the memory budget.
 
-On 2026-10-09, this full Go guest-export/`Hub.Export` source/import roundtrip passed on
-Linux amd64, microsandbox 0.7.7 and kernel 6.12.111. Owner SIGKILL after the first data
+On 2026-10-09, this full Go guest-export source/import roundtrip (then over the vsock
+`Hub.Export`, now over msb exec) passed on Linux amd64, microsandbox 0.7.7 and kernel 6.12.111. Owner SIGKILL after the first data
 frame and SIGKILL of the exact freeze watchdog both rejected the transfer without an
 artifact, and source writes resumed after owner death and emergency thaw. The normal
 source/import validation covered regular files, modes, symlinks, hardlinks, whiteouts,
