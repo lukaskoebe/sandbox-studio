@@ -115,7 +115,7 @@ func (h *buildHarness) Run(ctx context.Context, owner runtime.OwnedVM, cmd runti
 	if owner.Labels["studio.build-job"] == "" || cmd.Path == "" {
 		return runtime.RunResult{}, errors.New("command missing ownership or path")
 	}
-	if len(cmd.Args) == 1 && cmd.Args[0] == "export-layer" {
+	if len(cmd.Args) > 0 && cmd.Args[0] == "export-layer" {
 		return h.export(ctx, cmd)
 	}
 	if h.runHook != nil {
@@ -353,7 +353,9 @@ func TestExportStreamsExportLayerThroughReceive(t *testing.T) {
 		t.Fatalf("job %+v", job)
 	}
 	cmd := h.exportCommand
-	if cmd.Path != runtime.AgentPath || cmd.User != "root" || cmd.Stdout == nil || cmd.Stdin != nil || cmd.Timeout != exportTimeout(ocilayer.Limits{}) {
+	timeout := exportTimeout(ocilayer.Limits{})
+	if cmd.Path != runtime.AgentPath || cmd.User != "root" || cmd.Stdout == nil || cmd.Stdin != nil || cmd.Timeout != timeout ||
+		len(cmd.Args) != 2 || cmd.Args[1] != "--max-freeze="+timeout.String() {
 		t.Fatalf("export command = %+v", cmd)
 	}
 	if h.published.Entries != 1 || h.published.UncompressedSize == 0 || h.published.DiffID == "" {
@@ -414,6 +416,9 @@ func TestExportTimeoutAllowsLimitAtMinimumRate(t *testing.T) {
 	}
 	if exportTimeout(ocilayer.Limits{}) < time.Hour {
 		t.Fatal("default export limit timeout is below the minimum rate")
+	}
+	if got := exportTimeout(ocilayer.Limits{MaxInputBytes: 1 << 40}); got != agentproto.ExportMaxFreeze {
+		t.Fatalf("export timeout %s exceeds the guest freeze cap", got)
 	}
 }
 

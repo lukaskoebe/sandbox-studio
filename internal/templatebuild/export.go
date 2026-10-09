@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/ocilayer"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateexport"
@@ -24,18 +25,23 @@ var (
 	errExportTooLong = errors.New("export exceeded its time limit")
 )
 
-// exportCommand streams the guest's framed root-layer export on stdout.
+// exportCommand streams the guest's framed root-layer export on stdout. The
+// guest may hold its root frozen for the whole export.
 func exportCommand(timeout time.Duration) runtime.RunCommand {
-	return runtime.RunCommand{Path: runtime.AgentPath, Args: []string{"export-layer"}, User: "root", Cwd: "/", Timeout: timeout}
+	return runtime.RunCommand{
+		Path: runtime.AgentPath, Args: []string{"export-layer", "--max-freeze=" + timeout.String()},
+		User: "root", Cwd: "/", Timeout: timeout,
+	}
 }
 
-// exportTimeout allows the export byte limit at exportMinRate.
+// exportTimeout allows the export byte limit at exportMinRate, up to the
+// guest's freeze cap.
 func exportTimeout(limits ocilayer.Limits) time.Duration {
 	maxBytes := limits.MaxInputBytes
 	if maxBytes <= 0 {
 		maxBytes = ocilayer.DefaultLimits().MaxInputBytes
 	}
-	return exportStartup + time.Duration(maxBytes/exportMinRate)*time.Second
+	return min(exportStartup+time.Duration(maxBytes/exportMinRate)*time.Second, agentproto.ExportMaxFreeze)
 }
 
 // export runs export-layer in the owned build VM over msb exec and validates

@@ -79,6 +79,7 @@ func (w *fakeWatchdog) wait() error {
 var errWaitForCancel = errors.New("wait for cancellation")
 
 type fakeWatchdogRuntime struct {
+	deadline  time.Time
 	freezeErr error
 	thawErr   error
 	readyErr  error
@@ -107,15 +108,66 @@ func (r *fakeWatchdogRuntime) send(event watchdogEvent) error {
 	return nil
 }
 
-func (r *fakeWatchdogRuntime) waitUntil(time.Time) (string, error) {
+func (r *fakeWatchdogRuntime) waitUntil(deadline time.Time) (string, error) {
+	r.deadline = deadline
 	return r.reason, r.waitErr
+}
+
+func TestWatchdogMachineHoldsFreezeForRequestedLimit(t *testing.T) {
+	start := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	runtime := &fakeWatchdogRuntime{reason: "release"}
+	if err := runWatchdogMachine(runtime, func() time.Time { return start }, 75*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if want := start.Add(75 * time.Minute); !runtime.deadline.Equal(want) {
+		t.Fatalf("freeze deadline = %s, want %s", runtime.deadline, want)
+	}
+}
+
+func TestCheckMaxFreezeDefaultsAndBounds(t *testing.T) {
+	for _, tc := range []struct {
+		in, want time.Duration
+		ok       bool
+	}{
+		{0, DefaultMaxFreeze, true},
+		{90 * time.Minute, 90 * time.Minute, true},
+		{agentproto.ExportMaxFreeze, agentproto.ExportMaxFreeze, true},
+		{agentproto.ExportMaxFreeze + time.Second, 0, false},
+		{-time.Second, 0, false},
+	} {
+		got, err := checkMaxFreeze(tc.in)
+		if (err == nil) != tc.ok || got != tc.want {
+			t.Fatalf("checkMaxFreeze(%s) = %s, %v", tc.in, got, err)
+		}
+	}
+	if err := RunWatchdog("3h"); err == nil {
+		t.Fatal("watchdog accepted a freeze limit above the cap")
+	}
+}
+
+func TestExportPassesFreezeLimitToWatchdog(t *testing.T) {
+	files := testCaptureFiles(t)
+	wd := &fakeWatchdog{}
+	deps := fakeExportDeps(files, wd)
+	var got time.Duration
+	deps.start = func(_, _ *os.File, maxFreeze time.Duration) (watchdog, error) {
+		got = maxFreeze
+		return wd, nil
+	}
+	var stream bytes.Buffer
+	if err := exportWith(context.Background(), &stream, 40*time.Minute, deps); err != nil {
+		t.Fatal(err)
+	}
+	if got != 40*time.Minute {
+		t.Fatalf("watchdog freeze limit = %s", got)
+	}
 }
 
 func TestWatchdogMachineThawsForReleaseCancelDisconnectAndTimeout(t *testing.T) {
 	for _, reason := range []string{"release", "cancel", "owner-gone", "timeout", "signal"} {
 		t.Run(reason, func(t *testing.T) {
 			runtime := &fakeWatchdogRuntime{reason: reason}
-			if err := runWatchdogMachine(runtime, time.Now); err != nil {
+			if err := runWatchdogMachine(runtime, time.Now, DefaultMaxFreeze); err != nil {
 				t.Fatalf("run watchdog state machine: %v", err)
 			}
 			if runtime.freezes != 1 || runtime.thaws != 1 {
@@ -131,7 +183,7 @@ func TestWatchdogMachineThawsForReleaseCancelDisconnectAndTimeout(t *testing.T) 
 func TestWatchdogMachineThawsAfterUncertainFreezeAndFailedReady(t *testing.T) {
 	t.Run("interrupted freeze", func(t *testing.T) {
 		runtime := &fakeWatchdogRuntime{freezeErr: unix.EINTR}
-		if err := runWatchdogMachine(runtime, time.Now); err == nil {
+		if err := runWatchdogMachine(runtime, time.Now, DefaultMaxFreeze); err == nil {
 			t.Fatal("interrupted freeze succeeded")
 		}
 		if runtime.freezes != 1 || runtime.thaws != 1 || len(runtime.events) != 1 || runtime.events[0].Event != "error" {
@@ -141,7 +193,7 @@ func TestWatchdogMachineThawsAfterUncertainFreezeAndFailedReady(t *testing.T) {
 
 	t.Run("ready notification failed", func(t *testing.T) {
 		runtime := &fakeWatchdogRuntime{readyErr: errors.New("parent disconnected")}
-		if err := runWatchdogMachine(runtime, time.Now); err == nil {
+		if err := runWatchdogMachine(runtime, time.Now, DefaultMaxFreeze); err == nil {
 			t.Fatal("failed ready notification succeeded")
 		}
 		if runtime.freezes != 1 || runtime.thaws != 1 {
@@ -173,7 +225,7 @@ func TestExportSuccessWaitsForNormalThawAck(t *testing.T) {
 		return nil
 	}
 	wd.releaseErr = nil
-	if err := exportWith(context.Background(), &stream, deps); err != nil {
+	if err := exportWith(context.Background(), &stream, 0, deps); err != nil {
 		t.Fatalf("export: %v", err)
 	}
 	if !writerFinished || !wd.released {
@@ -200,9 +252,9 @@ func TestExportPreflightRefusalIsFramed(t *testing.T) {
 			case "discovery":
 				deps.discover = func() (*captureFiles, error) { return nil, cause }
 			case "runner":
-				deps.start = func(*os.File, *os.File) (watchdog, error) { return nil, cause }
+				deps.start = func(*os.File, *os.File, time.Duration) (watchdog, error) { return nil, cause }
 			}
-			err := exportWith(context.Background(), &stream, deps)
+			err := exportWith(context.Background(), &stream, 0, deps)
 			if err == nil || !strings.Contains(err.Error(), cause.Error()) {
 				t.Fatalf("export error = %v", err)
 			}
@@ -223,7 +275,7 @@ func TestExportReadinessFailureIsFramedAndCleansWatchdog(t *testing.T) {
 		writerCalled = true
 		return nil
 	}
-	err := exportWith(context.Background(), &stream, deps)
+	err := exportWith(context.Background(), &stream, 0, deps)
 	if err == nil || !strings.Contains(err.Error(), "malformed ready event") {
 		t.Fatalf("export error = %v", err)
 	}
@@ -250,7 +302,7 @@ func TestExportDoesNotCompleteAfterTimeoutOrMalformedThawAck(t *testing.T) {
 				_, err := io.WriteString(dst, "raw tar bytes")
 				return err
 			}
-			err := exportWith(context.Background(), &stream, deps)
+			err := exportWith(context.Background(), &stream, 0, deps)
 			if err == nil {
 				t.Fatal("export succeeded without verified normal thaw")
 			}
@@ -281,7 +333,7 @@ func TestExportCancelClosesPipeAndWatchdogControl(t *testing.T) {
 		return err
 	}
 	done := make(chan error, 1)
-	go func() { done <- exportWith(ctx, &stream, deps) }()
+	go func() { done <- exportWith(ctx, &stream, 0, deps) }()
 	select {
 	case <-wd.releaseStarted:
 	case <-time.After(time.Second):
@@ -410,7 +462,7 @@ func fakeExportDeps(files *captureFiles, wd *fakeWatchdog) exportDeps {
 	return exportDeps{
 		lock:     func(context.Context) (*os.File, error) { return os.Open(os.DevNull) },
 		discover: func() (*captureFiles, error) { return files, nil },
-		start:    func(*os.File, *os.File) (watchdog, error) { return wd, nil },
+		start:    func(*os.File, *os.File, time.Duration) (watchdog, error) { return wd, nil },
 		writeLayer: func(_ context.Context, dst io.Writer, _ *os.File, _ ocilayer.Limits) error {
 			_, err := io.WriteString(dst, "raw tar")
 			return err

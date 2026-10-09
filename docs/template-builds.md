@@ -153,8 +153,10 @@ After the commands succeed, the worker runs `studio-agent export-layer` as root 
 exec and streams its stdout into the untrusted-input validator, which normalizes and
 compresses the root layer. Guest→host bulk data over a vsock route stalls on msb 0.7.7 and
 0.7.8, so exports never use the agent channel. The export fails if no bytes arrive for
-60 s or if it runs longer than the export byte limit allows at 2 MB/s; its stderr goes to
-the build log. The worker then composes and
+60 s or if it runs longer than the export byte limit allows at 2 MB/s (at most 2 h); its
+stderr goes to the build log. The guest keeps its root filesystem frozen for the export and
+receives the same time limit as `--max-freeze` (60 s by default). Its watchdog thaws at that
+limit, or earlier if `export-layer` exits or dies, including after its stdout breaks. The worker then composes and
 publishes the derived image through the persistent authenticated registry, and marks the
 job ready. Cleanup can finish after that status transition.
 

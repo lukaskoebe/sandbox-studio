@@ -11,12 +11,18 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
 // Export framing is what `studio-agent export-layer` writes to stdout, which
 // Studio reads over msb exec. It uses the same
 // [type u8][length u32 BE][payload] layout as WriteFrame, with smaller limits.
+// ExportMaxFreeze bounds how long `studio-agent export-layer --max-freeze` may
+// hold the guest root filesystem frozen. The host's export time limit uses the
+// same bound.
+const ExportMaxFreeze = 2 * time.Hour
+
 const (
 	// ExportVersion is the version in the completion frame.
 	ExportVersion = 1

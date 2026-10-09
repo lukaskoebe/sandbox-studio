@@ -2084,7 +2084,7 @@ type probeCredential struct {
 type probeRunner struct{ *runtime.Runtime }
 
 func (r probeRunner) Run(ctx context.Context, owned runtime.OwnedVM, command runtime.RunCommand, output chan<- runtime.RunOutput) (runtime.RunResult, error) {
-	if command.Stdout == nil || len(command.Args) != 1 || command.Args[0] != "export-layer" {
+	if command.Stdout == nil || len(command.Args) == 0 || command.Args[0] != "export-layer" {
 		return r.Runtime.Run(ctx, owned, command, output)
 	}
 	counter := &countingWriter{w: command.Stdout}

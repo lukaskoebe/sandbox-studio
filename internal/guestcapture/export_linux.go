@@ -70,7 +70,7 @@ type watchdog interface {
 type exportDeps struct {
 	lock       func(context.Context) (*os.File, error)
 	discover   func() (*captureFiles, error)
-	start      func(*os.File, *os.File) (watchdog, error)
+	start      func(*os.File, *os.File, time.Duration) (watchdog, error)
 	writeLayer func(context.Context, io.Writer, *os.File, ocilayer.Limits) error
 }
 
@@ -82,12 +82,13 @@ var defaultExportDeps = exportDeps{
 }
 
 // Export sends a complete agentproto export stream containing a normalized
-// tar archive of the guest's managed overlay upper directory.
-func Export(ctx context.Context, dst io.Writer) error {
-	return exportWith(ctx, dst, defaultExportDeps)
+// tar archive of the guest's managed overlay upper directory. The root stays
+// frozen for at most maxFreeze (DefaultMaxFreeze if zero).
+func Export(ctx context.Context, dst io.Writer, maxFreeze time.Duration) error {
+	return exportWith(ctx, dst, maxFreeze, defaultExportDeps)
 }
 
-func exportWith(ctx context.Context, dst io.Writer, deps exportDeps) error {
+func exportWith(ctx context.Context, dst io.Writer, maxFreeze time.Duration, deps exportDeps) error {
 	if ctx == nil {
 		return errors.New("nil capture context")
 	}
@@ -128,7 +129,7 @@ func exportWith(ctx context.Context, dst io.Writer, deps exportDeps) error {
 	}
 	defer files.close()
 
-	wd, err := deps.start(files.root, lockFile)
+	wd, err := deps.start(files.root, lockFile, maxFreeze)
 	if err != nil {
 		return framePreflightError(ctx, dst, fmt.Errorf("start freeze watchdog: %w", err))
 	}

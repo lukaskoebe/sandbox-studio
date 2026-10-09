@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -29,14 +30,21 @@ func main() {
 			os.Exit(1)
 		}
 	case "export-layer":
+		flags := flag.NewFlagSet("export-layer", flag.ExitOnError)
+		maxFreeze := flags.Duration("max-freeze", 0, "longest time to hold the root filesystem frozen (default 60s)")
+		_ = flags.Parse(os.Args[2:])
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		if err := exportLayer(ctx, os.Stdout); err != nil {
+		if err := exportLayer(ctx, os.Stdout, *maxFreeze); err != nil {
 			fmt.Fprintf(os.Stderr, "studio-agent: export-layer: %v\n", err)
 			os.Exit(1)
 		}
 	case "__capture-watchdog":
-		if err := captureWatchdog(); err != nil {
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "studio-agent: capture watchdog: missing freeze limit")
+			os.Exit(2)
+		}
+		if err := captureWatchdog(os.Args[2]); err != nil {
 			fmt.Fprintf(os.Stderr, "studio-agent: capture watchdog: %v\n", err)
 			os.Exit(1)
 		}
