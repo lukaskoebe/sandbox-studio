@@ -154,7 +154,7 @@ func (r *Registry) Resolve(ctx context.Context, env, id string) (Reference, erro
 	return Reference{}, errors.New("template has no manifest")
 }
 
-// StagingDir is a private receive directory. Pass it to Hub.Export. Publish takes
+// StagingDir is a private receive directory. Pass it to templateexport.Receive. Publish takes
 // ownership only of artifacts created here; abandoned receives are removed at startup.
 func (r *Registry) StagingDir(ctx context.Context, env string) (string, error) {
 	if !validID(env) {

@@ -149,7 +149,14 @@ commands run in order:
 2. mise installs as `agent`, using the pinned tools in `/home/agent`.
 3. The user `setup` command as `agent`, with `/home/agent` as its working directory.
 
-After the commands succeed, the worker exports and validates the root layer, composes and
+After the commands succeed, the worker runs `studio-agent export-layer` as root over msb
+exec and streams its stdout into the untrusted-input validator, which normalizes and
+compresses the root layer. Guest→host bulk data over a vsock route stalls on msb 0.7.7 and
+0.7.8, so exports never use the agent channel. The export fails if no bytes arrive for
+60 s or if it runs longer than the export byte limit allows at 2 MB/s (at most 2 h); its
+stderr goes to the build log. The guest keeps its root filesystem frozen for the export and
+receives the same time limit as `--max-freeze` (60 s by default). Its watchdog thaws at that
+limit, or earlier if `export-layer` exits or dies, including after its stdout breaks. The worker then composes and
 publishes the derived image through the persistent authenticated registry, and marks the
 job ready. Cleanup can finish after that status transition.
 
@@ -207,7 +214,8 @@ UI validation used mocked desktop/mobile workflows and web checks; no live-worke
 build or workflow was run. Earlier Linux amd64 registry and exporter/source-import
 qualifications remain in the [M3 spike report](spikes.md#persistent-registry-qualification-2026-10-09)
 and its [layer-transfer results](spikes.md#layer-transfer-and-capture-foundations).
-M3 remains incomplete: rebase, apt/mise network installs, cold-cache base pulls, macOS and
+M3 remains incomplete: rebase, live qualification of the exec export path including apt/mise
+network installs, cold-cache base pulls, macOS and
 Windows host VM runs, arm64, the release template base digest pin, and oversized/backpressured
 capture qualification remain open. Restore remains blocked by microsandbox
 [#1736](https://github.com/superradcompany/microsandbox/issues/1736).

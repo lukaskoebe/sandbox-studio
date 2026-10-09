@@ -111,7 +111,7 @@ func run(ctx context.Context, agentPath, scratch string) (retErr error) {
 	}
 	hub.OnConnect = mgr.Configure
 	worker, err := templatebuild.New(templatebuild.Options{
-		Store: st, Runtime: rt, Guests: mgr, Exporter: hub, Registry: registry, Bus: &events.Bus{}, Log: log,
+		Store: st, Runtime: rt, Guests: mgr, Registry: registry, Bus: &events.Bus{}, Log: log,
 	})
 	if err != nil {
 		return err

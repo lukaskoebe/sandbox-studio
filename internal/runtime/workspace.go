@@ -20,7 +20,7 @@ func (r *Runtime) ImportWorkspace(ctx context.Context, owned OwnedVM, rd io.Read
 }
 
 func (r *Runtime) runAgent(ctx context.Context, owned OwnedVM, subcommand string, command RunCommand) error {
-	command.Path, command.Args, command.User, command.Cwd = agentPath, []string{subcommand}, "root", "/"
+	command.Path, command.Args, command.User, command.Cwd = AgentPath, []string{subcommand}, "root", "/"
 	stderr := make(chan RunOutput, 64)
 	result, err := r.Run(ctx, owned, command, stderr)
 	// Late output may still arrive after Run returns, so the channel is drained, not closed.

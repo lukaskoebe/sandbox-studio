@@ -20,10 +20,12 @@ const (
 	runDrainTimeout        = 5 * time.Second
 	runOutputChunkLimit    = 64 * 1024
 	runVMKillTimeout       = 10 * time.Second
+	runStdinChunk          = 256 * 1024
 )
 
-// ErrRunPending means this Runtime still owns a run whose native SDK work has
-// not finished. Call PendingRun before asking a worker to start another job.
+// ErrRunPending means this Runtime still owns a run in the same VM whose native
+// SDK work has not finished. Call PendingRun before asking a worker to start
+// another job.
 var ErrRunPending = errors.New("runtime has an active or pending run")
 
 var errOwnedVMNotFound = errors.New("owned VM not found")
@@ -37,6 +39,16 @@ type OwnedVM struct {
 }
 
 // RunCommand is a single command executed inside an owned VM.
+//
+// Stdin, when set, is streamed to the process's stdin, which is closed after
+// Stdin returns io.EOF. A read error cancels the command. Read may outlive Run;
+// the caller should make it return when it abandons the run.
+//
+// Stdout, when set, receives every stdout byte in order instead of the output
+// channel. Run waits for each Write, so a slow writer slows the guest rather
+// than dropping data. A Write error cancels the command and is returned by Run.
+// Run cannot finish cleanup while a Write is blocked, so Write must return once
+// the caller's context is done.
 type RunCommand struct {
 	Path    string
 	Args    []string
@@ -44,11 +56,8 @@ type RunCommand struct {
 	Cwd     string
 	Env     map[string]string
 	Timeout time.Duration
-	// Stdin, if set, is streamed to the command's stdin, which is closed at EOF.
-	Stdin io.Reader
-	// Stdout, if set, receives every stdout chunk in order instead of the output
-	// channel. A write error ends the command.
-	Stdout io.Writer
+	Stdin   io.Reader
+	Stdout  io.Writer
 }
 
 // RunOutput is one stdout or stderr chunk. The caller owns the received bytes
@@ -123,6 +132,14 @@ type runExec interface {
 	recv(context.Context) (runEvent, error)
 	kill(context.Context) error
 	close() error
+	// stdin returns the stdin pipe, or nil when the command has none.
+	stdin() runStdin
+}
+
+// runStdin may overlap Recv and Kill, but not exec Close.
+type runStdin interface {
+	write(context.Context, []byte) error
+	close() error
 }
 
 type runEventKind uint8
@@ -173,6 +190,9 @@ type runTask struct {
 	recvStartedSignal chan struct{}
 	recvCancel        context.CancelFunc
 	recvDone          chan struct{}
+	stdinCancel       context.CancelFunc
+	stdinDone         chan struct{}
+	stdoutFailed      bool
 	execKillSealed    bool
 	execKillCalls     []<-chan struct{}
 	exitCode          int
@@ -194,7 +214,9 @@ type runTask struct {
 // sequential Recv loop. Output is nonblocking: a full channel drops chunks, and
 // chunks larger than the bounded output size are truncated. A nil output channel
 // discards output. The caller must not close a non-nil output channel.
-// A nonzero process exit is returned in RunResult without a Go error.
+// Command.Stdout replaces the channel for stdout with lossless, blocking writes.
+// A nonzero process exit is returned in RunResult without a Go error. Runs in
+// different VMs may overlap; a second run in the same VM gets ErrRunPending.
 //
 // Startup contexts request a bounded operation, but microsandbox's FFI may wait
 // for a native call to return after cancellation. In particular, canceled
@@ -238,7 +260,7 @@ func (r *Runtime) Run(ctx context.Context, owned OwnedVM, command RunCommand, ou
 		return RunResult{}, ErrRunPending
 	}
 	if r.runSlots == nil {
-		r.runSlots = map[string]*runTask{}
+		r.runSlots = make(map[string]*runTask)
 	}
 	r.runSlots[owned.Name] = task
 	r.runMu.Unlock()
@@ -476,6 +498,16 @@ func (t *runTask) runSession() runOutcome {
 	t.mu.Lock()
 	t.exec = exec
 	t.mu.Unlock()
+	if t.command.Stdin != nil {
+		if sink := exec.stdin(); sink != nil {
+			stdinCtx, cancelStdin := context.WithCancel(context.Background())
+			t.stdinCancel, t.stdinDone = cancelStdin, make(chan struct{})
+			t.goTracked(func() { t.pumpStdin(stdinCtx, sink) })
+		} else {
+			t.setProcessError(errors.New("SDK returned no stdin pipe"))
+			t.requestCancellation()
+		}
+	}
 
 	recvEvents := make(chan runEvent, 8)
 	recvDone := make(chan struct{})
@@ -554,9 +586,9 @@ func (t *runTask) receive(exec runExec, ctx context.Context, cancel context.Canc
 		case runEventStdout:
 			if t.command.Stdout != nil {
 				t.writeStdout(event.data)
-				continue
+			} else {
+				t.emitOutput(false, event.data)
 			}
-			t.emitOutput(false, event.data)
 		case runEventStderr:
 			t.emitOutput(true, event.data)
 		case runEventExited:
@@ -590,6 +622,11 @@ func (t *runTask) finalize(exec runExec, conn runConnection, recvDone <-chan str
 	t.mu.Unlock()
 	for _, done := range killCalls {
 		<-done
+	}
+	// Stdin writes may overlap Recv and Kill, but not Close.
+	if t.stdinDone != nil {
+		t.stdinCancel()
+		<-t.stdinDone
 	}
 	closeResult, closeDone := t.startCall(exec.close)
 	closeTimer := time.NewTimer(t.limits.cleanup)
@@ -887,19 +924,69 @@ func (t *runTask) emitOutput(stderr bool, data []byte) {
 	}
 }
 
-// writeStdout writes one chunk synchronously. After a failed write the rest of the
-// output is discarded and the command is killed.
-// TODO(transport-merge): replaced by the transport branch's lossless stdout.
+// writeStdout runs only on the receiver goroutine. Blocking here also stops Recv,
+// which is the backpressure toward the guest.
 func (t *runTask) writeStdout(data []byte) {
-	t.mu.Lock()
-	failed := t.streamErr != nil
-	t.mu.Unlock()
-	if failed || len(data) == 0 {
+	if t.stdoutFailed || len(data) == 0 {
 		return
 	}
 	if _, err := t.command.Stdout.Write(data); err != nil {
-		t.setStreamError(fmt.Errorf("write stdout: %w", err))
+		t.stdoutFailed = true
+		t.setProcessError(fmt.Errorf("write command stdout: %w", err))
 		t.requestCancellation()
+	}
+}
+
+// pumpStdin copies Command.Stdin to the guest and closes the pipe at EOF. The
+// caller's Read runs in an untracked goroutine because it calls no SDK code and
+// may block until the caller abandons the run; finalize cancels ctx and waits
+// for the native writes here before closing the exec handle.
+func (t *runTask) pumpStdin(ctx context.Context, sink runStdin) {
+	defer close(t.stdinDone)
+	chunks := make(chan []byte)
+	readErr := make(chan error, 1)
+	go func() {
+		for {
+			chunk := make([]byte, runStdinChunk)
+			n, err := t.command.Stdin.Read(chunk)
+			if n > 0 {
+				select {
+				case chunks <- chunk[:n]:
+				case <-ctx.Done():
+					return
+				}
+			}
+			if err != nil {
+				readErr <- err
+				return
+			}
+		}
+	}()
+	fail := func(err error) {
+		if ctx.Err() == nil {
+			t.setProcessError(err)
+			t.requestCancellation()
+		}
+	}
+	for {
+		select {
+		case chunk := <-chunks:
+			if err := sink.write(ctx, chunk); err != nil {
+				fail(fmt.Errorf("write command stdin: %w", err))
+				return
+			}
+		case err := <-readErr:
+			if !errors.Is(err, io.EOF) {
+				fail(fmt.Errorf("read command stdin: %w", err))
+				return
+			}
+			if err := sink.close(); err != nil {
+				fail(fmt.Errorf("close command stdin: %w", err))
+			}
+			return
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -1047,11 +1134,11 @@ func nonEmpty(value, fallback string) string {
 	return value
 }
 
-// PendingRun reports whether this Runtime still has a run or late SDK operation
-// that has not fully returned. A true value blocks another Run call. It clears
-// after known late calls and cleanup finish, but remains true for the lifetime of
-// this Runtime if canceled ExecStream startup may have registered an exec handle
-// that the SDK did not return to Go.
+// PendingRun reports whether any VM still has a run or late SDK operation that
+// has not fully returned. A pending run blocks another Run call in the same VM.
+// It clears after known late calls and cleanup finish, but remains true for the
+// lifetime of this Runtime if canceled ExecStream startup may have registered an
+// exec handle that the SDK did not return to Go.
 func (r *Runtime) PendingRun() bool {
 	if r == nil {
 		return false
@@ -1192,7 +1279,7 @@ func (c sdkRunConnection) detach(ctx context.Context) error {
 	return c.sandbox.Detach(ctx)
 }
 func (c sdkRunConnection) execStream(ctx context.Context, command RunCommand) (runExec, error) {
-	options := make([]msb.ExecOption, 0, 4)
+	options := make([]msb.ExecOption, 0, 5)
 	if command.User != "" {
 		options = append(options, msb.WithExecUser(command.User))
 	}
@@ -1215,22 +1302,19 @@ func (c sdkRunConnection) execStream(ctx context.Context, command RunCommand) (r
 	if handle == nil {
 		return nil, errors.New("microsandbox returned an empty exec handle")
 	}
+	exec := sdkRunExec{handle: handle}
 	if command.Stdin != nil {
-		// TODO(transport-merge): replaced by the transport branch's stdin streaming.
-		sink := handle.TakeStdin()
-		if sink == nil {
-			return nil, errors.Join(errors.New("microsandbox returned no stdin pipe"), handle.Kill(ctx), handle.Close())
+		if sink := handle.TakeStdin(); sink != nil {
+			exec.sink = sdkRunStdin{sink: sink}
 		}
-		go func() {
-			buf := make([]byte, 64<<10)
-			_, _ = io.CopyBuffer(sink, command.Stdin, buf)
-			_ = sink.Close()
-		}()
 	}
-	return sdkRunExec{handle: handle}, nil
+	return exec, nil
 }
 
-type sdkRunExec struct{ handle *msb.ExecHandle }
+type sdkRunExec struct {
+	handle *msb.ExecHandle
+	sink   runStdin
+}
 
 func (e sdkRunExec) recv(ctx context.Context) (runEvent, error) {
 	event, err := e.handle.Recv(ctx)
@@ -1267,3 +1351,12 @@ func (e sdkRunExec) recv(ctx context.Context) (runEvent, error) {
 }
 func (e sdkRunExec) kill(ctx context.Context) error { return e.handle.Kill(ctx) }
 func (e sdkRunExec) close() error                   { return e.handle.Close() }
+func (e sdkRunExec) stdin() runStdin                { return e.sink }
+
+type sdkRunStdin struct{ sink *msb.ExecSink }
+
+func (s sdkRunStdin) write(ctx context.Context, data []byte) error {
+	_, err := s.sink.WriteCtx(ctx, data)
+	return err
+}
+func (s sdkRunStdin) close() error { return s.sink.Close() }

@@ -56,7 +56,6 @@ again. The fork is booted. A failed fork is removed.
 ## Limits
 
 - The size limit counts compressed bytes. A full guest disk also fails the import.
-- Copies hold the global run slot, so they can delay template builds.
 - Recovery after a crash leaves the sandbox stopped, even if it was running.
 - Restoring a checkpoint from before a rebase would bring back the old root while the
   sandbox names the new template. Restore is gated, so this cannot happen yet.

@@ -1,6 +1,8 @@
 package templatebuild
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -14,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/ocilayer"
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -45,6 +48,11 @@ type buildHarness struct {
 	resolveErr     error
 	exportErr      error
 	exportCtxLive  bool
+	exportCommand  runtime.RunCommand
+	exportWire     []byte
+	exportExit     int
+	exportEndless  bool
+	published      templateexport.Layer
 	runHook        func(context.Context, chan<- runtime.RunOutput) (runtime.RunResult, error)
 	beforePublish  func()
 	pending        atomic.Bool
@@ -62,7 +70,7 @@ func newBuildHarness(t *testing.T) *buildHarness {
 		t.Fatal(err)
 	}
 	h := &buildHarness{st: st, env: env.ID, dir: t.TempDir()}
-	h.w, err = New(Options{Store: st, Runtime: h, Guests: h, Registry: h, Exporter: h, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	h.w, err = New(Options{Store: st, Runtime: h, Guests: h, Registry: h, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +114,9 @@ func (h *buildHarness) Run(ctx context.Context, owner runtime.OwnedVM, cmd runti
 	h.record("command")
 	if owner.Labels["studio.build-job"] == "" || cmd.Path == "" {
 		return runtime.RunResult{}, errors.New("command missing ownership or path")
+	}
+	if len(cmd.Args) > 0 && cmd.Args[0] == "export-layer" {
+		return h.export(ctx, cmd)
 	}
 	if h.runHook != nil {
 		return h.runHook(ctx, output)
@@ -165,17 +176,43 @@ func (h *buildHarness) PrepareBase(ctx context.Context, env string, base templat
 	}
 	return ref, release, nil
 }
-func (h *buildHarness) Export(ctx context.Context, id, dir string, limits ocilayer.Limits) (templateexport.Layer, error) {
+
+// export models studio-agent export-layer: a framed stream on stdout.
+func (h *buildHarness) export(ctx context.Context, cmd runtime.RunCommand) (runtime.RunResult, error) {
 	h.record("export")
 	h.exportCtxLive = ctx.Err() == nil
+	h.exportCommand = cmd
 	if h.exportErr != nil {
-		return templateexport.Layer{}, h.exportErr
+		return runtime.RunResult{}, h.exportErr
 	}
-	path := filepath.Join(dir, ".oci-layer-test")
-	if err := os.WriteFile(path, []byte("layer"), 0600); err != nil {
-		return templateexport.Layer{}, err
+	wire := h.exportWire
+	if wire == nil {
+		wire = exportWire(testLayerTar())
 	}
-	return templateexport.Layer{Path: path, Size: 5, UncompressedSize: 20, Digest: templateimage.Digest([]byte("layer")), DiffID: templateimage.Digest([]byte("diff"))}, nil
+	if _, err := cmd.Stdout.Write(wire); err != nil {
+		return runtime.RunResult{}, err
+	}
+	for h.exportEndless {
+		if _, err := cmd.Stdout.Write(make([]byte, 64<<10)); err != nil {
+			return runtime.RunResult{}, err
+		}
+	}
+	return runtime.RunResult{ExitCodeKnown: true, ExitCode: h.exportExit}, nil
+}
+
+func testLayerTar() []byte {
+	var out bytes.Buffer
+	writer := tar.NewWriter(&out)
+	_ = writer.WriteHeader(&tar.Header{Name: "etc/built", Mode: 0o644, Size: 5, Typeflag: tar.TypeReg, Format: tar.FormatUSTAR})
+	_, _ = writer.Write([]byte("layer"))
+	_ = writer.Close()
+	return out.Bytes()
+}
+
+func exportWire(raw []byte) []byte {
+	var wire bytes.Buffer
+	_, _ = agentproto.WriteExport(context.Background(), &wire, bytes.NewReader(raw), int64(len(raw)+1))
+	return wire.Bytes()
 }
 
 func fakeBaseReference(env string) templateregistry.Reference {
@@ -187,6 +224,7 @@ func fakeBaseReference(env string) templateregistry.Reference {
 }
 func (h *buildHarness) Publish(ctx context.Context, in store.Template, image templateimage.Image, layer templateexport.Layer) (store.Template, error) {
 	h.record("publish")
+	h.published = layer
 	if h.beforePublish != nil {
 		h.beforePublish()
 	}
@@ -304,6 +342,83 @@ func TestBuildOrdersConfigurationBeforeSetupAndPublishes(t *testing.T) {
 	second = h.job(t, second.ID)
 	if second.ID == job.ID || second.TemplateID != job.TemplateID || second.Status != store.BuildReady || h.runs != oldRuns || h.basePrepares != 1 || h.baseReleases != 1 {
 		t.Fatalf("cache hit: %+v runs %d", second, h.runs)
+	}
+}
+
+func TestExportStreamsExportLayerThroughReceive(t *testing.T) {
+	h := newBuildHarness(t)
+	job := h.submit(t, testSource)
+	h.w.process(context.Background(), h.claim(t))
+	if job = h.job(t, job.ID); job.Status != store.BuildReady {
+		t.Fatalf("job %+v", job)
+	}
+	cmd := h.exportCommand
+	timeout := exportTimeout(ocilayer.Limits{})
+	if cmd.Path != runtime.AgentPath || cmd.User != "root" || cmd.Stdout == nil || cmd.Stdin != nil || cmd.Timeout != timeout ||
+		len(cmd.Args) != 2 || cmd.Args[1] != "--max-freeze="+timeout.String() {
+		t.Fatalf("export command = %+v", cmd)
+	}
+	if h.published.Entries != 1 || h.published.UncompressedSize == 0 || h.published.DiffID == "" {
+		t.Fatalf("published layer was not produced by Receive: %+v", h.published)
+	}
+	if entries, _ := os.ReadDir(h.dir); len(entries) != 0 {
+		t.Fatalf("layer artifacts remained after publish: %v", entries)
+	}
+}
+
+func TestExportRejectsInvalidStreamOrFailedCommand(t *testing.T) {
+	for name, change := range map[string]func(*buildHarness){
+		"garbage stream":       func(h *buildHarness) { h.exportWire = []byte("not an export stream") },
+		"truncated stream":     func(h *buildHarness) { wire := exportWire(testLayerTar()); h.exportWire = wire[:len(wire)-1] },
+		"nonzero exit":         func(h *buildHarness) { h.exportExit = 1 },
+		"invalid tar in frame": func(h *buildHarness) { h.exportWire = exportWire([]byte("not a tar")) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newBuildHarness(t)
+			change(h)
+			job := h.submit(t, testSource)
+			h.w.process(context.Background(), h.claim(t))
+			if job = h.job(t, job.ID); job.Status != store.BuildFailed {
+				t.Fatalf("job %+v", job)
+			}
+			if strings.Contains(strings.Join(h.sequence, ","), "publish") {
+				t.Fatal("rejected export was published")
+			}
+			if entries, _ := os.ReadDir(h.dir); len(entries) != 0 {
+				t.Fatalf("rejected layer artifact remained: %v", entries)
+			}
+		})
+	}
+}
+
+func TestExportReturnsWhenReceiveFailsWhileCommandKeepsWriting(t *testing.T) {
+	h := newBuildHarness(t)
+	h.exportWire = []byte("not an export stream")
+	h.exportEndless = true
+	job := h.submit(t, testSource)
+	claimed := h.claim(t)
+	done := make(chan struct{})
+	go func() { h.w.process(context.Background(), claimed); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("export stayed blocked on a writer after Receive failed")
+	}
+	if job = h.job(t, job.ID); job.Status != store.BuildFailed {
+		t.Fatalf("job %+v", job)
+	}
+}
+
+func TestExportTimeoutAllowsLimitAtMinimumRate(t *testing.T) {
+	got := exportTimeout(ocilayer.Limits{MaxInputBytes: 200_000_000})
+	if got != exportStartup+100*time.Second {
+		t.Fatalf("export timeout = %s", got)
+	}
+	if exportTimeout(ocilayer.Limits{}) < time.Hour {
+		t.Fatal("default export limit timeout is below the minimum rate")
+	}
+	if got := exportTimeout(ocilayer.Limits{MaxInputBytes: 1 << 40}); got != agentproto.ExportMaxFreeze {
+		t.Fatalf("export timeout %s exceeds the guest freeze cap", got)
 	}
 }
 

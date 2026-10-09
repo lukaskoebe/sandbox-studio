@@ -49,10 +49,6 @@ type Guests interface {
 	ConfigureGuest(context.Context, string, string) error
 }
 
-type Exporter interface {
-	Export(context.Context, string, string, ocilayer.Limits) (templateexport.Layer, error)
-}
-
 type Registry interface {
 	StagingDir(context.Context, string) (string, error)
 	Resolve(context.Context, string, string) (templateregistry.Reference, error)
@@ -64,7 +60,6 @@ type Options struct {
 	Store        *store.Store
 	Runtime      Runner
 	Guests       Guests
-	Exporter     Exporter
 	Registry     Registry
 	Bus          *events.Bus
 	Log          *slog.Logger
@@ -82,8 +77,8 @@ type Worker struct {
 }
 
 func New(opts Options) (*Worker, error) {
-	if opts.Store == nil || opts.Runtime == nil || opts.Guests == nil || opts.Exporter == nil || opts.Registry == nil {
-		return nil, errors.New("template builder requires store, runtime, guests, exporter and registry")
+	if opts.Store == nil || opts.Runtime == nil || opts.Guests == nil || opts.Registry == nil {
+		return nil, errors.New("template builder requires store, runtime, guests and registry")
 	}
 	if opts.Log == nil {
 		opts.Log = slog.Default()
@@ -487,7 +482,7 @@ func (w *Worker) build(ctx context.Context, job store.BuildJob, log *buildLog) e
 	if err != nil {
 		return err
 	}
-	layer, err := w.Exporter.Export(ctx, sb.ID, dir, w.ExportLimits)
+	layer, err := w.export(ctx, owned, dir, log)
 	if err != nil {
 		log.message("Template export failed\n")
 		return err

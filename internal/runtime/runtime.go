@@ -74,9 +74,8 @@ type Egress struct {
 type Runtime struct {
 	opts Options
 
-	runMu sync.Mutex
-	// TODO(transport-merge): one slot per VM name, so commands in two VMs can run at once.
-	runSlots   map[string]*runTask
+	runMu      sync.Mutex
+	runSlots   map[string]*runTask // keyed by owned VM name
 	runBackend runBackend
 	runLimits  runLimits
 }
@@ -281,13 +280,13 @@ func (r *Runtime) Boot(ctx context.Context, name string) error {
 	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
 
-// agentPath is the agent's path in the guest, under Options.GuestDir.
-const agentPath = "/opt/studio/bin/studio-agent"
+// AgentPath is the agent's path in the guest, under Options.GuestDir.
+const AgentPath = "/opt/studio/bin/studio-agent"
 
 // boot starts the guest's services. Sandboxes have no init system, so that microsandbox
 // can freeze all of their processes; see guest.Boot.
 func boot(ctx context.Context, sb *msb.Sandbox) error {
-	out, err := sb.Exec(ctx, agentPath, []string{"boot"}, msb.WithExecUser("root"), msb.WithExecTimeout(30*time.Second))
+	out, err := sb.Exec(ctx, AgentPath, []string{"boot"}, msb.WithExecUser("root"), msb.WithExecTimeout(30*time.Second))
 	if err != nil {
 		return fmt.Errorf("boot guest: %w", err)
 	}
@@ -332,7 +331,7 @@ func shutdownGuest(ctx context.Context, h *msb.SandboxHandle) error {
 	if sb == nil {
 		return errors.New("connect for graceful guest shutdown: SDK returned an empty sandbox")
 	}
-	out, execErr := sb.Exec(ctx, agentPath, []string{"shutdown"},
+	out, execErr := sb.Exec(ctx, AgentPath, []string{"shutdown"},
 		msb.WithExecUser("root"), msb.WithExecTimeout(guestShutdownExecTimeout))
 	detachErr := sb.Detach(ctx)
 	if execErr != nil {

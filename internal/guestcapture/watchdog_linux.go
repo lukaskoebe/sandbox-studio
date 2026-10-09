@@ -18,12 +18,16 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
 const (
-	freezeMaxDuration = 60 * time.Second
+	// DefaultMaxFreeze is how long the watchdog holds the freeze when the
+	// caller does not ask for longer.
+	DefaultMaxFreeze  = 60 * time.Second
 	readyWaitDuration = 8 * time.Second
-	ackWaitDuration   = freezeMaxDuration + 5*time.Second
+	ackWaitSlack      = 5 * time.Second
 	controlMaxBytes   = 4096
 	controlPollSlice  = 100 * time.Millisecond
 	freezeIoctl       = 0xC0045877
@@ -38,9 +42,10 @@ type watchdogEvent struct {
 }
 
 type processWatchdog struct {
-	cmd     *exec.Cmd
-	control net.Conn
-	root    *os.File
+	cmd       *exec.Cmd
+	control   net.Conn
+	root      *os.File
+	maxFreeze time.Duration
 
 	waitProcess   func() error
 	emergencyThaw func(*os.File) error
@@ -54,7 +59,22 @@ type processWatchdog struct {
 	waitErr  error
 }
 
-func startWatchdog(root, lock *os.File) (watchdog, error) {
+// checkMaxFreeze resolves a requested freeze limit: zero means DefaultMaxFreeze.
+func checkMaxFreeze(maxFreeze time.Duration) (time.Duration, error) {
+	if maxFreeze == 0 {
+		return DefaultMaxFreeze, nil
+	}
+	if maxFreeze < 0 || maxFreeze > agentproto.ExportMaxFreeze {
+		return 0, fmt.Errorf("freeze limit %s is outside (0, %s]", maxFreeze, agentproto.ExportMaxFreeze)
+	}
+	return maxFreeze, nil
+}
+
+func startWatchdog(root, lock *os.File, maxFreeze time.Duration) (watchdog, error) {
+	maxFreeze, err := checkMaxFreeze(maxFreeze)
+	if err != nil {
+		return nil, err
+	}
 	if root == nil {
 		return nil, errors.New("nil pinned filesystem root")
 	}
@@ -96,7 +116,7 @@ func startWatchdog(root, lock *os.File) (watchdog, error) {
 		return nil, fmt.Errorf("open null device for freeze watchdog: %w", err)
 	}
 	defer devNull.Close()
-	cmd := exec.Command(executable, "__capture-watchdog")
+	cmd := exec.Command(executable, "__capture-watchdog", maxFreeze.String())
 	cmd.Dir = "/"
 	cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LANG=C"}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = devNull, devNull, devNull
@@ -109,7 +129,7 @@ func startWatchdog(root, lock *os.File) (watchdog, error) {
 	}
 	started = true
 	_ = childControl.Close()
-	return &processWatchdog{cmd: cmd, control: parentControl, root: root}, nil
+	return &processWatchdog{cmd: cmd, control: parentControl, root: root, maxFreeze: maxFreeze}, nil
 }
 
 func (w *processWatchdog) waitReady(ctx context.Context) error {
@@ -154,7 +174,7 @@ func (w *processWatchdog) releaseAndWait(ctx context.Context) error {
 	if err := w.writeCommand('R'); err != nil {
 		return fmt.Errorf("send normal release to freeze watchdog: %w", err)
 	}
-	event, err := w.readEvent(ctx, time.Now().Add(ackWaitDuration))
+	event, err := w.readEvent(ctx, time.Now().Add(w.maxFreeze+ackWaitSlack))
 	if err != nil {
 		return fmt.Errorf("wait for verified thaw: %w", err)
 	}
@@ -343,11 +363,18 @@ func emergencyThaw(root *os.File) error {
 	return errno
 }
 
-// RunWatchdog is the self-exec entry point for studio-agent __capture-watchdog.
-// The launcher maps the pinned filesystem directory to fd 3, a duplex Unix
+// RunWatchdog is the self-exec entry point for studio-agent __capture-watchdog
+// <max-freeze>. The launcher maps the pinned filesystem directory to fd 3, a duplex Unix
 // socket to fd 4, and the inherited capture lock to fd 5. The helper does no
 // logging or filesystem writes and holds fd 5 until process exit.
-func RunWatchdog() error {
+func RunWatchdog(maxFreezeArg string) error {
+	maxFreeze, err := time.ParseDuration(maxFreezeArg)
+	if err != nil {
+		return fmt.Errorf("parse freeze limit: %w", err)
+	}
+	if maxFreeze, err = checkMaxFreeze(maxFreeze); err != nil {
+		return err
+	}
 	pid, err := unix.Getsid(0)
 	if err != nil {
 		return fmt.Errorf("inspect watchdog session: %w", err)
@@ -364,7 +391,7 @@ func RunWatchdog() error {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
 	defer signal.Stop(signals)
 	runtime := &unixWatchdogRuntime{rootFD: 3, controlFD: 4, signals: signals}
-	return runWatchdogMachine(runtime, time.Now)
+	return runWatchdogMachine(runtime, time.Now, maxFreeze)
 }
 
 func validateWatchdogFDs(rootFD, controlFD, lockFD int) error {
@@ -435,8 +462,8 @@ type watchdogRuntime interface {
 	waitUntil(time.Time) (string, error)
 }
 
-func runWatchdogMachine(runtime watchdogRuntime, now func() time.Time) error {
-	// FIFREEZE itself is a synchronous kernel call. The 60 second lease starts
+func runWatchdogMachine(runtime watchdogRuntime, now func() time.Time, maxFreeze time.Duration) error {
+	// FIFREEZE itself is a synchronous kernel call. The maxFreeze lease starts
 	// only after it returns successfully; the parent has an independent bounded
 	// ready wait and signals/closes this helper on cancellation. If the kernel
 	// never returns from FIFREEZE or FITHAW, userspace cannot promise recovery or
@@ -451,7 +478,7 @@ func runWatchdogMachine(runtime watchdogRuntime, now func() time.Time) error {
 		eventErr := runtime.send(watchdogEvent{Event: "error", Reason: "freeze", Error: err.Error()})
 		return errors.Join(err, thawErr, eventErr)
 	}
-	deadline := now().Add(freezeMaxDuration)
+	deadline := now().Add(maxFreeze)
 	if err := runtime.send(watchdogEvent{Event: "ready"}); err != nil {
 		thawErr := runtime.thaw()
 		return errors.Join(fmt.Errorf("send watchdog ready event: %w", err), thawErr)

@@ -267,18 +267,21 @@ pending streams and reply sizes and cancel without dropping the guest session. R
 tests cover ACK waits, guest/provider errors, oversized replies, saturation and recovery.
 The review also exposed yamux's half-close behavior: closing a local stream alone does
 not interrupt its read. Control cancellation now expires the stream deadline, and export
-sources do the same on close. Tests with a peer that neither reads nor closes verify
-prompt cancellation and early archive rejection, no retained artifact, and subsequent
-export over the same agent session.
+sources did the same on close.
 This is groundwork for the template build worker, not a completed template-build API.
 
 ### Layer transfer and capture foundations
 
 The implemented Go guest exporter sends bounded data frames and a completion trailer with
-version, byte count and SHA-256. `Hub.Export` validates and normalizes the tar into a gzip
+version, byte count and SHA-256. `templateexport.Receive` validates and normalizes the tar into a gzip
 artifact without extracting it. It keeps the artifact only after framing, tar, gzip and
-file completion succeed; failures close the source and discard the partial file. The
-exporter and Hub API are implemented. The persistent authenticated registry and pure image
+file completion succeed; failures close the source and discard the partial file.
+
+Guest→host bulk data over a vsock route stalls after roughly 128–256 KiB on msb 0.7.7 and
+0.7.8 ([vsock bulk probe](../spikes/vsock-bulk/README.md)), while msb exec stdout delivered
+about 6.3 MB/s. Bulk data therefore goes over msb exec: the worker runs `studio-agent
+export-layer` and streams its stdout into the receiver, and the agent channel carries no
+exports. The persistent authenticated registry and pure image
 composition/cache identity and base preparation helper are implemented; the template
 builder, cache invocation, recovery jobs, API and UI are not wired.
 
@@ -298,7 +301,7 @@ from the production Go exporter roundtrip below.
 
 ### Full Go exporter roundtrip
 
-On 2026-10-09, the Go guest exporter and `Hub.Export` passed a live source/import roundtrip
+On 2026-10-09, the Go guest exporter and host receiver passed a live source/import roundtrip
 in disposable deny-all VMs on Linux amd64, microsandbox 0.7.7 and kernel 6.12.111. The
 roundtrip removed the source VM before starting the destination to fit memory. Owner SIGKILL
 after the first data frame and SIGKILL of the exact freeze watchdog both caused rejection

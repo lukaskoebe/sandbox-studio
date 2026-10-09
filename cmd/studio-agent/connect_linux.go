@@ -43,11 +43,11 @@ func supervise(ctx context.Context, log *slog.Logger) error {
 
 func ociRuntime(args []string) error { return guest.OCIRuntime(args) }
 
-func exportLayer(ctx context.Context, dst io.Writer) error {
-	return guestcapture.Export(ctx, dst)
+func exportLayer(ctx context.Context, dst io.Writer, maxFreeze time.Duration) error {
+	return guestcapture.Export(ctx, dst, maxFreeze)
 }
 
-func captureWatchdog() error { return guestcapture.RunWatchdog() }
+func captureWatchdog(maxFreeze string) error { return guestcapture.RunWatchdog(maxFreeze) }
 
 func workspaceExport(dst, warn io.Writer) error {
 	w := bufio.NewWriterSize(dst, 1<<20)
