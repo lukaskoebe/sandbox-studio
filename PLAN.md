@@ -293,7 +293,29 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   1. Boot the base image with gateway networking, using a "template-build" scope that
      includes a curated, user-approved registry rule set.
   2. Run `apt`, `mise install` and `setup`.
-  3. Stop and take a disk snapshot.
+  3. Export the root changes as an OCI layer and publish a derived image through a
+     stable, authenticated loopback registry. Create template instances normally, with
+     fresh Studio networking and vsock routes; do not use snapshot restore while #1736
+     remains unresolved. The registry/image composition spike passes (docs/spikes.md).
+
+  This initially supports Studio's controlled base image, not arbitrary OCI images:
+  the SDK's image inspection API does not preserve every image-config field. Cache
+  entries are scoped to the environment and keyed by normalized spec, base digest,
+  platform and exporter version. Retain the derived manifest, config and layer blob.
+  Base layers must be available in microsandbox's cache before pulling a template;
+  a missing base must be recovered from its pinned source or fail explicitly.
+  In the current SDK this can be checked by creating and removing a temporary deny-all
+  base sandbox: `IfMissing` for digest-pinned release images, `Never` for the local dev
+  base (with an instruction to rebuild it if absent). Do not silently pull a similarly
+  named remote image for the dev base. Registry credentials stay on the host.
+
+  Layer export is still to be qualified. Prefer a dedicated agent stream with bounded
+  framing, cancellation and an explicit success trailer. A private mount alone does
+  not make a consistent capture: validate quiescing and concurrent-write handling before
+  implementing the builder. Translate overlay whiteouts/opaque directories, exclude
+  transient state and Studio's environment-specific config, and validate/rewrite the
+  untrusted tar on the host without extracting it. Bound sizes and metadata, and reject
+  unsafe paths, link targets and unsupported overlay features.
 
   Templates are cached by hash. Specs can be edited in the UI as YAML, and the same file can
   be exported or imported.

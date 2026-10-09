@@ -179,6 +179,35 @@ second or two, and the agent sees a clear 403 message on retry if it's still pen
 Follow-ups: tune threads and context size for query latency; measure on the Mac (Metal) and
 Windows.
 
+## M3 — OCI template image spike
+
+On microsandbox 0.7.7, a loopback registry served a derived image made from the installed
+Studio base plus one small gzip layer. Creating a fresh deny-all sandbox took about
+2.5 seconds. The registry received manifest, config and new-layer requests, with no base
+layer blob requests. Assertions in the guest confirmed an added file, a whiteout hiding
+an existing base file, an opaque directory hiding base entries, and an untouched base
+file. The spike VM and image reference were removed afterward.
+
+This qualifies image composition with a warm cache, not the template builder. Cached
+EROFS layers are keyed by diff ID; if a base layer is missing, the template registry must
+serve it or the base must be recovered first. A partial registry is not a portable OCI
+image distribution service. The SDK also exposes only a subset of the base config, so
+the initial implementation is restricted to Studio's controlled base image. Use a stable
+authenticated endpoint and immutable image references in production, not the spike's
+ephemeral port.
+
+Source review confirms that `IfMissing` requires a complete valid EROFS/fsmeta/VMDK cache,
+not just cached metadata. The v0.7.7 Go SDK has no standalone image-pull method; creating a
+temporary deny-all base sandbox can validate/prewarm it. Use the digest-pinned upstream
+reference with `IfMissing` for releases, or `Never` for the local-only dev base. This
+recovery sequence is source-reviewed; cold-cache recovery was not exercised by the spike.
+
+Guest layer export remains unqualified. A dedicated yamux stream avoids relying on
+undocumented FIFO behavior in the filesystem-read API, but needs explicit completion,
+bounded framing, cancellation and capture-consistency tests. Privately mounting the
+upper filesystem does not itself stop concurrent writes. Host-side tar validation must
+never extract guest-controlled entries onto the host.
+
 ## Remaining M0 work
 
 - S1–S3 and S9 on the Mac; Windows needs a cloud VM with nested virtualization.
