@@ -24,6 +24,9 @@ import (
 // ErrNotConnected means the sandbox's guest agent has no live session.
 var ErrNotConnected = errors.New("guest agent not connected")
 
+// ErrRequestsBusy bounds control requests if a guest is unresponsive.
+var ErrRequestsBusy = errors.New("too many pending guest requests")
+
 // Hub tracks guest-agent sessions by sandbox ID.
 type Hub struct {
 	// OnConnect, if set before the first Listen, runs (in its own goroutine) whenever a
@@ -39,10 +42,11 @@ type Hub struct {
 }
 
 type conn struct {
-	sess       *yamux.Session
-	hello      agentproto.Hello
-	since      time.Time
-	exportOpen chan struct{}
+	sess        *yamux.Session
+	hello       agentproto.Hello
+	since       time.Time
+	exportOpen  chan struct{}
+	requestOpen chan struct{}
 }
 
 // NewHub returns an empty hub.
@@ -122,7 +126,7 @@ func (h *Hub) serve(id string, nc net.Conn) {
 	}
 	st.Close()
 
-	c := &conn{sess: sess, hello: hello, since: time.Now(), exportOpen: make(chan struct{}, 1)}
+	c := &conn{sess: sess, hello: hello, since: time.Now(), exportOpen: make(chan struct{}, 1), requestOpen: make(chan struct{}, 32)}
 	h.mu.Lock()
 	old := h.sessions[id]
 	h.sessions[id] = c
@@ -202,21 +206,51 @@ func (h *Hub) open(ctx context.Context, id string, hdr agentproto.Header) (net.C
 
 // request opens a stream, sends hdr and body (unless nil) and decodes the single JSON
 // reply into v.
-func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, body, v any) error {
-	st, err := h.open(ctx, id, hdr)
+func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, body, v any) (retErr error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	h.mu.Lock()
+	c, ok := h.sessions[id]
+	h.mu.Unlock()
+	if !ok {
+		return ErrNotConnected
+	}
+	st, release, err := openLimitedStream(ctx, c.requestOpen, c.sess.Open, ErrRequestsBusy)
 	if err != nil {
 		return err
 	}
+	defer release()
 	defer st.Close()
 	if dl, ok := ctx.Deadline(); ok {
 		st.SetDeadline(dl)
+	}
+	// A caller can cancel before its deadline, including while waiting for a
+	// configuration ACK. Yamux Close is a half-close, so also expire reads.
+	// Both operations affect only this stream, leaving terminals connected.
+	stopCancel := context.AfterFunc(ctx, func() {
+		_ = st.SetDeadline(time.Now())
+		_ = st.Close()
+	})
+	defer stopCancel()
+	defer func() {
+		if err := ctx.Err(); err != nil {
+			retErr = err
+		}
+	}()
+	if err := agentproto.WriteJSONLine(st, hdr); err != nil {
+		return err
 	}
 	if body != nil {
 		if err := agentproto.WriteJSONLine(st, body); err != nil {
 			return err
 		}
 	}
-	line, err := bufio.NewReader(st).ReadBytes('\n')
+	const maxReplyBytes = 1 << 20
+	line, err := bufio.NewReader(io.LimitReader(st, maxReplyBytes+1)).ReadBytes('\n')
+	if len(line) > maxReplyBytes {
+		return errors.New("guest control reply exceeds 1 MiB")
+	}
 	if err != nil {
 		return err
 	}

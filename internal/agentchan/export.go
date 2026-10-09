@@ -15,6 +15,15 @@ import (
 
 const exportOperationTimeout = 90 * time.Second
 
+// interruptibleExportConn makes closing a yamux stream interrupt local reads
+// as well as sending the stream's close frame to the guest.
+type interruptibleExportConn struct{ net.Conn }
+
+func (c *interruptibleExportConn) Close() error {
+	_ = c.Conn.SetDeadline(time.Now())
+	return c.Conn.Close()
+}
+
 // ErrExportInProgress reports that this guest already has a pending or active
 // export on its current agent connection.
 var ErrExportInProgress = errors.New("guest export already pending or in progress")
@@ -40,34 +49,35 @@ func (h *Hub) Export(ctx context.Context, id, dir string, limits ocilayer.Limits
 		return templateexport.Layer{}, err
 	}
 	defer release()
-	stopClose := context.AfterFunc(opCtx, func() { _ = st.Close() })
-	defer stopClose()
+	source := &interruptibleExportConn{Conn: st}
 	if deadline, ok := opCtx.Deadline(); ok {
-		if err := st.SetDeadline(deadline); err != nil {
-			_ = st.Close()
+		if err := source.SetDeadline(deadline); err != nil {
+			_ = source.Close()
 			if ctxErr := opCtx.Err(); ctxErr != nil {
 				return templateexport.Layer{}, ctxErr
 			}
 			return templateexport.Layer{}, fmt.Errorf("set export stream deadline: %w", err)
 		}
 	}
+	stopClose := context.AfterFunc(opCtx, func() { _ = source.Close() })
+	defer stopClose()
 	if err := opCtx.Err(); err != nil {
-		_ = st.Close()
+		_ = source.Close()
 		return templateexport.Layer{}, err
 	}
-	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindExport}); err != nil {
-		_ = st.Close()
+	if err := agentproto.WriteJSONLine(source, agentproto.Header{Kind: agentproto.KindExport}); err != nil {
+		_ = source.Close()
 		if ctxErr := opCtx.Err(); ctxErr != nil {
 			return templateexport.Layer{}, ctxErr
 		}
 		return templateexport.Layer{}, fmt.Errorf("write export request: %w", err)
 	}
 	if err := opCtx.Err(); err != nil {
-		_ = st.Close()
+		_ = source.Close()
 		return templateexport.Layer{}, err
 	}
 	stopClose()
-	return templateexport.Receive(opCtx, dir, st, limits)
+	return templateexport.Receive(opCtx, dir, source, limits)
 }
 
 // openExport isolates yamux's context-free Open call. If the caller cancels
@@ -89,14 +99,21 @@ func (h *Hub) openExport(ctx context.Context, id string) (net.Conn, func(), erro
 // gate. The caller owns release while using a returned stream. If its context
 // ends first, the opener retains the gate until it closes any late stream.
 func openExportStream(ctx context.Context, gate chan struct{}, open func() (net.Conn, error)) (net.Conn, func(), error) {
+	return openLimitedStream(ctx, gate, open, ErrExportInProgress)
+}
+
+// openLimitedStream also bounds pending control requests. A canceled opener
+// retains its slot until any late stream has closed, so cancellation cannot
+// accumulate an unbounded number of blocked yamux openers.
+func openLimitedStream(ctx context.Context, gate chan struct{}, open func() (net.Conn, error), busy error) (net.Conn, func(), error) {
 	if ctx == nil {
 		return nil, nil, errors.New("nil context")
 	}
 	if gate == nil {
-		return nil, nil, errors.New("export connection gate is unavailable")
+		return nil, nil, errors.New("stream connection gate is unavailable")
 	}
 	if open == nil {
-		return nil, nil, errors.New("export stream opener is unavailable")
+		return nil, nil, errors.New("stream opener is unavailable")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
@@ -104,7 +121,7 @@ func openExportStream(ctx context.Context, gate chan struct{}, open func() (net.
 	select {
 	case gate <- struct{}{}:
 	default:
-		return nil, nil, ErrExportInProgress
+		return nil, nil, busy
 	}
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { <-gate }) }
@@ -144,7 +161,7 @@ func openExportStream(ctx context.Context, gate chan struct{}, open func() (net.
 		}
 		if result.st == nil {
 			release()
-			return nil, nil, errors.New("yamux returned a nil export stream")
+			return nil, nil, errors.New("yamux returned a nil stream")
 		}
 		return result.st, release, nil
 	case <-ctx.Done():

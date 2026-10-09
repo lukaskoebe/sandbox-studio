@@ -2,11 +2,11 @@ package sandboxes
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 const configureTimeout = 30 * time.Second
@@ -15,26 +15,55 @@ const configureTimeout = 30 * time.Second
 // gateway intercepts TLS with, and the secrets' placeholders. It runs whenever the agent
 // connects (see agentchan.Hub.OnConnect).
 func (m *Manager) Configure(sandboxID string) {
-	// One push at a time per sandbox, each reading the configuration once it holds the lock,
-	// so the last push to arrive carries the latest state.
-	mu, _ := m.configuring.LoadOrStore(sandboxID, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer mu.(*sync.Mutex).Unlock()
-
 	ctx, cancel := context.WithTimeout(context.Background(), configureTimeout)
 	defer cancel()
-	sb, err := m.Store.LookupSandbox(ctx, sandboxID)
-	if err != nil {
+	if err := m.configure(ctx, "", sandboxID); err != nil {
 		m.Log.Warn("configuring sandbox", "sandbox", sandboxID, "err", err)
-		return
+	}
+}
+
+// ConfigureGuest waits for the guest to acknowledge its current CA and secret
+// placeholders. Builders must call it after WaitReady and before running setup.
+// An agent connection alone does not mean the configuration has been applied.
+func (m *Manager) ConfigureGuest(ctx context.Context, envID, sandboxID string) error {
+	if envID == "" {
+		return store.ErrNotFound
+	}
+	ctx, cancel := context.WithTimeout(ctx, configureTimeout)
+	defer cancel()
+	return m.configure(ctx, envID, sandboxID)
+}
+
+func (m *Manager) configurationGate(sandboxID string) chan struct{} {
+	gate, _ := m.configuring.LoadOrStore(sandboxID, make(chan struct{}, 1))
+	return gate.(chan struct{})
+}
+
+func (m *Manager) configure(ctx context.Context, envID, sandboxID string) error {
+	// One push at a time per sandbox, each reading the configuration once it holds the lock,
+	// so the last push to arrive carries the latest state.
+	gate := m.configurationGate(sandboxID)
+	select {
+	case gate <- struct{}{}:
+		defer func() { <-gate }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	var sb store.Sandbox
+	var err error
+	if envID == "" {
+		sb, err = m.Store.LookupSandbox(ctx, sandboxID)
+	} else {
+		sb, err = m.Store.Sandbox(ctx, envID, sandboxID)
+	}
+	if err != nil {
+		return err
 	}
 	cfg, err := m.config(ctx, sb.EnvironmentID)
 	if err == nil {
 		err = m.Hub.Configure(ctx, sandboxID, cfg)
 	}
-	if err != nil {
-		m.Log.Warn("configuring sandbox", "sandbox", sandboxID, "err", err)
-	}
+	return err
 }
 
 // FollowEnvironments reconfigures an environment's connected sandboxes whenever its secrets
