@@ -6,6 +6,7 @@ import {
   CaretUpDownIcon,
   CheckIcon,
   CubeIcon,
+  GlobeIcon,
   PlusIcon,
   SquaresFourIcon,
 } from "@phosphor-icons/react"
@@ -81,6 +82,18 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <SquaresFourIcon />
                 <span>Overview</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Network"
+                isActive={
+                  !!matchRoute({ to: "/e/$env/network", params: { env } })
+                }
+                render={<Link to="/e/$env/network" params={{ env }} />}
+              >
+                <GlobeIcon />
+                <span>Network</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

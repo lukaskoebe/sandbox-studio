@@ -41,6 +41,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
+import { ConnectionsSheet } from "@/components/connections-sheet"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge, phase } from "@/components/status-badge"
 import { Terminal } from "@/components/terminal"
@@ -84,6 +85,7 @@ function SandboxPage() {
         <h1 className="truncate text-sm font-medium">{sb.name}</h1>
         <StatusBadge sandbox={sb} />
         <div className="ml-auto flex items-center gap-1">
+          <ConnectionsSheet env={env} sandbox={sb} />
           {isReady(sb) && <Previews env={env} sandbox={sb} />}
           <Lifecycle env={env} sandbox={sb} />
         </div>

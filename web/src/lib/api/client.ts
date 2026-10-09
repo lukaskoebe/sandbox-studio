@@ -14,6 +14,9 @@ export type Sandbox = components["schemas"]["View"]
 export type SandboxStatus = Sandbox["status"]
 export type Terminal = components["schemas"]["Session"]
 export type PreviewPort = components["schemas"]["PreviewPort"]
+export type Approval = components["schemas"]["ApprovalView"]
+export type Rule = components["schemas"]["Rule"]
+export type Connection = components["schemas"]["Conn"]
 
 /** The message of an API problem response, or of any thrown error. */
 export function errorMessage(err: unknown): string {
@@ -22,6 +25,13 @@ export function errorMessage(err: unknown): string {
     return e.detail ?? e.message ?? e.title ?? "Something went wrong"
   }
   return String(err)
+}
+
+/** The HTTP status of an API problem response, if the error is one. */
+export function errorStatus(err: unknown): number | undefined {
+  return err && typeof err === "object"
+    ? (err as { status?: number }).status
+    : undefined
 }
 
 /** Whether a sandbox's guest agent is connected, so terminals and previews work. */
