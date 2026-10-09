@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -75,24 +76,26 @@ func TestRulesCRUD(t *testing.T) {
 		t.Fatalf("created: %+v", created)
 	}
 
-	// The config is not part of the input, so an update keeps what the store holds.
-	proxy, err := s.Store.CreateRule(context.Background(), store.Rule{
-		EnvironmentID: env.ID, Host: "api.example.org", Action: store.ActionProxy,
-		Config: store.RuleConfig{Headers: map[string]string{"X-Key": "{secret.KEY}"}},
-	})
-	if err != nil {
+	if _, err := s.Vault.Create(context.Background(), env.ID, "KEY", "value-of-key", []string{"api.example.org"}, ""); err != nil {
 		t.Fatal(err)
 	}
+	rec = do(h, "POST", rules, `{"host":"api.example.org","action":"proxy","config":{"headers":{"x-api-key":"Bearer {secret.KEY}","x-static":"1"}}}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create proxy rule: %d %s", rec.Code, rec.Body)
+	}
+	proxy := decode[store.Rule](t, rec)
+	if proxy.Action != store.ActionProxy || !maps.Equal(proxy.Config.Headers, map[string]string{"X-Api-Key": "Bearer {secret.KEY}", "X-Static": "1"}) {
+		t.Fatalf("proxy rule: %+v", proxy)
+	}
+
+	// An update replaces the config; turning the rule into a deny rule drops its headers.
 	rec = do(h, "PUT", rules+"/"+proxy.ID, `{"host":"api.example.net","action":"deny"}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body)
 	}
 	updated := decode[store.Rule](t, rec)
-	if updated.ID != proxy.ID || updated.Host != "api.example.net" || updated.Action != store.ActionDeny || len(updated.Ports) != 0 {
+	if updated.ID != proxy.ID || updated.Host != "api.example.net" || updated.Action != store.ActionDeny || len(updated.Ports) != 0 || len(updated.Config.Headers) != 0 {
 		t.Fatalf("updated: %+v", updated)
-	}
-	if updated.Config.Headers["X-Key"] != "{secret.KEY}" {
-		t.Fatalf("update dropped the config: %+v", updated.Config)
 	}
 
 	if list := decode[[]store.Rule](t, do(h, "GET", rules, "")); len(list) != 2 {
@@ -120,8 +123,14 @@ func TestRuleValidation(t *testing.T) {
 	for _, tc := range []struct{ name, body string }{
 		{"bad pattern", `{"host":"*.*.com","action":"allow"}`},
 		{"empty host", `{"host":" ","action":"allow"}`},
-		{"proxy action", `{"host":"example.com","action":"proxy"}`},
 		{"caddy action", `{"host":"example.com","action":"caddy"}`},
+		{"headers on an allow rule", `{"host":"example.com","action":"allow","config":{"headers":{"X-A":"1"}}}`},
+		{"invalid header name", `{"host":"example.com","action":"proxy","config":{"headers":{"X A":"1"}}}`},
+		{"Host header", `{"host":"example.com","action":"proxy","config":{"headers":{"host":"evil.com"}}}`},
+		{"hop-by-hop header", `{"host":"example.com","action":"proxy","config":{"headers":{"Transfer-Encoding":"chunked"}}}`},
+		{"header set twice", `{"host":"example.com","action":"proxy","config":{"headers":{"X-A":"1","x-a":"2"}}}`},
+		{"newline in a value", `{"host":"example.com","action":"proxy","config":{"headers":{"X-A":"1\r\nX-B: 2"}}}`},
+		{"unknown secret", `{"host":"example.com","action":"proxy","config":{"headers":{"Authorization":"Bearer {secret.NOPE}"}}}`},
 		{"port out of range", `{"host":"example.com","ports":[70000],"action":"allow"}`},
 		{"sandbox of another environment", `{"host":"example.com","action":"allow","sandboxId":"` + foreign.ID + `"}`},
 		{"unknown sandbox", `{"host":"example.com","action":"allow","sandboxId":"nope"}`},

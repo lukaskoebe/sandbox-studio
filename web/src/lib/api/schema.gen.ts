@@ -466,9 +466,19 @@ export interface components {
                 [key: string]: string;
             };
         };
+        RuleConfigInput: {
+            /** @description proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to. */
+            headers?: {
+                [key: string]: string;
+            };
+        };
         RuleInput: {
-            /** @enum {string} */
-            action: "allow" | "deny";
+            /**
+             * @description allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers
+             * @enum {string}
+             */
+            action: "allow" | "proxy" | "deny";
+            config?: components["schemas"]["RuleConfigInput"];
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
             note?: string;

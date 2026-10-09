@@ -515,15 +515,34 @@
         },
         "type": "object"
       },
+      "RuleConfigInput": {
+        "additionalProperties": false,
+        "properties": {
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to.",
+            "maxProperties": 32,
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
       "RuleInput": {
         "additionalProperties": false,
         "properties": {
           "action": {
+            "description": "allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers",
             "enum": [
               "allow",
+              "proxy",
               "deny"
             ],
             "type": "string"
+          },
+          "config": {
+            "$ref": "#/components/schemas/RuleConfigInput"
           },
           "host": {
             "description": "example.com, *.example.com (includes example.com), or an IP address",

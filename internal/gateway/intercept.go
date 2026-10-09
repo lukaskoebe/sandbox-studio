@@ -250,6 +250,15 @@ func (ic *interception) substituteBasic(header string) (string, error) {
 
 var secretRef = regexp.MustCompile(`\{secret\.([A-Za-z0-9_]+)\}`)
 
+// SecretRefs lists the names of the secrets a rule header value refers to as {secret.NAME}.
+func SecretRefs(value string) []string {
+	var names []string
+	for _, m := range secretRef.FindAllStringSubmatch(value, -1) {
+		names = append(names, m[1])
+	}
+	return names
+}
+
 // expand resolves the {secret.NAME} references of a rule header.
 func (ic *interception) expand(header, tmpl string) (string, error) {
 	var err error

@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/textproto"
+	"slices"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"golang.org/x/net/http/httpguts"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -58,11 +61,61 @@ func (s *Server) checkEnvironment(ctx context.Context, env string) error {
 
 // RuleInput is the editable part of a network rule.
 type RuleInput struct {
-	Host      string `json:"host" minLength:"1" doc:"example.com, *.example.com (includes example.com), or an IP address"`
-	Ports     []int  `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
-	Action    string `json:"action" enum:"allow,deny"`
-	SandboxID string `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
-	Note      string `json:"note,omitempty" maxLength:"500"`
+	Host      string          `json:"host" minLength:"1" doc:"example.com, *.example.com (includes example.com), or an IP address"`
+	Ports     []int           `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
+	Action    string          `json:"action" enum:"allow,proxy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers"`
+	Config    RuleConfigInput `json:"config,omitempty"`
+	SandboxID string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
+	Note      string          `json:"note,omitempty" maxLength:"500"`
+}
+
+// RuleConfigInput is the editable part of a rule's config.
+type RuleConfigInput struct {
+	Headers map[string]string `json:"headers,omitempty" maxProperties:"32" doc:"proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to."`
+}
+
+// headersNotSet are managed by the HTTP machinery or describe the connection, not the
+// request, so a rule must not set them.
+var headersNotSet = []string{
+	"Host", "Content-Length", "Transfer-Encoding", "Connection", "Keep-Alive", "Proxy-Connection",
+	"Proxy-Authenticate", "Proxy-Authorization", "Te", "Trailer", "Upgrade",
+}
+
+// ruleConfigFrom validates the config of a rule with action in environment env.
+func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in RuleConfigInput) (store.RuleConfig, error) {
+	if len(in.Headers) == 0 {
+		return store.RuleConfig{}, nil
+	}
+	if action != store.ActionProxy {
+		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules set headers")
+	}
+	secrets, err := s.Store.Secrets(ctx, env)
+	if err != nil {
+		return store.RuleConfig{}, apiError(err)
+	}
+	headers := make(map[string]string, len(in.Headers))
+	for name, value := range in.Headers {
+		if !httpguts.ValidHeaderFieldName(name) {
+			return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("%q is not a valid header name", name))
+		}
+		canonical := textproto.CanonicalMIMEHeaderKey(name)
+		if slices.Contains(headersNotSet, canonical) {
+			return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("rules can't set the %s header", canonical))
+		}
+		if _, dup := headers[canonical]; dup {
+			return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("the %s header is set twice", canonical))
+		}
+		if !httpguts.ValidHeaderFieldValue(value) || len(value) > 8<<10 {
+			return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("the value of %s is not a valid header value", canonical))
+		}
+		for _, ref := range gateway.SecretRefs(value) {
+			if !slices.ContainsFunc(secrets, func(s store.Secret) bool { return s.Name == ref }) {
+				return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("%s refers to {secret.%s}, but this environment has no secret %s", canonical, ref, ref))
+			}
+		}
+		headers[canonical] = value
+	}
+	return store.RuleConfig{Headers: headers}, nil
 }
 
 // ruleFrom validates in and returns the rule it describes in environment env.
@@ -80,7 +133,11 @@ func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.
 			return store.Rule{}, apiError(err)
 		}
 	}
-	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, Host: host, Ports: in.Ports, Action: in.Action, Note: in.Note}, nil
+	config, err := s.ruleConfigFrom(ctx, env, in.Action, in.Config)
+	if err != nil {
+		return store.Rule{}, err
+	}
+	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note}, nil
 }
 
 type rulePath struct {
@@ -185,7 +242,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		if err != nil {
 			return nil, err
 		}
-		r.ID, r.Config = old.ID, old.Config // the config is not editable through the API yet
+		r.ID = old.ID
 		if r, err = s.Store.UpdateRule(ctx, r); err != nil {
 			return nil, apiError(err)
 		}
