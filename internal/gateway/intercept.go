@@ -294,8 +294,12 @@ func (ic *interception) refuse(w http.ResponseWriter, code int, msg string) {
 
 func handshakeProblem(err error) string {
 	msg := "TLS handshake: " + err.Error()
-	if strings.Contains(msg, "unknown certificate authority") || strings.Contains(msg, "bad certificate") {
-		msg += " (the sandbox does not trust the environment's Sandbox Studio CA)"
+	// Clients that reject the certificate say so with an alert. OpenSSL sends it before
+	// encrypting, which reads here as a bad record MAC.
+	for _, sign := range []string{"unknown certificate authority", "bad certificate", "bad record MAC"} {
+		if strings.Contains(msg, sign) {
+			return msg + " (the sandbox probably does not trust the environment's Sandbox Studio CA)"
+		}
 	}
 	return msg
 }
