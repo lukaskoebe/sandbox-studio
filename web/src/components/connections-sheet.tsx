@@ -178,8 +178,8 @@ function InterceptedMarker({ conn }: { conn: Connection }) {
       <TooltipContent>
         <span className="grid gap-1">
           <span>
-            Studio handled the HTTP requests (a proxy rule, or a host with
-            secrets)
+            Studio handled the HTTP requests (a proxy or Caddy rule, or a host
+            with secrets)
           </span>
           {reason && <span>{reason}</span>}
         </span>

@@ -2,6 +2,17 @@ import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { KeyIcon, PlusIcon, XIcon } from "@phosphor-icons/react"
+import { CaddyfileEditor } from "./caddyfile-editor"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -43,8 +54,16 @@ import {
   type Sandbox,
 } from "@/lib/api/client"
 
-type Action = "allow" | "proxy" | "deny"
-const actions: Action[] = ["allow", "proxy", "deny"]
+type Action = "allow" | "proxy" | "caddy" | "deny"
+const actions: Action[] = ["allow", "proxy", "caddy", "deny"]
+
+const caddyExample = `@read method GET HEAD
+handle @read {
+  reverse_proxy https://httpbin.org
+}
+handle {
+  respond "Forbidden" 403
+}`
 
 export function RuleDialog({
   env,
@@ -62,7 +81,7 @@ export function RuleDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-sm [&:has(form[data-action=caddy])]:sm:max-w-3xl">
         <RuleForm
           key={rule?.id ?? "new"}
           env={env}
@@ -143,16 +162,23 @@ function RuleForm({
   const [host, setHost] = useState(rule?.host ?? "")
   const [ports, setPorts] = useState(rule?.ports?.join(", ") ?? "")
   const [action, setAction] = useState<Action>(
-    rule?.action === "deny" || rule?.action === "proxy" ? rule.action : "allow"
+    rule?.action === "deny" ||
+      rule?.action === "proxy" ||
+      rule?.action === "caddy"
+      ? rule.action
+      : "allow"
   )
   const [headers, setHeaders] = useState(() => initialHeaders(rule))
+  const [caddyfile, setCaddyfile] = useState(rule?.config.caddyfile ?? "")
   const [scope, setScope] = useState(rule?.sandboxId ?? "environment")
   const [note, setNote] = useState(rule?.note ?? "")
   const [formError, setFormError] = useState<string>()
+  const clearFormError = () => setFormError(undefined)
   const portList = parsePorts(ports)
   const problems = headerProblems(headers)
   // Headers are only sent for proxy rules, so only proxy rules are checked.
   const headerError = action === "proxy" ? problems.find(Boolean) : undefined
+  const caddyfileError = action === "caddy" && !caddyfile.trim()
 
   const onSaved = () => {
     queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
@@ -179,10 +205,18 @@ function RuleForm({
     onError: onFailed,
   })
   const saving = create.isPending || update.isPending
-  const valid = host.trim() !== "" && portList !== null && !headerError
+  const valid =
+    host.trim() !== "" && portList !== null && !headerError && !caddyfileError
 
   const submit = () => {
-    if (portList === null || !host.trim() || headerError || saving) return
+    if (
+      portList === null ||
+      !host.trim() ||
+      headerError ||
+      caddyfileError ||
+      saving
+    )
+      return
     setFormError(undefined)
     const headerValues = action === "proxy" ? headerPayload(headers) : undefined
     const body = {
@@ -191,7 +225,12 @@ function RuleForm({
       action,
       sandboxId: scope === "environment" ? undefined : scope,
       note: note.trim() || undefined,
-      config: headerValues ? { headers: headerValues } : undefined,
+      config:
+        action === "caddy"
+          ? { caddyfile }
+          : headerValues
+            ? { headers: headerValues }
+            : undefined,
     }
     if (rule) update.mutate({ params: { path: { env, id: rule.id } }, body })
     else create.mutate({ params: { path: { env } }, body })
@@ -200,6 +239,7 @@ function RuleForm({
   return (
     <form
       className="contents"
+      data-action={action}
       onSubmit={(e) => {
         e.preventDefault()
         submit()
@@ -208,9 +248,10 @@ function RuleForm({
       <DialogHeader>
         <DialogTitle>{rule ? "Edit rule" : "Add rule"}</DialogTitle>
         <DialogDescription>
-          Allow, proxy or deny connections to a host. A proxy rule lets Studio
-          handle the HTTPS requests to set headers, such as an API key from a
-          secret. An environment rule covers every sandbox.
+          Allow, proxy, or deny connections to a host, or use a Caddyfile to
+          handle its HTTP requests. Proxy headers and Caddy reverse proxies can
+          use environment secrets on bound HTTPS hosts. An environment rule
+          covers every sandbox.
         </DialogDescription>
       </DialogHeader>
       <Field>
@@ -221,7 +262,10 @@ function RuleForm({
           autoComplete="off"
           placeholder="example.com or *.example.com"
           value={host}
-          onChange={(e) => setHost(e.target.value)}
+          onChange={(e) => {
+            setHost(e.target.value)
+            clearFormError()
+          }}
         />
       </Field>
       <Field data-invalid={portList === null || undefined}>
@@ -232,7 +276,10 @@ function RuleForm({
           placeholder="Any port"
           value={ports}
           aria-invalid={portList === null}
-          onChange={(e) => setPorts(e.target.value)}
+          onChange={(e) => {
+            setPorts(e.target.value)
+            clearFormError()
+          }}
         />
         {portList === null ? (
           <FieldError>
@@ -252,7 +299,10 @@ function RuleForm({
           value={[action]}
           onValueChange={(v) => {
             const next = actions.find((a) => a === v[0])
-            if (next) setAction(next)
+            if (next) {
+              setAction(next)
+              clearFormError()
+            }
           }}
           className="w-full"
         >
@@ -261,6 +311,9 @@ function RuleForm({
           </ToggleGroupItem>
           <ToggleGroupItem value="proxy" className="flex-1">
             Proxy
+          </ToggleGroupItem>
+          <ToggleGroupItem value="caddy" className="flex-1">
+            Caddy
           </ToggleGroupItem>
           <ToggleGroupItem value="deny" className="flex-1">
             Deny
@@ -272,14 +325,31 @@ function RuleForm({
           env={env}
           rows={headers}
           problems={problems}
-          onChange={setHeaders}
+          onChange={(rows) => {
+            setHeaders(rows)
+            clearFormError()
+          }}
+        />
+      )}
+      {action === "caddy" && (
+        <CaddyField
+          env={env}
+          value={caddyfile}
+          onChange={(value) => {
+            setCaddyfile(value)
+            clearFormError()
+          }}
+          error={formError}
         />
       )}
       <Field>
         <FieldLabel htmlFor="rule-scope">Scope</FieldLabel>
         <Select
           value={scope}
-          onValueChange={(v) => setScope(v ?? "environment")}
+          onValueChange={(v) => {
+            setScope(v ?? "environment")
+            clearFormError()
+          }}
           items={{
             environment: "Environment",
             ...Object.fromEntries(sandboxes.map((sb) => [sb.id, sb.name])),
@@ -306,10 +376,13 @@ function RuleForm({
           maxLength={500}
           placeholder="Optional"
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => {
+            setNote(e.target.value)
+            clearFormError()
+          }}
         />
       </Field>
-      {formError && <FieldError>{formError}</FieldError>}
+      {formError && action !== "caddy" && <FieldError>{formError}</FieldError>}
       <DialogFooter>
         <Button type="submit" disabled={!valid || saving}>
           {saving && <Spinner />}
@@ -317,6 +390,84 @@ function RuleForm({
         </Button>
       </DialogFooter>
     </form>
+  )
+}
+
+/** A Caddyfile for handling the host's HTTP requests. */
+function CaddyField({
+  env,
+  value,
+  onChange,
+  error,
+}: {
+  env: string
+  value: string
+  onChange: (value: string) => void
+  error?: string
+}) {
+  const [confirmReplace, setConfirmReplace] = useState(false)
+  const secrets = $api.useQuery("get", "/api/environments/{env}/secrets", {
+    params: { path: { env } },
+  })
+
+  const insertExample = () => {
+    if (value.length > 0) {
+      setConfirmReplace(true)
+      return
+    }
+    onChange(caddyExample)
+  }
+
+  return (
+    <Field data-invalid={!!error || undefined}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <FieldLabel>Caddyfile</FieldLabel>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={insertExample}
+        >
+          Insert example
+        </Button>
+      </div>
+      <FieldDescription>
+        Caddy routes for this host. Use <code>{"{secret.NAME}"}</code> in{" "}
+        <code>header_up</code> to send a bound secret to an HTTPS upstream.
+      </FieldDescription>
+      <CaddyfileEditor
+        value={value}
+        onChange={onChange}
+        secrets={secrets.data ?? []}
+        error={error}
+      />
+      {error && <FieldError>{error}</FieldError>}
+      <AlertDialog open={confirmReplace} onOpenChange={setConfirmReplace}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace the current Caddyfile?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This replaces all current editor content with the example below.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
+            {caddyExample}
+          </pre>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => {
+                onChange(caddyExample)
+                setConfirmReplace(false)
+              }}
+            >
+              Replace with example
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Field>
   )
 }
 

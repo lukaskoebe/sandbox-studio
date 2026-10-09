@@ -68,8 +68,8 @@ function NetworkPage() {
       <div className="flex-1 space-y-6 overflow-auto p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           Sandboxes reach the internet only through Studio. Connections that no
-          rule allows wait for your approval. An environment-wide deny always
-          wins.
+          rule allows wait for your approval. Proxy and Caddy rules can handle
+          HTTP requests; an environment-wide deny always wins.
         </p>
 
         <section className="space-y-2">
@@ -187,12 +187,18 @@ function NetworkPage() {
   )
 }
 
-/** A proxy rule names the headers it sets; their values stay hidden. */
+/** A rule's proxy headers or Caddyfile summary; secret values stay hidden. */
 function RuleAction({ rule }: { rule: Rule }) {
   const names =
     rule.action === "proxy"
       ? Object.keys(rule.config.headers ?? {}).join(", ")
       : ""
+  const caddyfile = rule.action === "caddy" ? (rule.config.caddyfile ?? "") : ""
+  const caddySummary = caddyfile
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith("#"))
+  const caddyLineCount = caddyfile ? caddyfile.split(/\r?\n/).length : 0
   return (
     <div className="flex items-center gap-2">
       <RuleActionBadge action={rule.action} />
@@ -203,6 +209,19 @@ function RuleAction({ rule }: { rule: Rule }) {
         >
           {names}
         </span>
+      )}
+      {rule.action === "caddy" && (
+        <>
+          <span
+            className="max-w-48 truncate font-mono text-xs text-muted-foreground"
+            title={caddySummary}
+          >
+            {caddySummary ?? "Empty Caddyfile"}
+          </span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {caddyLineCount} {caddyLineCount === 1 ? "line" : "lines"}
+          </span>
+        </>
       )}
     </div>
   )
