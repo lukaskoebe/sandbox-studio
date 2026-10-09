@@ -297,6 +297,8 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
      stable, authenticated loopback registry. Create template instances normally, with
      fresh Studio networking and vsock routes; do not use snapshot restore while #1736
      remains unresolved. The registry/image composition spike passes (docs/spikes.md).
+     The persistent registry, template builder, cache integration, API and UI are not
+     wired yet. The current roundtrip uses an ephemeral registry and a warm dev-base cache.
 
   This initially supports Studio's controlled base image, not arbitrary OCI images:
   the SDK's image inspection API does not preserve every image-config field. Cache
@@ -309,10 +311,11 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   base (with an instruction to rebuild it if absent). Do not silently pull a similarly
   named remote image for the dev base. Registry credentials stay on the host.
 
-  The export foundation uses bounded frames with an explicit byte count and SHA-256
-  completion trailer. The host validates and rewrites the untrusted tar without extracting
-  it, compresses it to a private temporary artifact, and keeps it only after both wire and
-  archive validation succeed. Interrupted and rejected transfers discard their artifacts.
+  The Go guest exporter and `Hub.Export` are implemented. Export uses bounded frames with
+  an explicit byte count and SHA-256 completion trailer. The host validates and rewrites
+  the untrusted tar without extracting it, compresses it to a private temporary artifact,
+  and keeps it only after both wire and archive validation succeed. Interrupted and
+  rejected transfers discard their artifacts.
 
   An in-guest freeze probe qualifies the capture primitive: read the managed upper through
   agentd's pinned descriptor while an independent watchdog owns filesystem freeze/thaw.
@@ -320,11 +323,15 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   Normal completion, disconnect, worker death and watchdog timeout must all thaw the root.
   This is filesystem consistency, not an application-level transaction boundary.
 
-  Full guest export is still to be implemented and qualified. Validate the pinned upper's
-  identity, translate overlay whiteouts/opaque directories, exclude transient state and
-  Studio's environment-specific config, and refuse unsupported overlay features. A timeout
-  or early thaw invalidates the whole capture. Require a full export/import round trip
-  before wiring the template builder or presenting templates in the UI.
+  The Go guest exporter and `Hub.Export` are implemented and qualified by a live Linux
+  amd64 source/import roundtrip on microsandbox 0.7.7 and kernel 6.12.111. See the
+  [layer-export evidence and remaining qualifications](docs/spikes.md#layer-transfer-and-capture-foundations).
+  The persistent authenticated registry, template builder/cache integration, API and UI
+  remain unwired. Live macOS/Windows hosts, arm64 guests, and oversized/backpressured
+  captures remain to be qualified; unsupported overlay features and file types remain
+  out of scope. This does not complete all M3 work. Userspace cannot guarantee automatic
+  recovery if a kernel freeze/thaw call never returns; stopping or rebooting the VM remains
+  possible.
 
   Templates are cached by hash. Specs can be edited in the UI as YAML, and the same file can
   be exported or imported.

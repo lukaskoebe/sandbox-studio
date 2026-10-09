@@ -266,7 +266,12 @@ func TestOpenExportStreamBoundsCanceledOpenerAndClosesLateStream(t *testing.T) {
 
 func newExportTestHub(t *testing.T, handleExport func(net.Conn, *bufio.Reader)) (*Hub, *yamux.Session) {
 	t.Helper()
-	socket := filepath.Join(t.TempDir(), "agent.sock")
+	dir, err := os.MkdirTemp("", "hub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socket := filepath.Join(dir, "s.sock")
 	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err := h.Listen("export-test", socket); err != nil {
 		t.Fatal(err)

@@ -204,11 +204,12 @@ recovery sequence is source-reviewed; cold-cache recovery was not exercised by t
 
 ### Layer transfer and capture foundations
 
-The wire format now requires bounded data frames and a completion trailer with version,
-byte count and SHA-256. The host normalizes the tar into a gzip artifact without extracting
-it. It keeps the artifact only after framing, tar, gzip and file completion succeed;
-failures close the source and discard the partial file. This is an internal foundation,
-not a guest export endpoint or a template builder.
+The implemented Go guest exporter sends bounded data frames and a completion trailer with
+version, byte count and SHA-256. `Hub.Export` validates and normalizes the tar into a gzip
+artifact without extracting it. It keeps the artifact only after framing, tar, gzip and
+file completion succeed; failures close the source and discard the partial file. The
+exporter and Hub API are implemented, but the persistent authenticated registry, template
+builder, cache integration, API and UI are not wired.
 
 The capture probe in `spikes/layer-export` runs **inside a disposable guest**. On Linux
 with msb 0.7.7, agentd retained descriptors to the hidden ext4 upper filesystem; their
@@ -220,13 +221,29 @@ An independent watchdog owns freeze/thaw and announces readiness only after free
 In the probe, a concurrent writer stopped advancing and the raw upper file's digest stayed
 unchanged during capture. Normal completion, disconnect, worker SIGKILL and watchdog timeout
 all thawed the filesystem and let the writer resume. Control files stayed in `/dev/shm`,
-since `/run` is not tmpfs in this guest. Test fixtures were removed afterward.
+since `/run` is not tmpfs in this guest. Test fixtures were removed afterward. This is the
+earlier Python lifecycle probe; it qualifies the freeze/thaw primitive only and is separate
+from the production Go exporter roundtrip below.
 
-This verifies a filesystem capture primitive, not application consistency or the full
-exporter. Production still needs bounded helper supervision, overlay metadata translation,
-exclusion of transient/environment state, and an export/import round trip with cancellation.
-A watchdog timeout or any early thaw must invalidate the capture. Whiteouts and opaque
-directories need explicit translation; they are not ordinary files to copy unchanged.
+### Full Go exporter roundtrip
+
+On 2026-10-09, the Go guest exporter and `Hub.Export` passed a live source/import roundtrip
+in disposable deny-all VMs on Linux amd64, microsandbox 0.7.7 and kernel 6.12.111. The
+roundtrip removed the source VM before starting the destination to fit memory. Owner SIGKILL
+after the first data frame and SIGKILL of the exact freeze watchdog both caused rejection
+with no artifact; source writes resumed, including after emergency thaw.
+
+The successful normal import contained 20 entries (27,648 tar bytes and 1,423 gzip bytes).
+It preserved file contents and mode 0751, symlink and hardlink inode identity, the
+`etc/issue.net` whiteout, the `/usr/share/doc/base-files` opaque directory, and untouched
+base files. Workspace, Docker state, transients, Studio environment config and CA were
+excluded; the system bundle matched the base. Its disposable registry relies on a warm
+dev-base cache and does not qualify persistent registry or template-builder integration.
+
+Remaining live qualifications: macOS and Windows hosts, an arm64 guest, and oversized or
+backpressured full captures. Userspace cannot guarantee automatic recovery if a kernel
+freeze/thaw call never returns; stopping or rebooting the VM remains possible. This result
+does not complete all M3 work.
 See the [kernel overlay documentation](https://docs.kernel.org/filesystems/overlayfs.html)
 and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze.8.html).
 
