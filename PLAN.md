@@ -309,13 +309,22 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   base (with an instruction to rebuild it if absent). Do not silently pull a similarly
   named remote image for the dev base. Registry credentials stay on the host.
 
-  Layer export is still to be qualified. Prefer a dedicated agent stream with bounded
-  framing, cancellation and an explicit success trailer. A private mount alone does
-  not make a consistent capture: validate quiescing and concurrent-write handling before
-  implementing the builder. Translate overlay whiteouts/opaque directories, exclude
-  transient state and Studio's environment-specific config, and validate/rewrite the
-  untrusted tar on the host without extracting it. Bound sizes and metadata, and reject
-  unsafe paths, link targets and unsupported overlay features.
+  The export foundation uses bounded frames with an explicit byte count and SHA-256
+  completion trailer. The host validates and rewrites the untrusted tar without extracting
+  it, compresses it to a private temporary artifact, and keeps it only after both wire and
+  archive validation succeed. Interrupted and rejected transfers discard their artifacts.
+
+  An in-guest freeze probe qualifies the capture primitive: read the managed upper through
+  agentd's pinned descriptor while an independent watchdog owns filesystem freeze/thaw.
+  Its scratch state belongs in `/dev/shm`; `/run` is on the root filesystem in this image.
+  Normal completion, disconnect, worker death and watchdog timeout must all thaw the root.
+  This is filesystem consistency, not an application-level transaction boundary.
+
+  Full guest export is still to be implemented and qualified. Validate the pinned upper's
+  identity, translate overlay whiteouts/opaque directories, exclude transient state and
+  Studio's environment-specific config, and refuse unsupported overlay features. A timeout
+  or early thaw invalidates the whole capture. Require a full export/import round trip
+  before wiring the template builder or presenting templates in the UI.
 
   Templates are cached by hash. Specs can be edited in the UI as YAML, and the same file can
   be exported or imported.

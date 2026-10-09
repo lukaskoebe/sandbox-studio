@@ -202,11 +202,33 @@ temporary deny-all base sandbox can validate/prewarm it. Use the digest-pinned u
 reference with `IfMissing` for releases, or `Never` for the local-only dev base. This
 recovery sequence is source-reviewed; cold-cache recovery was not exercised by the spike.
 
-Guest layer export remains unqualified. A dedicated yamux stream avoids relying on
-undocumented FIFO behavior in the filesystem-read API, but needs explicit completion,
-bounded framing, cancellation and capture-consistency tests. Privately mounting the
-upper filesystem does not itself stop concurrent writes. Host-side tar validation must
-never extract guest-controlled entries onto the host.
+### Layer transfer and capture foundations
+
+The wire format now requires bounded data frames and a completion trailer with version,
+byte count and SHA-256. The host normalizes the tar into a gzip artifact without extracting
+it. It keeps the artifact only after framing, tar, gzip and file completion succeed;
+failures close the source and discard the partial file. This is an internal foundation,
+not a guest export endpoint or a template builder.
+
+The capture probe in `spikes/layer-export` runs **inside a disposable guest**. On Linux
+with msb 0.7.7, agentd retained descriptors to the hidden ext4 upper filesystem; their
+device identity matched the managed root. Reading through those descriptors worked.
+Binding the hidden mount into a private namespace failed, so the probe does not use that
+approach. No host backing image was mounted or read.
+
+An independent watchdog owns freeze/thaw and announces readiness only after freezing.
+In the probe, a concurrent writer stopped advancing and the raw upper file's digest stayed
+unchanged during capture. Normal completion, disconnect, worker SIGKILL and watchdog timeout
+all thawed the filesystem and let the writer resume. Control files stayed in `/dev/shm`,
+since `/run` is not tmpfs in this guest. Test fixtures were removed afterward.
+
+This verifies a filesystem capture primitive, not application consistency or the full
+exporter. Production still needs bounded helper supervision, overlay metadata translation,
+exclusion of transient/environment state, and an export/import round trip with cancellation.
+A watchdog timeout or any early thaw must invalidate the capture. Whiteouts and opaque
+directories need explicit translation; they are not ordinary files to copy unchanged.
+See the [kernel overlay documentation](https://docs.kernel.org/filesystems/overlayfs.html)
+and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze.8.html).
 
 ## Remaining M0 work
 
