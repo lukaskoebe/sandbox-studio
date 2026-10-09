@@ -296,20 +296,36 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   3. Export the root changes as an OCI layer and publish a derived image through a
      stable, authenticated loopback registry. Create template instances normally, with
      fresh Studio networking and vsock routes; do not use snapshot restore while #1736
-     remains unresolved. The registry/image composition spike passes (docs/spikes.md).
-     The persistent registry, template builder, cache integration, API and UI are not
-     wired yet. The current roundtrip uses an ephemeral registry and a warm dev-base cache.
+     remains unresolved. The persistent host registry and pure image composition/cache
+     identity are implemented and qualified by a live Linux amd64 pull after a registry
+     and catalog restart. The template builder, cache invocation, base prewarm/recovery,
+     API and UI are not wired yet.
 
-  This initially supports Studio's controlled base image, not arbitrary OCI images:
-  the SDK's image inspection API does not preserve every image-config field. Cache
-  entries are scoped to the environment and keyed by normalized spec, base digest,
-  platform and exporter version. Retain the derived manifest, config and layer blob.
-  Base layers must be available in microsandbox's cache before pulling a template;
-  a missing base must be recovered from its pinned source or fail explicitly.
+  The pure composer supports Studio's controlled base image, not arbitrary OCI images:
+  the SDK's image inspection API does not preserve every image-config field. It preserves
+  base layer digests, sizes and diff IDs, normalizes their media types, copies the supported
+  common config fields, and adds the validated exported layer. Cache identity uses
+  normalized spec bytes, base digest, platform and exporter version; registry records
+  remain environment-scoped. The registry
+  retains the derived manifest, config and layer blob. Base layers must already be
+  available in microsandbox's cache before pulling a template; prewarm and recovery are
+  not wired, so a missing base must be recovered from its pinned source or fail explicitly.
   In the current SDK this can be checked by creating and removing a temporary deny-all
   base sandbox: `IfMissing` for digest-pinned release images, `Never` for the local dev
   base (with an instruction to rebuild it if absent). Do not silently pull a similarly
   named remote image for the dev base. Registry credentials stay on the host.
+  The builder must source base metadata from the approved Studio image, never from a
+  browser request; registry publication checks internal consistency, not remote provenance.
+
+  Production Studio starts a read-only HTTP registry at `127.0.0.1:7880`. It accepts only
+  exact-host-guarded GET/HEAD requests with environment-scoped Basic credentials derived
+  from the vault-sealed install key. References are digest-only under
+  `/studio/<env>/<template>@<digest>`. Artifacts live under the private `<data>/templates`
+  directory. Publication moves from a staging directory to the final directory before the
+  catalog transitions from creating to ready; deleting and startup reconciliation clean
+  interrupted operations. The registry has no tags, uploads or catalog endpoint. Missing,
+  truncated or symlinked ready artifacts return errors and do not silently overwrite the
+  ready record; same-size content corruption is left to the OCI client's digest check.
 
   The Go guest exporter and `Hub.Export` are implemented. Export uses bounded frames with
   an explicit byte count and SHA-256 completion trailer. The host validates and rewrites
@@ -326,12 +342,13 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   The Go guest exporter and `Hub.Export` are implemented and qualified by a live Linux
   amd64 source/import roundtrip on microsandbox 0.7.7 and kernel 6.12.111. See the
   [layer-export evidence and remaining qualifications](docs/spikes.md#layer-transfer-and-capture-foundations).
-  The persistent authenticated registry, template builder/cache integration, API and UI
-  remain unwired. Live macOS/Windows hosts, arm64 guests, and oversized/backpressured
-  captures remain to be qualified; unsupported overlay features and file types remain
-  out of scope. This does not complete all M3 work. Userspace cannot guarantee automatic
-  recovery if a kernel freeze/thaw call never returns; stopping or rebooting the VM remains
-  possible.
+  The persistent authenticated registry and pure image composer are implemented; the
+  template builder/cache invocation, base prewarm/recovery, API and UI remain unwired. Live
+  macOS/Windows hosts, arm64 guests, and oversized/backpressured captures remain to be
+  qualified; unsupported overlay features and file types remain out of scope. This does
+  not complete all M3 work. Userspace cannot
+  guarantee automatic recovery if a kernel freeze/thaw call never returns; stopping or
+  rebooting the VM remains possible.
 
   Templates are cached by hash. Specs can be edited in the UI as YAML, and the same file can
   be exported or imported.

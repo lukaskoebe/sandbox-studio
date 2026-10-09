@@ -35,6 +35,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 	"github.com/lukaskoebe/sandbox-studio/internal/webui"
@@ -73,6 +74,9 @@ func main() {
 
 // gatewayAddr is where sandbox VMs reach the network gateway.
 const gatewayAddr = "127.0.0.1:7879"
+
+// Template image references persist this address; never silently select a new port.
+const templateRegistryAddr = "127.0.0.1:7880"
 
 func defaultImage() string {
 	if version.Version == "dev" {
@@ -126,6 +130,24 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := ensureEnvironment(ctx, st); err != nil {
 		return err
 	}
+	rl, err := net.Listen("tcp4", templateRegistryAddr)
+	if err != nil {
+		return fmt.Errorf("template registry: %w", err)
+	}
+	defer rl.Close()
+	registry, err := templateregistry.Open(ctx, st, filepath.Join(p.Data, "templates"), templateRegistryAddr, vault)
+	if err != nil {
+		return fmt.Errorf("open template registry: %w", err)
+	}
+	defer registry.Close()
+	registryServer := &http.Server{Handler: registry.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+	defer registryServer.Close()
+	go func() {
+		if err := registryServer.Serve(rl); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("template registry stopped", "err", err)
+			stop()
+		}
+	}()
 	log.Info("checking the microsandbox runtime")
 	if err := runtime.Ensure(ctx); err != nil {
 		return fmt.Errorf("microsandbox runtime: %w", err)

@@ -4,12 +4,10 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -21,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -29,7 +28,10 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/ocilayer"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateexport"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateimage"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 )
 
 func main() {
@@ -52,7 +54,11 @@ func run(ctx context.Context, agent string) (retErr error) {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
+	defer func() {
+		if err := os.RemoveAll(dir); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("remove roundtrip temporary root: %w", err))
+		}
+	}()
 	guestDir := filepath.Join(dir, "guest")
 	if err := os.Mkdir(guestDir, 0o700); err != nil {
 		return err
@@ -128,7 +134,21 @@ subprocess.Popen(['/opt/studio/studio-agent','connect'],stdin=subprocess.DEVNULL
 		return fmt.Errorf("source did not resume after watchdog death or fixture cleanup failed: %w", err)
 	}
 	fmt.Println("PASS: source resumed writes after watchdog death; large fixture removed")
-	layer, err := hub.Export(ctx, id, dir, ocilayer.Limits{})
+	base, err := inspectRegistryBase(ctx)
+	if err != nil {
+		return fmt.Errorf("inspect warmed sandbox-studio base: %w", err)
+	}
+	fmt.Println("NOTE: sandbox-studio-base:dev is intentionally warmed by the source VM; this probe does not qualify a cold base-image pull")
+	registry, err := openRegistryProbe(ctx, dir)
+	if err != nil {
+		return fmt.Errorf("open private template registry: %w", err)
+	}
+	defer func() { retErr = errors.Join(retErr, registry.Close()) }()
+	staging, err := registry.StagingDir(ctx)
+	if err != nil {
+		return fmt.Errorf("create registry receive directory: %w", err)
+	}
+	layer, err := hub.Export(ctx, id, staging, ocilayer.Limits{})
 	if err != nil {
 		return fmt.Errorf("export: %w", err)
 	}
@@ -139,24 +159,59 @@ subprocess.Popen(['/opt/studio/studio-agent','connect'],stdin=subprocess.DEVNULL
 	if err := cleanupSource(); err != nil {
 		return fmt.Errorf("remove export source before destination startup: %w", err)
 	}
-	ref, closeRegistry, err := registry(ctx, layer)
+	tmpl, image, ref, err := registry.Publish(ctx, base, layer, roundtripCanonicalSpec)
 	if err != nil {
 		return err
 	}
-	defer closeRegistry()
+	otherEnv, err := registry.CreateEnvironment(ctx, "roundtrip-cross-environment")
+	if err != nil {
+		return err
+	}
+	if err := checkRegistryHTTP(ctx, registry.addr, tmpl, image, ref, otherEnv.ID); err != nil {
+		return fmt.Errorf("registry HTTP qualification: %w", err)
+	}
+	fmt.Println("PASS: unauthenticated manifest request returned 401")
+	fmt.Println("PASS: authenticated cross-environment manifest request returned 404")
+	fmt.Println("PASS: authenticated manifest GET returned the published bytes and OCI headers")
+	if err := registry.Restart(ctx); err != nil {
+		return fmt.Errorf("restart private template registry on its original address: %w", err)
+	}
+	refAfterRestart, err := registry.registry.Resolve(ctx, registry.env.ID, tmpl.ID)
+	if err != nil {
+		return fmt.Errorf("resolve template after registry restart: %w", err)
+	}
+	if refAfterRestart.Image != ref.Image || refAfterRestart.Username != ref.Username || refAfterRestart.Password != ref.Password {
+		return errors.New("template image reference or credentials changed after registry restart")
+	}
+	if err := checkAuthenticatedManifest(ctx, registry.addr, tmpl, image, refAfterRestart); err != nil {
+		return fmt.Errorf("authenticated manifest request after registry restart: %w", err)
+	}
+	fmt.Println("PASS: registry restart preserved image reference and authentication")
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if image, err := msb.Image.Get(cleanup, ref); err == nil {
-			retErr = errors.Join(retErr, image.Remove(cleanup, false))
+		cachedImage, err := msb.Image.Get(cleanup, ref.Image)
+		if msb.IsKind(err, msb.ErrImageNotFound) {
+			return
 		}
+		if err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("find unique roundtrip image for cleanup: %w", err))
+			return
+		}
+		retErr = errors.Join(retErr, cachedImage.Remove(cleanup, false))
 	}()
-	destination, err := msb.CreateSandbox(ctx, id+"-import", msb.WithImage(ref), msb.WithRegistryInsecure(),
+	manifestRequestsBeforeSDK := registry.authenticatedManifestRequests.Load()
+	destination, err := msb.CreateSandbox(ctx, id+"-import", msb.WithImage(ref.Image), msb.WithRegistryInsecure(),
+		msb.WithRegistryAuth(msb.RegistryAuth{Username: ref.Username, Password: ref.Password}),
 		msb.WithCPUs(1), msb.WithMemory(512), msb.WithDetached(), msb.WithNetwork(denyAll()))
 	if err != nil {
 		return fmt.Errorf("import exported layer: %w", err)
 	}
 	defer func() { retErr = errors.Join(retErr, removeVM(destination, id+"-import")) }()
+	if count := registry.authenticatedManifestRequests.Load() - manifestRequestsBeforeSDK; count == 0 {
+		return errors.New("SDK destination creation made no authenticated manifest request to the private registry")
+	}
+	fmt.Println("PASS: SDK authenticated to the private registry for the manifest pull")
 	if _, err := python(ctx, destination, verify); err != nil {
 		return err
 	}
@@ -615,97 +670,318 @@ func python(ctx context.Context, sb *msb.Sandbox, script string) (string, error)
 	return out.Stdout(), nil
 }
 
-type descriptor struct {
-	MediaType string `json:"mediaType"`
-	Digest    string `json:"digest"`
-	Size      int64  `json:"size"`
+const roundtripCanonicalSpec = `{"schema":"sandbox-studio/layer-export-roundtrip-v1","cpus":1,"memoryMiB":512,"network":"deny-all"}`
+
+// roundtripSealer is an AAD-bound plaintext fake for this private live probe.
+// It avoids connecting the probe to any real keychain or vault.
+type roundtripSealer struct{}
+
+func (roundtripSealer) Seal(plain, aad []byte) []byte {
+	sealed := append(append([]byte(nil), aad...), 0)
+	return append(sealed, plain...)
 }
 
-func digest(b []byte) string { h := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(h[:]) }
+func (roundtripSealer) Unseal(sealed, aad []byte) ([]byte, error) {
+	prefix := append(append([]byte(nil), aad...), 0)
+	if !bytes.HasPrefix(sealed, prefix) {
+		return nil, errors.New("roundtrip registry sealed value has mismatched AAD")
+	}
+	return append([]byte(nil), sealed[len(prefix):]...), nil
+}
 
-// This qualification registry deliberately relies on the dev base just used by source.
-// Production templates need the stable authenticated registry and cache recovery in PLAN.md.
-func registry(ctx context.Context, layer templateexport.Layer) (string, func(), error) {
-	base, err := msb.Image.Inspect(ctx, "sandbox-studio-base:dev")
+type registryProbe struct {
+	store                         *store.Store
+	env                           store.Environment
+	registry                      *templateregistry.Registry
+	root                          string
+	dbPath                        string
+	addr                          string
+	listener                      net.Listener
+	server                        *http.Server
+	serveDone                     chan error
+	authenticatedManifestRequests atomic.Uint64
+}
+
+func openRegistryProbe(ctx context.Context, tempRoot string) (*registryProbe, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
-	var layers []descriptor
-	var diffIDs []string
-	for _, l := range base.Layers {
-		if l.CompressedSizeBytes == nil {
-			return "", nil, errors.New("base layer size missing")
-		}
-		mt := l.MediaType
-		if strings.Contains(mt, "docker") {
-			mt = "application/vnd.oci.image.layer.v1.tar"
-			if strings.Contains(l.MediaType, "gzip") {
-				mt += "+gzip"
-			}
-		}
-		layers = append(layers, descriptor{mt, l.BlobDigest, *l.CompressedSizeBytes})
-		diffIDs = append(diffIDs, l.DiffID)
+	p := &registryProbe{
+		root: filepath.Join(tempRoot, "registry-data"), dbPath: filepath.Join(tempRoot, "registry-catalog.sqlite"),
+		addr: listener.Addr().String(), listener: listener,
 	}
-	layers = append(layers, descriptor{"application/vnd.oci.image.layer.v1.tar+gzip", layer.Digest, layer.Size})
-	diffIDs = append(diffIDs, layer.DiffID)
-	c := base.Config
-	cb, err := json.Marshal(map[string]any{"architecture": base.Architecture(), "os": base.OS(), "config": map[string]any{
-		"Env": c.Env, "Cmd": c.Cmd, "Entrypoint": c.Entrypoint, "WorkingDir": c.WorkingDir, "User": c.User, "Labels": c.Labels, "StopSignal": c.StopSignal},
-		"rootfs": map[string]any{"type": "layers", "diff_ids": diffIDs}})
+	fail := func(err error) (*registryProbe, error) { return nil, errors.Join(err, p.Close()) }
+	p.store, err = store.Open(ctx, p.dbPath)
 	if err != nil {
-		return "", nil, err
+		return fail(err)
 	}
-	cd := digest(cb)
-	mb, err := json.Marshal(map[string]any{"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
-		"config": descriptor{"application/vnd.oci.image.config.v1+json", cd, int64(len(cb))}, "layers": layers})
+	p.env, err = p.store.CreateEnvironment(ctx, "layer-export-roundtrip")
 	if err != nil {
-		return "", nil, err
+		return fail(err)
 	}
-	md := digest(mb)
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	p.registry, err = templateregistry.Open(ctx, p.store, p.root, p.addr, roundtripSealer{})
 	if err != nil {
-		return "", nil, err
+		return fail(err)
 	}
-	srv := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" && r.Method != "HEAD" {
-			w.WriteHeader(405)
-			return
+	if err := p.startHTTP(); err != nil {
+		return fail(err)
+	}
+	return p, nil
+}
+
+func (p *registryProbe) startHTTP() error {
+	if p.registry == nil || p.listener == nil {
+		return errors.New("registry HTTP server is missing its registry or listener")
+	}
+	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, Handler: countAuthenticatedManifests(&p.authenticatedManifestRequests, p.registry.Handler())}
+	done := make(chan error, 1)
+	listener := p.listener
+	p.server, p.serveDone = server, done
+	go func() {
+		err := server.Serve(listener)
+		if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
+			err = nil
 		}
-		w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
-		var body []byte
-		switch r.URL.Path {
-		case "/v2/":
-			return
-		case "/v2/studio/template/manifests/export", "/v2/studio/template/manifests/" + md:
-			w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
-			w.Header().Set("Docker-Content-Digest", md)
-			body = mb
-		case "/v2/studio/template/blobs/" + cd:
-			w.Header().Set("Content-Type", "application/vnd.oci.image.config.v1+json")
-			w.Header().Set("Docker-Content-Digest", cd)
-			body = cb
-		case "/v2/studio/template/blobs/" + layer.Digest:
-			f, err := os.Open(layer.Path)
-			if err != nil {
-				http.Error(w, "layer unavailable", 500)
-				return
-			}
-			defer f.Close()
-			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Header().Set("Docker-Content-Digest", layer.Digest)
-			http.ServeContent(w, r, "layer", time.Time{}, f)
-			return
-		default:
-			http.NotFound(w, r)
-			return
+		done <- err
+	}()
+	return nil
+}
+
+func (p *registryProbe) stopHTTP() error {
+	server, listener, done := p.server, p.listener, p.serveDone
+	p.server, p.listener, p.serveDone = nil, nil, nil
+	var stopErr error
+	if server != nil {
+		if err := server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+			stopErr = errors.Join(stopErr, err)
 		}
-		w.Header().Set("Content-Length", fmt.Sprint(len(body)))
-		if r.Method == "GET" {
-			_, _ = w.Write(body)
+	}
+	if listener != nil {
+		if err := listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			stopErr = errors.Join(stopErr, err)
 		}
-	})}
-	go srv.Serve(ln)
-	return ln.Addr().String() + "/studio/template:export", func() { _ = srv.Close() }, nil
+	}
+	if done != nil {
+		if err := <-done; err != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("serve registry HTTP: %w", err))
+		}
+	}
+	return stopErr
+}
+
+func (p *registryProbe) Close() error {
+	var closeErr error
+	closeErr = errors.Join(closeErr, p.stopHTTP())
+	if p.registry != nil {
+		closeErr = errors.Join(closeErr, p.registry.Close())
+		p.registry = nil
+	}
+	if p.store != nil {
+		closeErr = errors.Join(closeErr, p.store.Close())
+		p.store = nil
+	}
+	return closeErr
+}
+
+func (p *registryProbe) Restart(ctx context.Context) error {
+	if err := p.stopHTTP(); err != nil {
+		return err
+	}
+	envID := p.env.ID
+	if p.registry != nil {
+		if err := p.registry.Close(); err != nil {
+			return err
+		}
+		p.registry = nil
+	}
+	if p.store != nil {
+		if err := p.store.Close(); err != nil {
+			return err
+		}
+		p.store = nil
+	}
+	reopenedStore, err := store.Open(ctx, p.dbPath)
+	if err != nil {
+		return fmt.Errorf("reopen private registry catalog: %w", err)
+	}
+	p.store = reopenedStore
+	p.env, err = p.store.Environment(ctx, envID)
+	if err != nil {
+		return fmt.Errorf("reload registry environment after restart: %w", err)
+	}
+	registry, err := templateregistry.Open(ctx, p.store, p.root, p.addr, roundtripSealer{})
+	if err != nil {
+		return err
+	}
+	p.registry = registry
+	listener, err := net.Listen("tcp", p.addr)
+	if err != nil {
+		return fmt.Errorf("rebind template registry to original address %s: %w", p.addr, err)
+	}
+	p.listener = listener
+	return p.startHTTP()
+}
+
+func (p *registryProbe) StagingDir(ctx context.Context) (string, error) {
+	return p.registry.StagingDir(ctx, p.env.ID)
+}
+
+func (p *registryProbe) CreateEnvironment(ctx context.Context, name string) (store.Environment, error) {
+	return p.store.CreateEnvironment(ctx, name)
+}
+
+func (p *registryProbe) Publish(ctx context.Context, base templateimage.Base, layer templateexport.Layer, spec string) (store.Template, templateimage.Image, templateregistry.Reference, error) {
+	platform := base.OS + "/" + base.Architecture
+	if base.Variant != "" {
+		platform += "/" + base.Variant
+	}
+	cacheKey, err := templateimage.CacheKey([]byte(spec), base.Digest, platform, templateimage.ExporterVersion)
+	if err != nil {
+		return store.Template{}, templateimage.Image{}, templateregistry.Reference{}, err
+	}
+	image, err := templateimage.Compose(base, layer)
+	if err != nil {
+		return store.Template{}, templateimage.Image{}, templateregistry.Reference{}, err
+	}
+	in := store.Template{
+		EnvironmentID: p.env.ID, CacheKey: cacheKey, Spec: spec,
+		BaseRef: base.Reference, BaseDigest: base.Digest, Platform: platform,
+		ExporterVersion: templateimage.ExporterVersion,
+	}
+	tmpl, err := p.registry.Publish(ctx, in, image, layer)
+	if err != nil {
+		return store.Template{}, templateimage.Image{}, templateregistry.Reference{}, err
+	}
+	ref, err := p.registry.Resolve(ctx, p.env.ID, tmpl.ID)
+	return tmpl, image, ref, err
+}
+
+type responseStatusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *responseStatusWriter) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *responseStatusWriter) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
+}
+
+func (w *responseStatusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func countAuthenticatedManifests(counter *atomic.Uint64, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _, hasBasicAuth := r.BasicAuth()
+		manifestRoute := (r.Method == http.MethodGet || r.Method == http.MethodHead) && isManifestRoute(r.URL.Path)
+		statusWriter := &responseStatusWriter{ResponseWriter: w}
+		next.ServeHTTP(statusWriter, r)
+		if hasBasicAuth && manifestRoute && statusWriter.status == http.StatusOK {
+			counter.Add(1)
+		}
+	})
+}
+
+func isManifestRoute(path string) bool {
+	parts := strings.Split(path, "/")
+	return len(parts) == 7 && parts[0] == "" && parts[1] == "v2" && parts[2] == "studio" && parts[5] == "manifests"
+}
+
+func inspectRegistryBase(ctx context.Context) (templateimage.Base, error) {
+	detail, err := msb.Image.Inspect(ctx, "sandbox-studio-base:dev")
+	if err != nil {
+		return templateimage.Base{}, err
+	}
+	if detail == nil || detail.Config == nil {
+		return templateimage.Base{}, errors.New("SDK returned incomplete dev-base metadata")
+	}
+	base := templateimage.Base{
+		Reference: detail.Reference(), Digest: detail.ManifestDigest(),
+		Architecture: detail.Architecture(), OS: detail.OS(),
+		Config: templateimage.Config{
+			Env: append([]string(nil), detail.Config.Env...), Cmd: append([]string(nil), detail.Config.Cmd...),
+			Entrypoint: append([]string(nil), detail.Config.Entrypoint...), WorkingDir: detail.Config.WorkingDir,
+			User: detail.Config.User, StopSignal: detail.Config.StopSignal, Labels: detail.Config.Labels,
+		},
+		Layers: make([]templateimage.BaseLayer, 0, len(detail.Layers)),
+	}
+	for _, layer := range detail.Layers {
+		if layer.CompressedSizeBytes == nil {
+			return templateimage.Base{}, errors.New("SDK base layer compressed size is missing")
+		}
+		base.Layers = append(base.Layers, templateimage.BaseLayer{
+			Descriptor: templateimage.Descriptor{MediaType: layer.MediaType, Digest: layer.BlobDigest, Size: *layer.CompressedSizeBytes},
+			DiffID:     layer.DiffID,
+		})
+	}
+	return base, nil
+}
+
+func registryManifestPath(envID, templateID, digest string) string {
+	return "/v2/studio/" + envID + "/" + templateID + "/manifests/" + digest
+}
+
+func registryGET(ctx context.Context, addr, path, username, password string) (int, http.Header, []byte, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr+path, nil)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	if username != "" || password != "" {
+		request.SetBasicAuth(username, password)
+	}
+	client := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{}}
+	defer client.CloseIdleConnections()
+	response, err := client.Do(request)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	body, readErr := io.ReadAll(response.Body)
+	closeErr := response.Body.Close()
+	return response.StatusCode, response.Header.Clone(), body, errors.Join(readErr, closeErr)
+}
+
+func checkRegistryHTTP(ctx context.Context, addr string, tmpl store.Template, image templateimage.Image, ref templateregistry.Reference, otherEnvID string) error {
+	digest := image.ManifestDescriptor.Digest
+	status, _, _, err := registryGET(ctx, addr, registryManifestPath(tmpl.EnvironmentID, tmpl.ID, digest), "", "")
+	if err != nil {
+		return err
+	}
+	if status != http.StatusUnauthorized {
+		return fmt.Errorf("unauthenticated manifest request returned %d, want 401", status)
+	}
+	status, _, _, err = registryGET(ctx, addr, registryManifestPath(otherEnvID, tmpl.ID, digest), ref.Username, ref.Password)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusNotFound {
+		return fmt.Errorf("cross-environment manifest request returned %d, want 404", status)
+	}
+	return checkAuthenticatedManifest(ctx, addr, tmpl, image, ref)
+}
+
+func checkAuthenticatedManifest(ctx context.Context, addr string, tmpl store.Template, image templateimage.Image, ref templateregistry.Reference) error {
+	status, header, body, err := registryGET(ctx, addr, registryManifestPath(tmpl.EnvironmentID, tmpl.ID, image.ManifestDescriptor.Digest), ref.Username, ref.Password)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("authenticated manifest request returned %d, want 200", status)
+	}
+	if header.Get("Content-Type") != templateimage.MediaManifest || header.Get("Docker-Content-Digest") != image.ManifestDescriptor.Digest {
+		return errors.New("authenticated manifest response has incorrect OCI headers")
+	}
+	if !bytes.Equal(body, image.Manifest) {
+		return errors.New("authenticated manifest response bytes differ from published image")
+	}
+	return nil
 }
 
 const fixtures = `import os, pathlib, shutil

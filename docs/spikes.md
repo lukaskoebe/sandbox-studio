@@ -181,6 +181,8 @@ Windows.
 
 ## M3 — OCI template image spike
 
+### Historical disposable-registry spike
+
 On microsandbox 0.7.7, a loopback registry served a derived image made from the installed
 Studio base plus one small gzip layer. Creating a fresh deny-all sandbox took about
 2.5 seconds. The registry received manifest, config and new-layer requests, with no base
@@ -202,14 +204,49 @@ temporary deny-all base sandbox can validate/prewarm it. Use the digest-pinned u
 reference with `IfMissing` for releases, or `Never` for the local-only dev base. This
 recovery sequence is source-reviewed; cold-cache recovery was not exercised by the spike.
 
+### Persistent registry qualification (2026-10-09)
+
+Production Studio starts a read-only HTTP registry at `127.0.0.1:7880`, guarded by
+an exact Host check and GET/HEAD only. Environment-scoped Basic credentials derive from the
+vault-sealed install key. References are digest-only at
+`/studio/<env>/<template>@<digest>`; artifacts are stored under private `<data>/templates`.
+Publication stages artifacts, renames the completed directory, then marks the catalog entry
+ready. Creating/ready/deleting states and startup reconciliation clean up interrupted work.
+The service has no tags, uploads or catalog endpoint.
+
+The pure `templateimage.Compose` path supports Studio-controlled bases and the common config
+subset. It preserves base layer digests, sizes and diff IDs, normalizes media types, adds the
+validated exported layer, and builds cache identity from normalized spec bytes, base digest,
+platform and exporter version; catalog entries are environment-scoped. Missing, truncated
+or symlinked ready artifacts
+return explicit errors without silently replacing the ready record. Same-size corruption is
+checked by the OCI client's digest verification. The builder/cache invocation, base prewarm
+and recovery, API and UI remain unwired; templates still depend on base layers already being
+available in microsandbox's cache.
+
+The production registry passed a live roundtrip on Linux amd64 with microsandbox 0.7.7.
+The probe allocated a private loopback port and retained it across a full registry and
+SQLite reopen. The digest reference and credentials survived; an unauthenticated manifest
+request returned 401, a cross-environment request returned 404, and authenticated GET
+returned the published bytes and OCI headers. A request counter confirmed that the SDK
+itself authenticated and fetched the manifest before booting the destination VM.
+
+The import preserved the previous filesystem assertions and exclusions: 20 entries,
+27,648 tar bytes and 1,425 gzip bytes. Exporter and exact-watchdog SIGKILL probes again
+failed without retaining an artifact, and guest writes resumed. Both disposable VMs and
+the derived image reference were removed; existing VMs were untouched. The source warmed
+the development base first, so this does not qualify cold-cache recovery or the builder.
+Production race tests, registry lifecycle tests and the host build also pass.
+
 ### Layer transfer and capture foundations
 
 The implemented Go guest exporter sends bounded data frames and a completion trailer with
 version, byte count and SHA-256. `Hub.Export` validates and normalizes the tar into a gzip
 artifact without extracting it. It keeps the artifact only after framing, tar, gzip and
 file completion succeed; failures close the source and discard the partial file. The
-exporter and Hub API are implemented, but the persistent authenticated registry, template
-builder, cache integration, API and UI are not wired.
+exporter and Hub API are implemented. The persistent authenticated registry and pure image
+composition/cache identity are implemented; the template builder, cache invocation, base
+prewarm/recovery, API and UI are not wired.
 
 The capture probe in `spikes/layer-export` runs **inside a disposable guest**. On Linux
 with msb 0.7.7, agentd retained descriptors to the hidden ext4 upper filesystem; their
@@ -238,7 +275,8 @@ It preserved file contents and mode 0751, symlink and hardlink inode identity, t
 `etc/issue.net` whiteout, the `/usr/share/doc/base-files` opaque directory, and untouched
 base files. Workspace, Docker state, transients, Studio environment config and CA were
 excluded; the system bundle matched the base. Its disposable registry relies on a warm
-dev-base cache and does not qualify persistent registry or template-builder integration.
+dev-base cache and does not qualify the current production registry or template-builder
+integration.
 
 Remaining live qualifications: macOS and Windows hosts, an arm64 guest, and oversized or
 backpressured full captures. Userspace cannot guarantee automatic recovery if a kernel
