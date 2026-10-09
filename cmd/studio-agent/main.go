@@ -28,6 +28,18 @@ func main() {
 			log.Error("studio-agent stopped", "err", err)
 			os.Exit(1)
 		}
+	case "export-layer":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := exportLayer(ctx, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: export-layer: %v\n", err)
+			os.Exit(1)
+		}
+	case "__capture-watchdog":
+		if err := captureWatchdog(); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: capture watchdog: %v\n", err)
+			os.Exit(1)
+		}
 	case "boot":
 		// Studio runs this after every VM boot: see guest.Boot.
 		if err := boot(); err != nil {
@@ -55,7 +67,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|oci-runtime]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|oci-runtime|export-layer]\n")
 		os.Exit(2)
 	}
 }

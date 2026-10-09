@@ -39,9 +39,10 @@ type Hub struct {
 }
 
 type conn struct {
-	sess  *yamux.Session
-	hello agentproto.Hello
-	since time.Time
+	sess       *yamux.Session
+	hello      agentproto.Hello
+	since      time.Time
+	exportOpen chan struct{}
 }
 
 // NewHub returns an empty hub.
@@ -121,7 +122,7 @@ func (h *Hub) serve(id string, nc net.Conn) {
 	}
 	st.Close()
 
-	c := &conn{sess: sess, hello: hello, since: time.Now()}
+	c := &conn{sess: sess, hello: hello, since: time.Now(), exportOpen: make(chan struct{}, 1)}
 	h.mu.Lock()
 	old := h.sessions[id]
 	h.sessions[id] = c

@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 )
 
@@ -26,4 +27,12 @@ func supervise(context.Context, *slog.Logger) error {
 
 func ociRuntime([]string) error {
 	return errors.New("studio-agent only runs inside Linux sandboxes")
+}
+
+func exportLayer(context.Context, io.Writer) error {
+	return errors.New("studio-agent export-layer only runs inside Linux sandboxes")
+}
+
+func captureWatchdog() error {
+	return errors.New("studio-agent capture watchdog only runs inside Linux sandboxes")
 }

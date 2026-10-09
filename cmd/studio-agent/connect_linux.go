@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/guest"
+	"github.com/lukaskoebe/sandbox-studio/internal/guestcapture"
 )
 
 func connect(ctx context.Context, log *slog.Logger) error {
@@ -39,3 +41,9 @@ func supervise(ctx context.Context, log *slog.Logger) error {
 }
 
 func ociRuntime(args []string) error { return guest.OCIRuntime(args) }
+
+func exportLayer(ctx context.Context, dst io.Writer) error {
+	return guestcapture.Export(ctx, dst)
+}
+
+func captureWatchdog() error { return guestcapture.RunWatchdog() }

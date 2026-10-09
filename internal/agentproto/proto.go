@@ -30,7 +30,7 @@ const (
 	KindHello    = "hello"
 	KindPTY      = "pty"
 	KindTCP      = "tcp"
-	KindExport   = "export" // reserved for the guest capture handler; framing is implemented
+	KindExport   = "export" // no request body; guest replies with bounded data, completion, or error frames
 	KindSessions = "sessions"
 	KindPorts    = "ports"
 	KindKill     = "kill" // ends the tmux session named in Header.Session
