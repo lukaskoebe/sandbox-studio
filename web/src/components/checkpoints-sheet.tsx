@@ -236,8 +236,6 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
                       {new Date(checkpoint.createdAt).toLocaleString()}
                     </time>
                     <span className="px-1.5">·</span>
-                    Source generation {checkpoint.generation}
-                    <span className="px-1.5">·</span>
                     <span className="capitalize">{checkpoint.state}</span>
                   </p>
                   {checkpoint.state === "deleting" ? (
@@ -251,54 +249,57 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
                   ) : null}
                 </div>
                 <div className="flex items-center gap-1">
-                  <AlertDialog>
-                    <AlertDialogTrigger
-                      render={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={mutationPending || !canRestore}
-                        />
-                      }
-                    >
-                      <ArrowCounterClockwiseIcon />
-                      Restore
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Restore {checkpoint.name}?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This replaces the sandbox&apos;s root filesystem,
-                          workspace, and Docker state with the saved checkpoint.
-                          Any work done since this checkpoint will be lost.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          variant="destructive"
-                          disabled={mutationPending || !canRestore}
-                          onClick={() => {
-                            if (mutationPending || !canRestore) return
-                            restore.mutate({
-                              params: {
-                                path: {
-                                  env,
-                                  id: sandbox.id,
-                                  checkpoint: checkpoint.id,
+                  {sandbox.checkpointRestoreSupported && (
+                    <AlertDialog>
+                      <AlertDialogTrigger
+                        render={
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={mutationPending || !canRestore}
+                          />
+                        }
+                      >
+                        <ArrowCounterClockwiseIcon />
+                        Restore
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Restore {checkpoint.name}?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This replaces the sandbox&apos;s root filesystem,
+                            workspace, and Docker state with the saved
+                            checkpoint. Any work done since this checkpoint will
+                            be lost.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            variant="destructive"
+                            disabled={mutationPending || !canRestore}
+                            onClick={() => {
+                              if (mutationPending || !canRestore) return
+                              restore.mutate({
+                                params: {
+                                  path: {
+                                    env,
+                                    id: sandbox.id,
+                                    checkpoint: checkpoint.id,
+                                  },
                                 },
-                              },
-                            })
-                          }}
-                        >
-                          {restore.isPending && <Spinner />}
-                          Restore
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                              })
+                            }}
+                          >
+                            {restore.isPending && <Spinner />}
+                            Restore
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                   <AlertDialog>
                     <AlertDialogTrigger
                       render={

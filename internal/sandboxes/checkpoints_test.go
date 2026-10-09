@@ -361,6 +361,21 @@ func TestDeleteSandboxRetriesParentAfterRemovingIndexedChild(t *testing.T) {
 	}
 }
 
+func TestDeleteCheckpointWithChildLeavesItReady(t *testing.T) {
+	f := newCheckpointFixture(t)
+	parent := f.createReadyCheckpoint(t, "first")
+	child := f.createReadyCheckpoint(t, "second")
+	f.runtime.setCheckpointChild(parent.ID, child.ID)
+
+	if err := f.manager.DeleteCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, parent.ID); !errors.Is(err, runtime.ErrCheckpointInUse) {
+		t.Fatalf("DeleteCheckpoint(parent) = %v; want ErrCheckpointInUse", err)
+	}
+	got, err := f.store.Checkpoint(f.ctx, f.env.ID, f.sandbox.ID, parent.ID)
+	if err != nil || got.State != store.CheckpointStateReady {
+		t.Fatalf("parent after refused delete = %+v, %v; want ready", got, err)
+	}
+}
+
 func TestDeleteSandboxPreservesSourceWhenCheckpointCleanupStalls(t *testing.T) {
 	f := newCheckpointFixture(t)
 	sourceName := VMName(f.sandbox)
@@ -611,7 +626,7 @@ func (f *fakeSandboxRuntime) RemoveCheckpoint(_ context.Context, sandboxID, chec
 	f.mu.Lock()
 	if childID, ok := f.checkpointChildren[checkpointID]; ok && f.checkpoints[sandboxID+"/"+childID] {
 		f.mu.Unlock()
-		return errors.New("snapshot has an indexed child")
+		return runtime.ErrCheckpointInUse // As the real runtime reports an indexed child.
 	}
 	delete(f.checkpoints, key)
 	f.mu.Unlock()

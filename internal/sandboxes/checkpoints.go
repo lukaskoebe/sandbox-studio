@@ -101,13 +101,20 @@ func (m *Manager) DeleteCheckpoint(ctx context.Context, envID, id, checkpointID 
 }
 
 func (m *Manager) deleteCheckpointLocked(ctx context.Context, envID, id, checkpointID string) error {
-	if _, err := m.Store.Checkpoint(ctx, envID, id, checkpointID); err != nil {
+	cp, err := m.Store.Checkpoint(ctx, envID, id, checkpointID)
+	if err != nil {
 		return err
 	}
 	if err := m.Store.SetCheckpointState(ctx, envID, id, checkpointID, store.CheckpointStateDeleting); err != nil {
 		return err
 	}
 	if err := m.Runtime.RemoveCheckpoint(ctx, id, checkpointID); err != nil {
+		// A checkpoint that newer ones depend on was left as it was, so it isn't half deleted.
+		if errors.Is(err, runtime.ErrCheckpointInUse) {
+			resetCtx, cancel := cleanupContext(ctx)
+			defer cancel()
+			return errors.Join(err, m.Store.SetCheckpointState(resetCtx, envID, id, checkpointID, cp.State))
+		}
 		return err
 	}
 	return m.Store.DeleteCheckpoint(ctx, envID, id, checkpointID)
