@@ -425,12 +425,39 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   state was removed after cleanup. See the
   [worker qualification record](spikes/template-jobs/README.md).
 
+  After the separate initial `mise.jdx.dev` refusal documented in the worker qualification
+  record, a full Linux amd64 warm-cache apt/mise qualification passed on retry. That pass
+  remains valid. It inspected
+  base `sha256:99c7dca226e66d0cf26b8b75469dcb59b05b9d306b9858b8120873f6f241c29b`, observed
+  tree package `2.2.1-1`, mise `2026.10.4 linux-x64 (2026-10-07)`, and Node `v22.14.0`,
+  and observed the same connection ID held pending then allowed for each connection to
+  `deb.debian.org:80`, `download.docker.com:443`, `mise-versions.jdx.dev:443`,
+  `nodejs.org:443`, and `mise.jdx.dev:443`. The layer retained tree and Node; the canonical
+  cache repeat made no build-sandbox attach. A fresh instance ran both tools with current
+  private CA and placeholder, and no gateway TCP connection was observed from it. This does
+  not claim there was no network traffic: DNS forwarding through `dnsproxy.SystemUpstreams()`
+  is outside the approval flow and was not qualified. During the builder probe, an unlisted
+  outbound TCP gateway destination failed qualification: approval was withheld, the private
+  build was canceled, and the host was reported. Cleanup completed, no new VM names
+  remained, and private state was removed. The fixture used a dummy `TOKEN` placeholder and
+  private generated gateway/registry credentials; it accessed no real user credentials or
+  host keychain. Guest resource, capture-size, and runtime-duration bounds do not qualify
+  host-gateway connection or traffic resource limits under adversarial load.
+
+  Later warm-cache runs installed apt `tree` and pinned Node and observed the required
+  approvals, then failed during export with host `read export frame: unexpected EOF` and a
+  captured guest write timeout followed by watchdog cleanup (`exit status 1`). An experimental
+  normalized-tar staging change reproduced the failure and did not establish a fix. The
+  captured kernel tail contains no OOM-killer entry, but is not complete no-OOM evidence. The
+  successful retry and its approval, cache, and fresh-instance checks remain valid; they do not
+  establish reliable export. Network-install export transport qualification remains unresolved.
+
   Frontend checks passed; 2026-10-09 desktop/mobile browser probes with mocked build
   requests verified byte-exact BOM/CRLF downloads, invalid-file draft retention, pending
   guards, 422 draft retention, and submitted-job source download. No live-worker UI build
   or workflow was run. These results do not complete M3. Remaining work includes rebase,
-  apt/mise network installs, cold-cache pulls, macOS and Windows host VM runs, arm64, the
-  release template base digest pin, and
+  apt/mise network-install export-transport qualification, cold-cache pulls, macOS and
+  Windows host VM runs, arm64, the release template base digest pin, and
   oversized/backpressured capture qualification. Unsupported overlay features and file
   types remain out of scope. Userspace cannot guarantee automatic recovery if a kernel
   freeze/thaw call never returns; stopping or rebooting the VM remains possible. Restore

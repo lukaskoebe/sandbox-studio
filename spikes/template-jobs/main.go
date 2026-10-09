@@ -30,38 +30,49 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
+	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/ocilayer"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatebuild"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateexport"
+	"github.com/lukaskoebe/sandbox-studio/internal/templateimage"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
 
 const (
-	baseImage           = "sandbox-studio-base:dev"
-	dummyPlaceholder    = "studio-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	instancePlaceholder = "studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	proofPath           = "home/agent/template-build-proof"
-	totalTimeout        = 6 * time.Minute
-	workerStopTimeout   = 25 * time.Second
-	serverStopTimeout   = 5 * time.Second
-	jobPollInterval     = 200 * time.Millisecond
-	logFlushTimeout     = 5 * time.Second
-	probePasswordPrefix = "SS_TEMPLATE_JOBS_GATEWAY_"
-	maxFailureLogBytes  = 8 << 10
+	baseImage                  = "sandbox-studio-base:dev"
+	dummyPlaceholder           = "studio-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	instancePlaceholder        = "studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	proofPath                  = "home/agent/template-build-proof"
+	totalTimeout               = 6 * time.Minute
+	networkTimeout             = 20 * time.Minute
+	workerStopTimeout          = 25 * time.Second
+	serverStopTimeout          = 5 * time.Second
+	jobPollInterval            = 200 * time.Millisecond
+	logFlushTimeout            = 5 * time.Second
+	probePasswordPrefix        = "SS_TEMPLATE_JOBS_GATEWAY_"
+	maxFailureLogBytes         = 8 << 10
+	exportDiagnosticLimit      = 24 << 10
+	exportDiagnosticTimeout    = 20 * time.Second
+	exportDiagnosticRunTimeout = 8 * time.Second
 )
 
 func main() {
 	agent := flag.String("agent", "", "absolute path to a compiled Linux amd64 studio-agent binary")
 	scratch := flag.String("scratch", os.TempDir(), "parent directory for private qualification state")
+	networkInstalls := flag.Bool("network-installs", false, "qualify private apt and pinned mise installs through held gateway approvals")
 	flag.Parse()
 	if *agent == "" || !filepath.IsAbs(*agent) {
 		fmt.Fprintln(os.Stderr, "-agent must name an absolute path to a compiled Linux amd64 studio-agent binary")
@@ -72,15 +83,19 @@ func main() {
 		os.Exit(2)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), totalTimeout)
+	timeout := totalTimeout
+	if *networkInstalls {
+		timeout = networkTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := qualify(ctx, *agent, *scratch); err != nil {
+	if err := qualify(ctx, *agent, *scratch, *networkInstalls); err != nil {
 		fmt.Fprintln(os.Stderr, "FAIL template-jobs qualification:", err)
 		os.Exit(1)
 	}
 }
 
-func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
+func qualify(ctx context.Context, agentPath, scratch string, networkInstalls bool) (retErr error) {
 	started := time.Now()
 	scratchPath, err := filepath.Abs(scratch)
 	if err != nil {
@@ -106,11 +121,16 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 	var workerProcess *workerRun
 	workerStopped := true
 	preserveRoot := false
+	ownedCleanupConfirmed := true
 	var privateEnv store.Environment
 	var rt *runtime.Runtime
 	var initialVMs map[string]runtime.Status
 	var hub *agentchan.Hub
 	var egress *probeEgress
+	var networkPolicy *policy.Engine
+	var networkGateway *gateway.Gateway
+	var networkGatewayListener *trackedGatewayListener
+	var networkGatewayServeErr chan error
 	var templateInstanceCleanupPending bool
 
 	defer func() {
@@ -119,6 +139,7 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 			workerStopped = stopped
 			if !stopped {
 				preserveRoot = true
+				ownedCleanupConfirmed = false
 				retErr = errors.Join(retErr, stopErr)
 			} else if stopErr != nil {
 				retErr = errors.Join(retErr, fmt.Errorf("stop template worker: %w", stopErr))
@@ -132,28 +153,34 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 			// The worker may still be inside an SDK/native call. Its catalog and
 			// private registry stay open until process exit; the root is retained.
 			preserveRoot = true
+			ownedCleanupConfirmed = false
 		} else {
 			if templateInstanceCleanupPending {
 				preserveRoot = true
+				ownedCleanupConfirmed = false
 				retErr = errors.Join(retErr, errors.New("private template instance cleanup is not confirmed"))
 			}
 			if rt != nil && rt.PendingRun() {
 				preserveRoot = true
+				ownedCleanupConfirmed = false
 				retErr = errors.Join(retErr, errors.New("runtime command cleanup is still pending"))
 			}
 			if st != nil && privateEnv.ID != "" {
 				pending, pendingErr := privateOwnershipPending(cleanupCtx, st, privateEnv.ID)
 				if pendingErr != nil {
 					preserveRoot = true
+					ownedCleanupConfirmed = false
 					retErr = errors.Join(retErr, fmt.Errorf("check private sandbox and template ownership: %w", pendingErr))
 				} else if pending {
 					preserveRoot = true
+					ownedCleanupConfirmed = false
 					retErr = errors.Join(retErr, errors.New("private build, prewarm, or template-instance ownership is still pending"))
 				}
 			}
 			if egress != nil {
 				if egressErr := egress.assertDetached(); egressErr != nil {
 					preserveRoot = true
+					ownedCleanupConfirmed = false
 					retErr = errors.Join(retErr, egressErr)
 				}
 			}
@@ -161,14 +188,53 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 				after, statusErr := rt.Statuses(cleanupCtx, sandboxes.VMPrefix)
 				if statusErr != nil {
 					preserveRoot = true
+					ownedCleanupConfirmed = false
 					retErr = errors.Join(retErr, fmt.Errorf("snapshot prefixed VMs after qualification: %w", statusErr))
 				} else if lingering := newVMNames(initialVMs, after, false); len(lingering) != 0 {
 					preserveRoot = true
+					ownedCleanupConfirmed = false
 					retErr = errors.Join(retErr, fmt.Errorf("new prefixed VMs remain after worker cleanup: %s", strings.Join(lingering, ", ")))
 				} else {
 					fmt.Println("PASS no new prefixed VM names remain after owned cleanup")
 				}
 			}
+		}
+
+		gatewayStopped := networkGatewayListener == nil
+		if networkGatewayListener != nil && ownedCleanupConfirmed {
+			gatewayServeStopped := networkGatewayServeErr == nil
+			if closeErr := networkGatewayListener.Close(); closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+				retErr = errors.Join(retErr, fmt.Errorf("close private gateway listener: %w", closeErr))
+				preserveRoot = true
+			}
+			if networkGatewayServeErr != nil {
+				serverCtx, serverCancel := context.WithTimeout(context.Background(), serverStopTimeout)
+				select {
+				case serveErr := <-networkGatewayServeErr:
+					gatewayServeStopped = true
+					if serveErr != nil && !errors.Is(serveErr, net.ErrClosed) {
+						retErr = errors.Join(retErr, fmt.Errorf("private gateway server: %w", serveErr))
+						preserveRoot = true
+					}
+				case <-serverCtx.Done():
+					retErr = errors.Join(retErr, errors.New("private gateway server did not stop after listener close"))
+					preserveRoot = true
+				}
+				serverCancel()
+			}
+			drainCtx, drainCancel := context.WithTimeout(context.Background(), networkGatewayDrainTimeout)
+			if drainErr := networkGatewayListener.wait(drainCtx); drainErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("private gateway handlers did not drain: %w", drainErr))
+				preserveRoot = true
+			} else if gatewayServeStopped {
+				gatewayStopped = true
+			}
+			drainCancel()
+			if gatewayStopped && networkGateway != nil && networkGateway.Resolvers != nil {
+				networkGateway.Resolvers.Close()
+			}
+		} else if networkGatewayListener != nil {
+			preserveRoot = true
 		}
 
 		if registryServer != nil {
@@ -203,11 +269,13 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 					preserveRoot = true
 				}
 			}
-			if st != nil {
+			if st != nil && gatewayStopped {
 				if closeErr := st.Close(); closeErr != nil {
 					retErr = errors.Join(retErr, fmt.Errorf("close private store: %w", closeErr))
 					preserveRoot = true
 				}
+			} else if st != nil {
+				preserveRoot = true
 			}
 		}
 
@@ -283,27 +351,84 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 	go func() { registryServeErr <- registryServer.Serve(registryListener) }()
 
 	hub = agentchan.NewHub(logger)
+	privateCA := &ca.Authority{Store: st, Sealer: sealer}
 	egress = &probeEgress{
 		attached: make(map[string]probeCredential), seenEnvs: make(map[string]struct{}),
-		seenPasswords: make(map[string]struct{}),
+		seenPasswords: make(map[string]struct{}), savedConnections: make(map[string][]gateway.Conn),
+	}
+	bus := &events.Bus{}
+	if networkInstalls {
+		gatewayKey, keyErr := st.Secret(ctx, "gateway-key", 32)
+		if keyErr != nil {
+			return fmt.Errorf("create private gateway key: %w", keyErr)
+		}
+		listener, listenErr := net.Listen("tcp4", "127.0.0.1:0")
+		if listenErr != nil {
+			return fmt.Errorf("allocate private loopback gateway listener: %w", listenErr)
+		}
+		conns := &gateway.ConnLog{}
+		resolvers := &gateway.Resolvers{Upstreams: dnsproxy.SystemUpstreams(), Log: logger}
+		networkPolicy = &policy.Engine{Store: st, Bus: bus, Hold: networkPolicyHold}
+		networkGateway = &gateway.Gateway{
+			Addr: listener.Addr().String(), Key: gatewayKey, Policy: networkPolicy,
+			Sandbox: st.LookupSandbox, Resolvers: resolvers, Conns: conns, Log: logger,
+			CA: privateCA, Dial: gateway.DialPublic,
+		}
+		networkGatewayListener = &trackedGatewayListener{Listener: listener}
+		egress.gateway = networkGateway
+		egress.connLog = conns
+		networkGatewayServeErr = make(chan error, 1)
+		go func() { networkGatewayServeErr <- networkGateway.Serve(networkGatewayListener) }()
 	}
 	manager := &sandboxes.Manager{
 		Store: st, Runtime: rt, Hub: hub, Egress: egress,
-		CA:      &ca.Authority{Store: st, Sealer: sealer},
+		CA:      privateCA,
 		Secrets: probeSecrets{env: map[string]string{"TOKEN": dummyPlaceholder}},
 		Paths:   privatePaths, Log: logger,
 		Templates: registry,
 	}
-	guests := &probeGuests{Manager: manager}
+	exportLimits := ocilayer.Limits{}
+	if networkInstalls {
+		exportLimits = ocilayer.Limits{MaxInputBytes: 512 << 20, MaxOutputBytes: 512 << 20}
+	}
+	guests := &probeGuests{Manager: manager, suppressBootError: networkInstalls}
 	worker, err := templatebuild.New(templatebuild.Options{
-		Store: st, Runtime: rt, Guests: guests, Exporter: hub, Registry: registry,
-		Bus: &events.Bus{}, Log: logger, ExportLimits: ocilayer.Limits{},
+		Store: st, Runtime: rt, Guests: guests, Exporter: probeExporter{hub: hub, store: st, runtime: rt, environmentID: privateEnv.ID}, Registry: registry,
+		Bus: bus, Log: logger, ExportLimits: exportLimits,
 	})
 	if err != nil {
 		return fmt.Errorf("create production template worker: %w", err)
 	}
 	workerProcess = startWorker(ctx, worker)
 	workerStopped = false
+
+	if networkInstalls {
+		if err := runNetworkInstallQualification(ctx, worker, workerProcess, manager, st, rt, registry, egress, networkPolicy, privateEnv.ID, suffix, &templateInstanceCleanupPending); err != nil {
+			return err
+		}
+		if err := checkRegistryServer(registryServeErr); err != nil {
+			return err
+		}
+		stopped, stopErr := workerProcess.stop(workerStopTimeout)
+		workerStopped = stopped
+		if !stopped {
+			return stopErr
+		}
+		if stopErr != nil {
+			return fmt.Errorf("template worker stopped with an error: %w", stopErr)
+		}
+		if rt.PendingRun() {
+			return errors.New("runtime command remains pending after worker shutdown")
+		}
+		if err := assertNoOwnedRecords(ctx, st, privateEnv.ID); err != nil {
+			return fmt.Errorf("private build or template-instance ownership remains after worker shutdown: %w", err)
+		}
+		if err := egress.assertDetached(); err != nil {
+			return err
+		}
+		fmt.Println("PASS private network-install worker stopped with no runtime command or owner cleanup pending")
+		return nil
+	}
 
 	setupMarker := "TEMPLATE_BUILD_SETUP_OK_" + suffix
 	setup := setupScript(setupMarker)
@@ -499,6 +624,377 @@ func qualify(ctx context.Context, agentPath, scratch string) (retErr error) {
 	return nil
 }
 
+func runNetworkInstallQualification(
+	ctx context.Context,
+	worker *templatebuild.Worker,
+	workerProcess *workerRun,
+	manager *sandboxes.Manager,
+	st *store.Store,
+	rt *runtime.Runtime,
+	registry *templateregistry.Registry,
+	egress *probeEgress,
+	engine *policy.Engine,
+	envID, suffix string,
+	cleanupPending *bool,
+) error {
+	if engine == nil {
+		return errors.New("private network-install policy engine is unavailable")
+	}
+	setupMarker := "TEMPLATE_NETWORK_INSTALL_SETUP_OK_" + suffix
+	setup := networkSetupScript(setupMarker)
+	first, created, err := worker.Submit(ctx, envID, networkBuildSource(setup, false))
+	if err != nil {
+		return fmt.Errorf("submit private network-install build: %w", err)
+	}
+	if !created {
+		return errors.New("private network-install build unexpectedly deduplicated")
+	}
+	evidence, err := waitNetworkBuild(ctx, st, worker, workerProcess, engine, egress.connLog, egress, envID, first.ID)
+	if err != nil {
+		return fmt.Errorf("wait for private network-install build: %w", err)
+	}
+	first, err = st.BuildJob(ctx, envID, first.ID)
+	if err != nil {
+		return fmt.Errorf("read completed network-install build: %w", err)
+	}
+	if err := waitJobLogMarker(ctx, st, envID, first.ID, store.BuildReady, setupMarker, workerProcess); err != nil {
+		return fmt.Errorf("wait for network-install setup log entry: %w", err)
+	}
+	firstLog, _, err := st.BuildLog(ctx, envID, first.ID)
+	if err != nil {
+		return fmt.Errorf("read private network-install build log: %w", err)
+	}
+	if first.TemplateID == "" || first.SandboxID != "" || first.CleanupPending || !strings.Contains(firstLog, setupMarker) {
+		return errors.New("network-install build did not publish and release its builder ownership")
+	}
+	if strings.Contains(firstLog, dummyPlaceholder) || !templateimage.ValidDigest(first.BaseDigest) {
+		return errors.New("network-install build log leaked the dummy placeholder or has no inspected base digest")
+	}
+	versions, err := networkInstallVersions(firstLog)
+	if err != nil {
+		return fmt.Errorf("read observed network-install versions: %w", err)
+	}
+	if versions["node"] != "v22.14.0" {
+		return fmt.Errorf("installed node version is %q, want v22.14.0", versions["node"])
+	}
+	if err := verifyPublishedLayer(ctx, st, registry, envID, first.TemplateID, setupMarker, true); err != nil {
+		return fmt.Errorf("inspect published network-install layer: %w", err)
+	}
+	if err := assertNoOwnedRecords(ctx, st, envID); err != nil {
+		return fmt.Errorf("network-install build retained owner records: %w", err)
+	}
+	if err := assertNoPendingApprovals(ctx, st, envID); err != nil {
+		return err
+	}
+	if len(evidence) == 0 {
+		return errors.New("network installs completed without an observed held-and-allowed gateway connection")
+	}
+	for _, item := range evidence {
+		if _, ok := openedConnection(egress.savedConnectionsFor(item.SandboxID), item.Conn.ID,
+			networkInstallTarget{Host: item.Conn.Host, Port: item.Conn.Port}, item.Conn.RuleID); !ok {
+			return errors.New("gateway detach did not preserve an allowed/open connection record for the observed builder connection")
+		}
+	}
+	fmt.Printf("OBSERVED network-install versions: base_digest=%s tree_package=%s tree=%q mise=%q node=%s\n",
+		first.BaseDigest, versions["tree-package"], versions["tree"], versions["mise"], versions["node"])
+	fmt.Printf("PASS private gateway held and allowed %d exact builder connection(s); first sandbox=%s connection=%d host=%s:%d verdict=%s\n",
+		len(evidence), evidence[0].SandboxID, evidence[0].Conn.ID, evidence[0].Conn.Host, evidence[0].Conn.Port, evidence[0].Conn.Verdict)
+	fmt.Println("PASS network template layer retained /usr/bin/tree and the pinned node 22.14.0 install while excluding apt and temporary caches")
+
+	if err := runNetworkCacheProbe(ctx, worker, workerProcess, st, rt, egress, envID, first, setup); err != nil {
+		return fmt.Errorf("network-template warm-cache probe: %w", err)
+	}
+	if err := runFreshNetworkTemplateInstanceProbe(ctx, manager, st, rt, registry, egress, envID, first, setupMarker, suffix, cleanupPending); err != nil {
+		return fmt.Errorf("fresh network-template instance probe: %w", err)
+	}
+	if err := assertNoPendingApprovals(ctx, st, envID); err != nil {
+		return err
+	}
+	if err := assertNoOwnedRecords(ctx, st, envID); err != nil {
+		return fmt.Errorf("network template instance retained private sandbox ownership: %w", err)
+	}
+	if err := egress.assertDetached(); err != nil {
+		return err
+	}
+	fmt.Println("PASS fresh network-template instance executed tree and node from the agent login profile and completed owned cleanup with no outbound approval")
+	return nil
+}
+
+func waitNetworkBuild(
+	ctx context.Context,
+	st *store.Store,
+	worker *templatebuild.Worker,
+	workerProcess *workerRun,
+	engine *policy.Engine,
+	conns *gateway.ConnLog,
+	egress *probeEgress,
+	envID, jobID string,
+) ([]networkConnectionEvidence, error) {
+	ticker := time.NewTicker(jobPollInterval)
+	defer ticker.Stop()
+	var evidence []networkConnectionEvidence
+	for {
+		if err := workerProcess.alive(); err != nil {
+			return nil, err
+		}
+		job, err := st.BuildJob(ctx, envID, jobID)
+		if err != nil {
+			return nil, err
+		}
+		pending, err := st.Approvals(ctx, envID, store.StatusPending, 10000)
+		if err != nil {
+			return nil, fmt.Errorf("poll private pending approvals: %w", err)
+		}
+		if len(pending) != 0 {
+			if job.SandboxID == "" || !activeNetworkBuild(job.Status) {
+				return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, "", "private network approval has no active build sandbox")
+			}
+			sandbox, err := st.Sandbox(ctx, envID, job.SandboxID)
+			if err != nil {
+				return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, "", "private network approval sandbox lookup failed")
+			}
+			for _, approval := range pending {
+				target, targetErr := validatePrivateNetworkApproval(approval, envID, job, sandbox)
+				if targetErr != nil {
+					reason := "private network approval ownership check failed"
+					if target.Host != "" && !networkInstallHostAllowed(target.Host, target.Port) {
+						reason = "unexpected network approval"
+					}
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, reason)
+				}
+				conn, ok := pendingConnection(conns.List(job.SandboxID), target)
+				if !ok {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private network approval had no held gateway connection")
+				}
+				delay := time.NewTimer(networkApprovalDelay)
+				select {
+				case <-ctx.Done():
+					delay.Stop()
+					return nil, ctx.Err()
+				case <-delay.C:
+				}
+				currentApproval, err := st.Approval(ctx, envID, approval.ID)
+				if err != nil {
+					return nil, fmt.Errorf("reread private pending approval: %w", err)
+				}
+				if currentApproval.Status != store.StatusPending {
+					continue
+				}
+				currentJob, err := st.BuildJob(ctx, envID, jobID)
+				if err != nil {
+					return nil, err
+				}
+				if currentJob.SandboxID != job.SandboxID || !activeNetworkBuild(currentJob.Status) {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private network approval lost its active build owner")
+				}
+				currentSandbox, err := st.Sandbox(ctx, envID, currentJob.SandboxID)
+				if err != nil {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private network approval sandbox lookup failed")
+				}
+				if checked, checkErr := validatePrivateNetworkApproval(currentApproval, envID, currentJob, currentSandbox); checkErr != nil || checked != target {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private network approval ownership changed while held")
+				}
+				stillHeld, stillPending := pendingConnection(conns.List(currentJob.SandboxID), target)
+				if !stillPending || stillHeld.ID != conn.ID {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private gateway connection was not held through the approval delay")
+				}
+				resolved, err := engine.Resolve(ctx, envID, approval.ID, policy.Decision{
+					Action: store.ActionAllow, Host: target.Host, Ports: []int{target.Port}, Scope: "sandbox",
+				})
+				if err != nil {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private exact network approval could not be resolved")
+				}
+				if resolved.EnvironmentID != envID || resolved.SandboxID != currentJob.SandboxID || resolved.Status != store.StatusApproved || resolved.RuleID == "" {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private exact network approval did not settle as approved")
+				}
+				if err := assertExactSandboxNetworkRule(ctx, st, envID, currentJob.SandboxID, target, resolved.RuleID); err != nil {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, target.Host, "private network approval created a non-exact rule")
+				}
+				opened, err := waitForOpenedConnection(ctx, conns, egress, currentJob.SandboxID, conn.ID, target, resolved.RuleID)
+				if err != nil {
+					return nil, rejectNetworkBuild(ctx, st, worker, workerProcess, envID, jobID, "", fmt.Sprintf("held private gateway connection did not become allowed or open: %v", err))
+				}
+				evidence = append(evidence, networkConnectionEvidence{SandboxID: currentJob.SandboxID, Conn: opened})
+				fmt.Printf("PASS held private approval: host=%s port=%d sandbox=%s connection=%d verdict=%s\n",
+					opened.Host, opened.Port, currentJob.SandboxID, opened.ID, opened.Verdict)
+			}
+		}
+		if isTerminal(job.Status) && !job.CleanupPending {
+			if job.Status != store.BuildReady {
+				_, err := waitJob(ctx, st, envID, jobID, store.BuildReady, workerProcess)
+				return nil, err
+			}
+			return evidence, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func rejectNetworkBuild(ctx context.Context, st *store.Store, worker *templatebuild.Worker, workerProcess *workerRun, envID, jobID, host, reason string) error {
+	message := reason
+	if host != "" {
+		message += fmt.Sprintf(" for host %q", host)
+	}
+	_, cancelErr := worker.Cancel(ctx, envID, jobID)
+	waitErr := waitCancelledJob(ctx, st, envID, jobID, workerProcess)
+	return errors.Join(errors.New(message+"; private test build cancelled"), cancelErr, waitErr)
+}
+
+func waitCancelledJob(ctx context.Context, st *store.Store, envID, jobID string, worker *workerRun) error {
+	ticker := time.NewTicker(jobPollInterval)
+	defer ticker.Stop()
+	for {
+		if err := worker.alive(); err != nil {
+			return err
+		}
+		job, err := st.BuildJob(ctx, envID, jobID)
+		if err != nil {
+			return err
+		}
+		if job.Status == store.BuildCancelled && !job.CleanupPending && job.SandboxID == "" {
+			return nil
+		}
+		if isTerminal(job.Status) && job.Status != store.BuildCancelled {
+			return errors.New("private build became terminal before cancellation cleanup was confirmed")
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+func assertExactSandboxNetworkRule(ctx context.Context, st *store.Store, envID, sandboxID string, target networkInstallTarget, ruleID string) error {
+	rules, err := st.Rules(ctx, envID)
+	if err != nil {
+		return err
+	}
+	for _, rule := range rules {
+		if rule.ID != ruleID {
+			continue
+		}
+		if rule.EnvironmentID != envID || rule.SandboxID != sandboxID || rule.Host != target.Host ||
+			rule.Action != store.ActionAllow || len(rule.Ports) != 1 || rule.Ports[0] != target.Port {
+			return errors.New("resolved private rule is not host-and-port exact for the active sandbox")
+		}
+		return nil
+	}
+	return errors.New("resolved private network rule is absent")
+}
+
+func waitForOpenedConnection(ctx context.Context, conns *gateway.ConnLog, egress *probeEgress, sandboxID string, connectionID uint64, target networkInstallTarget, ruleID string) (gateway.Conn, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, networkConnectionWait)
+	defer cancel()
+	ticker := time.NewTicker(jobPollInterval)
+	defer ticker.Stop()
+	lastObservedVerdict := "unobserved"
+	for {
+		connection, observed := connectionByID(conns.List(sandboxID), connectionID)
+		if !observed {
+			connection, observed = connectionByID(egress.savedConnectionsFor(sandboxID), connectionID)
+		}
+		if observed {
+			lastObservedVerdict = connection.Verdict
+			switch connection.Verdict {
+			case gateway.VerdictDenied, gateway.VerdictUndecided, gateway.VerdictFailed:
+				problem := boundedProbeConnectionError(egress, sandboxID, connection.Error)
+				return gateway.Conn{}, fmt.Errorf("connection id=%d reached terminal verdict %q (expected host=%q port=%d rule=%q; observed host=%q port=%d rule=%q; gateway error: %s)",
+					connectionID, connection.Verdict, target.Host, target.Port, ruleID, connection.Host, connection.Port, connection.RuleID, problem)
+			case gateway.VerdictOpen, gateway.VerdictAllowed:
+				if connection.Host != target.Host || connection.Port != target.Port || connection.RuleID != ruleID {
+					return gateway.Conn{}, fmt.Errorf("connection id=%d opened with unexpected evidence (expected host=%q port=%d rule=%q; observed host=%q port=%d rule=%q)",
+						connectionID, target.Host, target.Port, ruleID, connection.Host, connection.Port, connection.RuleID)
+				}
+				return connection, nil
+			default:
+				if connection.Host != target.Host || connection.Port != target.Port || connection.RuleID != "" && connection.RuleID != ruleID {
+					return gateway.Conn{}, fmt.Errorf("connection id=%d has unexpected pending evidence (expected host=%q port=%d rule=%q; observed host=%q port=%d rule=%q)",
+						connectionID, target.Host, target.Port, ruleID, connection.Host, connection.Port, connection.RuleID)
+				}
+			}
+		}
+		select {
+		case <-waitCtx.Done():
+			if ctx.Err() != nil {
+				return gateway.Conn{}, ctx.Err()
+			}
+			return gateway.Conn{}, fmt.Errorf("wait deadline of %s expired for connection id=%d host=%q port=%d rule=%q (last observed verdict=%q)",
+				networkConnectionWait, connectionID, target.Host, target.Port, ruleID, lastObservedVerdict)
+		case <-ticker.C:
+		}
+	}
+}
+
+func connectionByID(connections []gateway.Conn, id uint64) (gateway.Conn, bool) {
+	for _, connection := range connections {
+		if connection.ID == id {
+			return connection, true
+		}
+	}
+	return gateway.Conn{}, false
+}
+
+func boundedProbeConnectionError(egress *probeEgress, sandboxID, problem string) string {
+	const limit = 512
+	if problem == "" {
+		return "[empty]"
+	}
+	if egress != nil {
+		egress.mu.Lock()
+		credential, ok := egress.attached[sandboxID]
+		egress.mu.Unlock()
+		if ok && credential.password != "" {
+			problem = strings.ReplaceAll(problem, credential.password, "[redacted]")
+		}
+	}
+	if len(problem) > limit {
+		prefix := problem[:limit-3]
+		for !utf8.ValidString(prefix) {
+			prefix = prefix[:len(prefix)-1]
+		}
+		problem = prefix + "..."
+	}
+	return problem
+}
+
+func assertNoPendingApprovals(ctx context.Context, st *store.Store, envID string) error {
+	pending, err := st.Approvals(ctx, envID, store.StatusPending, 10000)
+	if err != nil {
+		return fmt.Errorf("read pending approvals from private environment: %w", err)
+	}
+	if len(pending) != 0 {
+		return fmt.Errorf("private environment retains %d pending approval(s)", len(pending))
+	}
+	return nil
+}
+
+func networkInstallVersions(buildLog string) (map[string]string, error) {
+	want := []string{"tree-package", "tree", "mise", "node"}
+	versions := make(map[string]string, len(want))
+	for _, name := range want {
+		prefix := "QUALIFICATION_VERSION_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_")) + "="
+		for _, line := range strings.Split(buildLog, "\n") {
+			if !strings.HasPrefix(line, prefix) {
+				continue
+			}
+			value := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+			if value == "" || versions[name] != "" {
+				return nil, fmt.Errorf("observed %s version is missing or repeated", name)
+			}
+			versions[name] = value
+		}
+		if versions[name] == "" {
+			return nil, fmt.Errorf("build log has no observed %s version", name)
+		}
+	}
+	return versions, nil
+}
+
 func runFreshTemplateInstanceProbe(
 	ctx context.Context,
 	manager *sandboxes.Manager,
@@ -653,6 +1149,198 @@ func runFreshTemplateInstanceProbe(
 	}
 	return nil
 }
+
+func runNetworkCacheProbe(ctx context.Context, worker *templatebuild.Worker, workerProcess *workerRun, st *store.Store, rt *runtime.Runtime, egress *probeEgress, envID string, first store.BuildJob, setup string) error {
+	before, err := rt.Statuses(ctx, sandboxes.VMPrefix)
+	if err != nil {
+		return fmt.Errorf("snapshot VMs before network-template cache hit: %w", err)
+	}
+	attachCount := egress.attachCountValue()
+	second, created, err := worker.Submit(ctx, envID, networkBuildSource(setup, true))
+	if err != nil {
+		return err
+	}
+	if !created || second.ID == first.ID || second.Spec != first.Spec || second.Source == first.Source {
+		return errors.New("canonical-equivalent network build did not create a distinct job with the same canonical spec")
+	}
+	second, err = waitJob(ctx, st, envID, second.ID, store.BuildReady, workerProcess)
+	if err != nil {
+		return err
+	}
+	if err := waitJobLogMarker(ctx, st, envID, second.ID, store.BuildReady, "Using the cached template", workerProcess); err != nil {
+		return err
+	}
+	logText, _, err := st.BuildLog(ctx, envID, second.ID)
+	if err != nil {
+		return err
+	}
+	if second.TemplateID != first.TemplateID || second.SandboxID != "" || second.CleanupPending ||
+		strings.Contains(logText, "Booting the temporary build sandbox") || strings.Contains(logText, "Running apt") ||
+		strings.Contains(logText, "Running mise") || strings.Contains(logText, "Running setup") {
+		return errors.New("network-template warm-cache repeat did not reuse the ready template without install stages")
+	}
+	after, err := rt.Statuses(ctx, sandboxes.VMPrefix)
+	if err != nil {
+		return fmt.Errorf("snapshot VMs after network-template cache hit: %w", err)
+	}
+	if lingering := newVMNames(before, after, true); len(lingering) != 0 {
+		return fmt.Errorf("network-template cache hit left new non-prewarm VMs: %s", strings.Join(lingering, ", "))
+	}
+	if got := egress.attachCountValue(); got != attachCount {
+		return fmt.Errorf("network-template cache hit attached %d new build sandboxes", got-attachCount)
+	}
+	if err := assertNoOwnedRecords(ctx, st, envID); err != nil {
+		return err
+	}
+	fmt.Println("PASS canonical-equivalent network build reused the same TemplateID without repeating apt or mise installs")
+	return nil
+}
+
+func runFreshNetworkTemplateInstanceProbe(
+	ctx context.Context,
+	manager *sandboxes.Manager,
+	st *store.Store,
+	rt *runtime.Runtime,
+	registry *templateregistry.Registry,
+	egress *probeEgress,
+	envID string,
+	build store.BuildJob,
+	buildMarker, suffix string,
+	cleanupPending *bool,
+) (retErr error) {
+	if build.TemplateID == "" {
+		return errors.New("ready network build has no template ID")
+	}
+	template, err := st.Template(ctx, envID, build.TemplateID)
+	if err != nil {
+		return fmt.Errorf("load private network template: %w", err)
+	}
+	if template.State != store.TemplateStateReady || template.EnvironmentID != envID || template.Spec != build.Spec {
+		return errors.New("network template is not ready and owned by the private environment")
+	}
+	spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
+	if err != nil {
+		return fmt.Errorf("parse private network template resources: %w", err)
+	}
+	wantResources := resources.Resources{CPUs: 1, MemoryMiB: 512, MaxMemoryMiB: 1024, WorkspaceMiB: 1024, DockerMiB: 1024}
+	if spec.Resources != wantResources || template.Platform != rt.TargetPlatform() {
+		return errors.New("network template resources or platform differ from the qualification target")
+	}
+	caHash, err := currentCAHash(ctx, manager, envID)
+	if err != nil {
+		return fmt.Errorf("read private environment CA for network instance: %w", err)
+	}
+
+	originalSecrets := manager.Secrets
+	manager.Secrets = probeSecrets{env: map[string]string{"TOKEN": instancePlaceholder}}
+	defer func() { manager.Secrets = originalSecrets }()
+
+	name := "network-template-instance-" + suffix
+	owner := &privateTemplateInstanceOwner{envID: envID, name: name, templateID: template.ID, manager: manager, store: st, runtime: rt}
+	defer func() {
+		if !owner.armed {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		if cleanupErr := owner.cleanup(cleanupCtx); cleanupErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("deferred cleanup of %s could not be confirmed: %w", owner.name, cleanupErr))
+			return
+		}
+		owner.armed = false
+		*cleanupPending = false
+	}()
+
+	owner.armed = true
+	*cleanupPending = true
+	attachCount := egress.attachCountValue()
+	view, err := createPrivateTemplateInstance(ctx, manager, envID, template.ID, name)
+	owner.createReturned = true
+	owner.createSucceeded = err == nil
+	if err != nil {
+		return errors.New("create private network-template instance failed; provider details suppressed")
+	}
+	if err := assertTemplateInstanceView(view, envID, name, template.ID, spec.Resources); err != nil {
+		return fmt.Errorf("network template instance catalog fields: %w", err)
+	}
+	if egress.attachCountValue() != attachCount+1 {
+		return errors.New("network template instance did not receive exactly one new egress attachment")
+	}
+	if _, err := egress.currentCredential(view.ID); err != nil {
+		return fmt.Errorf("network template instance egress credential: %w", err)
+	}
+	if err := assertInstanceStoreRow(ctx, st, owner, view); err != nil {
+		return fmt.Errorf("network template instance private ownership: %w", err)
+	}
+	if err := waitAndConfigureTemplateInstance(ctx, manager, envID, view.ID, "network"); err != nil {
+		return err
+	}
+	if err := assertTemplatePinBlocksDelete(ctx, registry, envID, template.ID); err != nil {
+		return err
+	}
+	if err := runTemplateInstanceAssertions(ctx, rt, view, buildMarker, "NETWORK_TEMPLATE_INSTANCE_"+suffix, caHash); err != nil {
+		return fmt.Errorf("network template instance CA and placeholder assertions: %w", err)
+	}
+	if err := runInstalledNetworkToolAssertions(ctx, rt, view); err != nil {
+		return fmt.Errorf("network template instance agent login tool assertions: %w", err)
+	}
+	if err := owner.cleanup(ctx); err != nil {
+		return fmt.Errorf("delete network template instance: %w", err)
+	}
+	owner.armed = false
+	*cleanupPending = false
+	if err := egress.assertDetached(); err != nil {
+		return fmt.Errorf("network template instance egress cleanup: %w", err)
+	}
+	if connections := egress.savedConnectionsFor(view.ID); len(connections) != 0 {
+		return fmt.Errorf("fresh network template instance attempted an outbound gateway connection to host %q; it was not autoapproved", connections[0].Host)
+	}
+	if err := assertNoOwnedRecords(ctx, st, envID); err != nil {
+		return fmt.Errorf("network template instance row remains after cleanup: %w", err)
+	}
+	return nil
+}
+
+func runInstalledNetworkToolAssertions(ctx context.Context, rt *runtime.Runtime, view sandboxes.View) error {
+	command := runtime.RunCommand{
+		Path: "/bin/bash",
+		Args: []string{"--login", "-c", networkInstalledToolAssertionScript, "studio-network-template-tools"},
+		User: "agent", Cwd: "/home/agent",
+		Env: map[string]string{
+			"HOME": "/home/agent", "USER": "agent", "LOGNAME": "agent", "SHELL": "/bin/bash",
+			"PATH": "/usr/local/bin:/usr/bin:/bin",
+		},
+		Timeout: 20 * time.Second,
+	}
+	result, runErr := rt.Run(ctx, runtime.OwnedVM{
+		Name: sandboxes.VMName(view.Sandbox), Labels: templateInstanceLabels(view.Sandbox, view.EnvironmentID, view.TemplateID),
+	}, command, nil)
+	if runErr != nil {
+		return fmt.Errorf("agent login tool command returned an SDK error (PendingRun=%t, ExitCodeKnown=%t; SDK details suppressed)", rt.PendingRun(), result.ExitCodeKnown)
+	}
+	if result.CleanupPending || rt.PendingRun() {
+		return errors.New("agent login tool command cleanup is pending")
+	}
+	if !result.ExitCodeKnown || result.ExitCode != 0 || result.OutputDropped {
+		return fmt.Errorf("agent login tool command did not finish successfully (known=%t exit=%d output-dropped=%t)", result.ExitCodeKnown, result.ExitCode, result.OutputDropped)
+	}
+	return nil
+}
+
+const networkInstalledToolAssertionScript = `set -euo pipefail
+test "$(id -un)" = agent
+test "$HOME" = /home/agent
+test "$TOKEN" = 'studio-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+test "$SSL_CERT_FILE" = /etc/ssl/certs/ca-certificates.crt
+test "$CURL_CA_BUNDLE" = "$SSL_CERT_FILE"
+test -r "$SSL_CERT_FILE"
+test -x /usr/bin/tree
+test -x /home/agent/.local/share/mise/installs/node/22.14.0/bin/node
+case ":$PATH:" in *:/home/agent/.local/share/mise/shims:*) ;; *) exit 51 ;; esac
+case "$(command -v node)" in /home/agent/.local/share/mise/shims/node|/home/agent/.local/share/mise/installs/node/22.14.0/bin/node) ;; *) exit 52 ;; esac
+test "$(node --version)" = v22.14.0
+printf 'INSTANCE_TOOL tree=%s node=%s\n' "$(tree --version | head -n1)" "$(node --version)"
+`
 
 func createPrivateTemplateInstance(ctx context.Context, manager *sandboxes.Manager, envID, templateID, name string) (sandboxes.View, error) {
 	createCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -963,6 +1651,48 @@ func buildSource(setup string, reordered bool) string {
 	return out.String()
 }
 
+func networkSetupScript(marker string) string {
+	return setupScript(marker) + `
+set -eu
+tree_package_version="$(dpkg-query -W -f='${Version}' tree)"
+tree_version="$(tree --version | head -n1)"
+mise_version="$(/usr/local/bin/mise --version | head -n1)"
+node_version="$(node --version)"
+test -n "$tree_package_version"
+test -n "$tree_version"
+test -n "$mise_version"
+test "$node_version" = v22.14.0
+printf 'QUALIFICATION_VERSION_TREE_PACKAGE=%s\n' "$tree_package_version"
+printf 'QUALIFICATION_VERSION_TREE=%s\n' "$tree_version"
+printf 'QUALIFICATION_VERSION_MISE=%s\n' "$mise_version"
+printf 'QUALIFICATION_VERSION_NODE=%s\n' "$node_version"
+`
+}
+
+func networkBuildSource(setup string, reordered bool) string {
+	var out strings.Builder
+	writeSetup := func() {
+		out.WriteString("setup: |\n")
+		for _, line := range strings.Split(strings.TrimSuffix(setup, "\n"), "\n") {
+			out.WriteString("  ")
+			out.WriteString(line)
+			out.WriteByte('\n')
+		}
+	}
+	resourcesBlock := "resources:\n  cpus: 1\n  memory: 512MiB\n  max_memory: 1024MiB\n  workspace: 1024MiB\n  docker: 1024MiB\n"
+	if reordered {
+		writeSetup()
+		out.WriteString("tools: {node: \"22.14.0\"}\n")
+		out.WriteString("resources: {cpus: 1, memory: 512MiB, max_memory: 1024MiB, workspace: 1024MiB, docker: 1024MiB}\n")
+		out.WriteString("apt: [tree]\n")
+	} else {
+		out.WriteString(resourcesBlock)
+		out.WriteString("apt: [tree]\ntools:\n  node: \"22.14.0\"\n")
+		writeSetup()
+	}
+	return out.String()
+}
+
 func waitJob(ctx context.Context, st *store.Store, envID, jobID, want string, worker *workerRun) (store.BuildJob, error) {
 	ticker := time.NewTicker(jobPollInterval)
 	defer ticker.Stop()
@@ -1114,7 +1844,7 @@ func privateOwnershipPending(ctx context.Context, st *store.Store, envID string)
 	return false, nil
 }
 
-func verifyPublishedLayer(ctx context.Context, st *store.Store, registry *templateregistry.Registry, envID, templateID, marker string) error {
+func verifyPublishedLayer(ctx context.Context, st *store.Store, registry *templateregistry.Registry, envID, templateID, marker string, networkTools ...bool) error {
 	template, err := st.Template(ctx, envID, templateID)
 	if err != nil {
 		return err
@@ -1148,6 +1878,9 @@ func verifyPublishedLayer(ctx context.Context, st *store.Store, registry *templa
 	reader := tar.NewReader(gz)
 	proofFound := false
 	profileFound := false
+	treeFound := false
+	nodeFound := false
+	wantNetworkTools := len(networkTools) != 0 && networkTools[0]
 	for {
 		header, nextErr := reader.Next()
 		if errors.Is(nextErr, io.EOF) {
@@ -1180,6 +1913,18 @@ func verifyPublishedLayer(ctx context.Context, st *store.Store, registry *templa
 			}
 			proofFound = true
 		}
+		if cleanName == "usr/bin/tree" {
+			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+				return closeLayerReaders(gz, file, errors.New("published tree executable is not a regular file"))
+			}
+			treeFound = true
+		}
+		if cleanName == "home/agent/.local/share/mise/installs/node/22.14.0/bin/node" {
+			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+				return closeLayerReaders(gz, file, errors.New("published pinned node executable is not a regular file"))
+			}
+			nodeFound = true
+		}
 		if cleanName == "home/agent/.profile" || cleanName == "home/agent/.bash_profile" || cleanName == "home/agent/.bash_login" {
 			contents, readErr := io.ReadAll(io.LimitReader(reader, 1<<20))
 			if readErr != nil {
@@ -1198,6 +1943,9 @@ func verifyPublishedLayer(ctx context.Context, st *store.Store, registry *templa
 	}
 	if !profileFound {
 		return errors.New("published layer does not contain the managed mise login profile")
+	}
+	if wantNetworkTools && (!treeFound || !nodeFound) {
+		return fmt.Errorf("published network-install layer is missing tree (%t) or pinned node 22.14.0 (%t)", treeFound, nodeFound)
 	}
 	return nil
 }
@@ -1336,27 +2084,199 @@ type probeCredential struct {
 	password string
 }
 
+type probeExporter struct {
+	hub           *agentchan.Hub
+	store         *store.Store
+	runtime       *runtime.Runtime
+	environmentID string
+}
+
+func (e probeExporter) Export(ctx context.Context, sandboxID, dir string, limits ocilayer.Limits) (templateexport.Layer, error) {
+	started := time.Now()
+	layer, err := e.hub.Export(ctx, sandboxID, dir, limits)
+	if err != nil {
+		elapsed := time.Since(started)
+		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export returned after %s: %v\n", elapsed, err)
+		e.diagnoseExportFailure(ctx, sandboxID)
+		return layer, err
+	}
+	fmt.Printf("PRIVATE TEMPLATE PROBE Export succeeded: elapsed=%s size=%d uncompressed_size=%d entries=%d\n",
+		time.Since(started), layer.Size, layer.UncompressedSize, layer.Entries)
+	return layer, err
+}
+
+type exportDiagnosticResult struct {
+	result runtime.RunResult
+	err    error
+}
+
+type exportDiagnosticCapture struct {
+	stdout  []byte
+	stderr  []byte
+	dropped bool
+}
+
+func (c *exportDiagnosticCapture) add(output runtime.RunOutput) {
+	remaining := exportDiagnosticLimit - len(c.stdout) - len(c.stderr)
+	if remaining <= 0 {
+		c.dropped = true
+		return
+	}
+	data := output.Data
+	if len(data) > remaining {
+		data = data[:remaining]
+		c.dropped = true
+	}
+	if output.Stderr {
+		c.stderr = append(c.stderr, data...)
+	} else {
+		c.stdout = append(c.stdout, data...)
+	}
+}
+
+func (e probeExporter) diagnoseExportFailure(parent context.Context, sandboxID string) {
+	diagCtx, cancel := context.WithTimeout(context.WithoutCancel(parent), exportDiagnosticTimeout)
+	defer cancel()
+
+	if e.store == nil || e.runtime == nil || e.environmentID == "" {
+		fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic skipped: private owner dependencies unavailable")
+		return
+	}
+	sb, err := e.store.Sandbox(diagCtx, e.environmentID, sandboxID)
+	if err != nil || sb.ID != sandboxID || sb.EnvironmentID != e.environmentID || sb.BuildJobID == "" {
+		fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic skipped: private builder ownership not verified")
+		return
+	}
+	job, err := e.store.BuildJob(diagCtx, e.environmentID, sb.BuildJobID)
+	if err != nil || job.ID != sb.BuildJobID || job.EnvironmentID != e.environmentID ||
+		job.SandboxID != sb.ID || job.Status != store.BuildExporting || !job.CleanupPending ||
+		job.PrewarmName != "" || job.PrewarmToken != "" {
+		fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic skipped: active exporting job ownership not verified")
+		return
+	}
+
+	owned := runtime.OwnedVM{
+		Name: sandboxes.VMName(sb),
+		Labels: map[string]string{
+			"studio.sandbox-id":     sb.ID,
+			"studio.environment-id": e.environmentID,
+			"studio.sandbox-name":   sb.Name,
+			"studio.build-job":      job.ID,
+		},
+	}
+	command := runtime.RunCommand{
+		Path: "/usr/bin/timeout",
+		Args: []string{
+			"--signal=TERM", "--kill-after=1s", "6s",
+			"/bin/bash", "--noprofile", "--norc", "-c", exportDiagnosticScript,
+			"studio-template-export-diagnostic",
+		},
+		User: "root", Cwd: "/", Env: map[string]string{"HOME": "/root", "PATH": "/usr/sbin:/usr/bin:/sbin:/bin"},
+		Timeout: 7 * time.Second,
+	}
+	runCtx, runCancel := context.WithTimeout(diagCtx, exportDiagnosticRunTimeout)
+	defer runCancel()
+	output := make(chan runtime.RunOutput, 16)
+	runDone := make(chan exportDiagnosticResult, 1)
+	go func() {
+		result, runErr := e.runtime.Run(runCtx, owned, command, output)
+		runDone <- exportDiagnosticResult{result: result, err: runErr}
+	}()
+
+	var capture exportDiagnosticCapture
+	for {
+		select {
+		case chunk := <-output:
+			capture.add(chunk)
+		case run := <-runDone:
+			for {
+				select {
+				case chunk := <-output:
+					capture.add(chunk)
+				default:
+					printExportDiagnosticResult(run, capture)
+					return
+				}
+			}
+		case <-diagCtx.Done():
+			fmt.Fprintln(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic stopped at 20s bound; runtime result unavailable")
+			printExportDiagnosticOutput("stdout", capture.stdout)
+			printExportDiagnosticOutput("stderr", capture.stderr)
+			return
+		}
+	}
+}
+
+func printExportDiagnosticResult(run exportDiagnosticResult, capture exportDiagnosticCapture) {
+	if run.result.ExitCodeKnown {
+		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic complete: exit_code=%d cleanup_pending=%t output_truncated=%t runtime_error=%t\n",
+			run.result.ExitCode, run.result.CleanupPending, capture.dropped || run.result.OutputDropped, run.err != nil)
+	} else {
+		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic complete: exit_code=unknown cleanup_pending=%t output_truncated=%t runtime_error=%t\n",
+			run.result.CleanupPending, capture.dropped || run.result.OutputDropped, run.err != nil)
+	}
+	printExportDiagnosticOutput("stdout", capture.stdout)
+	printExportDiagnosticOutput("stderr", capture.stderr)
+}
+
+func printExportDiagnosticOutput(stream string, output []byte) {
+	if len(output) == 0 {
+		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic %s: [empty]\n", stream)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE Export diagnostic %s (%d bytes):\n%s", stream, len(output), output)
+	if output[len(output)-1] != '\n' {
+		fmt.Fprintln(os.Stderr)
+	}
+}
+
+const exportDiagnosticScript = `
+set +e
+dump_log() {
+	label="$1"
+	file="$2"
+	fprintf_line="--- %s: last up to 60 lines ---\n"
+	printf -- "$fprintf_line" "$label"
+	if [ -r "$file" ]; then
+		/usr/bin/tail -n 60 -- "$file" 2>&1 | /usr/bin/tail -c 6144
+	else
+		printf '[unavailable]\n'
+	fi
+}
+dump_log agent.log /var/log/studio/agent.log
+dump_log supervisor.log /var/log/studio/supervisor.log
+printf '\n--- dmesg: last up to 60 lines ---\n'
+/usr/bin/dmesg 2>&1 | /usr/bin/tail -n 60 | /usr/bin/tail -c 8192
+printf '\n--- /proc/meminfo: first 8 lines ---\n'
+/usr/bin/head -n 8 /proc/meminfo 2>&1 | /usr/bin/head -c 2048
+exit 0
+`
+
 // probeGuests keeps production manager behavior intact while exposing the
 // underlying boot error for this private, dummy-credential qualification.
 type probeGuests struct {
 	*sandboxes.Manager
+	suppressBootError bool
 }
 
 func (g *probeGuests) BootBuildSandbox(ctx context.Context, envID, jobID, sandboxID string, source runtime.ImageSource) error {
 	err := g.Manager.BootBuildSandbox(ctx, envID, jobID, sandboxID, source)
-	if err != nil {
+	if err != nil && !g.suppressBootError {
 		fmt.Fprintf(os.Stderr, "PRIVATE TEMPLATE PROBE BootBuildSandbox returned: %v\n", err)
 	}
 	return err
 }
 
 type probeEgress struct {
-	mu            sync.Mutex
-	attached      map[string]probeCredential
-	seenEnvs      map[string]struct{}
-	seenPasswords map[string]struct{}
-	lastErr       error
-	attachCount   int
+	mu               sync.Mutex
+	attached         map[string]probeCredential
+	seenEnvs         map[string]struct{}
+	seenPasswords    map[string]struct{}
+	savedConnections map[string][]gateway.Conn
+	gateway          *gateway.Gateway
+	connLog          *gateway.ConnLog
+	lastErr          error
+	attachCount      int
 }
 
 func (e *probeEgress) Attach(sb store.Sandbox) (runtime.Egress, error) {
@@ -1364,6 +2284,9 @@ func (e *probeEgress) Attach(sb store.Sandbox) (runtime.Egress, error) {
 	defer e.mu.Unlock()
 	if _, exists := e.attached[sb.ID]; exists {
 		return runtime.Egress{}, errors.New("probe egress already has this sandbox attached")
+	}
+	if e.gateway != nil {
+		return e.attachGateway(sb)
 	}
 	suffix, err := randomBase32(10)
 	if err != nil {
@@ -1398,6 +2321,52 @@ func (e *probeEgress) Attach(sb store.Sandbox) (runtime.Egress, error) {
 	}, nil
 }
 
+func (e *probeEgress) attachGateway(sb store.Sandbox) (runtime.Egress, error) {
+	envName := gateway.PasswordEnv(sb.ID)
+	if _, exists := os.LookupEnv(envName); exists {
+		return runtime.Egress{}, errors.New("private gateway credential environment name already exists")
+	}
+	var lastErr error
+	for attempt := 0; attempt < 8; attempt++ {
+		port, err := freeLoopbackTCPPort()
+		if err != nil {
+			return runtime.Egress{}, fmt.Errorf("allocate private resolver port: %w", err)
+		}
+		sandbox := sb
+		sandbox.DNSPort = port
+		network, attachErr := e.gateway.Attach(sandbox)
+		if attachErr != nil {
+			// Attach may have bound UDP before TCP failed. Detach owns rollback of
+			// the per-ID resolver and password before another port is attempted.
+			e.gateway.Detach(sb.ID)
+			lastErr = attachErr
+			if retryableResolverPortError(attachErr) {
+				continue
+			}
+			return runtime.Egress{}, fmt.Errorf("attach private gateway and resolver: %w", attachErr)
+		}
+		password, exists := os.LookupEnv(network.PasswordEnv)
+		if !exists || password == "" || network.PasswordEnv != envName {
+			e.gateway.Detach(sb.ID)
+			return runtime.Egress{}, errors.New("private gateway did not create its expected per-sandbox credential")
+		}
+		if _, exists := e.seenEnvs[network.PasswordEnv]; exists {
+			e.gateway.Detach(sb.ID)
+			return runtime.Egress{}, errors.New("private gateway reused a per-sandbox credential environment name")
+		}
+		if _, exists := e.seenPasswords[password]; exists {
+			e.gateway.Detach(sb.ID)
+			return runtime.Egress{}, errors.New("private gateway reused a per-sandbox credential")
+		}
+		e.attached[sb.ID] = probeCredential{env: network.PasswordEnv, password: password}
+		e.seenEnvs[network.PasswordEnv] = struct{}{}
+		e.seenPasswords[password] = struct{}{}
+		e.attachCount++
+		return network, nil
+	}
+	return runtime.Egress{}, fmt.Errorf("private resolver could not bind UDP and TCP on a free high loopback port after bounded retries: %w", lastErr)
+}
+
 func (e *probeEgress) attachCountValue() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -1428,11 +2397,35 @@ func (e *probeEgress) Detach(sandboxID string) {
 	current, exists := os.LookupEnv(credential.env)
 	if !exists || current != credential.password {
 		e.lastErr = errors.Join(e.lastErr, errors.New("per-job probe password changed before owned cleanup"))
-		return
 	}
-	if err := os.Unsetenv(credential.env); err != nil {
-		e.lastErr = errors.Join(e.lastErr, fmt.Errorf("unset per-job probe password after owned cleanup: %w", err))
-		return
+	if e.connLog != nil {
+		if e.savedConnections == nil {
+			e.savedConnections = make(map[string][]gateway.Conn)
+		}
+		e.savedConnections[sandboxID] = e.connLog.List(sandboxID)
+	}
+	if e.gateway != nil {
+		if !exists || current == credential.password {
+			e.gateway.Detach(sandboxID)
+		} else {
+			// Preserve an unexpected value in the process environment while
+			// still releasing this sandbox's resolver and connection records.
+			e.gateway.Resolvers.Stop(sandboxID)
+			e.gateway.Conns.Forget(sandboxID)
+		}
+	} else if exists && current == credential.password {
+		if err := os.Unsetenv(credential.env); err != nil {
+			e.lastErr = errors.Join(e.lastErr, fmt.Errorf("unset per-job probe password after owned cleanup: %w", err))
+		}
+	}
+	if after, present := os.LookupEnv(credential.env); present {
+		if after == credential.password {
+			if err := os.Unsetenv(credential.env); err != nil {
+				e.lastErr = errors.Join(e.lastErr, fmt.Errorf("remove owned per-job probe password after gateway cleanup: %w", err))
+			}
+		} else {
+			e.lastErr = errors.Join(e.lastErr, errors.New("unexpected process environment value remains at the owned credential name"))
+		}
 	}
 	delete(e.attached, sandboxID)
 }
@@ -1440,13 +2433,23 @@ func (e *probeEgress) Detach(sandboxID string) {
 func (e *probeEgress) assertDetached() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.lastErr != nil {
-		return e.lastErr
-	}
+	var result error
+	result = errors.Join(result, e.lastErr)
 	if len(e.attached) != 0 {
-		return errors.New("per-job probe password remains until its recorded owner is cleaned up")
+		result = errors.Join(result, errors.New("per-job probe password remains until its recorded owner is cleaned up"))
 	}
-	return nil
+	for envName := range e.seenEnvs {
+		if _, exists := os.LookupEnv(envName); exists {
+			result = errors.Join(result, errors.New("owned per-sandbox credential environment remains after cleanup"))
+		}
+	}
+	return result
+}
+
+func (e *probeEgress) savedConnectionsFor(sandboxID string) []gateway.Conn {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]gateway.Conn(nil), e.savedConnections[sandboxID]...)
 }
 
 type probeSecrets struct{ env map[string]string }

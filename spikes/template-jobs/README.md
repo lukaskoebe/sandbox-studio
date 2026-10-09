@@ -24,13 +24,13 @@ GOMAXPROCS=2 go run -p=1 ./spikes/template-jobs -agent "$agent_tmpdir/studio-age
 ```
 
 `-scratch` optionally selects an existing parent directory for the private state root; it
-defaults to `os.TempDir()`. The driver creates a new private Store, environment, registry
-storage tree, loopback registry listener, local fake sealer, and guest-agent mount there. It
-uses only the dummy `TOKEN` placeholder. It does not open the OS keychain, connect to
-production Studio or the gateway, create approvals, or autoapprove network access. Each
-build sandbox receives DNS and proxy endpoints at `127.0.0.1:9` and a random host-only
-password environment variable. Empty `apt` and `tools` lists keep this run independent of
-package and tool downloads.
+defaults to `os.TempDir()`. The default driver creates a new private Store, environment,
+registry storage tree, loopback registry listener, local fake sealer, and guest-agent mount
+there. It uses only the dummy `TOKEN` placeholder. The default path does not open the OS
+keychain, connect to production Studio or the gateway, create approvals, or autoapprove
+network access. Each build sandbox receives unreachable DNS and proxy endpoints at
+`127.0.0.1:9` and a random host-only password environment variable. Empty `apt` and `tools`
+lists keep the default run independent of package and tool downloads.
 
 The worker runs one job at a time with 1 CPU, 512 MiB initial memory, a 1024 MiB maximum,
 and 1024 MiB workspace and Docker disks. The first job checks its login-shell environment,
@@ -70,6 +70,96 @@ still pending, the private root is retained with its Store and registry state fo
 Otherwise, the driver removes the temporary root after verifying that no new prefixed VM
 name remains.
 
+## Opt-in network-install qualification
+
+The opt-in path preserves the default no-network path and requires explicit
+`-network-installs`. A full Linux amd64 warm-cache retry passed; its apt/mise approvals,
+published layer, cache reuse, and fresh-instance checks are recorded below. Subsequent live
+runs installed tree and Node but failed during export: the host received
+`read export frame: unexpected EOF` after 38.959, 38.287, and 35.802 seconds. Captured guest
+diagnostics identify `write guest export: write export data frame: connection write timeout
+(watchdog cleanup: exit status 1)`. An experimental normalized-tar staging change reproduced
+the failure and did not establish a fix. The captured kernel tail contains no OOM-killer
+entry, but does not prove the absence of OOM. The earlier pass remains valid, but does not
+establish reliable export.
+
+```sh
+set -eu
+agent_tmpdir="$(mktemp -d)"
+trap 'rm -rf "$agent_tmpdir"' EXIT
+GOMAXPROCS=2 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -p=1 -trimpath -o "$agent_tmpdir/studio-agent" ./cmd/studio-agent
+GOMAXPROCS=2 go run -p=1 ./spikes/template-jobs -agent "$agent_tmpdir/studio-agent" -network-installs
+```
+
+It submits one 1-CPU build with 512 MiB initial memory, 1024 MiB maximum memory, and 1 GiB
+workspace and Docker disks. The build installs `apt: [tree]` and the exact mise tool pin
+`node: "22.14.0"`; the setup log records the observed `tree` package and command versions,
+installed `mise` version, Node version, and inspected base digest. The OCI capture is capped
+at 512 MiB input and output. The whole qualification has a 20-minute context deadline and
+skips the already-qualified cancellation and exit-7 probes. The same canonical request is
+repeated once to check the warm template cache without rerunning apt or mise, then one fresh
+instance verifies its inherited proof, current private CA and placeholder, and executes
+`tree` plus Node through the agent login profile. Fresh-instance verification does not run
+the build approval controller and does not autoapprove gateway TCP connections.
+
+This mode creates its own private Store, environment, gateway key, policy engine, gateway,
+resolvers, CA, registry, and approval records under the temporary root. The gateway SOCKS
+listener and each resolver use dynamically selected loopback ports. Resolver startup binds
+both UDP and TCP; collisions are rolled back and retried a bounded number of times. Approval
+polling reads only the private environment and validates that each approval belongs to the
+active durable build job and its same sandbox. After observing a held connection for at least
+500 ms, it can grant only these exact host/port pairs, scoped to that builder sandbox:
+
+| Host | Ports |
+| --- | --- |
+| `deb.debian.org` | 80, 443 |
+| `security.debian.org` | 80, 443 |
+| `download.docker.com` | 443 |
+| `nodejs.org` | 443 |
+| `mise-versions.jdx.dev` | 443 |
+| `mise.jdx.dev` | 443 |
+
+The first live probe refused `mise.jdx.dev`. The TLS observation identified the host, not
+the exact URL; this host was added on port 443 after review of the [official mise security
+documentation](https://github.com/jdx/mise/security), which identifies it as hosting project
+assets and the `VERSION` used for occasional update checks.
+
+The fixture uses the dummy `TOKEN` placeholder and private generated gateway/registry
+credentials; it does not access real user credentials or a host keychain. Guest resource,
+capture-size, and total runtime-duration bounds constrain this probe, but it does not qualify
+host-gateway connection or traffic resource limits under adversarial load.
+
+The successful retry inspected base `sha256:99c7dca226e66d0cf26b8b75469dcb59b05b9d306b9858b8120873f6f241c29b`
+and observed `tree` package `2.2.1-1`, mise `2026.10.4 linux-x64 (2026-10-07)`, and Node
+`v22.14.0`. The same connection ID for each observed connection was seen pending and then
+allowed: `deb.debian.org:80`, `download.docker.com:443`, `mise-versions.jdx.dev:443`,
+`nodejs.org:443`, and `mise.jdx.dev:443`. The published layer retained tree and Node; the
+canonical warm-cache repeat made no build-sandbox attach. A fresh instance ran both tools with
+the current private CA and placeholder, and no gateway TCP connection was observed from it.
+This assertion does not claim that the instance produced no network traffic; DNS forwarding
+via `dnsproxy.SystemUpstreams()` is outside the approval flow and was not qualified. Cleanup
+completed, no new VM names remained, and private state was removed. Later failures are
+described above; the successful run does not establish reliable export.
+
+There are no wildcard or all-host grants. In this probe, an unlisted outbound TCP destination
+through the gateway fails qualification: its pending approval is not granted, the private
+test build is canceled, and the host is reported for review. This does not apply to DNS
+forwarding, which is not approval-gated or qualified here. The qualification requires at
+least one connection with the same ID observed pending and then open or allowed under the
+exact sandbox rule, and no pending private approvals at successful finish. Gateway connection
+evidence is copied before per-sandbox detach forgets it. The gateway handlers are drained
+with a deadline before the private Store closes; unresolved ownership retains the private root.
+
+The base image source in `images/base/Dockerfile` installs mise from `https://mise.run`
+without a version pin, and its apt package sources are refreshed during builds. The Node tool
+pin is exact; the apt `tree` package and base-image mise release are not reproducible pins, so
+their observed versions and the inspected base digest must accompany any qualification result.
+The base Dockerfile cleans apt metadata, and the exporter excludes `/tmp`, apt lists, and apt
+archives. It does not exclude `/usr/bin/tree` or
+`/home/agent/.local/share/mise/installs`; the opt-in layer inspection and fresh-instance
+commands verify those installed files survived. Any unlisted redirect host needs source and
+destination review before the exact allowlist is changed.
+
 ## Observed qualification — 2026-10-09
 
 The production worker passed on Linux amd64 with a warm cache, private isolated Store and
@@ -89,8 +179,8 @@ accepted current CA and placeholder configuration. The second instance inherited
 the first instance's root changes nor its workspace/Docker markers. A live instance pin
 blocked registry deletion, and both instances completed owned cleanup.
 
-Rebase, YAML file import/export, apt/mise network installs, cold-cache pulls, macOS and
-Windows host VM runs, arm64, and the release template base digest pin remain open, so M3
-is incomplete. UI validation used mocked desktop/mobile workflows and web checks;
+Rebase, apt/mise network-install export-transport qualification, cold-cache pulls,
+macOS and Windows host VM runs, arm64, and the release template base digest pin remain
+open, so M3 is incomplete. UI validation used mocked desktop/mobile workflows and web checks;
 no live-worker UI build or workflow was run. Restore remains blocked by microsandbox
 [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
