@@ -346,7 +346,7 @@ func (s *Store) SetTemplateDeleting(ctx context.Context, envID, id string) error
 		return err
 	}
 	var referenced int
-	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM sandboxes WHERE template_id = ?)", id).Scan(&referenced); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM sandboxes WHERE template_id = ?) OR EXISTS (SELECT 1 FROM rebases WHERE template_id = ?)", id, id).Scan(&referenced); err != nil {
 		return err
 	}
 	if referenced != 0 {
@@ -386,7 +386,7 @@ func (s *Store) DeleteTemplate(ctx context.Context, envID, id string) error {
 		return err
 	}
 	var referenced int
-	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM sandboxes WHERE template_id = ?)", id).Scan(&referenced); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM sandboxes WHERE template_id = ?) OR EXISTS (SELECT 1 FROM rebases WHERE template_id = ?)", id, id).Scan(&referenced); err != nil {
 		return err
 	}
 	if referenced != 0 {

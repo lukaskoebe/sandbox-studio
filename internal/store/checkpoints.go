@@ -229,6 +229,12 @@ func (s *Store) BeginRestore(ctx context.Context, envID, sandboxID, checkpointID
 	if !errors.Is(err, sql.ErrNoRows) {
 		return RestoreOperation{}, err
 	}
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM rebases WHERE sandbox_id = ?)", sandboxID).Scan(&pending); err != nil {
+		return RestoreOperation{}, err
+	}
+	if pending != 0 {
+		return RestoreOperation{}, ErrConflict
+	}
 	op := RestoreOperation{SandboxID: sandboxID, EnvironmentID: envID, CheckpointID: checkpointID, FromGeneration: generation, ToGeneration: generation + 1}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO restores ("+restoreCols+") VALUES (?, ?, ?, ?, ?)", op.SandboxID, op.EnvironmentID, op.CheckpointID, op.FromGeneration, op.ToGeneration); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
