@@ -136,9 +136,13 @@ func run(addr, image string, log *slog.Logger) error {
 		Runtime: runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()}),
 		Hub:     hub,
 		Egress:  gw,
+		CA:      authority,
+		Secrets: vault,
 		Paths:   p,
 		Log:     log,
 	}
+	hub.OnConnect = mgr.Configure
+	go mgr.FollowEnvironments(ctx, bus)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
 	}

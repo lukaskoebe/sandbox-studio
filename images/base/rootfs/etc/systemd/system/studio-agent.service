@@ -1,7 +1,5 @@
 [Unit]
 Description=Sandbox Studio guest agent
-After=studio-ca.service
-Wants=studio-ca.service
 ConditionPathExists=/opt/studio/bin/studio-agent
 
 [Service]

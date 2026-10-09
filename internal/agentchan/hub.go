@@ -26,6 +26,10 @@ var ErrNotConnected = errors.New("guest agent not connected")
 
 // Hub tracks guest-agent sessions by sandbox ID.
 type Hub struct {
+	// OnConnect, if set before the first Listen, runs (in its own goroutine) whenever a
+	// guest agent connects.
+	OnConnect func(id string)
+
 	log *slog.Logger
 
 	mu        sync.Mutex
@@ -131,6 +135,9 @@ func (h *Hub) serve(id string, nc net.Conn) {
 		close(w)
 	}
 	h.log.Info("guest agent connected", "sandbox", id, "version", hello.Version, "arch", hello.Arch)
+	if h.OnConnect != nil {
+		go h.OnConnect(id)
+	}
 
 	<-sess.CloseChan()
 	h.mu.Lock()
@@ -192,15 +199,21 @@ func (h *Hub) open(ctx context.Context, id string, hdr agentproto.Header) (net.C
 	return st, nil
 }
 
-// request opens a stream, sends hdr and decodes the single JSON reply into v.
-func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, v any) error {
+// request opens a stream, sends hdr and body (unless nil) and decodes the single JSON
+// reply into v.
+func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, body, v any) error {
 	st, err := h.open(ctx, id, hdr)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
 	if dl, ok := ctx.Deadline(); ok {
-		st.SetReadDeadline(dl)
+		st.SetDeadline(dl)
+	}
+	if body != nil {
+		if err := agentproto.WriteJSONLine(st, body); err != nil {
+			return err
+		}
 	}
 	line, err := bufio.NewReader(st).ReadBytes('\n')
 	if err != nil {
@@ -216,21 +229,27 @@ func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, v a
 // Sessions lists the guest's tmux sessions.
 func (h *Hub) Sessions(ctx context.Context, id string) ([]agentproto.Session, error) {
 	var out []agentproto.Session
-	err := h.request(ctx, id, agentproto.Header{Kind: agentproto.KindSessions}, &out)
+	err := h.request(ctx, id, agentproto.Header{Kind: agentproto.KindSessions}, nil, &out)
 	return out, err
 }
 
 // KillSession ends a tmux session in the guest, closing its terminals.
 func (h *Hub) KillSession(ctx context.Context, id, name string) error {
 	var ok struct{}
-	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindKill, Session: name}, &ok)
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindKill, Session: name}, nil, &ok)
 }
 
 // Ports lists TCP ports listening in the guest.
 func (h *Hub) Ports(ctx context.Context, id string) ([]agentproto.Port, error) {
 	var out []agentproto.Port
-	err := h.request(ctx, id, agentproto.Header{Kind: agentproto.KindPorts}, &out)
+	err := h.request(ctx, id, agentproto.Header{Kind: agentproto.KindPorts}, nil, &out)
 	return out, err
+}
+
+// Configure sends a sandbox its environment's configuration.
+func (h *Hub) Configure(ctx context.Context, id string, cfg agentproto.Config) error {
+	var ok struct{}
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindConfig}, cfg, &ok)
 }
 
 // DialTCP connects to a loopback port inside the guest.

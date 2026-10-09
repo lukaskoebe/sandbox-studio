@@ -8,6 +8,8 @@
 //   - KindPTY (host → guest): framed in both directions (see WriteFrame).
 //   - KindTCP (host → guest): raw bytes to a guest loopback port.
 //   - KindSessions, KindPorts, KindKill (host → guest): one JSON reply line.
+//   - KindConfig (host → guest): the host writes a Config line; the guest applies it and
+//     replies like KindKill: {} or an Error.
 package agentproto
 
 import (
@@ -30,6 +32,7 @@ const (
 	KindSessions = "sessions"
 	KindPorts    = "ports"
 	KindKill     = "kill" // ends the tmux session named in Header.Session
+	KindConfig   = "config"
 )
 
 // Header opens every stream.
@@ -39,6 +42,13 @@ type Header struct {
 	Cols    uint16 `json:"cols,omitempty"`
 	Rows    uint16 `json:"rows,omitempty"`
 	Port    int    `json:"port,omitempty"` // KindTCP: guest loopback port
+}
+
+// Config is what a sandbox gets from its environment. The host sends it whenever the guest
+// connects and whenever it changes.
+type Config struct {
+	CA  string            `json:"ca"`  // PEM certificate of the environment's CA, to trust
+	Env map[string]string `json:"env"` // secret names and their placeholders, for new shells
 }
 
 // Hello is sent by the guest when its session starts.

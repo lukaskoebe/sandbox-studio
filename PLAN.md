@@ -331,11 +331,16 @@ A small static Linux Go binary (in `cmd/studio-agent`), mounted into every sandb
      - Repeated attempts merge into one request with a counter.
 
 **CA trust.**
-- The per-install Studio CA is written into the guest trust store at boot (rootfs patch) and
-  exported through `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE` and
-  `GIT_SSL_CAINFO`.
-- Docker inside the guest gets `/etc/docker/certs.d` and a documented way to trust the CA in
-  containers. A helper script mounts the CA into containers.
+- Every environment has its own CA. Studio pushes it to the guest agent whenever the agent
+  connects, together with the secrets' placeholders (again whenever secrets change). The
+  agent adds the CA to the system trust store and writes both to `/etc/sandbox-studio`.
+  The base image points `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE` and
+  `GIT_SSL_CAINFO` at the system bundle.
+- Containers and `docker build` steps inside the guest trust it with no extra flags. The image
+  shadows `runc` on `PATH` with the agent, which adds a read-only mount of
+  `/etc/sandbox-studio` at `/dev/sandbox-studio` (a tmpfs, so it never lands in an image)
+  and the same variables plus `CURL_CA_BUNDLE`, unless the container already sets them.
+  Images that set their own (e.g. `curlimages/curl`) need `-e CURL_CA_BUNDLE=/dev/sandbox-studio/ca-bundle.crt`.
 
 **Secrets.**
 - Values are encrypted in `studio.db` with a master key held in the OS keychain:

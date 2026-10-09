@@ -17,8 +17,9 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
-// fakeGuest dials the hub socket and answers like a minimal studio-agent.
-func fakeGuest(t *testing.T, path string) *yamux.Session {
+// fakeGuest dials the hub socket and answers like a minimal studio-agent. Configurations it
+// receives go to configs.
+func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yamux.Session {
 	t.Helper()
 	nc, err := net.Dial("unix", path)
 	if err != nil {
@@ -48,6 +49,15 @@ func fakeGuest(t *testing.T, path string) *yamux.Session {
 					agentproto.WriteJSONLine(st, []agentproto.Session{{Name: "main", Windows: 1}})
 				case agentproto.KindPorts:
 					agentproto.WriteJSONLine(st, agentproto.Error{Error: "boom"})
+				case agentproto.KindConfig:
+					var cfg agentproto.Config
+					agentproto.ReadJSONLine(br, &cfg)
+					if cfg.CA == "bad" {
+						agentproto.WriteJSONLine(st, agentproto.Error{Error: "bad CA"})
+						return
+					}
+					agentproto.WriteJSONLine(st, struct{}{})
+					configs <- cfg
 				case agentproto.KindPTY:
 					// Echo input upper-cased, then exit on "exit".
 					for {
@@ -79,6 +89,8 @@ func TestHub(t *testing.T) {
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "s.sock")
 	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	connected := make(chan string, 1)
+	h.OnConnect = func(id string) { connected <- id }
 	if err := h.Listen("sb1", path); err != nil {
 		t.Fatal(err)
 	}
@@ -89,10 +101,19 @@ func TestHub(t *testing.T) {
 	if _, err := h.Sessions(ctx, "sb1"); err != ErrNotConnected {
 		t.Fatalf("want ErrNotConnected, got %v", err)
 	}
-	g := fakeGuest(t, path)
+	configs := make(chan agentproto.Config, 1)
+	g := fakeGuest(t, path, configs)
 	defer g.Close()
 	if err := h.WaitConnected(ctx, "sb1"); err != nil {
 		t.Fatal(err)
+	}
+	select {
+	case id := <-connected:
+		if id != "sb1" {
+			t.Fatalf("OnConnect(%q)", id)
+		}
+	case <-ctx.Done():
+		t.Fatal("OnConnect not called")
 	}
 	if hello, ok := h.Connected("sb1"); !ok || hello.Version != "test" {
 		t.Fatalf("hello %+v %v", hello, ok)
@@ -103,6 +124,17 @@ func TestHub(t *testing.T) {
 		t.Fatalf("sessions %+v %v", sessions, err)
 	}
 	if _, err := h.Ports(ctx, "sb1"); err == nil || err.Error() != "boom" {
+		t.Fatalf("want guest error, got %v", err)
+	}
+
+	want := agentproto.Config{CA: "pem", Env: map[string]string{"API_KEY": "studio-x"}}
+	if err := h.Configure(ctx, "sb1", want); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-configs; got.CA != want.CA || got.Env["API_KEY"] != "studio-x" {
+		t.Fatalf("guest got %+v", got)
+	}
+	if err := h.Configure(ctx, "sb1", agentproto.Config{CA: "bad"}); err == nil || err.Error() != "bad CA" {
 		t.Fatalf("want guest error, got %v", err)
 	}
 

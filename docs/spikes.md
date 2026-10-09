@@ -78,6 +78,10 @@ rules so `docker pull` never needs the CA. For containers that call intercepted 
 documented helper (`studio-ca mount`) that adds `-v /etc/ssl/certs:/etc/ssl/certs:ro` and the
 env vars.
 
+Update (M2): no helper after all. A `runc` shim in the guest adds the CA to every container
+and build step; see PLAN.md, CA trust. Verified live with curl, wget, Python, git and Node in
+`python`, `node` and `alpine/git` containers and in a `docker build` step.
+
 ## S5 — Volumes, snapshots and forks
 
 `msb volume`, `msb snap`, `msb fork` with an owned disk at `/owned` and a named disk at `/ws`.

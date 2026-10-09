@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
@@ -35,8 +36,16 @@ type Manager struct {
 	Runtime *runtime.Runtime
 	Hub     *agentchan.Hub
 	Egress  Egress
-	Paths   paths.Paths
-	Log     *slog.Logger
+	CA      interface {
+		CertPEM(ctx context.Context, envID string) ([]byte, error)
+	}
+	Secrets interface {
+		Env(ctx context.Context, envID string) (map[string]string, error)
+	}
+	Paths paths.Paths
+	Log   *slog.Logger
+
+	configuring sync.Map // sandbox ID → *sync.Mutex, see Configure
 }
 
 // Egress is the host side of sandbox networking (internal/gateway).
@@ -213,6 +222,7 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 	}
 	m.Hub.Close(rec.ID)
 	m.Egress.Detach(rec.ID)
+	m.configuring.Delete(rec.ID)
 	return m.Store.DeleteSandbox(ctx, envID, id)
 }
 

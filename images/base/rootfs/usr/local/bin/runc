@@ -1,0 +1,6 @@
+#!/bin/sh
+# Shadows /usr/bin/runc for containerd and BuildKit, which both find runc on PATH, so that
+# every container and build step trusts the environment's CA (see OCIRuntime in
+# internal/guest). Plain runc where Studio didn't mount its agent.
+[ -x /opt/studio/bin/studio-agent ] || exec /usr/bin/runc "$@"
+exec /opt/studio/bin/studio-agent oci-runtime "$@"

@@ -28,8 +28,14 @@ func main() {
 			log.Error("studio-agent stopped", "err", err)
 			os.Exit(1)
 		}
+	case "oci-runtime":
+		// Docker's runtime inside the sandbox: see guest.OCIRuntime.
+		if err := ociRuntime(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: %v\n", err)
+			os.Exit(1)
+		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|version|oci-runtime]\n")
 		os.Exit(2)
 	}
 }

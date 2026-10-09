@@ -14,3 +14,5 @@ func connect(ctx context.Context, log *slog.Logger) error {
 	}
 	return a.Run(ctx)
 }
+
+func ociRuntime(args []string) error { return guest.OCIRuntime(args) }

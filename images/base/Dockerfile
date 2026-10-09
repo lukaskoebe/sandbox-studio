@@ -34,7 +34,7 @@ COPY rootfs/ /
 RUN systemctl mask getty@tty1.service serial-getty@ttyS0.service systemd-logind.service \
         systemd-timesyncd.service apt-daily.timer apt-daily-upgrade.timer e2scrub_reap.service \
         systemd-modules-load.service systemd-sysctl.service \
-    && systemctl enable docker.service containerd.service studio-agent.service studio-ca.service
+    && systemctl enable docker.service containerd.service studio-agent.service
 
 ENV LANG=en_US.UTF-8
 CMD ["/lib/systemd/systemd"]

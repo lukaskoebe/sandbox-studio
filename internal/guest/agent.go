@@ -148,12 +148,27 @@ func (a *Agent) handle(st net.Conn) {
 		err = replyPorts(st)
 	case agentproto.KindKill:
 		err = a.killSession(st, h.Session)
+	case agentproto.KindConfig:
+		err = a.configure(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}
 	if err != nil && !errors.Is(err, io.EOF) {
 		a.log.Warn("stream failed", "kind", h.Kind, "err", err)
 	}
+}
+
+// configure applies the environment's configuration pushed by Studio.
+func (a *Agent) configure(st net.Conn, br *bufio.Reader) error {
+	var cfg agentproto.Config
+	if err := agentproto.ReadJSONLine(br, &cfg); err != nil {
+		return err
+	}
+	if err := applyConfig("/", cfg, updateCACertificates); err != nil {
+		a.log.Warn("applying the environment's configuration failed", "err", err)
+		return agentproto.WriteJSONLine(st, agentproto.Error{Error: err.Error()})
+	}
+	return agentproto.WriteJSONLine(st, struct{}{})
 }
 
 // --- terminals ------------------------------------------------------------------------
@@ -366,6 +381,9 @@ func (a *Agent) command(name string, args ...string) *exec.Cmd {
 		"LANG=en_US.UTF-8",
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 	}
+	// Secrets come first so that the system's own variables win; Studio refuses secret names
+	// that would shadow them anyway.
+	env = append(env, readEnvironmentFile(envFile)...)
 	cmd.Env = append(env, readEnvironmentFile("/etc/environment")...)
 	cmd.Dir = a.user.home
 	return cmd
