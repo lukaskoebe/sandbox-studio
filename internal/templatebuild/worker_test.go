@@ -51,6 +51,7 @@ type buildHarness struct {
 	exportCommand  runtime.RunCommand
 	exportWire     []byte
 	exportExit     int
+	exportEndless  bool
 	published      templateexport.Layer
 	runHook        func(context.Context, chan<- runtime.RunOutput) (runtime.RunResult, error)
 	beforePublish  func()
@@ -190,6 +191,11 @@ func (h *buildHarness) export(ctx context.Context, cmd runtime.RunCommand) (runt
 	}
 	if _, err := cmd.Stdout.Write(wire); err != nil {
 		return runtime.RunResult{}, err
+	}
+	for h.exportEndless {
+		if _, err := cmd.Stdout.Write(make([]byte, 64<<10)); err != nil {
+			return runtime.RunResult{}, err
+		}
 	}
 	return runtime.RunResult{ExitCodeKnown: true, ExitCode: h.exportExit}, nil
 }
@@ -380,6 +386,24 @@ func TestExportRejectsInvalidStreamOrFailedCommand(t *testing.T) {
 				t.Fatalf("rejected layer artifact remained: %v", entries)
 			}
 		})
+	}
+}
+
+func TestExportReturnsWhenReceiveFailsWhileCommandKeepsWriting(t *testing.T) {
+	h := newBuildHarness(t)
+	h.exportWire = []byte("not an export stream")
+	h.exportEndless = true
+	job := h.submit(t, testSource)
+	claimed := h.claim(t)
+	done := make(chan struct{})
+	go func() { h.w.process(context.Background(), claimed); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("export stayed blocked on a writer after Receive failed")
+	}
+	if job = h.job(t, job.ID); job.Status != store.BuildFailed {
+		t.Fatalf("job %+v", job)
 	}
 }
 

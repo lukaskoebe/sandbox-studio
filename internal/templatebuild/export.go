@@ -65,6 +65,9 @@ func (w *Worker) export(ctx context.Context, owned runtime.OwnedVM, dir string, 
 		ran <- runOutcome{result: result, err: err}
 	}()
 	layer, err := templateexport.Receive(ctx, dir, reader, w.ExportLimits)
+	// Unblock a Run still writing stdout, whether Receive failed or stopped at
+	// the trailer.
+	_ = reader.CloseWithError(errors.New("export receiver stopped"))
 	if err != nil {
 		cancel(err)
 	}
