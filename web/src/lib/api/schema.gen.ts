@@ -266,6 +266,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy a sandbox into a new one
+         * @description Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
+         */
+        post: operations["forkSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/ports": {
         parameters: {
             query?: never;
@@ -292,6 +312,26 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["openPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/rebase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a sandbox onto another template
+         * @description Copies /workspace into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox is left stopped on its old template.
+         */
+        post: operations["rebaseSandbox"];
         delete?: never;
         options?: never;
         head?: never;
@@ -661,6 +701,10 @@ export interface components {
              */
             type: string;
         };
+        ForkInBody: {
+            /** @description Name of the new sandbox */
+            name: string;
+        };
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -681,6 +725,10 @@ export interface components {
             /** Format: int64 */
             port: number;
             url: string;
+        };
+        RebaseInBody: {
+            /** @description A ready template in the same environment */
+            templateId: string;
         };
         Resources: {
             /** Format: int64 */
@@ -1599,6 +1647,44 @@ export interface operations {
             };
         };
     };
+    forkSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForkInBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listPorts: {
         parameters: {
             query?: never;
@@ -1656,6 +1742,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewOpenBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    rebaseSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RebaseInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
                 };
             };
             /** @description Error */

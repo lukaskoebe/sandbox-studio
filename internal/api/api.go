@@ -59,6 +59,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerSandboxes(api)
 	s.registerTemplates(api)
 	s.registerCheckpoints(api)
+	s.registerTransfers(api)
 	s.registerPreviews(api)
 	s.registerNetwork(api)
 	s.registerSecrets(api)
@@ -241,7 +242,9 @@ func apiError(err error) error {
 		errors.Is(err, runtime.ErrLiveCheckpointUnsupported),
 		errors.Is(err, store.ErrConflict),
 		errors.Is(err, sandboxes.ErrBusy),
-		errors.Is(err, sandboxes.ErrCheckpointState):
+		errors.Is(err, sandboxes.ErrCheckpointState),
+		errors.Is(err, sandboxes.ErrLifecycleState),
+		errors.Is(err, sandboxes.ErrWorkspaceTooLarge):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, agentchan.ErrNotConnected):
 		return huma.Error409Conflict("the sandbox is not running or still booting")

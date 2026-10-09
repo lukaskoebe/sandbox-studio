@@ -573,6 +573,21 @@
         },
         "type": "object"
       },
+      "ForkInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "Name of the new sandbox",
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "Health": {
         "additionalProperties": false,
         "properties": {
@@ -650,6 +665,20 @@
         "required": [
           "port",
           "url"
+        ],
+        "type": "object"
+      },
+      "RebaseInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "templateId": {
+            "description": "A ready template in the same environment",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "templateId"
         ],
         "type": "object"
       },
@@ -2282,6 +2311,70 @@
         ]
       }
     },
+    "/api/environments/{env}/sandboxes/{id}/fork": {
+      "post": {
+        "description": "Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
+        "operationId": "forkSandbox",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Copy a sandbox into a new one",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes/{id}/ports": {
       "get": {
         "operationId": "listPorts",
@@ -2402,6 +2495,70 @@
         },
         "tags": [
           "previews"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/rebase": {
+      "post": {
+        "description": "Copies /workspace into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox is left stopped on its old template.",
+        "operationId": "rebaseSandbox",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RebaseInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Move a sandbox onto another template",
+        "tags": [
+          "sandboxes"
         ]
       }
     },
