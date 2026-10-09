@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -435,8 +436,12 @@ type checkpointFixture struct {
 func newCheckpointFixture(t *testing.T) *checkpointFixture {
 	t.Helper()
 	ctx := context.Background()
-	dir := t.TempDir()
-	p := paths.Paths{Data: dir}
+	dataDir, err := os.MkdirTemp("", "ss-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dataDir) })
+	p := paths.Paths{Data: dataDir}
 	if err := p.Ensure(); err != nil {
 		t.Fatal(err)
 	}
