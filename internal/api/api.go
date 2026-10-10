@@ -19,6 +19,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -40,6 +41,7 @@ type Server struct {
 	Conns     *gateway.ConnLog
 	Caddy     *caddyrule.Engine // checks Caddyfiles; without it, caddy rules are refused
 	Auth      *webauth.Auth
+	Memory    *memory.Service
 	Log       *slog.Logger
 	Addr      string // the address Studio listens on, used to build preview URLs
 }
@@ -64,6 +66,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerPreviews(api)
 	s.registerNetwork(api)
 	s.registerSecrets(api)
+	s.registerMemory(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api

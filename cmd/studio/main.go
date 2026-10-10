@@ -28,6 +28,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/preview"
@@ -219,8 +220,23 @@ func run(addr, image string, log *slog.Logger) error {
 		}
 	}()
 
+	// Memory embeds in the background. The model is downloaded on the first memory write,
+	// never at startup.
+	embedder := &memory.Llama{Assets: memory.DefaultAssets(filepath.Join(p.Data, "memory"))}
+	mem := memory.New(st.DB(), embedder, log)
+	memDone := make(chan struct{})
+	go func() { defer close(memDone); mem.Run(ctx) }()
+	defer func() {
+		stop()
+		select {
+		case <-memDone:
+			embedder.Close()
+		case <-time.After(5 * time.Second): // a download that ignores cancellation; the process ends anyway
+		}
+	}()
+
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, Log: log, Addr: addr}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 

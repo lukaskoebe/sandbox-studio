@@ -44,7 +44,7 @@ type Fact struct {
 
 // FactInput creates or edits a fact. Zero values take defaults: observedAt now, confidence 1.
 type FactInput struct {
-	Scope      string     `json:"scope"`
+	Scope      string     `json:"scope,omitempty" doc:"Required on create; fixed afterwards"`
 	Kind       string     `json:"kind" enum:"preference,decision,fact,procedure,event"`
 	EntityIDs  []string   `json:"entityIds,omitempty" maxItems:"32"`
 	Attribute  string     `json:"attribute,omitempty" maxLength:"128" doc:"Normalized key, e.g. deploy.command"`
@@ -316,6 +316,9 @@ func (s *Service) Facts(ctx context.Context, envID string, f FactFilter) ([]Fact
 		args = append(args, f.Scope)
 	}
 	if f.Status != "" {
+		if err := oneOf("status", f.Status, []string{StatusActive, StatusSuperseded, StatusDisputed, StatusRetracted}); err != nil {
+			return nil, err
+		}
 		q += " AND status = ?"
 		args = append(args, f.Status)
 	}
