@@ -151,14 +151,14 @@ func CheckPattern(p store.BrowserPattern) (store.BrowserPattern, error) {
 	if p.Verdict != store.BrowserAllow && p.Verdict != store.BrowserDeny && p.Verdict != store.BrowserSensitive {
 		return p, ErrBadPattern
 	}
-	if p.Action == "" || len(p.Action) > 32 || len(p.Role) > 64 || len(p.Label) > 200 {
-		return p, ErrBadPattern
-	}
 	if p.Verdict == store.BrowserSensitive {
 		p.Action = "*" // a field is sensitive for every action
 		if p.Role == "" && p.Label == "" {
 			return p, ErrBadPattern
 		}
+	}
+	if p.Action == "" || len(p.Action) > 32 || len(p.Role) > 64 || len(p.Label) > 200 {
+		return p, ErrBadPattern
 	}
 	if p.Origin != "*" {
 		s, h, _ := splitOrigin(p.Origin)

@@ -70,7 +70,7 @@ const (
 	BrowserSensitive = "sensitive"
 )
 
-// BrowserPattern is a persona's rule for its browser; see migration 016.
+// BrowserPattern is a persona's rule for its browser; see migration 017.
 type BrowserPattern struct {
 	ID            string    `json:"id"`
 	EnvironmentID string    `json:"environmentId"`
