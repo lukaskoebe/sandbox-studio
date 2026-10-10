@@ -133,6 +133,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/personas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPersonas"];
+        put?: never;
+        post: operations["createPersona"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/personas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPersona"];
+        put: operations["updatePersona"];
+        post?: never;
+        /** @description Deletes the persona and the network rules scoped to it. Refused while it owns sandboxes. */
+        delete: operations["deletePersona"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listProviders"];
+        put?: never;
+        /** @description API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. */
+        post: operations["createProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/providers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The name and kind are fixed at creation. Omitted fields keep their values. */
+        put: operations["updateProvider"];
+        post?: never;
+        /** @description Deletes the provider and its key. Refused while a persona uses the provider. */
+        delete: operations["deleteProvider"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/rules": {
         parameters: {
             query?: never;
@@ -501,6 +569,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/provider-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The fixed table of provider kinds and the harnesses each supports. */
+        get: operations["listProviderKinds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -612,6 +697,17 @@ export interface components {
         CreateEnvBody: {
             name: string;
         };
+        CreateProviderInBody: {
+            /** @description API-key kinds: the key. It is sealed in the vault on arrival and never returned. */
+            apiKey?: string;
+            /** @description openai_compatible only: the https:// base URL */
+            baseUrl?: string;
+            /** @enum {string} */
+            kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
+            /** @description openai_compatible only: the endpoint's single model */
+            model?: string;
+            name: string;
+        };
         CreateRequest: {
             /** Format: int64 */
             cpus?: number;
@@ -622,6 +718,8 @@ export interface components {
             /** Format: int64 */
             memoryMiB?: number;
             name: string;
+            /** @description The persona that owns the sandbox; omit for an unowned sandbox */
+            personaId?: string;
             /** Format: int64 */
             workspaceMiB?: number;
         };
@@ -636,6 +734,8 @@ export interface components {
         };
         CreateTemplateSandboxInBody: {
             name: string;
+            /** @description The persona that owns the sandbox; omit for an unowned sandbox */
+            personaId?: string;
         };
         DecideInBody: {
             /**
@@ -648,11 +748,11 @@ export interface components {
             /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
             ports?: number[] | null;
             /**
-             * @description Whether the rule covers only the requesting sandbox
+             * @description Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment
              * @default environment
              * @enum {string}
              */
-            scope: "sandbox" | "environment";
+            scope: "sandbox" | "persona" | "environment";
         };
         Environment: {
             /** Format: date-time */
@@ -718,6 +818,40 @@ export interface components {
             port: number;
             sandboxName: string;
         };
+        Persona: {
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            gitEmail: string;
+            gitName: string;
+            /** @enum {string} */
+            harness: "opencode" | "claude" | "codex";
+            id: string;
+            model: string;
+            name: string;
+            providerId: string;
+            role: string;
+            /** @description Personality and working rules, as markdown */
+            soul: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PersonaInput: {
+            /** @description Defaults to <slug>@agents.invalid */
+            gitEmail?: string;
+            /** @description Defaults to the name */
+            gitName?: string;
+            /** @enum {string} */
+            harness: "opencode" | "claude" | "codex";
+            /** @description Required for API-key providers; defaults to the model of an OpenAI-compatible provider */
+            model?: string;
+            name: string;
+            providerId: string;
+            /** @description A short description of what the persona does */
+            role?: string;
+            /** @description Personality and working rules, as markdown */
+            soul?: string;
+        };
         PreviewOpenBody: {
             url: string;
         };
@@ -725,6 +859,49 @@ export interface components {
             /** Format: int64 */
             port: number;
             url: string;
+        };
+        ProviderKind: {
+            /** @description Whether the provider is an API key; otherwise it is a subscription login */
+            apiKey: boolean;
+            /** @description The variable the harness reads the credential from */
+            envVar?: string;
+            /** @description Harnesses that can use a provider of this kind */
+            harnesses: ("opencode" | "claude" | "codex")[] | null;
+            /** @description The host the key is bound to; for openai_compatible, the base URL's host */
+            host?: string;
+            /** @enum {string} */
+            kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
+        };
+        ProviderView: {
+            /** @description openai_compatible only */
+            baseUrl?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description The variable guests get the placeholder in */
+            envVar?: string;
+            environmentId: string;
+            /** @description Harnesses personas using this provider can run */
+            harnesses: ("opencode" | "claude" | "codex")[] | null;
+            /** @description Hosts the key is sent to */
+            hosts?: string[] | null;
+            id: string;
+            /** @enum {string} */
+            kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
+            /** @description openai_compatible only: the endpoint's single model */
+            model?: string;
+            name: string;
+            /** @description What guests see instead of the key */
+            placeholder?: string;
+            /** @description The vault secret holding the key */
+            secretId?: string;
+            secretName?: string;
+            /**
+             * @description login_required until a subscription login is stored
+             * @enum {string}
+             */
+            state: "ready" | "login_required";
+            /** Format: date-time */
+            updatedAt: string;
         };
         RebaseInBody: {
             /** @description A ready template in the same environment */
@@ -753,6 +930,8 @@ export interface components {
             host: string;
             id: string;
             note: string;
+            /** @description Set for rules that apply to every sandbox of one persona */
+            personaId?: string;
             /** @description Empty means any port */
             ports: number[] | null;
             sandboxId?: string;
@@ -781,6 +960,8 @@ export interface components {
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
             note?: string;
+            /** @description Limits the rule to the sandboxes one persona of this environment owns; excludes sandboxId */
+            personaId?: string;
             /** @description Empty or omitted means any port */
             ports?: number[] | null;
             /** @description Limits the rule to one sandbox of this environment */
@@ -819,6 +1000,14 @@ export interface components {
             platform: string;
             resources: components["schemas"]["Resources"];
         };
+        UpdateProviderInBody: {
+            /** @description A new key. Omit it to keep the stored one. */
+            apiKey?: string;
+            /** @description openai_compatible only */
+            baseUrl?: string;
+            /** @description openai_compatible only */
+            model?: string;
+        };
         UpdateSecretInBody: {
             /** @description Host patterns the value may be sent to */
             hosts: string[] | null;
@@ -844,6 +1033,8 @@ export interface components {
             /** Format: int64 */
             memoryMiB: number;
             name: string;
+            /** @description The persona that owns the sandbox; empty for unowned sandboxes */
+            personaId?: string;
             /** @enum {string} */
             status: "absent" | "created" | "starting" | "running" | "draining" | "paused" | "stopped" | "crashed";
             templateId?: string;
@@ -1187,6 +1378,316 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BuildJobLog"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listPersonas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createPersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updatePersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Persona"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deletePersona: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProviderInBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Provider ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProviderInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Provider ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -2186,6 +2687,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listProviderKinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderKind"][] | null;
                 };
             };
             /** @description Error */

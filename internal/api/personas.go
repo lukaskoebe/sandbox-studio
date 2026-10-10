@@ -17,7 +17,7 @@ import (
 // ProviderKind is one row of the fixed provider table (PLAN.md §6.6).
 type ProviderKind struct {
 	Kind      string   `json:"kind" enum:"anthropic_api,openai_api,openai_compatible,claude_subscription,chatgpt_subscription"`
-	Harnesses []string `json:"harnesses" doc:"Harnesses that can use a provider of this kind"`
+	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses that can use a provider of this kind"`
 	APIKey    bool     `json:"apiKey" doc:"Whether the provider is an API key; otherwise it is a subscription login"`
 	Host      string   `json:"host,omitempty" doc:"The host the key is bound to; for openai_compatible, the base URL's host"`
 	EnvVar    string   `json:"envVar,omitempty" doc:"The variable the harness reads the credential from"`
@@ -28,7 +28,7 @@ type ProviderView struct {
 	store.Provider
 	State     string   `json:"state" enum:"ready,login_required" doc:"login_required until a subscription login is stored"`
 	EnvVar    string   `json:"envVar,omitempty" doc:"The variable guests get the placeholder in"`
-	Harnesses []string `json:"harnesses"`
+	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses personas using this provider can run"`
 }
 
 func providerView(p store.Provider) ProviderView {
