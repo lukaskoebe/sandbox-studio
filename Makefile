@@ -5,7 +5,7 @@ LDFLAGS += $(if $(BASE_IMAGE),-X github.com/lukaskoebe/sandbox-studio/internal/v
 # Leaves out the databases of Caddy's PKI app, which Studio doesn't use.
 TAGS := nobadger,nomysql,nopgx
 
-.PHONY: all web build agent api test lint dev clean image
+.PHONY: all web build agent api test lint dev clean image image-browser
 
 all: web build
 
@@ -45,3 +45,9 @@ image:
 	docker build -t sandbox-studio-base:dev images/base
 	docker save sandbox-studio-base:dev | msb load -t sandbox-studio-base:dev
 	docker rmi sandbox-studio-base:dev
+
+# Dev only: the browser image for personas' browser VMs (docs/browser.md).
+image-browser:
+	docker build -t sandbox-studio-browser:dev images/browser
+	docker save sandbox-studio-browser:dev | msb load -t sandbox-studio-browser:dev
+	docker rmi sandbox-studio-browser:dev
