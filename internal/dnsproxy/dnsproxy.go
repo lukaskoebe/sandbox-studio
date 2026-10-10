@@ -300,6 +300,9 @@ func (s *Server) serveConn(c net.Conn) {
 // after recording the reply's names so the sandbox can't connect before the mapping exists.
 // If no upstream answers, it returns a SERVFAIL.
 func (s *Server) resolve(network string, q query) []byte {
+	if resp, ok := s.local(q); ok {
+		return resp
+	}
 	for _, up := range s.upstreams {
 		resp, err := s.exchange(network, q.raw, up)
 		if err == nil && !answers(resp, q) {
@@ -390,6 +393,53 @@ func (s *Server) record(resp []byte) {
 			}
 		}
 	}
+}
+
+// VirtualDomain holds the names of the services Studio itself offers sandboxes (the
+// virtual git remote, for one). They all resolve to VirtualAddr, which the gateway answers
+// itself; nothing is ever dialed there.
+const VirtualDomain = "studio.internal"
+
+// VirtualAddr is in 198.18.0.0/15 (benchmarking), which is never routed publicly.
+var VirtualAddr = netip.AddrFrom4([4]byte{198, 18, 0, 1})
+
+// IsVirtual reports whether name is under VirtualDomain.
+func IsVirtual(name string) bool {
+	name = strings.TrimSuffix(strings.ToLower(name), ".")
+	return name == VirtualDomain || strings.HasSuffix(name, "."+VirtualDomain)
+}
+
+// local answers names under VirtualDomain without asking upstream: an A record for
+// VirtualAddr, and no records of other types.
+func (s *Server) local(q query) ([]byte, bool) {
+	name := strings.TrimSuffix(strings.ToLower(q.question.Name.String()), ".")
+	if !IsVirtual(name) {
+		return nil, false
+	}
+	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{
+		ID:                 q.header.ID,
+		Response:           true,
+		Authoritative:      true,
+		RecursionDesired:   q.header.RecursionDesired,
+		RecursionAvailable: true,
+	})
+	b.EnableCompression()
+	if b.StartQuestions() != nil || b.Question(q.question) != nil {
+		return servfail(q), true
+	}
+	if q.question.Type == dnsmessage.TypeA && q.question.Class == dnsmessage.ClassINET {
+		if b.StartAnswers() != nil || b.AResource(dnsmessage.ResourceHeader{
+			Name: q.question.Name, Class: dnsmessage.ClassINET, TTL: 60,
+		}, dnsmessage.AResource{A: VirtualAddr.As4()}) != nil {
+			return servfail(q), true
+		}
+		s.Names.put(VirtualAddr, name, 60)
+	}
+	msg, err := b.Finish()
+	if err != nil {
+		return servfail(q), true
+	}
+	return msg, true
 }
 
 // query is a standard query we are willing to forward: QR clear, OpCode 0, one question.

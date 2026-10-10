@@ -55,6 +55,8 @@ type Gateway struct {
 	}
 	// Caddy runs the caddy rules. Its Dial must refuse what Dial refuses.
 	Caddy *caddyrule.Engine
+	// Virtual are Studio's own services under dnsproxy.VirtualDomain.
+	Virtual []VirtualHost
 
 	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
 	upstreamRoots *x509.CertPool               // replaces the system roots in tests
@@ -161,6 +163,11 @@ func (g *Gateway) handle(c net.Conn) {
 	verdict, ruleID, problem := VerdictFailed, "", ""
 	var sent, received int64
 	defer func() { g.Conns.finish(entry, verdict, ruleID, problem, sent, received) }()
+
+	if isVirtual(host) {
+		verdict, sent, received, problem = g.serveVirtual(c, br, entry, sb, host, proto)
+		return
+	}
 
 	rule, err := g.Policy.Decide(context.Background(), policy.Request{
 		EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, SandboxName: sb.Name, Host: host, Port: port,
