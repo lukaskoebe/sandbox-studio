@@ -40,7 +40,7 @@ func TestMatch(t *testing.T) {
 		{"sb0", "anything.example", 9999, ""},
 	}
 	for _, c := range cases {
-		r, ok := Match(rules, c.sandbox, c.host, c.port)
+		r, ok := Match(rules, c.sandbox, "", c.host, c.port)
 		if got := map[bool]string{true: r.ID}[ok]; got != c.want {
 			t.Errorf("%s %s:%d: got %q, want %q", c.sandbox, c.host, c.port, got, c.want)
 		}
