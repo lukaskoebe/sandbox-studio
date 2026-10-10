@@ -15,7 +15,7 @@ import (
 
 // decideIntegration settles an approval an integration owns. ok is false for approvals
 // that belong to the network policy.
-func (s *Server) decideIntegration(ctx context.Context, env, id, action, note string) (store.Approval, bool, error) {
+func (s *Server) decideIntegration(ctx context.Context, env, id string, d integrations.Decision) (store.Approval, bool, error) {
 	a, err := s.Store.Approval(ctx, env, id)
 	if err != nil {
 		return a, false, apiError(err)
@@ -27,7 +27,7 @@ func (s *Server) decideIntegration(ctx context.Context, env, id, action, note st
 	if a.Status != store.StatusPending {
 		return a, true, huma.Error409Conflict("the approval was already decided")
 	}
-	if err := k.Decide(ctx, a, integrations.Decision{Action: action, Note: strings.TrimSpace(note)}); err != nil {
+	if err := k.Decide(ctx, a, d); err != nil {
 		return a, true, apiError(err)
 	}
 	a, err = s.Store.Approval(ctx, env, id)

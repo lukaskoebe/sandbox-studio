@@ -504,6 +504,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/personas/{persona}/browser": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getBrowser"];
+        put?: never;
+        post?: never;
+        /** @description Deletes the browser VM with its profile: cookies and logins. The action log stays. */
+        delete: operations["deleteBrowser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/personas/{persona}/browser/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The browser's action log, newest first. Screenshots are at .../actions/{id}/screenshot. */
+        get: operations["listBrowserActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/personas/{persona}/browser/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listBrowserPatterns"];
+        put?: never;
+        post: operations["createBrowserPattern"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/personas/{persona}/browser/patterns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteBrowserPattern"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/personas/{persona}/browser/takeover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setBrowserTakeover"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/personas/{persona}/browser/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["controlBrowser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/providers": {
         parameters: {
             query?: never;
@@ -1123,6 +1221,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ActionPayload: {
+            /** @description The browser action, such as click or fill */
+            action: string;
+            /** @description Accessible name of the element */
+            label?: string;
+            /** @description scheme://host[:port] of the page */
+            origin: string;
+            personaId: string;
+            personaName: string;
+            /** @description Accessibility role of the element */
+            role?: string;
+            sandboxId: string;
+            sandboxName: string;
+            /** @description What the agent wants to type or select */
+            text?: string;
+            url: string;
+        };
         AgentInfo: {
             arch: string;
             version: string;
@@ -1130,6 +1245,10 @@ export interface components {
         ApprovalView: {
             /** Format: int64 */
             attempts: number;
+            /** @description An agent's browser action on a new origin */
+            browserAction?: components["schemas"]["ActionPayload"];
+            /** @description An agent asks Studio to fill a vault credential into a page */
+            browserCredential?: components["schemas"]["CredentialPayload"];
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
@@ -1158,6 +1277,56 @@ export interface components {
             path?: string;
             stale: boolean;
             supported: boolean;
+        };
+        BrowserAction: {
+            action: string;
+            /** @enum {string} */
+            actor: "agent" | "user";
+            /** Format: date-time */
+            at: string;
+            detail?: string;
+            environmentId: string;
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            outcome: "ok" | "denied" | "pending" | "failed";
+            personaId: string;
+            /** @description The agent sandbox that drove the action; empty for the user */
+            sandboxId?: string;
+            /** @description File name of the screenshot taken after the action */
+            screenshot?: string;
+            sessionId: string;
+            /** @description The element, as role and accessible name */
+            target?: string;
+            url?: string;
+        };
+        BrowserPattern: {
+            /** @description A browser action such as click or fill, or * for every action */
+            action: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            id: string;
+            /** @description Glob on the element's accessible name, case-insensitive; empty matches any */
+            label: string;
+            /** @description scheme://host[:port]; the host may start with *. */
+            origin: string;
+            personaId: string;
+            /** @description Accessibility role of the element; empty matches any */
+            role: string;
+            /** @enum {string} */
+            verdict: "allow" | "deny" | "sensitive";
+        };
+        BrowserPatternInput: {
+            /** @description A browser action such as click or fill, or *; ignored for sensitive */
+            action: string;
+            /** @description Glob on the accessible name; * matches anything */
+            label?: string;
+            /** @description scheme://host[:port], *.example.com or * */
+            origin: string;
+            role?: string;
+            /** @enum {string} */
+            verdict: "allow" | "deny" | "sensitive";
         };
         Budget: {
             /**
@@ -1383,6 +1552,19 @@ export interface components {
             /** @description The persona that owns the sandbox; omit for an unowned sandbox */
             personaId?: string;
         };
+        CredentialPayload: {
+            /** @description Name of the vault secret */
+            credential: string;
+            label?: string;
+            origin: string;
+            personaId: string;
+            personaName: string;
+            ref: string;
+            role?: string;
+            sandboxId: string;
+            sandboxName: string;
+            url: string;
+        };
         DecideInBody: {
             /**
              * @description For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
@@ -1395,6 +1577,8 @@ export interface components {
             note?: string;
             /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
             ports?: number[] | null;
+            /** @description For browser.action: allow (or deny) the action on the origin from now on */
+            remember?: boolean;
             /**
              * @description Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment
              * @default environment
@@ -2050,9 +2234,29 @@ export interface components {
             scope: string;
             sessionRef?: string;
         };
+        Status: {
+            /** @description Name of the agent sandbox that drove the browser last */
+            driver?: string;
+            personaId: string;
+            /** @description The current run's session in the action log */
+            sessionId?: string;
+            /** @description The user drives; agent calls are paused */
+            takeover: boolean;
+            /** @description The page the broker last saw */
+            url?: string;
+            /**
+             * @description State of the browser VM
+             * @enum {string}
+             */
+            vm: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed";
+        };
         SubmitInBody: {
             /** @description Template specification in YAML */
             source: string;
+        };
+        TakeoverInBody: {
+            /** @description true: the user drives and agent calls pause; false: hand back to the agents */
+            on: boolean;
         };
         TemplateView: {
             /** Format: date-time */
@@ -3657,6 +3861,271 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listBrowserActions: {
+        parameters: {
+            query?: {
+                /** @description Only this session's actions */
+                session?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserAction"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listBrowserPatterns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserPattern"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createBrowserPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserPatternInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserPattern"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteBrowserPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Pattern ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setBrowserTakeover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TakeoverInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    controlBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
+                /** @description start boots the browser VM, stop stops it (its profile stays) */
+                action: "start" | "stop";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Status"];
+                };
             };
             /** @description Error */
             default: {

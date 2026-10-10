@@ -16,8 +16,10 @@ import (
 	"golang.org/x/net/http/httpguts"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
+	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -31,6 +33,9 @@ type ApprovalView struct {
 	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A persona's proposal for shared memory"`
 	// MemoryConflict is set for memory.conflict approvals.
 	MemoryConflict *agentmem.ConflictPayload `json:"memoryConflict,omitempty" doc:"Two facts that disagree"`
+	// BrowserAction and BrowserCredential are set for browser.action and browser.credential.
+	BrowserAction     *browser.ActionPayload     `json:"browserAction,omitempty" doc:"An agent's browser action on a new origin"`
+	BrowserCredential *browser.CredentialPayload `json:"browserCredential,omitempty" doc:"An agent asks Studio to fill a vault credential into a page"`
 }
 
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
@@ -49,6 +54,16 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p agentmem.SharePayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.MemoryShare = &p
+		}
+	case browser.KindAction:
+		var p browser.ActionPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.BrowserAction = &p
+		}
+	case browser.KindCredential:
+		var p browser.CredentialPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.BrowserCredential = &p
 		}
 	case agentmem.ConflictApprovalKind:
 		var p agentmem.ConflictPayload
@@ -245,17 +260,18 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action string `json:"action" enum:"allow,deny,dismiss" doc:"For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
-			Host   string `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
-			Ports  []int  `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
-			Scope  string `json:"scope,omitempty" enum:"sandbox,persona,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment"`
-			Note   string `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
+			Action   string `json:"action" enum:"allow,deny,dismiss" doc:"For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
+			Host     string `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
+			Ports    []int  `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
+			Scope    string `json:"scope,omitempty" enum:"sandbox,persona,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment"`
+			Note     string `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
+			Remember bool   `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "decideApproval", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/decide", Tags: []string{"approvals"},
 	}, func(ctx context.Context, in *decideIn) (*struct{ Body ApprovalView }, error) {
-		if a, ok, err := s.decideIntegration(ctx, in.Env, in.ID, in.Body.Action, in.Body.Note); ok || err != nil {
+		if a, ok, err := s.decideIntegration(ctx, in.Env, in.ID, integrations.Decision{Action: in.Body.Action, Note: strings.TrimSpace(in.Body.Note), Remember: in.Body.Remember}); ok || err != nil {
 			if err != nil {
 				return nil, err
 			}

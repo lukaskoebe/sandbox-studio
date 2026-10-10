@@ -304,6 +304,9 @@ func (s *Server) registerPersonas(api huma.API) {
 		DefaultStatus: http.StatusNoContent,
 		Description:   "Deletes the persona and the network rules scoped to it. Refused while it owns sandboxes.",
 	}, func(ctx context.Context, in *personaPath) (*struct{}, error) {
+		if err := s.forgetBrowser(ctx, in.Env, in.ID); err != nil {
+			return nil, err
+		}
 		if err := s.Store.DeletePersona(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}

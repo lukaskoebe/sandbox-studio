@@ -17,6 +17,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
@@ -53,6 +54,7 @@ type Server struct {
 	// Integrations settle the approvals they raise; Git is the git review remote among them.
 	Integrations integrations.Set
 	Git          *gitreview.Service
+	Browser      *browser.Service // the browser broker; its endpoints answer 503 without it
 	System       System
 }
 
@@ -83,8 +85,11 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerSessions(api)
 	s.registerForges(api)
 	s.registerSystem(api)
+	s.registerBrowser(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
+	mux.HandleFunc("GET /api/environments/{env}/personas/{persona}/browser/live", s.browserLive)
+	mux.HandleFunc("GET /api/environments/{env}/personas/{persona}/browser/actions/{id}/screenshot", s.browserScreenshot)
 	return api
 }
 

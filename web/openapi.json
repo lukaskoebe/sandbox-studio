@@ -1,6 +1,56 @@
 {
   "components": {
     "schemas": {
+      "ActionPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "The browser action, such as click or fill",
+            "type": "string"
+          },
+          "label": {
+            "description": "Accessible name of the element",
+            "type": "string"
+          },
+          "origin": {
+            "description": "scheme://host[:port] of the page",
+            "type": "string"
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "personaName": {
+            "type": "string"
+          },
+          "role": {
+            "description": "Accessibility role of the element",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "text": {
+            "description": "What the agent wants to type or select",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "personaId",
+          "personaName",
+          "sandboxId",
+          "sandboxName",
+          "action",
+          "origin",
+          "url"
+        ],
+        "type": "object"
+      },
       "AgentInfo": {
         "additionalProperties": false,
         "properties": {
@@ -23,6 +73,14 @@
           "attempts": {
             "format": "int64",
             "type": "integer"
+          },
+          "browserAction": {
+            "$ref": "#/components/schemas/ActionPayload",
+            "description": "An agent's browser action on a new origin"
+          },
+          "browserCredential": {
+            "$ref": "#/components/schemas/CredentialPayload",
+            "description": "An agent asks Studio to fill a vault credential into a page"
           },
           "createdAt": {
             "format": "date-time",
@@ -112,6 +170,169 @@
           "supported",
           "enabled",
           "stale"
+        ],
+        "type": "object"
+      },
+      "BrowserAction": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "enum": [
+              "agent",
+              "user"
+            ],
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "outcome": {
+            "enum": [
+              "ok",
+              "denied",
+              "pending",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "sandboxId": {
+            "description": "The agent sandbox that drove the action; empty for the user",
+            "type": "string"
+          },
+          "screenshot": {
+            "description": "File name of the screenshot taken after the action",
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "target": {
+            "description": "The element, as role and accessible name",
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "personaId",
+          "sessionId",
+          "actor",
+          "action",
+          "outcome",
+          "at"
+        ],
+        "type": "object"
+      },
+      "BrowserPattern": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "A browser action such as click or fill, or * for every action",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "description": "Glob on the element's accessible name, case-insensitive; empty matches any",
+            "type": "string"
+          },
+          "origin": {
+            "description": "scheme://host[:port]; the host may start with *.",
+            "type": "string"
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "role": {
+            "description": "Accessibility role of the element; empty matches any",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "allow",
+              "deny",
+              "sensitive"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "personaId",
+          "action",
+          "origin",
+          "role",
+          "label",
+          "verdict",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "BrowserPatternInput": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "A browser action such as click or fill, or *; ignored for sensitive",
+            "maxLength": 32,
+            "type": "string"
+          },
+          "label": {
+            "description": "Glob on the accessible name; * matches anything",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "origin": {
+            "description": "scheme://host[:port], *.example.com or *",
+            "maxLength": 300,
+            "minLength": 1,
+            "type": "string"
+          },
+          "role": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "allow",
+              "deny",
+              "sensitive"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "origin",
+          "verdict"
         ],
         "type": "object"
       },
@@ -832,6 +1053,53 @@
         ],
         "type": "object"
       },
+      "CredentialPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "description": "Name of the vault secret",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "personaName": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "personaId",
+          "personaName",
+          "sandboxId",
+          "sandboxName",
+          "credential",
+          "ref",
+          "origin",
+          "url"
+        ],
+        "type": "object"
+      },
       "DecideInBody": {
         "additionalProperties": false,
         "properties": {
@@ -865,6 +1133,10 @@
               "array",
               "null"
             ]
+          },
+          "remember": {
+            "description": "For browser.action: allow (or deny) the action on the origin from now on",
+            "type": "boolean"
           },
           "scope": {
             "default": "environment",
@@ -2818,6 +3090,50 @@
         ],
         "type": "object"
       },
+      "Status": {
+        "additionalProperties": false,
+        "properties": {
+          "driver": {
+            "description": "Name of the agent sandbox that drove the browser last",
+            "type": "string"
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "description": "The current run's session in the action log",
+            "type": "string"
+          },
+          "takeover": {
+            "description": "The user drives; agent calls are paused",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "The page the broker last saw",
+            "type": "string"
+          },
+          "vm": {
+            "description": "State of the browser VM",
+            "enum": [
+              "absent",
+              "created",
+              "starting",
+              "running",
+              "draining",
+              "suspended",
+              "stopped",
+              "crashed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "personaId",
+          "vm",
+          "takeover"
+        ],
+        "type": "object"
+      },
       "SubmitInBody": {
         "additionalProperties": false,
         "properties": {
@@ -2830,6 +3146,19 @@
         },
         "required": [
           "source"
+        ],
+        "type": "object"
+      },
+      "TakeoverInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "on": {
+            "description": "true: the user drives and agent calls pause; false: hand back to the agents",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on"
         ],
         "type": "object"
       },
@@ -5562,6 +5891,400 @@
         },
         "tags": [
           "personas"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas/{persona}/browser": {
+      "delete": {
+        "description": "Deletes the browser VM with its profile: cookies and logins. The action log stays.",
+        "operationId": "deleteBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      },
+      "get": {
+        "operationId": "getBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas/{persona}/browser/actions": {
+      "get": {
+        "description": "The browser's action log, newest first. Screenshots are at .../actions/{id}/screenshot.",
+        "operationId": "listBrowserActions",
+        "parameters": [
+          {
+            "description": "Only this session's actions",
+            "explode": false,
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "description": "Only this session's actions",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 200,
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BrowserAction"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas/{persona}/browser/patterns": {
+      "get": {
+        "operationId": "listBrowserPatterns",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BrowserPattern"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      },
+      "post": {
+        "operationId": "createBrowserPattern",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowserPatternInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserPattern"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas/{persona}/browser/patterns/{id}": {
+      "delete": {
+        "operationId": "deleteBrowserPattern",
+        "parameters": [
+          {
+            "description": "Pattern ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Pattern ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas/{persona}/browser/takeover": {
+      "put": {
+        "operationId": "setBrowserTakeover",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeoverInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas/{persona}/browser/{action}": {
+      "post": {
+        "operationId": "controlBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "start boots the browser VM, stop stops it (its profile stays)",
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "description": "start boots the browser VM, stop stops it (its profile stays)",
+              "enum": [
+                "start",
+                "stop"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
         ]
       }
     },
