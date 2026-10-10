@@ -28,6 +28,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -168,9 +170,12 @@ func run(addr, image string, log *slog.Logger) error {
 	conns := &gateway.ConnLog{}
 	authority := &ca.Authority{Store: st, Sealer: vault}
 	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialPublic}
+	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log}
+	integs := integrations.Set{gitRemote}
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
+		Virtual: integs.Routes(),
 	}
 	gl, err := net.Listen("tcp", gatewayAddr)
 	if err != nil {
@@ -236,7 +241,8 @@ func run(addr, image string, log *slog.Logger) error {
 	}()
 
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, Log: log, Addr: addr,
+		Integrations: integs, Git: gitRemote}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 

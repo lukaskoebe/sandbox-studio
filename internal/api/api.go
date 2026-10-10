@@ -19,6 +19,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -46,6 +48,9 @@ type Server struct {
 	Log       *slog.Logger
 	Addr      string       // the address Studio listens on, used to build preview URLs
 	Guest     SessionGuest // agent sessions' guest channel; Sandboxes.Hub when nil
+	// Integrations settle the approvals they raise; Git is the git review remote among them.
+	Integrations integrations.Set
+	Git          *gitreview.Service
 }
 
 // BuildService is the optional durable template-build backend. Keeping this
@@ -71,6 +76,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerMemory(api)
 	s.registerPersonas(api)
 	s.registerSessions(api)
+	s.registerForges(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api
@@ -280,6 +286,8 @@ func apiError(err error) error {
 	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, sandboxes.ErrCheckpointName):
+		return huma.Error422UnprocessableEntity(err.Error())
+	case errors.Is(err, gitreview.ErrInvalid), errors.Is(err, gitreview.ErrNotImplemented), errors.Is(err, integrations.ErrAction):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, policy.ErrDecided):
 		return huma.Error409Conflict(err.Error())

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -244,4 +246,14 @@ func (s *Service) TestForge(ctx context.Context, f store.Forge) (string, error) 
 		return "", fmt.Errorf("the forge's token: %w", err)
 	}
 	return ad.Check(ctx, token)
+}
+
+// Forget removes the staging repositories of a forge that was removed from an environment.
+func (s *Service) Forget(envID, forgeID string) {
+	dirs, _ := filepath.Glob(filepath.Join(s.Dir, envID, "*", forgeID))
+	for _, d := range dirs {
+		if err := os.RemoveAll(d); err != nil && s.Log != nil {
+			s.Log.Error("git remote: remove staging", "dir", d, "err", err)
+		}
+	}
 }

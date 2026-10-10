@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/http/httpguts"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -24,14 +25,20 @@ import (
 type ApprovalView struct {
 	store.Approval
 	Network *policy.NetworkRequest `json:"network,omitempty"`
+	Git     *gitreview.Detail      `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
 }
 
-func approvalView(a store.Approval) ApprovalView {
+func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
 	v := ApprovalView{Approval: a}
-	if a.Kind == policy.KindNetwork {
+	switch a.Kind {
+	case policy.KindNetwork:
 		var req policy.NetworkRequest
 		if json.Unmarshal(a.Payload, &req) == nil {
 			v.Network = &req
+		}
+	case gitreview.KindPush, gitreview.KindPR:
+		if s.Git != nil {
+			v.Git, _ = s.Git.Detail(ctx, a)
 		}
 	}
 	return v
@@ -49,7 +56,7 @@ func (s *Server) approvalViews(ctx context.Context, env, status string) ([]Appro
 	}
 	out := make([]ApprovalView, len(list))
 	for i, a := range list {
-		out[i] = approvalView(a)
+		out[i] = s.approvalView(ctx, a)
 	}
 	return out, nil
 }
@@ -96,7 +103,7 @@ func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in Rule
 	if action != store.ActionProxy {
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules set headers")
 	}
-	secrets, err := s.Store.Secrets(ctx, env)
+	secrets, err := s.ruleSecrets(ctx, env)
 	if err != nil {
 		return store.RuleConfig{}, apiError(err)
 	}
@@ -143,7 +150,7 @@ func (s *Server) caddyConfigFrom(ctx context.Context, env, action string, in Rul
 	if err != nil {
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("Caddyfile: " + err.Error())
 	}
-	secrets, err := s.Store.Secrets(ctx, env)
+	secrets, err := s.ruleSecrets(ctx, env)
 	if err != nil {
 		return store.RuleConfig{}, apiError(err)
 	}
@@ -223,21 +230,28 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action string `json:"action" enum:"allow,deny,dismiss" doc:"allow or deny creates a rule; dismiss only closes the request"`
+			Action string `json:"action" enum:"allow,deny,dismiss" doc:"For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
 			Host   string `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports  []int  `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
 			Scope  string `json:"scope,omitempty" enum:"sandbox,persona,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment"`
+			Note   string `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "decideApproval", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/decide", Tags: []string{"approvals"},
 	}, func(ctx context.Context, in *decideIn) (*struct{ Body ApprovalView }, error) {
+		if a, ok, err := s.decideIntegration(ctx, in.Env, in.ID, in.Body.Action, in.Body.Note); ok || err != nil {
+			if err != nil {
+				return nil, err
+			}
+			return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
+		}
 		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope}
 		a, err := s.Policy.Resolve(ctx, in.Env, in.ID, d)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		return &struct{ Body ApprovalView }{approvalView(a)}, nil
+		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 	})
 
 	huma.Register(api, huma.Operation{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -108,5 +109,18 @@ func (s *Server) checkUnmanaged(ctx context.Context, envID, secretID string) err
 	if provider != "" {
 		return huma.Error409Conflict(fmt.Sprintf("the secret is the key of provider %s; change it on the Providers page", provider))
 	}
+	forge, err := s.Store.SecretForge(ctx, envID, secretID)
+	if err != nil {
+		return apiError(err)
+	}
+	if forge != "" {
+		return huma.Error409Conflict(fmt.Sprintf("the secret is the token of forge %s; change it on the Forges page", forge))
+	}
 	return nil
+}
+
+// ruleSecrets are the secrets rules may refer to: all but the studio-only ones.
+func (s *Server) ruleSecrets(ctx context.Context, envID string) ([]store.Secret, error) {
+	list, err := s.Store.Secrets(ctx, envID)
+	return slices.DeleteFunc(list, func(sec store.Secret) bool { return sec.StudioOnly }), err
 }
