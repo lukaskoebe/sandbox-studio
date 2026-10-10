@@ -949,6 +949,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/autostart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAutostart"];
+        /** Start Studio at login, or stop doing so */
+        put: operations["setAutostart"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/doctor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run the host checks */
+        get: operations["getDoctor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUpdates"];
+        /** Turn the daily update check on or off; turning it on checks right away */
+        put: operations["setUpdates"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -975,6 +1026,15 @@ export interface components {
             subject: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        AutostartStatus: {
+            /** @description The Studio binary the entry starts */
+            command?: string;
+            enabled: boolean;
+            /** @description The file or registry value that starts Studio */
+            path?: string;
+            stale: boolean;
+            supported: boolean;
         };
         BuildJobLog: {
             text: string;
@@ -1145,6 +1205,16 @@ export interface components {
              * @enum {string}
              */
             scope: "sandbox" | "persona" | "environment";
+        };
+        DoctorReport: {
+            /** Format: date-time */
+            checkedAt: string;
+            checks: components["schemas"]["HostCheck"][] | null;
+            /**
+             * @description The worst status of all checks
+             * @enum {string}
+             */
+            status: "ok" | "warn" | "fail";
         };
         Environment: {
             /** Format: date-time */
@@ -1339,6 +1409,16 @@ export interface components {
             /** @enum {string} */
             type: "fact" | "page";
             why: components["schemas"]["Why"];
+        };
+        HostCheck: {
+            /** @description How to fix a warning or failure */
+            fix?: string;
+            /** @description Stable identifier, e.g. msb or kvm */
+            id: string;
+            message: string;
+            name: string;
+            /** @enum {string} */
+            status: "ok" | "warn" | "fail";
         };
         NetworkRequest: {
             host: string;
@@ -1661,6 +1741,9 @@ export interface components {
             sourceId?: string;
             text: string;
         };
+        ToggleInBody: {
+            enabled: boolean;
+        };
         UpdateProviderInBody: {
             /** @description A new key. Omit it to keep the stored one. */
             apiKey?: string;
@@ -1675,6 +1758,21 @@ export interface components {
             note?: string;
             /** @description A new value. Omit it to keep the stored one. */
             value?: string;
+        };
+        UpdateState: {
+            /** @description Latest is newer than Current */
+            available: boolean;
+            /** Format: date-time */
+            checkedAt?: string;
+            /** @description The running Studio version */
+            current: string;
+            enabled: boolean;
+            /** @description Why the last check failed */
+            error?: string;
+            /** @description The newest release's tag, from the last check */
+            latest?: string;
+            /** @description The newest release's page */
+            url?: string;
         };
         View: {
             agent?: components["schemas"]["AgentInfo"];
@@ -4411,6 +4509,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderKind"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getAutostart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutostartStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setAutostart: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutostartStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getDoctor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoctorReport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateState"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateState"];
                 };
             };
             /** @description Error */
