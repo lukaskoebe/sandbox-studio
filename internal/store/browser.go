@@ -45,6 +45,24 @@ func (s *Store) BrowserSandbox(ctx context.Context, envID, personaID string) (Sa
 	return sb, err
 }
 
+// BrowserSandboxes lists every persona's browser VM row.
+func (s *Store) BrowserSandboxes(ctx context.Context) ([]Sandbox, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+sandboxCols+" FROM sandboxes WHERE kind = 'browser' ORDER BY created_at")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Sandbox{}
+	for rows.Next() {
+		sb, err := scanSandbox(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sb)
+	}
+	return out, rows.Err()
+}
+
 // Browser pattern verdicts.
 const (
 	BrowserAllow     = "allow"

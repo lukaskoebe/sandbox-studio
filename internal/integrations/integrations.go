@@ -26,6 +26,9 @@ var ErrAction = errors.New("unsupported action")
 type Decision struct {
 	Action string // Allow, Deny or Dismiss
 	Note   string // optional, passed on to the sandbox where the integration can
+	// Remember asks to keep the answer for similar requests, where the kind supports
+	// it (browser.action: allow or deny the action on the origin from now on).
+	Remember bool
 }
 
 // ApprovalKind settles approvals of one kind. Decide moves a pending approval out of
