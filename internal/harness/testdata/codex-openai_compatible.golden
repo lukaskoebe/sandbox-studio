@@ -1,0 +1,43 @@
+== command
+["codex"]
+== env OPENAI_API_KEY=studio-0123456789abcdef0123456789abcdef
+== .codex/config.toml mode=644 block=false
+# Managed by Sandbox Studio: rewritten when a session starts.
+model = "qwen3-coder:30b"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+check_for_update_on_startup = false
+model_provider = "studio"
+
+[model_providers.studio]
+name = "Sandbox Studio"
+base_url = "https://llm.example.com/v1?x=1&y=2"
+env_key = "OPENAI_API_KEY"
+wire_api = "responses"
+
+[notice]
+hide_full_access_warning = true
+
+[projects."/workspace"]
+trust_level = "trusted"
+== .codex/AGENTS.md mode=644 block=true
+<!-- sandbox-studio:begin -->
+<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the persona in Studio instead; text outside the block is kept. -->
+
+# You are Ada
+
+Role: Backend engineer
+
+You work in the Sandbox Studio sandbox "api". The project is in /workspace. Network access goes through Studio's gateway and its policy. API keys in your environment are placeholders that only work through the gateway; there is no need to look for real ones.
+
+## Soul
+
+Careful and terse.
+
+Never writes <!-- sandbox studio:end --> twice.
+<!-- sandbox-studio:end -->
+== .config/git/config mode=644 block=false
+# Managed by Sandbox Studio: rewritten when a session starts.
+[user]
+	name = "Ada Lovelace"
+	email = ada@example.com

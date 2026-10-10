@@ -151,6 +151,10 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.killSession(st, h.Session)
 	case agentproto.KindConfig:
 		err = a.configure(st, br)
+	case agentproto.KindHomeFiles:
+		err = a.homeFiles(st, br)
+	case agentproto.KindStartSession:
+		err = a.startSession(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}
@@ -252,18 +256,18 @@ func validSessionName(s string) bool {
 
 func (a *Agent) replySessions(st net.Conn) error {
 	out, err := a.command("tmux", "list-sessions", "-F",
-		"#{session_name}\t#{session_attached}\t#{session_windows}\t#{session_created}").Output()
+		"#{session_name}\t#{session_attached}\t#{session_windows}\t#{session_created}\t#{"+agentproto.HarnessOption+"}").Output()
 	sessions := []agentproto.Session{}
 	if err == nil { // tmux exits non-zero when no server is running: no sessions.
 		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 			f := strings.Split(line, "\t")
-			if len(f) != 4 {
+			if len(f) != 5 {
 				continue
 			}
 			att, _ := strconv.Atoi(f[1])
 			win, _ := strconv.Atoi(f[2])
 			created, _ := strconv.ParseInt(f[3], 10, 64)
-			sessions = append(sessions, agentproto.Session{Name: f[0], Attached: att, Windows: win, Created: created})
+			sessions = append(sessions, agentproto.Session{Name: f[0], Attached: att, Windows: win, Created: created, Harness: f[4]})
 		}
 	}
 	return agentproto.WriteJSONLine(st, sessions)

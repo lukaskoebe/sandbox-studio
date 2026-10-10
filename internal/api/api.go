@@ -44,7 +44,8 @@ type Server struct {
 	Auth      *webauth.Auth
 	Memory    *memory.Service
 	Log       *slog.Logger
-	Addr      string // the address Studio listens on, used to build preview URLs
+	Addr      string       // the address Studio listens on, used to build preview URLs
+	Guest     SessionGuest // agent sessions' guest channel; Sandboxes.Hub when nil
 }
 
 // BuildService is the optional durable template-build backend. Keeping this
@@ -69,6 +70,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerSecrets(api)
 	s.registerMemory(api)
 	s.registerPersonas(api)
+	s.registerSessions(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api
