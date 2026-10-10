@@ -41,8 +41,8 @@ placeholder and never see the secret. Config files name only the variable (`{env
 Files marked "managed" are rewritten on every session start, so edits made in the sandbox
 are lost. The instructions files hold a managed block between
 `<!-- sandbox-studio:begin -->` and `<!-- sandbox-studio:end -->`: Studio replaces only the
-block, or puts it first, and keeps text outside it. The block has the persona's name, role
-and soul. Memory joins it in M5.
+block, or puts it first, and keeps text outside it. The block has the persona's name and
+role and points to the memory tools. The soul comes with memory's session-start context.
 
 | | OpenCode | Claude Code | Codex |
 |---|---|---|---|
@@ -53,7 +53,9 @@ and soul. Memory joins it in M5.
 | Auto-approve | `"permission": "allow"` | `permissions.defaultMode = "bypassPermissions"`, `skipDangerousModePermissionPrompt` | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `/workspace` trusted |
 | Updates off | `"autoupdate": false` | `env.DISABLE_AUTOUPDATER = "1"` | `check_for_update_on_startup = false` |
 | Env | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | `ANTHROPIC_API_KEY` | `OPENAI_API_KEY` |
-| TUI | `opencode` | `claude` | `codex` |
+| Hooks | plugin `~/.config/opencode/plugins/studio-memory.js` | `hooks` in settings.json | `~/.codex/hooks.json` |
+| MCP | `"mcp": {"studio": {"type": "local", …}}` | `~/.claude/studio-mcp.json` | `[mcp_servers.studio]` |
+| TUI | `opencode` | `claude --mcp-config ~/.claude/studio-mcp.json` | `codex --dangerously-bypass-hook-trust` |
 | State dirs | `~/.local/share/opencode`, `~/.local/state/opencode` | `~/.claude` (plus `~/.claude.json`) | `~/.codex` |
 
 Auto-approve is safe here because the VM is the sandbox and the gateway's policy governs
@@ -63,6 +65,23 @@ still wins.
 
 Codex needs an OpenAI-compatible endpoint that speaks the Responses API, its only
 `wire_api`. OpenCode works with Chat Completions endpoints.
+
+## Memory hooks
+
+Every hook runs `/opt/studio/bin/studio-agent hook <event> --harness <h>` (docs/memory.md).
+
+- Claude Code and Codex: one matcher-less group each for `SessionStart`,
+  `UserPromptSubmit`, `PreCompact`, `Stop` and `SessionEnd`, with timeouts of 15, 10, 15, 15
+  and 3 seconds. They read `session_id`, `transcript_path`, `cwd`, `source` and `prompt`
+  and answer `hookSpecificOutput.additionalContext` for session start and prompts.
+- Codex's hooks are in the home, not the system layer, so the TUI starts with
+  `--dangerously-bypass-hook-trust` instead of a trust prompt.
+- OpenCode's plugin maps `session.created` and `session.compacted` to session start,
+  `chat.message` to prompts, `session.idle` to stop and `experimental.session.compacting`
+  to pre-compact. It adds the context through `experimental.chat.system.transform` and
+  sends the transcript inline (text parts from the session's messages) with an offset.
+  The guest reads no OpenCode files.
+- Golden files: `internal/harness/testdata/hooks/`.
 
 ## Persistence
 
@@ -98,7 +117,11 @@ Pending S7 (`// verify (S7)` in the code):
 - Whether Codex's custom provider with `env_key` needs no `codex login`.
 - The OpenCode global rules path.
 - Whether each auto-approve setting takes effect without a prompt.
-- Hooks (`ParseHook`, `RenderHookResponse`) and MCP config are M5.
+- Hook payload fields and answers for the pinned versions; Claude Code's
+  `--mcp-config` servers starting without an approval prompt; Codex's
+  `--dangerously-bypass-hook-trust` flag; the OpenCode plugin's event and hook names and
+  `client.session.messages`; which lines of Codex rollouts are noise.
+- The model ID `gpt-6-luna` and its price (third-party listings only).
 
 Pending S8: subscription logins (`claude_subscription`, `chatgpt_subscription`). Sessions
 refuse these providers until the login flow exists.

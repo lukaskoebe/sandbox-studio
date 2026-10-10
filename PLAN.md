@@ -611,7 +611,7 @@ copied by fork. Network rules can be scoped to a persona; the gateway resolves t
 from the catalog. Default rule scope and auto-patterns are not built yet.
 
 **Built (M4 part B).** `internal/harness` has the interface below with OpenCode, Claude Code
-and Codex adapters (`docs/harnesses.md`); hooks and MCP are stubs until M5, ACP until M6.
+and Codex adapters (`docs/harnesses.md`); hooks and MCP since M5 part B, ACP in M6.
 Starting a session (`POST .../sandboxes/{id}/sessions`) needs an owner persona, a `ready`
 provider and its key bound to the provider's host; it writes the harness config, the soul as
 a managed block in the global instructions file and the git identity into `/home/agent`
@@ -668,7 +668,7 @@ type Harness interface {
 |---|---|---|---|
 | Instructions | `AGENTS.md` | `CLAUDE.md` importing `@AGENTS.md` | `AGENTS.md` |
 | MCP | `opencode.json` `mcp` | managed MCP config | `config.toml` `[mcp_servers]` |
-| Hooks | JS plugin that calls `studio-agent hook` (verify event names for the pinned version) | managed settings hooks | system-layer `hooks.json` (managed, so no trust prompt) |
+| Hooks | JS plugin that calls `studio-agent hook` (verify event names for the pinned version) | managed settings hooks | `~/.codex/hooks.json`, TUI started with `--dangerously-bypass-hook-trust` (verify S7) |
 | Context at session start / after compaction | plugin (verify) | `SessionStart` `additionalContext` | `SessionStart` `additionalContext` (sources incl. `compact`) |
 | Context per prompt | plugin `chat.message` / system transform (verify) | `UserPromptSubmit` | `UserPromptSubmit` |
 | Before compaction | `experimental.session.compacting` | `PreCompact` | `PreCompact` |
@@ -819,9 +819,15 @@ memory can be moved to gbrain or qmd later.
 timeline, conflicts, chunks and int8 embeddings; the core-page budget (4000 characters per
 scope); hybrid search with RRF, tier and recency boosts and a per-hit "why"; the embedding
 worker with the pinned embeddinggemma and llama.cpp downloads; the REST API under
-`/api/environments/{env}/memory`; and the Memory page. Still open: hooks and automatic
-extraction, the agent tools, context packs, consolidation, "shared wins at recall" for
-conflicts, and the injection log.
+`/api/environments/{env}/memory`; and the Memory page.
+
+**M5 part B (docs/memory.md "In agent sessions").** Guest calls over the agent channel
+(`/run/studio-agent/call.sock` → stream `call`), `studio-agent hook` and `studio-agent mcp`
+wired into all three harnesses; session-start context packs, gated per-prompt recall, a
+per-session injection and write log (migration 015); the six memory tools with
+`memory.share` approvals; extraction with the provider's utility model under a daily
+budget. Still open: consolidation, "shared wins at recall" for conflicts, extraction for
+subscriptions (S8), and everything marked verify (S7).
 
 ### 6.8 Browser broker
 
