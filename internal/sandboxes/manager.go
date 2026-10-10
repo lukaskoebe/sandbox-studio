@@ -54,11 +54,17 @@ type Manager struct {
 	}
 	Paths paths.Paths
 	Log   *slog.Logger
+	// Builds builds the templates of imported sandboxes; nil disables template imports.
+	Builds Builds
 
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
 	// the Manager's lifetime so a deleted sandbox's lock can't be swapped under a holder.
 	mutating sync.Map
+
+	imports    importState
+	importPoll time.Duration                // build status poll interval; 0 means 1s
+	diskFree   func(string) (uint64, error) // overrides the free-disk probe in tests
 }
 
 // SandboxRuntime is the runtime surface the manager needs. Keeping it narrow makes
@@ -120,6 +126,7 @@ func vmNameAtGeneration(sb store.Sandbox, generation int) string {
 // Reconcile re-attaches agent listeners for every sandbox after Studio starts.
 // Detached VMs keep running across Studio restarts; their agents reconnect on their own.
 func (m *Manager) Reconcile(ctx context.Context) error {
+	m.recoverImports(ctx)
 	all, err := m.Store.AllSandboxes(ctx)
 	if err != nil {
 		return err

@@ -205,6 +205,21 @@ func (s *Store) CreateSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) 
 		return sb, err
 	}
 	defer tx.Rollback()
+	sb, err = insertSandbox(ctx, tx, sb)
+	if err != nil {
+		return sb, err
+	}
+	if err := tx.Commit(); err != nil {
+		return sb, err
+	}
+	return sb, nil
+}
+
+func insertSandbox(ctx context.Context, tx *sql.Tx, sb Sandbox) (Sandbox, error) {
+	if sb.MaxMemoryMiB == 0 {
+		sb.MaxMemoryMiB = sb.MemoryMiB
+	}
+	sb.BuildJobID = ""
 	if sb.TemplateID != "" {
 		var state string
 		err := tx.QueryRowContext(ctx, "SELECT state FROM templates WHERE environment_id = ? AND id = ?", sb.EnvironmentID, sb.TemplateID).Scan(&state)
@@ -229,13 +244,7 @@ func (s *Store) CreateSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) 
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}
-	if err != nil {
-		return sb, err
-	}
-	if err := tx.Commit(); err != nil {
-		return sb, err
-	}
-	return sb, nil
+	return sb, err
 }
 
 // Sandboxes lists the sandboxes of an environment.

@@ -165,6 +165,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandbox-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a .studio-sandbox file
+         * @description Creates a sandbox from an export in the background; poll the returned import. The workspace archive may be at most the exported workspace size. A name already in use gets a numeric suffix.
+         */
+        post: operations["importSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandbox-imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the status of a sandbox import */
+        get: operations["getSandboxImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandbox-imports/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a sandbox import
+         * @description Marks the import failed and removes its sandbox if one was created. A template build it started keeps running.
+         */
+        post: operations["cancelSandboxImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes": {
         parameters: {
             query?: never;
@@ -258,6 +315,26 @@ export interface paths {
         };
         /** @description The sandbox's most recent connections, newest first. The log is kept in memory only. */
         get: operations["listConnections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a sandbox as a .studio-sandbox file
+         * @description Streams the template spec, resources and /workspace. Secrets, network identity, approvals, checkpoints and Docker state are not included. A running sandbox is exported while it runs, so files written meanwhile may be inconsistent. A stopped one is started without services and stopped again.
+         */
+        get: operations["exportSandbox"];
         put?: never;
         post?: never;
         delete?: never;
@@ -785,6 +862,21 @@ export interface components {
             ports?: number[] | null;
             /** @description Limits the rule to one sandbox of this environment */
             sandboxId?: string;
+        };
+        SandboxImport: {
+            buildJobId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            error?: string;
+            id: string;
+            /** @description Name of the new sandbox; it gets a suffix if the exported name is taken */
+            name: string;
+            sandboxId?: string;
+            /** @enum {string} */
+            state: "uploading" | "building" | "creating" | "importing" | "ready" | "failed";
+            /** Format: date-time */
+            updatedAt: string;
         };
         Secret: {
             /** Format: date-time */
@@ -1337,6 +1429,110 @@ export interface operations {
             };
         };
     };
+    importSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The import was accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxImport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSandboxImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Import ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxImport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelSandboxImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Import ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxImport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listSandboxes: {
         parameters: {
             query?: never;
@@ -1634,6 +1830,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conn"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    exportSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The export file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
                 };
             };
             /** @description Error */

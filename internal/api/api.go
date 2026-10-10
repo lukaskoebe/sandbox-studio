@@ -60,6 +60,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerTemplates(api)
 	s.registerCheckpoints(api)
 	s.registerTransfers(api)
+	s.registerExports(api, mux)
 	s.registerPreviews(api)
 	s.registerNetwork(api)
 	s.registerSecrets(api)
