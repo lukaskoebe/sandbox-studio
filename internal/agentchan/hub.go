@@ -341,6 +341,9 @@ func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, bod
 	}
 	var e agentproto.Error
 	if json.Unmarshal(line, &e) == nil && e.Error != "" {
+		if e.Code == agentproto.CodeHarness {
+			return HarnessError(e.Error)
+		}
 		return errors.New(e.Error)
 	}
 	return json.Unmarshal(line, v)
@@ -364,6 +367,12 @@ func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.
 	var ok struct{}
 	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeFiles}, agentproto.HomeFiles{Files: files}, &ok)
 }
+
+// HarnessError is a session start the guest refused because of the harness itself: it is
+// not installed or exits right away. The message is meant for the user.
+type HarnessError string
+
+func (e HarnessError) Error() string { return string(e) }
 
 // StartSession starts a detached tmux session running an agent harness in the guest.
 func (h *Hub) StartSession(ctx context.Context, id string, req agentproto.StartSession) error {

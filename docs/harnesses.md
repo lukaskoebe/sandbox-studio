@@ -27,6 +27,13 @@ Then Studio:
    - The provider's variable is set to the placeholder after the profile has run.
    - The session is named after the harness (`claude`, `claude-2`, …) and tagged with the
      tmux option `@studio_harness`.
+   - The harness must be on the login shell's `PATH`. If it isn't (an image built before
+     the harnesses were added), the start fails with 409 and says to rebuild the base image
+     and create a new sandbox.
+   - The pane is kept with `remain-on-exit` for the first 1.5 s. A harness that exits in
+     that time fails the start with 409, its exit status and its last output lines (at most
+     600 characters, without the command line); its session is removed. After that the
+     option goes back to the default, so a harness that exits later ends its session.
 
 `GET .../sessions` lists the tagged tmux sessions. `DELETE .../sessions/{name}` ends one.
 Sessions are terminals too, so the sandbox page opens them as terminal tabs.
