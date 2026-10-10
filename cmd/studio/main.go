@@ -200,6 +200,7 @@ func run(addr, image string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	mgr.Builds = builds
 	buildCtx, cancelBuilds := context.WithCancel(ctx)
 	buildsDone := make(chan struct{})
 	go func() {
