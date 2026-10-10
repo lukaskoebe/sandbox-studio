@@ -58,12 +58,13 @@ const (
 	ActionDeny  = "deny"
 )
 
-// Rule decides what happens to connections to Host. SandboxID is empty for rules that
-// cover the whole environment.
+// Rule decides what happens to connections to Host. SandboxID and PersonaID are empty for
+// rules that cover the whole environment; at most one of them is set.
 type Rule struct {
 	ID            string     `json:"id"`
 	EnvironmentID string     `json:"environmentId"`
 	SandboxID     string     `json:"sandboxId,omitempty"`
+	PersonaID     string     `json:"personaId,omitempty" doc:"Set for rules that apply to every sandbox of one persona"`
 	Host          string     `json:"host" doc:"example.com, *.example.com (includes example.com), or an IP address"`
 	Ports         []int      `json:"ports" doc:"Empty means any port"`
 	Action        string     `json:"action" enum:"allow,proxy,caddy,deny"`
@@ -80,13 +81,13 @@ type RuleConfig struct {
 	Caddyfile string `json:"caddyfile,omitempty"`
 }
 
-const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), host, ports, action, config, note, created_at"
+const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(persona_id, ''), host, ports, action, config, note, created_at"
 
 func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 	var r Rule
 	var ports, config string
 	var created int64
-	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.Host, &ports, &r.Action, &config, &r.Note, &created); err != nil {
+	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.PersonaID, &r.Host, &ports, &r.Action, &config, &r.Note, &created); err != nil {
 		return r, err
 	}
 	r.Ports = []int{}
@@ -124,8 +125,8 @@ func (s *Store) CreateRule(ctx context.Context, r Rule) (Rule, error) {
 	if err != nil {
 		return r, err
 	}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, host, ports, action, config, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		r.ID, r.EnvironmentID, nullable(r.SandboxID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.CreatedAt.Unix())
+	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, persona_id, host, ports, action, config, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.PersonaID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.CreatedAt.Unix())
 	return r, err
 }
 
@@ -135,8 +136,8 @@ func (s *Store) UpdateRule(ctx context.Context, r Rule) (Rule, error) {
 	if err != nil {
 		return r, err
 	}
-	res, err := s.db.ExecContext(ctx, "UPDATE rules SET sandbox_id = ?, host = ?, ports = ?, action = ?, config = ?, note = ? WHERE environment_id = ? AND id = ?",
-		nullable(r.SandboxID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.EnvironmentID, r.ID)
+	res, err := s.db.ExecContext(ctx, "UPDATE rules SET sandbox_id = ?, persona_id = ?, host = ?, ports = ?, action = ?, config = ?, note = ? WHERE environment_id = ? AND id = ?",
+		nullable(r.SandboxID), nullable(r.PersonaID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.EnvironmentID, r.ID)
 	if err != nil {
 		return r, err
 	}

@@ -354,6 +354,46 @@
         ],
         "type": "object"
       },
+      "CreateProviderInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "description": "API-key kinds: the key. It is sealed in the vault on arrival and never returned.",
+            "type": "string",
+            "writeOnly": true
+          },
+          "baseUrl": {
+            "description": "openai_compatible only: the https:// base URL",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "anthropic_api",
+              "openai_api",
+              "openai_compatible",
+              "claude_subscription",
+              "chatgpt_subscription"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "description": "openai_compatible only: the endpoint's single model",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
       "CreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -374,6 +414,10 @@
             "type": "integer"
           },
           "name": {
+            "type": "string"
+          },
+          "personaId": {
+            "description": "The persona that owns the sandbox; omit for an unowned sandbox",
             "type": "string"
           },
           "workspaceMiB": {
@@ -429,6 +473,10 @@
             "maxLength": 40,
             "minLength": 1,
             "type": "string"
+          },
+          "personaId": {
+            "description": "The persona that owns the sandbox; omit for an unowned sandbox",
+            "type": "string"
           }
         },
         "required": [
@@ -467,9 +515,10 @@
           },
           "scope": {
             "default": "environment",
-            "description": "Whether the rule covers only the requesting sandbox",
+            "description": "Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment",
             "enum": [
               "sandbox",
+              "persona",
               "environment"
             ],
             "type": "string"
@@ -639,6 +688,123 @@
         ],
         "type": "object"
       },
+      "Persona": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "gitEmail": {
+            "type": "string"
+          },
+          "gitName": {
+            "type": "string"
+          },
+          "harness": {
+            "enum": [
+              "opencode",
+              "claude",
+              "codex"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "soul": {
+            "description": "Personality and working rules, as markdown",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "name",
+          "role",
+          "soul",
+          "harness",
+          "providerId",
+          "model",
+          "gitName",
+          "gitEmail",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "PersonaInput": {
+        "additionalProperties": false,
+        "properties": {
+          "gitEmail": {
+            "description": "Defaults to \u003cslug\u003e@agents.invalid",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "gitName": {
+            "description": "Defaults to the name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "harness": {
+            "enum": [
+              "opencode",
+              "claude",
+              "codex"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "description": "Required for API-key providers; defaults to the model of an OpenAI-compatible provider",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "providerId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "role": {
+            "description": "A short description of what the persona does",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "soul": {
+            "description": "Personality and working rules, as markdown",
+            "maxLength": 16384,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "harness",
+          "providerId"
+        ],
+        "type": "object"
+      },
       "PreviewOpenBody": {
         "additionalProperties": false,
         "properties": {
@@ -665,6 +831,153 @@
         "required": [
           "port",
           "url"
+        ],
+        "type": "object"
+      },
+      "ProviderKind": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "description": "Whether the provider is an API key; otherwise it is a subscription login",
+            "type": "boolean"
+          },
+          "envVar": {
+            "description": "The variable the harness reads the credential from",
+            "type": "string"
+          },
+          "harnesses": {
+            "description": "Harnesses that can use a provider of this kind",
+            "items": {
+              "enum": [
+                "opencode",
+                "claude",
+                "codex"
+              ],
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "host": {
+            "description": "The host the key is bound to; for openai_compatible, the base URL's host",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "anthropic_api",
+              "openai_api",
+              "openai_compatible",
+              "claude_subscription",
+              "chatgpt_subscription"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "harnesses",
+          "apiKey"
+        ],
+        "type": "object"
+      },
+      "ProviderView": {
+        "additionalProperties": false,
+        "properties": {
+          "baseUrl": {
+            "description": "openai_compatible only",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "envVar": {
+            "description": "The variable guests get the placeholder in",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "harnesses": {
+            "description": "Harnesses personas using this provider can run",
+            "items": {
+              "enum": [
+                "opencode",
+                "claude",
+                "codex"
+              ],
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "hosts": {
+            "description": "Hosts the key is sent to",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "anthropic_api",
+              "openai_api",
+              "openai_compatible",
+              "claude_subscription",
+              "chatgpt_subscription"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "description": "openai_compatible only: the endpoint's single model",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placeholder": {
+            "description": "What guests see instead of the key",
+            "type": "string"
+          },
+          "secretId": {
+            "description": "The vault secret holding the key",
+            "type": "string"
+          },
+          "secretName": {
+            "type": "string"
+          },
+          "state": {
+            "description": "login_required until a subscription login is stored",
+            "enum": [
+              "ready",
+              "login_required"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "harnesses",
+          "id",
+          "environmentId",
+          "name",
+          "kind",
+          "createdAt",
+          "updatedAt"
         ],
         "type": "object"
       },
@@ -745,6 +1058,10 @@
             "type": "string"
           },
           "note": {
+            "type": "string"
+          },
+          "personaId": {
+            "description": "Set for rules that apply to every sandbox of one persona",
             "type": "string"
           },
           "ports": {
@@ -831,6 +1148,10 @@
           },
           "note": {
             "maxLength": 500,
+            "type": "string"
+          },
+          "personaId": {
+            "description": "Limits the rule to the sandboxes one persona of this environment owns; excludes sandboxId",
             "type": "string"
           },
           "ports": {
@@ -1028,6 +1349,27 @@
         ],
         "type": "object"
       },
+      "UpdateProviderInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "description": "A new key. Omit it to keep the stored one.",
+            "type": "string",
+            "writeOnly": true
+          },
+          "baseUrl": {
+            "description": "openai_compatible only",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "model": {
+            "description": "openai_compatible only",
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "UpdateSecretInBody": {
         "additionalProperties": false,
         "properties": {
@@ -1097,6 +1439,10 @@
             "type": "integer"
           },
           "name": {
+            "type": "string"
+          },
+          "personaId": {
+            "description": "The persona that owns the sandbox; empty for unowned sandboxes",
             "type": "string"
           },
           "status": {
@@ -1668,6 +2014,466 @@
         },
         "tags": [
           "builds"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas": {
+      "get": {
+        "operationId": "listPersonas",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Persona"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "personas"
+        ]
+      },
+      "post": {
+        "operationId": "createPersona",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonaInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "personas"
+        ]
+      }
+    },
+    "/api/environments/{env}/personas/{id}": {
+      "delete": {
+        "description": "Deletes the persona and the network rules scoped to it. Refused while it owns sandboxes.",
+        "operationId": "deletePersona",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "personas"
+        ]
+      },
+      "get": {
+        "operationId": "getPersona",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "personas"
+        ]
+      },
+      "put": {
+        "operationId": "updatePersona",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonaInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Persona"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "personas"
+        ]
+      }
+    },
+    "/api/environments/{env}/providers": {
+      "get": {
+        "operationId": "listProviders",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      },
+      "post": {
+        "description": "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder.",
+        "operationId": "createProvider",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProviderInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderView"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/environments/{env}/providers/{id}": {
+      "delete": {
+        "description": "Deletes the provider and its key. Refused while a persona uses the provider.",
+        "operationId": "deleteProvider",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      },
+      "put": {
+        "description": "The name and kind are fixed at creation. Omitted fields keep their values.",
+        "operationId": "updateProvider",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProviderInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
         ]
       }
     },
@@ -3546,6 +4352,43 @@
         },
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/provider-kinds": {
+      "get": {
+        "description": "The fixed table of provider kinds and the harnesses each supports.",
+        "operationId": "listProviderKinds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderKind"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
         ]
       }
     }

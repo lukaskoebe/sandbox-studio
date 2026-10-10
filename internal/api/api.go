@@ -19,6 +19,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -64,6 +65,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerPreviews(api)
 	s.registerNetwork(api)
 	s.registerSecrets(api)
+	s.registerPersonas(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api
@@ -156,6 +158,9 @@ func (s *Server) registerSandboxes(api huma.API) {
 	}, func(ctx context.Context, in *createIn) (*sandboxOut, error) {
 		if _, err := s.Store.Environment(ctx, in.Env); err != nil {
 			return nil, apiError(err)
+		}
+		if err := s.checkPersona(ctx, in.Env, in.Body.PersonaID); err != nil {
+			return nil, err
 		}
 		// Booting continues even if the client goes away; the manager rolls back on failure.
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
@@ -265,7 +270,7 @@ func apiError(err error) error {
 		return huma.Error409Conflict("the sandbox is not running or still booting")
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern),
-		errors.Is(err, secrets.ErrInvalid):
+		errors.Is(err, secrets.ErrInvalid), errors.Is(err, personas.ErrInvalid), errors.Is(err, policy.ErrNoPersona):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())

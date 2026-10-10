@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { PageHeader } from "@/components/page-header"
+import { SandboxOwner } from "@/components/persona-avatar"
 import { StatusBadge } from "@/components/status-badge"
 import { $api } from "@/lib/api/client"
 
@@ -75,6 +76,13 @@ function Overview() {
                     <CardDescription>
                       {sb.cpus} CPUs · {sb.memoryMiB / 1024} GiB memory ·{" "}
                       {sb.workspaceMiB / 1024} GiB workspace
+                      {sb.personaId && (
+                        <SandboxOwner
+                          env={env}
+                          personaId={sb.personaId}
+                          className="mt-1.5 flex"
+                        />
+                      )}
                     </CardDescription>
                     <CardAction>
                       <StatusBadge sandbox={sb} />

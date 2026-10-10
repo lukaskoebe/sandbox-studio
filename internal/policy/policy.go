@@ -25,6 +25,7 @@ var (
 	ErrDismissed    = errors.New("the request was dismissed")
 	ErrDecided      = errors.New("the request was already decided")
 	ErrDoesNotCover = errors.New("the rule must cover the requested host and port")
+	ErrNoPersona    = errors.New("the sandbox has no persona")
 )
 
 // Request is a connection attempt from a sandbox.
@@ -60,11 +61,15 @@ type Engine struct {
 // matches. It returns ErrUndecided when time runs out and ErrDismissed when the user
 // dismissed the request without a rule.
 func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
+	persona, err := e.persona(ctx, req.EnvironmentID, req.SandboxID)
+	if err != nil {
+		return store.Rule{}, err
+	}
 	rules, wake, err := e.snapshot(ctx, req.EnvironmentID)
 	if err != nil {
 		return store.Rule{}, err
 	}
-	if r, ok := Match(rules, req.SandboxID, req.Host, req.Port); ok {
+	if r, ok := Match(rules, req.SandboxID, persona, req.Host, req.Port); ok {
 		return r, nil
 	}
 	host := Normalize(req.Host)
@@ -94,7 +99,7 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		if rules, wake, err = e.snapshot(ctx, req.EnvironmentID); err != nil {
 			return store.Rule{}, err
 		}
-		if r, ok := Match(rules, req.SandboxID, req.Host, req.Port); ok {
+		if r, ok := Match(rules, req.SandboxID, persona, req.Host, req.Port); ok {
 			return r, nil
 		}
 		if cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID); err != nil || cur.Status != store.StatusPending {
@@ -108,7 +113,7 @@ type Decision struct {
 	Action string // allow, deny or dismiss
 	Host   string // host pattern; empty means the requested host
 	Ports  []int  // nil means DefaultPorts of the requested port
-	Scope  string // sandbox or environment
+	Scope  string // sandbox, persona (the requesting sandbox's owner) or environment
 }
 
 // Resolve answers a pending network approval, creating a rule unless it is dismissed.
@@ -142,8 +147,16 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if rule.Ports == nil {
 		rule.Ports = DefaultPorts(req.Port)
 	}
-	if d.Scope == "sandbox" {
+	switch d.Scope {
+	case "sandbox":
 		rule.SandboxID = a.SandboxID
+	case "persona":
+		if rule.PersonaID, err = e.persona(ctx, envID, a.SandboxID); err != nil {
+			return a, err
+		}
+		if rule.PersonaID == "" {
+			return a, ErrNoPersona
+		}
 	}
 	if rule.Host, err = ValidPattern(rule.Host); err != nil {
 		return a, err
@@ -171,12 +184,16 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 	if err != nil {
 		return err
 	}
+	personas, err := e.Store.SandboxPersonas(ctx, envID)
+	if err != nil {
+		return err
+	}
 	for _, a := range pending {
 		var req NetworkRequest
 		if a.Kind != KindNetwork || json.Unmarshal(a.Payload, &req) != nil {
 			continue
 		}
-		r, ok := Match(rules, a.SandboxID, req.Host, req.Port)
+		r, ok := Match(rules, a.SandboxID, personas[a.SandboxID], req.Host, req.Port)
 		if !ok {
 			continue
 		}
@@ -190,6 +207,20 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 	}
 	e.changed(envID, true)
 	return nil
+}
+
+// persona returns the persona owning a sandbox, or "" for an unowned or unknown one. It is
+// read from the catalog, not from the caller, so a persona rule can only reach that
+// persona's sandboxes.
+func (e *Engine) persona(ctx context.Context, envID, sandboxID string) (string, error) {
+	if sandboxID == "" {
+		return "", nil
+	}
+	sb, err := e.Store.Sandbox(ctx, envID, sandboxID)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", nil
+	}
+	return sb.PersonaID, err
 }
 
 // snapshot returns the rules of an environment and a channel closed on the next change.
