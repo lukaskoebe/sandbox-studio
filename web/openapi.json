@@ -1054,7 +1054,7 @@
               "starting",
               "running",
               "draining",
-              "paused",
+              "suspended",
               "stopped",
               "crashed"
             ],
@@ -2562,6 +2562,58 @@
         ]
       }
     },
+    "/api/environments/{env}/sandboxes/{id}/resume": {
+      "post": {
+        "operationId": "resumeSandbox",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes/{id}/start": {
       "post": {
         "operationId": "startSandbox",
@@ -2617,6 +2669,58 @@
     "/api/environments/{env}/sandboxes/{id}/stop": {
       "post": {
         "operationId": "stopSandbox",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/View"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/suspend": {
+      "post": {
+        "operationId": "suspendSandbox",
         "parameters": [
           {
             "description": "Environment ID",

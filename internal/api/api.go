@@ -185,6 +185,20 @@ func (s *Server) registerSandboxes(api huma.API) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "suspendSandbox", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/suspend", Tags: []string{"sandboxes"},
+	}, func(ctx context.Context, in *sandboxPath) (*sandboxOut, error) {
+		v, err := s.Sandboxes.Suspend(context.WithoutCancel(ctx), in.Env, in.ID)
+		return &sandboxOut{v}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "resumeSandbox", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/resume", Tags: []string{"sandboxes"},
+	}, func(ctx context.Context, in *sandboxPath) (*sandboxOut, error) {
+		v, err := s.Sandboxes.Resume(context.WithoutCancel(ctx), in.Env, in.ID)
+		return &sandboxOut{v}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "deleteSandbox", Method: http.MethodDelete, Path: "/api/environments/{env}/sandboxes/{id}", Tags: []string{"sandboxes"},
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *sandboxPath) (*struct{}, error) {

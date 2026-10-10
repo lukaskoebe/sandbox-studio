@@ -338,6 +338,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resumeSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/start": {
         parameters: {
             query?: never;
@@ -364,6 +380,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["stopSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["suspendSandbox"];
         delete?: never;
         options?: never;
         head?: never;
@@ -845,7 +877,7 @@ export interface components {
             memoryMiB: number;
             name: string;
             /** @enum {string} */
-            status: "absent" | "created" | "starting" | "running" | "draining" | "paused" | "stopped" | "crashed";
+            status: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed";
             templateId?: string;
             /** Format: int64 */
             workspaceMiB: number;
@@ -1793,6 +1825,40 @@ export interface operations {
             };
         };
     };
+    resumeSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     startSandbox: {
         parameters: {
             query?: never;
@@ -1828,6 +1894,40 @@ export interface operations {
         };
     };
     stopSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    suspendSandbox: {
         parameters: {
             query?: never;
             header?: never;
