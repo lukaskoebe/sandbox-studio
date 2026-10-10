@@ -862,6 +862,21 @@ subscriptions (S8), and everything marked verify (S7).
   deliberately not used: it needs page injection, breaks under strict CSP, misses canvas and
   cross-origin frames, and makes input forwarding awkward.
 
+**Implemented (M7, see docs/browser.md):**
+
+- **Browser VM.** There is one browser VM per persona, because the profile, with its
+  cookies and logins, is the persona's identity. It is created lazily, stops after 10
+  minutes idle, and runs from the `sandbox-studio-browser` image (`make image-browser`).
+- **Egress rules.** The VM's egress is judged by the driving sandbox's rules, or by the
+  persona's rules while the user drives.
+- **Tools and approvals.** The broker's tools run over the `browser` agent request kind
+  under a guest allow-list. They use `browser.action` and `browser.credential` approvals,
+  "allow for this origin" patterns, redaction, and vault fills the agent never sees.
+- **Live view, takeover and history.** There is a relayed live view with takeover, and a
+  bounded action log with screenshots and replay.
+- **Testing.** Everything is tested with fakes. The image, the agent-browser stream and
+  input formats, and the CA trust in Chromium are pending a live run.
+
 ### 6.9 Git review and the integration interface
 
 - **Built-in "git review" integration:**
