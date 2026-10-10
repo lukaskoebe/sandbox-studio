@@ -254,23 +254,34 @@ func validSessionName(s string) bool {
 	return true
 }
 
+// sessionFormat separates fields with "|": session names can't contain it, and tmux 3.5
+// prints tabs in format output as "_".
+const sessionFormat = "#{session_name}|#{session_attached}|#{session_windows}|#{session_created}|#{" + agentproto.HarnessOption + "}"
+
 func (a *Agent) replySessions(st net.Conn) error {
-	out, err := a.command("tmux", "list-sessions", "-F",
-		"#{session_name}\t#{session_attached}\t#{session_windows}\t#{session_created}\t#{"+agentproto.HarnessOption+"}").Output()
+	out, err := a.command("tmux", "list-sessions", "-F", sessionFormat).Output()
 	sessions := []agentproto.Session{}
 	if err == nil { // tmux exits non-zero when no server is running: no sessions.
-		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			f := strings.Split(line, "\t")
-			if len(f) != 5 {
-				continue
-			}
-			att, _ := strconv.Atoi(f[1])
-			win, _ := strconv.Atoi(f[2])
-			created, _ := strconv.ParseInt(f[3], 10, 64)
-			sessions = append(sessions, agentproto.Session{Name: f[0], Attached: att, Windows: win, Created: created, Harness: f[4]})
-		}
+		sessions = parseSessions(string(out))
 	}
 	return agentproto.WriteJSONLine(st, sessions)
+}
+
+// parseSessions reads list-sessions output in sessionFormat. Sessions with names Studio
+// couldn't address are skipped.
+func parseSessions(out string) []agentproto.Session {
+	sessions := []agentproto.Session{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.Split(line, "|")
+		if len(f) != 5 || !validSessionName(f[0]) {
+			continue
+		}
+		att, _ := strconv.Atoi(f[1])
+		win, _ := strconv.Atoi(f[2])
+		created, _ := strconv.ParseInt(f[3], 10, 64)
+		sessions = append(sessions, agentproto.Session{Name: f[0], Attached: att, Windows: win, Created: created, Harness: f[4]})
+	}
+	return sessions
 }
 
 func (a *Agent) killSession(st net.Conn, name string) error {
