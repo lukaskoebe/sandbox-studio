@@ -1,11 +1,11 @@
 //go:build windows
 
-package sandboxes
+package diskspace
 
 import "golang.org/x/sys/windows"
 
-// diskFree returns the bytes the calling user may still write under dir.
-func diskFree(dir string) (uint64, error) {
+// Free returns the bytes the calling user may still write under dir.
+func Free(dir string) (uint64, error) {
 	path, err := windows.UTF16PtrFromString(dir)
 	if err != nil {
 		return 0, err

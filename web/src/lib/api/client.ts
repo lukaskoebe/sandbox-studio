@@ -59,3 +59,7 @@ export function errorStatus(err: unknown): number | undefined {
 export function isReady(sb: Sandbox) {
   return sb.status === "running" && sb.agent !== undefined
 }
+export type DoctorReport = components["schemas"]["DoctorReport"]
+export type HostCheck = components["schemas"]["HostCheck"]
+export type AutostartStatus = components["schemas"]["AutostartStatus"]
+export type UpdateState = components["schemas"]["UpdateState"]

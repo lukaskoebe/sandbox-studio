@@ -87,6 +87,34 @@
         ],
         "type": "object"
       },
+      "AutostartStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "command": {
+            "description": "The Studio binary the entry starts",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "path": {
+            "description": "The file or registry value that starts Studio",
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "supported": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "supported",
+          "enabled",
+          "stale"
+        ],
+        "type": "object"
+      },
       "Budget": {
         "additionalProperties": false,
         "properties": {
@@ -854,6 +882,39 @@
         ],
         "type": "object"
       },
+      "DoctorReport": {
+        "additionalProperties": false,
+        "properties": {
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/HostCheck"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "The worst status of all checks",
+            "enum": [
+              "ok",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checks",
+          "checkedAt"
+        ],
+        "type": "object"
+      },
       "DreamInBody": {
         "additionalProperties": false,
         "properties": {
@@ -1599,6 +1660,40 @@
           "snippet",
           "score",
           "why"
+        ],
+        "type": "object"
+      },
+      "HostCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "fix": {
+            "description": "How to fix a warning or failure",
+            "type": "string"
+          },
+          "id": {
+            "description": "Stable identifier, e.g. msb or kvm",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warn",
+              "fail"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "message"
         ],
         "type": "object"
       },
@@ -2831,6 +2926,18 @@
         ],
         "type": "object"
       },
+      "ToggleInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
       "UpdateProviderInBody": {
         "additionalProperties": false,
         "properties": {
@@ -2878,6 +2985,44 @@
         },
         "required": [
           "hosts"
+        ],
+        "type": "object"
+      },
+      "UpdateState": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "description": "Latest is newer than Current",
+            "type": "boolean"
+          },
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "current": {
+            "description": "The running Studio version",
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "error": {
+            "description": "Why the last check failed",
+            "type": "string"
+          },
+          "latest": {
+            "description": "The newest release's tag, from the last check",
+            "type": "string"
+          },
+          "url": {
+            "description": "The newest release's page",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "current",
+          "available"
         ],
         "type": "object"
       },
@@ -7703,6 +7848,175 @@
         },
         "tags": [
           "providers"
+        ]
+      }
+    },
+    "/api/system/autostart": {
+      "get": {
+        "operationId": "getAutostart",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutostartStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "system"
+        ]
+      },
+      "put": {
+        "operationId": "setAutostart",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutostartStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Start Studio at login, or stop doing so",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/doctor": {
+      "get": {
+        "operationId": "getDoctor",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorReport"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Run the host checks",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/updates": {
+      "get": {
+        "operationId": "getUpdates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateState"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "system"
+        ]
+      },
+      "put": {
+        "operationId": "setUpdates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateState"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Turn the daily update check on or off; turning it on checks right away",
+        "tags": [
+          "system"
         ]
       }
     }
