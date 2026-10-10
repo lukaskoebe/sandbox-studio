@@ -284,6 +284,9 @@ func (v *Vault) Bindings(ctx context.Context, envID string) ([]Binding, error) {
 	}
 	out := make([]Binding, 0, len(list))
 	for _, s := range list {
+		if s.StudioOnly {
+			continue
+		}
 		value, err := v.Unseal(s.Sealed, []byte(s.ID))
 		if err != nil {
 			return nil, fmt.Errorf("secret %s: %w", s.Name, err)
@@ -303,7 +306,9 @@ func (v *Vault) Env(ctx context.Context, envID string) (map[string]string, error
 	}
 	env := make(map[string]string, len(list))
 	for _, s := range list {
-		env[s.Name] = s.Placeholder
+		if !s.StudioOnly {
+			env[s.Name] = s.Placeholder
+		}
 	}
 	return env, nil
 }
