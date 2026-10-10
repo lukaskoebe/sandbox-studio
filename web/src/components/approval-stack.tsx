@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 import { ApprovalDecision } from "@/components/approval-decision"
+import {
+  GitApprovalSummary,
+  GitReviewSheet,
+  gitSummary,
+  isGitApproval,
+} from "@/components/git-review"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -16,8 +22,9 @@ import { cn, formatAge } from "@/lib/utils"
 const maxCards = 3
 
 /**
- * Pending network approvals, shown on every page: a held connection waits on the answer.
- * The network page lists its own environment's requests itself, so the stack leaves them out there.
+ * Pending approvals, shown on every page: a held connection waits on the answer, a staged
+ * git push waits for review. The network page lists its own environment's network requests
+ * itself, so the stack leaves them out there.
  */
 export function ApprovalStack() {
   const pending = $api.useQuery(
@@ -29,19 +36,29 @@ export function ApprovalStack() {
   const envs = $api.useQuery("get", "/api/environments")
   const matchRoute = useMatchRoute()
   const notifications = useNotifications(pending.data)
+  const [reviewing, setReviewing] = useState<string>()
   const all = pending.data ?? []
   useTitleCount(all.length)
 
   const onNetwork = matchRoute({ to: "/e/$env/network" })
   const items = onNetwork
-    ? all.filter((a) => a.environmentId !== onNetwork.env)
+    ? all.filter((a) => isGitApproval(a) || a.environmentId !== onNetwork.env)
     : all
-  if (items.length === 0) return null
+  const review = all.find((a) => a.id === reviewing)
+  const sheet = (
+    <GitReviewSheet
+      approval={review}
+      onOpenChange={(open) => {
+        if (!open) setReviewing(undefined)
+      }}
+    />
+  )
+  if (items.length === 0) return sheet
 
   return (
     <div className="fixed right-4 bottom-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
       <div className="flex items-center gap-2 px-1 text-xs">
-        <span className="font-medium">Network requests</span>
+        <span className="font-medium">Approvals</span>
         <span className="text-muted-foreground">{items.length}</span>
         {notifications.canAsk && (
           <Button
@@ -59,6 +76,7 @@ export function ApprovalStack() {
           <ApprovalCard
             approval={a}
             envName={envs.data?.find((e) => e.id === a.environmentId)?.name}
+            onReview={() => setReviewing(a.id)}
           />
         </div>
       ))}
@@ -76,11 +94,12 @@ export function ApprovalStack() {
           className="hidden sm:block"
         />
       )}
+      {sheet}
     </div>
   )
 }
 
-/** Links to the network page of the environment the next hidden request belongs to. */
+/** Links to the page of the environment the next hidden request belongs to. */
 function MoreLink({
   approval,
   count,
@@ -92,7 +111,7 @@ function MoreLink({
 }) {
   return (
     <Link
-      to="/e/$env/network"
+      to={isGitApproval(approval) ? "/e/$env/git" : "/e/$env/network"}
       params={{ env: approval.environmentId }}
       className={cn(
         "px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline",
@@ -107,12 +126,15 @@ function MoreLink({
 function ApprovalCard({
   approval,
   envName,
+  onReview,
 }: {
   approval: Approval
   envName?: string
+  onReview: () => void
 }) {
+  const git = isGitApproval(approval)
   const details = [
-    approval.network?.sandboxName,
+    approval.network?.sandboxName ?? approval.git?.review?.sandbox,
     envName,
     formatAge(approval.createdAt),
     approval.attempts > 1 ? `${approval.attempts} attempts` : undefined,
@@ -122,13 +144,17 @@ function ApprovalCard({
   return (
     <Card size="sm" className="gap-2 shadow-lg">
       <CardHeader>
-        <CardTitle className="font-mono break-all">
-          {approval.subject}
+        <CardTitle className={cn("break-all", !git && "font-mono")}>
+          {git ? gitSummary(approval) : approval.subject}
         </CardTitle>
         <CardDescription>{details}</CardDescription>
       </CardHeader>
       <CardContent>
-        <ApprovalDecision approval={approval} compact />
+        {git ? (
+          <GitApprovalSummary approval={approval} onReview={onReview} />
+        ) : (
+          <ApprovalDecision approval={approval} compact />
+        )}
       </CardContent>
     </Card>
   )
@@ -176,10 +202,16 @@ function useNotifications(data: Approval[] | null | undefined) {
 
 function notify(a: Approval) {
   try {
-    const n = new Notification("Network access requested", {
-      body: `${a.network?.sandboxName ?? "A sandbox"} wants to connect to ${a.subject}`,
-      tag: a.id,
-    })
+    const git = isGitApproval(a)
+    const n = new Notification(
+      git ? "Git review requested" : "Network access requested",
+      {
+        body: git
+          ? gitSummary(a)
+          : `${a.network?.sandboxName ?? "A sandbox"} wants to connect to ${a.subject}`,
+        tag: a.id,
+      }
+    )
     n.onclick = () => {
       window.focus()
       n.close()

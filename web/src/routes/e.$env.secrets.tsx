@@ -107,6 +107,11 @@ function SecretsPage() {
                           Provider {managed.get(s.id)}
                         </Badge>
                       )}
+                      {s.studioOnly && (
+                        <Badge variant="secondary" className="ml-1.5 font-sans">
+                          Forge token
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex max-w-xs flex-wrap gap-1">
@@ -144,7 +149,7 @@ function SecretsPage() {
                       {formatAge(s.updatedAt)}
                     </TableCell>
                     <TableCell>
-                      {!managed.has(s.id) && (
+                      {!managed.has(s.id) && !s.studioOnly && (
                         <div className="flex justify-end gap-0.5">
                           <Button
                             variant="ghost"
