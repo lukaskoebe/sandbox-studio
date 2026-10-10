@@ -857,6 +857,58 @@
         ],
         "type": "object"
       },
+      "SandboxImport": {
+        "additionalProperties": false,
+        "properties": {
+          "buildJobId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of the new sandbox; it gets a suffix if the exported name is taken",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "uploading",
+              "building",
+              "creating",
+              "importing",
+              "ready",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "name",
+          "state",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "Secret": {
         "additionalProperties": false,
         "properties": {
@@ -1822,6 +1874,168 @@
         ]
       }
     },
+    "/api/environments/{env}/sandbox-imports": {
+      "post": {
+        "description": "Creates a sandbox from an export in the background; poll the returned import. The workspace archive may be at most the exported workspace size. A name already in use gets a numeric suffix.",
+        "operationId": "importSandbox",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxImport"
+                }
+              }
+            },
+            "description": "The import was accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload a .studio-sandbox file",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandbox-imports/{id}": {
+      "get": {
+        "operationId": "getSandboxImport",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Import ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Import ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxImport"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get the status of a sandbox import",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandbox-imports/{id}/cancel": {
+      "post": {
+        "description": "Marks the import failed and removes its sandbox if one was created. A template build it started keeps running.",
+        "operationId": "cancelSandboxImport",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Import ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Import ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxImport"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Cancel a sandbox import",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes": {
       "get": {
         "operationId": "listSandboxes",
@@ -2308,6 +2522,60 @@
         },
         "tags": [
           "network"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/export": {
+      "get": {
+        "description": "Streams the template spec, resources and /workspace. Secrets, network identity, approvals, checkpoints and Docker state are not included. A running sandbox is exported while it runs, so files written meanwhile may be inconsistent. A stopped one is started without services and stopped again.",
+        "operationId": "exportSandbox",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "contentMediaType": "application/octet-stream",
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The export file"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download a sandbox as a .studio-sandbox file",
+        "tags": [
+          "sandboxes"
         ]
       }
     },
