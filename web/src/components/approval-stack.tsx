@@ -7,6 +7,10 @@ import {
   gitSummary,
   isGitApproval,
 } from "@/components/git-review"
+import {
+  ConflictSheet,
+  MemoryConflictDecision,
+} from "@/components/memory-conflict"
 import { MemoryShareDecision } from "@/components/memory-sessions"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,6 +42,7 @@ export function ApprovalStack() {
   const matchRoute = useMatchRoute()
   const notifications = useNotifications(pending.data)
   const [reviewing, setReviewing] = useState<string>()
+  const [conflict, setConflict] = useState<Approval>()
   const all = pending.data ?? []
   useTitleCount(all.length)
 
@@ -49,12 +54,21 @@ export function ApprovalStack() {
     : all
   const review = all.find((a) => a.id === reviewing)
   const sheet = (
-    <GitReviewSheet
-      approval={review}
-      onOpenChange={(open) => {
-        if (!open) setReviewing(undefined)
-      }}
-    />
+    <>
+      <GitReviewSheet
+        approval={review}
+        onOpenChange={(open) => {
+          if (!open) setReviewing(undefined)
+        }}
+      />
+      <ConflictSheet
+        env={conflict?.environmentId ?? ""}
+        conflictId={conflict?.memoryConflict?.conflictId}
+        onOpenChange={(open) => {
+          if (!open) setConflict(undefined)
+        }}
+      />
+    </>
   )
   if (items.length === 0) return sheet
 
@@ -79,7 +93,9 @@ export function ApprovalStack() {
           <ApprovalCard
             approval={a}
             envName={envs.data?.find((e) => e.id === a.environmentId)?.name}
-            onReview={() => setReviewing(a.id)}
+            onReview={() =>
+              a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id)
+            }
           />
         </div>
       ))}
@@ -137,6 +153,7 @@ function ApprovalCard({
 }) {
   const git = isGitApproval(approval)
   const share = approval.kind === "memory.share"
+  const conflict = approval.kind === "memory.conflict"
   const details = [
     approval.network?.sandboxName ??
       approval.git?.review?.sandbox ??
@@ -150,12 +167,19 @@ function ApprovalCard({
   return (
     <Card size="sm" className="gap-2 shadow-lg">
       <CardHeader>
-        <CardTitle className={cn("break-all", !git && !share && "font-mono")}>
+        <CardTitle
+          className={cn(
+            "break-all",
+            !git && !share && !conflict && "font-mono"
+          )}
+        >
           {git
             ? gitSummary(approval)
             : share
               ? "Share with every persona?"
-              : approval.subject}
+              : conflict
+                ? "Memory conflict"
+                : approval.subject}
         </CardTitle>
         <CardDescription>{details}</CardDescription>
       </CardHeader>
@@ -164,6 +188,8 @@ function ApprovalCard({
           <GitApprovalSummary approval={approval} onReview={onReview} />
         ) : share ? (
           <MemoryShareDecision approval={approval} />
+        ) : conflict ? (
+          <MemoryConflictDecision approval={approval} onResolve={onReview} />
         ) : (
           <ApprovalDecision approval={approval} compact />
         )}
