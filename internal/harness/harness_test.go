@@ -101,8 +101,8 @@ func TestInstructionsBlock(t *testing.T) {
 		!strings.HasPrefix(f.Content, agentproto.BlockBegin) || !strings.HasSuffix(f.Content, agentproto.BlockEnd+"\n") {
 		t.Fatalf("markers: %q", f.Content)
 	}
-	// The soul arrives as session-start context; the block points to the memory tools.
-	if strings.Contains(f.Content, "Careful and terse.") || !strings.Contains(f.Content, "`remember`") || !f.Block {
+	// The block carries the soul and points to the memory tools.
+	if !strings.Contains(f.Content, "## Your soul\n\nCareful and terse.") || !strings.Contains(f.Content, "`remember`") || !f.Block {
 		t.Fatalf("block: %+v", f)
 	}
 }

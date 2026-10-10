@@ -277,7 +277,7 @@ func TestShareNeedsApproval(t *testing.T) {
 
 	// Bob's next session hears about it.
 	r := f.hook(f.sbBob.ID, map[string]any{"event": agenthook.SessionStart, "sessionId": "b1"})
-	if !strings.Contains(r.Context, "Shared memory changed") || !strings.Contains(r.Context, sf.ID) || !strings.Contains(r.Context, "bob is careful") {
+	if !strings.Contains(r.Context, "Shared memory changed") || !strings.Contains(r.Context, sf.ID) {
 		t.Fatalf("bob's pack: %s", r.Context)
 	}
 	// Ada's own share is not news to her.
@@ -302,12 +302,13 @@ func TestSessionStartPack(t *testing.T) {
 
 	r := f.hook(f.sbAda.ID, map[string]any{"event": agenthook.SessionStart, "sessionId": "s1", "source": "resume",
 		"gitRemote": "github.com/Acme/api"})
-	for _, want := range []string{"<studio-memory>", "</studio-memory>", "ada is careful", "I prefer small commits", "make check runs tests"} {
+	for _, want := range []string{"<studio-memory>", "</studio-memory>", "I prefer small commits", "make check runs tests"} {
 		if !strings.Contains(r.Context, want) {
 			t.Errorf("pack lacks %q:\n%s", want, r.Context)
 		}
 	}
-	if strings.Contains(r.Context, "bob private") || len([]rune(r.Context)) > PackBudget+len(closeTag)+1 {
+	// The soul is in the harness's instructions file, never also in the pack.
+	if strings.Contains(r.Context, "bob private") || strings.Contains(r.Context, "ada is careful") || len([]rune(r.Context)) > PackBudget+len(closeTag)+1 {
 		t.Fatalf("pack leaked or too long:\n%s", r.Context)
 	}
 	l := f.logOf("s1")
@@ -320,16 +321,6 @@ func TestSessionStartPack(t *testing.T) {
 	}
 	if !got[core.ID] || !got[proj.ID] || got[other.ID] {
 		t.Fatalf("logged %v", got)
-	}
-
-	// A huge soul is cut to its budget.
-	f.ada.Soul = strings.Repeat("soul ", 5000)
-	if _, err := f.st.UpdatePersona(f.ctx, f.ada); err != nil {
-		t.Fatal(err)
-	}
-	r = f.hook(f.sbAda.ID, map[string]any{"event": agenthook.SessionStart, "sessionId": "s2"})
-	if n := strings.Count(r.Context, "soul "); n > soulBudget/5 || !strings.HasSuffix(r.Context, closeTag+"\n") {
-		t.Fatalf("soul not cut (%d) or tag missing", n)
 	}
 }
 

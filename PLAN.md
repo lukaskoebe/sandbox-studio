@@ -739,8 +739,7 @@ timeline split and its takes-vs-facts distinction):
 **Read paths.** Placement follows gbrain's finding that boundaries beat per-message
 retrieval.
 1. **Session start** (also on resume and after compaction), a budgeted *context pack*:
-   - persona soul
-   - core pages (persona and shared)
+   - core pages (persona and shared); the soul is in the harness's instructions file instead
    - the project page for the current repo (keyed by git remote)
    - shared-memory changes since this persona's last session
    - open conflicts touching those entities

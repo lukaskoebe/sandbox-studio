@@ -48,8 +48,13 @@ placeholder and never see the secret. Config files name only the variable (`{env
 Files marked "managed" are rewritten on every session start, so edits made in the sandbox
 are lost. The instructions files hold a managed block between
 `<!-- sandbox-studio:begin -->` and `<!-- sandbox-studio:end -->`: Studio replaces only the
-block, or puts it first, and keeps text outside it. The block has the persona's name and
-role and points to the memory tools. The soul comes with memory's session-start context.
+block, or puts it first, and keeps text outside it. The block has the persona's name,
+role and soul and points to the memory tools.
+
+The soul reaches the agent only through this block, never through the session-start
+hook: the harness reads its instructions file in every session, including resumed ones and
+those whose hook didn't fire, so the soul is there exactly once. A soul edited in Studio
+takes effect with the next session start, which rewrites the block.
 
 | | OpenCode | Claude Code | Codex |
 |---|---|---|---|
