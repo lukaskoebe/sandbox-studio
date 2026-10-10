@@ -42,7 +42,8 @@ type Server struct {
 	Caddy     *caddyrule.Engine // checks Caddyfiles; without it, caddy rules are refused
 	Auth      *webauth.Auth
 	Log       *slog.Logger
-	Addr      string // the address Studio listens on, used to build preview URLs
+	Addr      string       // the address Studio listens on, used to build preview URLs
+	Guest     SessionGuest // agent sessions' guest channel; Sandboxes.Hub when nil
 }
 
 // BuildService is the optional durable template-build backend. Keeping this
@@ -66,6 +67,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerNetwork(api)
 	s.registerSecrets(api)
 	s.registerPersonas(api)
+	s.registerSessions(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api
