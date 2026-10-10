@@ -216,6 +216,11 @@ func run(ctx context.Context, agentPath, scratch string) (retErr error) {
 	if _, err := sh(ctx, rt, st, fork.Sandbox, "root", "rm /workspace/fork-only"); err != nil {
 		return err
 	}
+	// Creating and removing fork-only bumped the fork's root mtime.
+	wantFork, err := sh(ctx, rt, st, fork.Sandbox, "root", manifest)
+	if err != nil {
+		return err
+	}
 	if _, err := mgr.Stop(ctx, env.ID, fork.ID); err != nil {
 		return err
 	}
@@ -260,7 +265,7 @@ func run(ctx context.Context, agentPath, scratch string) (retErr error) {
 	if err := ready(ctx, mgr, env.ID, fork.ID); err != nil {
 		return err
 	}
-	if err := check(ctx, rt, st, rebased.Sandbox, want, "B"); err != nil {
+	if err := check(ctx, rt, st, rebased.Sandbox, wantFork, "B"); err != nil {
 		return fmt.Errorf("rebase stopped: %w", err)
 	}
 	if err := gone(ctx, rt, sandboxes.VMName(fork.Sandbox)); err != nil {
