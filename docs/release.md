@@ -11,14 +11,16 @@ git push origin v0.1.0
 
 The workflow then:
 
-1. Builds `images/base` for linux/amd64 and linux/arm64. It pushes the image to
-   `ghcr.io/lukaskoebe/sandbox-studio-base:<tag>` and attests it. The resulting
-   `…@sha256:` reference is the image that release uses.
+1. Builds `images/base` and `images/browser` for linux/amd64 and linux/arm64. It pushes them
+   to `ghcr.io/lukaskoebe/sandbox-studio-base:<tag>` and
+   `ghcr.io/lukaskoebe/sandbox-studio-browser:<tag>` and attests both. The resulting
+   `…@sha256:` references are the images that release uses.
 2. Builds the web UI and both Linux guest agents once.
 3. Builds `studio` on a native runner for each target: linux/amd64, linux/arm64,
    darwin/arm64 and windows/amd64. The microsandbox SDK needs CGO, so nothing is
    cross-compiled. The build embeds the UI and the agents. Its ldflags set
-   `internal/version.Version` to the tag and `internal/version.BaseImage` to the image digest.
+   `internal/version.Version` to the tag, and `internal/version.BaseImage` and
+   `internal/version.BrowserImage` to the image digests.
 4. Signs and notarizes the macOS binary, and signs the Windows binary, when the secrets below
    exist. Without them those steps are skipped and the binaries are unsigned.
 5. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives. It writes
@@ -29,9 +31,9 @@ Locally, `make build BASE_IMAGE=ghcr.io/…@sha256:…` sets the same ldflag.
 
 ## First release
 
-- The ghcr package is created on the first push and starts private. Make it public under the
-  package's settings (Package settings → Change visibility); otherwise users cannot pull the
-  base image.
+- The ghcr packages are created on the first push and start private. Make both
+  (`sandbox-studio-base` and `sandbox-studio-browser`) public under each package's settings
+  (Package settings → Change visibility); otherwise users cannot pull the images.
 - Artifact attestations on a public repository need no setup.
 
 ## Secrets

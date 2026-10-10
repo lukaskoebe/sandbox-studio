@@ -25,8 +25,12 @@ func newBrowser(st *store.Store, vault *secrets.Vault, bus *events.Bus, data, im
 }
 
 // browserImage is the browser image that goes with a base image: the same registry and
-// version, named sandbox-studio-browser. A digest-pinned base gives the version's tag.
+// version, named sandbox-studio-browser. A release build's own base gives its pinned
+// browser image; another digest-pinned base gives the version's tag.
 func browserImage(base string) string {
+	if version.BrowserImage != "" && base == version.BaseImage {
+		return version.BrowserImage
+	}
 	if i := strings.Index(base, "@"); i >= 0 {
 		base = base[:i] + ":" + version.Version
 	}

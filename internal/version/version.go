@@ -8,3 +8,7 @@ var Version = "dev"
 // with -ldflags "-X .../internal/version.BaseImage=ghcr.io/lukaskoebe/sandbox-studio-base@sha256:…".
 // Empty in development builds.
 var BaseImage = ""
+
+// BrowserImage is the digest-pinned browser image that goes with BaseImage, set the same
+// way. Empty in development builds.
+var BrowserImage = ""

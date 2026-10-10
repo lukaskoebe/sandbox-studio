@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/version"
+)
 
 func TestBrowserImage(t *testing.T) {
 	for base, want := range map[string]string{
@@ -11,5 +15,18 @@ func TestBrowserImage(t *testing.T) {
 		if got := browserImage(base); got != want {
 			t.Errorf("browserImage(%q) = %q, want %q", base, got, want)
 		}
+	}
+}
+
+func TestBrowserImagePinned(t *testing.T) {
+	base, brw := version.BaseImage, version.BrowserImage
+	t.Cleanup(func() { version.BaseImage, version.BrowserImage = base, brw })
+	version.BaseImage = "ghcr.io/lukaskoebe/sandbox-studio-base@sha256:abc"
+	version.BrowserImage = "ghcr.io/lukaskoebe/sandbox-studio-browser@sha256:def"
+	if got := browserImage(version.BaseImage); got != version.BrowserImage {
+		t.Errorf("own base: got %q", got)
+	}
+	if got := browserImage("sandbox-studio-base:dev"); got != "sandbox-studio-browser:dev" {
+		t.Errorf("other base: got %q", got)
 	}
 }
