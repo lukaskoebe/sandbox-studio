@@ -84,10 +84,12 @@ func (OpenCode) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, er
 
 // ParseHook reads what Studio's plugin writes (opencode-plugin.js).
 func (OpenCode) ParseHook(event string, stdin []byte) (HookEvent, error) {
-	return parseOpenCode(event, stdin)
+	return hookFormat(personas.HarnessOpenCode).Parse(event, stdin)
 }
 
-func (OpenCode) RenderHookResponse(r HookResult) []byte { return renderOpenCode(r) }
+func (OpenCode) RenderHookResponse(r HookResult) []byte {
+	return hookFormat(personas.HarnessOpenCode).Render(r)
+}
 
 func (OpenCode) TUICommand(SessionOpts) []string { return []string{"opencode"} }
 
@@ -96,6 +98,4 @@ func (OpenCode) ACPCommand() []string { return []string{"opencode", "acp"} }
 
 // StateDirs: sessions, auth and logs are under the XDG data dir, the TUI's state under the
 // XDG state dir.
-func (OpenCode) StateDirs() []string {
-	return []string{".local/share/opencode", ".local/state/opencode"}
-}
+func (OpenCode) StateDirs() []string { return hookFormat(personas.HarnessOpenCode).StateDirs }

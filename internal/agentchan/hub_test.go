@@ -3,6 +3,8 @@ package agentchan
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -202,5 +204,68 @@ func TestHubDisconnect(t *testing.T) {
 	}
 	if _, err := h.Sessions(ctx, "sb1"); err != nil {
 		t.Fatalf("sessions after reconnect: %v", err)
+	}
+}
+
+// TestHubCalls checks that a guest's calls reach OnCall with the sandbox of the socket,
+// whatever the payload claims, and that oversized calls are refused.
+func TestHubCalls(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "hub")
+	defer os.RemoveAll(dir)
+	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	type got struct{ id, method, params string }
+	calls := make(chan got, 4)
+	h.OnCall = func(_ context.Context, id, method string, params json.RawMessage) (any, error) {
+		calls <- got{id, method, string(params)}
+		if method == "fail" {
+			return nil, errors.New("nope")
+		}
+		return map[string]string{"ok": id}, nil
+	}
+	sock := filepath.Join(dir, "a.sock")
+	if err := h.Listen("sbx-a", sock); err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close("sbx-a")
+	sess := fakeGuest(t, sock, nil)
+	defer sess.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.WaitConnected(ctx, "sbx-a"); err != nil {
+		t.Fatal(err)
+	}
+	call := func(c any) agentproto.CallReply {
+		st, err := sess.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer st.Close()
+		agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindCall})
+		agentproto.WriteJSONLine(st, c)
+		var r agentproto.CallReply
+		if err := agentproto.ReadJSONLine(bufio.NewReader(st), &r); err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	r := call(agentproto.Call{Method: "hook", Params: json.RawMessage(`{"sandbox":"sbx-b","persona":"other"}`)})
+	if r.Error != "" || string(r.Result) != `{"ok":"sbx-a"}` {
+		t.Fatalf("reply: %+v", r)
+	}
+	if g := <-calls; g.id != "sbx-a" || g.method != "hook" {
+		t.Fatalf("call: %+v", g)
+	}
+	if r := call(agentproto.Call{Method: "fail"}); r.Error != "nope" {
+		t.Fatalf("error reply: %+v", r)
+	}
+	<-calls
+	big := agentproto.Call{Method: "hook", Params: json.RawMessage(`"` + strings.Repeat("x", agentproto.MaxCallLine) + `"`)}
+	if r := call(big); r.Error == "" {
+		t.Fatal("oversized call accepted")
+	}
+	select {
+	case g := <-calls:
+		t.Fatalf("oversized call reached OnCall: %s", g.method)
+	default:
 	}
 }

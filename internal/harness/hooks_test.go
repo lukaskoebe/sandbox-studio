@@ -3,6 +3,7 @@ package harness
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,7 +42,7 @@ func TestHookGolden(t *testing.T) {
 	for _, h := range all {
 		t.Run(h.Name(), func(t *testing.T) {
 			var b strings.Builder
-			for _, event := range HookEvents {
+			for _, event := range agenthook.Events {
 				in := hookInputs[h.Name()][event]
 				ev, err := h.ParseHook(event, []byte(in))
 				if err != nil {
@@ -78,7 +79,7 @@ func TestParseHookRefuses(t *testing.T) {
 		if _, err := h.ParseHook(HookStop, []byte(`not json`)); err == nil {
 			t.Errorf("%s: bad JSON parsed", h.Name())
 		}
-		if _, err := h.ParseHook(HookStop, []byte(strings.Repeat(" ", MaxHookInput+1))); err == nil {
+		if _, err := h.ParseHook(HookStop, []byte(strings.Repeat(" ", agenthook.MaxInput+1))); err == nil {
 			t.Errorf("%s: oversized input parsed", h.Name())
 		}
 		if _, err := h.ParseHook(HookStop, []byte(`{"session_id":"a\nb","sessionID":"a\nb"}`)); err == nil {
@@ -90,9 +91,9 @@ func TestParseHookRefuses(t *testing.T) {
 		t.Error("claude: mismatched event parsed")
 	}
 	// Prompts are bounded; fields Studio decides on are never taken from the payload.
-	long := `{"prompt":"` + strings.Repeat("x", MaxPrompt+10) + `","hook_event_name":"UserPromptSubmit","persona":"other","sandbox":"other"}`
+	long := `{"prompt":"` + strings.Repeat("x", agenthook.MaxPrompt+10) + `","hook_event_name":"UserPromptSubmit","persona":"other","sandbox":"other"}`
 	ev, err := (Claude{}).ParseHook(HookUserPrompt, []byte(long))
-	if err != nil || len(ev.Prompt) != MaxPrompt {
+	if err != nil || len(ev.Prompt) != agenthook.MaxPrompt {
 		t.Fatalf("prompt: %v %d", err, len(ev.Prompt))
 	}
 }

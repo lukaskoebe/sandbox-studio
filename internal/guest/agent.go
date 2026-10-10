@@ -48,6 +48,9 @@ type Agent struct {
 	log      *slog.Logger
 	user     *account
 	configMu sync.Mutex
+
+	sessMu sync.Mutex
+	sess   *yamux.Session // the live host session, for relayed calls
 }
 
 // New prepares an agent; it fails if the terminal user does not exist.
@@ -67,6 +70,11 @@ func New(log *slog.Logger) (*Agent, error) {
 
 // Run dials the host and serves sessions until ctx is done, reconnecting with backoff.
 func (a *Agent) Run(ctx context.Context) error {
+	go func() {
+		if err := a.serveCalls(ctx); err != nil && ctx.Err() == nil {
+			a.log.Error("call socket failed; memory hooks and tools are unavailable", "err", err)
+		}
+	}()
 	backoff := 200 * time.Millisecond
 	for ctx.Err() == nil {
 		start := time.Now()
@@ -107,6 +115,7 @@ func (a *Agent) serveOnce(ctx context.Context) error {
 		return err
 	}
 	a.log.Info("connected to host")
+	a.setSession(sess)
 	for {
 		st, err := sess.Accept()
 		if err != nil {

@@ -32,6 +32,10 @@ type Hub struct {
 	// OnConnect, if set before the first Listen, runs (in its own goroutine) whenever a
 	// guest agent connects.
 	OnConnect func(id string)
+	// OnCall, if set before the first Listen, answers the calls a guest makes on its own
+	// (agentproto.KindCall): memory hooks and tools. id is the sandbox whose socket the
+	// call came in on, the only identity Studio trusts.
+	OnCall func(ctx context.Context, id, method string, params json.RawMessage) (any, error)
 
 	log *slog.Logger
 
@@ -164,13 +168,74 @@ func (h *Hub) serve(id string, nc net.Conn) {
 		go h.OnConnect(id)
 	}
 
-	<-sess.CloseChan()
+	h.acceptCalls(id, sess)
 	h.mu.Lock()
 	if h.sessions[id] == c {
 		delete(h.sessions, id)
 	}
 	h.mu.Unlock()
 	h.log.Info("guest agent disconnected", "sandbox", id)
+}
+
+// maxGuestCalls bounds the calls one guest has in flight; more wait in the guest's queue.
+const maxGuestCalls = 8
+
+// callTimeout bounds one call; hooks give up well before it (agentcall.HookDeadline).
+const callTimeout = 2 * time.Minute
+
+// acceptCalls serves the streams the guest opens after its hello until the session ends.
+func (h *Hub) acceptCalls(id string, sess *yamux.Session) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	slots := make(chan struct{}, maxGuestCalls)
+	for {
+		st, err := sess.AcceptStream()
+		if err != nil {
+			return
+		}
+		select {
+		case slots <- struct{}{}:
+		case <-sess.CloseChan():
+			st.Close()
+			return
+		}
+		go func() {
+			defer func() { <-slots }()
+			h.serveCall(ctx, id, st)
+		}()
+	}
+}
+
+func (h *Hub) serveCall(ctx context.Context, id string, st net.Conn) {
+	defer st.Close()
+	st.SetReadDeadline(time.Now().Add(10 * time.Second))
+	br := bufio.NewReader(st)
+	var hdr agentproto.Header
+	var call agentproto.Call
+	if err := agentproto.ReadJSONLineLimit(br, &hdr, 4096); err != nil || hdr.Kind != agentproto.KindCall {
+		agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "expected a call"})
+		return
+	}
+	if err := agentproto.ReadJSONLineLimit(br, &call, agentproto.MaxCallLine); err != nil {
+		agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "bad call: " + err.Error()})
+		return
+	}
+	st.SetReadDeadline(time.Time{})
+	if h.OnCall == nil {
+		agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "calls are not available"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+	result, err := h.OnCall(ctx, id, call.Method, call.Params)
+	var reply agentproto.CallReply
+	if err != nil {
+		reply.Error = err.Error()
+	} else if reply.Result, err = json.Marshal(result); err != nil {
+		reply = agentproto.CallReply{Error: "encoding the result failed"}
+	}
+	st.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	agentproto.WriteJSONLine(st, reply)
 }
 
 // Connected reports whether the guest agent of id is connected, and its hello.

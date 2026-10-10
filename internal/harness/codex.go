@@ -115,13 +115,15 @@ func (Codex) TUICommand(SessionOpts) []string {
 // ParseHook reads Codex's hook stdin, which uses Claude Code's field names. verify (S7):
 // the payloads of 0.162.1.
 func (Codex) ParseHook(event string, stdin []byte) (HookEvent, error) {
-	return parseClaudeStyle(personas.HarnessCodex, event, stdin)
+	return hookFormat(personas.HarnessCodex).Parse(event, stdin)
 }
 
-func (Codex) RenderHookResponse(r HookResult) []byte { return renderClaudeStyle(r) }
+func (Codex) RenderHookResponse(r HookResult) []byte {
+	return hookFormat(personas.HarnessCodex).Render(r)
+}
 
 // ACPCommand is nil: Codex speaks ACP through a separate adapter (M6).
 func (Codex) ACPCommand() []string { return nil }
 
 // StateDirs: sessions, history and auth are in CODEX_HOME, which defaults to ~/.codex.
-func (Codex) StateDirs() []string { return []string{".codex"} }
+func (Codex) StateDirs() []string { return hookFormat(personas.HarnessCodex).StateDirs }

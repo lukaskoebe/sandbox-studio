@@ -181,6 +181,32 @@ func ReadJSONLine(r *bufio.Reader, v any) error {
 	return json.Unmarshal(line, v)
 }
 
+// ErrLineTooLong is returned by ReadJSONLineLimit for a line over its limit.
+var ErrLineTooLong = errors.New("JSON line too long")
+
+// ReadJSONLineLimit reads one line of JSON of at most max bytes into v. A longer line is
+// read to its end and dropped, so the next call starts at the next line.
+func ReadJSONLineLimit(r *bufio.Reader, v any, max int) error {
+	var line []byte
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if len(line)+len(chunk) > max {
+			for errors.Is(err, bufio.ErrBufferFull) {
+				_, err = r.ReadSlice('\n')
+			}
+			return ErrLineTooLong
+		}
+		line = append(line, chunk...)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, bufio.ErrBufferFull) {
+			return err
+		}
+	}
+	return json.Unmarshal(line, v)
+}
+
 // PTY frame types.
 const (
 	FrameData   byte = 0

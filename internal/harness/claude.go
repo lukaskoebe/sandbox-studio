@@ -74,14 +74,16 @@ func (Claude) TUICommand(SessionOpts) []string {
 // ParseHook reads Claude Code's hook stdin. verify (S7): the field names and that
 // SessionStart fires with source "compact" after compaction, against 2.1.287.
 func (Claude) ParseHook(event string, stdin []byte) (HookEvent, error) {
-	return parseClaudeStyle(personas.HarnessClaude, event, stdin)
+	return hookFormat(personas.HarnessClaude).Parse(event, stdin)
 }
 
-func (Claude) RenderHookResponse(r HookResult) []byte { return renderClaudeStyle(r) }
+func (Claude) RenderHookResponse(r HookResult) []byte {
+	return hookFormat(personas.HarnessClaude).Render(r)
+}
 
 // ACPCommand is nil: Claude Code speaks ACP through a separate adapter (M6).
 func (Claude) ACPCommand() []string { return nil }
 
 // StateDirs: sessions and history are in ~/.claude (projects/, history.jsonl); account
 // and onboarding state is in the file ~/.claude.json next to it.
-func (Claude) StateDirs() []string { return []string{".claude"} }
+func (Claude) StateDirs() []string { return hookFormat(personas.HarnessClaude).StateDirs }
