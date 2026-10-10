@@ -3,6 +3,7 @@ package agentmem
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -433,10 +434,12 @@ func (s *Service) Promote(ctx context.Context, env, factID string) (store.Approv
 		Tier: f.Tier, Evidence: "promoted by the user"})
 }
 
-// DecideShare applies the user's decision on a memory.share approval: approved writes the
-// fact to shared memory with the proposing persona as author; anything else writes nothing.
-// The caller marks the approval decided.
-func (s *Service) DecideShare(ctx context.Context, a store.Approval, approved bool) (*memory.Fact, error) {
+// DecideShare settles a pending memory.share approval with status. Approved writes the fact
+// to shared memory with the proposing persona as author and marks the approval approved in
+// the same transaction: if the write fails, the approval stays pending with nothing written
+// and can be decided again; if it was decided meanwhile (store.ErrNotFound), nothing is
+// written. Denied or dismissed writes nothing.
+func (s *Service) DecideShare(ctx context.Context, a store.Approval, status string) (*memory.Fact, error) {
 	if a.Kind != ApprovalKind {
 		return nil, fmt.Errorf("approval %s is not a memory share", a.ID)
 	}
@@ -445,7 +448,10 @@ func (s *Service) DecideShare(ctx context.Context, a store.Approval, approved bo
 		return nil, fmt.Errorf("share payload: %w", err)
 	}
 	c := caller{env: a.EnvironmentID, sandbox: store.Sandbox{ID: a.SandboxID}, persona: store.Persona{ID: p.PersonaID, Name: p.PersonaName}, scope: memory.SharedScope}
-	if !approved {
+	if status != store.StatusApproved {
+		if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, status, ""); err != nil {
+			return nil, err
+		}
 		s.log(ctx, c, "", entry{kind: LogWrite, itemType: "approval", itemID: a.ID, summary: "share declined: " + p.Text})
 		return nil, nil
 	}
@@ -460,14 +466,20 @@ func (s *Service) DecideShare(ctx context.Context, a store.Approval, approved bo
 	if err != nil {
 		return nil, err
 	}
+	approve := func(tx *sql.Tx) error {
+		return store.DecideApprovalTx(ctx, tx, a.EnvironmentID, a.ID, store.StatusApproved, "")
+	}
 	var f memory.Fact
 	if dup != nil {
-		f, err = s.Memory.Reinforce(ctx, a.EnvironmentID, dup.ID, o)
+		f, err = s.Memory.ReinforceWith(ctx, a.EnvironmentID, dup.ID, o, approve)
 	} else {
-		f, err = s.Memory.CreateFact(ctx, a.EnvironmentID, memory.FactInput{Scope: memory.SharedScope, Kind: p.Kind, EntityIDs: p.EntityIDs,
-			Attribute: p.Attribute, Text: p.Text}, o)
+		f, err = s.Memory.CreateFactWith(ctx, a.EnvironmentID, memory.FactInput{Scope: memory.SharedScope, Kind: p.Kind, EntityIDs: p.EntityIDs,
+			Attribute: p.Attribute, Text: p.Text}, o, approve)
 	}
 	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			s.log(ctx, c, "", entry{kind: LogWrite, itemType: "approval", itemID: a.ID, summary: "sharing failed, still pending: " + truncate(err.Error(), 200)})
+		}
 		return nil, err
 	}
 	s.log(ctx, c, "", entry{kind: LogWrite, itemType: "fact", itemID: f.ID, summary: "shared after approval: " + f.Text})

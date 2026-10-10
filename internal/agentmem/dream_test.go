@@ -515,11 +515,77 @@ func TestPromote(t *testing.T) {
 	if err := json.Unmarshal(a.Payload, &p); err != nil || p.FactID != mine.ID || p.PersonaID != f.ada.ID || p.Tier != memory.TierVerified {
 		t.Fatalf("payload %+v", p)
 	}
-	fact, err := f.svc.DecideShare(f.ctx, a, true)
+	fact, err := f.svc.DecideShare(f.ctx, a, store.StatusApproved)
 	if err != nil || fact.Scope != memory.SharedScope || fact.Text != mine.Text {
 		t.Fatalf("approved %+v %v", fact, err)
 	}
 	if _, err := f.svc.Promote(f.ctx, f.env, fact.ID); !errors.Is(err, memory.ErrInvalid) {
 		t.Fatalf("promote shared: %v", err)
+	}
+}
+
+// A share is decided only together with its write: a failed write leaves the approval
+// pending, with nothing in shared memory, and deciding again works.
+func TestShareDecisionIsAtomic(t *testing.T) {
+	f := newFixture(t)
+	mine := f.mk(memory.PersonaScope(f.ada.ID), "Releases are tagged from main", memory.TierVerified, f.ada.ID, "api", "", day(1))
+	a, err := f.svc.Promote(f.ctx, f.env, mine.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	notified := 0
+	f.svc.Notify = func(string) { notified++ }
+	shared := func() int {
+		list, err := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.SharedScope})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(list)
+	}
+	status := func() string {
+		got, err := f.st.Approval(f.ctx, f.env, a.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got.Status
+	}
+
+	// Force the shared write to fail.
+	if _, err := f.st.DB().ExecContext(f.ctx, `CREATE TRIGGER fail_shared BEFORE INSERT ON memory_facts WHEN NEW.scope = 'shared'
+		BEGIN SELECT RAISE(ABORT, 'disk on fire'); END`); err != nil {
+		t.Fatal(err)
+	}
+	allow := integrations.Decision{Action: integrations.Allow}
+	if err := f.svc.decide(f.ctx, a, allow); err == nil || !strings.Contains(err.Error(), "disk on fire") {
+		t.Fatalf("decide with a failing write: %v", err)
+	}
+	if s := status(); s != store.StatusPending || shared() != 0 || notified != 0 {
+		t.Fatalf("after a failed write: status %s, %d shared, notified %d", s, shared(), notified)
+	}
+
+	// Retry once the write works.
+	if _, err := f.st.DB().ExecContext(f.ctx, "DROP TRIGGER fail_shared"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.decide(f.ctx, a, allow); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(); s != store.StatusApproved || shared() != 1 || notified != 1 {
+		t.Fatalf("after the retry: status %s, %d shared, notified %d", s, shared(), notified)
+	}
+
+	// An approval decided meanwhile writes nothing: the write rolls back with the decision.
+	b, err := f.svc.Promote(f.ctx, f.env, f.mk(memory.PersonaScope(f.ada.ID), "The staging database is reset nightly", memory.TierVerified, f.ada.ID, "db", "", day(2)).ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.DecideApproval(f.ctx, f.env, b.ID, store.StatusDismissed, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.DecideShare(f.ctx, b, store.StatusApproved); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("deciding a decided share: %v", err)
+	}
+	if n := shared(); n != 1 {
+		t.Fatalf("a decided share wrote: %d shared facts", n)
 	}
 }

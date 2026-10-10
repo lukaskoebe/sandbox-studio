@@ -51,6 +51,11 @@ func (s *Service) FactsChangedSince(ctx context.Context, envID, scope string, si
 // Reinforce records another source for a fact that was learned again: support count
 // up, the source linked, and the tier raised if the new origin is trusted more.
 func (s *Service) Reinforce(ctx context.Context, envID, id string, o Origin) (Fact, error) {
+	return s.ReinforceWith(ctx, envID, id, o, nil)
+}
+
+// ReinforceWith is Reinforce that also runs also in its transaction, like CreateFactWith.
+func (s *Service) ReinforceWith(ctx context.Context, envID, id string, o Origin, also func(tx *sql.Tx) error) (Fact, error) {
 	if err := o.validate(); err != nil {
 		return Fact{}, err
 	}
@@ -80,6 +85,11 @@ func (s *Service) Reinforce(ctx context.Context, envID, id string, o Origin) (Fa
 	if _, err := tx.ExecContext(ctx, "UPDATE memory_facts SET support_count = support_count + 1, tier = ?, updated_at = ? WHERE environment_id = ? AND id = ?",
 		tier, s.unix(), envID, id); err != nil {
 		return Fact{}, fmt.Errorf("reinforce: %w", err)
+	}
+	if also != nil {
+		if err := also(tx); err != nil {
+			return Fact{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return Fact{}, err

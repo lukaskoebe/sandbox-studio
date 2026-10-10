@@ -140,7 +140,9 @@ slug), `remember(text, kind, entity?, scope, source?)`, `share(fact_id | text)`,
 The last two take only the persona's own facts. `share`, and `remember` with scope
 `shared`, create a pending `memory.share` approval with the author; approving it in the
 inbox writes the fact to shared memory with that persona as author, or reinforces a
-duplicate.
+duplicate. The approval is marked approved in the same transaction as the write: if the
+write fails, the decision returns the error, the approval stays pending and can be approved
+again. "Promote to shared" on the memory page creates the same approval.
 
 **Extraction.** One host worker (queue of 64; a full queue fails the hook so the guest
 resends) calls the provider's utility model directly with the real key from the vault,

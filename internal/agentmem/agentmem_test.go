@@ -267,11 +267,19 @@ func TestShareNeedsApproval(t *testing.T) {
 		t.Fatal("remember scope=shared made no approval")
 	}
 
-	sf, err := f.svc.DecideShare(f.ctx, a, true)
+	sf, err := f.svc.DecideShare(f.ctx, a, store.StatusApproved)
 	if err != nil || sf == nil || sf.Scope != memory.SharedScope || sf.AuthorPersona != f.ada.ID || sf.Text != fact.Text {
 		t.Fatalf("decide: %+v %v", sf, err)
 	}
-	if again, _ := f.svc.DecideShare(f.ctx, a, true); again.ID != sf.ID || again.SupportCount != 2 {
+	if a, _ := f.st.Approval(f.ctx, f.env, a.ID); a.Status != store.StatusApproved {
+		t.Fatalf("approval is %s", a.Status)
+	}
+	if _, err := f.svc.DecideShare(f.ctx, a, store.StatusApproved); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("deciding twice: %v", err)
+	}
+	json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodShare, map[string]any{"fact_id": fact.ID}), &res)
+	a2, _ := f.st.Approval(f.ctx, f.env, res.ApprovalID)
+	if again, _ := f.svc.DecideShare(f.ctx, a2, store.StatusApproved); again.ID != sf.ID || again.SupportCount != 2 {
 		t.Fatalf("second share should reinforce: %+v", again)
 	}
 
