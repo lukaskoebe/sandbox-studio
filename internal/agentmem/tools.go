@@ -381,6 +381,15 @@ func (s *Service) toolShare(ctx context.Context, c caller, params json.RawMessag
 // requestShare creates a pending memory.share approval. Shared memory changes only when the
 // user approves it (DecideShare).
 func (s *Service) requestShare(ctx context.Context, c caller, se session, r shareRequest) (any, error) {
+	a, err := s.proposeShare(ctx, c, se, r)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"approvalId": a.ID, "status": a.Status,
+		"note": "The user decides in Studio's inbox; the fact joins shared memory when approved."}, nil
+}
+
+func (s *Service) proposeShare(ctx context.Context, c caller, se session, r shareRequest) (store.Approval, error) {
 	if r.EntityIDs == nil {
 		r.EntityIDs = []string{}
 	}
@@ -392,14 +401,36 @@ func (s *Service) requestShare(ctx context.Context, c caller, se session, r shar
 	a, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.env, SandboxID: c.sandbox.ID, Kind: ApprovalKind,
 		Subject: truncate(c.persona.Name+": "+r.Text, 300), Payload: payload})
 	if err != nil {
-		return nil, err
+		return a, err
 	}
 	if s.Notify != nil {
 		s.Notify(c.env)
 	}
 	s.log(ctx, c, se.id, entry{kind: LogWrite, itemType: "approval", itemID: a.ID, summary: "proposed for shared memory: " + r.Text})
-	return map[string]any{"approvalId": a.ID, "status": a.Status,
-		"note": "The user decides in Studio's inbox; the fact joins shared memory when approved."}, nil
+	return a, nil
+}
+
+// Promote proposes a persona's active fact for shared memory on the user's behalf, through
+// the same memory.share approval a persona's share request creates.
+func (s *Service) Promote(ctx context.Context, env, factID string) (store.Approval, error) {
+	f, err := s.Memory.Fact(ctx, env, factID)
+	if err != nil {
+		return store.Approval{}, err
+	}
+	id, ok := strings.CutPrefix(f.Scope, "persona:")
+	if !ok {
+		return store.Approval{}, fmt.Errorf("%w: fact %s is shared already", memory.ErrInvalid, f.ID)
+	}
+	if f.Status != memory.StatusActive {
+		return store.Approval{}, fmt.Errorf("%w: fact %s is %s", memory.ErrInvalid, f.ID, f.Status)
+	}
+	p, err := s.Store.Persona(ctx, env, id)
+	if err != nil {
+		return store.Approval{}, fmt.Errorf("%w: the persona of fact %s is gone", memory.ErrInvalid, f.ID)
+	}
+	c := caller{env: env, persona: p, scope: f.Scope}
+	return s.proposeShare(ctx, c, session{}, shareRequest{FactID: f.ID, Text: f.Text, Kind: f.Kind, EntityIDs: f.EntityIDs, Attribute: f.Attribute,
+		Tier: f.Tier, Evidence: "promoted by the user"})
 }
 
 // DecideShare applies the user's decision on a memory.share approval: approved writes the

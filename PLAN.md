@@ -1053,6 +1053,9 @@ are part of the acceptance criteria.
 - Accepted when: contradictory facts from two sources produce a conflict item; resolving it
   changes what is recalled; a time-based change is superseded automatically with a visible
   timeline entry.
+- Built: `internal/agentmem/dream.go`, `internal/memory/consolidate.go` and
+  `conflicts.go`, migration `016_memory_dream.sql`; see docs/memory.md, Consolidation.
+  Shared facts win at recall until a conflict is resolved.
 
 **M7 — Browser broker**
 - Browser VM image, broker tools, policy and patterns, redaction, credential fill, live view
@@ -1069,6 +1072,15 @@ are part of the acceptance criteria.
 **M9 — Packaging and release**
 - Signed macOS build (notarized) and Windows build, first-run doctor (KVM/HVF/WHP checks
   via msb doctor), autostart option, update check, docs.
+- Built: `studio doctor` (also run at startup and shown as the Runtime card under
+  Settings) checks msb and `msb doctor`, KVM/HVF/WHP, the base image, the data directory, free
+  disk and ports. Opt-in start at login uses a systemd user unit, a LaunchAgent or the HKCU Run
+  key. The opt-in update check queries GitHub releases at most daily and only notifies.
+  `release.yml` builds on native runners, because the SDK needs CGO. It pins the base image
+  digest through `version.BaseImage`, signs when secrets exist, and publishes checksums and
+  attestations. See [docs/release.md](docs/release.md).
+- Open: the browser image is not in the release yet (it comes with M7). Signing and
+  notarization are untested until the certificates exist.
 
 ACP-driven chat sessions and persona "tasks"/heartbeats (OpenClaw-style proactive work) come
 after M9, or slot in after M5 if wanted earlier.

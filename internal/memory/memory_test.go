@@ -384,7 +384,8 @@ func TestStatusFiltering(t *testing.T) {
 	a := f.fact(f.env, "persona:x", KindFact, "The deploy command is make alpha", UserOrigin)
 	b := f.fact(f.env, "shared", KindFact, "The deploy command is make beta", UserOrigin)
 	conflict, err := f.svc.CreateConflict(ctx, f.env, a.ID, b.ID, "contradiction", "two commands")
-	if err != nil || conflict.FactA.Status != StatusDisputed || conflict.FactB.Status != StatusDisputed || conflict.Status != "open" {
+	// Across scopes only the persona fact is disputed: the shared one wins until resolved.
+	if err != nil || conflict.FactA.Status != StatusDisputed || conflict.FactB.Status != StatusActive || conflict.Status != "open" || conflict.Reason != "two commands" {
 		t.Fatalf("conflict %+v %v", conflict, err)
 	}
 
@@ -393,7 +394,7 @@ func TestStatusFiltering(t *testing.T) {
 		t.Fatalf("default: %v", ids(hits))
 	}
 	for _, h := range hits {
-		if (h.ID == a.ID || h.ID == b.ID) != h.Disputed {
+		if (h.ID == a.ID) != h.Disputed {
 			t.Fatalf("disputed marker on %s: %+v", h.ID, h)
 		}
 		if h.Disputed && !strings.Contains(h.Why.Summary, "disputed") {
@@ -414,17 +415,23 @@ func TestStatusFiltering(t *testing.T) {
 		t.Fatalf("cross-scope supersede: %v", err)
 	}
 
-	resolved, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, "keep_b", "beta is current")
+	resolved, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, ConflictResolution{Resolution: "keep_b", Note: "beta is current"})
 	if err != nil || resolved.Status != "resolved" || resolved.Resolution != "keep_b" || resolved.ResolvedAt == nil || resolved.Note != "beta is current" {
 		t.Fatalf("resolve %+v %v", resolved, err)
 	}
-	if _, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, "keep_a", ""); !errors.Is(err, ErrExists) {
+	if resolved.FactA.Status != StatusRetracted || resolved.FactB.Status != StatusActive {
+		t.Fatalf("keep_b: a %s b %s", resolved.FactA.Status, resolved.FactB.Status)
+	}
+	if hits := f.search(f.env, SearchRequest{Query: "deploy command", Persona: "x", Limit: 50}); contains(hits, a.ID) || !contains(hits, b.ID) {
+		t.Fatalf("after keep_b: %v", ids(hits))
+	}
+	if _, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, ConflictResolution{Resolution: "keep_a"}); !errors.Is(err, ErrExists) {
 		t.Fatalf("twice: %v", err)
 	}
-	if _, err := f.svc.ResolveConflict(ctx, f.env2, conflict.ID, "keep_a", ""); !errors.Is(err, ErrNotFound) {
+	if _, err := f.svc.ResolveConflict(ctx, f.env2, conflict.ID, ConflictResolution{Resolution: "keep_a"}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("other env: %v", err)
 	}
-	if _, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, "maybe", ""); !errors.Is(err, ErrInvalid) {
+	if _, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, ConflictResolution{Resolution: "maybe"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("bad resolution: %v", err)
 	}
 	list, err := f.svc.Conflicts(ctx, f.env, "persona:x")

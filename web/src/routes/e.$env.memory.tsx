@@ -7,6 +7,7 @@ import {
   PencilSimpleIcon,
   PlusIcon,
   ProhibitIcon,
+  ShareNetworkIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
 import {
@@ -52,11 +53,11 @@ import {
   FactDialog,
   PageDialog,
   invalidateMemory,
-  type MemoryConflict,
   type MemoryFact,
   type MemoryHit,
   type MemoryPage,
 } from "@/components/memory-dialogs"
+import { ConflictSheet, DreamPanel } from "@/components/memory-conflict"
 import { MemorySessionsTab, MemoryUsage } from "@/components/memory-sessions"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
@@ -394,6 +395,23 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
         }),
     }
   )
+  const promote = $api.useMutation(
+    "post",
+    "/api/environments/{env}/memory/facts/{id}/promote",
+    {
+      onSuccess: () =>
+        toast.success("Proposed for shared memory", {
+          description:
+            "Approve it in the inbox to share it with every persona.",
+        }),
+      onSettled: () =>
+        queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] }),
+      onError: (err) =>
+        toast.error("Could not promote the fact", {
+          description: errorMessage(err),
+        }),
+    }
+  )
   const remove = $api.useMutation(
     "delete",
     "/api/environments/{env}/memory/facts/{id}",
@@ -472,6 +490,21 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
                       >
                         <PencilSimpleIcon />
                       </Button>
+                      {scope !== shared && f.status === "active" && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Promote to shared: propose it for every persona"
+                          disabled={promote.isPending}
+                          onClick={() =>
+                            promote.mutate({
+                              params: { path: { env, id: f.id } },
+                            })
+                          }
+                        >
+                          <ShareNetworkIcon />
+                        </Button>
+                      )}
                       {f.status !== "retracted" && (
                         <Button
                           variant="ghost"
@@ -519,111 +552,87 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
 
 // --- conflicts ---------------------------------------------------------------------------
 
-const resolutions: {
-  value: NonNullable<MemoryConflict["resolution"]>
-  label: string
-}[] = [
-  { value: "keep_a", label: "Keep A" },
-  { value: "keep_b", label: "Keep B" },
-  { value: "keep_both", label: "Keep both" },
-  { value: "dismiss", label: "Dismiss" },
-]
-
 function ConflictsTab({ env, scope }: { env: string; scope: string }) {
-  const queryClient = useQueryClient()
+  const [open, setOpen] = useState<string>()
   const conflicts = $api.useQuery(
     "get",
     "/api/environments/{env}/memory/conflicts",
     { params: { path: { env }, query: { scope } } }
   )
-  const resolve = $api.useMutation(
-    "post",
-    "/api/environments/{env}/memory/conflicts/{id}/resolve",
-    {
-      onSettled: () => invalidateMemory(queryClient),
-      onError: (err) =>
-        toast.error("Could not resolve the conflict", {
-          description: errorMessage(err),
-        }),
-    }
-  )
   const list = conflicts.data ?? []
 
-  if (conflicts.isPending) return <Spinner className="mx-auto block" />
-  if (list.length === 0)
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>No conflicts</EmptyTitle>
-          <EmptyDescription>
-            Facts that contradict each other show up here.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    )
   return (
     <div className="space-y-3">
-      <p className="text-muted-foreground">
-        Resolving records your decision. Edit or retract the facts themselves on
-        the Facts tab.
-      </p>
-      {list.map((c) => (
-        <div
-          key={c.id}
-          className="space-y-2 rounded-lg p-3 ring-1 ring-foreground/10"
-        >
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline">{c.verdict.replaceAll("_", " ")}</Badge>
-            <Badge variant={c.status === "open" ? "destructive" : "secondary"}>
-              {c.status === "open" ? "open" : `resolved: ${c.resolution}`}
-            </Badge>
-            <span className="text-muted-foreground">
-              {formatAge(c.createdAt)}
-            </span>
-          </div>
-          {c.note && <p className="text-muted-foreground">{c.note}</p>}
-          <div className="grid gap-2 md:grid-cols-2">
-            {(
-              [
-                ["A", c.factA],
-                ["B", c.factB],
-              ] as const
-            ).map(([name, fact]) => (
-              <div key={name} className="rounded-md bg-muted/50 p-2">
-                <span className="font-medium">{name}</span>{" "}
-                <span className="font-mono text-[0.625rem] text-muted-foreground">
-                  {fact.scope}
-                </span>
-                <p className="whitespace-pre-wrap">{fact.text}</p>
-                <div className="mt-1 flex gap-1">
-                  <TierBadge tier={fact.tier} />
-                  <StatusBadge status={fact.status} />
+      <DreamPanel env={env} scope={scope} />
+      {conflicts.isPending ? (
+        <Spinner className="mx-auto block" />
+      ) : list.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No conflicts</EmptyTitle>
+            <EmptyDescription>
+              Facts that contradict each other show up here. Until you resolve
+              one, a shared fact wins over a persona's.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        list.map((c) => (
+          <div
+            key={c.id}
+            className="space-y-2 rounded-lg p-3 ring-1 ring-foreground/10"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline">{c.verdict.replaceAll("_", " ")}</Badge>
+              <Badge
+                variant={c.status === "open" ? "destructive" : "secondary"}
+              >
+                {c.status === "open" ? "open" : `resolved: ${c.resolution}`}
+              </Badge>
+              <span className="text-muted-foreground">
+                {formatAge(c.createdAt)}
+              </span>
+              <Button
+                size="sm"
+                variant={c.status === "open" ? "default" : "outline"}
+                className="ml-auto"
+                onClick={() => setOpen(c.id)}
+              >
+                {c.status === "open" ? "Resolve…" : "Details"}
+              </Button>
+            </div>
+            {c.reason && <p className="text-muted-foreground">{c.reason}</p>}
+            {c.note && <p className="text-muted-foreground">{c.note}</p>}
+            <div className="grid gap-2 md:grid-cols-2">
+              {(
+                [
+                  ["A", c.factA],
+                  ["B", c.factB],
+                ] as const
+              ).map(([name, fact]) => (
+                <div key={name} className="rounded-md bg-muted/50 p-2">
+                  <span className="font-medium">{name}</span>{" "}
+                  <span className="font-mono text-[0.625rem] text-muted-foreground">
+                    {fact.scope}
+                  </span>
+                  <p className="whitespace-pre-wrap">{fact.text}</p>
+                  <div className="mt-1 flex gap-1">
+                    <TierBadge tier={fact.tier} />
+                    <StatusBadge status={fact.status} />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          {c.status === "open" && (
-            <div className="flex flex-wrap gap-1.5">
-              {resolutions.map((r) => (
-                <Button
-                  key={r.value}
-                  size="sm"
-                  variant="outline"
-                  disabled={resolve.isPending}
-                  onClick={() =>
-                    resolve.mutate({
-                      params: { path: { env, id: c.id } },
-                      body: { resolution: r.value },
-                    })
-                  }
-                >
-                  {r.label}
-                </Button>
               ))}
             </div>
-          )}
-        </div>
-      ))}
+          </div>
+        ))
+      )}
+      <ConflictSheet
+        env={env}
+        conflictId={open}
+        onOpenChange={(o) => {
+          if (!o) setOpen(undefined)
+        }}
+      />
     </div>
   )
 }

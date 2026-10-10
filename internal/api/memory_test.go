@@ -91,7 +91,7 @@ func TestMemoryAPI(t *testing.T) {
 		t.Fatalf("conflicts %+v", list)
 	}
 	rec = do(h, "POST", base+"/conflicts/"+c.ID+"/resolve", `{"resolution":"keep_a","note":"pnpm it is"}`)
-	if got := decode[memory.Conflict](t, rec); rec.Code != 200 || got.Status != "resolved" || got.FactB.Status != memory.StatusDisputed {
+	if got := decode[memory.Conflict](t, rec); rec.Code != 200 || got.Status != "resolved" || got.FactB.Status != memory.StatusRetracted || got.FactA.Status != memory.StatusActive {
 		t.Fatalf("resolve: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, "POST", base+"/conflicts/"+c.ID+"/resolve", `{"resolution":"keep_b"}`); rec.Code != http.StatusConflict {

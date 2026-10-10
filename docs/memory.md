@@ -1,8 +1,8 @@
 # Memory
 
 What personas remember, per environment (PLAN.md §6.7): the store, search, embeddings,
-API and UI, and memory in agent sessions (hooks, tools, extraction). Consolidation comes
-later.
+API and UI, memory in agent sessions (hooks, tools, extraction) and consolidation (the
+dream job and conflicts).
 
 ## Scopes
 
@@ -22,14 +22,18 @@ Tables live in the catalog database (`013_memory.sql`, all prefixed `memory_`):
 - `facts`: kind (`preference`, `decision`, `fact`, `procedure`, `event`), entities,
   attribute, text, `observed_at`, validity, confidence, tier, support count, status
   (`active`, `superseded`, `disputed`, `retracted`), `supersedes` and author persona.
-  Superseding marks the old fact (same scope) `superseded`; a conflict marks both
-  `disputed`.
+  Superseding marks the old fact `superseded` and ends its validity; a conflict marks both
+  facts `disputed` in one scope, only the persona's fact across scopes.
 - `pages`: slug (unique per scope), title, kind, compiled truth, `always_load`, tier. Core
   (`always_load`) pages of one scope share 4000 characters; a write over that is refused
   with a list of the other core pages and how much room is left.
 - `timeline`: dated entries per page, append-only (a trigger refuses updates).
-- `conflicts`: two facts, verdict and status. Resolving only records the decision
-  (`keep_a`, `keep_b`, `keep_both`, `dismiss`) and a note.
+- `conflicts`: two facts (one conflict per pair), verdict, the judge's reason, status and
+  the inbox approval. Resolutions: `keep_a` or `keep_b` retracts the other fact;
+  `keep_both` keeps both as tier `user`, optionally rewritten with a qualifier; `edit`
+  writes one new `user` fact that supersedes both. Each adds a timeline entry.
+- `dream_runs` and `judgments` (`016_memory_dream.sql`): consolidation runs and cached
+  verdicts.
 - `chunks`: the searchable text of facts, pages (split at about 1200 characters) and
   timeline entries, indexed by FTS5 (`porter unicode61`) through triggers.
 - `embeddings`: one int8 vector per chunk with its scale, dimensions and model name.
@@ -50,6 +54,9 @@ scope plus shared.
    procedure 180, fact 90, event 14, page 180.
 4. Retracted facts never show; superseded and expired (`valid_until` past) facts only with
    `includeSuperseded`, marked. Disputed facts are marked.
+5. Shared wins: a persona fact in an open conflict with a shared fact is marked
+   `overriddenBy` and the shared fact is placed right above it (pulled in if search missed
+   it) until the user resolves the conflict.
 
 Every hit carries `why`: both ranks, the similarity, whether vectors were used
 (`used`, `not_ready`, `not_embedded`), the RRF score, both boosts and a one-line summary.
@@ -78,13 +85,18 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET/POST facts`, `GET/PUT/DELETE facts/{id}`, `POST facts/{id}/retract` | facts; list filters `scope`, `status` |
 | `GET/POST pages`, `GET/PUT/DELETE pages/{id}`, `POST pages/{id}/timeline` | pages; `GET pages/{id}` includes the timeline |
 | `GET search` | hybrid search with `why` |
-| `GET conflicts`, `POST conflicts/{id}/resolve` | conflicts, open first |
+| `GET conflicts`, `GET conflicts/{id}`, `POST conflicts/{id}/resolve` | conflicts, open first; the detail adds both facts' sources and timeline |
+| `POST dream`, `GET dreams?scope=` | start consolidating a scope (202, 409 while one runs); runs with stats |
+| `POST facts/{id}/promote` | propose a persona fact for shared memory (`memory.share` approval) |
 
 | `GET sessions?persona=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
 | `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider |
 
 The Memory page in the environment sidebar has a scope switcher, the extraction budget line,
-and tabs for pages, facts, conflicts, search and sessions.
+and tabs for pages, facts (with "promote to shared" on persona facts), conflicts (with
+"Dream now", recent runs and a sheet that shows both facts side by side with sources, tiers
+and timeline, and resolves), search and sessions. `memory.conflict` approvals show in the
+approval stack with the same sheet.
 
 ## In agent sessions
 
@@ -143,3 +155,45 @@ scope; a fact with the same text, the same attribute and similarity ≥ 0.75, si
 
 **Budget.** Per environment and UTC day: $1.00 for priced models (each call's cost is
 estimated before it is made), 200 calls for unpriced ones. Skipped runs are counted.
+
+## Consolidation
+
+Code: `internal/agentmem/dream.go` (the job) and `internal/memory/consolidate.go`
+(merge, supersede, compiled truth).
+
+**Triggers.** A scheduler checks every minute: a scope with 25 new facts since its last
+finished run, a scope with new facts after 03:00 local time that has not run since, and
+any interrupted run. Automatic runs of one scope are at least an hour apart. "Dream now"
+(`POST dream`) starts one at once. One dream per scope runs at a time (an in-process lock
+plus a unique index on running rows).
+
+**A run** covers the facts created between the end of the last finished run and now (both
+ends included); a persona's run also takes new shared facts.
+
+1. Dedupe: near-duplicates in one scope (same normalized text, or the same kind with word
+   overlap ≥ 0.8 for the same attribute, ≥ 0.9 otherwise) are merged into the older fact:
+   sources and timeline move over, support adds up, the better tier stays.
+2. Pairs: each new fact against up to 8 related active facts (same attribute or a shared
+   entity) of its scope and shared; new shared facts against the persona's facts. At most
+   100 pairs per run; pairs with a conflict are skipped.
+3. Judge: the persona's utility model and budget, as for extraction (the first persona with
+   one for the shared scope; none for subscriptions, S8, so those runs only dedupe and
+   compile). The answer must be exactly `{"verdict", "reason"}` with a verdict of
+   `no_conflict`, `duplicate`, `supersedes` or `contradiction`; `supersedes` needs B
+   observed after A. Anything else is counted as rejected and changes nothing. Valid
+   verdicts are cached per pair, model and prompt version.
+4. Apply: `duplicate` merges (same scope). `supersedes` applies by itself, with a timeline
+   entry on the entity page, when B's tier is at least A's and B is in A's scope or shared;
+   a persona fact never replaces a shared one. Otherwise, and for every `contradiction`, a
+   conflict opens with a `memory.conflict` approval in the inbox. Dismissing the approval
+   only hides it; the conflict stays open until resolved on the memory page.
+5. Compiled truth: the touched entities' pages (`<entity>` or `topic/<entity>`, created at
+   two facts) get a regenerated block between `<!-- studio:compiled -->` markers; text the
+   user wrote outside it stays. A core page that would exceed the core budget keeps its old
+   text and the run notes it.
+
+Runs record their window, trigger, status (`running`, `done`, `stopped`, `failed`), stats
+(facts, pairs, judged, cached, rejected, merged, superseded, conflicts, pages, tokens,
+cost) and a note. An exhausted budget or the pair limit stops a run cleanly; the next run
+covers the same window again, and cached verdicts make that cheap. A run interrupted by a
+shutdown stays `running` and resumes; every step is idempotent.

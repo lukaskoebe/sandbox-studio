@@ -1,5 +1,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X github.com/lukaskoebe/sandbox-studio/internal/version.Version=$(VERSION)
+# Release builds pin the base image by digest; see docs/release.md.
+LDFLAGS += $(if $(BASE_IMAGE),-X github.com/lukaskoebe/sandbox-studio/internal/version.BaseImage=$(BASE_IMAGE))
 # Leaves out the databases of Caddy's PKI app, which Studio doesn't use.
 TAGS := nobadger,nomysql,nopgx
 

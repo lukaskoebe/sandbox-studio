@@ -7,6 +7,7 @@ import {
   CaretUpDownIcon,
   CheckIcon,
   CubeIcon,
+  GearIcon,
   GitBranchIcon,
   GlobeIcon,
   HammerIcon,
@@ -65,6 +66,9 @@ export function AppSidebar({ env }: { env: string }) {
     { refetchInterval: 3000 }
   )
   const health = $api.useQuery("get", "/api/health")
+  const updates = $api.useQuery("get", "/api/system/updates", undefined, {
+    refetchInterval: 60 * 60 * 1000,
+  })
   const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
     params: { path: { env } },
   })
@@ -230,6 +234,25 @@ export function AppSidebar({ env }: { env: string }) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Settings"
+              isActive={
+                !!matchRoute({ to: "/e/$env/settings", params: { env } })
+              }
+              render={<Link to="/e/$env/settings" params={{ env }} />}
+            >
+              <GearIcon />
+              <span>Settings</span>
+              {updates.data?.available && (
+                <span className="ml-auto text-[0.625rem] text-primary">
+                  Update available
+                </span>
+              )}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <p className="px-2 text-[0.625rem] text-muted-foreground group-data-[collapsible=icon]:hidden">
           Sandbox Studio {health.data?.version}
         </p>

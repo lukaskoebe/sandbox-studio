@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
@@ -51,6 +52,10 @@ type Service struct {
 
 	db   *sql.DB
 	jobs chan extractJob
+
+	dreamMu  sync.Mutex
+	dreaming map[string]bool // env|scope being consolidated
+	bg       context.Context // lives as long as RunDreams
 }
 
 // Budget is the daily limit on extraction calls per environment. Priced models are held

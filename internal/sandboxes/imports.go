@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/diskspace"
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -434,5 +435,5 @@ func (m *Manager) freeDisk(dir string) (uint64, error) {
 	if m.diskFree != nil {
 		return m.diskFree(dir)
 	}
-	return diskFree(dir)
+	return diskspace.Free(dir)
 }
