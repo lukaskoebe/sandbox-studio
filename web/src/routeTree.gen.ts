@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as EEnvRouteImport } from './routes/e.$env'
 import { Route as EEnvIndexRouteImport } from './routes/e.$env.index'
 import { Route as EEnvBuildsRouteImport } from './routes/e.$env.builds'
+import { Route as EEnvMemoryRouteImport } from './routes/e.$env.memory'
 import { Route as EEnvNetworkRouteImport } from './routes/e.$env.network'
 import { Route as EEnvPersonasRouteImport } from './routes/e.$env.personas'
 import { Route as EEnvProvidersRouteImport } from './routes/e.$env.providers'
@@ -37,6 +38,11 @@ const EEnvIndexRoute = EEnvIndexRouteImport.update({
 const EEnvBuildsRoute = EEnvBuildsRouteImport.update({
   id: '/builds',
   path: '/builds',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvMemoryRoute = EEnvMemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvNetworkRoute = EEnvNetworkRouteImport.update({
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/e/$env': typeof EEnvRouteWithChildren
   '/e/$env/builds': typeof EEnvBuildsRoute
+  '/e/$env/memory': typeof EEnvMemoryRoute
   '/e/$env/network': typeof EEnvNetworkRoute
   '/e/$env/personas': typeof EEnvPersonasRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
+  '/e/$env/memory': typeof EEnvMemoryRoute
   '/e/$env/network': typeof EEnvNetworkRoute
   '/e/$env/personas': typeof EEnvPersonasRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
@@ -91,6 +99,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/e/$env': typeof EEnvRouteWithChildren
   '/e/$env/builds': typeof EEnvBuildsRoute
+  '/e/$env/memory': typeof EEnvMemoryRoute
   '/e/$env/network': typeof EEnvNetworkRoute
   '/e/$env/personas': typeof EEnvPersonasRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
@@ -104,6 +113,7 @@ export interface FileRouteTypes {
     | '/'
     | '/e/$env'
     | '/e/$env/builds'
+    | '/e/$env/memory'
     | '/e/$env/network'
     | '/e/$env/personas'
     | '/e/$env/providers'
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/e/$env/builds'
+    | '/e/$env/memory'
     | '/e/$env/network'
     | '/e/$env/personas'
     | '/e/$env/providers'
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
     | '/'
     | '/e/$env'
     | '/e/$env/builds'
+    | '/e/$env/memory'
     | '/e/$env/network'
     | '/e/$env/personas'
     | '/e/$env/providers'
@@ -168,6 +180,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvBuildsRouteImport
       parentRoute: typeof EEnvRoute
     }
+    '/e/$env/memory': {
+      id: '/e/$env/memory'
+      path: '/memory'
+      fullPath: '/e/$env/memory'
+      preLoaderRoute: typeof EEnvMemoryRouteImport
+      parentRoute: typeof EEnvRoute
+    }
     '/e/$env/network': {
       id: '/e/$env/network'
       path: '/network'
@@ -208,6 +227,7 @@ declare module '@tanstack/react-router' {
 
 interface EEnvRouteChildren {
   EEnvBuildsRoute: typeof EEnvBuildsRoute
+  EEnvMemoryRoute: typeof EEnvMemoryRoute
   EEnvNetworkRoute: typeof EEnvNetworkRoute
   EEnvPersonasRoute: typeof EEnvPersonasRoute
   EEnvProvidersRoute: typeof EEnvProvidersRoute
@@ -218,6 +238,7 @@ interface EEnvRouteChildren {
 
 const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvBuildsRoute: EEnvBuildsRoute,
+  EEnvMemoryRoute: EEnvMemoryRoute,
   EEnvNetworkRoute: EEnvNetworkRoute,
   EEnvPersonasRoute: EEnvPersonasRoute,
   EEnvProvidersRoute: EEnvProvidersRoute,

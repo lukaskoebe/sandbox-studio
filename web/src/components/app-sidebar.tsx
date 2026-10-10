@@ -3,6 +3,7 @@ import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  BrainIcon,
   CaretUpDownIcon,
   CheckIcon,
   CubeIcon,
@@ -151,6 +152,18 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <PlugIcon />
                 <span>Providers</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Memory"
+                isActive={
+                  !!matchRoute({ to: "/e/$env/memory", params: { env } })
+                }
+                render={<Link to="/e/$env/memory" params={{ env }} />}
+              >
+                <BrainIcon />
+                <span>Memory</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

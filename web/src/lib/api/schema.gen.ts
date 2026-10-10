@@ -133,6 +133,175 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/memory/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Open conflicts first. */
+        get: operations["listMemoryConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/conflicts/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Records the decision only; the facts are not changed. Edit or retract them separately. */
+        post: operations["resolveMemoryConflict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMemoryFacts"];
+        put?: never;
+        post: operations["createMemoryFact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/facts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMemoryFact"];
+        /** @description The scope is fixed at creation and ignored here. An edit makes the fact tier user. */
+        put: operations["updateMemoryFact"];
+        post?: never;
+        delete: operations["deleteMemoryFact"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/facts/{id}/retract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Marks the fact retracted: it stays for the record but is never recalled. */
+        post: operations["retractMemoryFact"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Pages without their timelines; core (always-load) pages first. */
+        get: operations["listMemoryPages"];
+        put?: never;
+        /** @description Always-load pages of one scope share a budget of 4000 characters; exceeding it is a 422. */
+        post: operations["createMemoryPage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/pages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMemoryPage"];
+        /** @description Rewrites the compiled truth; scope and slug are fixed at creation. The timeline is append-only. */
+        put: operations["updateMemoryPage"];
+        post?: never;
+        delete: operations["deleteMemoryPage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/pages/{id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["appendMemoryTimeline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The shared scope, always first, and every persona scope that holds facts or pages. */
+        get: operations["listMemoryScopes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Hybrid search: BM25 and vector similarity fused by reciprocal rank, boosted by trust tier and recency. Each hit says why it ranked where it did. */
+        get: operations["searchMemory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/personas": {
         parameters: {
             query?: never;
@@ -765,6 +934,22 @@ export interface components {
             /** @enum {string} */
             state: "creating" | "ready" | "deleting";
         };
+        Conflict: {
+            /** Format: date-time */
+            createdAt: string;
+            factA: components["schemas"]["Fact"];
+            factB: components["schemas"]["Fact"];
+            id: string;
+            note?: string;
+            /** @enum {string} */
+            resolution?: "keep_a" | "keep_b" | "keep_both" | "dismiss";
+            /** Format: date-time */
+            resolvedAt?: string;
+            /** @enum {string} */
+            status: "open" | "resolved";
+            /** @enum {string} */
+            verdict: "contradiction" | "temporal_supersession" | "context_dependent" | "duplicate";
+        };
         Conn: {
             /** @description The destination as the sandbox asked for it */
             address: string;
@@ -910,6 +1095,56 @@ export interface components {
              */
             type: string;
         };
+        Fact: {
+            attribute?: string;
+            authorPersona?: string;
+            /** Format: double */
+            confidence: number;
+            /** Format: date-time */
+            createdAt: string;
+            entityIds: string[] | null;
+            id: string;
+            /** @enum {string} */
+            kind: "preference" | "decision" | "fact" | "procedure" | "event";
+            /** Format: date-time */
+            observedAt: string;
+            scope: string;
+            sourceIds: string[] | null;
+            /** @enum {string} */
+            status: "active" | "superseded" | "disputed" | "retracted";
+            supersedes?: string;
+            /** Format: int64 */
+            supportCount: number;
+            text: string;
+            /** @enum {string} */
+            tier: "user" | "verified" | "document" | "inferred";
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            validFrom?: string;
+            /** Format: date-time */
+            validUntil?: string;
+        };
+        FactInput: {
+            /** @description Normalized key, e.g. deploy.command */
+            attribute?: string;
+            /** Format: double */
+            confidence?: number;
+            entityIds?: string[] | null;
+            /** @enum {string} */
+            kind: "preference" | "decision" | "fact" | "procedure" | "event";
+            /** Format: date-time */
+            observedAt?: string;
+            /** @description Required on create; fixed afterwards */
+            scope?: string;
+            /** @description A fact of the same scope this one replaces; it becomes superseded */
+            supersedes?: string;
+            text: string;
+            /** Format: date-time */
+            validFrom?: string;
+            /** Format: date-time */
+            validUntil?: string;
+        };
         ForkInBody: {
             /** @description Name of the new sandbox */
             name: string;
@@ -919,6 +1154,23 @@ export interface components {
             status: "ok";
             version: string;
         };
+        Hit: {
+            /** @description The fact is part of an open conflict; treat it with care */
+            disputed?: boolean;
+            fact?: components["schemas"]["Fact"];
+            id: string;
+            page?: components["schemas"]["Page"];
+            scope: string;
+            /** Format: double */
+            score: number;
+            /** @description The best matching chunk */
+            snippet: string;
+            /** @description Only with includeSuperseded: the fact was replaced or expired */
+            superseded?: boolean;
+            /** @enum {string} */
+            type: "fact" | "page";
+            why: components["schemas"]["Why"];
+        };
         NetworkRequest: {
             host: string;
             /** @description Suggested host patterns, most specific first */
@@ -926,6 +1178,38 @@ export interface components {
             /** Format: int64 */
             port: number;
             sandboxName: string;
+        };
+        Page: {
+            /** @description A core page, loaded into every session of the scope */
+            alwaysLoad: boolean;
+            authorPersona?: string;
+            /** @description The compiled truth: a regenerated synthesis, as markdown */
+            compiled: string;
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            /** @enum {string} */
+            kind: "person" | "project" | "topic" | "procedure" | "persona-self";
+            scope: string;
+            slug: string;
+            /** @enum {string} */
+            tier: "user" | "verified" | "document" | "inferred";
+            /** @description Oldest first; only returned for a single page */
+            timeline?: components["schemas"]["TimelineEntry"][] | null;
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        PageInput: {
+            alwaysLoad?: boolean;
+            compiled?: string;
+            /** @enum {string} */
+            kind: "person" | "project" | "topic" | "procedure" | "persona-self";
+            /** @description Required on create */
+            scope?: string;
+            /** @description Required on create; lowercase words joined by - or /, e.g. project/sandbox-studio */
+            slug?: string;
+            title: string;
         };
         Persona: {
             /** Format: date-time */
@@ -1016,6 +1300,11 @@ export interface components {
             /** @description A ready template in the same environment */
             templateId: string;
         };
+        ResolveInBody: {
+            note?: string;
+            /** @enum {string} */
+            resolution: "keep_a" | "keep_b" | "keep_both" | "dismiss";
+        };
         Resources: {
             /** Format: int64 */
             cpus: number;
@@ -1091,6 +1380,20 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        Scope: {
+            /** Format: int64 */
+            coreBudget: number;
+            /**
+             * Format: int64
+             * @description Characters used by always-load pages, out of coreBudget
+             */
+            coreChars: number;
+            /** Format: int64 */
+            facts: number;
+            /** Format: int64 */
+            pages: number;
+            scope: string;
+        };
         Secret: {
             /** Format: date-time */
             createdAt: string;
@@ -1123,6 +1426,28 @@ export interface components {
             id: string;
             platform: string;
             resources: components["schemas"]["Resources"];
+        };
+        TimelineEntry: {
+            /** Format: date-time */
+            at: string;
+            authorPersona?: string;
+            /** Format: date-time */
+            createdAt: string;
+            factId?: string;
+            id: string;
+            pageId: string;
+            sourceId?: string;
+            text: string;
+        };
+        TimelineInput: {
+            /**
+             * Format: date-time
+             * @description When it happened; defaults to now
+             */
+            at?: string;
+            factId?: string;
+            sourceId?: string;
+            text: string;
         };
         UpdateProviderInBody: {
             /** @description A new key. Omit it to keep the stored one. */
@@ -1164,6 +1489,37 @@ export interface components {
             templateId?: string;
             /** Format: int64 */
             workspaceMiB: number;
+        };
+        Why: {
+            /** Format: double */
+            ageDays: number;
+            /**
+             * Format: int64
+             * @description 1-based rank among keyword matches; absent when it did not match
+             */
+            bm25Rank?: number;
+            /** Format: double */
+            halfLifeDays: number;
+            /** Format: double */
+            recencyBoost: number;
+            /** Format: double */
+            rrf: number;
+            /** Format: double */
+            similarity?: number;
+            summary: string;
+            tier: string;
+            /** Format: double */
+            tierBoost: number;
+            /**
+             * @description not_ready: the embedding model is not loaded yet; not_embedded: this item has no vector yet. Both fall back to BM25 alone.
+             * @enum {string}
+             */
+            vector: "used" | "not_ready" | "not_embedded";
+            /**
+             * Format: int64
+             * @description 1-based rank among vector matches; absent when it did not match
+             */
+            vectorRank?: number;
         };
     };
     responses: never;
@@ -1501,6 +1857,568 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildJobLog"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMemoryConflicts: {
+        parameters: {
+            query?: {
+                /** @description Conflicts touching this scope; empty lists all */
+                scope?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conflict"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    resolveMemoryConflict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Conflict ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMemoryFacts: {
+        parameters: {
+            query?: {
+                /** @description shared or persona:<id>; empty lists every scope */
+                scope?: string;
+                /** @description active, superseded, disputed or retracted; empty lists every status */
+                status?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fact"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createMemoryFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fact"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMemoryFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fact"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateMemoryFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fact"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteMemoryFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    retractMemoryFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fact"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMemoryPages: {
+        parameters: {
+            query?: {
+                /** @description shared or persona:<id>; empty lists every scope */
+                scope?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createMemoryPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMemoryPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateMemoryPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PageInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteMemoryPage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    appendMemoryTimeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Page ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimelineInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineEntry"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMemoryScopes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scope"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    searchMemory: {
+        parameters: {
+            query: {
+                q: string;
+                /** @description Searches this persona's private scope plus shared; empty searches shared only */
+                persona?: string;
+                /** @description Also return superseded and expired facts, marked as such */
+                includeSuperseded?: boolean;
+                /** @description Defaults to 10 */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hit"][] | null;
                 };
             };
             /** @description Error */
