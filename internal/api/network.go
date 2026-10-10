@@ -68,6 +68,7 @@ type RuleInput struct {
 	Action    string          `json:"action" enum:"allow,proxy,caddy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile"`
 	Config    RuleConfigInput `json:"config,omitempty"`
 	SandboxID string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
+	PersonaID string          `json:"personaId,omitempty" doc:"Limits the rule to the sandboxes one persona of this environment owns; excludes sandboxId"`
 	Note      string          `json:"note,omitempty" maxLength:"500"`
 }
 
@@ -174,11 +175,17 @@ func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.
 			return store.Rule{}, apiError(err)
 		}
 	}
+	if in.PersonaID != "" && in.SandboxID != "" {
+		return store.Rule{}, huma.Error422UnprocessableEntity("a rule is scoped to a sandbox or a persona, not both")
+	}
+	if err := s.checkPersona(ctx, env, in.PersonaID); err != nil {
+		return store.Rule{}, err
+	}
 	config, err := s.ruleConfigFrom(ctx, env, in.Action, in.Config)
 	if err != nil {
 		return store.Rule{}, err
 	}
-	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note}, nil
+	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, PersonaID: in.PersonaID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note}, nil
 }
 
 type rulePath struct {
@@ -219,7 +226,7 @@ func (s *Server) registerNetwork(api huma.API) {
 			Action string `json:"action" enum:"allow,deny,dismiss" doc:"allow or deny creates a rule; dismiss only closes the request"`
 			Host   string `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports  []int  `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
-			Scope  string `json:"scope,omitempty" enum:"sandbox,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox"`
+			Scope  string `json:"scope,omitempty" enum:"sandbox,persona,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment"`
 		}
 	}
 	huma.Register(api, huma.Operation{

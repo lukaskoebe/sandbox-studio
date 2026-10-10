@@ -249,10 +249,11 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
     can't own an init handoff, and Studio does not bypass that flush check.
     This is a filesystem checkpoint, not application-level database consistency or
     a saved process session. Stop applications first when their own recovery requires it.
-  - **Suspend / Resume:** a full snapshot, then stop; restore resumes the processes,
-    including agent TUIs. Blocked with microsandbox 0.7.7 like restore (below); a full
-    restore must also re-create the source's vsock route, or the device layout no longer
-    matches.
+  - **Suspend / Resume:** for now an in-place pause (msb pause/resume): vCPUs stop, memory
+    stays with the VM process, and resume continues every process, agent TUIs and tmux
+    included. It frees no memory and does not survive a host reboot. A full snapshot then
+    stop waits on restore (below: #1736 egress, vsock route). Fork, rebase and checkpoints
+    refuse a suspended sandbox; Stop and Delete resume it first.
   - **Fork:** a new sandbox with a new ID and egress identity, the same template and
     resources, and a copy of `/workspace`. Not msb fork: Studio copies the workspace as a
     tar stream between two VMs. A running source keeps running, so the copy may be
@@ -476,8 +477,8 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
 - **Rebase:** moving an existing sandbox to a new template keeps its workspace. The mechanism
   copies `/workspace` as a gzip tar over msb exec from the old VM to a new generation, with
-  no staging on the host. Docker data is not kept. Fork uses the same copy. Restore and
-  suspend stay gated. See [docs/rebase.md](docs/rebase.md).
+  no staging on the host. Docker data is not kept. Fork uses the same copy. Restore stays
+  gated; suspend is an in-place pause for now (6.1). See [docs/rebase.md](docs/rebase.md).
 - **Export/import:** a sandbox saves to a `.studio-sandbox` file (manifest plus workspace
   tar) and is recreated from it through a template build and the same workspace copy.
   Secrets, egress identity, approvals, checkpoints and Docker data are not exported. See
@@ -600,6 +601,14 @@ shown in the UI and kept for a bounded period.
 - Auto-decided requests are logged too, so the inbox doubles as an audit log.
 
 ### 6.6 Personas, providers and harness adapters
+
+**Built (M4 part A).** Providers and personas are per-environment records with CRUD pages
+and API (`docs/personas.md`). An API-key provider owns one vault secret bound to the vendor
+host (or the custom base URL's host); subscription providers are records in state
+`login_required` until the login flow exists. A persona's harness must be one its provider
+kind supports (table below). Sandboxes can be owned by a persona, fixed at creation and
+copied by fork. Network rules can be scoped to a persona; the gateway resolves the owner
+from the catalog. Harness adapters, default rule scope and auto-patterns are not built yet.
 
 **Persona settings.**
 - Identity and soul (markdown).
@@ -990,7 +999,7 @@ are part of the acceptance criteria.
 
 **M3 — Specs, templates, persistence**
 - Spec YAML, template builds and cache, workspace and Docker disks, checkpoints, suspend and
-  resume (full snapshot), fork, restore, rebase, export and import.
+  resume (in-place pause until #1736 allows a full snapshot), fork, restore, rebase, export and import.
 - Accepted when: a suspend/resume brings a running agent TUI back mid-session; a fork creates
   an independent copy; a spec change rebuilds the template and rebases while keeping the
   workspace.

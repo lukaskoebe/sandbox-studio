@@ -54,7 +54,8 @@ default network, which would bypass Studio's gateway
 ([upstream #1736](https://github.com/superradcompany/microsandbox/issues/1736)).
 Disk checkpoints do not preserve running processes, and one of a running sandbox is
 crash-consistent. Quiesce applications first when they need application-level consistency;
-live memory suspend/resume is still planned.
+**Suspend** pauses a running sandbox in place and **Resume** continues it where it was,
+terminals included. A suspended sandbox keeps its memory and does not survive a host reboot.
 
 ## License
 

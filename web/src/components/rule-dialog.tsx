@@ -176,7 +176,15 @@ function RuleForm({
   )
   const [headers, setHeaders] = useState(() => initialHeaders(rule))
   const [caddyfile, setCaddyfile] = useState(rule?.config.caddyfile ?? "")
-  const [scope, setScope] = useState(rule?.sandboxId ?? "environment")
+  // "environment", a sandbox ID, or "persona:" and a persona ID.
+  const [scope, setScope] = useState(
+    rule?.sandboxId ??
+      (rule?.personaId ? `persona:${rule.personaId}` : "environment")
+  )
+  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+    params: { path: { env } },
+  })
+  const personaList = personas.data ?? []
   const [note, setNote] = useState(rule?.note ?? "")
   const [formError, setFormError] = useState<string>()
   const clearFormError = () => setFormError(undefined)
@@ -229,7 +237,13 @@ function RuleForm({
       host: host.trim(),
       ports: portList,
       action,
-      sandboxId: scope === "environment" ? undefined : scope,
+      sandboxId:
+        scope === "environment" || scope.startsWith("persona:")
+          ? undefined
+          : scope,
+      personaId: scope.startsWith("persona:")
+        ? scope.slice("persona:".length)
+        : undefined,
       note: note.trim() || undefined,
       config:
         action === "caddy"
@@ -360,6 +374,9 @@ function RuleForm({
           items={{
             environment: "Environment",
             ...Object.fromEntries(sandboxes.map((sb) => [sb.id, sb.name])),
+            ...Object.fromEntries(
+              personaList.map((p) => [`persona:${p.id}`, `Persona ${p.name}`])
+            ),
           }}
         >
           <SelectTrigger id="rule-scope" className="w-full">
@@ -372,8 +389,18 @@ function RuleForm({
                 {sb.name}
               </SelectItem>
             ))}
+            {personaList.map((p) => (
+              <SelectItem key={p.id} value={`persona:${p.id}`}>
+                Persona {p.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
+        {personaList.length > 0 && (
+          <FieldDescription>
+            A persona rule covers every sandbox the persona owns.
+          </FieldDescription>
+        )}
       </Field>
       <Field>
         <FieldLabel htmlFor="rule-note">Note</FieldLabel>

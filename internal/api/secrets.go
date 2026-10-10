@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -66,6 +67,9 @@ func (s *Server) registerSecrets(api huma.API) {
 		OperationID: "updateSecret", Method: http.MethodPut, Path: "/api/environments/{env}/secrets/{id}", Tags: []string{"secrets"},
 		Description: "The name is fixed at creation. Omitting value keeps the stored value.",
 	}, func(ctx context.Context, in *updateSecretIn) (*struct{ Body store.Secret }, error) {
+		if err := s.checkUnmanaged(ctx, in.Env, in.ID); err != nil {
+			return nil, err
+		}
 		sec, err := s.Vault.Update(ctx, in.Env, in.ID, in.Body.Value, in.Body.Hosts, in.Body.Note)
 		if err != nil {
 			return nil, apiError(err)
@@ -78,6 +82,9 @@ func (s *Server) registerSecrets(api huma.API) {
 		OperationID: "deleteSecret", Method: http.MethodDelete, Path: "/api/environments/{env}/secrets/{id}", Tags: []string{"secrets"},
 		DefaultStatus: http.StatusNoContent,
 	}, func(ctx context.Context, in *secretPath) (*struct{}, error) {
+		if err := s.checkUnmanaged(ctx, in.Env, in.ID); err != nil {
+			return nil, err
+		}
 		if err := s.Vault.Delete(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}
@@ -89,4 +96,17 @@ func (s *Server) registerSecrets(api huma.API) {
 // publishSecrets tells open tabs that the environment's secrets changed.
 func (s *Server) publishSecrets(envID string) {
 	s.Bus.Publish(events.Event{Topic: events.TopicSecrets, EnvironmentID: envID})
+}
+
+// checkUnmanaged answers 409 if a provider owns the secret: its key is changed and removed
+// through the provider.
+func (s *Server) checkUnmanaged(ctx context.Context, envID, secretID string) error {
+	provider, err := s.Store.SecretProvider(ctx, envID, secretID)
+	if err != nil {
+		return apiError(err)
+	}
+	if provider != "" {
+		return huma.Error409Conflict(fmt.Sprintf("the secret is the key of provider %s; change it on the Providers page", provider))
+	}
+	return nil
 }

@@ -73,6 +73,8 @@ type SandboxRuntime interface {
 	Create(context.Context, string, runtime.Spec, string, map[string]string) error
 	Start(context.Context, string) error
 	Stop(context.Context, string) error
+	Pause(context.Context, string) error
+	Resume(context.Context, string) error
 	Remove(context.Context, string) error
 	Status(context.Context, string) (runtime.Status, error)
 	Statuses(context.Context, string) (map[string]runtime.Status, error)
@@ -94,7 +96,7 @@ type Egress interface {
 // View is a sandbox as shown to clients: catalog record plus live state.
 type View struct {
 	store.Sandbox
-	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,paused,stopped,crashed"`
+	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,suspended,stopped,crashed"`
 	CheckpointRestoreSupported bool           `json:"checkpointRestoreSupported"`
 	Agent                      *AgentInfo     `json:"agent,omitempty"`
 }
@@ -113,6 +115,7 @@ type CreateRequest struct {
 	MaxMemoryMiB int    `json:"maxMemoryMiB,omitempty"`
 	WorkspaceMiB int    `json:"workspaceMiB,omitempty"`
 	DockerMiB    int    `json:"dockerMiB,omitempty"`
+	PersonaID    string `json:"personaId,omitempty" doc:"The persona that owns the sandbox; omit for an unowned sandbox"`
 }
 
 // VMName is the microsandbox name of the current generation of sb.
@@ -202,17 +205,18 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err := runtime.ValidName(req.Name); err != nil {
 		return View{}, err
 	}
-	rec, err := m.createSandboxRecord(ctx, envID, req.Name, resolved, "")
+	rec, err := m.createOwnedRecord(ctx, envID, req.Name, resolved, "", req.PersonaID)
 	if err != nil {
 		return View{}, err
 	}
 	return m.bootSandbox(ctx, rec, resolved, nil, false)
 }
 
-// CreateFromTemplate starts a fresh sandbox from one ready, same-environment template.
-// The catalog row pins the template before registry metadata is resolved or the VM is
-// allocated. The runtime receives credentials only in its host-side image options.
-func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, name string) (View, error) {
+// CreateFromTemplateFor starts a fresh sandbox, owned by personaID if it is set, from one
+// ready, same-environment template. The catalog row pins the template before registry
+// metadata is resolved or the VM is allocated. The runtime receives credentials only in
+// its host-side image options.
+func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, name, personaID string) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
 	}
@@ -220,7 +224,7 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, nam
 	if err != nil {
 		return View{}, err
 	}
-	rec, err := m.createSandboxRecord(ctx, envID, name, resolved, templateID)
+	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, templateID, personaID)
 	if err != nil {
 		return View{}, err
 	}
@@ -282,19 +286,6 @@ func (m *Manager) templateImage(ctx context.Context, envID, templateID string) (
 		return nil, errors.New("template image is unavailable")
 	}
 	return &runtime.ImageSource{Reference: ref.Image, Username: ref.Username, Password: ref.Password}, nil
-}
-
-func (m *Manager) createSandboxRecord(ctx context.Context, envID, name string, resolved resources.Resources, templateID string) (store.Sandbox, error) {
-	return m.Store.CreateSandbox(ctx, store.Sandbox{
-		EnvironmentID: envID,
-		TemplateID:    templateID,
-		Name:          name,
-		CPUs:          int(resolved.CPUs),
-		MemoryMiB:     int(resolved.MemoryMiB),
-		MaxMemoryMiB:  int(resolved.MaxMemoryMiB),
-		WorkspaceMiB:  int(resolved.WorkspaceMiB),
-		DockerMiB:     int(resolved.DockerMiB),
-	})
 }
 
 func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, retainOnUncertainBoot bool) (View, error) {
@@ -455,6 +446,11 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	rec, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
+	}
+	if status, err := m.Runtime.Status(ctx, VMName(rec)); err != nil {
+		return View{}, err
+	} else if status == runtime.StatusSuspended {
+		return View{}, lifecycleError("the sandbox is suspended; resume it instead")
 	}
 	if _, err := m.Egress.Attach(rec); err != nil {
 		return View{}, err

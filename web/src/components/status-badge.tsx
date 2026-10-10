@@ -7,7 +7,7 @@ import {
 import type { Approval, Connection, Rule, Sandbox } from "@/lib/api/client"
 import { cn } from "@/lib/utils"
 
-type Phase = "ready" | "booting" | "stopped" | "failed"
+type Phase = "ready" | "booting" | "suspended" | "stopped" | "failed"
 
 export function phase(sb: Sandbox): Phase {
   switch (sb.status) {
@@ -16,6 +16,8 @@ export function phase(sb: Sandbox): Phase {
     case "starting":
     case "created":
       return "booting"
+    case "suspended":
+      return "suspended"
     case "crashed":
     case "absent":
       return "failed"
@@ -27,6 +29,7 @@ export function phase(sb: Sandbox): Phase {
 const labels: Record<Phase, string> = {
   ready: "Running",
   booting: "Booting",
+  suspended: "Suspended",
   stopped: "Stopped",
   failed: "Failed",
 }
@@ -34,6 +37,7 @@ const labels: Record<Phase, string> = {
 const dots: Record<Phase, string> = {
   ready: "bg-emerald-500",
   booting: "bg-amber-500 animate-pulse",
+  suspended: "bg-sky-500",
   stopped: "bg-muted-foreground/40",
   failed: "bg-destructive",
 }

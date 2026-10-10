@@ -9,7 +9,9 @@ import {
   GlobeIcon,
   HammerIcon,
   KeyIcon,
+  PlugIcon,
   PlusIcon,
+  RobotIcon,
   SquaresFourIcon,
 } from "@phosphor-icons/react"
 import {
@@ -48,6 +50,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
+import { PersonaAvatar } from "@/components/persona-avatar"
 import { StatusDot } from "@/components/status-badge"
 import { $api, errorMessage } from "@/lib/api/client"
 
@@ -60,6 +63,10 @@ export function AppSidebar({ env }: { env: string }) {
     { refetchInterval: 3000 }
   )
   const health = $api.useQuery("get", "/api/health")
+  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+    params: { path: { env } },
+  })
+  const owners = new Map(personas.data?.map((p) => [p.id, p.name]))
   const matchRoute = useMatchRoute()
 
   return (
@@ -122,6 +129,30 @@ export function AppSidebar({ env }: { env: string }) {
                 <span>Secrets</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Personas"
+                isActive={
+                  !!matchRoute({ to: "/e/$env/personas", params: { env } })
+                }
+                render={<Link to="/e/$env/personas" params={{ env }} />}
+              >
+                <RobotIcon />
+                <span>Personas</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Providers"
+                isActive={
+                  !!matchRoute({ to: "/e/$env/providers", params: { env } })
+                }
+                render={<Link to="/e/$env/providers" params={{ env }} />}
+              >
+                <PlugIcon />
+                <span>Providers</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>
@@ -157,7 +188,14 @@ export function AppSidebar({ env }: { env: string }) {
                       />
                     }
                   >
-                    <CubeIcon />
+                    {sb.personaId && owners.has(sb.personaId) ? (
+                      <PersonaAvatar
+                        name={owners.get(sb.personaId) ?? ""}
+                        className="size-4 text-[0.5rem]"
+                      />
+                    ) : (
+                      <CubeIcon />
+                    )}
                     <span className="truncate">{sb.name}</span>
                     <StatusDot sandbox={sb} className="ml-auto" />
                   </SidebarMenuButton>

@@ -63,6 +63,16 @@ func (r *checkpointFakeRuntime) Stop(_ context.Context, name string) error {
 	return nil
 }
 
+func (r *checkpointFakeRuntime) Pause(_ context.Context, name string) error {
+	r.setStatus(name, runtime.StatusSuspended)
+	return nil
+}
+
+func (r *checkpointFakeRuntime) Resume(_ context.Context, name string) error {
+	r.setStatus(name, runtime.StatusRunning)
+	return nil
+}
+
 func (r *checkpointFakeRuntime) Remove(_ context.Context, name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -181,7 +191,7 @@ func TestCheckpointRoutes(t *testing.T) {
 		t.Fatalf("blank checkpoint name: %d %s", rec.Code, rec.Body)
 	}
 
-	rt.setStatus(vmName, runtime.StatusPaused)
+	rt.setStatus(vmName, runtime.StatusSuspended)
 	if rec := do(h, http.MethodPost, base, `{"name":"before-edit"}`); rec.Code != http.StatusConflict {
 		t.Fatalf("create from paused state: %d %s", rec.Code, rec.Body)
 	}
@@ -270,7 +280,7 @@ func TestCheckpointRestoreRequiresStoppedSource(t *testing.T) {
 	rt.mu.Lock()
 	rt.checkpoints[sb.ID+"/"+checkpoint.ID] = true
 	rt.mu.Unlock()
-	rt.setStatus(sandboxes.VMName(sb), runtime.StatusPaused)
+	rt.setStatus(sandboxes.VMName(sb), runtime.StatusSuspended)
 
 	if rec := do(h, http.MethodPost, base+"/"+checkpoint.ID+"/restore", ""); rec.Code != http.StatusConflict {
 		t.Fatalf("restore from paused source: %d %s", rec.Code, rec.Body)
@@ -362,5 +372,25 @@ func TestDeleteCheckpointInUseConflictRetainsSourceAndCheckpoint(t *testing.T) {
 	}
 	if !snapshotExists {
 		t.Fatal("checkpoint runtime snapshot was not retained")
+	}
+}
+
+func TestSuspendSandboxEndpoint(t *testing.T) {
+	h, _, env, sb, rt := checkpointAPI(t)
+	base := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID
+	rt.setStatus(sandboxes.VMName(sb), runtime.StatusRunning)
+
+	if rec := do(h, http.MethodPost, base+"/resume", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("resume a running sandbox: %d %s", rec.Code, rec.Body)
+	}
+	rec := do(h, http.MethodPost, base+"/suspend", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"suspended"`) {
+		t.Fatalf("suspend: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, http.MethodPost, base+"/suspend", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("suspend twice: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, http.MethodPost, base+"/start", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("start a suspended sandbox: %d %s", rec.Code, rec.Body)
 	}
 }

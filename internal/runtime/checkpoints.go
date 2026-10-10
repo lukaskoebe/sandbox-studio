@@ -38,7 +38,7 @@ func (r *Runtime) CreateCheckpoint(ctx context.Context, vmName, sandboxID, check
 	if err != nil {
 		return fmt.Errorf("look up sandbox for checkpoint: %w", err)
 	}
-	if Status(h.Status()) == StatusRunning {
+	if statusOf(h.Status()) == StatusRunning {
 		var config struct {
 			Init json.RawMessage `json:"init"`
 		}

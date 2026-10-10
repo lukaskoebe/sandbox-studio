@@ -13,7 +13,9 @@ import (
 var (
 	// ErrTransferUnsupported means the runtime cannot copy workspaces between VMs.
 	ErrTransferUnsupported = errors.New("this runtime cannot copy workspaces")
-	// ErrLifecycleState means a rebase or fork found the sandbox neither running nor stopped.
+	// ErrLifecycleState means the sandbox's state does not allow the operation: rebase and
+	// fork need it running or stopped (so they refuse a suspended one), suspend needs it
+	// running, resume needs it suspended, and start refuses a suspended one.
 	ErrLifecycleState = errors.New("sandbox must be running or stopped")
 	// ErrWorkspaceTooLarge means the copied workspace does not fit the target's disk.
 	ErrWorkspaceTooLarge = errors.New("workspace does not fit the target disk")
@@ -140,7 +142,7 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 		}
 	}
 	rec, err := m.Store.CreateSandbox(ctx, store.Sandbox{
-		EnvironmentID: envID, TemplateID: sb.TemplateID, Name: name,
+		EnvironmentID: envID, TemplateID: sb.TemplateID, PersonaID: sb.PersonaID, Name: name,
 		CPUs: sb.CPUs, MemoryMiB: sb.MemoryMiB, MaxMemoryMiB: sb.MaxMemoryMiB,
 		WorkspaceMiB: sb.WorkspaceMiB, DockerMiB: sb.DockerMiB,
 	})

@@ -92,6 +92,18 @@ func (h *Hub) Close(id string) {
 	}
 }
 
+// Disconnect drops the current session of id but keeps listening, so the guest agent can
+// connect again. Its open streams, such as terminals, end.
+func (h *Hub) Disconnect(id string) {
+	h.mu.Lock()
+	c := h.sessions[id]
+	delete(h.sessions, id)
+	h.mu.Unlock()
+	if c != nil {
+		c.sess.Close()
+	}
+}
+
 func (h *Hub) accept(id string, ln net.Listener) {
 	for {
 		nc, err := ln.Accept()

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
+import { PersonaField } from "@/components/persona-field"
 import { TemplateResources } from "@/components/template-resources"
 import { $api, errorMessage } from "@/lib/api/client"
 
@@ -35,6 +36,7 @@ export function CreateTemplateSandboxDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [name, setName] = useState("")
+  const [personaId, setPersonaId] = useState("")
   const [serverError, setServerError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -53,6 +55,7 @@ export function CreateTemplateSandboxDialog({
           queryKey: ["get", "/api/environments/{env}/sandboxes"],
         })
         setName("")
+        setPersonaId("")
         setServerError(null)
         onOpenChange(false)
         navigate({
@@ -92,7 +95,7 @@ export function CreateTemplateSandboxDialog({
             setServerError(null)
             create.mutate({
               params: { path: { env, id: templateId } },
-              body: { name },
+              body: { name, personaId: personaId || undefined },
             })
           }}
         >
@@ -157,6 +160,16 @@ export function CreateTemplateSandboxDialog({
                   </FieldDescription>
                 )}
               </Field>
+              <PersonaField
+                env={env}
+                id="template-sandbox-persona"
+                value={personaId}
+                disabled={pending}
+                onChange={(id) => {
+                  setPersonaId(id)
+                  setServerError(null)
+                }}
+              />
               {serverError && (
                 <p role="alert" className="text-destructive">
                   Could not create the sandbox: {serverError}

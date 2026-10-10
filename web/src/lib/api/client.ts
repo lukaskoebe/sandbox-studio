@@ -32,6 +32,10 @@ export type BuildJob = components["schemas"]["BuildJobView"]
 export type BuildJobLog = components["schemas"]["BuildJobLog"]
 export type Template = components["schemas"]["TemplateView"]
 export type BuildJobStatus = BuildJobSummary["status"]
+export type Provider = components["schemas"]["ProviderView"]
+export type ProviderKind = Provider["kind"]
+export type Persona = components["schemas"]["Persona"]
+export type Harness = Persona["harness"]
 
 /** The message of an API problem response, or of any thrown error. */
 export function errorMessage(err: unknown): string {

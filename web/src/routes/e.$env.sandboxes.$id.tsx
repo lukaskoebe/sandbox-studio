@@ -46,8 +46,10 @@ import { ConnectionsSheet } from "@/components/connections-sheet"
 import { ExportSandboxButton } from "@/components/export-sandbox-button"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { PageHeader } from "@/components/page-header"
+import { SandboxOwner } from "@/components/persona-avatar"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { StatusBadge, phase } from "@/components/status-badge"
+import { SuspendResumeButton } from "@/components/suspend-resume-button"
 import { Terminal } from "@/components/terminal"
 import {
   $api,
@@ -98,6 +100,11 @@ function SandboxPage() {
       <PageHeader>
         <h1 className="truncate text-sm font-medium">{sb.name}</h1>
         <StatusBadge sandbox={sb} />
+        <SandboxOwner
+          env={env}
+          personaId={sb.personaId}
+          className="text-xs text-muted-foreground"
+        />
         <div className="ml-auto flex items-center gap-1">
           <ConnectionsSheet env={env} sandbox={sb} />
           <CheckpointsSheet env={env} sandbox={sb} />
@@ -127,8 +134,14 @@ function SandboxPage() {
 function Body({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   switch (phase(sb)) {
     case "ready":
+    case "suspended":
       return (
-        <Terminals key={`${sb.id}:${sb.generation}`} env={env} id={sb.id} />
+        <Terminals
+          key={`${sb.id}:${sb.generation}`}
+          env={env}
+          id={sb.id}
+          suspended={phase(sb) === "suspended"}
+        />
       )
     case "booting":
       return (
@@ -247,7 +260,8 @@ function Lifecycle({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
 
   return (
     <>
-      {(p === "ready" || p === "booting") && (
+      <SuspendResumeButton env={env} sandbox={sb} />
+      {(p === "ready" || p === "booting" || p === "suspended") && (
         <Button
           variant="ghost"
           size="sm"
@@ -410,13 +424,21 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
  * agent starts appear here too. Open terminals stay mounted while hidden, so switching tabs
  * keeps scrollback and the connection.
  */
-function Terminals({ env, id }: { env: string; id: string }) {
+function Terminals({
+  env,
+  id,
+  suspended,
+}: {
+  env: string
+  id: string
+  suspended: boolean
+}) {
   const queryClient = useQueryClient()
   const sessions = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/terminals",
     { params: { path: { env, id } } },
-    { refetchInterval: 5000 }
+    { refetchInterval: 5000, enabled: !suspended }
   )
   const [tabs, setTabs] = useState<string[]>([])
   const [closing, setClosing] = useState<ReadonlySet<string>>(new Set())
@@ -469,6 +491,18 @@ function Terminals({ env, id }: { env: string; id: string }) {
     setActive(name)
   }
 
+  if (suspended && !sessions.data) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Sandbox suspended</EmptyTitle>
+          <EmptyDescription>
+            Resume it to continue where it left off.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
+  }
   if (sessions.isPending) return <Spinner className="m-auto" />
 
   return (
@@ -532,6 +566,7 @@ function Terminals({ env, id }: { env: string; id: string }) {
             key={name}
             url={`/api/environments/${env}/sandboxes/${id}/terminals/${name}/attach`}
             active={name === active}
+            suspended={suspended}
             onExit={() => drop(name)}
           />
         ))}
