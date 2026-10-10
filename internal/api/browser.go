@@ -25,7 +25,7 @@ type browserPath struct {
 
 // BrowserPatternInput is a browser pattern to add.
 type BrowserPatternInput struct {
-	Action  string `json:"action" maxLength:"32" doc:"A browser action such as click or fill, or *; ignored for sensitive"`
+	Action  string `json:"action,omitempty" maxLength:"32" doc:"A browser action such as click or fill, or *; ignored for sensitive"`
 	Origin  string `json:"origin" minLength:"1" maxLength:"300" doc:"scheme://host[:port], *.example.com or *"`
 	Role    string `json:"role,omitempty" maxLength:"64"`
 	Label   string `json:"label,omitempty" maxLength:"200" doc:"Glob on the accessible name; * matches anything"`
@@ -51,12 +51,12 @@ func (s *Server) registerBrowser(api huma.API) {
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "getBrowser", Method: http.MethodGet, Path: "/api/environments/{env}/personas/{persona}/browser", Tags: []string{"browser"},
-	}, func(ctx context.Context, in *browserPath) (*struct{ Body browser.Status }, error) {
+	}, func(ctx context.Context, in *browserPath) (*struct{ Body browser.BrowserStatus }, error) {
 		if err := need(); err != nil {
 			return nil, err
 		}
 		st, err := s.Browser.Status(ctx, in.Env, in.Persona)
-		return &struct{ Body browser.Status }{st}, s.browserError(err)
+		return &struct{ Body browser.BrowserStatus }{st}, s.browserError(err)
 	})
 
 	type browserAction struct {
@@ -66,7 +66,7 @@ func (s *Server) registerBrowser(api huma.API) {
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "controlBrowser", Method: http.MethodPost, Path: "/api/environments/{env}/personas/{persona}/browser/{action}", Tags: []string{"browser"},
-	}, func(ctx context.Context, in *browserAction) (*struct{ Body browser.Status }, error) {
+	}, func(ctx context.Context, in *browserAction) (*struct{ Body browser.BrowserStatus }, error) {
 		if err := need(); err != nil {
 			return nil, err
 		}
@@ -80,7 +80,7 @@ func (s *Server) registerBrowser(api huma.API) {
 			return nil, s.browserError(err)
 		}
 		st, err := s.Browser.Status(ctx, in.Env, in.Persona)
-		return &struct{ Body browser.Status }{st}, s.browserError(err)
+		return &struct{ Body browser.BrowserStatus }{st}, s.browserError(err)
 	})
 
 	huma.Register(api, huma.Operation{
@@ -97,14 +97,15 @@ func (s *Server) registerBrowser(api huma.API) {
 	})
 
 	type takeoverIn struct {
-		browserPath
-		Body struct {
+		Env     string `path:"env" doc:"Environment ID"`
+		Persona string `path:"persona" doc:"Persona ID"`
+		Body    struct {
 			On bool `json:"on" doc:"true: the user drives and agent calls pause; false: hand back to the agents"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "setBrowserTakeover", Method: http.MethodPut, Path: "/api/environments/{env}/personas/{persona}/browser/takeover", Tags: []string{"browser"},
-	}, func(ctx context.Context, in *takeoverIn) (*struct{ Body browser.Status }, error) {
+	}, func(ctx context.Context, in *takeoverIn) (*struct{ Body browser.BrowserStatus }, error) {
 		if err := need(); err != nil {
 			return nil, err
 		}
@@ -112,11 +113,12 @@ func (s *Server) registerBrowser(api huma.API) {
 			return nil, s.browserError(err)
 		}
 		st, err := s.Browser.Status(ctx, in.Env, in.Persona)
-		return &struct{ Body browser.Status }{st}, s.browserError(err)
+		return &struct{ Body browser.BrowserStatus }{st}, s.browserError(err)
 	})
 
 	type actionsIn struct {
-		browserPath
+		Env     string `path:"env" doc:"Environment ID"`
+		Persona string `path:"persona" doc:"Persona ID"`
 		Session string `query:"session" doc:"Only this session's actions"`
 		Limit   int    `query:"limit" minimum:"1" maximum:"500" default:"200"`
 	}
@@ -142,8 +144,9 @@ func (s *Server) registerBrowser(api huma.API) {
 	})
 
 	type patternIn struct {
-		browserPath
-		Body BrowserPatternInput
+		Env     string `path:"env" doc:"Environment ID"`
+		Persona string `path:"persona" doc:"Persona ID"`
+		Body    BrowserPatternInput
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "createBrowserPattern", Method: http.MethodPost, Path: "/api/environments/{env}/personas/{persona}/browser/patterns", Tags: []string{"browser"},
@@ -158,8 +161,9 @@ func (s *Server) registerBrowser(api huma.API) {
 	})
 
 	type patternPath struct {
-		browserPath
-		ID string `path:"id" doc:"Pattern ID"`
+		Env     string `path:"env" doc:"Environment ID"`
+		Persona string `path:"persona" doc:"Persona ID"`
+		ID      string `path:"id" doc:"Pattern ID"`
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteBrowserPattern", Method: http.MethodDelete, Path: "/api/environments/{env}/personas/{persona}/browser/patterns/{id}", Tags: []string{"browser"},

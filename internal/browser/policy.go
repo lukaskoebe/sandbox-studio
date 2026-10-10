@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -161,9 +162,15 @@ func CheckPattern(p store.BrowserPattern) (store.BrowserPattern, error) {
 		return p, ErrBadPattern
 	}
 	if p.Origin != "*" {
-		s, h, _ := splitOrigin(p.Origin)
+		s, h, port := splitOrigin(p.Origin)
 		if s != "" && s != "http" && s != "https" {
 			return p, ErrBadPattern
+		}
+		if n, err := strconv.Atoi(port); port != "" && (err != nil || n < 1 || n > 65535) {
+			return p, ErrBadPattern
+		}
+		if rest := strings.TrimPrefix(p.Origin, s+"://"); strings.ContainsAny(rest, "/?#@") {
+			return p, ErrBadPattern // an origin, not a URL
 		}
 		if _, err := policy.ValidPattern(h); err != nil || h == "*" {
 			return p, ErrBadPattern

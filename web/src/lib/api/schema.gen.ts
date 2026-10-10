@@ -1328,6 +1328,22 @@ export interface components {
             /** @enum {string} */
             verdict: "allow" | "deny" | "sensitive";
         };
+        BrowserStatus: {
+            /** @description Name of the agent sandbox that drove the browser last */
+            driver?: string;
+            personaId: string;
+            /** @description The current run's session in the action log */
+            sessionId?: string;
+            /** @description The user drives; agent calls are paused */
+            takeover: boolean;
+            /** @description The page the broker last saw */
+            url?: string;
+            /**
+             * @description State of the browser VM
+             * @enum {string}
+             */
+            vm: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed";
+        };
         Budget: {
             /**
              * Format: int64
@@ -2233,22 +2249,6 @@ export interface components {
             kind: "user" | "verified" | "document" | "inferred" | "consolidation";
             scope: string;
             sessionRef?: string;
-        };
-        Status: {
-            /** @description Name of the agent sandbox that drove the browser last */
-            driver?: string;
-            personaId: string;
-            /** @description The current run's session in the action log */
-            sessionId?: string;
-            /** @description The user drives; agent calls are paused */
-            takeover: boolean;
-            /** @description The page the broker last saw */
-            url?: string;
-            /**
-             * @description State of the browser VM
-             * @enum {string}
-             */
-            vm: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed";
         };
         SubmitInBody: {
             /** @description Template specification in YAML */
@@ -3893,7 +3893,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Status"];
+                    "application/json": components["schemas"]["BrowserStatus"];
                 };
             };
             /** @description Error */
@@ -3947,7 +3947,12 @@ export interface operations {
                 limit?: number;
             };
             header?: never;
-            path?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -4010,7 +4015,12 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -4044,6 +4054,10 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
                 /** @description Pattern ID */
                 id: string;
             };
@@ -4073,7 +4087,12 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Persona ID */
+                persona: string;
+            };
             cookie?: never;
         };
         requestBody: {
@@ -4088,7 +4107,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Status"];
+                    "application/json": components["schemas"]["BrowserStatus"];
                 };
             };
             /** @description Error */
@@ -4124,7 +4143,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Status"];
+                    "application/json": components["schemas"]["BrowserStatus"];
                 };
             };
             /** @description Error */

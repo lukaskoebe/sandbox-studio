@@ -336,6 +336,50 @@
         ],
         "type": "object"
       },
+      "BrowserStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "driver": {
+            "description": "Name of the agent sandbox that drove the browser last",
+            "type": "string"
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "sessionId": {
+            "description": "The current run's session in the action log",
+            "type": "string"
+          },
+          "takeover": {
+            "description": "The user drives; agent calls are paused",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "The page the broker last saw",
+            "type": "string"
+          },
+          "vm": {
+            "description": "State of the browser VM",
+            "enum": [
+              "absent",
+              "created",
+              "starting",
+              "running",
+              "draining",
+              "suspended",
+              "stopped",
+              "crashed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "personaId",
+          "vm",
+          "takeover"
+        ],
+        "type": "object"
+      },
       "Budget": {
         "additionalProperties": false,
         "properties": {
@@ -3087,50 +3131,6 @@
           "scope",
           "kind",
           "createdAt"
-        ],
-        "type": "object"
-      },
-      "Status": {
-        "additionalProperties": false,
-        "properties": {
-          "driver": {
-            "description": "Name of the agent sandbox that drove the browser last",
-            "type": "string"
-          },
-          "personaId": {
-            "type": "string"
-          },
-          "sessionId": {
-            "description": "The current run's session in the action log",
-            "type": "string"
-          },
-          "takeover": {
-            "description": "The user drives; agent calls are paused",
-            "type": "boolean"
-          },
-          "url": {
-            "description": "The page the broker last saw",
-            "type": "string"
-          },
-          "vm": {
-            "description": "State of the browser VM",
-            "enum": [
-              "absent",
-              "created",
-              "starting",
-              "running",
-              "draining",
-              "suspended",
-              "stopped",
-              "crashed"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "personaId",
-          "vm",
-          "takeover"
         ],
         "type": "object"
       },
@@ -5968,7 +5968,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Status"
+                  "$ref": "#/components/schemas/BrowserStatus"
                 }
               }
             },
@@ -5995,6 +5995,26 @@
         "description": "The browser's action log, newest first. Screenshots are at .../actions/{id}/screenshot.",
         "operationId": "listBrowserActions",
         "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          },
           {
             "description": "Only this session's actions",
             "explode": false,
@@ -6110,6 +6130,28 @@
       },
       "post": {
         "operationId": "createBrowserPattern",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -6152,6 +6194,26 @@
         "operationId": "deleteBrowserPattern",
         "parameters": [
           {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          },
+          {
             "description": "Pattern ID",
             "in": "path",
             "name": "id",
@@ -6185,6 +6247,28 @@
     "/api/environments/{env}/personas/{persona}/browser/takeover": {
       "put": {
         "operationId": "setBrowserTakeover",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Persona ID",
+            "in": "path",
+            "name": "persona",
+            "required": true,
+            "schema": {
+              "description": "Persona ID",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -6200,7 +6284,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Status"
+                  "$ref": "#/components/schemas/BrowserStatus"
                 }
               }
             },
@@ -6266,7 +6350,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Status"
+                  "$ref": "#/components/schemas/BrowserStatus"
                 }
               }
             },

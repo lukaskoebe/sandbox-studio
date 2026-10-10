@@ -83,8 +83,8 @@ func (s *Service) decideCredentialKind(ctx context.Context, a store.Approval, d 
 	return s.decideCredential(ctx, a, status == store.StatusApproved)
 }
 
-// Status is the state of a persona's browser, for the Browser page.
-type Status struct {
+// BrowserStatus is the state of a persona's browser, for the Browser page.
+type BrowserStatus struct {
 	PersonaID string `json:"personaId"`
 	VM        string `json:"vm" enum:"absent,created,starting,running,draining,suspended,stopped,crashed" doc:"State of the browser VM"`
 	Takeover  bool   `json:"takeover" doc:"The user drives; agent calls are paused"`
@@ -94,15 +94,15 @@ type Status struct {
 }
 
 // Status reports a persona's browser.
-func (s *Service) Status(ctx context.Context, envID, personaID string) (Status, error) {
+func (s *Service) Status(ctx context.Context, envID, personaID string) (BrowserStatus, error) {
 	if _, err := s.Store.Persona(ctx, envID, personaID); err != nil {
-		return Status{}, err
+		return BrowserStatus{}, err
 	}
 	_, vm, err := s.VMs.BrowserStatus(ctx, envID, personaID)
 	if err != nil {
-		return Status{}, err
+		return BrowserStatus{}, err
 	}
-	out := Status{PersonaID: personaID, VM: string(vm)}
+	out := BrowserStatus{PersonaID: personaID, VM: string(vm)}
 	s.mu.Lock()
 	if st := s.states[personaID]; st != nil && st.env == envID {
 		out.Takeover, out.SessionID, out.URL, out.Driver = st.takeover, st.session, st.url, st.driver.Name

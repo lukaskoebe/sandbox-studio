@@ -90,6 +90,9 @@ func TestCheckPattern(t *testing.T) {
 		{Verdict: "allow", Action: "click", Origin: "javascript://example.com"},
 		{Verdict: "allow", Action: "click", Origin: "https://exa mple.com"},
 		{Verdict: "sensitive", Action: "*", Origin: "*"},
+		{Verdict: "allow", Action: "click", Origin: "javascript:alert(1)"},
+		{Verdict: "allow", Action: "click", Origin: "https://example.com/path"},
+		{Verdict: "allow", Action: "click", Origin: "https://user@example.com"},
 	}
 	for _, p := range bad {
 		if _, err := CheckPattern(p); err == nil {
