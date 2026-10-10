@@ -1,7 +1,7 @@
 # Personas and providers
 
-Both belong to one environment. Harness adapters, which turn a persona into config files
-inside a sandbox, come later (PLAN.md §6.6).
+Both belong to one environment. Harness adapters turn a persona into config files inside
+its sandboxes when an agent session starts (`docs/harnesses.md`).
 
 ## Providers
 
