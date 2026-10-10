@@ -43,6 +43,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { CheckpointsSheet } from "@/components/checkpoints-sheet"
 import { ConnectionsSheet } from "@/components/connections-sheet"
+import { ExportSandboxButton } from "@/components/export-sandbox-button"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge, phase } from "@/components/status-badge"
 import { Terminal } from "@/components/terminal"
@@ -98,6 +99,7 @@ function SandboxPage() {
         <div className="ml-auto flex items-center gap-1">
           <ConnectionsSheet env={env} sandbox={sb} />
           <CheckpointsSheet env={env} sandbox={sb} />
+          <ExportSandboxButton env={env} sandbox={sb} />
           {isReady(sb) && <Previews env={env} sandbox={sb} />}
           <Lifecycle env={env} sandbox={sb} />
         </div>

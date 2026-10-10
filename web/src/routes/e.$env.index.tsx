@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { CubeIcon, PlusIcon } from "@phosphor-icons/react"
+import { CubeIcon, PlusIcon, UploadSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
+import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
 import { $api } from "@/lib/api/client"
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/e/$env/")({ component: Overview })
 function Overview() {
   const { env } = Route.useParams()
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
   const sandboxes = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes",
@@ -39,7 +41,16 @@ function Overview() {
     <>
       <PageHeader>
         <h1 className="text-sm font-medium">Sandboxes</h1>
-        <Button size="sm" className="ml-auto" onClick={() => setCreating(true)}>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          onClick={() => setImporting(true)}
+        >
+          <UploadSimpleIcon />
+          Import sandbox
+        </Button>
+        <Button size="sm" onClick={() => setCreating(true)}>
           <PlusIcon />
           New sandbox
         </Button>
@@ -98,6 +109,11 @@ function Overview() {
         env={env}
         open={creating}
         onOpenChange={setCreating}
+      />
+      <ImportSandboxDialog
+        env={env}
+        open={importing}
+        onOpenChange={setImporting}
       />
     </>
   )
