@@ -51,6 +51,7 @@ type Server struct {
 	// Integrations settle the approvals they raise; Git is the git review remote among them.
 	Integrations integrations.Set
 	Git          *gitreview.Service
+	System       System
 }
 
 // BuildService is the optional durable template-build backend. Keeping this
@@ -77,6 +78,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerPersonas(api)
 	s.registerSessions(api)
 	s.registerForges(api)
+	s.registerSystem(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	return api

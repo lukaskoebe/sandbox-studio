@@ -303,7 +303,7 @@ func checkData(p Probes, dir string) []Check {
 func checkPort(p Probes, addr string, owned bool) Check {
 	c := Check{ID: "port:" + addr, Name: "Port " + addr}
 	if owned {
-		return c.with(OK, addr+" is in use by this Studio.", "")
+		return c.with(OK, addr+" is in use by Studio.", "")
 	}
 	if p.PortFree == nil {
 		return c.with(Warn, addr+" was not checked.", "")

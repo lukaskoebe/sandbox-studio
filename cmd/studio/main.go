@@ -3,6 +3,9 @@
 //	studio            run the server
 //	studio openapi    print the API description (used to generate the web client types)
 //	studio login-url  print a fresh one-time browser login link
+//	studio doctor     check that this host can run Studio
+//	studio autostart enable|disable|status
+//	                  start Studio at login (a user-scope entry; off by default)
 package main
 
 import (
@@ -23,9 +26,11 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
+	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
@@ -40,6 +45,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatebuild"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
+	"github.com/lukaskoebe/sandbox-studio/internal/updates"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 	"github.com/lukaskoebe/sandbox-studio/internal/webui"
@@ -58,6 +64,12 @@ func main() {
 			os.Exit(1)
 		}
 		return
+	}
+	switch flag.Arg(0) {
+	case "doctor":
+		os.Exit(runDoctor(os.Stdout, *addr, *image))
+	case "autostart":
+		os.Exit(runAutostart(os.Stdout, flag.Args()[1:]))
 	}
 	if flag.Arg(0) == "login-url" {
 		link, err := requestLoginURL(context.Background(), *addr)
@@ -82,7 +94,12 @@ const gatewayAddr = "127.0.0.1:7879"
 // Template image references persist this address; never silently select a new port.
 const templateRegistryAddr = "127.0.0.1:7880"
 
+// defaultImage is the digest-pinned base image set by the release build
+// (-X .../version.BaseImage=ghcr.io/...@sha256:...), else the image for this version.
 func defaultImage() string {
+	if version.BaseImage != "" {
+		return version.BaseImage
+	}
 	if version.Version == "dev" {
 		return "sandbox-studio-base:dev" // built locally with `make image`
 	}
@@ -107,6 +124,7 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := p.Ensure(); err != nil {
 		return err
 	}
+	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false))
 	if err := agentbin.Install(p.Guest(), goruntime.GOARCH); err != nil {
 		return err
 	}
@@ -240,9 +258,18 @@ func run(addr, image string, log *slog.Logger) error {
 		}
 	}()
 
+	checker := &updates.Checker{Settings: st, Current: version.Version, Log: log}
+	go checker.Run(ctx)
+	system := api.System{Updates: checker, Doctor: func(ctx context.Context) doctor.Report {
+		return doctorCheck(ctx, p.Data, image, addr, true)
+	}}
+	if system.Autostart, err = autostart.Default(); err != nil {
+		log.Warn("autostart is unavailable", "err", err)
+	}
+
 	mux := http.NewServeMux()
 	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, Log: log, Addr: addr,
-		Integrations: integs, Git: gitRemote}).Register(mux)
+		Integrations: integs, Git: gitRemote, System: system}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 
