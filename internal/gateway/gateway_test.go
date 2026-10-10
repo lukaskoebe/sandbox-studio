@@ -284,3 +284,38 @@ func TestPublicAddresses(t *testing.T) {
 		t.Fatalf("unexpected error type %T", err)
 	}
 }
+
+// A browser VM's connections are decided as the sandbox driving it; a driver in another
+// environment is ignored.
+func TestDriverDecides(t *testing.T) {
+	h := newHarness(t, "")
+	driver := store.Sandbox{ID: "agent1", EnvironmentID: "env", Name: "agent"}
+	h.gw.Driver = func(_ context.Context, sb store.Sandbox) store.Sandbox {
+		if sb.ID != "sb1" {
+			t.Errorf("driver asked for %s", sb.ID)
+		}
+		return driver
+	}
+	ask := func() policy.Request {
+		c, err := h.dial(t, Password([]byte("key"), "sb1"), "192.0.2.1:80")
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Write([]byte("GET / HTTP/1.1\r\nHost: unknown.example\r\n\r\n"))
+		io.ReadAll(c)
+		c.Close()
+		h.policy.mu.Lock()
+		defer h.policy.mu.Unlock()
+		return h.policy.asked[len(h.policy.asked)-1]
+	}
+	if req := ask(); req.SandboxID != "agent1" || req.SandboxName != "agent" {
+		t.Fatalf("decided as %+v", req)
+	}
+	driver = store.Sandbox{ID: "other", EnvironmentID: "env2"}
+	if req := ask(); req.SandboxID != "sb1" {
+		t.Fatalf("cross-environment driver used: %+v", req)
+	}
+	if log := h.gw.Conns.List("sb1"); len(log) != 2 {
+		t.Fatalf("connections are logged for the browser VM: %+v", log)
+	}
+}

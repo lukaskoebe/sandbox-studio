@@ -406,7 +406,7 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 	}
 	public := recs[:0]
 	for _, rec := range recs {
-		if rec.BuildJobID == "" {
+		if Public(rec) {
 			public = append(public, rec)
 		}
 	}
@@ -574,20 +574,25 @@ func (m *Manager) PublicSandbox(ctx context.Context, envID, id string) (store.Sa
 	if err != nil {
 		return store.Sandbox{}, err
 	}
-	if sb.BuildJobID != "" {
+	if !Public(sb) {
 		return store.Sandbox{}, store.ErrNotFound
 	}
 	return sb, nil
 }
 
+// Public reports whether a sandbox is part of the user-facing sandbox API. Build VMs and
+// browser VMs are not: Studio drives them, and nothing else may reach them.
+func Public(sb store.Sandbox) bool { return sb.BuildJobID == "" && sb.Kind == "" }
+
 // DialPreviewTCP connects to a public sandbox's loopback port over its guest-agent
-// channel. Build VMs remain private even when their IDs are supplied as preview hosts.
+// channel. Build and browser VMs remain private even when their IDs are supplied as
+// preview hosts: a preview of a browser VM would expose its DevTools and live-view ports.
 func (m *Manager) DialPreviewTCP(ctx context.Context, sandboxID string, port int) (net.Conn, error) {
 	sb, err := m.Store.LookupSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	if sb.BuildJobID != "" {
+	if !Public(sb) {
 		return nil, store.ErrNotFound
 	}
 	return m.Hub.DialTCP(ctx, sandboxID, port)

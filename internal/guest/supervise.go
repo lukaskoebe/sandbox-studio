@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -219,6 +220,11 @@ func Supervise(ctx context.Context, log *slog.Logger, self string, lock *os.File
 		},
 		{name: "agent", path: self, args: []string{"connect"}},
 	}
+	// The browser image has no Docker; its VM runs only the agent.
+	services = slices.DeleteFunc(services, func(s service) bool {
+		_, err := os.Stat(s.path)
+		return err != nil
+	})
 	return superviseAll(ctx, log, serviceLogDir, services, time.Second)
 }
 

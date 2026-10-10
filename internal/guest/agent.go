@@ -164,6 +164,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.homeFiles(st, br)
 	case agentproto.KindStartSession:
 		err = a.startSession(st, br)
+	case agentproto.KindBrowser:
+		err = a.browser(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}

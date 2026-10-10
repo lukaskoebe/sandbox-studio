@@ -7,6 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -31,7 +32,7 @@ func (s *Server) publicSandbox(ctx context.Context, envID, sandboxID string) (st
 	if err != nil {
 		return store.Sandbox{}, err
 	}
-	if sb.BuildJobID != "" {
+	if !sandboxes.Public(sb) {
 		return store.Sandbox{}, store.ErrNotFound
 	}
 	return sb, nil

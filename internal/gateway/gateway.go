@@ -57,6 +57,10 @@ type Gateway struct {
 	Caddy *caddyrule.Engine
 	// Virtual are Studio's own services under dnsproxy.VirtualDomain.
 	Virtual []VirtualHost
+	// Driver, if set, names the sandbox whose rules decide a sandbox's connections. A
+	// persona's browser VM is decided by the agent sandbox driving it, or by its persona
+	// while the user drives (internal/browser).
+	Driver func(ctx context.Context, sb store.Sandbox) store.Sandbox
 
 	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
 	upstreamRoots *x509.CertPool               // replaces the system roots in tests
@@ -169,8 +173,14 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 
+	decider := sb
+	if g.Driver != nil {
+		if d := g.Driver(context.Background(), sb); d.EnvironmentID == sb.EnvironmentID {
+			decider = d
+		}
+	}
 	rule, err := g.Policy.Decide(context.Background(), policy.Request{
-		EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, SandboxName: sb.Name, Host: host, Port: port,
+		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name, Host: host, Port: port,
 	})
 	ruleID = rule.ID
 	switch {

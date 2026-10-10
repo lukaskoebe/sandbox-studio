@@ -12,6 +12,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/personas"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -77,7 +78,7 @@ func (s *Server) registerSessions(api huma.API) {
 // sessionSandbox returns a sandbox agent sessions can use; build VMs are never exposed.
 func (s *Server) sessionSandbox(ctx context.Context, envID, id string) (store.Sandbox, error) {
 	sb, err := s.Store.Sandbox(ctx, envID, id)
-	if err == nil && sb.BuildJobID != "" {
+	if err == nil && !sandboxes.Public(sb) {
 		err = store.ErrNotFound
 	}
 	return sb, apiError(err)

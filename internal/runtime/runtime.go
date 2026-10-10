@@ -58,8 +58,11 @@ type Spec struct {
 	DockerMiB    uint32
 	// Image selects a private, environment-scoped image source for internal
 	// builder VMs. It is host-side SDK configuration and is never serialized.
-	Image  *ImageSource `json:"-"`
-	Egress Egress
+	Image *ImageSource `json:"-"`
+	// BaseImage replaces Options.Image for this sandbox: the browser VM runs the browser
+	// image. Image wins over it.
+	BaseImage string `json:"-"`
+	Egress    Egress
 }
 
 // ImageSource contains host-side credentials and a private immutable image
@@ -158,8 +161,12 @@ func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocke
 		DNS:            &msb.DNSConfig{Nameservers: []string{spec.Egress.Nameserver}},
 	}
 	proxy := msb.SOCKS5Proxy(spec.Egress.Proxy).Credentials(spec.Egress.User, msb.SecretSourceEnv(spec.Egress.PasswordEnv))
+	image := r.opts.Image
+	if spec.BaseImage != "" {
+		image = spec.BaseImage
+	}
 	options := []msb.SandboxOption{
-		msb.WithImage(r.opts.Image),
+		msb.WithImage(image),
 		msb.WithCPUs(spec.CPUs),
 		msb.WithMemory(spec.MemoryMiB),
 		msb.WithMaxMemory(maxMemoryMiB),
