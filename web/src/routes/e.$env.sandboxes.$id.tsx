@@ -45,6 +45,7 @@ import { CheckpointsSheet } from "@/components/checkpoints-sheet"
 import { ConnectionsSheet } from "@/components/connections-sheet"
 import { ExportSandboxButton } from "@/components/export-sandbox-button"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
+import { AgentSessions } from "@/components/agent-sessions"
 import { PageHeader } from "@/components/page-header"
 import { SandboxOwner } from "@/components/persona-avatar"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
@@ -67,6 +68,8 @@ export const Route = createFileRoute("/e/$env/sandboxes/$id")({
 
 function SandboxPage() {
   const { env, id } = Route.useParams()
+  // The terminal tab an agent session asked to show; seq makes repeated asks count.
+  const [focus, setFocus] = useState<Focus | null>(null)
   const sandbox = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}",
@@ -106,6 +109,16 @@ function SandboxPage() {
           className="text-xs text-muted-foreground"
         />
         <div className="ml-auto flex items-center gap-1">
+          {sb.personaId && isReady(sb) && (
+            <AgentSessions
+              env={env}
+              id={sb.id}
+              personaId={sb.personaId}
+              onAttach={(name) =>
+                setFocus((f) => ({ name, seq: (f?.seq ?? 0) + 1 }))
+              }
+            />
+          )}
           <ConnectionsSheet env={env} sandbox={sb} />
           <CheckpointsSheet env={env} sandbox={sb} />
           <ExportSandboxButton env={env} sandbox={sb} />
@@ -125,13 +138,23 @@ function SandboxPage() {
             Sandbox status refresh failed. Retrying…
           </div>
         )}
-        <Body env={env} sandbox={sb} />
+        <Body env={env} sandbox={sb} focus={focus} />
       </div>
     </>
   )
 }
 
-function Body({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
+type Focus = { name: string; seq: number }
+
+function Body({
+  env,
+  sandbox: sb,
+  focus,
+}: {
+  env: string
+  sandbox: Sandbox
+  focus: Focus | null
+}) {
   switch (phase(sb)) {
     case "ready":
     case "suspended":
@@ -141,6 +164,7 @@ function Body({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           env={env}
           id={sb.id}
           suspended={phase(sb) === "suspended"}
+          focus={focus}
         />
       )
     case "booting":
@@ -428,10 +452,12 @@ function Terminals({
   env,
   id,
   suspended,
+  focus,
 }: {
   env: string
   id: string
   suspended: boolean
+  focus: Focus | null
 }) {
   const queryClient = useQueryClient()
   const sessions = $api.useQuery(
@@ -477,6 +503,15 @@ function Terminals({
   useEffect(() => {
     if (!active || !tabs.includes(active)) setActive(tabs.at(-1) ?? null)
   }, [tabs, active])
+
+  // An agent session to show: open its tab if needed and select it.
+  useEffect(() => {
+    if (!focus) return
+    setTabs((prev) =>
+      prev.includes(focus.name) ? prev : [...prev, focus.name]
+    )
+    setActive(focus.name)
+  }, [focus])
 
   const drop = (name: string) => {
     setClosing((prev) => new Set(prev).add(name))
