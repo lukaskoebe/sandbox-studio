@@ -19,16 +19,19 @@ const theme = {
 /**
  * One tmux session in the guest, attached over a websocket. Binary messages carry terminal
  * bytes; text messages are control messages. The connection is retried until the session
- * ends, so a Studio restart or a sandbox reboot only shows a short notice.
+ * ends, so a Studio restart or a sandbox reboot only shows a short notice. While the sandbox
+ * is suspended the terminal parks instead of retrying, and reattaches on resume.
  */
 export function Terminal({
   url,
   active,
+  suspended = false,
   onExit,
   className,
 }: {
   url: string
   active: boolean
+  suspended?: boolean
   onExit: () => void
   className?: string
 }) {
@@ -37,6 +40,8 @@ export function Terminal({
   const termRef = useRef<XTerm>(null)
   const onExitRef = useRef(onExit)
   onExitRef.current = onExit
+  const suspendedRef = useRef(suspended)
+  const parkRef = useRef<(suspended: boolean) => void>(null)
 
   useEffect(() => {
     const el = container.current
@@ -68,26 +73,38 @@ export function Terminal({
     let disposed = false
     let retry: ReturnType<typeof setTimeout> | undefined
     let attempts = 0
+    let parked = false
+
+    const park = () => {
+      if (parked) return
+      parked = true
+      clearTimeout(retry)
+      term.write("\r\n\x1b[2m[Sandbox suspended]\x1b[0m\r\n")
+    }
 
     const send = (data: string | Uint8Array<ArrayBuffer>) => {
       if (ws?.readyState === WebSocket.OPEN) ws.send(data)
     }
     const connect = () => {
+      if (suspendedRef.current) return park()
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
-      ws = new WebSocket(
+      const sock = new WebSocket(
         `${proto}//${window.location.host}${url}?cols=${term.cols}&rows=${term.rows}`
       )
-      ws.binaryType = "arraybuffer"
-      ws.onopen = () => {
+      ws = sock
+      sock.binaryType = "arraybuffer"
+      sock.onopen = () => {
         attempts = 0
       }
-      ws.onmessage = (e) => term.write(new Uint8Array(e.data as ArrayBuffer))
-      ws.onclose = (e) => {
-        if (disposed) return
+      sock.onmessage = (e) => term.write(new Uint8Array(e.data as ArrayBuffer))
+      sock.onclose = (e) => {
+        // A socket closed by park() may report after resume opened its successor.
+        if (disposed || ws !== sock) return
         if (e.code === 1000 && e.reason === "exited") {
           onExitRef.current()
           return
         }
+        if (suspendedRef.current) return park()
         if (attempts === 0)
           term.write("\r\n\x1b[2m[connection lost, reconnecting…]\x1b[0m\r\n")
         attempts++
@@ -114,8 +131,20 @@ export function Terminal({
       }
     })
     observer.observe(el)
+    parkRef.current = (on) => {
+      if (on) {
+        if (!started) return
+        park()
+        ws?.close()
+      } else if (parked) {
+        parked = false
+        attempts = 0
+        connect()
+      }
+    }
 
     return () => {
+      parkRef.current = null
       disposed = true
       clearTimeout(retry)
       observer.disconnect()
@@ -124,6 +153,11 @@ export function Terminal({
       term.dispose()
     }
   }, [url])
+
+  useEffect(() => {
+    suspendedRef.current = suspended
+    parkRef.current?.(suspended)
+  }, [suspended])
 
   useEffect(() => {
     if (!active) return
