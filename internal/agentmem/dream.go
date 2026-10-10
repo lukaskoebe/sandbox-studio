@@ -118,7 +118,11 @@ func scanRun(row interface{ Scan(...any) error }) (DreamRun, error) {
 }
 
 // DreamRuns lists the latest runs of an environment, of one scope if scope is set.
+// limit defaults to 20.
 func (s *Service) DreamRuns(ctx context.Context, env, scope string, limit int) ([]DreamRun, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 20
+	}
 	q, args := "SELECT "+runCols+" FROM memory_dream_runs WHERE environment_id = ?", []any{env}
 	if scope != "" {
 		if err := memory.ValidateScope(scope); err != nil {

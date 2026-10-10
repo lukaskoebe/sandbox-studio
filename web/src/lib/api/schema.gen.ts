@@ -200,6 +200,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/memory/conflicts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A conflict with both facts' sources and their timeline. */
+        get: operations["getMemoryConflict"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/memory/conflicts/{id}/resolve": {
         parameters: {
             query?: never;
@@ -209,8 +226,42 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Records the decision only; the facts are not changed. Edit or retract them separately. */
+        /** @description Applies the decision to both facts, which changes recall, and closes the conflict's approval. */
         post: operations["resolveMemoryConflict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/dream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Consolidates one scope now: merges duplicates, judges related facts, supersedes or opens conflicts and recompiles entity pages. 409 while a dream of the scope runs. */
+        post: operations["startMemoryDream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/dreams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Dream runs with their stats, newest first. */
+        get: operations["listMemoryDreams"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -245,6 +296,23 @@ export interface paths {
         put: operations["updateMemoryFact"];
         post?: never;
         delete: operations["deleteMemoryFact"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/facts/{id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Proposes a persona's fact for shared memory through a memory.share approval. */
+        post: operations["promoteMemoryFact"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1018,6 +1086,8 @@ export interface components {
             git?: components["schemas"]["GitDetail"];
             id: string;
             kind: string;
+            /** @description Two facts that disagree */
+            memoryConflict?: components["schemas"]["ConflictPayload"];
             /** @description A persona's proposal for shared memory */
             memoryShare?: components["schemas"]["SharePayload"];
             network?: components["schemas"]["NetworkRequest"];
@@ -1096,20 +1166,81 @@ export interface components {
             when: string;
         };
         Conflict: {
+            /** @description The memory.conflict approval in the inbox */
+            approvalId?: string;
             /** Format: date-time */
             createdAt: string;
             factA: components["schemas"]["Fact"];
             factB: components["schemas"]["Fact"];
             id: string;
             note?: string;
+            /** @description The judge's reasons */
+            reason?: string;
             /** @enum {string} */
-            resolution?: "keep_a" | "keep_b" | "keep_both" | "dismiss";
+            resolution?: "keep_a" | "keep_b" | "keep_both" | "edit";
             /** Format: date-time */
             resolvedAt?: string;
             /** @enum {string} */
             status: "open" | "resolved";
-            /** @enum {string} */
+            /**
+             * @description temporal_supersession: B looks like a newer value of A but has a lower tier or another scope, so it is not applied automatically
+             * @enum {string}
+             */
             verdict: "contradiction" | "temporal_supersession" | "context_dependent" | "duplicate";
+        };
+        ConflictDetail: {
+            /** @description The memory.conflict approval in the inbox */
+            approvalId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            factA: components["schemas"]["Fact"];
+            factB: components["schemas"]["Fact"];
+            id: string;
+            note?: string;
+            /** @description The judge's reasons */
+            reason?: string;
+            /** @enum {string} */
+            resolution?: "keep_a" | "keep_b" | "keep_both" | "edit";
+            /** Format: date-time */
+            resolvedAt?: string;
+            sourcesA: components["schemas"]["Source"][] | null;
+            sourcesB: components["schemas"]["Source"][] | null;
+            /** @enum {string} */
+            status: "open" | "resolved";
+            /** @description Timeline entries about either fact, oldest first */
+            timeline: components["schemas"]["TimelineEntry"][] | null;
+            /**
+             * @description temporal_supersession: B looks like a newer value of A but has a lower tier or another scope, so it is not applied automatically
+             * @enum {string}
+             */
+            verdict: "contradiction" | "temporal_supersession" | "context_dependent" | "duplicate";
+        };
+        ConflictPayload: {
+            conflictId: string;
+            factA: components["schemas"]["ConflictSide"];
+            factB: components["schemas"]["ConflictSide"];
+            reason?: string;
+            verdict: string;
+        };
+        ConflictResolution: {
+            note?: string;
+            /**
+             * @description keep_a or keep_b retracts the other fact; keep_both keeps both, optionally qualified ("in project X, …"); edit replaces both with text
+             * @enum {string}
+             */
+            resolution: "keep_a" | "keep_b" | "keep_both" | "edit";
+            /** @description edit: the fact that replaces both */
+            text?: string;
+            /** @description keep_both: a qualified rewrite of A */
+            textA?: string;
+            /** @description keep_both: a qualified rewrite of B */
+            textB?: string;
+        };
+        ConflictSide: {
+            id: string;
+            scope: string;
+            text: string;
+            tier: string;
         };
         Conn: {
             /** @description The destination as the sandbox asked for it */
@@ -1210,6 +1341,93 @@ export interface components {
              * @enum {string}
              */
             scope: "sandbox" | "persona" | "environment";
+        };
+        DreamInBody: {
+            /** @description shared or persona:<id> */
+            scope: string;
+        };
+        DreamRun: {
+            /** Format: date-time */
+            finishedAt?: string;
+            id: string;
+            note?: string;
+            /**
+             * Format: int64
+             * @description Times an interrupted run was picked up again
+             */
+            resumes: number;
+            scope: string;
+            /** Format: date-time */
+            startedAt: string;
+            stats: components["schemas"]["DreamStats"];
+            /**
+             * @description stopped: the budget or the pair limit ended it early; the next run continues
+             * @enum {string}
+             */
+            status: "running" | "done" | "stopped" | "failed";
+            /** @enum {string} */
+            trigger: "nightly" | "facts" | "manual";
+            /**
+             * Format: date-time
+             * @description …to here (both included) are new to this run
+             */
+            windowEnd: string;
+            /**
+             * Format: date-time
+             * @description Facts created from here…
+             */
+            windowStart: string;
+        };
+        DreamStats: {
+            /**
+             * Format: int64
+             * @description Pairs answered from earlier verdicts
+             */
+            cached: number;
+            /**
+             * Format: int64
+             * @description Conflicts opened for the user
+             */
+            conflicts: number;
+            /** Format: int64 */
+            costMicros: number;
+            /**
+             * Format: int64
+             * @description New facts in the run's window
+             */
+            facts: number;
+            /** Format: int64 */
+            inputTokens: number;
+            /**
+             * Format: int64
+             * @description Pairs the utility model judged
+             */
+            judged: number;
+            /**
+             * Format: int64
+             * @description Near-duplicates merged
+             */
+            merged: number;
+            model?: string;
+            /** Format: int64 */
+            outputTokens: number;
+            /**
+             * Format: int64
+             * @description Entity pages created or regenerated
+             */
+            pages: number;
+            /**
+             * Format: int64
+             * @description Pairs of related facts to judge
+             */
+            pairs: number;
+            /**
+             * Format: int64
+             * @description Judge answers rejected as malformed; nothing was changed for them
+             */
+            rejected: number;
+            /** Format: int64 */
+            superseded: number;
         };
         Environment: {
             /** Format: date-time */
@@ -1393,6 +1611,8 @@ export interface components {
             disputed?: boolean;
             fact?: components["schemas"]["Fact"];
             id: string;
+            /** @description A shared fact this persona fact has an open conflict with; the shared fact wins until the user resolves it */
+            overriddenBy?: string;
             page?: components["schemas"]["Page"];
             scope: string;
             /** Format: double */
@@ -1591,11 +1811,6 @@ export interface components {
             /** @description A ready template in the same environment */
             templateId: string;
         };
-        ResolveInBody: {
-            note?: string;
-            /** @enum {string} */
-            resolution: "keep_a" | "keep_b" | "keep_both" | "dismiss";
-        };
         Resources: {
             /** Format: int64 */
             cpus: number;
@@ -1742,6 +1957,18 @@ export interface components {
             sessionRef?: string;
             text: string;
             tier: string;
+        };
+        Source: {
+            authorPersona?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description A short quote; full transcripts are never stored */
+            evidence?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "user" | "verified" | "document" | "inferred" | "consolidation";
+            scope: string;
+            sessionRef?: string;
         };
         SubmitInBody: {
             /** @description Template specification in YAML */
@@ -2404,6 +2631,39 @@ export interface operations {
             };
         };
     };
+    getMemoryConflict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConflictDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     resolveMemoryConflict: {
         parameters: {
             query?: never;
@@ -2418,7 +2678,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResolveInBody"];
+                "application/json": components["schemas"]["ConflictResolution"];
             };
         };
         responses: {
@@ -2429,6 +2689,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Conflict"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    startMemoryDream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DreamInBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DreamRun"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMemoryDreams: {
+        parameters: {
+            query?: {
+                /** @description Only this scope's runs */
+                scope?: string;
+                /** @description At most this many, newest first; 20 by default */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DreamRun"][] | null;
                 };
             };
             /** @description Error */
@@ -2604,6 +2937,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    promoteMemoryFact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalView"];
+                };
             };
             /** @description Error */
             default: {

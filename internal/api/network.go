@@ -29,6 +29,8 @@ type ApprovalView struct {
 	Git     *gitreview.GitDetail   `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
 	// MemoryShare is set for memory.share approvals.
 	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A persona's proposal for shared memory"`
+	// MemoryConflict is set for memory.conflict approvals.
+	MemoryConflict *agentmem.ConflictPayload `json:"memoryConflict,omitempty" doc:"Two facts that disagree"`
 }
 
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
@@ -47,6 +49,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p agentmem.SharePayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.MemoryShare = &p
+		}
+	case agentmem.ConflictApprovalKind:
+		var p agentmem.ConflictPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.MemoryConflict = &p
 		}
 	}
 	return v

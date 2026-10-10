@@ -205,7 +205,8 @@ func run(addr, image string, log *slog.Logger) error {
 	agentMem := agentmem.New(st, mem, vault, log)
 	agentMem.Notify = func(envID string) { bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: envID}) }
 	go agentMem.Run(ctx)
-	integs = append(integs, agentMem) // settles memory.share approvals; it serves no hosts
+	go agentMem.RunDreams(ctx) // nightly, after enough new facts, and interrupted runs
+	integs = append(integs, agentMem) // settles memory.share and memory.conflict approvals; it serves no hosts
 
 	hub := agentchan.NewHub(log)
 	rt := runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()})
