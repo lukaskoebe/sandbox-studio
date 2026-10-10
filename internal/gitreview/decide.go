@@ -20,8 +20,8 @@ type prPayload struct {
 	PullRequest PullRequest `json:"pullRequest"`
 }
 
-// Detail is what the inbox shows for a git approval besides the approval itself.
-type Detail struct {
+// GitDetail is what the inbox shows for a git approval besides the approval itself.
+type GitDetail struct {
 	Push        store.GitPush `json:"push"`
 	Review      *PushReview   `json:"review,omitempty" doc:"Set for git.push approvals"`
 	PullRequest *PullRequest  `json:"pullRequest,omitempty" doc:"Set for git.pr approvals"`
@@ -35,13 +35,13 @@ func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
 	}
 }
 
-// Detail describes a git approval for the inbox.
-func (s *Service) Detail(ctx context.Context, a store.Approval) (*Detail, error) {
+// GitDetail describes a git approval for the inbox.
+func (s *Service) GitDetail(ctx context.Context, a store.Approval) (*GitDetail, error) {
 	p, err := s.Store.GitPushByApproval(ctx, a.EnvironmentID, a.ID)
 	if err != nil {
 		return nil, err
 	}
-	d := &Detail{Push: p}
+	d := &GitDetail{Push: p}
 	switch a.Kind {
 	case KindPush:
 		var rv PushReview

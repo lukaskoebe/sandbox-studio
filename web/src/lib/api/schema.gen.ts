@@ -964,7 +964,7 @@ export interface components {
             createdAt: string;
             environmentId: string;
             /** @description Set for git.push and git.pr approvals */
-            git?: components["schemas"]["Detail"];
+            git?: components["schemas"]["GitDetail"];
             id: string;
             kind: string;
             network?: components["schemas"]["NetworkRequest"];
@@ -1146,13 +1146,6 @@ export interface components {
              */
             scope: "sandbox" | "persona" | "environment";
         };
-        Detail: {
-            /** @description Set for git.pr approvals */
-            pullRequest?: components["schemas"]["PullRequest"];
-            push: components["schemas"]["GitPush"];
-            /** @description Set for git.push approvals */
-            review?: components["schemas"]["PushReview"];
-        };
         Environment: {
             /** Format: date-time */
             createdAt: string;
@@ -1287,6 +1280,13 @@ export interface components {
         ForkInBody: {
             /** @description Name of the new sandbox */
             name: string;
+        };
+        GitDetail: {
+            /** @description Set for git.pr approvals */
+            pullRequest?: components["schemas"]["PullRequest"];
+            push: components["schemas"]["GitPush"];
+            /** @description Set for git.push approvals */
+            review?: components["schemas"]["PushReview"];
         };
         GitPush: {
             approvalId: string;

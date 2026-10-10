@@ -25,7 +25,7 @@ import (
 type ApprovalView struct {
 	store.Approval
 	Network *policy.NetworkRequest `json:"network,omitempty"`
-	Git     *gitreview.Detail      `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
+	Git     *gitreview.GitDetail   `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
 }
 
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
@@ -38,7 +38,7 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		}
 	case gitreview.KindPush, gitreview.KindPR:
 		if s.Git != nil {
-			v.Git, _ = s.Git.Detail(ctx, a)
+			v.Git, _ = s.Git.GitDetail(ctx, a)
 		}
 	}
 	return v

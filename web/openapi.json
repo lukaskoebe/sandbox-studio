@@ -32,7 +32,7 @@
             "type": "string"
           },
           "git": {
-            "$ref": "#/components/schemas/Detail",
+            "$ref": "#/components/schemas/GitDetail",
             "description": "Set for git.push and git.pr approvals"
           },
           "id": {
@@ -629,26 +629,6 @@
         ],
         "type": "object"
       },
-      "Detail": {
-        "additionalProperties": false,
-        "properties": {
-          "pullRequest": {
-            "$ref": "#/components/schemas/PullRequest",
-            "description": "Set for git.pr approvals"
-          },
-          "push": {
-            "$ref": "#/components/schemas/GitPush"
-          },
-          "review": {
-            "$ref": "#/components/schemas/PushReview",
-            "description": "Set for git.push approvals"
-          }
-        },
-        "required": [
-          "push"
-        ],
-        "type": "object"
-      },
       "Environment": {
         "additionalProperties": false,
         "properties": {
@@ -1036,6 +1016,26 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "GitDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "pullRequest": {
+            "$ref": "#/components/schemas/PullRequest",
+            "description": "Set for git.pr approvals"
+          },
+          "push": {
+            "$ref": "#/components/schemas/GitPush"
+          },
+          "review": {
+            "$ref": "#/components/schemas/PushReview",
+            "description": "Set for git.push approvals"
+          }
+        },
+        "required": [
+          "push"
         ],
         "type": "object"
       },

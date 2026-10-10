@@ -417,7 +417,7 @@ func TestPushIsStagedAndApprovalPushesUpstream(t *testing.T) {
 	if a.SandboxID != g.sb.ID || a.Subject != "forge/owner/repo:main" {
 		t.Fatalf("approval = %+v", a)
 	}
-	d, err := h.svc.Detail(h.ctx, a)
+	d, err := h.svc.GitDetail(h.ctx, a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +465,7 @@ func TestApprovedBranchPushProposesAPullRequest(t *testing.T) {
 		t.Fatalf("push: %v", err)
 	}
 	a := h.approvals(t, KindPush, store.StatusPending)[0]
-	d, _ := h.svc.Detail(h.ctx, a)
+	d, _ := h.svc.GitDetail(h.ctx, a)
 	if d.Review.Old != "" || len(d.Review.Commits) != 2 || d.Review.Files != 2 {
 		t.Fatalf("review of a new branch = %+v", d.Review)
 	}
@@ -474,7 +474,7 @@ func TestApprovedBranchPushProposesAPullRequest(t *testing.T) {
 	if len(prs) != 1 {
 		t.Fatalf("git.pr approvals = %d", len(prs))
 	}
-	pd, err := h.svc.Detail(h.ctx, prs[0])
+	pd, err := h.svc.GitDetail(h.ctx, prs[0])
 	if err != nil || pd.PullRequest.Head != "feature" || pd.PullRequest.Base != "main" ||
 		!strings.Contains(pd.PullRequest.Body, "Add a") || !strings.Contains(pd.PullRequest.Body, "Add b") {
 		t.Fatalf("PR detail = %+v, %v", pd, err)
@@ -582,7 +582,7 @@ func TestNewerPushSupersedesPending(t *testing.T) {
 	if old.State != store.PushSuperseded {
 		t.Fatalf("first push = %s", old.State)
 	}
-	d, _ := h.svc.Detail(h.ctx, pending[0])
+	d, _ := h.svc.GitDetail(h.ctx, pending[0])
 	if len(d.Review.Commits) != 2 {
 		t.Fatalf("second review has %d commits", len(d.Review.Commits))
 	}
@@ -718,7 +718,7 @@ func TestReviewTruncatesLargeDiffs(t *testing.T) {
 	if err := push(repo, "refs/heads/main:refs/heads/main", false); err != nil {
 		t.Fatal(err)
 	}
-	d, _ := h.svc.Detail(h.ctx, h.approvals(t, KindPush, store.StatusPending)[0])
+	d, _ := h.svc.GitDetail(h.ctx, h.approvals(t, KindPush, store.StatusPending)[0])
 	if !d.Review.DiffTruncated || !strings.Contains(d.Review.Diff, "diff truncated by Sandbox Studio") || len(d.Review.Diff) > 3<<10 {
 		t.Fatalf("diff (%d bytes, truncated=%v)", len(d.Review.Diff), d.Review.DiffTruncated)
 	}
