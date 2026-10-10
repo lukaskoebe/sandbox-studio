@@ -51,9 +51,13 @@ func (p Paths) AgentSocket(sandboxID string) string {
 	return filepath.Join(p.Data, "run", sandboxID+".sock")
 }
 
+// Imports holds uploaded workspace archives of sandbox imports until they finish. The
+// host never extracts them.
+func (p Paths) Imports() string { return filepath.Join(p.Data, "imports") }
+
 // Ensure creates the directories.
 func (p Paths) Ensure() error {
-	for _, d := range []string{p.Data, p.Guest(), filepath.Join(p.Data, "run")} {
+	for _, d := range []string{p.Data, p.Guest(), filepath.Join(p.Data, "run"), p.Imports()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return err
 		}

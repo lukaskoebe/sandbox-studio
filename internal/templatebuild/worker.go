@@ -123,6 +123,11 @@ func requestKey(spec []byte, base, platform string) string {
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
 }
 
+// Job returns one build job of an environment.
+func (w *Worker) Job(ctx context.Context, envID, id string) (store.BuildJob, error) {
+	return w.Store.BuildJob(ctx, envID, id)
+}
+
 // Cancel commits cancellation before signaling the running operation. A late
 // publication may leave a reusable ready cache entry, but cannot resurrect a job.
 func (w *Worker) Cancel(ctx context.Context, envID, id string) (store.BuildJob, error) {
