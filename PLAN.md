@@ -1053,6 +1053,9 @@ are part of the acceptance criteria.
 - Accepted when: contradictory facts from two sources produce a conflict item; resolving it
   changes what is recalled; a time-based change is superseded automatically with a visible
   timeline entry.
+- Built: `internal/agentmem/dream.go`, `internal/memory/consolidate.go` and
+  `conflicts.go`, migration `016_memory_dream.sql`; see docs/memory.md, Consolidation.
+  Shared facts win at recall until a conflict is resolved.
 
 **M7 — Browser broker**
 - Browser VM image, broker tools, policy and patterns, redaction, credential fill, live view
