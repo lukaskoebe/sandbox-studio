@@ -73,6 +73,8 @@ type SandboxRuntime interface {
 	Create(context.Context, string, runtime.Spec, string, map[string]string) error
 	Start(context.Context, string) error
 	Stop(context.Context, string) error
+	Pause(context.Context, string) error
+	Resume(context.Context, string) error
 	Remove(context.Context, string) error
 	Status(context.Context, string) (runtime.Status, error)
 	Statuses(context.Context, string) (map[string]runtime.Status, error)
@@ -94,7 +96,7 @@ type Egress interface {
 // View is a sandbox as shown to clients: catalog record plus live state.
 type View struct {
 	store.Sandbox
-	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,paused,stopped,crashed"`
+	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,suspended,stopped,crashed"`
 	CheckpointRestoreSupported bool           `json:"checkpointRestoreSupported"`
 	Agent                      *AgentInfo     `json:"agent,omitempty"`
 }
@@ -455,6 +457,11 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	rec, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
+	}
+	if status, err := m.Runtime.Status(ctx, VMName(rec)); err != nil {
+		return View{}, err
+	} else if status == runtime.StatusSuspended {
+		return View{}, lifecycleError("the sandbox is suspended; resume it instead")
 	}
 	if _, err := m.Egress.Attach(rec); err != nil {
 		return View{}, err

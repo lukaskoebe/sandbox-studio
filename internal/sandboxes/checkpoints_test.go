@@ -162,7 +162,7 @@ func TestCheckpointCreationRequiresRunningOrStoppedGuest(t *testing.T) {
 		status runtime.Status
 		name   string
 	}{
-		{status: runtime.StatusPaused, name: "paused"},
+		{status: runtime.StatusSuspended, name: "suspended"},
 		{status: runtime.StatusStarting, name: "starting"},
 	} {
 		f.runtime.setStatus(vmName, tc.status)
@@ -572,6 +572,24 @@ func (f *fakeSandboxRuntime) Stop(_ context.Context, name string) error {
 		return err
 	}
 	f.setStatus(name, runtime.StatusStopped)
+	return nil
+}
+
+func (f *fakeSandboxRuntime) Pause(_ context.Context, name string) error {
+	f.record("pause:" + name)
+	if err := f.failure("pause:" + name); err != nil {
+		return err
+	}
+	f.setStatus(name, runtime.StatusSuspended)
+	return nil
+}
+
+func (f *fakeSandboxRuntime) Resume(_ context.Context, name string) error {
+	f.record("resume:" + name)
+	if err := f.failure("resume:" + name); err != nil {
+		return err
+	}
+	f.setStatus(name, runtime.StatusRunning)
 	return nil
 }
 

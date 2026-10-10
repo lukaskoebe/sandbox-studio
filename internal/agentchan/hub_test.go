@@ -163,3 +163,44 @@ func TestHub(t *testing.T) {
 	}
 	t.Fatal("session not dropped after guest disconnect")
 }
+
+// TestHubDisconnect drops a live session without closing the listener, so the guest
+// agent can connect again (resume after suspend).
+func TestHubDisconnect(t *testing.T) {
+	dir, err := os.MkdirTemp("", "hub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "s.sock")
+	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := h.Listen("sb1", path); err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close("sb1")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	g := fakeGuest(t, path, make(chan agentproto.Config, 1))
+	if err := h.WaitConnected(ctx, "sb1"); err != nil {
+		t.Fatal(err)
+	}
+	h.Disconnect("sb1")
+	if _, ok := h.Connected("sb1"); ok {
+		t.Fatal("still connected after Disconnect")
+	}
+	select {
+	case <-g.CloseChan():
+	case <-ctx.Done():
+		t.Fatal("guest session not closed")
+	}
+
+	g2 := fakeGuest(t, path, make(chan agentproto.Config, 1))
+	defer g2.Close()
+	if err := h.WaitConnected(ctx, "sb1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Sessions(ctx, "sb1"); err != nil {
+		t.Fatalf("sessions after reconnect: %v", err)
+	}
+}
