@@ -92,7 +92,7 @@ var (
 	sourceKinds = []string{TierUser, TierVerified, TierDocument, TierInferred, SourceConsolidation}
 	pageKinds   = []string{"person", "project", "topic", "procedure", "persona-self"}
 	verdicts    = []string{"contradiction", "temporal_supersession", "context_dependent", "duplicate"}
-	resolutions = []string{"keep_a", "keep_b", "keep_both", "dismiss"}
+	resolutions = []string{"keep_a", "keep_b", "keep_both", "edit"}
 )
 
 func oneOf(field, v string, allowed []string) error {

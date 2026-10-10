@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -53,16 +54,17 @@ type SearchRequest struct {
 
 // Hit is one search result with the reasons for its rank.
 type Hit struct {
-	Type       string  `json:"type" enum:"fact,page"`
-	ID         string  `json:"id"`
-	Scope      string  `json:"scope"`
-	Snippet    string  `json:"snippet" doc:"The best matching chunk"`
-	Score      float64 `json:"score"`
-	Disputed   bool    `json:"disputed,omitempty" doc:"The fact is part of an open conflict; treat it with care"`
-	Superseded bool    `json:"superseded,omitempty" doc:"Only with includeSuperseded: the fact was replaced or expired"`
-	Fact       *Fact   `json:"fact,omitempty"`
-	Page       *Page   `json:"page,omitempty"`
-	Why        Why     `json:"why"`
+	Type         string  `json:"type" enum:"fact,page"`
+	ID           string  `json:"id"`
+	Scope        string  `json:"scope"`
+	Snippet      string  `json:"snippet" doc:"The best matching chunk"`
+	Score        float64 `json:"score"`
+	Disputed     bool    `json:"disputed,omitempty" doc:"The fact is part of an open conflict; treat it with care"`
+	Superseded   bool    `json:"superseded,omitempty" doc:"Only with includeSuperseded: the fact was replaced or expired"`
+	OverriddenBy string  `json:"overriddenBy,omitempty" doc:"A shared fact this persona fact has an open conflict with; the shared fact wins until the user resolves it"`
+	Fact         *Fact   `json:"fact,omitempty"`
+	Page         *Page   `json:"page,omitempty"`
+	Why          Why     `json:"why"`
 }
 
 // Why explains a hit's score: score = rrf × tierBoost × recencyBoost.
@@ -219,10 +221,59 @@ func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) (
 		out = append(out, c.hit)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	if req.Persona != "" {
+		if out, err = s.sharedWins(ctx, envID, PersonaScope(req.Persona), out); err != nil {
+			return nil, err
+		}
+	}
 	if len(out) > req.Limit {
 		out = out[:req.Limit]
 	}
 	return out, nil
+}
+
+// sharedWins applies "shared wins" to sorted hits: a persona fact with an open conflict
+// against a shared fact is marked disputed and overridden, and the shared fact is placed
+// right above it, pulled in if the search did not find it.
+func (s *Service) sharedWins(ctx context.Context, envID, scope string, hits []Hit) ([]Hit, error) {
+	winners, err := s.OpenConflictsWithShared(ctx, envID, scope)
+	if err != nil || len(winners) == 0 {
+		return hits, err
+	}
+	for i := 0; i < len(hits); i++ {
+		h := hits[i]
+		winner, ok := winners[h.ID]
+		if h.Type != "fact" || h.Scope != scope || !ok || h.OverriddenBy != "" {
+			continue
+		}
+		hits[i].Disputed, hits[i].OverriddenBy = true, winner
+		hits[i].Why.Summary += "; overridden: an open conflict with shared fact " + winner + ", which wins until resolved"
+		at := slices.IndexFunc(hits, func(x Hit) bool { return x.Type == "fact" && x.ID == winner })
+		var w Hit
+		switch {
+		case at >= 0 && at < i:
+			continue
+		case at > i:
+			w = hits[at]
+			hits = slices.Delete(hits, at, at+1)
+		default:
+			f, err := s.Fact(ctx, envID, winner)
+			if errors.Is(err, ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			w = Hit{Type: "fact", ID: f.ID, Scope: f.Scope, Snippet: truncate(f.Text, 300), Score: h.Score, Disputed: f.Status == StatusDisputed, Fact: &f,
+				Why: Why{Vector: h.Why.Vector, Tier: f.Tier, TierBoost: tierBoost[f.Tier]}}
+			w.Why.Summary = "added: wins an open conflict with persona fact " + h.ID
+		}
+		w.Score = max(w.Score, h.Score)
+		w.Why.Summary += "; shared fact wins an open conflict with persona fact " + h.ID
+		hits = slices.Insert(hits, i, w)
+		i++
+	}
+	return hits, nil
 }
 
 func (s *Service) bm25(ctx context.Context, envID, match, scopeIn string, scopeArgs []any) ([]chunkHit, error) {
