@@ -107,6 +107,7 @@ type CreateRequest struct {
 	MaxMemoryMiB int    `json:"maxMemoryMiB,omitempty"`
 	WorkspaceMiB int    `json:"workspaceMiB,omitempty"`
 	DockerMiB    int    `json:"dockerMiB,omitempty"`
+	PersonaID    string `json:"personaId,omitempty" doc:"The persona that owns the sandbox; omit for an unowned sandbox"`
 }
 
 // VMName is the microsandbox name of the current generation of sb.
@@ -195,17 +196,18 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err := runtime.ValidName(req.Name); err != nil {
 		return View{}, err
 	}
-	rec, err := m.createSandboxRecord(ctx, envID, req.Name, resolved, "")
+	rec, err := m.createOwnedRecord(ctx, envID, req.Name, resolved, "", req.PersonaID)
 	if err != nil {
 		return View{}, err
 	}
 	return m.bootSandbox(ctx, rec, resolved, nil, false)
 }
 
-// CreateFromTemplate starts a fresh sandbox from one ready, same-environment template.
-// The catalog row pins the template before registry metadata is resolved or the VM is
-// allocated. The runtime receives credentials only in its host-side image options.
-func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, name string) (View, error) {
+// CreateFromTemplateFor starts a fresh sandbox, owned by personaID if it is set, from one
+// ready, same-environment template. The catalog row pins the template before registry
+// metadata is resolved or the VM is allocated. The runtime receives credentials only in
+// its host-side image options.
+func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, name, personaID string) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
 	}
@@ -213,7 +215,7 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, nam
 	if err != nil {
 		return View{}, err
 	}
-	rec, err := m.createSandboxRecord(ctx, envID, name, resolved, templateID)
+	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, templateID, personaID)
 	if err != nil {
 		return View{}, err
 	}
@@ -275,19 +277,6 @@ func (m *Manager) templateImage(ctx context.Context, envID, templateID string) (
 		return nil, errors.New("template image is unavailable")
 	}
 	return &runtime.ImageSource{Reference: ref.Image, Username: ref.Username, Password: ref.Password}, nil
-}
-
-func (m *Manager) createSandboxRecord(ctx context.Context, envID, name string, resolved resources.Resources, templateID string) (store.Sandbox, error) {
-	return m.Store.CreateSandbox(ctx, store.Sandbox{
-		EnvironmentID: envID,
-		TemplateID:    templateID,
-		Name:          name,
-		CPUs:          int(resolved.CPUs),
-		MemoryMiB:     int(resolved.MemoryMiB),
-		MaxMemoryMiB:  int(resolved.MaxMemoryMiB),
-		WorkspaceMiB:  int(resolved.WorkspaceMiB),
-		DockerMiB:     int(resolved.DockerMiB),
-	})
 }
 
 func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, retainOnUncertainBoot bool) (View, error) {

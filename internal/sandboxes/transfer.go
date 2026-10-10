@@ -140,7 +140,7 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 		}
 	}
 	rec, err := m.Store.CreateSandbox(ctx, store.Sandbox{
-		EnvironmentID: envID, TemplateID: sb.TemplateID, Name: name,
+		EnvironmentID: envID, TemplateID: sb.TemplateID, PersonaID: sb.PersonaID, Name: name,
 		CPUs: sb.CPUs, MemoryMiB: sb.MemoryMiB, MaxMemoryMiB: sb.MaxMemoryMiB,
 		WorkspaceMiB: sb.WorkspaceMiB, DockerMiB: sb.DockerMiB,
 	})

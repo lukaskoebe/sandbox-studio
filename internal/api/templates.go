@@ -72,18 +72,22 @@ func (s *Server) registerTemplates(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Template ID"`
 		Body struct {
-			Name string `json:"name" minLength:"1" maxLength:"40"`
+			Name      string `json:"name" minLength:"1" maxLength:"40"`
+			PersonaID string `json:"personaId,omitempty" doc:"The persona that owns the sandbox; omit for an unowned sandbox"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "createTemplateSandbox", Method: http.MethodPost, Path: "/api/environments/{env}/templates/{id}/sandboxes", Tags: []string{"templates", "sandboxes"},
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *createTemplateSandboxIn) (*sandboxOut, error) {
+		if err := s.checkPersona(ctx, in.Env, in.Body.PersonaID); err != nil {
+			return nil, err
+		}
 		// Booting continues if the browser disconnects; template cleanup keeps its
 		// catalog pin whenever exact VM absence cannot be established.
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
 		defer cancel()
-		view, err := s.Sandboxes.CreateFromTemplate(ctx, in.Env, in.ID, in.Body.Name)
+		view, err := s.Sandboxes.CreateFromTemplateFor(ctx, in.Env, in.ID, in.Body.Name, in.Body.PersonaID)
 		return &sandboxOut{view}, templateAPIError(err)
 	})
 }
