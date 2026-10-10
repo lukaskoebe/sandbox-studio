@@ -11,26 +11,6 @@ import {
   type Approval,
 } from "@/lib/api/client"
 
-export function isBrowserApproval(a: Approval) {
-  return a.kind === "browser.action" || a.kind === "browser.credential"
-}
-
-/** One line for a browser approval: what the agent wants to do where. */
-export function browserSummary(a: Approval) {
-  const act = a.browserAction
-  if (act) {
-    const target = act.label
-      ? ` “${act.label}”`
-      : act.role
-        ? ` ${act.role}`
-        : ""
-    return `${act.action}${target} on ${act.origin}`
-  }
-  const cred = a.browserCredential
-  if (cred) return `Fill ${cred.credential} on ${cred.origin}`
-  return a.subject
-}
-
 function useDecide(what: string) {
   const queryClient = useQueryClient()
   return $api.useMutation(

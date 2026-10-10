@@ -54,12 +54,12 @@ import {
 import {
   GitOutcome,
   GitReviewSheet,
-  gitSummary,
   isGitApproval,
 } from "@/components/git-review"
 import { PageHeader } from "@/components/page-header"
 import { ApprovalStatusBadge } from "@/components/status-badge"
 import { $api, errorMessage, fetchClient, type Forge } from "@/lib/api/client"
+import { gitSummary } from "@/lib/approval-kinds"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/git")({

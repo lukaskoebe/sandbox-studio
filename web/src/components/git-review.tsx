@@ -20,6 +20,7 @@ import {
   type Approval,
   type GitDetail,
 } from "@/lib/api/client"
+import { gitSummary } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
@@ -30,21 +31,6 @@ export function isGitApproval(a: Approval) {
 
 function short(sha: string) {
   return sha.slice(0, 10)
-}
-
-/** One line describing what a git approval asks for. */
-export function gitSummary(a: Approval): string {
-  const git = a.git
-  if (!git) return a.subject
-  const where = `${git.push.owner}/${git.push.repo}`
-  if (git.pullRequest) {
-    return `Open a pull request ${git.pullRequest.head} → ${git.pullRequest.base} on ${where}`
-  }
-  const commits =
-    (git.review?.commits?.length ?? 0) + (git.review?.moreCommits ?? 0)
-  const branch =
-    git.review?.branch ?? git.push.ref.replace(/^refs\/heads\//, "")
-  return `Push ${commits} ${commits === 1 ? "commit" : "commits"} to ${branch} on ${where}`
 }
 
 function useDecideGit() {

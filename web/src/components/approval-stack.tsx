@@ -4,13 +4,10 @@ import { ApprovalDecision } from "@/components/approval-decision"
 import {
   BrowserActionDecision,
   BrowserCredentialDecision,
-  browserSummary,
-  isBrowserApproval,
 } from "@/components/browser-approval"
 import {
   GitApprovalSummary,
   GitReviewSheet,
-  gitSummary,
   isGitApproval,
 } from "@/components/git-review"
 import {
@@ -27,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { $api, type Approval } from "@/lib/api/client"
+import { approvalKind, approvalSource } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
 
 /** Cards shown at sm and wider; below that only the newest one is. */
@@ -124,7 +122,7 @@ export function ApprovalStack() {
   )
 }
 
-/** Links to the page of the environment the next hidden request belongs to. */
+/** Links to the environment page that lists the next hidden approval's kind. */
 function MoreLink({
   approval,
   count,
@@ -136,7 +134,7 @@ function MoreLink({
 }) {
   return (
     <Link
-      to={isGitApproval(approval) ? "/e/$env/git" : "/e/$env/network"}
+      to={approvalKind(approval).page}
       params={{ env: approval.environmentId }}
       className={cn(
         "px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline",
@@ -157,16 +155,9 @@ function ApprovalCard({
   envName?: string
   onReview: () => void
 }) {
-  const git = isGitApproval(approval)
-  const share = approval.kind === "memory.share"
-  const conflict = approval.kind === "memory.conflict"
-  const browser = isBrowserApproval(approval)
+  const kind = approvalKind(approval)
   const details = [
-    approval.network?.sandboxName ??
-      approval.git?.review?.sandbox ??
-      approval.memoryShare?.personaName ??
-      approval.browserAction?.sandboxName ??
-      approval.browserCredential?.sandboxName,
+    approvalSource(approval),
     envName,
     formatAge(approval.createdAt),
     approval.attempts > 1 ? `${approval.attempts} attempts` : undefined,
@@ -176,30 +167,28 @@ function ApprovalCard({
   return (
     <Card size="sm" className="gap-2 shadow-lg">
       <CardHeader>
-        <CardTitle
-          className={cn(
-            "break-all",
-            !git && !share && !conflict && !browser && "font-mono"
-          )}
-        >
-          {git
-            ? gitSummary(approval)
-            : share
-              ? "Share with every persona?"
-              : conflict
-                ? "Memory conflict"
-                : browser
-                  ? browserSummary(approval)
-                  : approval.subject}
+        <CardTitle className="flex items-start gap-1.5">
+          <kind.icon
+            className="mt-0.5 shrink-0 text-muted-foreground"
+            aria-label={kind.title}
+          />
+          <span
+            className={cn(
+              "min-w-0",
+              kind.mono ? "font-mono break-all" : "break-words"
+            )}
+          >
+            {kind.summary(approval)}
+          </span>
         </CardTitle>
         <CardDescription>{details}</CardDescription>
       </CardHeader>
       <CardContent>
-        {git ? (
+        {isGitApproval(approval) ? (
           <GitApprovalSummary approval={approval} onReview={onReview} />
-        ) : share ? (
+        ) : approval.kind === "memory.share" ? (
           <MemoryShareDecision approval={approval} />
-        ) : conflict ? (
+        ) : approval.kind === "memory.conflict" ? (
           <MemoryConflictDecision approval={approval} onResolve={onReview} />
         ) : approval.kind === "browser.action" ? (
           <BrowserActionDecision approval={approval} />
@@ -255,16 +244,13 @@ function useNotifications(data: Approval[] | null | undefined) {
 
 function notify(a: Approval) {
   try {
-    const git = isGitApproval(a)
-    const n = new Notification(
-      git ? "Git review requested" : "Network access requested",
-      {
-        body: git
-          ? gitSummary(a)
-          : `${a.network?.sandboxName ?? "A sandbox"} wants to connect to ${a.subject}`,
-        tag: a.id,
-      }
-    )
+    const kind = approvalKind(a)
+    const source = approvalSource(a)
+    const summary = kind.summary(a)
+    const n = new Notification(kind.title, {
+      body: source ? `${source}: ${summary}` : summary,
+      tag: a.id,
+    })
     n.onclick = () => {
       window.focus()
       n.close()

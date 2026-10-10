@@ -226,4 +226,3 @@ The value never enters:
   digest-pinned base image, Studio uses `sandbox-studio-browser:<version>`.
 - A credential fill runs inside the approval's decide request, bounded by the command
   timeout.
-- Browser approvals show in the notification text as generic approvals.
