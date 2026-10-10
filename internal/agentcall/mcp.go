@@ -26,7 +26,7 @@ var mcpVersions = []string{"2025-06-18", "2025-03-26", "2024-11-05"}
 // mcpToolTimeout bounds one tool call.
 const mcpToolTimeout = 60 * time.Second
 
-const mcpInstructions = "Studio's memory: search and read what you and the team remember, save what should last, " +
+var mcpInstructions = "Studio's memory: search and read what you and the team remember, save what should last, " +
 	"fix or retract your own facts, and propose facts for shared memory (the user approves them)."
 
 type rpcRequest struct {
@@ -213,6 +213,21 @@ func callTool(ctx context.Context, c Caller, req rpcRequest) rpcResponse {
 	var result json.RawMessage
 	if err := c.Call(ctx, p.Name, args, &result); err != nil {
 		r.Result = toolText(err.Error(), true)
+		return r
+	}
+	// A result with an image, such as a browser screenshot, becomes image content.
+	var img struct {
+		Image *struct {
+			MIMEType string `json:"mimeType"`
+			Data     string `json:"data"`
+		} `json:"image"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(result, &img) == nil && img.Image != nil && img.Image.Data != "" {
+		r.Result = map[string]any{"content": []any{
+			map[string]any{"type": "image", "mimeType": img.Image.MIMEType, "data": img.Image.Data},
+			map[string]any{"type": "text", "text": img.Text},
+		}, "isError": false}
 		return r
 	}
 	text := string(result)

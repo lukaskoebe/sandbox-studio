@@ -96,7 +96,7 @@ func TestMCPOverPipe(t *testing.T) {
 	send(`{"jsonrpc":"2.0","method":"notifications/initialized"}`)
 	send(`{"jsonrpc":"2.0","id":"two","method":"tools/list"}`)
 	r := recv()
-	if r["id"] != "two" || len(r["result"].(map[string]any)["tools"].([]any)) != 6 {
+	if r["id"] != "two" || len(r["result"].(map[string]any)["tools"].([]any)) != len(Tools) {
 		t.Fatalf("tools/list: %v", r)
 	}
 	send(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"remember","arguments":{"text":"use pnpm","kind":"preference"}}}`)
