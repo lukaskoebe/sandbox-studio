@@ -152,6 +152,9 @@ func (s *Service) CreateFact(ctx context.Context, envID string, in FactInput, o 
 		return Fact{}, err
 	}
 	defer tx.Rollback()
+	if err := checkPersonas(ctx, tx, envID, in.Scope, o.AuthorPersona); err != nil {
+		return Fact{}, err
+	}
 	if in.Supersedes != "" {
 		var scope string
 		err := tx.QueryRowContext(ctx, "SELECT scope FROM memory_facts WHERE environment_id = ? AND id = ?", envID, in.Supersedes).Scan(&scope)
@@ -224,6 +227,9 @@ func (s *Service) UpdateFact(ctx context.Context, envID, id string, in FactInput
 		return Fact{}, err
 	}
 	defer tx.Rollback()
+	if err := checkPersonas(ctx, tx, envID, "", o.AuthorPersona); err != nil {
+		return Fact{}, err
+	}
 	observed := old.ObservedAt.Unix()
 	if in.ObservedAt != nil && !in.ObservedAt.IsZero() {
 		observed = in.ObservedAt.Unix()

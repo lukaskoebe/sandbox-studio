@@ -226,3 +226,27 @@ func (s *Service) Scopes(ctx context.Context, envID string) ([]Scope, error) {
 	}
 	return out, nil
 }
+
+// checkPersonas makes sure that the personas a write names belong to the environment: the
+// author and, on create, the persona of a persona scope (pass "" for scope otherwise).
+// Memory has no foreign key to personas, so a deleted persona's memory stays readable and
+// editable by the user; only new writes for it are refused.
+func checkPersonas(ctx context.Context, tx execer, envID, scope, author string) error {
+	ids := []string{author}
+	if id, ok := strings.CutPrefix(scope, "persona:"); ok {
+		ids = append(ids, id)
+	}
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		var n int
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM personas WHERE environment_id = ? AND id = ?", envID, id).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("%w: persona %q does not exist in this environment", ErrInvalid, id)
+		}
+	}
+	return nil
+}

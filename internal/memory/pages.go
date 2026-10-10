@@ -140,6 +140,9 @@ func (s *Service) CreatePage(ctx context.Context, envID string, in PageInput, o 
 		return Page{}, err
 	}
 	defer tx.Rollback()
+	if err := checkPersonas(ctx, tx, envID, in.Scope, o.AuthorPersona); err != nil {
+		return Page{}, err
+	}
 	if in.AlwaysLoad {
 		if err := checkCoreBudget(ctx, tx, envID, in.Scope, "", in.Compiled); err != nil {
 			return Page{}, err
@@ -178,6 +181,9 @@ func (s *Service) UpdatePage(ctx context.Context, envID, id string, in PageInput
 		return Page{}, err
 	}
 	defer tx.Rollback()
+	if err := checkPersonas(ctx, tx, envID, "", o.AuthorPersona); err != nil {
+		return Page{}, err
+	}
 	old, err := scanPage(tx.QueryRowContext(ctx, "SELECT "+pageCols+" FROM memory_pages WHERE environment_id = ? AND id = ?", envID, id))
 	if err != nil {
 		return Page{}, err
@@ -278,6 +284,9 @@ func (s *Service) AppendTimeline(ctx context.Context, envID, pageID string, in T
 		return TimelineEntry{}, err
 	}
 	defer tx.Rollback()
+	if err := checkPersonas(ctx, tx, envID, "", o.AuthorPersona); err != nil {
+		return TimelineEntry{}, err
+	}
 	var scope, title string
 	err = tx.QueryRowContext(ctx, "SELECT scope, title FROM memory_pages WHERE environment_id = ? AND id = ?", envID, pageID).Scan(&scope, &title)
 	if errors.Is(err, sql.ErrNoRows) {

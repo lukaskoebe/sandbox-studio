@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 	"testing"
@@ -35,8 +36,25 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	addPersonas(t, st.DB(), e1.ID, "p1", "a", "b", "x", "p")
 	emb := &FakeEmbedder{Aliases: map[string]string{"node": "javascript", "npm": "javascript", "ship": "deploy", "backend": "api"}}
 	return &fixture{t: t, st: st, svc: New(st.DB(), emb, nil), emb: emb, env: e1.ID, env2: e2.ID}
+}
+
+// addPersonas inserts personas with fixed IDs (and a provider for them) directly.
+func addPersonas(t *testing.T, db *sql.DB, envID string, ids ...string) {
+	t.Helper()
+	prov := "prov-" + envID
+	if _, err := db.Exec(`INSERT OR IGNORE INTO providers (id, environment_id, name, kind, created_at, updated_at)
+		VALUES (?, ?, ?, 'claude_subscription', 0, 0)`, prov, envID, prov); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range ids {
+		if _, err := db.Exec(`INSERT INTO personas (id, environment_id, name, harness, provider_id, git_name, git_email, created_at, updated_at)
+			VALUES (?, ?, ?, 'claude', ?, ?, ?, 0, 0)`, id, envID, id, prov, id, id+"@example.com"); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func (f *fixture) fact(env, scope, kind, text string, o Origin, mod ...func(*FactInput)) Fact {
@@ -206,6 +224,13 @@ func TestEnvironmentIsolation(t *testing.T) {
 	}
 	if _, err := f.svc.CreateFact(ctx, f.env2, FactInput{Scope: "shared", Kind: KindFact, Text: "x", Supersedes: fact.ID}, UserOrigin); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("supersede across environments: %v", err)
+	}
+	// Personas belong to one environment.
+	if _, err := f.svc.CreateFact(ctx, f.env2, FactInput{Scope: "persona:a", Kind: KindFact, Text: "x"}, UserOrigin); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("persona of another environment: %v", err)
+	}
+	if _, err := f.svc.CreatePage(ctx, f.env2, PageInput{Scope: "shared", Slug: "x", Title: "x", Kind: "topic"}, Origin{Tier: TierInferred, AuthorPersona: "a"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("author of another environment: %v", err)
 	}
 	for _, env := range []string{f.env, f.env2} {
 		facts, _ := f.svc.Facts(ctx, env, FactFilter{})

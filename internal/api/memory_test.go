@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 func newMemoryServer(t *testing.T) (http.Handler, *Server) {
@@ -20,8 +21,19 @@ func TestMemoryAPI(t *testing.T) {
 	h, s := newMemoryServer(t)
 	env := newEnvironment(t, s, "work")
 	base := testOrigin + "/api/environments/" + env.ID + "/memory"
+	prov, err := s.Store.CreateProvider(t.Context(), store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "claude", Kind: "claude_subscription"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dev, err := s.Store.CreatePersona(t.Context(), store.Persona{EnvironmentID: env.ID, Name: "dev", Harness: "claude", ProviderID: prov.ID, GitName: "Dev", GitEmail: "dev@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := do(h, "POST", base+"/facts", `{"scope":"persona:nobody","kind":"fact","text":"x"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown persona: %d %s", rec.Code, rec.Body)
+	}
 
-	rec := do(h, "POST", base+"/facts", `{"scope":"persona:dev","kind":"preference","text":"Use pnpm, not npm","attribute":"js.package_manager"}`)
+	rec := do(h, "POST", base+"/facts", `{"scope":"persona:`+dev.ID+`","kind":"preference","text":"Use pnpm, not npm","attribute":"js.package_manager"}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create fact: %d %s", rec.Code, rec.Body)
 	}
@@ -30,7 +42,7 @@ func TestMemoryAPI(t *testing.T) {
 		t.Fatalf("fact %+v", fact)
 	}
 	rec = do(h, "PUT", base+"/facts/"+fact.ID, `{"scope":"shared","kind":"preference","text":"Use pnpm everywhere"}`)
-	if edited := decode[memory.Fact](t, rec); rec.Code != 200 || edited.Text != "Use pnpm everywhere" || edited.Scope != "persona:dev" {
+	if edited := decode[memory.Fact](t, rec); rec.Code != 200 || edited.Text != "Use pnpm everywhere" || edited.Scope != "persona:"+dev.ID {
 		t.Fatalf("update: %d %s", rec.Code, rec.Body)
 	}
 
@@ -50,13 +62,13 @@ func TestMemoryAPI(t *testing.T) {
 	}
 
 	scopes := decode[[]memory.Scope](t, do(h, "GET", base+"/scopes", ""))
-	if len(scopes) != 2 || scopes[0].Scope != "shared" || scopes[1].Scope != "persona:dev" || scopes[1].Facts != 1 {
+	if len(scopes) != 2 || scopes[0].Scope != "shared" || scopes[1].Scope != "persona:"+dev.ID || scopes[1].Facts != 1 {
 		t.Fatalf("scopes %+v", scopes)
 	}
-	if list := decode[[]memory.Fact](t, do(h, "GET", base+"/facts?scope=persona:dev&status=active", "")); len(list) != 1 {
+	if list := decode[[]memory.Fact](t, do(h, "GET", base+"/facts?scope=persona:"+dev.ID+"&status=active", "")); len(list) != 1 {
 		t.Fatalf("facts %+v", list)
 	}
-	if list := decode[[]memory.Page](t, do(h, "GET", base+"/pages?scope=persona:dev", "")); len(list) != 0 {
+	if list := decode[[]memory.Page](t, do(h, "GET", base+"/pages?scope=persona:"+dev.ID, "")); len(list) != 0 {
 		t.Fatalf("pages %+v", list)
 	}
 
@@ -64,7 +76,7 @@ func TestMemoryAPI(t *testing.T) {
 	if hits := decode[[]memory.Hit](t, do(h, "GET", base+"/search?q=pnpm", "")); len(hits) != 0 {
 		t.Fatalf("shared search found a private fact: %+v", hits)
 	}
-	hits := decode[[]memory.Hit](t, do(h, "GET", base+"/search?q=pnpm&persona=dev", ""))
+	hits := decode[[]memory.Hit](t, do(h, "GET", base+"/search?q=pnpm&persona="+dev.ID, ""))
 	if len(hits) != 1 || hits[0].ID != fact.ID || hits[0].Why.Summary == "" || hits[0].Why.Vector != "not_ready" {
 		t.Fatalf("search %+v", hits)
 	}
