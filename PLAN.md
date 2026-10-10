@@ -805,6 +805,15 @@ from Studio, not through a sandbox.
 **Portability.** Markdown export and import of pages with facts in frontmatter, so v2
 memory can be moved to gbrain or qmd later.
 
+**Implemented so far (M5 part A, see docs/memory.md):** the store (migration
+`013_memory.sql`, package `internal/memory`) with sources, facts, pages, the append-only
+timeline, conflicts, chunks and int8 embeddings; the core-page budget (4000 characters per
+scope); hybrid search with RRF, tier and recency boosts and a per-hit "why"; the embedding
+worker with the pinned embeddinggemma and llama.cpp downloads; the REST API under
+`/api/environments/{env}/memory`; and the Memory page. Still open: hooks and automatic
+extraction, the agent tools, context packs, consolidation, "shared wins at recall" for
+conflicts, and the injection log.
+
 ### 6.8 Browser broker
 
 - **Isolation.** The browser runs in a separate microVM: Debian Chromium (arm64 and amd64)
