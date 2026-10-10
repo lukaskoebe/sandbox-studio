@@ -7,6 +7,7 @@ import {
   gitSummary,
   isGitApproval,
 } from "@/components/git-review"
+import { MemoryShareDecision } from "@/components/memory-sessions"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -42,7 +43,9 @@ export function ApprovalStack() {
 
   const onNetwork = matchRoute({ to: "/e/$env/network" })
   const items = onNetwork
-    ? all.filter((a) => isGitApproval(a) || a.environmentId !== onNetwork.env)
+    ? all.filter(
+        (a) => a.kind !== "network" || a.environmentId !== onNetwork.env
+      )
     : all
   const review = all.find((a) => a.id === reviewing)
   const sheet = (
@@ -133,8 +136,11 @@ function ApprovalCard({
   onReview: () => void
 }) {
   const git = isGitApproval(approval)
+  const share = approval.kind === "memory.share"
   const details = [
-    approval.network?.sandboxName ?? approval.git?.review?.sandbox,
+    approval.network?.sandboxName ??
+      approval.git?.review?.sandbox ??
+      approval.memoryShare?.personaName,
     envName,
     formatAge(approval.createdAt),
     approval.attempts > 1 ? `${approval.attempts} attempts` : undefined,
@@ -144,14 +150,20 @@ function ApprovalCard({
   return (
     <Card size="sm" className="gap-2 shadow-lg">
       <CardHeader>
-        <CardTitle className={cn("break-all", !git && "font-mono")}>
-          {git ? gitSummary(approval) : approval.subject}
+        <CardTitle className={cn("break-all", !git && !share && "font-mono")}>
+          {git
+            ? gitSummary(approval)
+            : share
+              ? "Share with every persona?"
+              : approval.subject}
         </CardTitle>
         <CardDescription>{details}</CardDescription>
       </CardHeader>
       <CardContent>
         {git ? (
           <GitApprovalSummary approval={approval} onReview={onReview} />
+        ) : share ? (
+          <MemoryShareDecision approval={approval} />
         ) : (
           <ApprovalDecision approval={approval} compact />
         )}

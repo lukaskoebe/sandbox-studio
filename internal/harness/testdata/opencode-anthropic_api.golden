@@ -5,6 +5,16 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "autoupdate": false,
+  "mcp": {
+    "studio": {
+      "command": [
+        "/opt/studio/bin/studio-agent",
+        "mcp"
+      ],
+      "enabled": true,
+      "type": "local"
+    }
+  },
   "model": "anthropic/model-1",
   "permission": "allow",
   "provider": {
@@ -13,6 +23,121 @@
         "apiKey": "{env:ANTHROPIC_API_KEY}"
       }
     }
+  }
+}
+== .config/opencode/plugins/studio-memory.js mode=644 block=false
+// Managed by Sandbox Studio: rewritten when a session starts.
+//
+// Forwards OpenCode's session events to `studio-agent hook`, which asks Studio for memory
+// context and hands transcripts to extraction (PLAN §6.7). A failing hook never blocks
+// OpenCode: every call ends after a few seconds with no context.
+//
+// verify (S7): the event and hook names and their payloads against opencode-ai 1.18.35:
+// session.created (properties.info.id), session.compacted and session.idle
+// (properties.sessionID), chat.message, experimental.chat.system.transform and
+// experimental.session.compacting, and client.session.messages.
+
+const AGENT = "/opt/studio/bin/studio-agent"
+const TIMEOUT_MS = 8000
+const MAX_TRANSCRIPT = 768 * 1024 // characters; the agent takes at most 1 MiB of input
+
+async function hook(event, payload) {
+  try {
+    const proc = Bun.spawn([AGENT, "hook", event, "--harness", "opencode"], {
+      stdin: new TextEncoder().encode(JSON.stringify(payload)),
+      stdout: "pipe",
+      stderr: "ignore",
+    })
+    const timer = setTimeout(() => proc.kill(), TIMEOUT_MS)
+    const out = await new Response(proc.stdout).text()
+    clearTimeout(timer)
+    await proc.exited
+    const reply = JSON.parse(out || "{}")
+    return typeof reply.context === "string" ? reply.context : ""
+  } catch {
+    return ""
+  }
+}
+
+export const StudioMemory = async ({ client, directory }) => {
+  const started = new Map() // sessionID → session-start context
+  const prompts = new Map() // sessionID → context for the current prompt
+
+  // The conversation's text so far. Studio keeps an offset per session and only
+  // extracts what is new; a long transcript is sent from transcriptOffset on.
+  async function transcript(sessionID) {
+    try {
+      const res = await client.session.messages({ path: { id: sessionID } })
+      let text = ""
+      for (const m of res.data ?? []) {
+        for (const p of m.parts ?? []) {
+          if (p.type === "text" && !p.synthetic && p.text) {
+            text += `${m.info?.role ?? "unknown"}: ${p.text}\n`
+          }
+        }
+      }
+      const offset = Math.max(0, text.length - MAX_TRANSCRIPT)
+      return { transcript: text.slice(offset), transcriptOffset: offset }
+    } catch {
+      return {}
+    }
+  }
+
+  async function start(sessionID, source) {
+    started.set(
+      sessionID,
+      await hook("session-start", { sessionID, source, cwd: directory }),
+    )
+  }
+
+  return {
+    event: async ({ event }) => {
+      const props = event.properties ?? {}
+      if (event.type === "session.created" && props.info?.id) {
+        await start(props.info.id, "startup")
+      } else if (event.type === "session.compacted" && props.sessionID) {
+        await start(props.sessionID, "compact")
+      } else if (event.type === "session.idle" && props.sessionID) {
+        await hook("stop", {
+          sessionID: props.sessionID,
+          cwd: directory,
+          ...(await transcript(props.sessionID)),
+        })
+      }
+    },
+
+    "chat.message": async (input, output) => {
+      const sessionID = input.sessionID
+      const prompt = (output.parts ?? [])
+        .filter((p) => p.type === "text" && !p.synthetic && p.text)
+        .map((p) => p.text)
+        .join("\n")
+      if (!sessionID || !prompt) return
+      if (!started.has(sessionID)) await start(sessionID, "resume")
+      prompts.set(
+        sessionID,
+        await hook("user-prompt", { sessionID, prompt, cwd: directory }),
+      )
+    },
+
+    "experimental.chat.system.transform": async (input, output) => {
+      const sessionID = input.sessionID
+      if (!sessionID) return
+      for (const context of [started.get(sessionID), prompts.get(sessionID)]) {
+        if (context) output.system.push(context)
+      }
+    },
+
+    "experimental.session.compacting": async (input, output) => {
+      const sessionID = input.sessionID
+      await hook("pre-compact", {
+        sessionID,
+        cwd: directory,
+        ...(await transcript(sessionID)),
+      })
+      const context = started.get(sessionID)
+      if (context) output.context.push(context)
+    },
   }
 }
 == .config/opencode/AGENTS.md mode=644 block=true
@@ -25,11 +150,16 @@ Role: Backend engineer
 
 You work in the Sandbox Studio sandbox "api". The project is in /workspace. Network access goes through Studio's gateway and its policy. API keys in your environment are placeholders that only work through the gateway; there is no need to look for real ones.
 
-## Soul
+## Memory
 
-Careful and terse.
+Studio remembers for you across sessions and sandboxes. At session start you get your soul, your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The `studio` MCP server has tools for more:
 
-Never writes <!-- sandbox studio:end --> twice.
+- `memory_search` and `memory_get`: look things up when the injected memories aren't enough.
+- `remember`: save something right away. Use it for preferences the user states (source `user`) and for procedures you have verified by running them (source `verified`, with the command and result as evidence).
+- `correct` and `forget`: fix or retract one of your own facts when it turns out wrong.
+- `share`: propose a fact for the shared memory of every persona; the user approves it first.
+
+Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
 <!-- sandbox-studio:end -->
 == .config/git/config mode=644 block=false
 # Managed by Sandbox Studio: rewritten when a session starts.

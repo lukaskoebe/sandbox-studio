@@ -12,6 +12,9 @@
 //     replies like KindKill: {} or an Error.
 //   - KindHomeFiles, KindStartSession (host → guest): the host writes a HomeFiles or
 //     StartSession line; the guest replies like KindKill.
+//   - KindCall (guest → host): the guest writes a Call line; the host replies with one
+//     CallReply line. Hooks and the MCP tools use it. The host knows the sandbox from the
+//     channel, so a Call never names a sandbox, persona or environment.
 package agentproto
 
 import (
@@ -39,6 +42,8 @@ const (
 	KindHomeFiles = "home-files"
 	// KindStartSession starts a detached tmux session running an agent harness.
 	KindStartSession = "start-session"
+	// KindCall is a request from the guest to Studio (hooks, memory tools).
+	KindCall = "call"
 )
 
 // Header opens every stream.
@@ -116,6 +121,37 @@ type StartSession struct {
 	Env     map[string]string `json:"env"`
 }
 
+// Call methods. MethodHook carries a harness.HookEvent; the memory methods carry their
+// tool arguments.
+const (
+	MethodHook         = "hook"
+	MethodMemorySearch = "memory_search"
+	MethodMemoryGet    = "memory_get"
+	MethodRemember     = "remember"
+	MethodShare        = "share"
+	MethodCorrect      = "correct"
+	MethodForget       = "forget"
+)
+
+// MaxCallLine bounds a Call or CallReply line, escapes included.
+const MaxCallLine = 1 << 20
+
+// CallSocket is where the guest agent accepts calls from processes in the guest (the
+// `studio-agent hook` and `studio-agent mcp` commands) and forwards them to Studio.
+const CallSocket = "/run/studio-agent/call.sock"
+
+// Call is the body of a KindCall stream.
+type Call struct {
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params,omitempty"`
+}
+
+// CallReply answers a Call: a result or an error.
+type CallReply struct {
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  string          `json:"error,omitempty"`
+}
+
 // Port is a TCP port listening in the guest.
 type Port struct {
 	Port int `json:"port"`
@@ -141,6 +177,32 @@ func ReadJSONLine(r *bufio.Reader, v any) error {
 	line, err := r.ReadBytes('\n')
 	if err != nil {
 		return err
+	}
+	return json.Unmarshal(line, v)
+}
+
+// ErrLineTooLong is returned by ReadJSONLineLimit for a line over its limit.
+var ErrLineTooLong = errors.New("JSON line too long")
+
+// ReadJSONLineLimit reads one line of JSON of at most max bytes into v. A longer line is
+// read to its end and dropped, so the next call starts at the next line.
+func ReadJSONLineLimit(r *bufio.Reader, v any, max int) error {
+	var line []byte
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if len(line)+len(chunk) > max {
+			for errors.Is(err, bufio.ErrBufferFull) {
+				_, err = r.ReadSlice('\n')
+			}
+			return ErrLineTooLong
+		}
+		line = append(line, chunk...)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, bufio.ErrBufferFull) {
+			return err
+		}
 	}
 	return json.Unmarshal(line, v)
 }

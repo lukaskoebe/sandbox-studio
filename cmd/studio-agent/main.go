@@ -10,6 +10,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentcall"
+	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
@@ -79,6 +81,33 @@ func main() {
 			log.Error("supervisor stopped", "err", err)
 			os.Exit(1)
 		}
+	case "hook":
+		// Harness hooks run this as the agent user: see agentcall.RunHook. It always exits 0
+		// with an answer the harness accepts, so memory can never block a session.
+		flags := flag.NewFlagSet("hook", flag.ContinueOnError)
+		name := flags.String("harness", "", "the harness that runs the hook: claude, codex or opencode")
+		event := ""
+		if len(os.Args) > 2 {
+			event = os.Args[2]
+			_ = flags.Parse(os.Args[3:])
+		}
+		h, ok := agenthook.Lookup(*name)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "studio-agent: hook: unknown harness %q\n", *name)
+			fmt.Println("{}")
+			return
+		}
+		if err := agentcall.RunHook(context.Background(), h, event, os.Stdin, os.Stdout, agentcall.HookOptions{}); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: hook %s: %v\n", event, err)
+		}
+	case "mcp":
+		// The harness's MCP server for memory tools: see agentcall.ServeMCP.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := agentcall.ServeMCP(ctx, os.Stdin, os.Stdout, agentcall.SocketCaller{}); err != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: mcp: %v\n", err)
+			os.Exit(1)
+		}
 	case "oci-runtime":
 		// Docker's runtime inside the sandbox: see guest.OCIRuntime.
 		if err := ociRuntime(os.Args[2:]); err != nil {
@@ -86,7 +115,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|oci-runtime|export-layer|workspace-export|workspace-import]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|oci-runtime|export-layer|workspace-export|workspace-import]\n")
 		os.Exit(2)
 	}
 }

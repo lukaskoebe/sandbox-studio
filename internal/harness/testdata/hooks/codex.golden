@@ -1,0 +1,45 @@
+== session-start
+-- stdin
+{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"SessionStart","model":"gpt-x","source":"startup"}
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
+{"harness":"codex","event":"session-start","sessionId":"019a","source":"startup","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"SessionStart"}}
+== user-prompt
+-- stdin
+{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"UserPromptSubmit","model":"gpt-x","turn_id":"t1","prompt":"Run the tests"}
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
+{"harness":"codex","event":"user-prompt","sessionId":"019a","prompt":"Run the tests","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"UserPromptSubmit"}}
+== pre-compact
+-- stdin
+{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"PreCompact","model":"gpt-x","turn_id":"t2","trigger":"manual"}
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
+{"harness":"codex","event":"pre-compact","sessionId":"019a","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{}
+== stop
+-- stdin
+{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"Stop","model":"gpt-x","turn_id":"t2","stop_hook_active":false,"last_assistant_message":"Done."}
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
+{"harness":"codex","event":"stop","sessionId":"019a","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{}
+== session-end
+-- stdin
+{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"SessionEnd","model":"gpt-x","reason":"other"}
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
+{"harness":"codex","event":"session-end","sessionId":"019a","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{}

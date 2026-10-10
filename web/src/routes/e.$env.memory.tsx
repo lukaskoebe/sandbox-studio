@@ -57,6 +57,7 @@ import {
   type MemoryHit,
   type MemoryPage,
 } from "@/components/memory-dialogs"
+import { MemorySessionsTab, MemoryUsage } from "@/components/memory-sessions"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
@@ -127,12 +128,14 @@ function MemoryPage() {
             {current.coreChars} of {current.coreBudget} characters.
           </p>
         )}
+        <MemoryUsage env={env} />
         <Tabs defaultValue="pages">
           <TabsList>
             <TabsTrigger value="pages">Pages</TabsTrigger>
             <TabsTrigger value="facts">Facts</TabsTrigger>
             <TabsTrigger value="conflicts">Conflicts</TabsTrigger>
             <TabsTrigger value="search">Search</TabsTrigger>
+            <TabsTrigger value="sessions">Sessions</TabsTrigger>
           </TabsList>
           <TabsContent value="pages">
             <PagesTab key={scope} env={env} scope={scope} />
@@ -145,6 +148,15 @@ function MemoryPage() {
           </TabsContent>
           <TabsContent value="search">
             <SearchTab env={env} scope={scope} />
+          </TabsContent>
+          <TabsContent value="sessions">
+            <MemorySessionsTab
+              env={env}
+              persona={
+                scope === shared ? undefined : scope.slice("persona:".length)
+              }
+              names={names}
+            />
           </TabsContent>
         </Tabs>
       </div>

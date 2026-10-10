@@ -1,7 +1,7 @@
 # Memory
 
-What personas remember, per environment (PLAN.md §6.7). This is the core: store, search,
-embeddings, API and UI. Hooks, automatic extraction, consolidation and the agent tools come
+What personas remember, per environment (PLAN.md §6.7): the store, search, embeddings,
+API and UI, and memory in agent sessions (hooks, tools, extraction). Consolidation comes
 later.
 
 ## Scopes
@@ -80,5 +80,66 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET search` | hybrid search with `why` |
 | `GET conflicts`, `POST conflicts/{id}/resolve` | conflicts, open first |
 
-The Memory page in the environment sidebar has a scope switcher and tabs for pages,
-facts, conflicts and search.
+| `GET sessions?persona=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
+| `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider |
+
+The Memory page in the environment sidebar has a scope switcher, the extraction budget line,
+and tabs for pages, facts, conflicts, search and sessions.
+
+## In agent sessions
+
+Code: `internal/agentmem` (host), `internal/agentcall` and `internal/agenthook` (guest),
+`cmd/studio-agent` (`hook`, `mcp`). Harness wiring is in docs/harnesses.md.
+
+**Identity.** Hooks and tools run `studio-agent`, which sends a call through
+`/run/studio-agent/call.sock` to the guest daemon and on over the sandbox's own vsock
+channel (stream kind `call`, at most 8 at once, 1 MiB each). Studio takes the sandbox,
+environment and persona from the channel, never from the payload. A persona reads `shared`
+and its own scope and writes only its own; tool arguments with unknown fields are refused.
+A sandbox without a persona gets no memory: hooks answer empty, tools fail.
+
+**Hooks never block.** `studio-agent hook <event> --harness <h>` reads at most 1 MiB of
+stdin, answers within 5 s (2.5 s at session end) and on any failure prints the neutral
+answer (`{}`) and exits 0.
+
+- *Session start* (also resume and compact) injects a context pack of at most 12 000
+  characters inside `<studio-memory>` tags: the soul (4000), core pages (persona, then
+  shared), the project page for the repository's normalized git remote
+  (`project/<host/owner/repo>`, then `project/<repo>`, persona scope first), shared facts
+  other personas changed since the persona's previous session (or the last 7 days, at most
+  10), and up to 5 open conflicts that touch them or the persona's own facts.
+- *Prompt* runs hybrid search and injects at most 5 hits, about 500 tokens (2000
+  characters), each with similarity ≥ 0.45 or at least 2 matching prompt words, and none
+  already given to the session.
+- *Pre-compact, stop, session end* send the transcript delta for extraction. The guest
+  keeps a per-session offset (`~/.local/state/studio-agent/transcripts.json`) that moves
+  only when Studio accepted the delta. It reads only regular files under the harness's
+  state dirs, only complete lines, at most 256 KiB at a time, and condenses them to user and
+  assistant text (64 KiB), without tool calls or anything in `<studio-memory>` tags. A stop
+  sends only after 5 minutes and 2 KiB of new text; pre-compact and session end always do.
+
+Every injection and write goes to the session log (migration `015_memory_sessions.sql`)
+with the item, its score and why: the search explanation plus the threshold it passed, or
+the extraction's model, tokens, cost and any rejection.
+
+**Tools** (`studio-agent mcp`, a stdio MCP server): `memory_search`, `memory_get` (id or
+slug), `remember(text, kind, entity?, scope, source?)`, `share(fact_id | text)`,
+`correct(fact_id, text)` (a new fact supersedes the old) and `forget(fact_id)` (retracts).
+The last two take only the persona's own facts. `share`, and `remember` with scope
+`shared`, create a pending `memory.share` approval with the author; approving it in the
+inbox writes the fact to shared memory with that persona as author, or reinforces a
+duplicate.
+
+**Extraction.** One host worker (queue of 64; a full queue fails the hook so the guest
+resends) calls the provider's utility model directly with the real key from the vault,
+which is never logged: `claude-haiku-4-5` for `anthropic_api`, `gpt-6-luna` for
+`openai_api` (unconfirmed, S7), the endpoint's model for `openai_compatible`, none for
+subscriptions (S8). The answer must be `{"facts": [...]}` with at most 20 facts of text,
+kind, tier (`user` or `inferred`), entities, attribute and an evidence quote found in the
+transcript; one bad fact, an unknown field or anything like a credential rejects the whole
+answer. `user` tier stays only if the quote is from a user line. Facts go to the persona's
+scope; a fact with the same text, the same attribute and similarity ≥ 0.75, similarity
+≥ 0.92 or word overlap ≥ 0.8 reinforces the existing one instead.
+
+**Budget.** Per environment and UTC day: $1.00 for priced models (each call's cost is
+estimated before it is made), 200 calls for unpriced ones. Skipped runs are counted.

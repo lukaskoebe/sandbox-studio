@@ -15,6 +15,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"golang.org/x/net/http/httpguts"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
@@ -26,6 +27,8 @@ type ApprovalView struct {
 	store.Approval
 	Network *policy.NetworkRequest `json:"network,omitempty"`
 	Git     *gitreview.GitDetail   `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
+	// MemoryShare is set for memory.share approvals.
+	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A persona's proposal for shared memory"`
 }
 
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
@@ -39,6 +42,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 	case gitreview.KindPush, gitreview.KindPR:
 		if s.Git != nil {
 			v.Git, _ = s.Git.GitDetail(ctx, a)
+		}
+	case agentmem.ApprovalKind:
+		var p agentmem.SharePayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.MemoryShare = &p
 		}
 	}
 	return v

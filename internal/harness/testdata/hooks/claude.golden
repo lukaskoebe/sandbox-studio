@@ -1,0 +1,45 @@
+== session-start
+-- stdin
+{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"SessionStart","source":"compact","model":"claude-x"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
+{"harness":"claude","event":"session-start","sessionId":"s-1","source":"compact","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"SessionStart"}}
+== user-prompt
+-- stdin
+{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"UserPromptSubmit","prompt":"How do we deploy to staging?"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
+{"harness":"claude","event":"user-prompt","sessionId":"s-1","prompt":"How do we deploy to staging?","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"UserPromptSubmit"}}
+== pre-compact
+-- stdin
+{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"PreCompact","trigger":"auto","custom_instructions":""}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
+{"harness":"claude","event":"pre-compact","sessionId":"s-1","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{}
+== stop
+-- stdin
+{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"Stop","stop_hook_active":false}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
+{"harness":"claude","event":"stop","sessionId":"s-1","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{}
+== session-end
+-- stdin
+{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"SessionEnd","reason":"prompt_input_exit"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
+{"harness":"claude","event":"session-end","sessionId":"s-1","cwd":"/workspace"}
+-- neutral
+{}
+-- with context
+{}

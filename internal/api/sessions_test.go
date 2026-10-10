@@ -92,14 +92,14 @@ func TestSessionStart(t *testing.T) {
 		t.Fatalf("the key reached the guest: %s", sent)
 	}
 	if g.started[0].Env["ANTHROPIC_API_KEY"] != prov.Placeholder || len(g.started[0].Env) != 1 ||
-		strings.Join(g.started[0].Command, " ") != "claude" {
+		strings.Join(g.started[0].Command, " ") != "claude --mcp-config /home/agent/.claude/studio-mcp.json" {
 		t.Fatalf("start request: %+v", g.started[0])
 	}
 	paths := map[string]agentproto.HomeFile{}
 	for _, f := range g.files {
 		paths[f.Path] = f
 	}
-	if !paths[".claude/CLAUDE.md"].Block || !strings.Contains(paths[".claude/CLAUDE.md"].Content, "Careful.") ||
+	if !paths[".claude/CLAUDE.md"].Block || !strings.Contains(paths[".claude/CLAUDE.md"].Content, "`remember`") ||
 		!strings.Contains(paths[".claude/settings.json"].Content, `"claude-sonnet-4-5"`) ||
 		!strings.Contains(paths[".config/git/config"].Content, `name = "Ada L"`) {
 		t.Fatalf("files: %+v", paths)
