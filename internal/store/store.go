@@ -168,6 +168,7 @@ type Sandbox struct {
 	EnvironmentID string    `json:"environmentId"`
 	BuildJobID    string    `json:"-"`
 	TemplateID    string    `json:"templateId,omitempty"`
+	PersonaID     string    `json:"personaId,omitempty" doc:"The persona that owns the sandbox; empty for unowned sandboxes"`
 	Name          string    `json:"name"`
 	Generation    int       `json:"generation"`
 	CPUs          int       `json:"cpus"`
@@ -179,7 +180,7 @@ type Sandbox struct {
 	DNSPort       int       `json:"-"` // loopback port of the sandbox's Studio resolver
 }
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(persona_id, '')"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
 const firstDNSPort = 17100
@@ -187,7 +188,7 @@ const firstDNSPort = 17100
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created int64
-	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort)
+	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.PersonaID)
 	sb.CreatedAt = time.Unix(created, 0)
 	return sb, err
 }
@@ -218,14 +219,23 @@ func (s *Store) CreateSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) 
 			return sb, ErrConflict
 		}
 	}
+	if sb.PersonaID != "" {
+		err := tx.QueryRowContext(ctx, "SELECT 1 FROM personas WHERE environment_id = ? AND id = ?", sb.EnvironmentID, sb.PersonaID).Scan(new(int))
+		if errors.Is(err, sql.ErrNoRows) {
+			return sb, fmt.Errorf("persona %s: %w", sb.PersonaID, ErrNotFound)
+		}
+		if err != nil {
+			return sb, err
+		}
+	}
 	sb.ID, sb.Generation, sb.CreatedAt = NewID(), 1, time.Unix(now(), 0)
 	port, err := freeDNSPort(ctx, tx)
 	if err != nil {
 		return sb, err
 	}
 	sb.DNSPort = port
-	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort)
+	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, persona_id) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''))",
+		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort, sb.PersonaID)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}
