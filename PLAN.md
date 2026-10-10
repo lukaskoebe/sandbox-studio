@@ -597,6 +597,14 @@ shown in the UI and kept for a bounded period.
 
 ### 6.6 Personas, providers and harness adapters
 
+**Built (M4 part A).** Providers and personas are per-environment records with CRUD pages
+and API (`docs/personas.md`). An API-key provider owns one vault secret bound to the vendor
+host (or the custom base URL's host); subscription providers are records in state
+`login_required` until the login flow exists. A persona's harness must be one its provider
+kind supports (table below). Sandboxes can be owned by a persona, fixed at creation and
+copied by fork. Network rules can be scoped to a persona; the gateway resolves the owner
+from the catalog. Harness adapters, default rule scope and auto-patterns are not built yet.
+
 **Persona settings.**
 - Identity and soul (markdown).
 - Harness: `opencode | claude | codex`.
