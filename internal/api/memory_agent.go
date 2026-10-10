@@ -2,15 +2,11 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
-	"github.com/lukaskoebe/sandbox-studio/internal/events"
-	"github.com/lukaskoebe/sandbox-studio/internal/policy"
-	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // registerMemoryAgent adds what memory did in agent sessions: the sessions, each one's
@@ -65,33 +61,4 @@ func (s *Server) registerMemoryAgent(api huma.API) {
 		v, err := s.AgentMem.UsageReport(ctx, in.Env)
 		return &struct{ Body agentmem.UsageView }{v}, apiError(err)
 	})
-}
-
-// decideMemoryShare settles a memory.share approval: allow writes the fact to shared
-// memory, deny and dismiss write nothing. Its errors are API errors already.
-func (s *Server) decideMemoryShare(ctx context.Context, a store.Approval, action string) (store.Approval, error) {
-	if a.Status != store.StatusPending {
-		return a, apiError(policy.ErrDecided)
-	}
-	if s.AgentMem == nil {
-		return a, huma.Error503ServiceUnavailable("memory in agent sessions is not running")
-	}
-	status := map[string]string{store.ActionAllow: store.StatusApproved, store.ActionDeny: store.StatusDenied, "dismiss": store.StatusDismissed}[action]
-	if status == "" {
-		return a, huma.Error422UnprocessableEntity("unsupported decision " + action)
-	}
-	// Close the request first, so a double click can't write the fact twice.
-	if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, status, ""); errors.Is(err, store.ErrNotFound) {
-		return a, apiError(policy.ErrDecided)
-	} else if err != nil {
-		return a, apiError(err)
-	}
-	if _, err := s.AgentMem.DecideShare(ctx, a, status == store.StatusApproved); err != nil {
-		return a, memoryError(err)
-	}
-	if s.Bus != nil {
-		s.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: a.EnvironmentID})
-	}
-	a, err := s.Store.Approval(ctx, a.EnvironmentID, a.ID)
-	return a, apiError(err)
 }

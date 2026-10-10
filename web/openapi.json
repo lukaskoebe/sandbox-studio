@@ -31,6 +31,10 @@
           "environmentId": {
             "type": "string"
           },
+          "git": {
+            "$ref": "#/components/schemas/GitDetail",
+            "description": "Set for git.push and git.pr approvals"
+          },
           "id": {
             "type": "string"
           },
@@ -239,6 +243,38 @@
           "state",
           "generation",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "Commit": {
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "sha": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "when": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sha",
+          "author",
+          "email",
+          "when",
+          "subject"
         ],
         "type": "object"
       },
@@ -547,7 +583,7 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "allow or deny creates a rule; dismiss only closes the request",
+            "description": "For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request",
             "enum": [
               "allow",
               "deny",
@@ -557,6 +593,11 @@
           },
           "host": {
             "description": "Host pattern the rule covers; empty means the requested host",
+            "type": "string"
+          },
+          "note": {
+            "description": "For git approvals: a note passed on to the sandbox, such as why a push was rejected",
+            "maxLength": 2000,
             "type": "string"
           },
           "ports": {
@@ -860,6 +901,109 @@
         ],
         "type": "object"
       },
+      "Forge": {
+        "additionalProperties": false,
+        "properties": {
+          "baseUrl": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "forgejo",
+              "github"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The URL segment: https://git.studio.internal/\u003cname\u003e/\u003cowner\u003e/\u003crepo\u003e.git",
+            "type": "string"
+          },
+          "secretId": {
+            "description": "The studio-only vault secret holding the token",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "name",
+          "kind",
+          "baseUrl",
+          "secretId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ForgeInput": {
+        "additionalProperties": false,
+        "properties": {
+          "baseUrl": {
+            "description": "The forge's public HTTPS URL, such as https://codeberg.org",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "kind": {
+            "description": "github is not implemented yet",
+            "enum": [
+              "forgejo",
+              "github"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "Names the forge in the remote URL: https://git.studio.internal/\u003cname\u003e/\u003cowner\u003e/\u003crepo\u003e.git",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+            "type": "string"
+          },
+          "token": {
+            "description": "An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it",
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "baseUrl",
+          "token"
+        ],
+        "type": "object"
+      },
+      "ForgeTest": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "user": {
+            "description": "The user the token belongs to",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
       "ForkInBody": {
         "additionalProperties": false,
         "properties": {
@@ -872,6 +1016,127 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "GitDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "pullRequest": {
+            "$ref": "#/components/schemas/PullRequest",
+            "description": "Set for git.pr approvals"
+          },
+          "push": {
+            "$ref": "#/components/schemas/GitPush"
+          },
+          "review": {
+            "$ref": "#/components/schemas/PushReview",
+            "description": "Set for git.push approvals"
+          }
+        },
+        "required": [
+          "push"
+        ],
+        "type": "object"
+      },
+      "GitPush": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "defaultBranch": {
+            "type": "string"
+          },
+          "delivered": {
+            "description": "The sandbox has been told it was rejected or failed",
+            "type": "boolean"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "forgeId": {
+            "type": "string"
+          },
+          "forgeName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "newSha": {
+            "type": "string"
+          },
+          "note": {
+            "description": "The reviewer's note",
+            "type": "string"
+          },
+          "oldSha": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "personaName": {
+            "type": "string"
+          },
+          "prApprovalId": {
+            "type": "string"
+          },
+          "prResult": {
+            "type": "string"
+          },
+          "prUrl": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "result": {
+            "description": "What the forge answered, or why the push failed",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "pushed",
+              "failed",
+              "rejected",
+              "superseded"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "sandboxId",
+          "forgeId",
+          "forgeName",
+          "owner",
+          "repo",
+          "ref",
+          "oldSha",
+          "newSha",
+          "approvalId",
+          "state",
+          "delivered",
+          "createdAt",
+          "updatedAt"
         ],
         "type": "object"
       },
@@ -1389,6 +1654,116 @@
         ],
         "type": "object"
       },
+      "PullRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "description": "Branch to merge into",
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "head": {
+            "description": "Branch with the changes",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "head",
+          "base",
+          "title",
+          "body"
+        ],
+        "type": "object"
+      },
+      "PushReview": {
+        "additionalProperties": false,
+        "properties": {
+          "additions": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "commits": {
+            "description": "New commits, newest first",
+            "items": {
+              "$ref": "#/components/schemas/Commit"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "deletions": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "diff": {
+            "description": "Unified diff from the branch's previous state (or where a new branch forked) to the push",
+            "type": "string"
+          },
+          "diffTruncated": {
+            "type": "boolean"
+          },
+          "files": {
+            "description": "Files changed",
+            "format": "int64",
+            "type": "integer"
+          },
+          "forge": {
+            "type": "string"
+          },
+          "moreCommits": {
+            "description": "New commits not listed",
+            "format": "int64",
+            "type": "integer"
+          },
+          "new": {
+            "type": "string"
+          },
+          "old": {
+            "description": "The branch on the forge before the push; empty for a new branch",
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "persona": {
+            "description": "The persona owning the sandbox; empty for unowned sandboxes",
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "sandbox": {
+            "description": "The sandbox's name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandbox",
+          "forge",
+          "owner",
+          "repo",
+          "branch",
+          "old",
+          "new",
+          "commits",
+          "moreCommits",
+          "files",
+          "additions",
+          "deletions",
+          "diff",
+          "diffTruncated"
+        ],
+        "type": "object"
+      },
       "RebaseInBody": {
         "additionalProperties": false,
         "properties": {
@@ -1724,6 +2099,9 @@
           "placeholder": {
             "type": "string"
           },
+          "studioOnly": {
+            "type": "boolean"
+          },
           "updatedAt": {
             "format": "date-time",
             "type": "string"
@@ -1736,6 +2114,7 @@
           "hosts",
           "placeholder",
           "note",
+          "studioOnly",
           "createdAt",
           "updatedAt"
         ],
@@ -2610,6 +2989,203 @@
         },
         "tags": [
           "builds"
+        ]
+      }
+    },
+    "/api/environments/{env}/forges": {
+      "get": {
+        "operationId": "listForges",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Forge"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      },
+      "post": {
+        "operationId": "createForge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forge"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/forges/{id}": {
+      "delete": {
+        "description": "Removes the forge, its token and the staged pushes to it. Pending pushes can no longer be approved.",
+        "operationId": "deleteForge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/forges/{id}/test": {
+      "post": {
+        "description": "Checks that the forge answers and accepts the token.",
+        "operationId": "testForge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForgeTest"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
         ]
       }
     },

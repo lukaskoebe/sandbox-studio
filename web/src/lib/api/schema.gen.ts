@@ -133,6 +133,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/forges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listForges"];
+        put?: never;
+        post: operations["createForge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/forges/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Removes the forge, its token and the staged pushes to it. Pending pushes can no longer be approved. */
+        delete: operations["deleteForge"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/forges/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Checks that the forge answers and accepts the token. */
+        post: operations["testForge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/memory/conflicts": {
         parameters: {
             query?: never;
@@ -913,6 +963,8 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
+            /** @description Set for git.push and git.pr approvals */
+            git?: components["schemas"]["GitDetail"];
             id: string;
             kind: string;
             network?: components["schemas"]["NetworkRequest"];
@@ -968,6 +1020,15 @@ export interface components {
             sandboxId: string;
             /** @enum {string} */
             state: "creating" | "ready" | "deleting";
+        };
+        Commit: {
+            author: string;
+            body?: string;
+            email: string;
+            sha: string;
+            subject: string;
+            /** Format: date-time */
+            when: string;
         };
         Conflict: {
             /** Format: date-time */
@@ -1068,12 +1129,14 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description allow or deny creates a rule; dismiss only closes the request
+             * @description For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
              * @enum {string}
              */
             action: "allow" | "deny" | "dismiss";
             /** @description Host pattern the rule covers; empty means the requested host */
             host?: string;
+            /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected */
+            note?: string;
             /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
             ports?: number[] | null;
             /**
@@ -1180,9 +1243,80 @@ export interface components {
             /** Format: date-time */
             validUntil?: string;
         };
+        Forge: {
+            baseUrl: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            id: string;
+            /** @enum {string} */
+            kind: "forgejo" | "github";
+            /** @description The URL segment: https://git.studio.internal/<name>/<owner>/<repo>.git */
+            name: string;
+            /** @description The studio-only vault secret holding the token */
+            secretId: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ForgeInput: {
+            /** @description The forge's public HTTPS URL, such as https://codeberg.org */
+            baseUrl: string;
+            /**
+             * @description github is not implemented yet
+             * @enum {string}
+             */
+            kind: "forgejo" | "github";
+            /** @description Names the forge in the remote URL: https://git.studio.internal/<name>/<owner>/<repo>.git */
+            name: string;
+            /** @description An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it */
+            token: string;
+        };
+        ForgeTest: {
+            message?: string;
+            ok: boolean;
+            /** @description The user the token belongs to */
+            user?: string;
+        };
         ForkInBody: {
             /** @description Name of the new sandbox */
             name: string;
+        };
+        GitDetail: {
+            /** @description Set for git.pr approvals */
+            pullRequest?: components["schemas"]["PullRequest"];
+            push: components["schemas"]["GitPush"];
+            /** @description Set for git.push approvals */
+            review?: components["schemas"]["PushReview"];
+        };
+        GitPush: {
+            approvalId: string;
+            /** Format: date-time */
+            createdAt: string;
+            defaultBranch?: string;
+            /** @description The sandbox has been told it was rejected or failed */
+            delivered: boolean;
+            environmentId: string;
+            forgeId: string;
+            forgeName: string;
+            id: string;
+            newSha: string;
+            /** @description The reviewer's note */
+            note?: string;
+            oldSha: string;
+            owner: string;
+            personaName?: string;
+            prApprovalId?: string;
+            prResult?: string;
+            prUrl?: string;
+            ref: string;
+            repo: string;
+            /** @description What the forge answered, or why the push failed */
+            result?: string;
+            sandboxId: string;
+            /** @enum {string} */
+            state: "pending" | "pushed" | "failed" | "rejected" | "superseded";
+            /** Format: date-time */
+            updatedAt: string;
         };
         Health: {
             /** @enum {string} */
@@ -1331,6 +1465,46 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        PullRequest: {
+            /** @description Branch to merge into */
+            base: string;
+            body: string;
+            /** @description Branch with the changes */
+            head: string;
+            title: string;
+        };
+        PushReview: {
+            /** Format: int64 */
+            additions: number;
+            branch: string;
+            /** @description New commits, newest first */
+            commits: components["schemas"]["Commit"][] | null;
+            /** Format: int64 */
+            deletions: number;
+            /** @description Unified diff from the branch's previous state (or where a new branch forked) to the push */
+            diff: string;
+            diffTruncated: boolean;
+            /**
+             * Format: int64
+             * @description Files changed
+             */
+            files: number;
+            forge: string;
+            /**
+             * Format: int64
+             * @description New commits not listed
+             */
+            moreCommits: number;
+            new: string;
+            /** @description The branch on the forge before the push; empty for a new branch */
+            old: string;
+            owner: string;
+            /** @description The persona owning the sandbox; empty for unowned sandboxes */
+            persona?: string;
+            repo: string;
+            /** @description The sandbox's name */
+            sandbox: string;
+        };
         RebaseInBody: {
             /** @description A ready template in the same environment */
             templateId: string;
@@ -1438,6 +1612,7 @@ export interface components {
             name: string;
             note: string;
             placeholder: string;
+            studioOnly: boolean;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -1894,6 +2069,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildJobLog"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listForges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forge"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createForge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgeInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forge"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteForge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    testForge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForgeTest"];
                 };
             };
             /** @description Error */

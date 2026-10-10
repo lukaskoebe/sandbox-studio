@@ -198,6 +198,11 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 		},
 		upstreamRoots: h.upCA,
 		Caddy:         sharedCaddy(),
+		Virtual: []VirtualHost{{Name: "echo.studio.internal", Serve: func(sb store.Sandbox) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprintf(w, "virtual %s %s %s", sb.ID, sb.EnvironmentID, r.URL.Path)
+			})
+		}}},
 	}
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -748,4 +753,38 @@ func TestCaddyRule(t *testing.T) {
 		}
 		return intercepted && broken
 	}, func() string { return fmt.Sprintf("%+v", h.gw.Conns.List("sb1")) })
+}
+
+func TestVirtualHosts(t *testing.T) {
+	h := newInterceptHarness(t)
+	c := h.client(t, h.envCA)
+	before := h.requests()
+
+	resp, body := get(t, c, "https://echo.studio.internal/x")
+	if resp.StatusCode != 200 || !strings.HasPrefix(body, "virtual sb1 ") || !strings.HasSuffix(body, " /x") {
+		t.Fatalf("status %d: %q", resp.StatusCode, body)
+	}
+	resp, body = get(t, c, "https://other.studio.internal/x")
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(body, "no service") {
+		t.Fatalf("unknown service: %d %q", resp.StatusCode, body)
+	}
+	resp, body = get(t, c, "http://echo.studio.internal/x")
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(body, "https://echo.studio.internal/") {
+		t.Fatalf("plain HTTP: %d %q", resp.StatusCode, body)
+	}
+	if h.requests() != before {
+		t.Fatal("a virtual host request went upstream")
+	}
+	h.harness.mu.Lock()
+	defer h.harness.mu.Unlock()
+	for _, d := range h.dialed {
+		if strings.Contains(d, "studio.internal") {
+			t.Fatalf("dialed %s", d)
+		}
+	}
+	for _, r := range h.policy.asked {
+		if strings.HasSuffix(r.Host, "studio.internal") {
+			t.Fatalf("asked the policy about %s", r.Host)
+		}
+	}
 }

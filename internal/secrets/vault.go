@@ -284,6 +284,9 @@ func (v *Vault) Bindings(ctx context.Context, envID string) ([]Binding, error) {
 	}
 	out := make([]Binding, 0, len(list))
 	for _, s := range list {
+		if s.StudioOnly {
+			continue
+		}
 		value, err := v.Unseal(s.Sealed, []byte(s.ID))
 		if err != nil {
 			return nil, fmt.Errorf("secret %s: %w", s.Name, err)
@@ -292,20 +295,6 @@ func (v *Vault) Bindings(ctx context.Context, envID string) ([]Binding, error) {
 	}
 	v.bindings[envID] = out
 	return out, nil
-}
-
-// Value returns the real value of one secret. Studio calls providers from the host with
-// it (memory extraction); it must never be logged or sent to a guest.
-func (v *Vault) Value(ctx context.Context, envID, secretID string) (string, error) {
-	sec, err := v.st.SecretByID(ctx, envID, secretID)
-	if err != nil {
-		return "", err
-	}
-	value, err := v.Unseal(sec.Sealed, []byte(sec.ID))
-	if err != nil {
-		return "", fmt.Errorf("secret %s: %w", sec.Name, err)
-	}
-	return string(value), nil
 }
 
 // Env maps each secret's name to its placeholder. These are the environment variables a
@@ -317,7 +306,9 @@ func (v *Vault) Env(ctx context.Context, envID string) (map[string]string, error
 	}
 	env := make(map[string]string, len(list))
 	for _, s := range list {
-		env[s.Name] = s.Placeholder
+		if !s.StudioOnly {
+			env[s.Name] = s.Placeholder
+		}
 	}
 	return env, nil
 }

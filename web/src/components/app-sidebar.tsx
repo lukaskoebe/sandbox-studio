@@ -7,6 +7,7 @@ import {
   CaretUpDownIcon,
   CheckIcon,
   CubeIcon,
+  GitBranchIcon,
   GlobeIcon,
   HammerIcon,
   KeyIcon,
@@ -128,6 +129,16 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <KeyIcon />
                 <span>Secrets</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Git"
+                isActive={!!matchRoute({ to: "/e/$env/git", params: { env } })}
+                render={<Link to="/e/$env/git" params={{ env }} />}
+              >
+                <GitBranchIcon />
+                <span>Git</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

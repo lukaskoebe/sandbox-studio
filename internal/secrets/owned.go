@@ -1,6 +1,8 @@
 package secrets
 
 import (
+	"context"
+
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -44,4 +46,15 @@ func (v *Vault) Changed(envID string) {
 	v.mu.Lock()
 	delete(v.bindings, envID)
 	v.mu.Unlock()
+}
+
+// Value unseals one secret of an environment, for Studio's own use of a studio-only
+// secret. Sandboxes never see what it returns.
+func (v *Vault) Value(ctx context.Context, envID, id string) (string, error) {
+	sec, err := v.st.SecretByID(ctx, envID, id)
+	if err != nil {
+		return "", err
+	}
+	b, err := v.Unseal(sec.Sealed, []byte(sec.ID))
+	return string(b), err
 }

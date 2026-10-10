@@ -882,6 +882,11 @@ conflicts, and the injection log.
 
   A third-party plugin runtime (OCI image per plugin in its own microVM) is revisited after
   two or three integrations exist.
+- **Built (M8)**, see `docs/git-review.md`: per-sandbox staging repos, size and
+  fast-forward checks, `git.push` and Forgejo `git.pr` approvals, forges with studio-only
+  tokens on the Git page. The interface in `internal/integrations` has only `ID`, `Routes`
+  and `ApprovalKinds` so far; a rejection reaches the agent as a one-time failed fetch
+  (the MCP notification waits for M5). GitHub and GitLab adapters are not built.
 
 ### 6.10 Terminals, previews and files
 

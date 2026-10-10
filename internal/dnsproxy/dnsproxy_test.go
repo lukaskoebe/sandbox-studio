@@ -627,3 +627,39 @@ func TestCloseReleasesPortAndOpenConnections(t *testing.T) {
 	}
 	ln.Close()
 }
+
+func TestVirtualNamesAreAnsweredLocally(t *testing.T) {
+	up := startUpstream(t, fakeAnswer)
+	srv := listen(t, up.addr)
+	for _, typ := range []dnsmessage.Type{dnsmessage.TypeA, dnsmessage.TypeAAAA} {
+		resp := udpExchange(t, srv.Addr(), buildQuery(0x77, "Git.Studio.Internal.", typ))
+		var p dnsmessage.Parser
+		h, err := p.Start(resp)
+		if err != nil || h.ID != 0x77 || !h.Response || h.RCode != dnsmessage.RCodeSuccess {
+			t.Fatalf("type %v: header %+v, %v", typ, h, err)
+		}
+		p.SkipAllQuestions()
+		answers, err := p.AllAnswers()
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := 0
+		if typ == dnsmessage.TypeA {
+			want = 1
+		}
+		if len(answers) != want {
+			t.Fatalf("type %v: %d answers", typ, len(answers))
+		}
+		if want == 1 {
+			if a := answers[0].Body.(*dnsmessage.AResource).A; netip.AddrFrom4(a) != VirtualAddr {
+				t.Fatalf("A = %v", a)
+			}
+		}
+	}
+	if name, ok := srv.Names.Lookup(VirtualAddr); !ok || name != "git.studio.internal" {
+		t.Fatalf("Lookup = %q, %v", name, ok)
+	}
+	if n := len(up.queries()); n != 0 {
+		t.Fatalf("%d queries went upstream", n)
+	}
+}

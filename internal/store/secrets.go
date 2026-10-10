@@ -12,24 +12,30 @@ import (
 // Secret is a named value sandboxes see as a placeholder environment variable. The value
 // is sealed by the vault; the store only keeps the sealed bytes.
 type Secret struct {
-	ID            string    `json:"id"`
-	EnvironmentID string    `json:"environmentId"`
-	Name          string    `json:"name"`
-	Sealed        []byte    `json:"-"`
-	Hosts         []string  `json:"hosts"`
-	Placeholder   string    `json:"placeholder"`
-	Note          string    `json:"note"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID            string   `json:"id"`
+	EnvironmentID string   `json:"environmentId"`
+	Name          string   `json:"name"`
+	Sealed        []byte   `json:"-"`
+	Hosts         []string `json:"hosts"`
+	Placeholder   string   `json:"placeholder"`
+	Note          string   `json:"note"`
+	// StudioOnly secrets are used by Studio itself (a forge's token) and never reach
+	// sandboxes: no placeholder, no substitution.
+	StudioOnly bool      `json:"studioOnly"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
+// secretCols are the columns inserted; selects also read studio_only.
 const secretCols = "id, environment_id, name, value, hosts, placeholder, note, created_at, updated_at"
+
+const secretSelect = secretCols + ", studio_only"
 
 func scanSecret(row interface{ Scan(...any) error }) (Secret, error) {
 	var s Secret
 	var hosts string
 	var created, updated int64
-	err := row.Scan(&s.ID, &s.EnvironmentID, &s.Name, &s.Sealed, &hosts, &s.Placeholder, &s.Note, &created, &updated)
+	err := row.Scan(&s.ID, &s.EnvironmentID, &s.Name, &s.Sealed, &hosts, &s.Placeholder, &s.Note, &created, &updated, &s.StudioOnly)
 	s.Hosts = strings.Split(hosts, ",")
 	s.CreatedAt, s.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return s, err
@@ -68,7 +74,7 @@ func (s *Store) UpdateSecret(ctx context.Context, sec Secret) (Secret, error) {
 
 // SecretByID returns one secret of an environment.
 func (s *Store) SecretByID(ctx context.Context, envID, id string) (Secret, error) {
-	sec, err := scanSecret(s.db.QueryRowContext(ctx, "SELECT "+secretCols+" FROM secrets WHERE environment_id = ? AND id = ?", envID, id))
+	sec, err := scanSecret(s.db.QueryRowContext(ctx, "SELECT "+secretSelect+" FROM secrets WHERE environment_id = ? AND id = ?", envID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return sec, ErrNotFound
 	}
@@ -77,7 +83,7 @@ func (s *Store) SecretByID(ctx context.Context, envID, id string) (Secret, error
 
 // Secrets lists the secrets of an environment by name, sealed values included.
 func (s *Store) Secrets(ctx context.Context, envID string) ([]Secret, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+secretCols+" FROM secrets WHERE environment_id = ? ORDER BY name", envID)
+	rows, err := s.db.QueryContext(ctx, "SELECT "+secretSelect+" FROM secrets WHERE environment_id = ? ORDER BY name", envID)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ func TestMemoryShareApproval(t *testing.T) {
 		t.Fatalf("usage without the service: %d", rec.Code)
 	}
 	s.AgentMem = agentmem.New(s.Store, s.Memory, s.Vault, s.Log)
+	s.Integrations = append(s.Integrations, s.AgentMem)
 	env := newEnvironment(t, s, "work")
 	base += env.ID
 	ctx := t.Context()

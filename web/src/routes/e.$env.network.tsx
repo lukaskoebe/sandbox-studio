@@ -54,6 +54,8 @@ function NetworkPage() {
   const requests = $api.useQuery("get", "/api/environments/{env}/approvals", {
     params: { path: { env }, query: { status: "all" } },
   })
+  // Git approvals are reviewed on the Git page.
+  const networkRequests = requests.data?.filter((a) => a.kind === "network")
   const names = new Map((sandboxes.data ?? []).map((sb) => [sb.id, sb.name]))
   const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
     params: { path: { env } },
@@ -156,9 +158,9 @@ function NetworkPage() {
           <h2 className="text-xs font-medium">Requests</h2>
           {requests.isPending ? (
             <Spinner className="mx-auto block" />
-          ) : requests.data?.length ? (
+          ) : networkRequests?.length ? (
             <ul className="divide-y rounded-lg ring-1 ring-foreground/10">
-              {requests.data.slice(0, 50).map((a) => (
+              {networkRequests.slice(0, 50).map((a) => (
                 <li key={a.id} className="grid gap-2 p-3">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                     <span className="font-mono">{a.subject}</span>
