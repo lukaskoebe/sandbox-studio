@@ -1,39 +1,3 @@
-== command
-["opencode"]
-== env OPENAI_API_KEY=studio-0123456789abcdef0123456789abcdef
-== .config/opencode/opencode.json mode=644 block=false
-{
-  "$schema": "https://opencode.ai/config.json",
-  "autoupdate": false,
-  "mcp": {
-    "studio": {
-      "command": [
-        "/opt/studio/bin/studio-agent",
-        "mcp"
-      ],
-      "enabled": true,
-      "type": "local"
-    }
-  },
-  "model": "studio/qwen3-coder:30b",
-  "permission": "allow",
-  "provider": {
-    "studio": {
-      "models": {
-        "qwen3-coder:30b": {
-          "name": "qwen3-coder:30b"
-        }
-      },
-      "name": "Sandbox Studio",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "apiKey": "{env:OPENAI_API_KEY}",
-        "baseURL": "https://llm.example.com/v1?x=1&y=2"
-      }
-    }
-  }
-}
-== .config/opencode/plugins/studio-memory.js mode=644 block=false
 // Managed by Sandbox Studio: rewritten when a session starts.
 //
 // Forwards OpenCode's session events to `studio-agent hook`, which asks Studio for memory
@@ -148,29 +112,3 @@ export const StudioMemory = async ({ client, directory }) => {
     },
   }
 }
-== .config/opencode/AGENTS.md mode=644 block=true
-<!-- sandbox-studio:begin -->
-<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the persona in Studio instead; text outside the block is kept. -->
-
-# You are Ada
-
-Role: Backend engineer
-
-You work in the Sandbox Studio sandbox "api". The project is in /workspace. Network access goes through Studio's gateway and its policy. API keys in your environment are placeholders that only work through the gateway; there is no need to look for real ones.
-
-## Memory
-
-Studio remembers for you across sessions and sandboxes. At session start you get your soul, your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The `studio` MCP server has tools for more:
-
-- `memory_search` and `memory_get`: look things up when the injected memories aren't enough.
-- `remember`: save something right away. Use it for preferences the user states (source `user`) and for procedures you have verified by running them (source `verified`, with the command and result as evidence).
-- `correct` and `forget`: fix or retract one of your own facts when it turns out wrong.
-- `share`: propose a fact for the shared memory of every persona; the user approves it first.
-
-Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
-<!-- sandbox-studio:end -->
-== .config/git/config mode=644 block=false
-# Managed by Sandbox Studio: rewritten when a session starts.
-[user]
-	name = "Ada Lovelace"
-	email = ada@example.com

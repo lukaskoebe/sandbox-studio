@@ -1,6 +1,7 @@
 package harness
 
 import (
+	_ "embed"
 	"fmt"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/personas"
@@ -12,8 +13,15 @@ import (
 // providers: https://opencode.ai/docs/providers/ (custom OpenAI-compatible providers via
 // @ai-sdk/openai-compatible, "{env:VAR}" substitution), permissions:
 // https://opencode.ai/docs/permissions/ ("permission": "allow"), rules:
-// https://opencode.ai/docs/rules/ (global ~/.config/opencode/AGENTS.md).
-type OpenCode struct{ noHooks }
+// https://opencode.ai/docs/rules/ (global ~/.config/opencode/AGENTS.md), MCP:
+// https://opencode.ai/docs/mcp-servers/ ("mcp" with type local), plugins:
+// https://opencode.ai/docs/plugins/ (global ~/.config/opencode/plugins/).
+type OpenCode struct{}
+
+// opencodePlugin forwards OpenCode's events to `studio-agent hook`.
+//
+//go:embed opencode-plugin.js
+var opencodePlugin string
 
 func (OpenCode) Name() string { return personas.HarnessOpenCode }
 
@@ -27,7 +35,10 @@ func (OpenCode) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, er
 		"permission": "allow",
 		// The binary is installed by the image; the agent user can't update it.
 		"autoupdate": false,
-		// TODO(M5): "mcp" servers and the plugin that forwards hooks.
+		// Memory tools; the hooks are the plugin in plugins/.
+		"mcp": map[string]any{mcpServerName: map[string]any{
+			"type": "local", "command": []string{AgentPath, "mcp"}, "enabled": true,
+		}},
 	}
 	apiKey := map[string]any{"apiKey": "{env:" + provider.EnvVar + "}"}
 	m := model(p, provider)
@@ -66,9 +77,17 @@ func (OpenCode) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, er
 	rules.Path = ".config/opencode/AGENTS.md"
 	return []GuestFile{
 		{Path: ".config/opencode/opencode.json", Content: b, Mode: 0o644},
+		{Path: ".config/opencode/plugins/studio-memory.js", Content: opencodePlugin, Mode: 0o644},
 		rules,
 	}, nil
 }
+
+// ParseHook reads what Studio's plugin writes (opencode-plugin.js).
+func (OpenCode) ParseHook(event string, stdin []byte) (HookEvent, error) {
+	return parseOpenCode(event, stdin)
+}
+
+func (OpenCode) RenderHookResponse(r HookResult) []byte { return renderOpenCode(r) }
 
 func (OpenCode) TUICommand(SessionOpts) []string { return []string{"opencode"} }
 

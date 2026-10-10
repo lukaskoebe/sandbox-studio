@@ -13,8 +13,11 @@ import (
 // https://developers.openai.com/codex/config-reference; ~/.codex/config.toml, model_providers
 // with base_url, env_key and wire_api, approval_policy, sandbox_mode, projects trust),
 // instructions: https://developers.openai.com/codex/guides/agents-md (global
-// ~/.codex/AGENTS.md).
-type Codex struct{ noHooks }
+// ~/.codex/AGENTS.md), hooks: https://learn.chatgpt.com/docs/hooks (~/.codex/hooks.json,
+// stdin fields, hookSpecificOutput.additionalContext on SessionStart and UserPromptSubmit,
+// SessionEnd timeout at most 3 s, trust by hash), MCP: config reference
+// (mcp_servers.<id>.command and args).
+type Codex struct{}
 
 func (Codex) Name() string { return personas.HarnessCodex }
 
@@ -62,12 +65,22 @@ func (Codex) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error
 	}
 	b.WriteString("\n[notice]\nhide_full_access_warning = true\n")
 	b.WriteString("\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n")
-	// TODO(M5): [mcp_servers.<id>] and hooks.
+	// Memory tools.
+	fmt.Fprintf(&b, "\n[mcp_servers.%s]\ncommand = %s\nargs = [\"mcp\"]\n", mcpServerName, tomlString(AgentPath))
+
+	hooks, err := marshalJSON(map[string]any{
+		"description": "Managed by Sandbox Studio: rewritten when a session starts. Forwards to Studio's memory.",
+		"hooks":       claudeStyleHooks(personas.HarnessCodex),
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	agents := instructions(p, s)
 	agents.Path = ".codex/AGENTS.md"
 	return []GuestFile{
 		{Path: ".codex/config.toml", Content: b.String(), Mode: 0o644},
+		{Path: ".codex/hooks.json", Content: hooks, Mode: 0o644},
 		agents,
 	}, nil
 }
@@ -91,7 +104,21 @@ func tomlString(s string) string {
 	return b.String()
 }
 
-func (Codex) TUICommand(SessionOpts) []string { return []string{"codex"} }
+// TUICommand skips the hook trust review: user-layer hooks run only once trusted by hash,
+// and the managed layer (requirements.toml) is outside the home. Studio rewrites hooks.json
+// on every start and the VM is the sandbox. verify (S7): the flag is accepted by the
+// interactive TUI of 0.162.1.
+func (Codex) TUICommand(SessionOpts) []string {
+	return []string{"codex", "--dangerously-bypass-hook-trust"}
+}
+
+// ParseHook reads Codex's hook stdin, which uses Claude Code's field names. verify (S7):
+// the payloads of 0.162.1.
+func (Codex) ParseHook(event string, stdin []byte) (HookEvent, error) {
+	return parseClaudeStyle(personas.HarnessCodex, event, stdin)
+}
+
+func (Codex) RenderHookResponse(r HookResult) []byte { return renderClaudeStyle(r) }
 
 // ACPCommand is nil: Codex speaks ACP through a separate adapter (M6).
 func (Codex) ACPCommand() []string { return nil }

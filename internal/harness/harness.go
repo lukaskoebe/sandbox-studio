@@ -16,7 +16,6 @@ package harness
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -57,21 +56,12 @@ type SessionOpts struct {
 	Workdir string
 }
 
-// HookEvent and HookResult are the harness-neutral hook types of PLAN.md §6.6. Hooks are
-// M5; until then they carry nothing and the adapters refuse to parse.
-type (
-	HookEvent  struct{}
-	HookResult struct{}
-)
-
-// ErrNoHooks is returned by ParseHook until hooks land (M5).
-var ErrNoHooks = errors.New("harness hooks are not implemented yet")
-
 // Harness is an adapter for one agent harness (PLAN.md §6.6).
 type Harness interface {
 	Name() string
 	// Render returns the harness's config files: the managed instructions block, the
-	// provider and model, and the auto-approve mode. MCP servers and hooks join here in M5.
+	// provider and model, the auto-approve mode, the hooks that call `studio-agent hook`
+	// and the registration of `studio-agent mcp`.
 	Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error)
 	// TUICommand is the command line of the interactive TUI, run in a login shell.
 	TUICommand(opts SessionOpts) []string
@@ -81,7 +71,10 @@ type Harness interface {
 	// StateDirs are the directories, relative to the home, where the harness keeps its
 	// sessions and history.
 	StateDirs() []string
+	// ParseHook turns the harness's hook stdin for one of HookEvents into a HookEvent. It
+	// runs in the guest, in `studio-agent hook`.
 	ParseHook(event string, stdin []byte) (HookEvent, error)
+	// RenderHookResponse is the hook's stdout in the harness's format.
 	RenderHookResponse(HookResult) []byte
 }
 
@@ -143,9 +136,10 @@ func GitConfig(p Persona) GuestFile {
 	return GuestFile{Path: ".config/git/config", Content: content, Mode: 0o644}
 }
 
-// instructions is the managed block with the persona's identity and soul. It goes into the
-// harness's global instructions file in the home, not into /workspace, so it never ends up
-// in the project's repository.
+// instructions is the managed block: who the persona is and how its memory works. It goes
+// into the harness's global instructions file in the home, not into /workspace, so it never
+// ends up in the project's repository. The soul and the persona's memory arrive as context
+// at session start (PLAN §6.6), so the block stays small and the same across sessions.
 func instructions(p Persona, s Sandbox) GuestFile {
 	var b strings.Builder
 	b.WriteString(agentproto.BlockBegin + "\n")
@@ -157,15 +151,24 @@ func instructions(p Persona, s Sandbox) GuestFile {
 	fmt.Fprintf(&b, "You work in the Sandbox Studio sandbox %q. The project is in /workspace. "+
 		"Network access goes through Studio's gateway and its policy. API keys in your environment are "+
 		"placeholders that only work through the gateway; there is no need to look for real ones.\n", s.Name)
-	if soul := strings.TrimSpace(p.Soul); soul != "" {
-		b.WriteString("\n## Soul\n\n")
-		b.WriteString(soul)
-		b.WriteString("\n")
-	}
-	// TODO(M5): the persona's memory joins the block.
+	b.WriteString(memoryInstructions)
 	b.WriteString(agentproto.BlockEnd + "\n")
 	return GuestFile{Content: defuseMarkers(b.String()), Mode: 0o644, Block: true}
 }
+
+// memoryInstructions tells the agent how Studio's memory works and when to use its tools.
+const memoryInstructions = `
+## Memory
+
+Studio remembers for you across sessions and sandboxes. At session start you get your soul, your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The ` + "`studio`" + ` MCP server has tools for more:
+
+- ` + "`memory_search`" + ` and ` + "`memory_get`" + `: look things up when the injected memories aren't enough.
+- ` + "`remember`" + `: save something right away. Use it for preferences the user states (source ` + "`user`" + `) and for procedures you have verified by running them (source ` + "`verified`" + `, with the command and result as evidence).
+- ` + "`correct`" + ` and ` + "`forget`" + `: fix or retract one of your own facts when it turns out wrong.
+- ` + "`share`" + `: propose a fact for the shared memory of every persona; the user approves it first.
+
+Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
+`
 
 // defuseMarkers keeps text from the persona from closing or opening the managed block:
 // only the outer markers stay intact.
@@ -174,12 +177,6 @@ func defuseMarkers(block string) string {
 	inner = strings.ReplaceAll(inner, "<!-- sandbox-studio:", "<!-- sandbox studio:")
 	return agentproto.BlockBegin + inner + agentproto.BlockEnd + "\n"
 }
-
-// noHooks implements the hook methods until M5.
-type noHooks struct{}
-
-func (noHooks) ParseHook(string, []byte) (HookEvent, error) { return HookEvent{}, ErrNoHooks }
-func (noHooks) RenderHookResponse(HookResult) []byte        { return nil }
 
 // marshalJSON is v as indented JSON without HTML escaping, which harnesses don't need.
 func marshalJSON(v any) (string, error) {

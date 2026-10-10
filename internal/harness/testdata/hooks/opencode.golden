@@ -1,0 +1,45 @@
+== session-start
+-- stdin
+{"sessionID":"ses_1","source":"startup","cwd":"/workspace"}
+-- parsed (transcript path "")
+{"harness":"opencode","event":"session-start","sessionId":"ses_1","source":"startup","cwd":"/workspace"}
+-- neutral
+{"context":""}
+-- with context
+{"context":"Remember: \"pnpm\" \u003cnot npm\u003e"}
+== user-prompt
+-- stdin
+{"sessionID":"ses_1","prompt":"Which port does the API use?","cwd":"/workspace"}
+-- parsed (transcript path "")
+{"harness":"opencode","event":"user-prompt","sessionId":"ses_1","prompt":"Which port does the API use?","cwd":"/workspace"}
+-- neutral
+{"context":""}
+-- with context
+{"context":"Remember: \"pnpm\" \u003cnot npm\u003e"}
+== pre-compact
+-- stdin
+{"sessionID":"ses_1","cwd":"/workspace","transcript":"user: use pnpm\nassistant: ok\n","transcriptOffset":0}
+-- parsed (transcript path "")
+{"harness":"opencode","event":"pre-compact","sessionId":"ses_1","cwd":"/workspace","transcript":"user: use pnpm\nassistant: ok\n"}
+-- neutral
+{"context":""}
+-- with context
+{"context":"Remember: \"pnpm\" \u003cnot npm\u003e"}
+== stop
+-- stdin
+{"sessionID":"ses_1","cwd":"/workspace","transcript":"user: more\n","transcriptOffset":30}
+-- parsed (transcript path "")
+{"harness":"opencode","event":"stop","sessionId":"ses_1","cwd":"/workspace","transcript":"user: more\n","transcriptOffset":30}
+-- neutral
+{"context":""}
+-- with context
+{"context":"Remember: \"pnpm\" \u003cnot npm\u003e"}
+== session-end
+-- stdin
+{"sessionID":"ses_1","cwd":"/workspace"}
+-- parsed (transcript path "")
+{"harness":"opencode","event":"session-end","sessionId":"ses_1","cwd":"/workspace"}
+-- neutral
+{"context":""}
+-- with context
+{"context":"Remember: \"pnpm\" \u003cnot npm\u003e"}

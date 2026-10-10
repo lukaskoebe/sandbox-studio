@@ -1,5 +1,5 @@
 == command
-["codex"]
+["codex" "--dangerously-bypass-hook-trust"]
 == env OPENAI_API_KEY=studio-0123456789abcdef0123456789abcdef
 == .codex/config.toml mode=644 block=false
 # Managed by Sandbox Studio: rewritten when a session starts.
@@ -20,6 +20,71 @@ hide_full_access_warning = true
 
 [projects."/workspace"]
 trust_level = "trusted"
+
+[mcp_servers.studio]
+command = "/opt/studio/bin/studio-agent"
+args = ["mcp"]
+== .codex/hooks.json mode=644 block=false
+{
+  "description": "Managed by Sandbox Studio: rewritten when a session starts. Forwards to Studio's memory.",
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "/opt/studio/bin/studio-agent hook pre-compact --harness codex",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "/opt/studio/bin/studio-agent hook session-end --harness codex",
+            "timeout": 3,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "/opt/studio/bin/studio-agent hook session-start --harness codex",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "/opt/studio/bin/studio-agent hook stop --harness codex",
+            "timeout": 15,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "/opt/studio/bin/studio-agent hook user-prompt --harness codex",
+            "timeout": 10,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
 == .codex/AGENTS.md mode=644 block=true
 <!-- sandbox-studio:begin -->
 <!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the persona in Studio instead; text outside the block is kept. -->
@@ -30,11 +95,16 @@ Role: Backend engineer
 
 You work in the Sandbox Studio sandbox "api". The project is in /workspace. Network access goes through Studio's gateway and its policy. API keys in your environment are placeholders that only work through the gateway; there is no need to look for real ones.
 
-## Soul
+## Memory
 
-Careful and terse.
+Studio remembers for you across sessions and sandboxes. At session start you get your soul, your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The `studio` MCP server has tools for more:
 
-Never writes <!-- sandbox studio:end --> twice.
+- `memory_search` and `memory_get`: look things up when the injected memories aren't enough.
+- `remember`: save something right away. Use it for preferences the user states (source `user`) and for procedures you have verified by running them (source `verified`, with the command and result as evidence).
+- `correct` and `forget`: fix or retract one of your own facts when it turns out wrong.
+- `share`: propose a fact for the shared memory of every persona; the user approves it first.
+
+Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
 <!-- sandbox-studio:end -->
 == .config/git/config mode=644 block=false
 # Managed by Sandbox Studio: rewritten when a session starts.

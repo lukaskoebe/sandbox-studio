@@ -13,8 +13,14 @@ import (
 // https://code.claude.com/docs/en/settings-reference (permissions.defaultMode
 // "bypassPermissions" and skipDangerousModePermissionPrompt are honored in user settings),
 // environment variables: https://code.claude.com/docs/en/env-vars (ANTHROPIC_API_KEY,
-// CLAUDE_CODE_OAUTH_TOKEN, DISABLE_AUTOUPDATER).
-type Claude struct{ noHooks }
+// CLAUDE_CODE_OAUTH_TOKEN, DISABLE_AUTOUPDATER), hooks:
+// https://code.claude.com/docs/en/hooks (settings "hooks", stdin fields, hookSpecificOutput),
+// MCP: https://code.claude.com/docs/en/mcp (--mcp-config with an "mcpServers" file).
+type Claude struct{}
+
+// claudeMCPConfig is the MCP config file the TUI loads with --mcp-config. User-scope MCP
+// servers live in ~/.claude.json, which Claude Code owns, so Studio passes its own file.
+const claudeMCPConfig = ".claude/studio-mcp.json"
 
 func (Claude) Name() string { return personas.HarnessClaude }
 
@@ -31,7 +37,8 @@ func (Claude) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, erro
 		"skipDangerousModePermissionPrompt": true,
 		// The binary is installed by the image; the agent user can't update it.
 		"env": map[string]any{"DISABLE_AUTOUPDATER": "1"},
-		// TODO(M5): "hooks" that forward to the guest agent.
+		// Memory: every hook forwards to Studio through the guest agent.
+		"hooks": claudeStyleHooks(personas.HarnessClaude),
 	}
 	// verify (S7): the first start with ANTHROPIC_API_KEY set may ask once whether to use
 	// the key, and a fresh home shows the onboarding screens. Both are answered in the TUI
@@ -43,15 +50,34 @@ func (Claude) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, erro
 	if err != nil {
 		return nil, err
 	}
+	mcp, err := marshalJSON(map[string]any{"mcpServers": map[string]any{
+		mcpServerName: map[string]any{"type": "stdio", "command": AgentPath, "args": []string{"mcp"}},
+	}})
+	if err != nil {
+		return nil, err
+	}
 	memory := instructions(p, s)
 	memory.Path = ".claude/CLAUDE.md"
 	return []GuestFile{
 		{Path: ".claude/settings.json", Content: b, Mode: 0o644},
+		{Path: claudeMCPConfig, Content: mcp, Mode: 0o644},
 		memory,
 	}, nil
 }
 
-func (Claude) TUICommand(SessionOpts) []string { return []string{"claude"} }
+// TUICommand loads Studio's MCP server from its own file. verify (S7): servers passed with
+// --mcp-config need no approval prompt, unlike a project's .mcp.json.
+func (Claude) TUICommand(SessionOpts) []string {
+	return []string{"claude", "--mcp-config", Home + "/" + claudeMCPConfig}
+}
+
+// ParseHook reads Claude Code's hook stdin. verify (S7): the field names and that
+// SessionStart fires with source "compact" after compaction, against 2.1.287.
+func (Claude) ParseHook(event string, stdin []byte) (HookEvent, error) {
+	return parseClaudeStyle(personas.HarnessClaude, event, stdin)
+}
+
+func (Claude) RenderHookResponse(r HookResult) []byte { return renderClaudeStyle(r) }
 
 // ACPCommand is nil: Claude Code speaks ACP through a separate adapter (M6).
 func (Claude) ACPCommand() []string { return nil }
