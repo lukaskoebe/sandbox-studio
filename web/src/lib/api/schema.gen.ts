@@ -352,6 +352,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/memory/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Harness sessions that used memory, newest first. */
+        get: operations["listMemorySessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/sessions/{id}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What memory gave a session and wrote from it, in order, each with its reason. */
+        get: operations["getMemorySessionLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Today's extraction calls and spending against the daily budget, and each provider's utility model. */
+        get: operations["getMemoryUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/personas": {
         parameters: {
             query?: never;
@@ -967,6 +1018,8 @@ export interface components {
             git?: components["schemas"]["GitDetail"];
             id: string;
             kind: string;
+            /** @description A persona's proposal for shared memory */
+            memoryShare?: components["schemas"]["SharePayload"];
             network?: components["schemas"]["NetworkRequest"];
             ruleId?: string;
             sandboxId?: string;
@@ -975,6 +1028,18 @@ export interface components {
             subject: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        Budget: {
+            /**
+             * Format: int64
+             * @description Calls per day for models without a known price
+             */
+            maxCalls: number;
+            /**
+             * Format: int64
+             * @description USD × 10^6 per day for priced models
+             */
+            maxCostMicros: number;
         };
         BuildJobLog: {
             text: string;
@@ -1340,6 +1405,23 @@ export interface components {
             type: "fact" | "page";
             why: components["schemas"]["Why"];
         };
+        LogEntry: {
+            /** Format: date-time */
+            at: string;
+            /** Format: int64 */
+            id: number;
+            itemId?: string;
+            itemType?: string;
+            /** @enum {string} */
+            kind: "context" | "recall" | "write" | "extraction" | "tool";
+            personaId: string;
+            /** Format: double */
+            score?: number;
+            sessionId?: string;
+            summary: string;
+            /** @description Why it happened: the search explanation, threshold or extraction details */
+            why?: unknown;
+        };
         NetworkRequest: {
             host: string;
             /** @description Suggested host patterns, most specific first */
@@ -1627,6 +1709,40 @@ export interface components {
             /** Format: int64 */
             windows: number;
         };
+        SessionView: {
+            gitRemote?: string;
+            harness: string;
+            id: string;
+            /**
+             * Format: int64
+             * @description Items given to the session as context or recall
+             */
+            injections: number;
+            /** Format: date-time */
+            lastEventAt: string;
+            personaId: string;
+            sandboxId: string;
+            sandboxName: string;
+            /** @description The harness's session ID; "tools" for tool calls outside a hooked session */
+            sessionRef: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: int64 */
+            writes: number;
+        };
+        SharePayload: {
+            attribute?: string;
+            entityIds: string[] | null;
+            evidence?: string;
+            /** @description The persona's own fact, when it shared one */
+            factId?: string;
+            kind: string;
+            personaId: string;
+            personaName: string;
+            sessionRef?: string;
+            text: string;
+            tier: string;
+        };
         SubmitInBody: {
             /** @description Template specification in YAML */
             source: string;
@@ -1675,6 +1791,43 @@ export interface components {
             note?: string;
             /** @description A new value. Omit it to keep the stored one. */
             value?: string;
+        };
+        Usage: {
+            /** Format: int64 */
+            calls: number;
+            /**
+             * Format: int64
+             * @description USD × 10^6, for models with a known price
+             */
+            costMicros: number;
+            day: string;
+            /** Format: int64 */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+            /**
+             * Format: int64
+             * @description Runs skipped: over budget, or no utility model
+             */
+            skipped: number;
+        };
+        UsageView: {
+            budget: components["schemas"]["Budget"];
+            /** @description Per provider; empty model means no extraction */
+            models: components["schemas"]["UtilityModel"][] | null;
+            today: components["schemas"]["Usage"];
+        };
+        UtilityModel: {
+            kind: string;
+            model: string;
+            note?: string;
+            /** Format: double */
+            priceInPerM?: number;
+            /** Format: double */
+            priceOutPerM?: number;
+            priced: boolean;
+            /** @description The provider's name */
+            provider?: string;
         };
         View: {
             agent?: components["schemas"]["AgentInfo"];
@@ -2765,6 +2918,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Hit"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMemorySessions: {
+        parameters: {
+            query?: {
+                /** @description Only this persona's sessions */
+                persona?: string;
+                /** @description At most this many, newest first; 50 by default */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMemorySessionLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogEntry"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMemoryUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageView"];
                 };
             };
             /** @description Error */
