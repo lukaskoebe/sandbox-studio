@@ -45,6 +45,7 @@ import { CheckpointsSheet } from "@/components/checkpoints-sheet"
 import { ConnectionsSheet } from "@/components/connections-sheet"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { PageHeader } from "@/components/page-header"
+import { SandboxOwner } from "@/components/persona-avatar"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { StatusBadge, phase } from "@/components/status-badge"
 import { Terminal } from "@/components/terminal"
@@ -97,6 +98,11 @@ function SandboxPage() {
       <PageHeader>
         <h1 className="truncate text-sm font-medium">{sb.name}</h1>
         <StatusBadge sandbox={sb} />
+        <SandboxOwner
+          env={env}
+          personaId={sb.personaId}
+          className="text-xs text-muted-foreground"
+        />
         <div className="ml-auto flex items-center gap-1">
           <ConnectionsSheet env={env} sandbox={sb} />
           <CheckpointsSheet env={env} sandbox={sb} />

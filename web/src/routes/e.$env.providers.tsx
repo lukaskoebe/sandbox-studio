@@ -2,12 +2,7 @@ import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import {
-  CopyIcon,
-  PencilSimpleIcon,
-  PlusIcon,
-  TrashIcon,
-} from "@phosphor-icons/react"
+import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,49 +33,41 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { PageHeader } from "@/components/page-header"
-import { SecretDialog } from "@/components/secret-dialog"
-import { $api, errorMessage, type Secret } from "@/lib/api/client"
+import { ProviderDialog } from "@/components/provider-dialog"
+import { $api, errorMessage, type Provider } from "@/lib/api/client"
+import { harnessLabels, isSubscription, kindLabels } from "@/lib/personas"
 import { formatAge } from "@/lib/utils"
 
-export const Route = createFileRoute("/e/$env/secrets")({
-  component: SecretsPage,
+export const Route = createFileRoute("/e/$env/providers")({
+  component: ProvidersPage,
 })
 
 const explanation =
-  "Sandboxes see each secret as an environment variable holding a placeholder. Studio swaps in the real value only in the headers and URLs of HTTPS requests to the secret's hosts, and masks it in their responses, so the value never enters a sandbox."
+  "Providers give personas access to a model. An API key is stored as a secret bound to the provider's API host, so sandboxes see only its placeholder."
 
-function SecretsPage() {
+function ProvidersPage() {
   const { env } = Route.useParams()
-  // The open dialog: an empty object adds a secret, a secret edits it, null is closed.
-  const [dialog, setDialog] = useState<{ secret?: Secret } | null>(null)
-  const secrets = $api.useQuery("get", "/api/environments/{env}/secrets", {
-    params: { path: { env } },
-  })
-  const list = secrets.data ?? []
+  // The open dialog: an empty object adds a provider, a provider edits it, null is closed.
+  const [dialog, setDialog] = useState<{ provider?: Provider } | null>(null)
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  // Provider keys are changed and deleted on the Providers page.
-  const managed = new Map(
-    (providers.data ?? []).flatMap((p) =>
-      p.secretId ? [[p.secretId, p.name] as const] : []
-    )
-  )
+  const list = providers.data ?? []
 
   return (
     <>
       <PageHeader>
-        <h1 className="text-sm font-medium">Secrets</h1>
+        <h1 className="text-sm font-medium">Providers</h1>
         <Button size="sm" className="ml-auto" onClick={() => setDialog({})}>
           <PlusIcon />
-          Add secret
+          Add provider
         </Button>
       </PageHeader>
       <div className="flex-1 space-y-6 overflow-auto p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           {explanation}
         </p>
-        {secrets.isPending ? (
+        {providers.isPending ? (
           <Spinner className="mx-auto block" />
         ) : list.length ? (
           <div className="rounded-lg ring-1 ring-foreground/10">
@@ -88,9 +75,9 @@ function SecretsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Hosts</TableHead>
-                  <TableHead>Placeholder</TableHead>
-                  <TableHead>Note</TableHead>
+                  <TableHead>Kind</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Harnesses</TableHead>
                   <TableHead>Updated</TableHead>
                   <TableHead>
                     <span className="sr-only">Actions</span>
@@ -98,65 +85,55 @@ function SecretsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono">
-                      {s.name}
-                      {managed.has(s.id) && (
-                        <Badge variant="secondary" className="ml-1.5 font-sans">
-                          Provider {managed.get(s.id)}
-                        </Badge>
+                {list.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">{p.name}</TableCell>
+                    <TableCell>
+                      <div>{kindLabels[p.kind]}</div>
+                      {p.baseUrl && (
+                        <div className="max-w-56 truncate font-mono text-muted-foreground">
+                          {p.baseUrl} · {p.model}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex max-w-xs flex-wrap gap-1">
-                        {(s.hosts ?? []).map((host) => (
-                          <Badge
-                            key={host}
-                            variant="outline"
-                            className="font-mono"
-                          >
-                            {host}
+                      {p.state === "login_required" ? (
+                        <Badge variant="outline">Login required</Badge>
+                      ) : (
+                        <div className="font-mono">
+                          <div>{p.envVar}</div>
+                          <div className="text-muted-foreground">
+                            as {p.secretName}
+                          </div>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(p.harnesses ?? []).map((h) => (
+                          <Badge key={h} variant="secondary">
+                            {harnessLabels[h]}
                           </Badge>
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <span className="block max-w-40 truncate font-mono text-muted-foreground">
-                          {s.placeholder}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          title="Copy placeholder"
-                          aria-label="Copy placeholder"
-                          onClick={() => copy(s.placeholder)}
-                        >
-                          <CopyIcon />
-                        </Button>
-                      </div>
-                    </TableCell>
                     <TableCell className="text-muted-foreground">
-                      <span className="block max-w-48 truncate">{s.note}</span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatAge(s.updatedAt)}
+                      {formatAge(p.updatedAt)}
                     </TableCell>
                     <TableCell>
-                      {!managed.has(s.id) && (
-                        <div className="flex justify-end gap-0.5">
+                      <div className="flex justify-end gap-0.5">
+                        {!isSubscription(p.kind) && (
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            title="Edit secret"
-                            onClick={() => setDialog({ secret: s })}
+                            title="Edit provider"
+                            onClick={() => setDialog({ provider: p })}
                           >
                             <PencilSimpleIcon />
                           </Button>
-                          <DeleteSecret env={env} secret={s} />
-                        </div>
-                      )}
+                        )}
+                        <DeleteProvider env={env} provider={p} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -166,21 +143,21 @@ function SecretsPage() {
         ) : (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>No secrets yet</EmptyTitle>
+              <EmptyTitle>No providers yet</EmptyTitle>
               <EmptyDescription>{explanation}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <Button onClick={() => setDialog({})}>
                 <PlusIcon />
-                Add secret
+                Add provider
               </Button>
             </EmptyContent>
           </Empty>
         )}
       </div>
-      <SecretDialog
+      <ProviderDialog
         env={env}
-        secret={dialog?.secret}
+        provider={dialog?.provider}
         open={dialog !== null}
         onOpenChange={(open) => {
           if (!open) setDialog(null)
@@ -190,28 +167,28 @@ function SecretsPage() {
   )
 }
 
-async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
-    toast.success("Copied")
-  } catch {
-    toast.error("Could not copy")
-  }
-}
-
-function DeleteSecret({ env, secret }: { env: string; secret: Secret }) {
+function DeleteProvider({
+  env,
+  provider,
+}: {
+  env: string
+  provider: Provider
+}) {
   const queryClient = useQueryClient()
   const remove = $api.useMutation(
     "delete",
-    "/api/environments/{env}/secrets/{id}",
+    "/api/environments/{env}/providers/{id}",
     {
       onSettled: () => {
+        queryClient.invalidateQueries({
+          queryKey: ["get", "/api/environments/{env}/providers"],
+        })
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/secrets"],
         })
       },
       onError: (err) =>
-        toast.error("Could not delete the secret", {
+        toast.error("Could not delete the provider", {
           description: errorMessage(err),
         }),
     }
@@ -220,15 +197,20 @@ function DeleteSecret({ env, secret }: { env: string; secret: Secret }) {
   return (
     <AlertDialog>
       <AlertDialogTrigger
-        render={<Button variant="ghost" size="icon-sm" title="Delete secret" />}
+        render={
+          <Button variant="ghost" size="icon-sm" title="Delete provider" />
+        }
       >
         <TrashIcon />
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {secret.name}?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {provider.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Requests that use its placeholder will fail until you add it again.
+            {provider.secretName
+              ? `Its key ${provider.secretName} is deleted too. `
+              : ""}
+            Personas using it must be changed or deleted first.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -237,7 +219,7 @@ function DeleteSecret({ env, secret }: { env: string; secret: Secret }) {
             variant="destructive"
             disabled={remove.isPending}
             onClick={() =>
-              remove.mutate({ params: { path: { env, id: secret.id } } })
+              remove.mutate({ params: { path: { env, id: provider.id } } })
             }
           >
             {remove.isPending && <Spinner />}

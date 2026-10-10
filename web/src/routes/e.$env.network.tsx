@@ -55,6 +55,10 @@ function NetworkPage() {
     params: { path: { env }, query: { status: "all" } },
   })
   const names = new Map((sandboxes.data ?? []).map((sb) => [sb.id, sb.name]))
+  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+    params: { path: { env } },
+  })
+  const personaNames = new Map((personas.data ?? []).map((p) => [p.id, p.name]))
 
   return (
     <>
@@ -105,7 +109,9 @@ function NetworkPage() {
                       <TableCell>
                         {r.sandboxId
                           ? (names.get(r.sandboxId) ?? "Other sandbox")
-                          : "Environment"}
+                          : r.personaId
+                            ? `Persona ${personaNames.get(r.personaId) ?? ""}`
+                            : "Environment"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         <span className="block max-w-48 truncate">
