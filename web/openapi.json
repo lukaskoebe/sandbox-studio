@@ -330,7 +330,6 @@
           }
         },
         "required": [
-          "action",
           "origin",
           "verdict"
         ],

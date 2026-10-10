@@ -1319,7 +1319,7 @@ export interface components {
         };
         BrowserPatternInput: {
             /** @description A browser action such as click or fill, or *; ignored for sensitive */
-            action: string;
+            action?: string;
             /** @description Glob on the accessible name; * matches anything */
             label?: string;
             /** @description scheme://host[:port], *.example.com or * */
