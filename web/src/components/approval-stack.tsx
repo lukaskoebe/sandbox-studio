@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 import { ApprovalDecision } from "@/components/approval-decision"
 import {
+  BrowserActionDecision,
+  BrowserCredentialDecision,
+  browserSummary,
+  isBrowserApproval,
+} from "@/components/browser-approval"
+import {
   GitApprovalSummary,
   GitReviewSheet,
   gitSummary,
@@ -154,10 +160,13 @@ function ApprovalCard({
   const git = isGitApproval(approval)
   const share = approval.kind === "memory.share"
   const conflict = approval.kind === "memory.conflict"
+  const browser = isBrowserApproval(approval)
   const details = [
     approval.network?.sandboxName ??
       approval.git?.review?.sandbox ??
-      approval.memoryShare?.personaName,
+      approval.memoryShare?.personaName ??
+      approval.browserAction?.sandboxName ??
+      approval.browserCredential?.sandboxName,
     envName,
     formatAge(approval.createdAt),
     approval.attempts > 1 ? `${approval.attempts} attempts` : undefined,
@@ -170,7 +179,7 @@ function ApprovalCard({
         <CardTitle
           className={cn(
             "break-all",
-            !git && !share && !conflict && "font-mono"
+            !git && !share && !conflict && !browser && "font-mono"
           )}
         >
           {git
@@ -179,7 +188,9 @@ function ApprovalCard({
               ? "Share with every persona?"
               : conflict
                 ? "Memory conflict"
-                : approval.subject}
+                : browser
+                  ? browserSummary(approval)
+                  : approval.subject}
         </CardTitle>
         <CardDescription>{details}</CardDescription>
       </CardHeader>
@@ -190,6 +201,10 @@ function ApprovalCard({
           <MemoryShareDecision approval={approval} />
         ) : conflict ? (
           <MemoryConflictDecision approval={approval} onResolve={onReview} />
+        ) : approval.kind === "browser.action" ? (
+          <BrowserActionDecision approval={approval} />
+        ) : approval.kind === "browser.credential" ? (
+          <BrowserCredentialDecision approval={approval} />
         ) : (
           <ApprovalDecision approval={approval} compact />
         )}

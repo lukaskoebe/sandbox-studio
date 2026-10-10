@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as EEnvRouteImport } from './routes/e.$env'
 import { Route as EEnvIndexRouteImport } from './routes/e.$env.index'
+import { Route as EEnvBrowserRouteImport } from './routes/e.$env.browser'
 import { Route as EEnvBuildsRouteImport } from './routes/e.$env.builds'
 import { Route as EEnvGitRouteImport } from './routes/e.$env.git'
 import { Route as EEnvMemoryRouteImport } from './routes/e.$env.memory'
@@ -35,6 +36,11 @@ const EEnvRoute = EEnvRouteImport.update({
 const EEnvIndexRoute = EEnvIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvBrowserRoute = EEnvBrowserRouteImport.update({
+  id: '/browser',
+  path: '/browser',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvBuildsRoute = EEnvBuildsRouteImport.update({
@@ -86,6 +92,7 @@ const EEnvSandboxesIdRoute = EEnvSandboxesIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/git': typeof EEnvGitRoute
   '/e/$env/memory': typeof EEnvMemoryRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/git': typeof EEnvGitRoute
   '/e/$env/memory': typeof EEnvMemoryRoute
@@ -114,6 +122,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/git': typeof EEnvGitRoute
   '/e/$env/memory': typeof EEnvMemoryRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/e/$env'
+    | '/e/$env/browser'
     | '/e/$env/builds'
     | '/e/$env/git'
     | '/e/$env/memory'
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/e/$env/browser'
     | '/e/$env/builds'
     | '/e/$env/git'
     | '/e/$env/memory'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/e/$env'
+    | '/e/$env/browser'
     | '/e/$env/builds'
     | '/e/$env/git'
     | '/e/$env/memory'
@@ -195,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/e/$env/'
       preLoaderRoute: typeof EEnvIndexRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/browser': {
+      id: '/e/$env/browser'
+      path: '/browser'
+      fullPath: '/e/$env/browser'
+      preLoaderRoute: typeof EEnvBrowserRouteImport
       parentRoute: typeof EEnvRoute
     }
     '/e/$env/builds': {
@@ -264,6 +283,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface EEnvRouteChildren {
+  EEnvBrowserRoute: typeof EEnvBrowserRoute
   EEnvBuildsRoute: typeof EEnvBuildsRoute
   EEnvGitRoute: typeof EEnvGitRoute
   EEnvMemoryRoute: typeof EEnvMemoryRoute
@@ -277,6 +297,7 @@ interface EEnvRouteChildren {
 }
 
 const EEnvRouteChildren: EEnvRouteChildren = {
+  EEnvBrowserRoute: EEnvBrowserRoute,
   EEnvBuildsRoute: EEnvBuildsRoute,
   EEnvGitRoute: EEnvGitRoute,
   EEnvMemoryRoute: EEnvMemoryRoute,

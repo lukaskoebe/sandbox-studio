@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   BrainIcon,
+  BrowserIcon,
   CaretUpDownIcon,
   CheckIcon,
   CubeIcon,
@@ -179,6 +180,18 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <BrainIcon />
                 <span>Memory</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Browser"
+                isActive={
+                  !!matchRoute({ to: "/e/$env/browser", params: { env } })
+                }
+                render={<Link to="/e/$env/browser" params={{ env }} />}
+              >
+                <BrowserIcon />
+                <span>Browser</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
