@@ -294,6 +294,20 @@ func (v *Vault) Bindings(ctx context.Context, envID string) ([]Binding, error) {
 	return out, nil
 }
 
+// Value returns the real value of one secret. Studio calls providers from the host with
+// it (memory extraction); it must never be logged or sent to a guest.
+func (v *Vault) Value(ctx context.Context, envID, secretID string) (string, error) {
+	sec, err := v.st.SecretByID(ctx, envID, secretID)
+	if err != nil {
+		return "", err
+	}
+	value, err := v.Unseal(sec.Sealed, []byte(sec.ID))
+	if err != nil {
+		return "", fmt.Errorf("secret %s: %w", sec.Name, err)
+	}
+	return string(value), nil
+}
+
 // Env maps each secret's name to its placeholder. These are the environment variables a
 // sandbox sees.
 func (v *Vault) Env(ctx context.Context, envID string) (map[string]string, error) {
