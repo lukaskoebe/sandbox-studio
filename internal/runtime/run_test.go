@@ -1114,3 +1114,15 @@ func TestPrivateImageSourceOptionsStayHostSide(t *testing.T) {
 		t.Fatalf("nil image source options = %d, %v; want no options", len(defaultOptions), err)
 	}
 }
+
+func TestStatusOfMapsPausedToSuspended(t *testing.T) {
+	if got := statusOf(msb.SandboxStatusPaused); got != StatusSuspended {
+		t.Fatalf("paused -> %q", got)
+	}
+	if got := statusOf(msb.SandboxStatusRunning); got != StatusRunning {
+		t.Fatalf("running -> %q", got)
+	}
+	if StatusSuspended.IsRunning() {
+		t.Fatal("a suspended sandbox counts as running")
+	}
+}

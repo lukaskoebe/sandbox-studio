@@ -22,17 +22,26 @@ import (
 // Status is the runtime state of a sandbox VM.
 type Status string
 
-// Runtime states. StatusAbsent means no VM exists for the name.
+// Runtime states. StatusAbsent means no VM exists for the name. StatusSuspended is msb's
+// "paused": the VM process, its memory, disks and network stay, but its vCPUs don't run.
 const (
-	StatusAbsent   Status = "absent"
-	StatusCreated  Status = "created"
-	StatusStarting Status = "starting"
-	StatusRunning  Status = "running"
-	StatusDraining Status = "draining"
-	StatusPaused   Status = "paused"
-	StatusStopped  Status = "stopped"
-	StatusCrashed  Status = "crashed"
+	StatusAbsent    Status = "absent"
+	StatusCreated   Status = "created"
+	StatusStarting  Status = "starting"
+	StatusRunning   Status = "running"
+	StatusDraining  Status = "draining"
+	StatusSuspended Status = "suspended"
+	StatusStopped   Status = "stopped"
+	StatusCrashed   Status = "crashed"
 )
+
+// statusOf maps an SDK state to Studio's.
+func statusOf(s msb.SandboxStatus) Status {
+	if s == msb.SandboxStatusPaused {
+		return StatusSuspended
+	}
+	return Status(s)
+}
 
 // Options configure every sandbox Studio creates.
 type Options struct {
@@ -310,9 +319,17 @@ func (r *Runtime) stop(ctx context.Context, name string, graceful bool) error {
 		}
 		return err
 	}
-	s := Status(h.Status())
+	s := statusOf(h.Status())
 	if s == StatusStopped || s == StatusCrashed || s == StatusCreated {
 		return nil
+	}
+	if s == StatusSuspended {
+		// A paused guest can't run the shutdown or answer msb's stop request, so it is
+		// resumed first and then stopped like a running one.
+		if err := h.Resume(ctx); err != nil {
+			return fmt.Errorf("resume suspended sandbox before stopping: %w", err)
+		}
+		s = StatusRunning
 	}
 	var shutdownErr error
 	if graceful && s == StatusRunning {
@@ -347,6 +364,28 @@ func shutdownGuest(ctx context.Context, h *msb.SandboxHandle) error {
 	return errors.Join(execErr, detachErr)
 }
 
+// Pause suspends a running sandbox in place: its vCPUs stop, while the VM process, its
+// memory, disks, network and egress configuration stay as they are. It needs no snapshot
+// or restore. Guest flush "auto" skips the optional filesystem writeback, which a pause
+// that is never captured doesn't need. A paused VM does not survive a host reboot.
+func (r *Runtime) Pause(ctx context.Context, name string) error {
+	h, err := msb.GetSandbox(ctx, name)
+	if err != nil {
+		return err
+	}
+	// The handle carries the VM's identity, so a VM replaced under the same name is refused.
+	return h.PauseWithGuestFlush(ctx, msb.GuestFlushAuto)
+}
+
+// Resume continues a paused sandbox; msb corrects the guest's wall clock first.
+func (r *Runtime) Resume(ctx context.Context, name string) error {
+	h, err := msb.GetSandbox(ctx, name)
+	if err != nil {
+		return err
+	}
+	return h.Resume(ctx)
+}
+
 // Remove stops and deletes a sandbox and its owned disks. Missing sandboxes are fine.
 func (r *Runtime) Remove(ctx context.Context, name string) error {
 	if err := r.stop(ctx, name, false); err != nil {
@@ -368,7 +407,7 @@ func (r *Runtime) Status(ctx context.Context, name string) (Status, error) {
 		}
 		return "", err
 	}
-	return Status(h.Status()), nil
+	return statusOf(h.Status()), nil
 }
 
 // Statuses returns the state of every sandbox whose name starts with prefix.
@@ -386,7 +425,7 @@ func (r *Runtime) Statuses(ctx context.Context, prefix string) (map[string]Statu
 		}
 		for _, h := range page.Sandboxes {
 			if strings.HasPrefix(h.Name(), prefix) {
-				out[h.Name()] = Status(h.Status())
+				out[h.Name()] = statusOf(h.Status())
 			}
 		}
 		if page.NextCursor == nil || *page.NextCursor == "" {

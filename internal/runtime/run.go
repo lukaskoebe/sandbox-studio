@@ -1248,7 +1248,7 @@ type sdkRunVM struct{ handle *msb.SandboxHandle }
 
 func (v sdkRunVM) name() string   { return v.handle.Name() }
 func (v sdkRunVM) id() string     { return v.handle.ID() }
-func (v sdkRunVM) status() Status { return Status(v.handle.Status()) }
+func (v sdkRunVM) status() Status { return statusOf(v.handle.Status()) }
 func (v sdkRunVM) labels(context.Context) (map[string]string, error) {
 	config, err := v.handle.Config()
 	if err != nil {
