@@ -478,6 +478,10 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   copies `/workspace` as a gzip tar over msb exec from the old VM to a new generation, with
   no staging on the host. Docker data is not kept. Fork uses the same copy. Restore and
   suspend stay gated. See [docs/rebase.md](docs/rebase.md).
+- **Export/import:** a sandbox saves to a `.studio-sandbox` file (manifest plus workspace
+  tar) and is recreated from it through a template build and the same workspace copy.
+  Secrets, egress identity, approvals, checkpoints and Docker data are not exported. See
+  [docs/export-import.md](docs/export-import.md).
 
 ### 6.3 Guest agent (`studio-agent`)
 
