@@ -59,6 +59,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	return s, nil
 }
 
+// DB is the catalog connection, for packages that keep their own tables in it (memory).
+func (s *Store) DB() *sql.DB { return s.db }
+
 // Close closes the database without releasing an outstanding build worker lease.
 func (s *Store) Close() error { return s.db.Close() }
 
