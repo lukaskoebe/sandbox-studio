@@ -35,7 +35,12 @@ import {
 import { PageHeader } from "@/components/page-header"
 import { PersonaAvatar } from "@/components/persona-avatar"
 import { PersonaDialog } from "@/components/persona-dialog"
-import { $api, errorMessage, type Persona } from "@/lib/api/client"
+import {
+  $api,
+  errorMessage,
+  type Persona,
+  type Provider,
+} from "@/lib/api/client"
 import { harnessLabels } from "@/lib/personas"
 
 export const Route = createFileRoute("/e/$env/personas")({
@@ -57,7 +62,7 @@ function PersonasPage() {
   })
   const list = personas.data ?? []
   const providerList = providers.data ?? []
-  const providerNames = new Map(providerList.map((p) => [p.id, p.name]))
+  const providerById = new Map(providerList.map((p) => [p.id, p]))
   const canAdd = providerList.length > 0
 
   const addButton = (
@@ -93,6 +98,7 @@ function PersonasPage() {
                   <TableHead>Harness</TableHead>
                   <TableHead>Provider</TableHead>
                   <TableHead>Model</TableHead>
+                  <TableHead>Sessions</TableHead>
                   <TableHead>Git identity</TableHead>
                   <TableHead>
                     <span className="sr-only">Actions</span>
@@ -118,11 +124,19 @@ function PersonasPage() {
                         {harnessLabels[p.harness]}
                       </Badge>
                     </TableCell>
-                    <TableCell>{providerNames.get(p.providerId)}</TableCell>
+                    <TableCell>
+                      {providerById.get(p.providerId)?.name}
+                    </TableCell>
                     <TableCell className="font-mono">
                       {p.model || (
                         <span className="text-muted-foreground">default</span>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Readiness
+                        persona={p}
+                        provider={providerById.get(p.providerId)}
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       <span className="block max-w-56 truncate">
@@ -235,5 +249,44 @@ function DeletePersona({ env, persona }: { env: string; persona: Persona }) {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+/**
+ * Whether the persona's agent sessions can start: its harness is in the base image, so it
+ * comes down to the provider being able to run that harness with a key.
+ */
+function Readiness({
+  persona,
+  provider,
+}: {
+  persona: Persona
+  provider?: Provider
+}) {
+  if (!provider) return null
+  if (provider.state === "login_required") {
+    return (
+      <Badge
+        variant="outline"
+        title={`${provider.name} needs a subscription login, which Studio can't do yet`}
+      >
+        Login required
+      </Badge>
+    )
+  }
+  if (!(provider.harnesses ?? []).includes(persona.harness)) {
+    return (
+      <Badge variant="outline">
+        {provider.name} can't run {harnessLabels[persona.harness]}
+      </Badge>
+    )
+  }
+  return (
+    <Badge
+      variant="secondary"
+      title={`${harnessLabels[persona.harness]} reads the key from ${provider.envVar}`}
+    >
+      Ready
+    </Badge>
   )
 }

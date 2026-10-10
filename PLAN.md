@@ -608,7 +608,16 @@ host (or the custom base URL's host); subscription providers are records in stat
 `login_required` until the login flow exists. A persona's harness must be one its provider
 kind supports (table below). Sandboxes can be owned by a persona, fixed at creation and
 copied by fork. Network rules can be scoped to a persona; the gateway resolves the owner
-from the catalog. Harness adapters, default rule scope and auto-patterns are not built yet.
+from the catalog. Default rule scope and auto-patterns are not built yet.
+
+**Built (M4 part B).** `internal/harness` has the interface below with OpenCode, Claude Code
+and Codex adapters (`docs/harnesses.md`); hooks and MCP are stubs until M5, ACP until M6.
+Starting a session (`POST .../sandboxes/{id}/sessions`) needs an owner persona, a `ready`
+provider and its key bound to the provider's host; it writes the harness config, the soul as
+a managed block in the global instructions file and the git identity into `/home/agent`
+through the guest agent (openat2, no symlinks, bounded), then runs the TUI in a named tmux
+session with the placeholder in the provider's variable. The UI attaches it as a terminal.
+The base image ships node LTS and the three harnesses at pinned versions.
 
 **Persona settings.**
 - Identity and soul (markdown).
@@ -644,7 +653,7 @@ type Harness interface {
     Name() string
     // Config files to write into the guest home: instructions block, MCP server
     // registration, hooks, provider/model, auto-approve mode.
-    Render(p Persona, s Sandbox, providers Providers) []GuestFile
+    Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error)
     TUICommand(session SessionOpts) []string       // launched in tmux
     ACPCommand() []string                          // programmatic sessions (later)
     StateDirs() []string                           // persisted on the sandbox

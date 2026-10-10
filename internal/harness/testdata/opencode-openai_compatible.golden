@@ -1,0 +1,46 @@
+== command
+["opencode"]
+== env OPENAI_API_KEY=studio-0123456789abcdef0123456789abcdef
+== .config/opencode/opencode.json mode=644 block=false
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "model": "studio/qwen3-coder:30b",
+  "permission": "allow",
+  "provider": {
+    "studio": {
+      "models": {
+        "qwen3-coder:30b": {
+          "name": "qwen3-coder:30b"
+        }
+      },
+      "name": "Sandbox Studio",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "apiKey": "{env:OPENAI_API_KEY}",
+        "baseURL": "https://llm.example.com/v1?x=1&y=2"
+      }
+    }
+  }
+}
+== .config/opencode/AGENTS.md mode=644 block=true
+<!-- sandbox-studio:begin -->
+<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the persona in Studio instead; text outside the block is kept. -->
+
+# You are Ada
+
+Role: Backend engineer
+
+You work in the Sandbox Studio sandbox "api". The project is in /workspace. Network access goes through Studio's gateway and its policy. API keys in your environment are placeholders that only work through the gateway; there is no need to look for real ones.
+
+## Soul
+
+Careful and terse.
+
+Never writes <!-- sandbox studio:end --> twice.
+<!-- sandbox-studio:end -->
+== .config/git/config mode=644 block=false
+# Managed by Sandbox Studio: rewritten when a session starts.
+[user]
+	name = "Ada Lovelace"
+	email = ada@example.com

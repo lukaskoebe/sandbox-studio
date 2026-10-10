@@ -294,6 +294,18 @@ func (h *Hub) KillSession(ctx context.Context, id, name string) error {
 	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindKill, Session: name}, nil, &ok)
 }
 
+// WriteHomeFiles writes harness config files into the terminal user's home in the guest.
+func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.HomeFile) error {
+	var ok struct{}
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeFiles}, agentproto.HomeFiles{Files: files}, &ok)
+}
+
+// StartSession starts a detached tmux session running an agent harness in the guest.
+func (h *Hub) StartSession(ctx context.Context, id string, req agentproto.StartSession) error {
+	var ok struct{}
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindStartSession}, req, &ok)
+}
+
 // Ports lists TCP ports listening in the guest.
 func (h *Hub) Ports(ctx context.Context, id string) ([]agentproto.Port, error) {
 	var out []agentproto.Port

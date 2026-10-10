@@ -10,6 +10,8 @@
 //   - KindSessions, KindPorts, KindKill (host → guest): one JSON reply line.
 //   - KindConfig (host → guest): the host writes a Config line; the guest applies it and
 //     replies like KindKill: {} or an Error.
+//   - KindHomeFiles, KindStartSession (host → guest): the host writes a HomeFiles or
+//     StartSession line; the guest replies like KindKill.
 package agentproto
 
 import (
@@ -33,6 +35,10 @@ const (
 	KindPorts    = "ports"
 	KindKill     = "kill" // ends the tmux session named in Header.Session
 	KindConfig   = "config"
+	// KindHomeFiles writes harness config files into the terminal user's home.
+	KindHomeFiles = "home-files"
+	// KindStartSession starts a detached tmux session running an agent harness.
+	KindStartSession = "start-session"
 )
 
 // Header opens every stream.
@@ -64,6 +70,50 @@ type Session struct {
 	Attached int    `json:"attached"`
 	Windows  int    `json:"windows"`
 	Created  int64  `json:"created"` // unix seconds
+	// Harness is set for agent sessions started with KindStartSession.
+	Harness string `json:"harness,omitempty" doc:"The agent harness running in the session; empty for plain terminals"`
+}
+
+// HarnessOption is the tmux user option that marks a session as an agent session.
+const HarnessOption = "@studio_harness"
+
+// Limits of a HomeFiles request.
+const (
+	MaxHomeFiles     = 16
+	MaxHomeFileBytes = 256 << 10
+	MaxHomeFilesLine = 4 << 20 // the JSON line, escapes included
+)
+
+// The markers around a managed block. A HomeFile with Block set replaces the text from
+// BlockBegin to BlockEnd in the existing file and keeps everything else.
+const (
+	BlockBegin = "<!-- sandbox-studio:begin -->"
+	BlockEnd   = "<!-- sandbox-studio:end -->"
+)
+
+// HomeFile is a file written into the terminal user's home, owned by that user. The write
+// is atomic: a temporary file renamed over the target.
+type HomeFile struct {
+	Path    string `json:"path"` // relative to the home directory, slash-separated
+	Content string `json:"content"`
+	Mode    uint32 `json:"mode"` // permission bits, at most 0o755
+	// Block marks Content as a managed block: it starts with BlockBegin and ends with
+	// BlockEnd, and replaces only the existing block of the file (or is prepended).
+	Block bool `json:"block,omitempty"`
+}
+
+// HomeFiles is the body of a KindHomeFiles stream.
+type HomeFiles struct {
+	Files []HomeFile `json:"files"`
+}
+
+// StartSession is the body of a KindStartSession stream: a detached tmux session named
+// Name, in the workspace, running Command through a login shell with Env added.
+type StartSession struct {
+	Name    string            `json:"name"`
+	Harness string            `json:"harness"`
+	Command []string          `json:"command"`
+	Env     map[string]string `json:"env"`
 }
 
 // Port is a TCP port listening in the guest.
