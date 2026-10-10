@@ -191,6 +191,8 @@ func run(addr, image string, log *slog.Logger) error {
 	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialPublic}
 	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log}
 	integs := integrations.Set{gitRemote}
+	brw := newBrowser(st, vault, bus, p.Data, image, log) // settles browser.action and browser.credential approvals
+	integs = append(integs, brw)
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
@@ -201,6 +203,7 @@ func run(addr, image string, log *slog.Logger) error {
 		return fmt.Errorf("network gateway: %w", err)
 	}
 	defer gl.Close()
+	gw.Driver = brw.Driver // a browser VM's connections follow the rules of the agent driving it
 	go gw.Serve(gl)
 
 	// Memory embeds in the background. The model is downloaded on the first memory write,
@@ -223,7 +226,7 @@ func run(addr, image string, log *slog.Logger) error {
 	agentMem := agentmem.New(st, mem, vault, log)
 	agentMem.Notify = func(envID string) { bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: envID}) }
 	go agentMem.Run(ctx)
-	go agentMem.RunDreams(ctx) // nightly, after enough new facts, and interrupted runs
+	go agentMem.RunDreams(ctx)        // nightly, after enough new facts, and interrupted runs
 	integs = append(integs, agentMem) // settles memory.share and memory.conflict approvals; it serves no hosts
 
 	hub := agentchan.NewHub(log)
@@ -240,7 +243,9 @@ func run(addr, image string, log *slog.Logger) error {
 		Log:       log,
 	}
 	hub.OnConnect = mgr.Configure
-	hub.OnCall = agentMem.HandleCall
+	hub.OnCall = routeCalls(brw, agentMem.HandleCall)
+	brw.Runner, brw.VMs = hub, mgr
+	go brw.Run(ctx)
 	go mgr.FollowEnvironments(ctx, bus)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
@@ -279,7 +284,7 @@ func run(addr, image string, log *slog.Logger) error {
 
 	mux := http.NewServeMux()
 	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
-		Integrations: integs, Git: gitRemote, System: system}).Register(mux)
+		Integrations: integs, Git: gitRemote, System: system, Browser: brw}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 
