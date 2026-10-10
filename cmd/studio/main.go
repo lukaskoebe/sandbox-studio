@@ -22,6 +22,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
+	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
@@ -179,6 +180,27 @@ func run(addr, image string, log *slog.Logger) error {
 	defer gl.Close()
 	go gw.Serve(gl)
 
+	// Memory embeds in the background. The model is downloaded on the first memory write,
+	// never at startup.
+	embedder := &memory.Llama{Assets: memory.DefaultAssets(filepath.Join(p.Data, "memory"))}
+	mem := memory.New(st.DB(), embedder, log)
+	memDone := make(chan struct{})
+	go func() { defer close(memDone); mem.Run(ctx) }()
+	defer func() {
+		stop()
+		select {
+		case <-memDone:
+			embedder.Close()
+		case <-time.After(5 * time.Second): // a download that ignores cancellation; the process ends anyway
+		}
+	}()
+
+	// Memory in agent sessions: guests' hooks and memory tools arrive as calls on their
+	// channel; extraction runs in the background.
+	agentMem := agentmem.New(st, mem, vault, log)
+	agentMem.Notify = func(envID string) { bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: envID}) }
+	go agentMem.Run(ctx)
+
 	hub := agentchan.NewHub(log)
 	rt := runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()})
 	mgr := &sandboxes.Manager{
@@ -193,6 +215,7 @@ func run(addr, image string, log *slog.Logger) error {
 		Log:       log,
 	}
 	hub.OnConnect = mgr.Configure
+	hub.OnCall = agentMem.HandleCall
 	go mgr.FollowEnvironments(ctx, bus)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
@@ -220,23 +243,8 @@ func run(addr, image string, log *slog.Logger) error {
 		}
 	}()
 
-	// Memory embeds in the background. The model is downloaded on the first memory write,
-	// never at startup.
-	embedder := &memory.Llama{Assets: memory.DefaultAssets(filepath.Join(p.Data, "memory"))}
-	mem := memory.New(st.DB(), embedder, log)
-	memDone := make(chan struct{})
-	go func() { defer close(memDone); mem.Run(ctx) }()
-	defer func() {
-		stop()
-		select {
-		case <-memDone:
-			embedder.Close()
-		case <-time.After(5 * time.Second): // a download that ignores cancellation; the process ends anyway
-		}
-	}()
-
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, Log: log, Addr: addr}).Register(mux)
+	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 

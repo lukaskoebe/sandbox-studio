@@ -46,6 +46,8 @@ type Service struct {
 	Budget Budget
 	Log    *slog.Logger
 	Now    func() time.Time
+	// Notify, when set, is told that an environment has a new approval.
+	Notify func(envID string)
 
 	db   *sql.DB
 	jobs chan extractJob

@@ -394,6 +394,9 @@ func (s *Service) requestShare(ctx context.Context, c caller, se session, r shar
 	if err != nil {
 		return nil, err
 	}
+	if s.Notify != nil {
+		s.Notify(c.env)
+	}
 	s.log(ctx, c, se.id, entry{kind: LogWrite, itemType: "approval", itemID: a.ID, summary: "proposed for shared memory: " + r.Text})
 	return map[string]any{"approvalId": a.ID, "status": a.Status,
 		"note": "The user decides in Studio's inbox; the fact joins shared memory when approved."}, nil

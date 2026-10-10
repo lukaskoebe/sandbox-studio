@@ -15,6 +15,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
+	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
@@ -43,6 +44,7 @@ type Server struct {
 	Caddy     *caddyrule.Engine // checks Caddyfiles; without it, caddy rules are refused
 	Auth      *webauth.Auth
 	Memory    *memory.Service
+	AgentMem  *agentmem.Service // memory in agent sessions; its endpoints answer 503 without it
 	Log       *slog.Logger
 	Addr      string       // the address Studio listens on, used to build preview URLs
 	Guest     SessionGuest // agent sessions' guest channel; Sandboxes.Hub when nil
@@ -69,6 +71,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerNetwork(api)
 	s.registerSecrets(api)
 	s.registerMemory(api)
+	s.registerMemoryAgent(api)
 	s.registerPersonas(api)
 	s.registerSessions(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)

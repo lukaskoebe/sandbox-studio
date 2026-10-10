@@ -15,6 +15,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"golang.org/x/net/http/httpguts"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -23,7 +24,8 @@ import (
 // ApprovalView is an approval with the details of its request decoded from the payload.
 type ApprovalView struct {
 	store.Approval
-	Network *policy.NetworkRequest `json:"network,omitempty"`
+	Network     *policy.NetworkRequest `json:"network,omitempty"`
+	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A persona's proposal for shared memory"`
 }
 
 func approvalView(a store.Approval) ApprovalView {
@@ -32,6 +34,12 @@ func approvalView(a store.Approval) ApprovalView {
 		var req policy.NetworkRequest
 		if json.Unmarshal(a.Payload, &req) == nil {
 			v.Network = &req
+		}
+	}
+	if a.Kind == agentmem.ApprovalKind {
+		var p agentmem.SharePayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.MemoryShare = &p
 		}
 	}
 	return v
@@ -232,6 +240,13 @@ func (s *Server) registerNetwork(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "decideApproval", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/decide", Tags: []string{"approvals"},
 	}, func(ctx context.Context, in *decideIn) (*struct{ Body ApprovalView }, error) {
+		if a, err := s.Store.Approval(ctx, in.Env, in.ID); err == nil && a.Kind == agentmem.ApprovalKind {
+			a, err = s.decideMemoryShare(ctx, a, in.Body.Action)
+			if err != nil {
+				return nil, err
+			}
+			return &struct{ Body ApprovalView }{approvalView(a)}, nil
+		}
 		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope}
 		a, err := s.Policy.Resolve(ctx, in.Env, in.ID, d)
 		if err != nil {
