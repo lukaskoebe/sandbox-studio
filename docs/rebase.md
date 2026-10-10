@@ -3,6 +3,7 @@
 Both move `/workspace` from one VM to another. Neither uses msb restore or msb fork.
 Restore drops Studio's DNS and proxy egress
 ([#1736](https://github.com/superradcompany/microsandbox/issues/1736)).
+Both need a running or stopped sandbox; a suspended one is refused until it is resumed.
 
 ## Workspace copy
 

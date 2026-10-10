@@ -140,6 +140,8 @@ whose stored network config doesn't match Create's.
 A full restore has the same gap, so suspend/resume waits for #1736 as well. It also needs the
 source's vsock route: without one the device layout changes and the restore fails with
 `incompatible virtio state: saved IRQ Some(18) does not match destination IRQ Some(17)`.
+Meanwhile Studio suspends in place with msb pause/resume, which keeps the VM, its network
+and its vsock route (`spikes/suspend`; live run pending).
 
 Checkpoint deletion must move a group head to a surviving member before removing it.
 Studio prefers the parent, keeps head changes within the sandbox's group, and always

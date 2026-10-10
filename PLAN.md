@@ -249,10 +249,11 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
     can't own an init handoff, and Studio does not bypass that flush check.
     This is a filesystem checkpoint, not application-level database consistency or
     a saved process session. Stop applications first when their own recovery requires it.
-  - **Suspend / Resume:** a full snapshot, then stop; restore resumes the processes,
-    including agent TUIs. Blocked with microsandbox 0.7.7 like restore (below); a full
-    restore must also re-create the source's vsock route, or the device layout no longer
-    matches.
+  - **Suspend / Resume:** for now an in-place pause (msb pause/resume): vCPUs stop, memory
+    stays with the VM process, and resume continues every process, agent TUIs and tmux
+    included. It frees no memory and does not survive a host reboot. A full snapshot then
+    stop waits on restore (below: #1736 egress, vsock route). Fork, rebase and checkpoints
+    refuse a suspended sandbox; Stop and Delete resume it first.
   - **Fork:** a new sandbox with a new ID and egress identity, the same template and
     resources, and a copy of `/workspace`. Not msb fork: Studio copies the workspace as a
     tar stream between two VMs. A running source keeps running, so the copy may be
@@ -476,8 +477,8 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
   [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
 - **Rebase:** moving an existing sandbox to a new template keeps its workspace. The mechanism
   copies `/workspace` as a gzip tar over msb exec from the old VM to a new generation, with
-  no staging on the host. Docker data is not kept. Fork uses the same copy. Restore and
-  suspend stay gated. See [docs/rebase.md](docs/rebase.md).
+  no staging on the host. Docker data is not kept. Fork uses the same copy. Restore stays
+  gated; suspend is an in-place pause for now (6.1). See [docs/rebase.md](docs/rebase.md).
 
 ### 6.3 Guest agent (`studio-agent`)
 
@@ -986,7 +987,7 @@ are part of the acceptance criteria.
 
 **M3 — Specs, templates, persistence**
 - Spec YAML, template builds and cache, workspace and Docker disks, checkpoints, suspend and
-  resume (full snapshot), fork, restore, rebase, export and import.
+  resume (in-place pause until #1736 allows a full snapshot), fork, restore, rebase, export and import.
 - Accepted when: a suspend/resume brings a running agent TUI back mid-session; a fork creates
   an independent copy; a spec change rebuilds the template and rebases while keeping the
   workspace.
