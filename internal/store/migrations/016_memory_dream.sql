@@ -4,9 +4,9 @@ ALTER TABLE memory_conflicts ADD COLUMN reason TEXT NOT NULL DEFAULT '';
 ALTER TABLE memory_conflicts ADD COLUMN approval_id TEXT;
 CREATE UNIQUE INDEX memory_conflicts_pair ON memory_conflicts (environment_id, fact_a, fact_b);
 
--- One row per dream of a scope. A run covers the facts created in [window_start,
--- window_end); only a finished ('done') run moves the next run's window. A 'running' row
--- left by an interrupted run is resumed with the same window.
+-- One row per dream of a scope. A run covers the facts created from window_start to
+-- window_end (both included); only a finished ('done') run moves the next run's window. A
+-- 'running' row left by an interrupted run is resumed with the same window.
 CREATE TABLE memory_dream_runs (
     id             TEXT PRIMARY KEY,
     environment_id TEXT NOT NULL REFERENCES environments(id) ON DELETE CASCADE,

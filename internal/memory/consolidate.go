@@ -247,17 +247,17 @@ func (s *Service) Supersede(ctx context.Context, envID, oldID, newID, reason str
 	return true, nil
 }
 
-// FactsCreatedBetween lists the active and disputed facts of a scope created in [from,
-// to), oldest first.
+// FactsCreatedBetween lists the active and disputed facts of a scope created from from
+// to to, both included (by the second), oldest first.
 func (s *Service) FactsCreatedBetween(ctx context.Context, envID, scope string, from, to time.Time) ([]Fact, error) {
-	return s.queryFacts(ctx, `scope = ? AND created_at >= ? AND created_at < ? AND status IN ('active', 'disputed')
+	return s.queryFacts(ctx, `scope = ? AND created_at >= ? AND created_at <= ? AND status IN ('active', 'disputed')
 		ORDER BY created_at, id`, envID, scope, from.Unix(), to.Unix())
 }
 
-// CountFactsSince counts the facts of a scope created at or after since.
+// CountFactsSince counts the facts of a scope created after since (by the second).
 func (s *Service) CountFactsSince(ctx context.Context, envID, scope string, since time.Time) (int, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memory_facts WHERE environment_id = ? AND scope = ? AND created_at >= ?",
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM memory_facts WHERE environment_id = ? AND scope = ? AND created_at > ?",
 		envID, scope, since.Unix()).Scan(&n)
 	return n, err
 }

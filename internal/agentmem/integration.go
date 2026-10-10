@@ -8,14 +8,15 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// The service is an integration only to settle memory.share approvals; it serves no hosts.
+// The service is an integration only to settle memory.share and memory.conflict
+// approvals; it serves no hosts.
 var _ integrations.Integration = (*Service)(nil)
 
 func (s *Service) ID() string                    { return "memory" }
 func (s *Service) Routes() []gateway.VirtualHost { return nil }
 
 func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
-	return []integrations.ApprovalKind{{Kind: ApprovalKind, Decide: s.decide}}
+	return []integrations.ApprovalKind{{Kind: ApprovalKind, Decide: s.decide}, {Kind: ConflictApprovalKind, Decide: s.decideConflict}}
 }
 
 // decide closes a memory.share request, then writes the fact to shared memory if allowed.

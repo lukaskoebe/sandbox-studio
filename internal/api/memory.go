@@ -242,19 +242,22 @@ func (s *Server) registerMemory(api huma.API) {
 	type resolveIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Conflict ID"`
-		Body struct {
-			Resolution string `json:"resolution" enum:"keep_a,keep_b,keep_both,dismiss"`
-			Note       string `json:"note,omitempty" maxLength:"500"`
-		}
+		Body memory.ConflictResolution
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "resolveMemoryConflict", Method: http.MethodPost, Path: base + "/conflicts/{id}/resolve", Tags: tags,
-		Description: "Records the decision only; the facts are not changed. Edit or retract them separately.",
+		Description: "Applies the decision to both facts, which changes recall, and closes the conflict's approval.",
 	}, func(ctx context.Context, in *resolveIn) (*struct{ Body memory.Conflict }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
 		}
-		c, err := s.Memory.ResolveConflict(ctx, in.Env, in.ID, in.Body.Resolution, in.Body.Note)
+		var c memory.Conflict
+		var err error
+		if s.AgentMem != nil {
+			c, err = s.AgentMem.ResolveConflict(ctx, in.Env, in.ID, in.Body)
+		} else {
+			c, err = s.Memory.ResolveConflict(ctx, in.Env, in.ID, in.Body)
+		}
 		return &struct{ Body memory.Conflict }{c}, memoryError(err)
 	})
 }

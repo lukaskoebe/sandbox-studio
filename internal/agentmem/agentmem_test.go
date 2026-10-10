@@ -40,12 +40,18 @@ type fakeLLM struct {
 	calls []Request
 	reply string
 	err   error
+	// respond, when set, answers instead of reply and err.
+	respond func(Request) (string, error)
 }
 
 func (f *fakeLLM) Complete(_ context.Context, r Request) (Response, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, r)
+	if f.respond != nil {
+		text, err := f.respond(r)
+		return Response{Text: text, InputTokens: 1000, OutputTokens: 200}, err
+	}
 	return Response{Text: f.reply, InputTokens: 1000, OutputTokens: 200}, f.err
 }
 
