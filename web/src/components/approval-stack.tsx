@@ -194,8 +194,12 @@ function ApprovalCard({
           <BrowserActionDecision approval={approval} />
         ) : approval.kind === "browser.credential" ? (
           <BrowserCredentialDecision approval={approval} />
-        ) : (
+        ) : approval.kind === "network" ? (
           <ApprovalDecision approval={approval} compact />
+        ) : (
+          <p className="text-xs text-muted-foreground" role="status">
+            This approval type is not supported by this version of Studio.
+          </p>
         )}
       </CardContent>
     </Card>

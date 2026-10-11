@@ -114,11 +114,13 @@ export function BrowserCredentialDecision({
 }) {
   const cred = approval.browserCredential
   const decide = useDecide("credential request")
-  const send = (action: "allow" | "deny") =>
+  const send = (action: "allow" | "deny" | "dismiss") =>
     decide.mutate({
       params: { path: { env: approval.environmentId, id: approval.id } },
       body: { action, scope: "teammate" },
     })
+  const busy = (action: "allow" | "deny" | "dismiss") =>
+    decide.isPending && decide.variables.body.action === action
   return (
     <div className="grid gap-2">
       <p className="text-xs text-muted-foreground">
@@ -131,12 +133,22 @@ export function BrowserCredentialDecision({
       )}
       <div className="flex items-center gap-1.5">
         <Button
+          variant="ghost"
+          size="xs"
+          disabled={decide.isPending}
+          onClick={() => send("dismiss")}
+        >
+          {busy("dismiss") && <Spinner className="size-3" />}
+          Ignore
+        </Button>
+        <Button
           variant="outline"
           size="sm"
           className="ml-auto"
           disabled={decide.isPending}
           onClick={() => send("deny")}
         >
+          {busy("deny") && <Spinner />}
           Deny
         </Button>
         <Button
@@ -144,7 +156,7 @@ export function BrowserCredentialDecision({
           disabled={decide.isPending}
           onClick={() => send("allow")}
         >
-          {decide.isPending && <Spinner />}
+          {busy("allow") && <Spinner />}
           Fill
         </Button>
       </div>

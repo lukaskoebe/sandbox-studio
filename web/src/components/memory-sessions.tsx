@@ -218,11 +218,13 @@ export function MemoryShareDecision({ approval }: { approval: Approval }) {
       },
     }
   )
-  const act = (action: "allow" | "deny") =>
+  const act = (action: "allow" | "deny" | "dismiss") =>
     decide.mutate({
       params: { path: { env: approval.environmentId, id: approval.id } },
       body: { action, scope: "environment" },
     })
+  const busy = (action: "allow" | "deny" | "dismiss") =>
+    decide.isPending && decide.variables.body.action === action
   const share = approval.memoryShare
   return (
     <div className="grid gap-2">
@@ -232,12 +234,22 @@ export function MemoryShareDecision({ approval }: { approval: Approval }) {
           {share ? `${share.kind} · ${share.tier}` : ""}
         </span>
         <Button
+          variant="ghost"
+          size="xs"
+          disabled={decide.isPending}
+          onClick={() => act("dismiss")}
+        >
+          {busy("dismiss") && <Spinner className="size-3" />}
+          Ignore
+        </Button>
+        <Button
           variant="outline"
           size="sm"
           className="ml-auto"
           disabled={decide.isPending}
           onClick={() => act("deny")}
         >
+          {busy("deny") && <Spinner />}
           Decline
         </Button>
         <Button
@@ -245,7 +257,7 @@ export function MemoryShareDecision({ approval }: { approval: Approval }) {
           disabled={decide.isPending}
           onClick={() => act("allow")}
         >
-          {decide.isPending && <Spinner />}
+          {busy("allow") && <Spinner />}
           Share
         </Button>
       </div>
