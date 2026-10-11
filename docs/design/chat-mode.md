@@ -223,9 +223,12 @@ the turn `interrupted`.
   |---|---|---|
   | Allow | `allow_once` | `allow_always` |
   | Deny | `reject_once` | `reject_always` |
-  | Dismiss | `reject_once` | `reject_once` |
+  | Dismiss | `cancelled` | `cancelled` |
 
-  If the agent didn't offer that exact kind, Studio uses the nearest one it did offer.
+  A remembered decision may fall back to its one-time option. A one-time decision never
+  becomes persistent: if the agent offers no matching option, Studio refuses the decision
+  and keeps the request pending. Unknown option kinds are rejected, and Ignore always
+  sends `cancelled` without selecting a reject option.
 - **No timeout.** The request waits until it's decided or the turn is cancelled. There's no
   30 s hold as in the browser broker, because the agent is blocked, not a network client.
 - **Rarely seen.** The harness configs still auto-approve (docs/harnesses.md). The VM and
@@ -565,7 +568,7 @@ need a real provider.
    - Checks:
      - Every decision maps to the right option kind.
      - Cancel dismisses open approvals.
-     - Unknown option kinds fall back to the nearest one.
+     - Unknown option kinds are rejected; one-time decisions never become persistent.
    - VM and LLM: Claude's plan exit asks and is answered from the approval stack. An
      OpenCode question renders as a form.
 5. **The terminal bridge.**
