@@ -89,7 +89,7 @@ export function ApprovalDecision({
     })
 
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {patterns.length > 1 && (
         <ToggleGroup
           aria-label="Host pattern"
@@ -105,9 +105,10 @@ export function ApprovalDecision({
               key={p}
               value={p}
               size="sm"
-              className="min-w-0 flex-1 font-mono"
+              title={p}
+              className="min-w-0 flex-1 shrink font-mono"
             >
-              {p}
+              <span className="truncate">{p}</span>
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -135,14 +136,15 @@ export function ApprovalDecision({
             <ToggleGroupItem
               value="environment"
               size="sm"
-              className="min-w-0 flex-1"
+              className="min-w-0 flex-1 shrink"
             >
               Environment
             </ToggleGroupItem>
             <ToggleGroupItem
               value="sandbox"
               size="sm"
-              className="min-w-0 flex-1"
+              title={`Only ${net?.sandboxName ?? "this sandbox"}`}
+              className="min-w-0 flex-1 shrink"
             >
               <span className="truncate">
                 Only {net?.sandboxName ?? "this sandbox"}
