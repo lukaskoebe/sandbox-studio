@@ -20,6 +20,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
+import { AgentViewToggle } from "@/components/agent-view"
 import { PageHeader } from "@/components/page-header"
 import { $api, errorMessage, type HostCheck } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
@@ -40,6 +41,7 @@ function SettingsPage() {
           These settings apply to this Studio installation and every
           environment.
         </p>
+        <AgentsCard />
         <RuntimeCard />
         <AutostartCard />
         <UpdatesCard />
@@ -54,6 +56,24 @@ function CheckIcon({ status }: { status: HostCheck["status"] }) {
   if (status === "warn")
     return <WarningIcon className="size-4 shrink-0 text-amber-600" />
   return <XCircleIcon className="size-4 shrink-0 text-destructive" />
+}
+
+function AgentsCard() {
+  return (
+    <Card className="max-w-3xl">
+      <CardHeader>
+        <CardTitle>Agents</CardTitle>
+        <CardDescription>
+          How you work with your teammates' agents by default: chatting, or in
+          the agent's own terminal app. The other way stays one click away on
+          each sandbox.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <AgentViewToggle />
+      </CardContent>
+    </Card>
+  )
 }
 
 function RuntimeCard() {
