@@ -47,7 +47,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	s := &Store{db: db}
-	if err := s.migrate(ctx); err != nil {
+	if err := s.migrateTo(ctx, 0); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -65,9 +65,18 @@ func (s *Store) DB() *sql.DB { return s.db }
 // Close closes the database without releasing an outstanding build worker lease.
 func (s *Store) Close() error { return s.db.Close() }
 
-func (s *Store) migrate(ctx context.Context) error {
+// migrateTo applies the migrations up to version last, or all of them if last is 0. Each
+// runs in its own transaction with foreign keys off, as SQLite's ALTER TABLE procedure
+// asks, so a table can be rebuilt without cascading deletes; the keys are checked before
+// the commit.
+func (s *Store) migrateTo(ctx context.Context, last int) error {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
 	var current int
-	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
+	if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
 		return err
 	}
 	names, err := fs.Glob(migrations, "migrations/*.sql")
@@ -75,20 +84,34 @@ func (s *Store) migrate(ctx context.Context) error {
 		return err
 	}
 	sort.Strings(names)
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+		return err
+	}
+	err = applyMigrations(ctx, conn, names, current, last)
+	// The connection goes back to the pool; Open closes the database if this fails.
+	_, onErr := conn.ExecContext(context.WithoutCancel(ctx), "PRAGMA foreign_keys = ON")
+	return errors.Join(err, onErr)
+}
+
+func applyMigrations(ctx context.Context, conn *sql.Conn, names []string, current, last int) error {
 	for i, name := range names {
 		version := i + 1
-		if version <= current {
+		if version <= current || (last > 0 && version > last) {
 			continue
 		}
 		body, err := migrations.ReadFile(name)
 		if err != nil {
 			return err
 		}
-		tx, err := s.db.BeginTx(ctx, nil)
+		tx, err := conn.BeginTx(ctx, nil)
 		if err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, string(body)); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("migration %s: %w", name, err)
+		}
+		if err := foreignKeyCheck(ctx, tx); err != nil {
 			tx.Rollback()
 			return fmt.Errorf("migration %s: %w", name, err)
 		}
@@ -101,6 +124,25 @@ func (s *Store) migrate(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// foreignKeyCheck fails if any row breaks a foreign key.
+func foreignKeyCheck(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var table, parent string
+		var rowid sql.NullInt64
+		var fk int
+		if err := rows.Scan(&table, &rowid, &parent, &fk); err != nil {
+			return err
+		}
+		return fmt.Errorf("row %d of %s breaks its foreign key to %s", rowid.Int64, table, parent)
+	}
+	return rows.Err()
 }
 
 // NewID returns a short, lowercase, URL- and filename-safe random ID.
