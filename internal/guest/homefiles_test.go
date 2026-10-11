@@ -172,6 +172,10 @@ func TestStartSessionCommand(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("command:\n got %q\nwant %q", got, want)
 	}
+	req.Chat = "abc7"
+	if got := startCommand(req); !slices.Equal(got[len(got)-6:], []string{";", "set-option", "-t", "=claude", agentproto.ChatOption, "abc7"}) {
+		t.Fatalf("chat tag: %q", got)
+	}
 	for _, bad := range []agentproto.StartSession{
 		{Name: "a b", Harness: "claude", Command: []string{"claude"}},
 		{Name: "a", Harness: "Claude!", Command: []string{"claude"}},
@@ -182,6 +186,7 @@ func TestStartSessionCommand(t *testing.T) {
 		{Name: "a", Harness: "claude", Command: []string{"claude", "x;"}},
 		{Name: "a", Harness: "claude", Command: []string{"claude"}, Env: map[string]string{"A": "$(id)"}},
 		{Name: "a", Harness: "claude", Command: []string{"claude"}, Env: map[string]string{"a-b": "1"}},
+		{Name: "a", Harness: "claude", Command: []string{"claude"}, Chat: "x;y"},
 	} {
 		if checkStartSession(bad) == nil {
 			t.Errorf("accepted %+v", bad)

@@ -413,6 +413,24 @@ func TestPreviewTicketTargetBindingCookieIsolationAndRedirect(t *testing.T) {
 		t.Fatalf("preview cookie flags = %#v", previewCookie)
 	}
 
+	// For the chat's preview panel the cookie works in a cross-site frame.
+	embedToken, err := a.IssuePreview(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	embed := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+embedToken+"&embed=1", host, nil, "", downstream())
+	if embed.Code != http.StatusSeeOther || embed.Header().Get("Location") != "/" {
+		t.Fatalf("embedded preview login = %d %v", embed.Code, embed.Header())
+	}
+	embedded := embed.Result().Cookies()
+	if len(embedded) != 1 || embedded[0].Name != PreviewCookie || !embedded[0].HttpOnly || !embedded[0].Secure || !embedded[0].Partitioned ||
+		embedded[0].SameSite != http.SameSiteNoneMode || embedded[0].MaxAge != int(previewSessionLife.Seconds()) {
+		t.Fatalf("embedded preview cookie = %#v", embedded)
+	}
+	if raw := embed.Header().Get("Set-Cookie"); !strings.Contains(raw, "SameSite=None") || !strings.Contains(raw, "; Secure") || !strings.Contains(raw, "; Partitioned") {
+		t.Fatalf("embedded preview Set-Cookie = %q", raw)
+	}
+
 	// The same one-time ticket cannot be redeemed again.
 	again := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+token, host, nil, "", downstream())
 	if again.Code != http.StatusForbidden {

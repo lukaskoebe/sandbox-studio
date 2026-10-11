@@ -92,7 +92,12 @@ func (OpenCode) RenderHookResponse(r HookResult) []byte {
 	return hookFormat(teammates.HarnessOpenCode).Render(r)
 }
 
-func (OpenCode) TUICommand(SessionOpts) []string { return []string{"opencode"} }
+func (OpenCode) TUICommand(opts SessionOpts) []string {
+	if opts.Resume != "" {
+		return []string{"opencode", "--session", opts.Resume}
+	}
+	return []string{"opencode"}
+}
 
 // ACPCommand: https://opencode.ai/docs/acp/.
 func (OpenCode) ACPCommand() []string { return []string{"opencode", "acp"} }

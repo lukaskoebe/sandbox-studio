@@ -63,6 +63,9 @@ type GuestFile = agentproto.HomeFile
 // SessionOpts are the options of one TUI session.
 type SessionOpts struct {
 	Workdir string
+	// Resume is the harness's session ID to continue, for a chat opened in the terminal
+	// (docs/design/chat-mode.md section 4); empty starts a new session.
+	Resume string
 }
 
 // Harness is an adapter for one agent harness (PLAN.md §6.6).

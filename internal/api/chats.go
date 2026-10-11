@@ -11,6 +11,8 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -142,15 +144,7 @@ func (s *Server) registerChats(api huma.API) {
 		if err != nil {
 			return nil, err
 		}
-		c, err := s.Store.Chat(ctx, in.Env, in.Chat)
-		if err != nil {
-			return nil, apiError(err)
-		}
-		sb, err := s.sessionSandbox(ctx, in.Env, c.SandboxID)
-		if err != nil {
-			return nil, err
-		}
-		launch, err := s.chatLaunch(ctx, sb)
+		launch, err := s.chatLaunchFor(ctx, in.Env, in.Chat)
 		if err != nil {
 			return nil, err
 		}
@@ -170,6 +164,45 @@ func (s *Server) registerChats(api huma.API) {
 		return nil, apiError(chats.Cancel(ctx, in.Env, in.Chat))
 	})
 
+	huma.Register(api, huma.Operation{
+		OperationID: "openChatInTerminal", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/terminal", Tags: []string{"chats"},
+		Description: "Hands the chat's agent session to its harness's TUI in a tmux session tagged with the chat. The chat " +
+			"is read-only in state terminal until returnToChat. Calling it again restarts the TUI if it exited. " +
+			"409 while a turn runs, and before the chat's first prompt.",
+	}, func(ctx context.Context, in *chatPath) (*struct{ Body ChatTerminal }, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		launch, err := s.chatLaunchFor(ctx, in.Env, in.Chat)
+		if err != nil {
+			return nil, err
+		}
+		name, err := chats.OpenInTerminal(context.WithoutCancel(ctx), in.Env, in.Chat, launch)
+		var he agentchan.HarnessError
+		if errors.As(err, &he) {
+			return nil, huma.Error409Conflict(he.Error())
+		}
+		return &struct{ Body ChatTerminal }{ChatTerminal{Session: name}}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "returnToChat", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/return", Tags: []string{"chats"},
+		DefaultStatus: http.StatusNoContent,
+		Description: "Ends the chat's TUI and reattaches the agent; turns made in the terminal arrive on the stream with " +
+			"origin terminal. Does nothing for a chat that isn't in the terminal.",
+	}, func(ctx context.Context, in *chatPath) (*struct{}, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		launch, err := s.chatLaunchFor(ctx, in.Env, in.Chat)
+		if err != nil {
+			return nil, err
+		}
+		return nil, apiError(chats.ReturnToChat(context.WithoutCancel(ctx), in.Env, in.Chat, launch))
+	})
+
 	type answerIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		Chat string `path:"chat" doc:"Chat ID"`
@@ -186,6 +219,70 @@ func (s *Server) registerChats(api huma.API) {
 			return nil, err
 		}
 		return nil, apiError(chats.Answer(ctx, in.Env, in.Chat, in.Item, in.Body.Action, in.Body.Content))
+	})
+
+	type turnPath struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Chat string `path:"chat" doc:"Chat ID"`
+		Turn string `path:"turn" doc:"Turn ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "undoTurn", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/turns/{turn}/undo", Tags: []string{"chats"},
+		DefaultStatus: http.StatusNoContent,
+		Description: "Puts the sandbox's workspace back as it was before the turn, undoing it and every later turn " +
+			"(.git and ignored files stay). The turns get undoneAt and the next prompt tells the agent. " +
+			"409 while a turn runs, in the terminal, and for turns that aren't undoable.",
+	}, func(ctx context.Context, in *turnPath) (*struct{}, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		return nil, apiError(chats.Undo(context.WithoutCancel(ctx), in.Env, in.Chat, in.Turn))
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getTurnChanges", Method: http.MethodGet, Path: "/api/environments/{env}/chats/{chat}/turns/{turn}/changes", Tags: []string{"chats"},
+		Description: "The files the turn changed, with unified diffs of text files (at most 128 KiB each and 512 KiB in all; " +
+			"truncated marks the rest). Without diffs once the turn's snapshots are gone.",
+	}, func(ctx context.Context, in *turnPath) (*struct{ Body chat.TurnChanges }, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		out, err := chats.Changes(ctx, in.Env, in.Chat, in.Turn)
+		return &struct{ Body chat.TurnChanges }{out}, apiError(err)
+	})
+
+	type filesIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Path string `query:"path" maxLength:"4096" doc:"Relative to /workspace; empty for /workspace itself"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "listFiles", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/files", Tags: []string{"chats"},
+		Description: "Lists a directory of the sandbox's workspace, directories first, at most 1,000 entries. " +
+			"Symlinks are listed, never followed.",
+	}, func(ctx context.Context, in *filesIn) (*struct{ Body FileList }, error) {
+		reply, err := s.workspaceFiles(ctx, in.Env, in.ID, agentproto.FilesRequest{Op: agentproto.FilesList, Path: in.Path})
+		if err != nil {
+			return nil, err
+		}
+		return &struct{ Body FileList }{FileList{Entries: orEmpty(reply.Entries), Truncated: reply.Truncated}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "readFile", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/files/content", Tags: []string{"chats"},
+		Description: "Reads a file of the sandbox's workspace: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come " +
+			"with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not.",
+	}, func(ctx context.Context, in *filesIn) (*struct{ Body FileContent }, error) {
+		if in.Path == "" {
+			return nil, huma.Error422UnprocessableEntity("path is required")
+		}
+		r, err := s.workspaceFiles(ctx, in.Env, in.ID, agentproto.FilesRequest{Op: agentproto.FilesRead, Path: in.Path})
+		if err != nil {
+			return nil, err
+		}
+		return &struct{ Body FileContent }{FileContent{Size: r.Size, MimeType: r.MimeType, Data: r.Data, TooLarge: r.TooLarge, Binary: r.Binary, Unreadable: r.Unreadable}}, nil
 	})
 }
 
@@ -217,7 +314,68 @@ func (s *Server) chatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch,
 	if err != nil {
 		return chat.Launch{}, err
 	}
-	return chat.Launch{Harness: plan.harness, Files: plan.files, Env: harness.ACPEnvironment(plan.harness, plan.provider)}, nil
+	return chat.Launch{Harness: plan.harness, Files: plan.files, Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env}, nil
+}
+
+// chatLaunchFor plans the agent of an existing chat.
+func (s *Server) chatLaunchFor(ctx context.Context, envID, chatID string) (chat.Launch, error) {
+	c, err := s.Store.Chat(ctx, envID, chatID)
+	if err != nil {
+		return chat.Launch{}, apiError(err)
+	}
+	sb, err := s.sessionSandbox(ctx, envID, c.SandboxID)
+	if err != nil {
+		return chat.Launch{}, err
+	}
+	return s.chatLaunch(ctx, sb)
+}
+
+// FileList is a directory of a sandbox's workspace.
+type FileList struct {
+	Entries   []agentproto.FileEntry `json:"entries"`
+	Truncated bool                   `json:"truncated,omitempty" doc:"More than 1,000 entries"`
+}
+
+// FileContent is a file of a sandbox's workspace.
+type FileContent struct {
+	Size       int64  `json:"size"`
+	MimeType   string `json:"mimeType,omitempty"`
+	Data       []byte `json:"data,omitempty" doc:"The file, base64-encoded"`
+	TooLarge   bool   `json:"tooLarge,omitempty" doc:"Larger than 1 MiB"`
+	Binary     bool   `json:"binary,omitempty" doc:"Neither text nor a shown image type"`
+	Unreadable bool   `json:"unreadable,omitempty" doc:"The sandbox's agent user can't read it"`
+}
+
+// workspaceFiles asks the guest for a directory or file. Its refusals (a missing path, a
+// symlink, an invalid path) are the caller's mistakes.
+func (s *Server) workspaceFiles(ctx context.Context, envID, id string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
+	chats, err := s.chats()
+	if err != nil {
+		return agentproto.FilesReply{}, err
+	}
+	if _, err := s.sessionSandbox(ctx, envID, id); err != nil {
+		return agentproto.FilesReply{}, err
+	}
+	reply, err := chats.Files(ctx, id, req)
+	switch {
+	case err == nil:
+		return reply, nil
+	case errors.Is(err, agentchan.ErrNotConnected), ctx.Err() != nil:
+		return reply, apiError(err)
+	}
+	return reply, huma.Error422UnprocessableEntity(err.Error())
+}
+
+func orEmpty[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
+
+// ChatTerminal is the tmux session a chat continues in.
+type ChatTerminal struct {
+	Session string `json:"session" doc:"The tmux session's name; attach to it like any agent session"`
 }
 
 // --- streaming ------------------------------------------------------------------------

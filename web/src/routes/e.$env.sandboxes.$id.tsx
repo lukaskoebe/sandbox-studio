@@ -61,7 +61,7 @@ import {
   isReady,
   type Sandbox,
 } from "@/lib/api/client"
-import { useAgentView } from "@/lib/api/pending"
+import { useAgentView } from "@/lib/agent-view"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/sandboxes/$id")({

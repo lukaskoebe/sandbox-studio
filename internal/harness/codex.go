@@ -109,7 +109,10 @@ func tomlString(s string) string {
 // and the managed layer (requirements.toml) is outside the home. Studio rewrites hooks.json
 // on every start and the VM is the sandbox. verify (S7): the flag is accepted by the
 // interactive TUI of 0.162.1.
-func (Codex) TUICommand(SessionOpts) []string {
+func (Codex) TUICommand(opts SessionOpts) []string {
+	if opts.Resume != "" {
+		return []string{"codex", "resume", opts.Resume, "--dangerously-bypass-hook-trust"}
+	}
 	return []string{"codex", "--dangerously-bypass-hook-trust"}
 }
 

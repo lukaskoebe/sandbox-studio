@@ -219,6 +219,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/chats/{chat}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Ends the chat's TUI and reattaches the agent; turns made in the terminal arrive on the stream with origin terminal. Does nothing for a chat that isn't in the terminal. */
+        post: operations["returnToChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/chats/{chat}/terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Hands the chat's agent session to its harness's TUI in a tmux session tagged with the chat. The chat is read-only in state terminal until returnToChat. Calling it again restarts the TUI if it exited. 409 while a turn runs, and before the chat's first prompt. */
+        post: operations["openChatInTerminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/chats/{chat}/turns/{turn}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The files the turn changed, with unified diffs of text files (at most 128 KiB each and 512 KiB in all; truncated marks the rest). Without diffs once the turn's snapshots are gone. */
+        get: operations["getTurnChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/chats/{chat}/turns/{turn}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Puts the sandbox's workspace back as it was before the turn, undoing it and every later turn (.git and ignored files stay). The turns get undoneAt and the next prompt tells the agent. 409 while a turn runs, in the terminal, and for turns that aren't undoable. */
+        post: operations["undoTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/forges": {
         parameters: {
             query?: never;
@@ -870,6 +938,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lists a directory of the sandbox's workspace, directories first, at most 1,000 entries. Symlinks are listed, never followed. */
+        get: operations["listFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Reads a file of the sandbox's workspace: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not. */
+        get: operations["readFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/fork": {
         parameters: {
             query?: never;
@@ -1320,6 +1422,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/ui": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getUISettings"];
+        put: operations["setUISettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/autostart": {
         parameters: {
             query?: never;
@@ -1570,6 +1688,10 @@ export interface components {
             title: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        ChatTerminal: {
+            /** @description The tmux session's name; attach to it like any agent session */
+            session: string;
         };
         Checkpoint: {
             /** Format: date-time */
@@ -1998,6 +2120,57 @@ export interface components {
             validFrom?: string;
             /** Format: date-time */
             validUntil?: string;
+        };
+        FileChange: {
+            /**
+             * Format: int64
+             * @description Lines added
+             */
+            added: number;
+            /** @description Not text, or too large to compare by line */
+            binary?: boolean;
+            /** @description Unified diff of the file */
+            diff?: string;
+            path: string;
+            /**
+             * Format: int64
+             * @description Lines removed
+             */
+            removed: number;
+            /** @enum {string} */
+            status: "added" | "modified" | "deleted";
+            /** @description The diff was cut, or left out to keep the reply small */
+            truncated?: boolean;
+        };
+        FileContent: {
+            /** @description Neither text nor a shown image type */
+            binary?: boolean;
+            /** @description The file, base64-encoded */
+            data?: string;
+            mimeType?: string;
+            /** Format: int64 */
+            size: number;
+            /** @description Larger than 1 MiB */
+            tooLarge?: boolean;
+            /** @description The sandbox's agent user can't read it */
+            unreadable?: boolean;
+        };
+        FileEntry: {
+            /**
+             * Format: int64
+             * @description Unix seconds
+             */
+            modTime: number;
+            name: string;
+            /** Format: int64 */
+            size: number;
+            /** @enum {string} */
+            type: "file" | "dir" | "symlink" | "other";
+        };
+        FileList: {
+            entries: components["schemas"]["FileEntry"][] | null;
+            /** @description More than 1,000 entries */
+            truncated?: boolean;
         };
         Forge: {
             /** @description https://host[/path], or ssh://user@host[:port] for kind ssh */
@@ -2508,6 +2681,8 @@ export interface components {
         Session: {
             /** Format: int64 */
             attached: number;
+            /** @description The chat this session continues, when a chat was opened in the terminal */
+            chat?: string;
             /** Format: int64 */
             created: number;
             /** @description The agent harness running in the session; empty for plain terminals */
@@ -2681,6 +2856,8 @@ export interface components {
             toolCallId: string;
         };
         Turn: {
+            /** @description The files the turn changed, once it ended */
+            changes?: components["schemas"]["TurnChanges"];
             chatId: string;
             /** Format: date-time */
             endedAt?: string;
@@ -2694,9 +2871,19 @@ export interface components {
             /** Format: date-time */
             startedAt: string;
             stopReason?: string;
+            /** @description The workspace can be put back as it was before this turn */
+            undoable: boolean;
             /** Format: date-time */
             undoneAt?: string;
             usage?: components["schemas"]["TurnUsage"];
+        };
+        TurnChanges: {
+            files: components["schemas"]["FileChange"][] | null;
+            /**
+             * Format: int64
+             * @description Changed files not listed
+             */
+            more?: number;
         };
         TurnUsage: {
             /**
@@ -2713,6 +2900,19 @@ export interface components {
             cost?: unknown;
             /** @description The prompt response's usage, as the agent reports it */
             tokens?: unknown;
+        };
+        UISettings: {
+            /**
+             * @description How agent sessions open by default
+             * @enum {string}
+             */
+            agentView: "chat" | "terminal";
+            /** @description The user chose agentView; until then it is chat and the UI asks once */
+            asked: boolean;
+        };
+        UISettingsUpdate: {
+            /** @enum {string} */
+            agentView: "chat" | "terminal";
         };
         UpdateProviderInBody: {
             /** @description A new key. Omit it to keep the stored one. */
@@ -3387,6 +3587,142 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Turn"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    returnToChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    openChatInTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatTerminal"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTurnChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+                /** @description Turn ID */
+                turn: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TurnChanges"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    undoTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+                /** @description Turn ID */
+                turn: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -5248,6 +5584,80 @@ export interface operations {
             };
         };
     };
+    listFiles: {
+        parameters: {
+            query?: {
+                /** @description Relative to /workspace; empty for /workspace itself */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    readFile: {
+        parameters: {
+            query?: {
+                /** @description Relative to /workspace; empty for /workspace itself */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     forkSandbox: {
         parameters: {
             query?: never;
@@ -5322,7 +5732,10 @@ export interface operations {
     };
     openPreview: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned */
+                embed?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Environment ID */
@@ -6441,6 +6854,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProviderKind"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getUISettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UISettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setUISettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UISettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UISettings"];
                 };
             };
             /** @description Error */

@@ -14,10 +14,12 @@ import (
 )
 
 func TestParseSessions(t *testing.T) {
-	out := "main|1|2|1791627258|\nclaude-2|0|1|1791627300|claude\nodd name|0|1|1|\nshort|0\n"
+	out := "main|1|2|1791627258||\nclaude-2|0|1|1791627300|claude|\nchat-x|0|1|1791627301|codex|abc7\nold|0|1|1|opencode\nodd name|0|1|1||\nshort|0\n"
 	want := []agentproto.Session{
 		{Name: "main", Attached: 1, Windows: 2, Created: 1791627258},
 		{Name: "claude-2", Windows: 1, Created: 1791627300, Harness: "claude"},
+		{Name: "chat-x", Windows: 1, Created: 1791627301, Harness: "codex", Chat: "abc7"},
+		{Name: "old", Windows: 1, Created: 1, Harness: "opencode"},
 	}
 	if got := parseSessions(out); !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)

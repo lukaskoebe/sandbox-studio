@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +26,7 @@ type chatGuest struct {
 	fakeGuest
 	agent *acptest.Agent
 	acp   []agentproto.StartACP
+	snaps []agentproto.SnapshotRequest
 }
 
 func (g *chatGuest) OpenACP(_ context.Context, _ string, req agentproto.StartACP) (io.ReadWriteCloser, error) {
@@ -32,6 +34,31 @@ func (g *chatGuest) OpenACP(_ context.Context, _ string, req agentproto.StartACP
 	g.acp = append(g.acp, req)
 	g.mu.Unlock()
 	return g.agent.Pipe(), nil
+}
+
+func (g *chatGuest) Snapshot(_ context.Context, _ string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.snaps = append(g.snaps, req)
+	change := agentproto.FileChange{Path: "a.txt", Status: "modified", Added: 1, Removed: 1}
+	switch {
+	case req.Op == agentproto.SnapshotTake && req.Base != "":
+		return agentproto.SnapshotReply{Changes: []agentproto.FileChange{change}}, nil
+	case req.Op == agentproto.SnapshotChanges:
+		change.Diff = "--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-1\n+2\n"
+		return agentproto.SnapshotReply{Changes: []agentproto.FileChange{change}}, nil
+	}
+	return agentproto.SnapshotReply{}, nil
+}
+
+func (g *chatGuest) Files(_ context.Context, _ string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
+	switch {
+	case req.Op == agentproto.FilesList && req.Path == "":
+		return agentproto.FilesReply{Entries: []agentproto.FileEntry{{Name: "src", Type: "dir"}, {Name: "a.txt", Type: "file", Size: 2}}}, nil
+	case req.Op == agentproto.FilesRead && req.Path == "a.txt":
+		return agentproto.FilesReply{Size: 2, MimeType: "text/plain; charset=utf-8", Data: []byte("2\n")}, nil
+	}
+	return agentproto.FilesReply{}, errors.New("the path goes through a symlink")
 }
 
 func newChatServer(t *testing.T, agent *acptest.Agent) (http.Handler, *Server, *chatGuest, store.Environment) {
@@ -124,11 +151,86 @@ func TestChats(t *testing.T) {
 	if rec := do(h, "POST", base+"/cancel", ""); rec.Code != http.StatusNoContent {
 		t.Fatalf("cancel: %d %s", rec.Code, rec.Body)
 	}
+
+	// Chat to terminal and back.
+	rec = do(h, "POST", base+"/terminal", "")
+	if rec.Code != http.StatusOK || decode[ChatTerminal](t, rec).Session != "chat-"+c.ID {
+		t.Fatalf("terminal: %d %s", rec.Code, rec.Body)
+	}
+	if len(g.started) != 1 || g.started[0].Chat != c.ID || g.started[0].Command[1] != "--resume" ||
+		g.started[0].Env["ANTHROPIC_API_KEY"] != prov.Placeholder {
+		t.Fatalf("started %+v", g.started)
+	}
+	if rec := do(h, "POST", base+"/prompt", `{"text":"x"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("prompt in terminal: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/return", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("return: %d %s", rec.Code, rec.Body)
+	}
+	if log := decode[chat.Log](t, do(h, "GET", base, "")); log.Chat.State != store.ChatIdle || len(g.killed) != 1 {
+		t.Fatalf("returned: %+v killed %v", log.Chat, g.killed)
+	}
+
 	if rec := do(h, "DELETE", base, ""); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, "GET", base, ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("deleted: %d", rec.Code)
+	}
+}
+
+func TestChatUndoAndFiles(t *testing.T) {
+	h, s, g, env := newChatServer(t, &acptest.Agent{SessionID: "ses_1"})
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+	rec := do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"Edit a.txt"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	base := envBase + "/chats/" + decode[store.Chat](t, rec).ID
+	log := waitIdle(t, h, base)
+	turn := log.Turns[0]
+	if !turn.Undoable || turn.Changes == nil || len(turn.Changes.Files) != 1 || turn.Changes.Files[0].Path != "a.txt" {
+		t.Fatalf("turn %+v", turn)
+	}
+	ch := decode[chat.TurnChanges](t, do(h, "GET", base+"/turns/"+turn.ID+"/changes", ""))
+	if len(ch.Files) != 1 || !strings.Contains(ch.Files[0].Diff, "+2") {
+		t.Fatalf("changes %+v", ch)
+	}
+	if rec := do(h, "POST", base+"/turns/"+turn.ID+"/undo", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("undo: %d %s", rec.Code, rec.Body)
+	}
+	g.mu.Lock()
+	last := g.snaps[len(g.snaps)-1]
+	g.mu.Unlock()
+	if last.Op != agentproto.SnapshotRestore || last.ID != turn.ID {
+		t.Fatalf("restore %+v", last)
+	}
+	if log := decode[chat.Log](t, do(h, "GET", base, "")); log.Turns[0].UndoneAt == nil || log.Turns[0].Undoable {
+		t.Fatalf("undone %+v", log.Turns[0])
+	}
+	if rec := do(h, "POST", base+"/turns/"+turn.ID+"/undo", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("undo again: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/turns/nope/undo", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("undo a missing turn: %d", rec.Code)
+	}
+
+	files := envBase + "/sandboxes/" + sb.ID + "/files"
+	if list := decode[FileList](t, do(h, "GET", files, "")); len(list.Entries) != 2 || list.Entries[0].Type != "dir" {
+		t.Fatalf("list %+v", list)
+	}
+	if f := decode[FileContent](t, do(h, "GET", files+"/content?path=a.txt", "")); string(f.Data) != "2\n" || f.Size != 2 {
+		t.Fatalf("read %+v", f)
+	}
+	for _, q := range []string{"/content", "/content?path=link/x", "?path=link"} {
+		if rec := do(h, "GET", files+q, ""); rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("%s: %d %s", q, rec.Code, rec.Body)
+		}
+	}
+	if rec := do(h, "GET", envBase+"/sandboxes/nope/files", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("missing sandbox: %d", rec.Code)
 	}
 }
 

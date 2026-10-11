@@ -60,8 +60,17 @@ func TestOpenPreviewTicket(t *testing.T) {
 	if u.Scheme != "http" || u.Host != wantHost || u.Path != "/__studio/preview-login" {
 		t.Fatalf("preview URL: got %q, want http://%s/__studio/preview-login?token=...", body.URL, wantHost)
 	}
-	if u.Query().Get("token") == "" || issuedHost != wantHost {
+	if u.Query().Get("token") == "" || issuedHost != wantHost || u.Query().Has("embed") {
 		t.Fatalf("ticket: token present=%v, issued host=%q, want %q", u.Query().Get("token") != "", issuedHost, wantHost)
+	}
+
+	// The chat's preview panel asks for an embeddable login.
+	rec = do(h, http.MethodPost, "http://localhost:7878"+path+"?embed=true", "")
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("open embedded preview: %d %s", rec.Code, rec.Body)
+	}
+	if u, err := url.Parse(body.URL); err != nil || u.Query().Get("embed") != "1" || u.Query().Get("token") == "" {
+		t.Fatalf("embedded preview URL %q", body.URL)
 	}
 }
 

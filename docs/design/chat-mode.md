@@ -1,12 +1,12 @@
 # Chat mode (design)
 
-Status: backend implemented on `chat-backend`: ACP streams, persisted turns, SSE,
-permissions and form answers have local test coverage. The chat UI (stage 3 and the UI
-half of stage 4) is built on `chat-ui`: chat list and view, item renderers, composer,
-permission cards in the chat and the approval stack, and the Chat/Terminal choice. Until
-the terminal handover and `/api/settings/ui` endpoints land, the UI calls them through
-`web/src/lib/api/pending.ts`, which keeps the choice in the browser. File changes, undo
-and preview remain unfinished; this is not release-ready. Researched 2026-10-11.
+Status: implemented and covered by local tests with fakes: the backend (ACP streams,
+persisted turns, SSE, permissions and form answers), the chat UI (stage 3 and the UI half
+of stage 4), the terminal handover and replay reconciliation (stage 5), turn snapshots with
+undo, the changed files and the read-only file browser on the backend (stage 6), the
+embedded preview login (the backend half of stage 7), and the stored Chat/Terminal choice.
+The Changes, Files and preview panels are not built, and nothing has run in a VM or against
+a real LLM, so this is not release-ready. Researched 2026-10-11.
 Versions marked "verify" have not been run in a VM.
 
 Chat mode puts each agent session in a chat view for people who don't use terminals. The
@@ -205,9 +205,12 @@ the turn `interrupted`.
 - **After Studio restarts or the process dies:** the next prompt starts a new process and
   calls `session/resume`. A turn that was running is marked `interrupted`, with a marker.
 - **`session/load` only for reconciling**, after the session was used in the terminal
-  (section 4). The replay is authoritative for message content. Studio rebuilds the chat's
-  items from it and keeps its own rows (turn checkpoints, permissions, markers) attached
-  by turn order.
+  (section 4). Studio matches the replay's turns to its own in order, by their prompts.
+  Matched turns keep the chat's own items, which also hold what the replay lacks
+  (permissions, questions, markers). Every replay turn from the first unmatched one on is
+  added with `origin = terminal`. Chat turns the replay no longer has (the TUI ran
+  `/clear`, `/compact` or a rewind) stay, but lose undo. An agent without `session/load`
+  gets a "Continued in the terminal" marker instead.
 
 **Permission requests become approvals.**
 
@@ -370,12 +373,16 @@ Paths under `/api/environments/{env}`:
 | `DELETE /chats/{chat}` | `deleteChat` | Also `session/delete` when live |
 | `POST /chats/{chat}/prompt` | `sendPrompt` | Body `{text, attachments[]}` (base64, at most 10 MiB in total). 202 with the turn. 409 while running |
 | `POST /chats/{chat}/cancel` | `cancelChat` | |
-| `POST /chats/{chat}/turns/{turn}/undo` | `undoTurn` | 409 while running |
-| `POST /chats/{chat}/terminal` | `openChatInTerminal` | Returns the tmux session name |
-| `POST /chats/{chat}/return` | `returnToChat` | Ends the TUI and reconciles |
-| `GET /sandboxes/{id}/files?path=` | `listFiles` | |
-| `GET /sandboxes/{id}/files/content?path=` | `readFile` | |
-| `GET /api/settings/ui` / `PUT /api/settings/ui` | `getUISettings` / `setUISettings` | `{agentView: chat\|terminal\|""}` |
+| `POST /chats/{chat}/turns/{turn}/undo` | `undoTurn` | 204. 409 while running, or once the turn is undone or its snapshot is gone |
+| `GET /chats/{chat}/turns/{turn}/changes` | `getTurnChanges` | `{files[], more}` with diffs. Without the snapshots, the stored list without diffs |
+| `POST /chats/{chat}/terminal` | `openChatInTerminal` | `{session}`: the tmux session name |
+| `POST /chats/{chat}/return` | `returnToChat` | 204. Ends the TUI and reconciles |
+| `GET /sandboxes/{id}/files?path=` | `listFiles` | `{entries[], truncated}` |
+| `GET /sandboxes/{id}/files/content?path=` | `readFile` | `{size, mimeType, data, tooLarge, binary, unreadable}`, `data` in base64 |
+| `POST /sandboxes/{id}/previews/{port}/open?embed=true` | `openPreview` | The login URL for an iframe (section 5) |
+| `GET /api/settings/ui` / `PUT /api/settings/ui` | `getUISettings` / `setUISettings` | `{agentView: chat\|terminal, asked}`. `asked` is false until the first `PUT`, which the onboarding dialog waits for |
+
+Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
 
 **Streaming** is a plain handler like `streamEvents`:
 `GET /api/environments/{env}/chats/{chat}/stream?after=<rev>` (or `Last-Event-ID`).
@@ -430,8 +437,9 @@ a session at a time, so Studio hands it over instead of sharing it.
    - The chat goes to state `terminal`, the composer is replaced by "Continue in chat", and
      the UI opens the terminal tab.
 2. **Terminal to chat.**
-   - "Continue in chat", or the TUI exiting, ends the tmux session. Each harness saves after
-     every message.
+   - "Back to chat" ends the tmux session. Each harness saves after every message. The TUI
+     exiting on its own doesn't return the chat; opening it in the terminal again restarts
+     the TUI.
    - Studio starts the ACP process and calls `session/load`, then reconciles (section 2).
      Turns that exist only in the replay get `origin = terminal`, no snapshot, and a
      "Continued in the terminal" `Marker`.
@@ -487,9 +495,12 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
       path, mode, size, mtime and hash.
     - Unchanged files are found by size and mtime and not reread. Typically this takes well
       under a second.
-  - **After the turn**, op `changes` diffs the manifest against the live tree into
-    `chat_turns.changes`: added, modified and deleted paths with line counts. The Changes
-    tab and the turn footer ("Changed 3 files") show it.
+  - **After the turn** the guest takes a second snapshot, `<turn>-after`, based on the
+    first, and Studio stores the difference in `chat_turns.changes`: added, modified and
+    deleted paths with line counts. The next turn's snapshot reuses its hashes. The Changes
+    tab and the turn footer ("Changed 3 files") show it. Op `changes` compares the two
+    snapshots again for the diffs, so they show what the turn did even after later edits.
+    Diffs cover text files up to 1 MiB that the agent user may read.
   - **Undo turn N** (op `restore`) puts the workspace back to the snapshot taken before
     turn N. That reverts turn N and every later turn, and the button says so: "Undo this and
     2 later changes".

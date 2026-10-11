@@ -79,10 +79,16 @@ type Session struct {
 	Created  int64  `json:"created"` // unix seconds
 	// Harness is set for agent sessions started with KindStartSession.
 	Harness string `json:"harness,omitempty" doc:"The agent harness running in the session; empty for plain terminals"`
+	// Chat is set for a chat opened in the terminal.
+	Chat string `json:"chat,omitempty" doc:"The chat this session continues, when a chat was opened in the terminal"`
 }
 
 // HarnessOption is the tmux user option that marks a session as an agent session.
 const HarnessOption = "@studio_harness"
+
+// ChatOption is the tmux user option that marks the session of a chat opened in the
+// terminal (docs/design/chat-mode.md section 4).
+const ChatOption = "@studio_chat"
 
 // Limits of a HomeFiles request.
 const (
@@ -121,6 +127,8 @@ type StartSession struct {
 	Harness string            `json:"harness"`
 	Command []string          `json:"command"`
 	Env     map[string]string `json:"env"`
+	// Chat tags the session with ChatOption.
+	Chat string `json:"chat,omitempty"`
 }
 
 // Call methods. MethodHook carries a harness.HookEvent; the memory methods carry their

@@ -183,6 +183,20 @@ func TestTOMLString(t *testing.T) {
 	}
 }
 
+func TestResumeCommand(t *testing.T) {
+	want := map[string]string{
+		teammates.HarnessOpenCode: "opencode --session ses_1",
+		teammates.HarnessClaude:   "claude --resume ses_1 --mcp-config " + Home + "/" + claudeMCPConfig,
+		teammates.HarnessCodex:    "codex resume ses_1 --dangerously-bypass-hook-trust",
+	}
+	for name, cmd := range want {
+		h, _ := Lookup(name)
+		if got := strings.Join(h.TUICommand(SessionOpts{Workdir: "/workspace", Resume: "ses_1"}), " "); got != cmd {
+			t.Errorf("%s: %q", name, got)
+		}
+	}
+}
+
 func TestLookup(t *testing.T) {
 	for _, name := range []string{teammates.HarnessOpenCode, teammates.HarnessClaude, teammates.HarnessCodex} {
 		h, ok := Lookup(name)

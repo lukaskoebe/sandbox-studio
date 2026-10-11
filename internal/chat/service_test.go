@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -17,13 +19,144 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// fakeGuest serves every ACP stream with one scripted agent.
+// fakeGuest serves every ACP stream with one scripted agent and keeps tmux sessions as a
+// list.
 type fakeGuest struct {
-	agent *acptest.Agent
-	mu    sync.Mutex
-	opens []agentproto.StartACP
-	files int
-	conns []io.ReadWriteCloser
+	agent    *acptest.Agent
+	mu       sync.Mutex
+	opens    []agentproto.StartACP
+	files    int
+	conns    []io.ReadWriteCloser
+	sessions []agentproto.Session
+	started  []agentproto.StartSession
+	killed   []string
+	// The workspace as path → content, and its snapshots by ID.
+	ws    map[string]string
+	snaps map[string]map[string]string
+	// turnEdits are what the next turns change, applied as each turn ends.
+	turnEdits []map[string]string
+	snapErr   error
+}
+
+func (g *fakeGuest) Snapshot(_ context.Context, _ string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.snapErr != nil {
+		return agentproto.SnapshotReply{}, g.snapErr
+	}
+	if g.snaps == nil {
+		g.snaps = map[string]map[string]string{}
+	}
+	diff := func(a, b map[string]string, diffs bool) []agentproto.FileChange {
+		var out []agentproto.FileChange
+		for p, x := range a {
+			if y, ok := b[p]; !ok {
+				out = append(out, agentproto.FileChange{Path: p, Status: "deleted", Removed: 1})
+			} else if x != y {
+				c := agentproto.FileChange{Path: p, Status: "modified", Added: 1, Removed: 1}
+				if diffs {
+					c.Diff = "-" + x + "\n+" + y + "\n"
+				}
+				out = append(out, c)
+			}
+		}
+		for p := range b {
+			if _, ok := a[p]; !ok {
+				out = append(out, agentproto.FileChange{Path: p, Status: "added", Added: 1})
+			}
+		}
+		slices.SortFunc(out, func(x, y agentproto.FileChange) int { return strings.Compare(x.Path, y.Path) })
+		return out
+	}
+	switch req.Op {
+	case agentproto.SnapshotTake:
+		if strings.HasSuffix(req.ID, "-after") && len(g.turnEdits) > 0 {
+			g.apply(g.turnEdits[0])
+			g.turnEdits = g.turnEdits[1:]
+		}
+		g.snaps[req.ID] = maps.Clone(g.ws)
+		var r agentproto.SnapshotReply
+		if base, ok := g.snaps[req.Base]; ok {
+			r.Changes = diff(base, g.ws, false)
+		}
+		return r, nil
+	case agentproto.SnapshotChanges:
+		a, ok1 := g.snaps[req.Base]
+		b, ok2 := g.snaps[req.ID]
+		if !ok1 || !ok2 {
+			return agentproto.SnapshotReply{}, errors.New("no such snapshot")
+		}
+		return agentproto.SnapshotReply{Changes: diff(a, b, true)}, nil
+	case agentproto.SnapshotRestore:
+		snap, ok := g.snaps[req.ID]
+		if !ok {
+			return agentproto.SnapshotReply{}, errors.New("no such snapshot")
+		}
+		g.ws = maps.Clone(snap)
+		return agentproto.SnapshotReply{Restored: len(snap)}, nil
+	case agentproto.SnapshotGC:
+		for id := range g.snaps {
+			if !slices.Contains(req.Keep, id) {
+				delete(g.snaps, id)
+			}
+		}
+		return agentproto.SnapshotReply{}, nil
+	}
+	return agentproto.SnapshotReply{}, errors.New("bad op")
+}
+
+func (g *fakeGuest) Files(_ context.Context, _ string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if req.Op == agentproto.FilesRead {
+		if c, ok := g.ws[req.Path]; ok {
+			return agentproto.FilesReply{Size: int64(len(c)), MimeType: "text/plain; charset=utf-8", Data: []byte(c)}, nil
+		}
+		return agentproto.FilesReply{}, errors.New("no such file or directory")
+	}
+	var r agentproto.FilesReply
+	for p, c := range g.ws {
+		if !strings.Contains(p, "/") {
+			r.Entries = append(r.Entries, agentproto.FileEntry{Name: p, Type: "file", Size: int64(len(c))})
+		}
+	}
+	return r, nil
+}
+
+// apply changes the fake workspace; an empty content deletes.
+func (g *fakeGuest) apply(files map[string]string) {
+	if g.ws == nil {
+		g.ws = map[string]string{}
+	}
+	for p, c := range files {
+		if c == "" {
+			delete(g.ws, p)
+		} else {
+			g.ws[p] = c
+		}
+	}
+}
+
+func (g *fakeGuest) Sessions(context.Context, string) ([]agentproto.Session, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]agentproto.Session(nil), g.sessions...), nil
+}
+
+func (g *fakeGuest) StartSession(_ context.Context, _ string, req agentproto.StartSession) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.started = append(g.started, req)
+	g.sessions = append(g.sessions, agentproto.Session{Name: req.Name, Harness: req.Harness, Chat: req.Chat, Windows: 1})
+	return nil
+}
+
+func (g *fakeGuest) KillSession(_ context.Context, _, name string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.killed = append(g.killed, name)
+	g.sessions = slices.DeleteFunc(g.sessions, func(x agentproto.Session) bool { return x.Name == name })
+	return nil
 }
 
 func (g *fakeGuest) OpenACP(_ context.Context, _ string, req agentproto.StartACP) (io.ReadWriteCloser, error) {

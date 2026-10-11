@@ -68,7 +68,10 @@ func (Claude) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, err
 
 // TUICommand loads Studio's MCP server from its own file. verify (S7): servers passed with
 // --mcp-config need no approval prompt, unlike a project's .mcp.json.
-func (Claude) TUICommand(SessionOpts) []string {
+func (Claude) TUICommand(opts SessionOpts) []string {
+	if opts.Resume != "" {
+		return []string{"claude", "--resume", opts.Resume, "--mcp-config", Home + "/" + claudeMCPConfig}
+	}
 	return []string{"claude", "--mcp-config", Home + "/" + claudeMCPConfig}
 }
 
