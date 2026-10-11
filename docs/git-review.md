@@ -41,6 +41,12 @@ body is limited to 16 MiB.
    (`<data>/git-staging/<env-id>/<sandbox-id>/<forge-id>/<owner>/<repo>.git`) and advertises them.
    Each sandbox has its own staging repo, so sandboxes and environments never see each
    other's pushes.
+   Deleting a sandbox deletes its staging repos (`<data>/git-staging/<env-id>/<sandbox-id>`);
+   a failure there is logged and doesn't fail the delete. At startup Studio sweeps the
+   staging root and removes, with a log line each, the directories of sandboxes no longer in
+   the catalog; stopped or crashed sandboxes keep theirs. Removal only accepts store IDs
+   and plain directories below the staging root: symlinks and other entries are never
+   followed or removed.
 2. `POST git-receive-pack`: the pack (at most 100 MiB, else 413) is stored. Each command
    is checked:
    - only `refs/heads/*`, no deletes, at most 32 updates;
