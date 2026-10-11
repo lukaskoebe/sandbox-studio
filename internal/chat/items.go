@@ -152,39 +152,204 @@ func ItemView(it store.ChatItem) Item {
 	return v
 }
 
-// encodeBody marshals a body within MaxBody, truncating text where it has to.
+// encodeBody marshals a body within MaxBody, truncating or dropping optional content
+// with a strictly decreasing fallback for every body type.
 func encodeBody(body any) json.RawMessage {
-	b, _ := json.Marshal(body)
-	if len(b) <= MaxBody {
+	if b, ok := marshalBody(body); ok {
 		return b
 	}
 	switch v := body.(type) {
 	case *TextBody:
-		c := *v
-		c.Text, c.Truncated = clip(c.Text, MaxBody-1024), true
-		return encodeBody(&c)
+		return encodeTextBody(v)
 	case *ToolBody:
-		c := *v
-		c.Truncated = true
-		if c.Input != nil {
-			c.Input = nil
-			return encodeBody(&c)
-		}
-		c.Content = shrinkContent(c.Content)
-		if c.Content == nil {
-			c.Locations = nil
-			b, _ = json.Marshal(&c)
+		return encodeToolBody(v)
+	case *QuestionBody:
+		return encodeQuestionBody(v)
+	case *UserBody:
+		return encodeUserBody(v)
+	case *PlanBody:
+		return encodePlanBody(v)
+	case *PermissionBody:
+		return encodePermissionBody(v)
+	case *MarkerBody:
+		return encodeMarkerBody(v)
+	default:
+		return json.RawMessage(`{"kind":"","text":""}`)
+	}
+}
+
+func marshalBody(body any) (json.RawMessage, bool) {
+	b, err := json.Marshal(body)
+	return b, err == nil && len(b) <= MaxBody
+}
+
+func encodeTextBody(body *TextBody) json.RawMessage {
+	c := *body
+	c.Truncated = true
+	for {
+		if b, ok := marshalBody(&c); ok {
 			return b
 		}
-		return encodeBody(&c)
-	case *QuestionBody:
-		c := *v
-		c.Schema, c.Answer = nil, nil
-		b, _ = json.Marshal(&c)
+		if c.Text == "" {
+			b, _ := json.Marshal(&TextBody{Truncated: true})
+			return b
+		}
+		c.Text = halveString(c.Text)
+	}
+}
+
+func encodeToolBody(body *ToolBody) json.RawMessage {
+	c := *body
+	c.Truncated = true
+	for {
+		if b, ok := marshalBody(&c); ok {
+			return b
+		}
+		if c.Input != nil {
+			c.Input = nil
+			continue
+		}
+		if content := shrinkContent(c.Content); content != nil {
+			c.Content = content
+			continue
+		}
+		if len(c.Content) != 0 {
+			c.Content = nil
+			continue
+		}
+		if len(c.Locations) != 0 {
+			c.Locations = nil
+			continue
+		}
+		if shrinkLongestString(&c.Title, &c.Kind, &c.Status) {
+			continue
+		}
+		b, _ := json.Marshal(&ToolBody{Truncated: true})
 		return b
 	}
-	b, _ = json.Marshal(newBody(""))
-	return b
+}
+
+func encodeQuestionBody(body *QuestionBody) json.RawMessage {
+	c := *body
+	for {
+		if b, ok := marshalBody(&c); ok {
+			return b
+		}
+		if c.Answer != nil {
+			c.Answer = nil
+			continue
+		}
+		if c.Schema != nil {
+			c.Schema = nil
+			continue
+		}
+		if shrinkLongestString(&c.Message, &c.Action) {
+			continue
+		}
+		b, _ := json.Marshal(&QuestionBody{})
+		return b
+	}
+}
+
+func encodeUserBody(body *UserBody) json.RawMessage {
+	c := *body
+	for {
+		if b, ok := marshalBody(&c); ok {
+			return b
+		}
+		if len(c.Attachments) != 0 {
+			c.Attachments = c.Attachments[:len(c.Attachments)/2]
+			continue
+		}
+		if c.Text != "" {
+			c.Text = halveString(c.Text)
+			continue
+		}
+		b, _ := json.Marshal(&UserBody{})
+		return b
+	}
+}
+
+func encodePlanBody(body *PlanBody) json.RawMessage {
+	c := *body
+	for {
+		if b, ok := marshalBody(&c); ok {
+			return b
+		}
+		if len(c.Entries) != 0 {
+			c.Entries = c.Entries[:len(c.Entries)/2]
+			continue
+		}
+		b, _ := json.Marshal(&PlanBody{Entries: []acp.PlanEntry{}})
+		return b
+	}
+}
+
+func encodePermissionBody(body *PermissionBody) json.RawMessage {
+	c := *body
+	c.ToolCall.RawInput = nil
+	for {
+		if b, ok := marshalBody(&c); ok {
+			return b
+		}
+		if content := shrinkContent(c.ToolCall.Content); content != nil {
+			c.ToolCall.Content = content
+			continue
+		}
+		if len(c.ToolCall.Content) != 0 {
+			c.ToolCall.Content = nil
+			continue
+		}
+		if len(c.ToolCall.Locations) != 0 {
+			c.ToolCall.Locations = nil
+			continue
+		}
+		if shrinkLongestString(&c.ToolCall.Title, &c.ToolCall.Kind, &c.ToolCall.Status, &c.ToolCall.ToolCallID, &c.Outcome) {
+			continue
+		}
+		// RequestPermission bounds the full option list before saving, so this fallback
+		// is only for malformed or legacy bodies whose options alone exceed MaxBody.
+		if b, ok := marshalBody(&PermissionBody{Options: c.Options}); ok {
+			return b
+		}
+		b, _ := json.Marshal(&PermissionBody{Options: []acp.PermissionOption{}})
+		return b
+	}
+}
+
+func encodeMarkerBody(body *MarkerBody) json.RawMessage {
+	c := *body
+	for {
+		if b, ok := marshalBody(&c); ok {
+			return b
+		}
+		if shrinkLongestString(&c.Text, &c.Kind) {
+			continue
+		}
+		b, _ := json.Marshal(&MarkerBody{})
+		return b
+	}
+}
+
+func shrinkLongestString(values ...*string) bool {
+	longest := -1
+	for i, value := range values {
+		if len(*value) > 0 && (longest < 0 || len(*value) > len(*values[longest])) {
+			longest = i
+		}
+	}
+	if longest < 0 {
+		return false
+	}
+	*values[longest] = halveString(*values[longest])
+	return true
+}
+
+func halveString(s string) string {
+	if s == "" {
+		return ""
+	}
+	return clip(s, len(s)/2)
 }
 
 // shrinkContent halves the longest text of tool content, or returns nil when nothing
