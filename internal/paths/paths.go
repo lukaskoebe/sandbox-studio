@@ -55,12 +55,15 @@ func (p Paths) AgentSocket(sandboxID string) string {
 // host never extracts them.
 func (p Paths) Imports() string { return filepath.Join(p.Data, "imports") }
 
-// Ensure creates the directories.
+// Ensure creates the directories. Guest is shared into every sandbox, where the harness
+// runs studio-agent as the unprivileged agent user, so it must be traversable there; the
+// data directory around it keeps it private on the host.
 func (p Paths) Ensure() error {
 	for _, d := range []string{p.Data, p.Guest(), filepath.Join(p.Data, "run"), p.Imports()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return err
 		}
 	}
-	return nil
+	// MkdirAll leaves existing directories alone, and installs before this fix made it 0700.
+	return os.Chmod(p.Guest(), 0o755)
 }
