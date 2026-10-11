@@ -57,11 +57,11 @@ import {
   $api,
   errorMessage,
   errorStatus,
-  fetchClient,
   isReady,
   type Sandbox,
 } from "@/lib/api/client"
 import { useAgentView } from "@/lib/agent-view"
+import { onStudioMachine, openPreviewTab } from "@/lib/previews"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/sandboxes/$id")({
@@ -345,11 +345,6 @@ function Lifecycle({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   )
 }
 
-/** Preview URLs live on *.localhost, which only resolves on the machine running Studio. */
-const onStudioMachine = ["localhost", "127.0.0.1", "[::1]"].includes(
-  window.location.hostname
-)
-
 function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const ports = $api.useQuery(
     "get",
@@ -358,65 +353,6 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
     { refetchInterval: 3000 }
   )
   const list = ports.data ?? []
-
-  async function openPreview(port: number) {
-    let popup: Window | null = null
-    try {
-      popup = window.open("about:blank", "_blank")
-    } catch {
-      popup = null
-    }
-    if (!popup) {
-      toast.error("Could not open preview", {
-        description:
-          "Allow pop-ups for Studio, then select this preview again.",
-      })
-      return
-    }
-
-    try {
-      popup.opener = null
-      const { data, error, response } = await fetchClient.POST(
-        "/api/environments/{env}/sandboxes/{id}/previews/{port}/open",
-        { params: { path: { env, id: sb.id, port } } }
-      )
-      if (response.status === 401) {
-        try {
-          popup.close()
-        } catch {
-          // The browser may already have closed the blank tab.
-        }
-        toast.error("Studio login expired", {
-          description: "Reconnect, then open this preview again.",
-        })
-        return
-      }
-      if (error) {
-        throw new Error(errorMessage(error))
-      }
-      if (!data.url) {
-        throw new Error("Studio returned an invalid preview address.")
-      }
-
-      const target = new URL(data.url, window.location.origin)
-      if (target.protocol !== "http:" && target.protocol !== "https:") {
-        throw new Error("Studio returned an invalid preview address.")
-      }
-      popup.location.replace(target.href)
-    } catch (error) {
-      try {
-        popup.close()
-      } catch {
-        // The browser may already have closed the blank tab.
-      }
-      toast.error("Could not open preview", {
-        description:
-          error instanceof TypeError
-            ? "Could not reach Studio. Check the connection and try again."
-            : errorMessage(error),
-      })
-    }
-  }
 
   return (
     <DropdownMenu>
@@ -442,7 +378,7 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
             <DropdownMenuItem
               key={p.port}
               render={<button type="button" />}
-              onClick={() => void openPreview(p.port)}
+              onClick={() => void openPreviewTab(env, sb.id, p.port)}
             >
               :{p.port}
               <ArrowSquareOutIcon className="ml-auto" />
