@@ -68,6 +68,7 @@ takes effect with the next session start, which rewrites the block.
 | Hooks | plugin `~/.config/opencode/plugins/studio-memory.js` | `hooks` in settings.json | `~/.codex/hooks.json` |
 | MCP | `"mcp": {"studio": {"type": "local", …}}` | `~/.claude/studio-mcp.json` | `[mcp_servers.studio]` |
 | TUI | `opencode` | `claude --mcp-config ~/.claude/studio-mcp.json` | `codex --dangerously-bypass-hook-trust` |
+| TUI for a chat | `opencode --session <id>` | `claude --resume <id> --mcp-config …` | `codex resume <id> --dangerously-bypass-hook-trust` |
 | State dirs | `~/.local/share/opencode`, `~/.local/state/opencode` | `~/.claude` (plus `~/.claude.json`) | `~/.codex` |
 
 Auto-approve is safe here because the VM is the sandbox and the gateway's policy governs
@@ -139,6 +140,12 @@ API-key provider. The guest kills the agent's process group when the stream clos
 SIGKILL after 5 s) and runs at most 4 per sandbox, one per chat; its stderr goes to
 `/run/studio-agent/acp-<chat>.log`, capped at 256 KiB.
 
+A chat opened in the terminal runs its harness's TUI with the resume command above, in the
+tmux session `chat-<chat>` tagged `@studio_chat`. The `<id>` is the ACP session ID, which
+is the harness's own session ID. Studio only passes IDs matching
+`[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`. The ACP agent is stopped while the TUI runs, since only
+one process may write a session.
+
 ## Verified vs pending
 
 Every format above comes from the vendor docs cited in each adapter. None of it has been
@@ -156,6 +163,8 @@ Pending S7 (`// verify (S7)` in the code):
   `--mcp-config` servers starting without an approval prompt; Codex's
   `--dangerously-bypass-hook-trust` flag; the OpenCode plugin's event and hook names and
   `client.session.messages`; which lines of Codex rollouts are noise.
+- The resume commands for chats opened in the terminal, and that each harness's ACP session
+  ID is the ID its TUI resumes.
 - The model ID `gpt-6-luna` and its price (third-party listings only).
 
 Pending S8: subscription logins (`claude_subscription`, `chatgpt_subscription`). Sessions
