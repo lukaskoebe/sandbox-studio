@@ -89,11 +89,22 @@ Every hook runs `/opt/studio/bin/studio-agent hook <event> --harness <h>` (docs/
   and answer `hookSpecificOutput.additionalContext` for session start and prompts.
 - Codex's hooks are in the home, not the system layer, so the TUI starts with
   `--dangerously-bypass-hook-trust` instead of a trust prompt.
-- OpenCode's plugin maps `session.created` and `session.compacted` to session start,
-  `chat.message` to prompts, `session.idle` to stop and `experimental.session.compacting`
-  to pre-compact. It adds the context through `experimental.chat.system.transform` and
-  sends the transcript inline (text parts from the session's messages) with an offset.
-  The guest reads no OpenCode files.
+- OpenCode's plugin default-exports `sandbox-studio.memory` with both V2 `setup(ctx)` and
+  V1 `server()` entrypoints (V1 object plugins require 1.18.29+). V2 uses the `prompt`,
+  `context` and `compaction` hooks plus an abortable event subscription; both APIs inject
+  session and prompt context. V2 idle extraction reads [Session.Message.Info](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/session-message.ts)
+  user text and assistant text content; V2 compaction reads model messages. Both send bounded transcript
+  text. Context also resumes a session after plugin reload, including tool-driven
+  continuations. Hook registration failures fail plugin setup; runtime memory-hook failures
+  stay fail-open. The plugin resolves the session's directory and reads no OpenCode files.
+  V2 event handling follows the [v2.0.26 event envelope](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/event.ts),
+  [session lifecycle](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/session-event.ts),
+  [status events](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/session-status-event.ts)
+  and [compaction events](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/session-compaction-event.ts).
+  [Session.Info](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/session.ts)
+  and the [move payload](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/session-inbox.ts)
+  define `location.directory`. Event payloads use `data`; a move refreshes the cached
+  directory and session context.
 - Golden files: `internal/harness/testdata/hooks/`.
 
 ## Persistence
@@ -148,8 +159,9 @@ one process may write a session.
 
 ## Verified vs pending
 
-Every format above comes from the vendor docs cited in each adapter. None of it has been
-run against the real harnesses yet: the image wasn't built and no VM could start here.
+The updated OpenCode plugin was loaded as active in an existing OpenCode 2.0.26 VM.
+Compatibility tests cover the V1 hooks and V2 lifecycle, context, compaction and subprocess
+failure handling. End-to-end model-driven hook delivery still needs qualification.
 
 Pending S7 (`// verify (S7)` in the code):
 
@@ -159,10 +171,11 @@ Pending S7 (`// verify (S7)` in the code):
 - Whether Codex's custom provider with `env_key` needs no `codex login`.
 - The OpenCode global rules path.
 - Whether each auto-approve setting takes effect without a prompt.
-- Hook payload fields and answers for the pinned versions; Claude Code's
+- Live hook and event delivery for the pinned versions; OpenCode V2 event and session
+  payload shapes are source-checked against the v2.0.26 schemas above. Claude Code's
   `--mcp-config` servers starting without an approval prompt; Codex's
-  `--dangerously-bypass-hook-trust` flag; the OpenCode plugin's event and hook names and
-  `client.session.messages`; which lines of Codex rollouts are noise.
+  `--dangerously-bypass-hook-trust` flag; V1 `client.session.messages`; which lines of
+  Codex rollouts are noise.
 - The resume commands for chats opened in the terminal, and that each harness's ACP session
   ID is the ID its TUI resumes.
 - The model ID `gpt-6-luna` and its price (third-party listings only).

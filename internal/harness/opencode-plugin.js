@@ -1,114 +1,506 @@
 // Managed by Sandbox Studio: rewritten when a session starts.
 //
-// Forwards OpenCode's session events to `studio-agent hook`, which asks Studio for memory
-// context and hands transcripts to extraction (PLAN §6.7). A failing hook never blocks
-// OpenCode: every call ends after a few seconds with no context.
-//
-// verify (S7): the event and hook names and their payloads against opencode-ai 1.18.35:
-// session.created (properties.info.id), session.compacted and session.idle
-// (properties.sessionID), chat.message, experimental.chat.system.transform and
-// experimental.session.compacting, and client.session.messages.
+// This file exposes both OpenCode's V1 `server()` entrypoint and its V2 `setup(ctx)`
+// entrypoint. Subprocess and hook runtime failures are fail-open; setup registration
+// failures propagate so OpenCode does not report a plugin without its memory hooks.
+
+import { spawn } from "node:child_process"
+import { Buffer } from "node:buffer"
 
 const AGENT = "/opt/studio/bin/studio-agent"
 const TIMEOUT_MS = 8000
-const MAX_TRANSCRIPT = 768 * 1024 // characters; the agent takes at most 1 MiB of input
+const MAX_HOOK_INPUT_BYTES = 1024 * 1024
+const MAX_HOOK_OUTPUT_BYTES = 128 * 1024
+const MAX_TRANSCRIPT_CHARS = 128 * 1024
+const MAX_PROMPT_CHARS = 128 * 1024
 
+// Use only an argv vector: no shell is involved. Bound both sides of the process pipe,
+// kill a stuck child, and always release the timer and child in finally.
 async function hook(event, payload) {
+  let proc
+  let timer
+  let closed = false
   try {
-    const proc = Bun.spawn([AGENT, "hook", event, "--harness", "opencode"], {
-      stdin: new TextEncoder().encode(JSON.stringify(payload)),
-      stdout: "pipe",
-      stderr: "ignore",
+    const safePayload = { ...(payload ?? {}) }
+    if (typeof safePayload.prompt === "string") {
+      safePayload.prompt = safePayload.prompt.slice(0, MAX_PROMPT_CHARS)
+    }
+    if (typeof safePayload.transcript === "string") {
+      safePayload.transcript = safePayload.transcript.slice(-MAX_TRANSCRIPT_CHARS)
+    }
+    const input = JSON.stringify(safePayload)
+    if (Buffer.byteLength(input, "utf8") > MAX_HOOK_INPUT_BYTES) return ""
+
+    proc = spawn(AGENT, ["hook", event, "--harness", "opencode"], {
+      stdio: ["pipe", "pipe", "ignore"],
+      windowsHide: true,
     })
-    const timer = setTimeout(() => proc.kill(), TIMEOUT_MS)
-    const out = await new Response(proc.stdout).text()
-    clearTimeout(timer)
-    await proc.exited
-    const reply = JSON.parse(out || "{}")
-    return typeof reply.context === "string" ? reply.context : ""
+
+    return await new Promise((resolve) => {
+      let settled = false
+      let outputBytes = 0
+      const output = []
+      const finish = (context) => {
+        if (settled) return
+        settled = true
+        resolve(context)
+      }
+      const fail = () => {
+        try {
+          proc.kill("SIGKILL")
+        } catch {}
+        finish("")
+      }
+
+      timer = setTimeout(fail, TIMEOUT_MS)
+      proc.on("error", fail)
+      proc.stdout.on("error", fail)
+      proc.stdin.on("error", fail)
+      proc.stdout.on("data", (chunk) => {
+        if (settled) return
+        try {
+          const bytes = Buffer.from(chunk)
+          outputBytes += bytes.length
+          if (outputBytes > MAX_HOOK_OUTPUT_BYTES) {
+            fail()
+            return
+          }
+          output.push(bytes)
+        } catch {
+          fail()
+        }
+      })
+      proc.on("close", (code) => {
+        closed = true
+        if (code !== 0) {
+          finish("")
+          return
+        }
+        try {
+          const reply = JSON.parse(Buffer.concat(output).toString("utf8") || "{}")
+          finish(typeof reply.context === "string" ? reply.context : "")
+        } catch {
+          finish("")
+        }
+      })
+      proc.stdin.end(input)
+    })
   } catch {
     return ""
+  } finally {
+    clearTimeout(timer)
+    if (proc && !closed) {
+      try {
+        proc.kill("SIGKILL")
+      } catch {}
+    }
   }
 }
 
-export const StudioMemory = async ({ client, directory }) => {
-  const started = new Map() // sessionID → session-start context
-  const prompts = new Map() // sessionID → context for the current prompt
+function responseMessages(response) {
+  if (Array.isArray(response)) return response
+  if (Array.isArray(response?.data)) return response.data
+  return []
+}
 
-  // The conversation's text so far. Studio keeps an offset per session and only
-  // extracts what is new; a long transcript is sent from transcriptOffset on.
-  async function transcript(sessionID) {
+function textParts(message) {
+  if (Array.isArray(message?.parts)) return message.parts
+  if (Array.isArray(message?.content)) return message.content
+  if (typeof message?.content === "string") return [{ type: "text", text: message.content }]
+  return []
+}
+
+function promptFromParts(parts) {
+  let prompt = ""
+  for (const part of parts ?? []) {
+    if (part?.type !== "text" || part.synthetic || typeof part.text !== "string" || !part.text) {
+      continue
+    }
+    if (prompt.length >= MAX_PROMPT_CHARS) break
+    if (prompt) prompt += "\n"
+    prompt += part.text.slice(0, MAX_PROMPT_CHARS - prompt.length)
+  }
+  return prompt
+}
+
+// Keep only a bounded tail while counting the full offset expected by the guest hook.
+// V1 session messages and V2 compaction-hook model messages use different shapes, both
+// handled here. V2 ctx.session.context returns Session.Message.Info entries and has its
+// own converter below.
+function transcriptFromMessages(messages) {
+  let transcript = ""
+  let totalChars = 0
+  for (const message of messages ?? []) {
+    const role = message?.info?.role ?? message?.role ?? "unknown"
+    for (const part of textParts(message)) {
+      if (part?.type !== "text" || part.synthetic || typeof part.text !== "string" || !part.text) {
+        continue
+      }
+      const prefix = `${role}: `
+      const maxTextChars = Math.max(0, MAX_TRANSCRIPT_CHARS - prefix.length - 1)
+      const visibleText = part.text.length > maxTextChars ? part.text.slice(-maxTextChars) : part.text
+      const line = `${prefix}${visibleText}\n`
+      totalChars += prefix.length + part.text.length + 1
+      transcript = (transcript + line).slice(-MAX_TRANSCRIPT_CHARS)
+    }
+  }
+  return {
+    transcript,
+    transcriptOffset: Math.max(0, totalChars - transcript.length),
+  }
+}
+
+function transcriptFromV2SessionContext(messages) {
+  let transcript = ""
+  let totalChars = 0
+  const append = (role, text) => {
+    if (typeof text !== "string" || !text) return
+    const prefix = `${role}: `
+    const maxTextChars = Math.max(0, MAX_TRANSCRIPT_CHARS - prefix.length - 1)
+    const visibleText = text.length > maxTextChars ? text.slice(-maxTextChars) : text
+    const line = `${prefix}${visibleText}\n`
+    totalChars += prefix.length + text.length + 1
+    transcript = (transcript + line).slice(-MAX_TRANSCRIPT_CHARS)
+  }
+
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (message?.type === "user") {
+      append("user", message.text)
+    } else if (message?.type === "assistant" && Array.isArray(message.content)) {
+      for (const part of message.content) {
+        if (part?.type === "text") append("assistant", part.text)
+      }
+    }
+  }
+  return {
+    transcript,
+    transcriptOffset: Math.max(0, totalChars - transcript.length),
+  }
+}
+
+function directoryIn(value) {
+  return typeof value?.directory === "string" ? value.directory : ""
+}
+
+function v2DirectoryIn(value) {
+  return typeof value?.location?.directory === "string" ? value.location.directory : ""
+}
+
+function appendUniqueStrings(target, contexts) {
+  if (!Array.isArray(target)) return
+  const seen = new Set(target.filter((value) => typeof value === "string"))
+  for (const context of contexts) {
+    if (context && !seen.has(context)) {
+      target.push(context)
+      seen.add(context)
+    }
+  }
+}
+
+function appendUniqueSystemParts(target, contexts) {
+  if (!Array.isArray(target)) return
+  const seen = new Set(
+    target.filter((part) => part?.type === "text" && typeof part.text === "string").map((part) => part.text),
+  )
+  for (const context of contexts) {
+    if (context && !seen.has(context)) {
+      target.push({ type: "text", text: context })
+      seen.add(context)
+    }
+  }
+}
+
+function v1EventProperties(event) {
+  return event?.properties ?? {}
+}
+
+// OpenCode V1 server plugin. Keep the existing V1 hook names and behavior for the pinned
+// base image; V1 object entrypoints are supported by OpenCode 1.18.29 and newer.
+async function StudioMemory({ client, directory }) {
+  const started = new Map()
+  const prompts = new Map()
+  const directories = new Map()
+
+  async function sessionDirectory(sessionID, hint) {
+    const hinted = directoryIn(hint)
+    if (hinted) {
+      directories.set(sessionID, hinted)
+      return hinted
+    }
+    if (directories.has(sessionID)) return directories.get(sessionID)
     try {
-      const res = await client.session.messages({ path: { id: sessionID } })
-      let text = ""
-      for (const m of res.data ?? []) {
-        for (const p of m.parts ?? []) {
-          if (p.type === "text" && !p.synthetic && p.text) {
-            text += `${m.info?.role ?? "unknown"}: ${p.text}\n`
-          }
+      if (typeof client?.session?.get === "function") {
+        const response = await client.session.get({ path: { id: sessionID } })
+        const found = directoryIn(response?.data ?? response)
+        if (found) {
+          directories.set(sessionID, found)
+          return found
         }
       }
-      const offset = Math.max(0, text.length - MAX_TRANSCRIPT)
-      return { transcript: text.slice(offset), transcriptOffset: offset }
+    } catch {}
+    return directory ?? ""
+  }
+
+  function start(sessionID, source, cwd, refresh = false) {
+    if (!refresh && started.has(sessionID)) return started.get(sessionID)
+    const pending = hook("session-start", { sessionID, source, cwd })
+    started.set(sessionID, pending)
+    return pending
+  }
+
+  async function transcript(sessionID) {
+    try {
+      const response = await client.session.messages({ path: { id: sessionID } })
+      return transcriptFromMessages(responseMessages(response))
     } catch {
       return {}
     }
   }
 
-  async function start(sessionID, source) {
-    started.set(
+  async function compact(sessionID, output) {
+    const cwd = await sessionDirectory(sessionID)
+    await hook("pre-compact", {
       sessionID,
-      await hook("session-start", { sessionID, source, cwd: directory }),
-    )
+      cwd,
+      ...(await transcript(sessionID)),
+    })
+    const context = started.has(sessionID) ? await started.get(sessionID) : ""
+    appendUniqueStrings(output?.context, [context])
   }
 
   return {
     event: async ({ event }) => {
-      const props = event.properties ?? {}
-      if (event.type === "session.created" && props.info?.id) {
-        await start(props.info.id, "startup")
-      } else if (event.type === "session.compacted" && props.sessionID) {
-        await start(props.sessionID, "compact")
-      } else if (event.type === "session.idle" && props.sessionID) {
-        await hook("stop", {
-          sessionID: props.sessionID,
-          cwd: directory,
-          ...(await transcript(props.sessionID)),
-        })
+      const props = v1EventProperties(event)
+      if (event?.type === "session.created" && props.info?.id) {
+        await start(props.info.id, "startup", await sessionDirectory(props.info.id, props.info))
+      } else if (event?.type === "session.compacted" && props.sessionID) {
+        await start(
+          props.sessionID,
+          "compact",
+          await sessionDirectory(props.sessionID, props),
+          true,
+        )
+      } else if (event?.type === "session.idle" && props.sessionID) {
+        const sessionID = props.sessionID
+        const cwd = await sessionDirectory(sessionID, props)
+        await hook("stop", { sessionID, cwd, ...(await transcript(sessionID)) })
+        prompts.delete(sessionID)
+      } else if (event?.type === "session.deleted") {
+        const sessionID = props.info?.id
+        started.delete(sessionID)
+        prompts.delete(sessionID)
+        directories.delete(sessionID)
       }
     },
 
     "chat.message": async (input, output) => {
-      const sessionID = input.sessionID
-      const prompt = (output.parts ?? [])
-        .filter((p) => p.type === "text" && !p.synthetic && p.text)
-        .map((p) => p.text)
-        .join("\n")
+      const sessionID = input?.sessionID
+      const prompt = promptFromParts(output?.parts)
       if (!sessionID || !prompt) return
-      if (!started.has(sessionID)) await start(sessionID, "resume")
-      prompts.set(
-        sessionID,
-        await hook("user-prompt", { sessionID, prompt, cwd: directory }),
-      )
+      const cwd = await sessionDirectory(sessionID, input)
+      if (!started.has(sessionID)) await start(sessionID, "resume", cwd)
+      prompts.set(sessionID, await hook("user-prompt", { sessionID, prompt, cwd }))
     },
 
     "experimental.chat.system.transform": async (input, output) => {
-      const sessionID = input.sessionID
+      const sessionID = input?.sessionID
       if (!sessionID) return
-      for (const context of [started.get(sessionID), prompts.get(sessionID)]) {
-        if (context) output.system.push(context)
-      }
+      appendUniqueStrings(output?.system, [
+        started.has(sessionID) ? await started.get(sessionID) : "",
+        prompts.get(sessionID) ?? "",
+      ])
     },
 
     "experimental.session.compacting": async (input, output) => {
-      const sessionID = input.sessionID
-      await hook("pre-compact", {
-        sessionID,
-        cwd: directory,
-        ...(await transcript(sessionID)),
-      })
-      const context = started.get(sessionID)
-      if (context) output.context.push(context)
+      if (input?.sessionID) await compact(input.sessionID, output)
+    },
+
+    dispose: async () => {
+      started.clear()
+      prompts.clear()
+      directories.clear()
     },
   }
+}
+
+// OpenCode V2 Promise plugin. The plugin location can differ from a session's directory,
+// so resolve each session's own directory from its event or session record before falling
+// back to the plugin location.
+async function setupV2(ctx) {
+  const started = new Map()
+  const prompts = new Map()
+  const directories = new Map()
+  const registrations = []
+  const fallbackDirectory = ctx?.location?.directory ?? ""
+
+  async function disposeRegistrations() {
+    for (const registration of registrations.splice(0)) {
+      try {
+        await registration?.dispose?.()
+      } catch {}
+    }
+  }
+
+  async function sessionDirectory(sessionID, hint) {
+    const hinted = v2DirectoryIn(hint)
+    if (hinted) {
+      directories.set(sessionID, hinted)
+      return hinted
+    }
+    if (directories.has(sessionID)) return directories.get(sessionID)
+    try {
+      if (typeof ctx?.session?.get === "function") {
+        const response = await ctx.session.get({ sessionID })
+        const found = v2DirectoryIn(response)
+        if (found) {
+          directories.set(sessionID, found)
+          return found
+        }
+      }
+    } catch {}
+    return fallbackDirectory
+  }
+
+  function start(sessionID, source, cwd, refresh = false) {
+    if (!refresh && started.has(sessionID)) return started.get(sessionID)
+    const pending = hook("session-start", { sessionID, source, cwd })
+    started.set(sessionID, pending)
+    return pending
+  }
+
+  async function transcript(sessionID) {
+    try {
+      const messages = await ctx.session.context({ sessionID })
+      return transcriptFromV2SessionContext(messages)
+    } catch {
+      return {}
+    }
+  }
+
+  const register = async (name, callback) => {
+    if (typeof ctx?.session?.hook !== "function") {
+      throw new TypeError("OpenCode session hook API is unavailable")
+    }
+    const registration = await ctx.session.hook(name, callback)
+    registrations.push(registration)
+  }
+
+  try {
+    await register("prompt", async (event) => {
+      const sessionID = event?.sessionID
+      const prompt = typeof event?.prompt?.text === "string" ? event.prompt.text.slice(0, MAX_PROMPT_CHARS) : ""
+      if (!sessionID || !prompt) return
+      const cwd = await sessionDirectory(sessionID)
+      if (!started.has(sessionID)) await start(sessionID, "resume", cwd)
+      prompts.set(sessionID, await hook("user-prompt", { sessionID, prompt, cwd }))
+    })
+
+    await register("context", async (event) => {
+      const sessionID = event?.sessionID
+      if (!sessionID) return
+      if (!started.has(sessionID)) {
+        const cwd = await sessionDirectory(sessionID)
+        await start(sessionID, "resume", cwd)
+      }
+      appendUniqueSystemParts(event.system, [
+        started.has(sessionID) ? await started.get(sessionID) : "",
+        prompts.get(sessionID) ?? "",
+      ])
+    })
+
+    await register("compaction", async (event) => {
+      const sessionID = event?.sessionID
+      if (!sessionID) return
+      const cwd = await sessionDirectory(sessionID)
+      if (!started.has(sessionID)) await start(sessionID, "resume", cwd)
+      await hook("pre-compact", {
+        sessionID,
+        cwd,
+        ...transcriptFromMessages(event.messages),
+      })
+      const context = started.has(sessionID) ? await started.get(sessionID) : ""
+      appendUniqueSystemParts(event.system, [context])
+    })
+  } catch (error) {
+    await disposeRegistrations()
+    throw error
+  }
+
+  const controller = new AbortController()
+  let events
+  try {
+    if (typeof ctx?.event?.subscribe !== "function") {
+      throw new TypeError("OpenCode event subscription API is unavailable")
+    }
+    events = ctx.event.subscribe({ signal: controller.signal })
+    if (!events || typeof events[Symbol.asyncIterator] !== "function") {
+      throw new TypeError("OpenCode event subscription is not async iterable")
+    }
+  } catch (error) {
+    controller.abort()
+    await disposeRegistrations()
+    throw error
+  }
+  void (async () => {
+    try {
+      for await (const event of events) {
+        const data = event?.data ?? {}
+        if (event?.type === "session.created") {
+          const sessionID = data.sessionID
+          if (sessionID) {
+            await start(sessionID, "startup", await sessionDirectory(sessionID, data))
+          }
+        } else if (event?.type === "session.compacted") {
+          const sessionID = data.sessionID
+          if (sessionID) {
+            await start(
+              sessionID,
+              "compact",
+              await sessionDirectory(sessionID),
+              true,
+            )
+          }
+        } else if (event?.type === "session.idle") {
+          const sessionID = data.sessionID
+          if (sessionID) {
+            const cwd = await sessionDirectory(sessionID)
+            await hook("stop", { sessionID, cwd, ...(await transcript(sessionID)) })
+            prompts.delete(sessionID)
+          }
+        } else if (event?.type === "session.moved") {
+          const sessionID = data.sessionID
+          if (sessionID) {
+            const cwd = v2DirectoryIn(data)
+            if (cwd) directories.set(sessionID, cwd)
+            else directories.delete(sessionID)
+            prompts.delete(sessionID)
+            await start(sessionID, "resume", cwd || (await sessionDirectory(sessionID)), true)
+          }
+        } else if (event?.type === "session.deleted") {
+          const sessionID = data.sessionID
+          if (sessionID) {
+            started.delete(sessionID)
+            prompts.delete(sessionID)
+            directories.delete(sessionID)
+          }
+        }
+      }
+    } catch {}
+  })()
+
+  return async () => {
+    controller.abort()
+    await disposeRegistrations()
+    started.clear()
+    prompts.clear()
+    directories.clear()
+  }
+}
+
+// A plain definition object is intentional: this local plugin has no runtime dependency on
+// @opencode/plugin and V1 1.18.29+ calls server() while V2 calls setup().
+export default {
+  id: "sandbox-studio.memory",
+  setup: setupV2,
+  server: StudioMemory,
 }

@@ -50,6 +50,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: API client types are up to date (make api)
         run: pnpm exec openapi-typescript openapi.json -o "$RUNNER_TEMP/schema.gen.ts" && diff -u src/lib/api/schema.gen.ts "$RUNNER_TEMP/schema.gen.ts"
+      - name: OpenCode plugin compatibility
+        run: node --test ../internal/harness/opencode-plugin.test.mjs
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm check
