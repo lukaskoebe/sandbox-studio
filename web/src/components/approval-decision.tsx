@@ -27,7 +27,7 @@ function defaultPorts(port: number) {
 }
 
 /** Allow, deny or dismiss an approval; refreshes the lists the decision changes. */
-function useDecideApproval() {
+export function useDecideApproval() {
   const queryClient = useQueryClient()
   return $api.useMutation(
     "post",
