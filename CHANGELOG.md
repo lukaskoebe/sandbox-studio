@@ -19,6 +19,9 @@ The first public release.
 - **Teammates:** named agents with a role, soul, git identity and a harness (OpenCode,
   Claude Code or Codex) on Anthropic, OpenAI or OpenAI-compatible API keys. Subscription
   logins are not supported yet.
+- **Chat mode:** chats with teammates over the Agent Client Protocol, with permission
+  requests and questions, per-turn changes and undo, a file browser, an embedded preview,
+  and a handover to the terminal and back. Onboarding asks for Chat or Terminal.
 - **Memory:** per-teammate and shared memory with hybrid search on local embeddings,
   automatic recall and capture through harness hooks, consolidation and contradiction
   handling.

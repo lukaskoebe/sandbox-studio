@@ -47,7 +47,10 @@ on `127.0.0.1`.
   browser, disk checkpoints, suspend and resume, fork, and export/import.
 - **Environments** such as "work" and "private" share no rules, secrets, providers,
   teammates or memory.
-- Chat mode for non-developers is in development.
+- **Chat mode** for non-developers: talk to a teammate in a chat instead of a terminal,
+  answer its permission requests and questions, see and undo each turn's file changes,
+  browse files and preview apps. Pick Chat or Terminal in onboarding; the other view is
+  one click away.
 
 ## Requirements
 
