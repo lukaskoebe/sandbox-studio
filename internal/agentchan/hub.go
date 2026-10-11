@@ -291,7 +291,12 @@ func (h *Hub) open(ctx context.Context, id string, hdr agentproto.Header) (net.C
 
 // request opens a stream, sends hdr and body (unless nil) and decodes the single JSON
 // reply into v.
-func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, body, v any) (retErr error) {
+func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, body, v any) error {
+	return h.requestLimit(ctx, id, hdr, body, v, 1<<20)
+}
+
+// requestLimit is request with replies of up to maxReplyBytes.
+func (h *Hub) requestLimit(ctx context.Context, id string, hdr agentproto.Header, body, v any, maxReplyBytes int) (retErr error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -331,10 +336,9 @@ func (h *Hub) request(ctx context.Context, id string, hdr agentproto.Header, bod
 			return err
 		}
 	}
-	const maxReplyBytes = 1 << 20
-	line, err := bufio.NewReader(io.LimitReader(st, maxReplyBytes+1)).ReadBytes('\n')
+	line, err := bufio.NewReader(io.LimitReader(st, int64(maxReplyBytes)+1)).ReadBytes('\n')
 	if len(line) > maxReplyBytes {
-		return errors.New("guest control reply exceeds 1 MiB")
+		return fmt.Errorf("guest control reply exceeds %d KiB", maxReplyBytes>>10)
 	}
 	if err != nil {
 		return err
@@ -360,6 +364,21 @@ func (h *Hub) Sessions(ctx context.Context, id string) ([]agentproto.Session, er
 func (h *Hub) KillSession(ctx context.Context, id, name string) error {
 	var ok struct{}
 	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindKill, Session: name}, nil, &ok)
+}
+
+// Snapshot takes, compares, restores or collects turn snapshots of the guest's workspace.
+// The guest keeps them; only the reply's listing and diffs come to the host.
+func (h *Hub) Snapshot(ctx context.Context, id string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error) {
+	var out agentproto.SnapshotReply
+	err := h.requestLimit(ctx, id, agentproto.Header{Kind: agentproto.KindSnapshot}, req, &out, agentproto.MaxGuestReply)
+	return out, err
+}
+
+// Files lists a directory or reads a file of the guest's workspace.
+func (h *Hub) Files(ctx context.Context, id string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
+	var out agentproto.FilesReply
+	err := h.requestLimit(ctx, id, agentproto.Header{Kind: agentproto.KindFiles}, req, &out, agentproto.MaxGuestReply)
+	return out, err
 }
 
 // WriteHomeFiles writes harness config files into the terminal user's home in the guest.

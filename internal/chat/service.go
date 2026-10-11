@@ -65,6 +65,8 @@ type Guest interface {
 	Sessions(ctx context.Context, id string) ([]agentproto.Session, error)
 	StartSession(ctx context.Context, id string, req agentproto.StartSession) error
 	KillSession(ctx context.Context, id, name string) error
+	Snapshot(ctx context.Context, id string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error)
+	Files(ctx context.Context, id string, req agentproto.FilesRequest) (agentproto.FilesReply, error)
 }
 
 // Launch is how to start a chat's agent, planned like an agent session: the harness,
@@ -151,19 +153,28 @@ type Log struct {
 	Items []Item     `json:"items"`
 }
 
-// Turn is a chat turn with its usage decoded.
+// Turn is a chat turn with its usage and changed files decoded.
 type Turn struct {
 	store.ChatTurn
-	Usage *TurnUsage `json:"usage,omitempty"`
+	Usage    *TurnUsage   `json:"usage,omitempty"`
+	Changes  *TurnChanges `json:"changes,omitempty" doc:"The files the turn changed, once it ended"`
+	Undoable bool         `json:"undoable" doc:"The workspace can be put back as it was before this turn"`
 }
 
 // TurnView decodes a stored turn.
 func TurnView(t store.ChatTurn) Turn {
-	v := Turn{ChatTurn: t}
+	v := Turn{ChatTurn: t, Undoable: t.Snapshot != "" && t.UndoneAt == nil}
 	if len(t.Usage) > 0 {
 		var u TurnUsage
 		if json.Unmarshal(t.Usage, &u) == nil {
 			v.Usage = &u
+		}
+	}
+	if len(t.Changes) > 0 {
+		var c TurnChanges
+		if json.Unmarshal(t.Changes, &c) == nil {
+			c.Files = orEmpty(c.Files)
+			v.Changes = &c
 		}
 	}
 	return v
@@ -205,6 +216,9 @@ func (s *Service) Delete(ctx context.Context, envID, chatID string) error {
 		return err
 	}
 	s.changed(envID, chatID, true)
+	if err := s.collect(ctx, envID, c.SandboxID); err != nil {
+		s.log().Debug("chat: collect the snapshots of a deleted chat", "chat", chatID, "err", err)
+	}
 	return nil
 }
 
@@ -416,11 +430,7 @@ func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, r
 	s.mu.Unlock()
 	go func() {
 		<-l.conn.Done()
-		s.mu.Lock()
-		if s.live[c.ID] == l {
-			delete(s.live, c.ID)
-		}
-		s.mu.Unlock()
+		s.forgetLive(l)
 	}()
 	return l, replay, nil
 }
@@ -496,6 +506,16 @@ func (l *live) shutdown(ctx context.Context) {
 	}
 	l.conn.Close()
 	<-l.conn.Done()
+	l.s.forgetLive(l)
+}
+
+// forgetLive drops l from the running agents, unless another took its place.
+func (s *Service) forgetLive(l *live) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.live[l.chatID] == l {
+		delete(s.live, l.chatID)
+	}
 }
 
 // SessionUpdate folds the agent's updates into the running turn, or the replay.
