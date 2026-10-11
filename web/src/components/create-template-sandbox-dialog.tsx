@@ -76,10 +76,7 @@ export function CreateTemplateSandboxDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
-        showCloseButton={!pending}
-      >
+      <DialogContent showCloseButton={!pending}>
         <form
           className="contents"
           onSubmit={(event) => {
