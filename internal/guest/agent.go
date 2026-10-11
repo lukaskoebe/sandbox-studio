@@ -329,7 +329,7 @@ func servTCP(st net.Conn, br *bufio.Reader, port int) error {
 	if port <= 0 || port > 65535 {
 		return fmt.Errorf("invalid port %d", port)
 	}
-	up, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), 5*time.Second)
+	up, err := dialLoopback(port)
 	if err != nil {
 		return err
 	}
@@ -343,8 +343,25 @@ func servTCP(st net.Conn, br *bufio.Reader, port int) error {
 		close(done)
 	}()
 	io.Copy(st, up)
+	// A yamux Close only ends our side. Without it the host never learns that the server
+	// dropped an idle keep-alive connection, reuses it, and the request hangs.
+	st.Close()
 	<-done
 	return nil
+}
+
+// dialLoopback connects to port on IPv4 loopback, then IPv6: dev servers that listen on
+// "localhost" (Vite, for one) often bind only ::1.
+func dialLoopback(port int) (net.Conn, error) {
+	p := strconv.Itoa(port)
+	up, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", p), 5*time.Second)
+	if err == nil {
+		return up, nil
+	}
+	if up, err6 := net.DialTimeout("tcp", net.JoinHostPort("::1", p), 5*time.Second); err6 == nil {
+		return up, nil
+	}
+	return nil, err
 }
 
 func replyPorts(st net.Conn) error {
