@@ -866,3 +866,65 @@ func TestFilterInput(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterInputTextBounds(t *testing.T) {
+	accepted := []struct {
+		name string
+		text string
+	}{
+		{name: "eight ASCII bytes", text: "12345678"},
+		{name: "four two-byte characters", text: "éééé"},
+		{name: "two four-byte characters", text: "💡💡"},
+	}
+	for _, tc := range accepted {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := json.Marshal(map[string]any{
+				"type":      "input_keyboard",
+				"eventType": "char",
+				"text":      tc.text,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := FilterInput(data, true)
+			var message map[string]any
+			if err := json.Unmarshal(got, &message); err != nil {
+				t.Fatalf("filtered message %s: %v", got, err)
+			}
+			if message["eventType"] != "char" || message["text"] != tc.text {
+				t.Errorf("filtered text = %v, want %q", message["text"], tc.text)
+			}
+			if _, ok := message["key"]; ok {
+				t.Error("text-only event contains an empty key")
+			}
+			if _, ok := message["code"]; ok {
+				t.Error("text-only event contains an empty code")
+			}
+			if FilterInput(data, false) != nil {
+				t.Error("text input passed while the agent drives")
+			}
+		})
+	}
+
+	for _, text := range []string{"123456789", "ééééa", "💡💡a"} {
+		data, err := json.Marshal(map[string]any{
+			"type":      "input_keyboard",
+			"eventType": "char",
+			"text":      text,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := FilterInput(data, true)
+		var message map[string]any
+		if err := json.Unmarshal(got, &message); err != nil {
+			t.Fatalf("filtered message %s: %v", got, err)
+		}
+		if _, ok := message["text"]; ok {
+			t.Errorf("oversized text payload passed: %q", message["text"])
+		}
+		if FilterInput(data, false) != nil {
+			t.Error("text input passed while the agent drives")
+		}
+	}
+}

@@ -169,6 +169,16 @@ The value never enters:
 
 ## Live view and takeover
 
+On a teammate-owned sandbox, **Browser** opens the same teammate browser beside the
+workspace. Drag the divider (or focus it and use the arrow keys) to resize it. On phones
+the panel fills the workspace. Closing it hides the viewer without stopping the browser
+or handing control back; **Hand back** remains an explicit action.
+
+During takeover, tap the remote page to focus the mobile keyboard. The controls below
+the page provide Ctrl, Esc, Tab, arrows, Backspace and Enter. Ctrl applies to the next key.
+Composed text and paste go through the same filtered input channel; handing back or
+disconnecting clears the local input buffer.
+
 - **Live view.** `GET .../browser/live` is a WebSocket that Studio relays to agent-browser's
   stream server on guest port 9223, through the agent channel, like terminals.
   - Frames go to the UI as they are: `{type:"frame",data:<base64 JPEG>,metadata}`.

@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ArrowSquareOutIcon,
   BroadcastIcon,
+  BrowserIcon,
   PlayIcon,
   PlusIcon,
   StopIcon,
@@ -53,6 +54,7 @@ import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { StatusBadge, phase } from "@/components/status-badge"
 import { SuspendResumeButton } from "@/components/suspend-resume-button"
 import { Terminal } from "@/components/terminal"
+import { SandboxBrowserPanel } from "@/components/sandbox-browser-panel"
 import {
   $api,
   errorMessage,
@@ -79,6 +81,20 @@ function SandboxPage() {
   const [focus, setFocus] = useState<Focus | null>(
     terminal ? { name: terminal, seq: 1 } : null
   )
+  const [browserOpenFor, setBrowserOpenFor] = useState<string | null>(null)
+  const [browserPanelWidth, setBrowserPanelWidth] = useState(42)
+  const workspaceRef = useRef<HTMLDivElement>(null)
+  const browserToggleRef = useRef<HTMLButtonElement>(null)
+  const [isNarrowViewport, setIsNarrowViewport] = useState(
+    () => window.matchMedia("(max-width: 1023.98px)").matches
+  )
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023.98px)")
+    const update = () => setIsNarrowViewport(media.matches)
+    media.addEventListener("change", update)
+    update()
+    return () => media.removeEventListener("change", update)
+  }, [])
   const sandbox = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}",
@@ -107,43 +123,109 @@ function SandboxPage() {
   }
 
   const sb = sandbox.data
+  const browserKey = `${sb.id}:${sb.teammateId ?? ""}`
+  const browserOpen = !!sb.teammateId && browserOpenFor === browserKey
+  const closeBrowser = () => {
+    setBrowserOpenFor(null)
+    requestAnimationFrame(() => browserToggleRef.current?.focus())
+  }
+  const resizeBrowser = (clientX: number) => {
+    const rect = workspaceRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0) return
+    const width = ((rect.right - clientX) / rect.width) * 100
+    setBrowserPanelWidth(Math.round(Math.min(70, Math.max(30, width))))
+  }
   return (
     <>
       <PageHeader>
-        <h1 className="truncate text-sm font-medium">{sb.name}</h1>
-        <StatusBadge sandbox={sb} />
+        <h1 className="min-w-0 flex-1 truncate text-sm font-medium">
+          {sb.name}
+        </h1>
+        <span className="shrink-0">
+          <StatusBadge sandbox={sb} />
+        </span>
         <SandboxOwner
           env={env}
           teammateId={sb.teammateId}
-          className="text-xs text-muted-foreground"
+          className="hidden min-w-0 shrink-0 items-center text-xs text-muted-foreground sm:inline-flex"
         />
-        <div className="ml-auto flex items-center gap-1">
+        {sb.teammateId && (
+          <Button
+            ref={browserToggleRef}
+            className="shrink-0"
+            size="sm"
+            variant={browserOpen ? "secondary" : "ghost"}
+            aria-pressed={browserOpen}
+            aria-expanded={browserOpen}
+            aria-label={
+              browserOpen ? "Hide teammate browser" : "Show teammate browser"
+            }
+            title={
+              browserOpen ? "Hide teammate browser" : "Show teammate browser"
+            }
+            onClick={() =>
+              browserOpen ? closeBrowser() : setBrowserOpenFor(browserKey)
+            }
+          >
+            <BrowserIcon />
+            <span className="hidden sm:inline">Browser</span>
+          </Button>
+        )}
+      </PageHeader>
+      <div
+        role="group"
+        aria-label="Sandbox actions"
+        className="flex h-9 min-w-0 shrink-0 items-center overflow-x-auto border-b px-3"
+      >
+        <div className="flex w-max shrink-0 items-center gap-1">
           {sb.teammateId && view !== "terminal" && (
-            <SandboxChats env={env} id={sb.id} />
+            <div className="shrink-0">
+              <SandboxChats env={env} id={sb.id} />
+            </div>
           )}
           {sb.teammateId && isReady(sb) && (
-            <AgentSessions
-              env={env}
-              id={sb.id}
-              teammateId={sb.teammateId}
-              onAttach={(name) =>
-                setFocus((f) => ({ name, seq: (f?.seq ?? 0) + 1 }))
-              }
-            />
+            <div className="shrink-0">
+              <AgentSessions
+                env={env}
+                id={sb.id}
+                teammateId={sb.teammateId}
+                onAttach={(name) =>
+                  setFocus((f) => ({ name, seq: (f?.seq ?? 0) + 1 }))
+                }
+              />
+            </div>
           )}
           {/* Chat or terminal comes first by preference; the other is one click away. */}
           {sb.teammateId && view === "terminal" && (
-            <SandboxChats env={env} id={sb.id} />
+            <div className="shrink-0">
+              <SandboxChats env={env} id={sb.id} />
+            </div>
           )}
-          <ConnectionsSheet env={env} sandbox={sb} />
-          <CheckpointsSheet env={env} sandbox={sb} />
-          <ExportSandboxButton env={env} sandbox={sb} />
-          {isReady(sb) && <Previews env={env} sandbox={sb} />}
-          <ForkSandboxDialog env={env} sandbox={sb} />
-          <RebaseSandboxDialog env={env} sandbox={sb} />
-          <Lifecycle env={env} sandbox={sb} />
+          <div className="shrink-0">
+            <ConnectionsSheet env={env} sandbox={sb} />
+          </div>
+          <div className="shrink-0">
+            <CheckpointsSheet env={env} sandbox={sb} />
+          </div>
+          <div className="shrink-0">
+            <ExportSandboxButton env={env} sandbox={sb} />
+          </div>
+          {isReady(sb) && (
+            <div className="shrink-0">
+              <Previews env={env} sandbox={sb} />
+            </div>
+          )}
+          <div className="shrink-0">
+            <ForkSandboxDialog env={env} sandbox={sb} />
+          </div>
+          <div className="shrink-0">
+            <RebaseSandboxDialog env={env} sandbox={sb} />
+          </div>
+          <div className="shrink-0">
+            <Lifecycle env={env} sandbox={sb} />
+          </div>
         </div>
-      </PageHeader>
+      </div>
       <div className="flex min-h-0 flex-1 flex-col">
         {sandbox.isRefetchError && (
           <div
@@ -154,7 +236,64 @@ function SandboxPage() {
             Sandbox status refresh failed. Retrying…
           </div>
         )}
-        <Body env={env} sandbox={sb} focus={focus} />
+        <div ref={workspaceRef} className="relative flex min-h-0 flex-1">
+          <div
+            id="sandbox-workspace"
+            inert={browserOpen && isNarrowViewport}
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+          >
+            <Body env={env} sandbox={sb} focus={focus} />
+          </div>
+          {browserOpen && sb.teammateId && (
+            <>
+              <div
+                role="separator"
+                aria-label="Resize browser panel"
+                aria-orientation="vertical"
+                aria-controls="sandbox-browser-panel"
+                aria-valuemin={30}
+                aria-valuemax={70}
+                aria-valuenow={browserPanelWidth}
+                aria-valuetext={`Browser panel ${browserPanelWidth}% of workspace width`}
+                tabIndex={0}
+                className="hidden w-1 shrink-0 cursor-col-resize touch-none items-center justify-center bg-border/50 outline-none hover:bg-primary/40 focus-visible:bg-primary/60 lg:flex"
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                  resizeBrowser(event.clientX)
+                }}
+                onPointerMove={(event) => {
+                  if (event.buttons === 1) resizeBrowser(event.clientX)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowRight") {
+                    event.preventDefault()
+                    setBrowserPanelWidth((width) => Math.max(30, width - 2))
+                  } else if (event.key === "ArrowLeft") {
+                    event.preventDefault()
+                    setBrowserPanelWidth((width) => Math.min(70, width + 2))
+                  } else if (event.key === "Home") {
+                    event.preventDefault()
+                    setBrowserPanelWidth(70)
+                  } else if (event.key === "End") {
+                    event.preventDefault()
+                    setBrowserPanelWidth(30)
+                  }
+                }}
+              >
+                <span className="h-8 w-0.5 rounded-full bg-foreground/25" />
+              </div>
+              <SandboxBrowserPanel
+                key={browserKey}
+                env={env}
+                teammate={sb.teammateId}
+                width={browserPanelWidth}
+                onClose={closeBrowser}
+                autoFocusClose={isNarrowViewport}
+              />
+            </>
+          )}
+        </div>
       </div>
     </>
   )

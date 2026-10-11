@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { $api, errorMessage } from "@/lib/api/client"
+import { normalizeBrowserAddress } from "@/lib/browser-address"
 import type { components } from "@/lib/api/schema.gen"
 import { cn, formatAge } from "@/lib/utils"
 
@@ -51,51 +52,10 @@ type BrowserStatus = components["schemas"]["BrowserStatus"]
 
 const browserStatusPath = "/api/environments/{env}/teammates/{teammate}/browser"
 
-function normalizeBrowserAddress(raw: string): {
-  value?: string
-  error?: string
-} {
-  if (/\p{Cc}/u.test(raw))
-    return { error: "Remove control characters from the address." }
-
-  const input = raw.trim()
-  if (!input) return { error: "Enter a website address." }
-
-  const webScheme = /^https?:\/\//i.test(input)
-  const hostWithPort =
-    /^(?:localhost|(?:[a-z\d](?:[a-z\d-]*[a-z\d])?\.)+[a-z\d](?:[a-z\d-]*[a-z\d])?|\d{1,3}(?:\.\d{1,3}){3}|\[[\da-f:.]+\]):\d+(?:[/?#]|$)/i.test(
-      input
-    )
-  if (/^https?:/i.test(input) && !webScheme)
-    return { error: "Enter a complete http:// or https:// address." }
-  if (/^[a-z][a-z\d+.-]*:/i.test(input) && !webScheme && !hostWithPort)
-    return { error: "Only http and https websites are supported." }
-
-  const candidate = input.startsWith("//")
-    ? `https:${input}`
-    : webScheme
-      ? input
-      : `https://${input}`
-  let parsed: URL
-  try {
-    parsed = new URL(candidate)
-  } catch {
-    return { error: "Enter a valid website address." }
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
-    return { error: "Only http and https websites are supported." }
-  const authority = candidate.match(/^https?:\/\/([^/?#]*)/i)?.[1] ?? ""
-  if (parsed.username || parsed.password || authority.includes("@"))
-    return { error: "Addresses with usernames or passwords are not supported." }
-  if (parsed.href.length > 4000)
-    return { error: "Address must be 4,000 characters or fewer." }
-
-  return { value: parsed.href }
-}
-
 export const Route = createFileRoute("/e/$env/browser")({
   component: BrowserPage,
+  validateSearch: (search: Record<string, unknown>): { teammate?: string } =>
+    typeof search.teammate === "string" ? { teammate: search.teammate } : {},
 })
 
 const explanation =
@@ -103,12 +63,17 @@ const explanation =
 
 function BrowserPage() {
   const { env } = Route.useParams()
+  const { teammate: linkedTeammate } = Route.useSearch()
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
   const list = useMemo(() => teammates.data ?? [], [teammates.data])
   const [picked, setPicked] = useState("")
-  const teammate = list.some((p) => p.id === picked) ? picked : list.at(0)?.id
+  const teammate = list.some((p) => p.id === picked)
+    ? picked
+    : list.some((p) => p.id === linkedTeammate)
+      ? linkedTeammate
+      : list.at(0)?.id
 
   return (
     <>
@@ -286,7 +251,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
                 size="sm"
                 variant={driving ? "default" : "outline"}
                 aria-pressed={driving}
-                disabled={takeover.isPending || navigate.isPending}
+                disabled={navigationBlocked}
                 onClick={() =>
                   takeover.mutate({
                     params: { path },
@@ -300,7 +265,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={control.isPending || navigate.isPending}
+                disabled={navigationBlocked}
                 onClick={() =>
                   control.mutate({
                     params: { path: { ...path, action: "stop" } },
@@ -314,7 +279,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
           ) : (
             <Button
               size="sm"
-              disabled={control.isPending || navigate.isPending || !st}
+              disabled={navigationBlocked || !st}
               onClick={() =>
                 control.mutate({
                   params: { path: { ...path, action: "start" } },
@@ -329,9 +294,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
             size="sm"
             variant="ghost"
             title="Delete the browser VM with its profile: cookies and logins"
-            disabled={
-              remove.isPending || navigate.isPending || st?.vm === "absent"
-            }
+            disabled={navigationBlocked || st?.vm === "absent"}
             onClick={() => {
               if (
                 confirm(
@@ -416,7 +379,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
             <BrowserLive
               url={liveURL}
               driving={driving}
-              inputEnabled={!navigate.isPending}
+              inputEnabled={!navigationBlocked}
               pageURL={pageURL}
               onPageURL={setStreamURL}
               className="max-w-5xl overflow-hidden rounded-md border"

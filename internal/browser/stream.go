@@ -304,8 +304,15 @@ func FilterInput(data []byte, driving bool) []byte {
 		if !driving || !slices.Contains(keyEvents, m.EventType) || len(m.Key) > 32 || len(m.Code) > 32 {
 			return nil
 		}
-		out = map[string]any{"type": "input_keyboard", "eventType": m.EventType, "key": m.Key, "code": m.Code,
+		out = map[string]any{"type": "input_keyboard", "eventType": m.EventType,
 			"windowsVirtualKeyCode": clampI(m.VK, 0, 255), "modifiers": clampI(m.Modifiers, 0, 15)}
+		// agent-browser's char event is text-only; omit absent optional CDP strings.
+		if m.Key != "" {
+			out["key"] = m.Key
+		}
+		if m.Code != "" {
+			out["code"] = m.Code
+		}
 		if m.Text != nil && len(*m.Text) <= 8 {
 			out["text"] = *m.Text
 		}
