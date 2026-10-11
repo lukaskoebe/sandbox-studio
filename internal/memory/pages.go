@@ -13,30 +13,30 @@ import (
 
 // Page is an entity or topic page: compiled truth plus an append-only timeline.
 type Page struct {
-	ID            string          `json:"id"`
-	Scope         string          `json:"scope"`
-	Slug          string          `json:"slug"`
-	Title         string          `json:"title"`
-	Kind          string          `json:"kind" enum:"person,project,topic,procedure,persona-self"`
-	Compiled      string          `json:"compiled" doc:"The compiled truth: a regenerated synthesis, as markdown"`
-	AlwaysLoad    bool            `json:"alwaysLoad" doc:"A core page, loaded into every session of the scope"`
-	Tier          string          `json:"tier" enum:"user,verified,document,inferred"`
-	AuthorPersona string          `json:"authorPersona,omitempty"`
-	CreatedAt     time.Time       `json:"createdAt"`
-	UpdatedAt     time.Time       `json:"updatedAt"`
-	Timeline      []TimelineEntry `json:"timeline,omitempty" doc:"Oldest first; only returned for a single page"`
+	ID             string          `json:"id"`
+	Scope          string          `json:"scope"`
+	Slug           string          `json:"slug"`
+	Title          string          `json:"title"`
+	Kind           string          `json:"kind" enum:"person,project,topic,procedure,teammate-self"`
+	Compiled       string          `json:"compiled" doc:"The compiled truth: a regenerated synthesis, as markdown"`
+	AlwaysLoad     bool            `json:"alwaysLoad" doc:"A core page, loaded into every session of the scope"`
+	Tier           string          `json:"tier" enum:"user,verified,document,inferred"`
+	AuthorTeammate string          `json:"authorTeammate,omitempty"`
+	CreatedAt      time.Time       `json:"createdAt"`
+	UpdatedAt      time.Time       `json:"updatedAt"`
+	Timeline       []TimelineEntry `json:"timeline,omitempty" doc:"Oldest first; only returned for a single page"`
 }
 
 // TimelineEntry is one dated line under a page. Entries are never edited.
 type TimelineEntry struct {
-	ID            string    `json:"id"`
-	PageID        string    `json:"pageId"`
-	At            time.Time `json:"at"`
-	Text          string    `json:"text"`
-	FactID        string    `json:"factId,omitempty"`
-	SourceID      string    `json:"sourceId,omitempty"`
-	AuthorPersona string    `json:"authorPersona,omitempty"`
-	CreatedAt     time.Time `json:"createdAt"`
+	ID             string    `json:"id"`
+	PageID         string    `json:"pageId"`
+	At             time.Time `json:"at"`
+	Text           string    `json:"text"`
+	FactID         string    `json:"factId,omitempty"`
+	SourceID       string    `json:"sourceId,omitempty"`
+	AuthorTeammate string    `json:"authorTeammate,omitempty"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 // PageInput creates or edits a page. Scope and slug are fixed after creation.
@@ -44,7 +44,7 @@ type PageInput struct {
 	Scope      string `json:"scope,omitempty" doc:"Required on create"`
 	Slug       string `json:"slug,omitempty" doc:"Required on create; lowercase words joined by - or /, e.g. project/sandbox-studio"`
 	Title      string `json:"title" minLength:"1" maxLength:"200"`
-	Kind       string `json:"kind" enum:"person,project,topic,procedure,persona-self"`
+	Kind       string `json:"kind" enum:"person,project,topic,procedure,teammate-self"`
 	Compiled   string `json:"compiled,omitempty" maxLength:"100000"`
 	AlwaysLoad bool   `json:"alwaysLoad,omitempty"`
 }
@@ -72,12 +72,12 @@ func (in *PageInput) validate() error {
 	return nil
 }
 
-const pageCols = "id, scope, slug, title, kind, compiled, always_load, tier, author_persona, created_at, updated_at"
+const pageCols = "id, scope, slug, title, kind, compiled, always_load, tier, author_teammate, created_at, updated_at"
 
 func scanPage(row interface{ Scan(...any) error }) (Page, error) {
 	var p Page
 	var created, updated int64
-	err := row.Scan(&p.ID, &p.Scope, &p.Slug, &p.Title, &p.Kind, &p.Compiled, &p.AlwaysLoad, &p.Tier, &p.AuthorPersona, &created, &updated)
+	err := row.Scan(&p.ID, &p.Scope, &p.Slug, &p.Title, &p.Kind, &p.Compiled, &p.AlwaysLoad, &p.Tier, &p.AuthorTeammate, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -140,7 +140,7 @@ func (s *Service) CreatePage(ctx context.Context, envID string, in PageInput, o 
 		return Page{}, err
 	}
 	defer tx.Rollback()
-	if err := checkPersonas(ctx, tx, envID, in.Scope, o.AuthorPersona); err != nil {
+	if err := checkTeammates(ctx, tx, envID, in.Scope, o.AuthorTeammate); err != nil {
 		return Page{}, err
 	}
 	if in.AlwaysLoad {
@@ -149,8 +149,8 @@ func (s *Service) CreatePage(ctx context.Context, envID string, in PageInput, o 
 		}
 	}
 	id, now := newID(), s.unix()
-	_, err = tx.ExecContext(ctx, `INSERT INTO memory_pages (id, environment_id, scope, slug, title, kind, compiled, always_load, tier, author_persona, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, envID, in.Scope, in.Slug, in.Title, in.Kind, in.Compiled, in.AlwaysLoad, o.Tier, o.AuthorPersona, now, now)
+	_, err = tx.ExecContext(ctx, `INSERT INTO memory_pages (id, environment_id, scope, slug, title, kind, compiled, always_load, tier, author_teammate, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, envID, in.Scope, in.Slug, in.Title, in.Kind, in.Compiled, in.AlwaysLoad, o.Tier, o.AuthorTeammate, now, now)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return Page{}, fmt.Errorf("a page %q in %s: %w", in.Slug, in.Scope, ErrExists)
 	}
@@ -181,7 +181,7 @@ func (s *Service) UpdatePage(ctx context.Context, envID, id string, in PageInput
 		return Page{}, err
 	}
 	defer tx.Rollback()
-	if err := checkPersonas(ctx, tx, envID, "", o.AuthorPersona); err != nil {
+	if err := checkTeammates(ctx, tx, envID, "", o.AuthorTeammate); err != nil {
 		return Page{}, err
 	}
 	old, err := scanPage(tx.QueryRowContext(ctx, "SELECT "+pageCols+" FROM memory_pages WHERE environment_id = ? AND id = ?", envID, id))
@@ -193,8 +193,8 @@ func (s *Service) UpdatePage(ctx context.Context, envID, id string, in PageInput
 			return Page{}, err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE memory_pages SET title = ?, kind = ?, compiled = ?, always_load = ?, tier = ?, author_persona = ?, updated_at = ?
-		WHERE id = ?`, in.Title, in.Kind, in.Compiled, in.AlwaysLoad, o.Tier, o.AuthorPersona, s.unix(), id); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE memory_pages SET title = ?, kind = ?, compiled = ?, always_load = ?, tier = ?, author_teammate = ?, updated_at = ?
+		WHERE id = ?`, in.Title, in.Kind, in.Compiled, in.AlwaysLoad, o.Tier, o.AuthorTeammate, s.unix(), id); err != nil {
 		return Page{}, err
 	}
 	var chunks []int64
@@ -224,7 +224,7 @@ func (s *Service) Page(ctx context.Context, envID, id string) (Page, error) {
 	if err != nil {
 		return p, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, page_id, at, text, IFNULL(fact_id, ''), IFNULL(source_id, ''), author_persona, created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT id, page_id, at, text, IFNULL(fact_id, ''), IFNULL(source_id, ''), author_teammate, created_at
 		FROM memory_timeline WHERE page_id = ? ORDER BY at, created_at, rowid`, id)
 	if err != nil {
 		return p, err
@@ -234,7 +234,7 @@ func (s *Service) Page(ctx context.Context, envID, id string) (Page, error) {
 	for rows.Next() {
 		var e TimelineEntry
 		var at, created int64
-		if err := rows.Scan(&e.ID, &e.PageID, &at, &e.Text, &e.FactID, &e.SourceID, &e.AuthorPersona, &created); err != nil {
+		if err := rows.Scan(&e.ID, &e.PageID, &at, &e.Text, &e.FactID, &e.SourceID, &e.AuthorTeammate, &created); err != nil {
 			return p, err
 		}
 		e.At, e.CreatedAt = time.Unix(at, 0).UTC(), time.Unix(created, 0).UTC()
@@ -276,7 +276,7 @@ func (s *Service) AppendTimeline(ctx context.Context, envID, pageID string, in T
 	if err := notEmpty("text", in.Text, 2000); err != nil {
 		return TimelineEntry{}, err
 	}
-	if err := validatePersona(o.AuthorPersona); err != nil {
+	if err := validateTeammate(o.AuthorTeammate); err != nil {
 		return TimelineEntry{}, err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -284,7 +284,7 @@ func (s *Service) AppendTimeline(ctx context.Context, envID, pageID string, in T
 		return TimelineEntry{}, err
 	}
 	defer tx.Rollback()
-	if err := checkPersonas(ctx, tx, envID, "", o.AuthorPersona); err != nil {
+	if err := checkTeammates(ctx, tx, envID, "", o.AuthorTeammate); err != nil {
 		return TimelineEntry{}, err
 	}
 	var scope, title string
@@ -310,12 +310,12 @@ func (s *Service) AppendTimeline(ctx context.Context, envID, pageID string, in T
 	}
 	now := s.unix()
 	e := TimelineEntry{ID: newID(), PageID: pageID, At: time.Unix(now, 0).UTC(), Text: in.Text, FactID: in.FactID, SourceID: in.SourceID,
-		AuthorPersona: o.AuthorPersona, CreatedAt: time.Unix(now, 0).UTC()}
+		AuthorTeammate: o.AuthorTeammate, CreatedAt: time.Unix(now, 0).UTC()}
 	if in.At != nil && !in.At.IsZero() {
 		e.At = in.At.UTC().Truncate(time.Second)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_timeline (id, environment_id, page_id, at, text, fact_id, source_id, author_persona, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, e.ID, envID, pageID, e.At.Unix(), e.Text, nullString(e.FactID), nullString(e.SourceID), e.AuthorPersona, now); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_timeline (id, environment_id, page_id, at, text, fact_id, source_id, author_teammate, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, e.ID, envID, pageID, e.At.Unix(), e.Text, nullString(e.FactID), nullString(e.SourceID), e.AuthorTeammate, now); err != nil {
 		return TimelineEntry{}, err
 	}
 	chunk, err := insertChunk(ctx, tx, envID, scope, "timeline_id", e.ID, title, e.Text)

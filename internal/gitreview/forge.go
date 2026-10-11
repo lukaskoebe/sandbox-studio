@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // Forge kinds. forgejo and github have an API (default branch, pull requests); https is
@@ -126,9 +126,9 @@ func CheckForge(name, kind, baseURL, username string) (ForgeURL, error) {
 }
 
 func publicBase(raw string) (string, string, error) {
-	base, host, err := personas.BaseURL(raw)
+	base, host, err := teammates.BaseURL(raw)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: %s", ErrInvalid, strings.TrimPrefix(err.Error(), personas.ErrInvalid.Error()+": "))
+		return "", "", fmt.Errorf("%w: %s", ErrInvalid, strings.TrimPrefix(err.Error(), teammates.ErrInvalid.Error()+": "))
 	}
 	if dnsproxy.IsVirtual(host) {
 		return "", "", fmt.Errorf("%w: the base URL must name a public host", ErrInvalid)
@@ -143,7 +143,7 @@ func ParseSSHURL(raw string) (ForgeURL, error) {
 	bad := func(why string) (ForgeURL, error) {
 		return ForgeURL{}, fmt.Errorf("%w: %s", ErrInvalid, why)
 	}
-	if len(raw) > personas.MaxBaseURLLen {
+	if len(raw) > teammates.MaxBaseURLLen {
 		return bad("the address is too long")
 	}
 	var user, hostport string

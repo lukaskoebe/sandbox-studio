@@ -10,8 +10,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // ProviderKind is one row of the fixed provider table (PLAN.md §6.6).
@@ -28,16 +28,16 @@ type ProviderView struct {
 	store.Provider
 	State     string   `json:"state" enum:"ready,login_required" doc:"login_required until a subscription login is stored"`
 	EnvVar    string   `json:"envVar,omitempty" doc:"The variable guests get the placeholder in"`
-	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses personas using this provider can run"`
+	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses teammates using this provider can run"`
 }
 
 func providerView(p store.Provider) ProviderView {
-	k, _ := personas.LookupKind(p.Kind)
-	v := ProviderView{Provider: p, EnvVar: k.EnvVar, Harnesses: k.Harnesses, State: personas.StateReady}
+	k, _ := teammates.LookupKind(p.Kind)
+	v := ProviderView{Provider: p, EnvVar: k.EnvVar, Harnesses: k.Harnesses, State: teammates.StateReady}
 	if !k.APIKey {
 		// TODO(M4): run `claude setup-token` / `codex login` in a system sandbox and store the
 		// result as the provider's secret; until then subscription providers can't log in.
-		v.State = personas.StateLoginRequired
+		v.State = teammates.StateLoginRequired
 	}
 	return v
 }
@@ -47,15 +47,15 @@ type providerPath struct {
 	ID  string `path:"id" doc:"Provider ID"`
 }
 
-type personaPath struct {
+type teammatePath struct {
 	Env string `path:"env" doc:"Environment ID"`
-	ID  string `path:"id" doc:"Persona ID"`
+	ID  string `path:"id" doc:"Teammate ID"`
 }
 
-// PersonaInput is the editable part of a persona.
-type PersonaInput struct {
+// TeammateInput is the editable part of a teammate.
+type TeammateInput struct {
 	Name       string `json:"name" minLength:"1" maxLength:"64"`
-	Role       string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the persona does"`
+	Role       string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
 	Soul       string `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
 	Harness    string `json:"harness" enum:"opencode,claude,codex"`
 	ProviderID string `json:"providerId" minLength:"1"`
@@ -64,14 +64,14 @@ type PersonaInput struct {
 	GitEmail   string `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
 }
 
-func (s *Server) registerPersonas(api huma.API) {
+func (s *Server) registerTeammates(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "listProviderKinds", Method: http.MethodGet, Path: "/api/provider-kinds", Tags: []string{"providers"},
 		Description: "The fixed table of provider kinds and the harnesses each supports.",
 	}, func(ctx context.Context, _ *struct{}) (*struct{ Body []ProviderKind }, error) {
 		out := []ProviderKind{}
-		for _, kind := range []string{personas.KindAnthropicAPI, personas.KindOpenAIAPI, personas.KindOpenAICompatible, personas.KindClaudeSubscription, personas.KindChatGPTSubscription} {
-			k, _ := personas.LookupKind(kind)
+		for _, kind := range []string{teammates.KindAnthropicAPI, teammates.KindOpenAIAPI, teammates.KindOpenAICompatible, teammates.KindClaudeSubscription, teammates.KindChatGPTSubscription} {
+			k, _ := teammates.LookupKind(kind)
 			out = append(out, ProviderKind{Kind: k.Kind, Harnesses: k.Harnesses, APIKey: k.APIKey, Host: k.Host, EnvVar: k.EnvVar})
 		}
 		return &struct{ Body []ProviderKind }{out}, nil
@@ -113,24 +113,24 @@ func (s *Server) registerPersonas(api huma.API) {
 			return nil, err
 		}
 		b := in.Body
-		k, ok := personas.LookupKind(b.Kind)
+		k, ok := teammates.LookupKind(b.Kind)
 		if !ok {
 			return nil, huma.Error422UnprocessableEntity("unknown provider kind")
 		}
-		if err := personas.CheckName("provider", b.Name); err != nil {
+		if err := teammates.CheckName("provider", b.Name); err != nil {
 			return nil, apiError(err)
 		}
 		p := store.Provider{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind}
 		host := k.Host
-		if b.Kind == personas.KindOpenAICompatible {
+		if b.Kind == teammates.KindOpenAICompatible {
 			var err error
-			if p.BaseURL, host, err = personas.BaseURL(b.BaseURL); err != nil {
+			if p.BaseURL, host, err = teammates.BaseURL(b.BaseURL); err != nil {
 				return nil, apiError(err)
 			}
 			if b.Model == "" {
 				return nil, huma.Error422UnprocessableEntity("OpenAI-compatible providers need a model")
 			}
-			if err := personas.CheckModel(b.Model); err != nil {
+			if err := teammates.CheckModel(b.Model); err != nil {
 				return nil, apiError(err)
 			}
 			p.Model = b.Model
@@ -142,7 +142,7 @@ func (s *Server) registerPersonas(api huma.API) {
 		case k.APIKey && b.APIKey == "":
 			return nil, huma.Error422UnprocessableEntity("this provider needs an API key")
 		case k.APIKey:
-			prepared, err := s.Vault.Prepare(in.Env, personas.SecretName(b.Name, p.ID), b.APIKey, []string{host}, "Key of provider "+b.Name)
+			prepared, err := s.Vault.Prepare(in.Env, teammates.SecretName(b.Name, p.ID), b.APIKey, []string{host}, "Key of provider "+b.Name)
 			if err != nil {
 				return nil, apiError(err)
 			}
@@ -158,7 +158,7 @@ func (s *Server) registerPersonas(api huma.API) {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)
 		}
-		s.publishPersonas(in.Env)
+		s.publishTeammates(in.Env)
 		return &struct{ Body ProviderView }{providerView(created)}, nil
 	})
 
@@ -181,16 +181,16 @@ func (s *Server) registerPersonas(api huma.API) {
 		}
 		b := in.Body
 		var u store.ProviderUpdate
-		if p.Kind == personas.KindOpenAICompatible {
+		if p.Kind == teammates.KindOpenAICompatible {
 			if b.BaseURL != nil {
-				baseURL, host, err := personas.BaseURL(*b.BaseURL)
+				baseURL, host, err := teammates.BaseURL(*b.BaseURL)
 				if err != nil {
 					return nil, apiError(err)
 				}
 				u.BaseURL, u.Hosts = &baseURL, []string{host}
 			}
 			if b.Model != nil {
-				if err := personas.CheckModel(*b.Model); err != nil {
+				if err := teammates.CheckModel(*b.Model); err != nil {
 					return nil, apiError(err)
 				}
 				u.Model = b.Model
@@ -214,14 +214,14 @@ func (s *Server) registerPersonas(api huma.API) {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)
 		}
-		s.publishPersonas(in.Env)
+		s.publishTeammates(in.Env)
 		return &struct{ Body ProviderView }{providerView(updated)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteProvider", Method: http.MethodDelete, Path: "/api/environments/{env}/providers/{id}", Tags: []string{"providers"},
 		DefaultStatus: http.StatusNoContent,
-		Description:   "Deletes the provider and its key. Refused while a persona uses the provider.",
+		Description:   "Deletes the provider and its key. Refused while a teammate uses the provider.",
 	}, func(ctx context.Context, in *providerPath) (*struct{}, error) {
 		p, err := s.Store.Provider(ctx, in.Env, in.ID)
 		if err != nil {
@@ -234,91 +234,91 @@ func (s *Server) registerPersonas(api huma.API) {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)
 		}
-		s.publishPersonas(in.Env)
+		s.publishTeammates(in.Env)
 		return nil, nil
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID: "listPersonas", Method: http.MethodGet, Path: "/api/environments/{env}/personas", Tags: []string{"personas"},
-	}, func(ctx context.Context, in *envPath) (*struct{ Body []store.Persona }, error) {
+		OperationID: "listTeammates", Method: http.MethodGet, Path: "/api/environments/{env}/teammates", Tags: []string{"teammates"},
+	}, func(ctx context.Context, in *envPath) (*struct{ Body []store.Teammate }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
 		}
-		list, err := s.Store.Personas(ctx, in.Env)
-		return &struct{ Body []store.Persona }{list}, apiError(err)
+		list, err := s.Store.Teammates(ctx, in.Env)
+		return &struct{ Body []store.Teammate }{list}, apiError(err)
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID: "getPersona", Method: http.MethodGet, Path: "/api/environments/{env}/personas/{id}", Tags: []string{"personas"},
-	}, func(ctx context.Context, in *personaPath) (*struct{ Body store.Persona }, error) {
-		p, err := s.Store.Persona(ctx, in.Env, in.ID)
-		return &struct{ Body store.Persona }{p}, apiError(err)
+		OperationID: "getTeammate", Method: http.MethodGet, Path: "/api/environments/{env}/teammates/{id}", Tags: []string{"teammates"},
+	}, func(ctx context.Context, in *teammatePath) (*struct{ Body store.Teammate }, error) {
+		p, err := s.Store.Teammate(ctx, in.Env, in.ID)
+		return &struct{ Body store.Teammate }{p}, apiError(err)
 	})
 
-	type createPersonaIn struct {
+	type createTeammateIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
-		Body PersonaInput
+		Body TeammateInput
 	}
 	huma.Register(api, huma.Operation{
-		OperationID: "createPersona", Method: http.MethodPost, Path: "/api/environments/{env}/personas", Tags: []string{"personas"},
+		OperationID: "createTeammate", Method: http.MethodPost, Path: "/api/environments/{env}/teammates", Tags: []string{"teammates"},
 		DefaultStatus: http.StatusCreated,
-	}, func(ctx context.Context, in *createPersonaIn) (*struct{ Body store.Persona }, error) {
+	}, func(ctx context.Context, in *createTeammateIn) (*struct{ Body store.Teammate }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
 		}
-		p, err := s.personaFrom(ctx, in.Env, store.NewID(), in.Body)
+		p, err := s.teammateFrom(ctx, in.Env, store.NewID(), in.Body)
 		if err != nil {
 			return nil, err
 		}
-		if p, err = s.Store.CreatePersona(ctx, p); err != nil {
+		if p, err = s.Store.CreateTeammate(ctx, p); err != nil {
 			return nil, apiError(err)
 		}
-		s.publishPersonas(in.Env)
-		return &struct{ Body store.Persona }{p}, nil
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{p}, nil
 	})
 
-	type updatePersonaIn struct {
+	type updateTeammateIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
-		ID   string `path:"id" doc:"Persona ID"`
-		Body PersonaInput
+		ID   string `path:"id" doc:"Teammate ID"`
+		Body TeammateInput
 	}
 	huma.Register(api, huma.Operation{
-		OperationID: "updatePersona", Method: http.MethodPut, Path: "/api/environments/{env}/personas/{id}", Tags: []string{"personas"},
-	}, func(ctx context.Context, in *updatePersonaIn) (*struct{ Body store.Persona }, error) {
-		if _, err := s.Store.Persona(ctx, in.Env, in.ID); err != nil {
+		OperationID: "updateTeammate", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{id}", Tags: []string{"teammates"},
+	}, func(ctx context.Context, in *updateTeammateIn) (*struct{ Body store.Teammate }, error) {
+		if _, err := s.Store.Teammate(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}
-		p, err := s.personaFrom(ctx, in.Env, in.ID, in.Body)
+		p, err := s.teammateFrom(ctx, in.Env, in.ID, in.Body)
 		if err != nil {
 			return nil, err
 		}
-		if p, err = s.Store.UpdatePersona(ctx, p); err != nil {
+		if p, err = s.Store.UpdateTeammate(ctx, p); err != nil {
 			return nil, apiError(err)
 		}
-		s.publishPersonas(in.Env)
-		return &struct{ Body store.Persona }{p}, nil
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{p}, nil
 	})
 
 	huma.Register(api, huma.Operation{
-		OperationID: "deletePersona", Method: http.MethodDelete, Path: "/api/environments/{env}/personas/{id}", Tags: []string{"personas"},
+		OperationID: "deleteTeammate", Method: http.MethodDelete, Path: "/api/environments/{env}/teammates/{id}", Tags: []string{"teammates"},
 		DefaultStatus: http.StatusNoContent,
-		Description:   "Deletes the persona and the network rules scoped to it. Refused while it owns sandboxes.",
-	}, func(ctx context.Context, in *personaPath) (*struct{}, error) {
+		Description:   "Deletes the teammate and the network rules scoped to it. Refused while it owns sandboxes.",
+	}, func(ctx context.Context, in *teammatePath) (*struct{}, error) {
 		if err := s.forgetBrowser(ctx, in.Env, in.ID); err != nil {
 			return nil, err
 		}
-		if err := s.Store.DeletePersona(ctx, in.Env, in.ID); err != nil {
+		if err := s.Store.DeleteTeammate(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}
-		s.publishPersonas(in.Env)
+		s.publishTeammates(in.Env)
 		// Its rules are gone; held connections and cached rules must see that.
 		return nil, apiError(s.Policy.Settle(ctx, in.Env))
 	})
 }
 
-// personaFrom validates in and returns the persona it describes, with defaults filled in.
-func (s *Server) personaFrom(ctx context.Context, env, id string, in PersonaInput) (store.Persona, error) {
-	p := store.Persona{
+// teammateFrom validates in and returns the teammate it describes, with defaults filled in.
+func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateInput) (store.Teammate, error) {
+	p := store.Teammate{
 		ID: id, EnvironmentID: env, Name: in.Name, Role: strings.TrimSpace(in.Role), Soul: in.Soul,
 		Harness: in.Harness, ProviderID: in.ProviderID, Model: strings.TrimSpace(in.Model),
 		GitName: strings.TrimSpace(in.GitName), GitEmail: strings.TrimSpace(in.GitEmail),
@@ -327,11 +327,11 @@ func (s *Server) personaFrom(ctx context.Context, env, id string, in PersonaInpu
 		p.GitName = p.Name
 	}
 	if p.GitEmail == "" {
-		p.GitEmail = personas.DefaultGitEmail(p.Name, id)
+		p.GitEmail = teammates.DefaultGitEmail(p.Name, id)
 	}
 	for _, err := range []error{
-		personas.CheckName("persona", p.Name), personas.CheckRole(p.Role), personas.CheckSoul(p.Soul),
-		personas.CheckGitName(p.GitName), personas.CheckGitEmail(p.GitEmail),
+		teammates.CheckName("teammate", p.Name), teammates.CheckRole(p.Role), teammates.CheckSoul(p.Soul),
+		teammates.CheckGitName(p.GitName), teammates.CheckGitEmail(p.GitEmail),
 	} {
 		if err != nil {
 			return p, apiError(err)
@@ -344,37 +344,37 @@ func (s *Server) personaFrom(ctx context.Context, env, id string, in PersonaInpu
 	if err != nil {
 		return p, apiError(err)
 	}
-	k, _ := personas.LookupKind(provider.Kind)
-	if !personas.Supports(provider.Kind, p.Harness) {
+	k, _ := teammates.LookupKind(provider.Kind)
+	if !teammates.Supports(provider.Kind, p.Harness) {
 		return p, huma.Error422UnprocessableEntity(fmt.Sprintf("provider %s can't run %s; it supports %s", provider.Name, p.Harness, strings.Join(k.Harnesses, " and ")))
 	}
-	if p.Model == "" && provider.Kind == personas.KindOpenAICompatible {
+	if p.Model == "" && provider.Kind == teammates.KindOpenAICompatible {
 		p.Model = provider.Model
 	}
 	if p.Model == "" && k.APIKey {
 		return p, huma.Error422UnprocessableEntity("API-key providers need a model")
 	}
 	if p.Model != "" {
-		if err := personas.CheckModel(p.Model); err != nil {
+		if err := teammates.CheckModel(p.Model); err != nil {
 			return p, apiError(err)
 		}
 	}
 	return p, nil
 }
 
-// checkPersona answers 422 unless personaID is empty or a persona of the environment.
-func (s *Server) checkPersona(ctx context.Context, env, personaID string) error {
-	if personaID == "" {
+// checkTeammate answers 422 unless teammateID is empty or a teammate of the environment.
+func (s *Server) checkTeammate(ctx context.Context, env, teammateID string) error {
+	if teammateID == "" {
 		return nil
 	}
-	_, err := s.Store.Persona(ctx, env, personaID)
+	_, err := s.Store.Teammate(ctx, env, teammateID)
 	if errors.Is(err, store.ErrNotFound) {
-		return huma.Error422UnprocessableEntity(fmt.Sprintf("persona %s is not in this environment", personaID))
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("teammate %s is not in this environment", teammateID))
 	}
 	return apiError(err)
 }
 
-// publishPersonas tells open tabs that the environment's personas or providers changed.
-func (s *Server) publishPersonas(envID string) {
-	s.Bus.Publish(events.Event{Topic: events.TopicPersonas, EnvironmentID: envID})
+// publishTeammates tells open tabs that the environment's teammates or providers changed.
+func (s *Server) publishTeammates(envID string) {
+	s.Bus.Publish(events.Event{Topic: events.TopicTeammates, EnvironmentID: envID})
 }

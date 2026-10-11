@@ -90,7 +90,7 @@ func (s *Service) entityPage(ctx context.Context, tx execer, envID, scope, entit
 	if i := strings.LastIndex(entity, "/"); i >= 0 && i < len(entity)-1 {
 		title = entity[i+1:]
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_pages (id, environment_id, scope, slug, title, kind, compiled, always_load, tier, author_persona, created_at, updated_at)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_pages (id, environment_id, scope, slug, title, kind, compiled, always_load, tier, author_teammate, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, '', 0, 'inferred', '', ?, ?)`, id, envID, scope, slug, title, slugKind(slug), now, now); err != nil {
 		return Page{}, nil, err
 	}
@@ -118,7 +118,7 @@ func (s *Service) noteOnPage(ctx context.Context, tx execer, envID string, home,
 	}
 	id, now := newID(), s.unix()
 	text = truncate(text, 2000)
-	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_timeline (id, environment_id, page_id, at, text, fact_id, source_id, author_persona, created_at)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_timeline (id, environment_id, page_id, at, text, fact_id, source_id, author_teammate, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, NULL, '', ?)`, id, envID, p.ID, at.Unix(), text, home.ID, now); err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (s *Service) Supersede(ctx context.Context, envID, oldID, newID, reason str
 		return false, nil
 	}
 	if old.Scope != nf.Scope && old.Scope == SharedScope {
-		return false, fmt.Errorf("%w: a persona fact cannot supersede a shared fact", ErrInvalid)
+		return false, fmt.Errorf("%w: a teammate fact cannot supersede a shared fact", ErrInvalid)
 	}
 	now := s.unix()
 	until := nf.ObservedAt.Unix()

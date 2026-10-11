@@ -68,8 +68,8 @@ export function MemoryUsage({ env, shared }: { env: string; shared: boolean }) {
       {shared && (
         <p className="text-xs text-muted-foreground">
           {sharedJudge
-            ? `Consolidated with ${sharedJudge.personaName}'s model (${sharedJudge.model}), the persona that has had a utility model the longest.`
-            : "No persona has a utility model, so consolidation only merges duplicates and compiles pages."}
+            ? `Consolidated with ${sharedJudge.teammateName}'s model (${sharedJudge.model}), the teammate that has had a utility model the longest.`
+            : "No teammate has a utility model, so consolidation only merges duplicates and compiles pages."}
         </p>
       )}
     </>
@@ -79,18 +79,18 @@ export function MemoryUsage({ env, shared }: { env: string; shared: boolean }) {
 /** Harness sessions and, for the selected one, what memory gave it and wrote from it. */
 export function MemorySessionsTab({
   env,
-  persona,
+  teammate,
   names,
 }: {
   env: string
-  persona?: string
+  teammate?: string
   names: Map<string, string>
 }) {
   const [selected, setSelected] = useState<string>()
   const sessions = $api.useQuery(
     "get",
     "/api/environments/{env}/memory/sessions",
-    { params: { path: { env }, query: { persona } } }
+    { params: { path: { env }, query: { teammate } } }
   )
   const list = sessions.data ?? []
   if (sessions.isPending) return <Spinner className="mx-auto block" />
@@ -113,7 +113,7 @@ export function MemorySessionsTab({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Persona</TableHead>
+            <TableHead>Teammate</TableHead>
             <TableHead>Sandbox</TableHead>
             <TableHead>Session</TableHead>
             <TableHead>Repository</TableHead>
@@ -132,7 +132,7 @@ export function MemorySessionsTab({
               )}
               onClick={() => setSelected(selected === s.id ? undefined : s.id)}
             >
-              <TableCell>{names.get(s.personaId) ?? s.personaId}</TableCell>
+              <TableCell>{names.get(s.teammateId) ?? s.teammateId}</TableCell>
               <TableCell>{s.sandboxName}</TableCell>
               <TableCell className="font-mono text-[0.625rem]">
                 {s.harness} · {s.sessionRef.slice(0, 12)}
@@ -193,7 +193,7 @@ function SessionLog({ env, id }: { env: string; id: string }) {
   )
 }
 
-/** Approves or declines a persona's proposal for shared memory. */
+/** Approves or declines a teammate's proposal for shared memory. */
 export function MemoryShareDecision({ approval }: { approval: Approval }) {
   const queryClient = useQueryClient()
   const decide = $api.useMutation(

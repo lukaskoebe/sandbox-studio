@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // LLM is a provider's utility model as extraction uses it.
@@ -58,13 +58,13 @@ var ErrNoUtility = errors.New("no utility model for this provider")
 // UtilityFor is the utility model of a provider kind; ok is false for subscriptions.
 func UtilityFor(p store.Provider) (UtilityModel, bool) {
 	switch p.Kind {
-	case personas.KindAnthropicAPI:
+	case teammates.KindAnthropicAPI:
 		return UtilityModel{Kind: p.Kind, Model: "claude-haiku-4-5", PriceInPerM: 1, PriceOutPerM: 5, Priced: true}, true
-	case personas.KindOpenAIAPI:
+	case teammates.KindOpenAIAPI:
 		// TODO verify (S7): gpt-6-luna is OpenAI's small model per third-party listings;
 		// confirm the ID and price against the API before relying on it.
 		return UtilityModel{Kind: p.Kind, Model: "gpt-6-luna", PriceInPerM: 0.10, PriceOutPerM: 0.50, Priced: true}, true
-	case personas.KindOpenAICompatible:
+	case teammates.KindOpenAICompatible:
 		return UtilityModel{Kind: p.Kind, Model: p.Model, Note: "the endpoint's single model; price unknown, so calls are capped instead"}, p.Model != "" && p.BaseURL != ""
 	default:
 		// TODO (S8): subscriptions can't be called from the host; extraction would have to
@@ -82,9 +82,9 @@ func DefaultUtility(p store.Provider, key string) (LLM, UtilityModel, error) {
 	}
 	hc := &http.Client{Timeout: 90 * time.Second}
 	switch p.Kind {
-	case personas.KindAnthropicAPI:
+	case teammates.KindAnthropicAPI:
 		return &anthropicLLM{httpc: hc, url: "https://api.anthropic.com/v1/messages", key: key, model: m.Model}, m, nil
-	case personas.KindOpenAIAPI:
+	case teammates.KindOpenAIAPI:
 		return &openAILLM{httpc: hc, url: "https://api.openai.com/v1/responses", key: key, model: m.Model}, m, nil
 	default:
 		return &chatLLM{httpc: hc, url: strings.TrimRight(p.BaseURL, "/") + "/chat/completions", key: key, model: m.Model}, m, nil

@@ -17,8 +17,8 @@ func observed(t time.Time) func(*FactInput) { return func(in *FactInput) { in.Ob
 func TestMergeFacts(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	keep := f.fact(f.env, "persona:a", KindFact, "Deploys use make ship", Origin{Tier: TierInferred, AuthorPersona: "a"}, withEntity("api", "deploy.command"))
-	drop := f.fact(f.env, "persona:a", KindFact, "Deploys use make ship.", Origin{Tier: TierVerified, AuthorPersona: "a"}, withEntity("api", "deploy.command"))
+	keep := f.fact(f.env, "teammate:a", KindFact, "Deploys use make ship", Origin{Tier: TierInferred, AuthorTeammate: "a"}, withEntity("api", "deploy.command"))
+	drop := f.fact(f.env, "teammate:a", KindFact, "Deploys use make ship.", Origin{Tier: TierVerified, AuthorTeammate: "a"}, withEntity("api", "deploy.command"))
 	other := f.fact(f.env, "shared", KindFact, "Deploys use make ship", UserOrigin)
 	if _, err := f.svc.MergeFacts(ctx, f.env, keep.ID, other.ID); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("cross-scope merge: %v", err)
@@ -70,10 +70,10 @@ func TestSupersedeWritesTimeline(t *testing.T) {
 	if p, _ = f.svc.Page(ctx, f.env, p.ID); len(p.Timeline) != 1 {
 		t.Fatalf("idempotent timeline %d", len(p.Timeline))
 	}
-	// A shared fact is never superseded by a persona fact.
-	pf := f.fact(f.env, "persona:a", KindFact, "Prod database is Postgres 17", UserOrigin, withEntity("project/api", "db.version"))
+	// A shared fact is never superseded by a teammate fact.
+	pf := f.fact(f.env, "teammate:a", KindFact, "Prod database is Postgres 17", UserOrigin, withEntity("project/api", "db.version"))
 	if _, err := f.svc.Supersede(ctx, f.env, nf.ID, pf.ID, ""); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("persona over shared: %v", err)
+		t.Fatalf("teammate over shared: %v", err)
 	}
 }
 
@@ -81,8 +81,8 @@ func TestConflictResolutions(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	pair := func() (Fact, Fact, Conflict) {
-		a := f.fact(f.env, "persona:a", KindPreference, "Use tabs for indentation", Origin{Tier: TierInferred, AuthorPersona: "a"}, withEntity("style", "indent"))
-		b := f.fact(f.env, "persona:a", KindPreference, "Use spaces for indentation", UserOrigin, withEntity("style", "indent"))
+		a := f.fact(f.env, "teammate:a", KindPreference, "Use tabs for indentation", Origin{Tier: TierInferred, AuthorTeammate: "a"}, withEntity("style", "indent"))
+		b := f.fact(f.env, "teammate:a", KindPreference, "Use spaces for indentation", UserOrigin, withEntity("style", "indent"))
 		c, created, err := f.svc.OpenConflict(ctx, f.env, a.ID, b.ID, "contradiction", "tabs vs spaces")
 		if err != nil || !created || c.FactA.Status != StatusDisputed || c.FactB.Status != StatusDisputed {
 			t.Fatalf("open %+v %v %v", c, created, err)
@@ -99,7 +99,7 @@ func TestConflictResolutions(t *testing.T) {
 	if err != nil || r.FactA.Status != StatusActive || r.FactB.Status != StatusActive || r.FactA.Text != "In Go code, use tabs" || r.FactA.Tier != TierUser {
 		t.Fatalf("keep_both %+v %v", r, err)
 	}
-	if hits := f.search(f.env, SearchRequest{Query: "yaml", Persona: "a"}); !contains(hits, r.FactB.ID) {
+	if hits := f.search(f.env, SearchRequest{Query: "yaml", Teammate: "a"}); !contains(hits, r.FactB.ID) {
 		t.Fatalf("rewritten text not searchable: %v", ids(hits))
 	}
 
@@ -108,7 +108,7 @@ func TestConflictResolutions(t *testing.T) {
 	if err != nil || r.FactA.Status != StatusSuperseded || r.FactB.Status != StatusSuperseded {
 		t.Fatalf("edit %+v %v", r, err)
 	}
-	hits := f.search(f.env, SearchRequest{Query: "formatter indentation", Persona: "a"})
+	hits := f.search(f.env, SearchRequest{Query: "formatter indentation", Teammate: "a"})
 	if len(hits) == 0 || hits[0].Fact == nil || hits[0].Fact.Text != "Use the formatter's default indentation" || hits[0].Fact.Tier != TierUser || contains(hits, a.ID) || contains(hits, b.ID) {
 		t.Fatalf("after edit %v", ids(hits))
 	}
@@ -121,7 +121,7 @@ func TestConflictResolutions(t *testing.T) {
 
 	// A fact stays disputed while another open conflict disputes it.
 	a, b, c = pair()
-	x := f.fact(f.env, "persona:a", KindPreference, "Indent with two spaces", UserOrigin, withEntity("style", "indent"))
+	x := f.fact(f.env, "teammate:a", KindPreference, "Indent with two spaces", UserOrigin, withEntity("style", "indent"))
 	if _, _, err := f.svc.OpenConflict(ctx, f.env, b.ID, x.ID, "contradiction", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -140,28 +140,28 @@ func TestSharedWinsAtRecall(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	shared := f.fact(f.env, "shared", KindFact, "Releases are cut on Thursday", Origin{Tier: TierInferred}, withEntity("release", "release.day"))
-	mine := f.fact(f.env, "persona:a", KindFact, "Releases are cut on Monday mornings after standup", UserOrigin, withEntity("release", "release.day"))
+	mine := f.fact(f.env, "teammate:a", KindFact, "Releases are cut on Monday mornings after standup", UserOrigin, withEntity("release", "release.day"))
 	if _, err := f.svc.CreateConflict(ctx, f.env, shared.ID, mine.ID, "contradiction", ""); err != nil {
 		t.Fatal(err)
 	}
-	// "monday standup" only matches the persona fact; the shared one is pulled in above it.
-	hits := f.search(f.env, SearchRequest{Query: "monday standup", Persona: "a"})
+	// "monday standup" only matches the teammate fact; the shared one is pulled in above it.
+	hits := f.search(f.env, SearchRequest{Query: "monday standup", Teammate: "a"})
 	if len(hits) < 2 || hits[0].ID != shared.ID || hits[1].ID != mine.ID {
 		t.Fatalf("order %v", ids(hits))
 	}
 	if !hits[1].Disputed || hits[1].OverriddenBy != shared.ID || !strings.Contains(hits[1].Why.Summary, "overridden") || hits[0].Disputed {
 		t.Fatalf("markers %+v / %+v", hits[0], hits[1])
 	}
-	// Another persona doesn't see the conflict's persona fact at all.
-	if hits := f.search(f.env, SearchRequest{Query: "monday standup", Persona: "b"}); contains(hits, mine.ID) {
-		t.Fatalf("persona b sees %v", ids(hits))
+	// Another teammate doesn't see the conflict's teammate fact at all.
+	if hits := f.search(f.env, SearchRequest{Query: "monday standup", Teammate: "b"}); contains(hits, mine.ID) {
+		t.Fatalf("teammate b sees %v", ids(hits))
 	}
 }
 
 func TestCompileEntityPage(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	scope := "persona:a"
+	scope := "teammate:a"
 	f.fact(f.env, scope, KindFact, "The API is written in Go", UserOrigin, withEntity("project/api", ""))
 	if res, err := f.svc.CompileEntityPage(ctx, f.env, scope, "project/api"); err != nil || res.PageID != "" {
 		t.Fatalf("one fact makes no page: %+v %v", res, err)

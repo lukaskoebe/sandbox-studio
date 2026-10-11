@@ -43,7 +43,7 @@ func (a *Agent) serveCalls(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Everything in the sandbox acts for the same persona; the agent user must connect.
+	// Everything in the sandbox acts for the same teammate; the agent user must connect.
 	if err := os.Chmod(agentproto.CallSocket, 0o666); err != nil {
 		ln.Close()
 		return err

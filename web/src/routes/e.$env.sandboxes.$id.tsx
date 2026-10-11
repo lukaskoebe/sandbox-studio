@@ -47,7 +47,7 @@ import { ExportSandboxButton } from "@/components/export-sandbox-button"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { AgentSessions } from "@/components/agent-sessions"
 import { PageHeader } from "@/components/page-header"
-import { SandboxOwner } from "@/components/persona-avatar"
+import { SandboxOwner } from "@/components/teammate-avatar"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { StatusBadge, phase } from "@/components/status-badge"
 import { SuspendResumeButton } from "@/components/suspend-resume-button"
@@ -105,15 +105,15 @@ function SandboxPage() {
         <StatusBadge sandbox={sb} />
         <SandboxOwner
           env={env}
-          personaId={sb.personaId}
+          teammateId={sb.teammateId}
           className="text-xs text-muted-foreground"
         />
         <div className="ml-auto flex items-center gap-1">
-          {sb.personaId && isReady(sb) && (
+          {sb.teammateId && isReady(sb) && (
             <AgentSessions
               env={env}
               id={sb.id}
-              personaId={sb.personaId}
+              teammateId={sb.teammateId}
               onAttach={(name) =>
                 setFocus((f) => ({ name, seq: (f?.seq ?? 0) + 1 }))
               }

@@ -69,7 +69,7 @@ export const Route = createFileRoute("/e/$env/memory")({
 const shared = "shared"
 
 const explanation =
-  "What personas remember about you and your work. Shared memory is visible to every persona; a persona's own scope only to that persona. Edits you make here are user-tier: they outrank anything inferred."
+  "What teammates remember about you and your work. Shared memory is visible to every teammate; a teammate's own scope only to that teammate. Edits you make here are user-tier: they outrank anything inferred."
 
 function MemoryPage() {
   const { env } = Route.useParams()
@@ -77,21 +77,21 @@ function MemoryPage() {
   const scopes = $api.useQuery("get", "/api/environments/{env}/memory/scopes", {
     params: { path: { env } },
   })
-  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
-  const names = new Map(personas.data?.map((p) => [p.id, p.name]))
+  const names = new Map(teammates.data?.map((p) => [p.id, p.name]))
   const label = (s: string) => {
     if (s === shared) return "Shared"
-    const id = s.slice("persona:".length)
+    const id = s.slice("teammate:".length)
     return names.has(id) ? `${names.get(id)} (${s})` : s
   }
-  // Shared, every scope with data, and the personas that have none yet.
+  // Shared, every scope with data, and the teammates that have none yet.
   const choices = [
     ...new Set([
       shared,
       ...(scopes.data ?? []).map((s) => s.scope),
-      ...(personas.data ?? []).map((p) => `persona:${p.id}`),
+      ...(teammates.data ?? []).map((p) => `teammate:${p.id}`),
     ]),
   ]
   const current = scopes.data?.find((s) => s.scope === scope)
@@ -153,8 +153,8 @@ function MemoryPage() {
           <TabsContent value="sessions">
             <MemorySessionsTab
               env={env}
-              persona={
-                scope === shared ? undefined : scope.slice("persona:".length)
+              teammate={
+                scope === shared ? undefined : scope.slice("teammate:".length)
               }
               names={names}
             />
@@ -297,8 +297,8 @@ function PageView({
         <Badge variant="outline">{p.kind}</Badge>
         <TierBadge tier={p.tier} />
         {p.alwaysLoad && <Badge>core</Badge>}
-        {p.authorPersona && (
-          <Badge variant="secondary">by persona:{p.authorPersona}</Badge>
+        {p.authorTeammate && (
+          <Badge variant="secondary">by teammate:{p.authorTeammate}</Badge>
         )}
         <span className="text-muted-foreground">
           updated {formatAge(p.updatedAt)}
@@ -332,7 +332,7 @@ function PageView({
             <li key={t.id}>
               <span className="text-muted-foreground">
                 {new Date(t.at).toLocaleString()}
-                {t.authorPersona && ` · persona:${t.authorPersona}`}
+                {t.authorTeammate && ` · teammate:${t.authorTeammate}`}
               </span>
               <pre className="font-sans whitespace-pre-wrap">{t.text}</pre>
             </li>
@@ -402,7 +402,7 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
       onSuccess: () =>
         toast.success("Proposed for shared memory", {
           description:
-            "Approve it in the inbox to share it with every persona.",
+            "Approve it in the inbox to share it with every teammate.",
         }),
       onSettled: () =>
         queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] }),
@@ -462,11 +462,11 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
                 <TableRow key={f.id}>
                   <TableCell className="max-w-md">
                     <span className="block whitespace-pre-wrap">{f.text}</span>
-                    {(f.attribute || f.authorPersona) && (
+                    {(f.attribute || f.authorTeammate) && (
                       <span className="block font-mono text-[0.625rem] text-muted-foreground">
                         {f.attribute}
-                        {f.attribute && f.authorPersona && " · "}
-                        {f.authorPersona && `by persona:${f.authorPersona}`}
+                        {f.attribute && f.authorTeammate && " · "}
+                        {f.authorTeammate && `by teammate:${f.authorTeammate}`}
                       </span>
                     )}
                   </TableCell>
@@ -494,7 +494,7 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="Promote to shared: propose it for every persona"
+                          title="Promote to shared: propose it for every teammate"
                           disabled={promote.isPending}
                           onClick={() =>
                             promote.mutate({
@@ -572,7 +572,7 @@ function ConflictsTab({ env, scope }: { env: string; scope: string }) {
             <EmptyTitle>No conflicts</EmptyTitle>
             <EmptyDescription>
               Facts that contradict each other show up here. Until you resolve
-              one, a shared fact wins over a persona's.
+              one, a shared fact wins over a teammate's.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -643,8 +643,8 @@ function SearchTab({ env, scope }: { env: string; scope: string }) {
   const [draft, setDraft] = useState("")
   const [query, setQuery] = useState("")
   const [includeSuperseded, setIncludeSuperseded] = useState(false)
-  const persona = scope.startsWith("persona:")
-    ? scope.slice("persona:".length)
+  const teammate = scope.startsWith("teammate:")
+    ? scope.slice("teammate:".length)
     : undefined
   const hits = $api.useQuery(
     "get",
@@ -652,7 +652,7 @@ function SearchTab({ env, scope }: { env: string; scope: string }) {
     {
       params: {
         path: { env },
-        query: { q: query, persona, includeSuperseded, limit: 20 },
+        query: { q: query, teammate, includeSuperseded, limit: 20 },
       },
     },
     { enabled: query !== "" }
@@ -670,8 +670,8 @@ function SearchTab({ env, scope }: { env: string; scope: string }) {
         <Input
           className="max-w-md"
           placeholder={
-            persona
-              ? "Search this persona's memory and shared memory"
+            teammate
+              ? "Search this teammate's memory and shared memory"
               : "Search shared memory"
           }
           maxLength={500}

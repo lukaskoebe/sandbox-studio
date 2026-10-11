@@ -1,15 +1,15 @@
 # Memory
 
-What personas remember, per environment (PLAN.md §6.7): the store, search, embeddings,
+What teammates remember, per environment (PLAN.md §6.7): the store, search, embeddings,
 API and UI, memory in agent sessions (hooks, tools, extraction) and consolidation (the
 dream job and conflicts).
 
 ## Scopes
 
-- `shared` is visible to every persona; `persona:<id>` only to that persona.
-- A new fact or page in `persona:<id>`, and any write with an author persona, must name a
-  persona of the same environment (422 otherwise). There is no foreign key, so the memory of
-  a deleted persona stays readable and editable.
+- `shared` is visible to every teammate; `teammate:<id>` only to that teammate.
+- A new fact or page in `teammate:<id>`, and any write with an author teammate, must name a
+  teammate of the same environment (422 otherwise). There is no foreign key, so the memory of
+  a deleted teammate stays readable and editable.
 - Nothing crosses environments: every table carries `environment_id`, and IDs from another
   environment are 404.
 
@@ -18,12 +18,12 @@ dream job and conflicts).
 Tables live in the catalog database (`013_memory.sql`, all prefixed `memory_`):
 
 - `sources`: kind (`user`, `verified`, `document`, `inferred`, `consolidation`), session
-  ref, author persona and a short evidence quote. Every fact write adds one.
+  ref, author teammate and a short evidence quote. Every fact write adds one.
 - `facts`: kind (`preference`, `decision`, `fact`, `procedure`, `event`), entities,
   attribute, text, `observed_at`, validity, confidence, tier, support count, status
-  (`active`, `superseded`, `disputed`, `retracted`), `supersedes` and author persona.
+  (`active`, `superseded`, `disputed`, `retracted`), `supersedes` and author teammate.
   Superseding marks the old fact `superseded` and ends its validity; a conflict marks both
-  facts `disputed` in one scope, only the persona's fact across scopes.
+  facts `disputed` in one scope, only the teammate's fact across scopes.
 - `pages`: slug (unique per scope), title, kind, compiled truth, `always_load`, tier. Core
   (`always_load`) pages of one scope share 4000 characters; a write over that is refused
   with a list of the other core pages and how much room is left.
@@ -42,7 +42,7 @@ UI edits are tier `user`; editing an inferred fact raises it to `user`.
 
 ## Search
 
-`GET /api/environments/{env}/memory/search?q=…&persona=…`: shared only, or a persona's
+`GET /api/environments/{env}/memory/search?q=…&teammate=…`: shared only, or a teammate's
 scope plus shared.
 
 1. BM25 over FTS5 (terms ORed) and a brute-force int8 dot product over the vectors of the
@@ -54,7 +54,7 @@ scope plus shared.
    procedure 180, fact 90, event 14, page 180.
 4. Retracted facts never show; superseded and expired (`valid_until` past) facts only with
    `includeSuperseded`, marked. Disputed facts are marked.
-5. Shared wins: a persona fact in an open conflict with a shared fact is marked
+5. Shared wins: a teammate fact in an open conflict with a shared fact is marked
    `overriddenBy` and the shared fact is placed right above it (pulled in if search missed
    it) until the user resolves the conflict.
 
@@ -81,19 +81,19 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 
 | | |
 |---|---|
-| `GET scopes` | shared plus persona scopes with data, with counts and core usage |
+| `GET scopes` | shared plus teammate scopes with data, with counts and core usage |
 | `GET/POST facts`, `GET/PUT/DELETE facts/{id}`, `POST facts/{id}/retract` | facts; list filters `scope`, `status` |
 | `GET/POST pages`, `GET/PUT/DELETE pages/{id}`, `POST pages/{id}/timeline` | pages; `GET pages/{id}` includes the timeline |
 | `GET search` | hybrid search with `why` |
 | `GET conflicts`, `GET conflicts/{id}`, `POST conflicts/{id}/resolve` | conflicts, open first; the detail adds both facts' sources and timeline |
 | `POST dream`, `GET dreams?scope=` | start consolidating a scope (202, 409 while one runs); runs with stats |
-| `POST facts/{id}/promote` | propose a persona fact for shared memory (`memory.share` approval) |
+| `POST facts/{id}/promote` | propose a teammate fact for shared memory (`memory.share` approval) |
 
-| `GET sessions?persona=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
+| `GET sessions?teammate=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
 | `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider, and `sharedJudge`: whose utility model consolidates shared memory |
 
 The Memory page in the environment sidebar has a scope switcher, the extraction budget line,
-and tabs for pages, facts (with "promote to shared" on persona facts), conflicts (with
+and tabs for pages, facts (with "promote to shared" on teammate facts), conflicts (with
 "Dream now", recent runs and a sheet that shows both facts side by side with sources, tiers
 and timeline, and resolves), search and sessions. `memory.conflict` approvals show in the
 approval stack with the same sheet.
@@ -106,20 +106,20 @@ Code: `internal/agentmem` (host), `internal/agentcall` and `internal/agenthook` 
 **Identity.** Hooks and tools run `studio-agent`, which sends a call through
 `/run/studio-agent/call.sock` to the guest daemon and on over the sandbox's own vsock
 channel (stream kind `call`, at most 8 at once, 1 MiB each). Studio takes the sandbox,
-environment and persona from the channel, never from the payload. A persona reads `shared`
+environment and teammate from the channel, never from the payload. A teammate reads `shared`
 and its own scope and writes only its own; tool arguments with unknown fields are refused.
-A sandbox without a persona gets no memory: hooks answer empty, tools fail.
+A sandbox without a teammate gets no memory: hooks answer empty, tools fail.
 
 **Hooks never block.** `studio-agent hook <event> --harness <h>` reads at most 1 MiB of
 stdin, answers within 5 s (2.5 s at session end) and on any failure prints the neutral
 answer (`{}`) and exits 0.
 
 - *Session start* (also resume and compact) injects a context pack of at most 12 000
-  characters inside `<studio-memory>` tags: core pages (persona, then shared), the project
+  characters inside `<studio-memory>` tags: core pages (teammate, then shared), the project
   page for the repository's normalized git remote (`project/<host/owner/repo>`, then
-  `project/<repo>`, persona scope first), shared facts
-  other personas changed since the persona's previous session (or the last 7 days, at most
-  10), and up to 5 open conflicts that touch them or the persona's own facts. The soul is not
+  `project/<repo>`, teammate scope first), shared facts
+  other teammates changed since the teammate's previous session (or the last 7 days, at most
+  10), and up to 5 open conflicts that touch them or the teammate's own facts. The soul is not
   in it: it is in the harness's instructions file ([harnesses.md](harnesses.md#files)).
 - *Prompt* runs hybrid search and injects at most 5 hits, about 500 tokens (2000
   characters), each with similarity ≥ 0.45 or at least 2 matching prompt words, and none
@@ -138,9 +138,9 @@ the extraction's model, tokens, cost and any rejection.
 **Tools** (`studio-agent mcp`, a stdio MCP server): `memory_search`, `memory_get` (id or
 slug), `remember(text, kind, entity?, scope, source?)`, `share(fact_id | text)`,
 `correct(fact_id, text)` (a new fact supersedes the old) and `forget(fact_id)` (retracts).
-The last two take only the persona's own facts. `share`, and `remember` with scope
+The last two take only the teammate's own facts. `share`, and `remember` with scope
 `shared`, create a pending `memory.share` approval with the author; approving it in the
-inbox writes the fact to shared memory with that persona as author, or reinforces a
+inbox writes the fact to shared memory with that teammate as author, or reinforces a
 duplicate. The approval is marked approved in the same transaction as the write: if the
 write fails, the decision returns the error, the approval stays pending and can be approved
 again. "Promote to shared" on the memory page creates the same approval.
@@ -152,7 +152,7 @@ which is never logged: `claude-haiku-4-5` for `anthropic_api`, `gpt-6-luna` for
 subscriptions (S8). The answer must be `{"facts": [...]}` with at most 20 facts of text,
 kind, tier (`user` or `inferred`), entities, attribute and an evidence quote found in the
 transcript; one bad fact, an unknown field or anything like a credential rejects the whole
-answer. `user` tier stays only if the quote is from a user line. Facts go to the persona's
+answer. `user` tier stays only if the quote is from a user line. Facts go to the teammate's
 scope; a fact with the same text, the same attribute and similarity ≥ 0.75, similarity
 ≥ 0.92 or word overlap ≥ 0.8 reinforces the existing one instead.
 
@@ -171,28 +171,28 @@ any interrupted run. Automatic runs of one scope are at least an hour apart. "Dr
 plus a unique index on running rows).
 
 **A run** covers the facts created between the end of the last finished run and now (both
-ends included); a persona's run also takes new shared facts.
+ends included); a teammate's run also takes new shared facts.
 
 1. Dedupe: near-duplicates in one scope (same normalized text, or the same kind with word
    overlap ≥ 0.8 for the same attribute, ≥ 0.9 otherwise) are merged into the older fact:
    sources and timeline move over, support adds up, the better tier stays.
 2. Pairs: each new fact against up to 8 related active facts (same attribute or a shared
-   entity) of its scope and shared; new shared facts against the persona's facts. At most
+   entity) of its scope and shared; new shared facts against the teammate's facts. At most
    100 pairs per run; pairs with a conflict are skipped.
-3. Judge: the persona's utility model, as for extraction; none for subscriptions, S8, so
-   those runs only dedupe and compile. Shared memory uses the persona that has had a
-   utility model the longest. Studio does not record when a persona's provider was set, so
-   that is the oldest persona whose provider has one (by creation time, then ID); there is
-   no fallback to another persona if its key or client fails. The run records the persona,
+3. Judge: the teammate's utility model, as for extraction; none for subscriptions, S8, so
+   those runs only dedupe and compile. Shared memory uses the teammate that has had a
+   utility model the longest. Studio does not record when a teammate's provider was set, so
+   that is the oldest teammate whose provider has one (by creation time, then ID); there is
+   no fallback to another teammate if its key or client fails. The run records the teammate,
    `GET usage` reports it as `sharedJudge`, and the memory page shows "Consolidated with
-   <persona>'s model" on the shared scope. Calls count against the environment's daily
-   budget, which extraction shares; there is no per-persona budget. The answer must be exactly `{"verdict", "reason"}` with a verdict of
+   <teammate>'s model" on the shared scope. Calls count against the environment's daily
+   budget, which extraction shares; there is no per-teammate budget. The answer must be exactly `{"verdict", "reason"}` with a verdict of
    `no_conflict`, `duplicate`, `supersedes` or `contradiction`; `supersedes` needs B
    observed after A. Anything else is counted as rejected and changes nothing. Valid
    verdicts are cached per pair, model and prompt version.
 4. Apply: `duplicate` merges (same scope). `supersedes` applies by itself, with a timeline
    entry on the entity page, when B's tier is at least A's and B is in A's scope or shared;
-   a persona fact never replaces a shared one. Otherwise, and for every `contradiction`, a
+   a teammate fact never replaces a shared one. Otherwise, and for every `contradiction`, a
    conflict opens with a `memory.conflict` approval in the inbox. Dismissing the approval
    only hides it; the conflict stays open until resolved on the memory page.
 5. Compiled truth: the touched entities' pages (`<entity>` or `topic/<entity>`, created at
@@ -202,6 +202,6 @@ ends included); a persona's run also takes new shared facts.
 
 Runs record their window, trigger, status (`running`, `done`, `stopped`, `failed`), stats
 (facts, pairs, judged, cached, rejected, merged, superseded, conflicts, pages, tokens,
-cost, model and persona) and a note. An exhausted budget or the pair limit stops a run cleanly; the next run
+cost, model and teammate) and a note. An exhausted budget or the pair limit stops a run cleanly; the next run
 covers the same window again, and cached verdicts make that cheap. A run interrupted by a
 shutdown stays `running` and resumes; every step is idempotent.

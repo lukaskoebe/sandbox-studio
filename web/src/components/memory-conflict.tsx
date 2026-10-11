@@ -176,7 +176,7 @@ function FactSide({
           {sources.map((s) => (
             <li key={s.id} className="text-muted-foreground">
               <span className="text-foreground">{s.kind}</span>
-              {s.authorPersona && ` · persona:${s.authorPersona}`}
+              {s.authorTeammate && ` · teammate:${s.authorTeammate}`}
               {` · ${formatAge(s.createdAt)}`}
               {s.evidence && (
                 <span className="block italic">“{s.evidence}”</span>

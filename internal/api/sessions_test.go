@@ -65,18 +65,18 @@ func TestSessionStart(t *testing.T) {
 	s.Guest = g
 	env := newEnvironment(t, s, "work")
 	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
-	rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/personas",
+	rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/teammates",
 		`{"name":"Ada","soul":"Careful.","harness":"claude","providerId":"`+prov.ID+`","model":"claude-sonnet-4-5","gitName":"Ada L","gitEmail":"ada@example.com"}`)
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("persona: %d %s", rec.Code, rec.Body)
+		t.Fatalf("teammate: %d %s", rec.Code, rec.Body)
 	}
-	ada := decode[store.Persona](t, rec)
+	ada := decode[store.Teammate](t, rec)
 	const forgeToken = "github_pat_session-test-token"
 	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/forges",
 		`{"name":"gh","kind":"github","baseUrl":"https://github.com","token":"`+forgeToken+`"}`); rec.Code != http.StatusCreated {
 		t.Fatalf("forge: %d %s", rec.Code, rec.Body)
 	}
-	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, PersonaID: ada.ID})
+	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestSessionStartRefused(t *testing.T) {
 		return do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/sandboxes/"+sb.ID+"/sessions", "").Code
 	}
 
-	// No owner persona.
+	// No owner teammate.
 	plain, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "plain", CPUs: 1})
 	if err != nil {
 		t.Fatal(err)
@@ -169,12 +169,12 @@ func TestSessionStartRefused(t *testing.T) {
 
 	// A subscription provider that hasn't logged in.
 	sub := createProvider(t, h, env, `{"name":"Claude Max","kind":"claude_subscription"}`)
-	rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/personas", `{"name":"Eve","harness":"claude","providerId":"`+sub.ID+`"}`)
+	rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/teammates", `{"name":"Eve","harness":"claude","providerId":"`+sub.ID+`"}`)
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("persona: %d %s", rec.Code, rec.Body)
+		t.Fatalf("teammate: %d %s", rec.Code, rec.Body)
 	}
-	eve := decode[store.Persona](t, rec)
-	eveSB, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "eve-dev", CPUs: 1, PersonaID: eve.ID})
+	eve := decode[store.Teammate](t, rec)
+	eveSB, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "eve-dev", CPUs: 1, TeammateID: eve.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,9 +184,9 @@ func TestSessionStartRefused(t *testing.T) {
 
 	// A key that isn't bound to the provider's host.
 	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
-	rec = do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/personas", `{"name":"Ada","harness":"claude","providerId":"`+prov.ID+`","model":"claude-sonnet-4-5"}`)
-	ada := decode[store.Persona](t, rec)
-	adaSB, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, PersonaID: ada.ID})
+	rec = do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/teammates", `{"name":"Ada","harness":"claude","providerId":"`+prov.ID+`","model":"claude-sonnet-4-5"}`)
+	ada := decode[store.Teammate](t, rec)
+	adaSB, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada.ID})
 	if err != nil {
 		t.Fatal(err)
 	}

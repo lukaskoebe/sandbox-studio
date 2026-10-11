@@ -43,11 +43,11 @@ func recencyBoost(age, half time.Duration) float64 {
 	return 0.5 + 0.5*math.Pow(0.5, age.Hours()/half.Hours())
 }
 
-// SearchRequest is a hybrid search. Without Persona it covers the shared scope only; with
-// it, that persona's private scope plus shared.
+// SearchRequest is a hybrid search. Without Teammate it covers the shared scope only; with
+// it, that teammate's private scope plus shared.
 type SearchRequest struct {
 	Query             string
-	Persona           string
+	Teammate          string
 	IncludeSuperseded bool
 	Limit             int
 }
@@ -61,7 +61,7 @@ type Hit struct {
 	Score        float64 `json:"score"`
 	Disputed     bool    `json:"disputed,omitempty" doc:"The fact is part of an open conflict; treat it with care"`
 	Superseded   bool    `json:"superseded,omitempty" doc:"Only with includeSuperseded: the fact was replaced or expired"`
-	OverriddenBy string  `json:"overriddenBy,omitempty" doc:"A shared fact this persona fact has an open conflict with; the shared fact wins until the user resolves it"`
+	OverriddenBy string  `json:"overriddenBy,omitempty" doc:"A shared fact this teammate fact has an open conflict with; the shared fact wins until the user resolves it"`
 	Fact         *Fact   `json:"fact,omitempty"`
 	Page         *Page   `json:"page,omitempty"`
 	Why          Why     `json:"why"`
@@ -115,11 +115,11 @@ func ftsQuery(q string) string {
 // superseded and expired ones only on request; disputed ones carry a marker.
 func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) ([]Hit, error) {
 	scopes := []string{SharedScope}
-	if req.Persona != "" {
-		if err := validatePersona(req.Persona); err != nil {
+	if req.Teammate != "" {
+		if err := validateTeammate(req.Teammate); err != nil {
 			return nil, err
 		}
-		scopes = append(scopes, PersonaScope(req.Persona))
+		scopes = append(scopes, TeammateScope(req.Teammate))
 	}
 	if req.Limit <= 0 {
 		req.Limit = 10
@@ -221,8 +221,8 @@ func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) (
 		out = append(out, c.hit)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
-	if req.Persona != "" {
-		if out, err = s.sharedWins(ctx, envID, PersonaScope(req.Persona), out); err != nil {
+	if req.Teammate != "" {
+		if out, err = s.sharedWins(ctx, envID, TeammateScope(req.Teammate), out); err != nil {
 			return nil, err
 		}
 	}
@@ -232,7 +232,7 @@ func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) (
 	return out, nil
 }
 
-// sharedWins applies "shared wins" to sorted hits: a persona fact with an open conflict
+// sharedWins applies "shared wins" to sorted hits: a teammate fact with an open conflict
 // against a shared fact is marked disputed and overridden, and the shared fact is placed
 // right above it, pulled in if the search did not find it.
 func (s *Service) sharedWins(ctx context.Context, envID, scope string, hits []Hit) ([]Hit, error) {
@@ -266,10 +266,10 @@ func (s *Service) sharedWins(ctx context.Context, envID, scope string, hits []Hi
 			}
 			w = Hit{Type: "fact", ID: f.ID, Scope: f.Scope, Snippet: truncate(f.Text, 300), Score: h.Score, Disputed: f.Status == StatusDisputed, Fact: &f,
 				Why: Why{Vector: h.Why.Vector, Tier: f.Tier, TierBoost: tierBoost[f.Tier]}}
-			w.Why.Summary = "added: wins an open conflict with persona fact " + h.ID
+			w.Why.Summary = "added: wins an open conflict with teammate fact " + h.ID
 		}
 		w.Score = max(w.Score, h.Score)
-		w.Why.Summary += "; shared fact wins an open conflict with persona fact " + h.ID
+		w.Why.Summary += "; shared fact wins an open conflict with teammate fact " + h.ID
 		hits = slices.Insert(hits, i, w)
 		i++
 	}

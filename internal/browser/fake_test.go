@@ -177,44 +177,44 @@ type fakeVMs struct {
 	stops   int
 }
 
-func (v *fakeVMs) EnsureBrowser(ctx context.Context, envID, personaID, image string) (store.Sandbox, error) {
-	sb, err := v.st.BrowserSandbox(ctx, envID, personaID)
+func (v *fakeVMs) EnsureBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {
+	sb, err := v.st.BrowserSandbox(ctx, envID, teammateID)
 	if err != nil {
-		sb, err = v.st.CreateBrowserSandbox(ctx, store.Sandbox{EnvironmentID: envID, PersonaID: personaID, Name: "browser-" + personaID, CPUs: 1})
+		sb, err = v.st.CreateBrowserSandbox(ctx, store.Sandbox{EnvironmentID: envID, TeammateID: teammateID, Name: "browser-" + teammateID, CPUs: 1})
 	}
 	v.mu.Lock()
-	delete(v.stopped, personaID)
+	delete(v.stopped, teammateID)
 	v.mu.Unlock()
 	return sb, err
 }
 
-func (v *fakeVMs) StopBrowser(_ context.Context, _, personaID string) error {
+func (v *fakeVMs) StopBrowser(_ context.Context, _, teammateID string) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if v.stopped == nil {
 		v.stopped = map[string]bool{}
 	}
-	v.stopped[personaID] = true
+	v.stopped[teammateID] = true
 	v.stops++
 	return nil
 }
 
-func (v *fakeVMs) RemoveBrowser(ctx context.Context, envID, personaID string) error {
-	sb, err := v.st.BrowserSandbox(ctx, envID, personaID)
+func (v *fakeVMs) RemoveBrowser(ctx context.Context, envID, teammateID string) error {
+	sb, err := v.st.BrowserSandbox(ctx, envID, teammateID)
 	if err != nil {
 		return nil
 	}
 	return v.st.DeleteSandbox(ctx, envID, sb.ID)
 }
 
-func (v *fakeVMs) BrowserStatus(ctx context.Context, envID, personaID string) (store.Sandbox, runtime.Status, error) {
-	sb, err := v.st.BrowserSandbox(ctx, envID, personaID)
+func (v *fakeVMs) BrowserStatus(ctx context.Context, envID, teammateID string) (store.Sandbox, runtime.Status, error) {
+	sb, err := v.st.BrowserSandbox(ctx, envID, teammateID)
 	if err != nil {
 		return sb, runtime.StatusAbsent, nil
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.stopped[personaID] {
+	if v.stopped[teammateID] {
 		return sb, runtime.StatusStopped, nil
 	}
 	return sb, runtime.StatusRunning, nil
@@ -253,11 +253,11 @@ type fixture struct {
 	ctx      context.Context
 	st       *store.Store
 	env      string
-	ada, bob store.Persona
+	ada, bob store.Teammate
 	sbAda    store.Sandbox // an agent sandbox of ada
 	sbAda2   store.Sandbox // another one
 	sbBob    store.Sandbox
-	sbPlain  store.Sandbox // no persona
+	sbPlain  store.Sandbox // no teammate
 	fb       *fakeBrowser
 	vms      *fakeVMs
 	keys     fakeKeys
@@ -282,16 +282,16 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	f := &fixture{t: t, ctx: ctx, st: st, env: env.ID, fb: newFakeBrowser(), keys: fakeKeys{}, logs: &syncBuffer{}, notified: make(chan string, 64)}
-	persona := func(name string) store.Persona {
-		p, err := st.CreatePersona(ctx, store.Persona{EnvironmentID: env.ID, Name: name, Harness: "claude", ProviderID: "sub", GitName: name, GitEmail: name + "@agents.invalid"})
+	teammate := func(name string) store.Teammate {
+		p, err := st.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: name, Harness: "claude", ProviderID: "sub", GitName: name, GitEmail: name + "@agents.invalid"})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return p
 	}
-	f.ada, f.bob = persona("ada"), persona("bob")
-	sandbox := func(name, persona string) store.Sandbox {
-		s, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: name, CPUs: 1, PersonaID: persona})
+	f.ada, f.bob = teammate("ada"), teammate("bob")
+	sandbox := func(name, teammate string) store.Sandbox {
+		s, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: name, CPUs: 1, TeammateID: teammate})
 		if err != nil {
 			t.Fatal(err)
 		}

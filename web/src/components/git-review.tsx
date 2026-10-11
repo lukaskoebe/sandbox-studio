@@ -121,10 +121,10 @@ export function GitReview({ approval }: { approval: Approval }) {
         <dt className="text-muted-foreground">Sandbox</dt>
         <dd>
           {rv?.sandbox ?? git.push.sandboxId}
-          {git.push.personaName && (
+          {git.push.teammateName && (
             <span className="text-muted-foreground">
               {" "}
-              · persona {git.push.personaName}
+              · teammate {git.push.teammateName}
             </span>
           )}
         </dd>

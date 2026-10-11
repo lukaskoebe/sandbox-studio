@@ -15,7 +15,7 @@ func TestSPA(t *testing.T) {
 	h := spa(app)
 	for _, tc := range []struct{ path, want, cache string }{
 		{"/", "index", "no-cache"},
-		{"/personas/ada", "index", "no-cache"},
+		{"/teammates/ada", "index", "no-cache"},
 		{"/assets/app.js", "console.log", "immutable"},
 	} {
 		rec := httptest.NewRecorder()

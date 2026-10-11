@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { PersonaField } from "@/components/persona-field"
+import { TeammateField } from "@/components/teammate-field"
 import { TemplateResources } from "@/components/template-resources"
 import { $api, errorMessage } from "@/lib/api/client"
 
@@ -36,7 +36,7 @@ export function CreateTemplateSandboxDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [name, setName] = useState("")
-  const [personaId, setPersonaId] = useState("")
+  const [teammateId, setTeammateId] = useState("")
   const [serverError, setServerError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -55,7 +55,7 @@ export function CreateTemplateSandboxDialog({
           queryKey: ["get", "/api/environments/{env}/sandboxes"],
         })
         setName("")
-        setPersonaId("")
+        setTeammateId("")
         setServerError(null)
         onOpenChange(false)
         navigate({
@@ -95,7 +95,7 @@ export function CreateTemplateSandboxDialog({
             setServerError(null)
             create.mutate({
               params: { path: { env, id: templateId } },
-              body: { name, personaId: personaId || undefined },
+              body: { name, teammateId: teammateId || undefined },
             })
           }}
         >
@@ -160,13 +160,13 @@ export function CreateTemplateSandboxDialog({
                   </FieldDescription>
                 )}
               </Field>
-              <PersonaField
+              <TeammateField
                 env={env}
-                id="template-sandbox-persona"
-                value={personaId}
+                id="template-sandbox-teammate"
+                value={teammateId}
                 disabled={pending}
                 onChange={(id) => {
-                  setPersonaId(id)
+                  setTeammateId(id)
                   setServerError(null)
                 }}
               />

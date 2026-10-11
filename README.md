@@ -16,7 +16,7 @@ approved from a web UI.
 - **Network gateway**: every connection is checked against rules; unknown destinations pop
   up for approval while the connection is held. Secrets never enter a sandbox.
 - **Environments** (e.g. "work", "private") that share no rules, secrets, providers or memory.
-- **Personas**: named agents with their own identity and long-term memory, plus a shared team
+- **Teammates**: named agents with their own identity and long-term memory, plus a shared team
   memory with consolidation and contradiction handling. Local embeddings, nothing to configure.
 - **Browser broker**: agents drive a browser in a separate VM; actions are approved in the UI,
   passwords are never shown to the agent, and you can watch and take over live.

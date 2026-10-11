@@ -35,7 +35,7 @@ import {
 import { PageHeader } from "@/components/page-header"
 import { ProviderDialog } from "@/components/provider-dialog"
 import { $api, errorMessage, type Provider } from "@/lib/api/client"
-import { harnessLabels, isSubscription, kindLabels } from "@/lib/personas"
+import { harnessLabels, isSubscription, kindLabels } from "@/lib/teammates"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/providers")({
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/e/$env/providers")({
 })
 
 const explanation =
-  "Providers give personas access to a model. An API key is stored as a secret bound to the provider's API host, so sandboxes see only its placeholder."
+  "Providers give teammates access to a model. An API key is stored as a secret bound to the provider's API host, so sandboxes see only its placeholder."
 
 function ProvidersPage() {
   const { env } = Route.useParams()
@@ -210,7 +210,7 @@ function DeleteProvider({
             {provider.secretName
               ? `Its key ${provider.secretName} is deleted too. `
               : ""}
-            Personas using it must be changed or deleted first.
+            Teammates using it must be changed or deleted first.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

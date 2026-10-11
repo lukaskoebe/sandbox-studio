@@ -6,13 +6,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { PersonaAvatar } from "@/components/persona-avatar"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { $api } from "@/lib/api/client"
 
 const none = "none"
 
-/** Picks the persona that will own a new sandbox; "" means none. */
-export function PersonaField({
+/** Picks the teammate that will own a new sandbox; "" means none. */
+export function TeammateField({
   env,
   id,
   value,
@@ -22,17 +22,17 @@ export function PersonaField({
   env: string
   id: string
   value: string
-  onChange: (personaId: string) => void
+  onChange: (teammateId: string) => void
   disabled?: boolean
 }) {
-  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
-  const list = personas.data ?? []
+  const list = teammates.data ?? []
 
   return (
     <Field>
-      <FieldLabel htmlFor={id}>Persona</FieldLabel>
+      <FieldLabel htmlFor={id}>Teammate</FieldLabel>
       <Select
         value={value || none}
         disabled={disabled}
@@ -49,7 +49,7 @@ export function PersonaField({
           <SelectItem value={none}>None</SelectItem>
           {list.map((p) => (
             <SelectItem key={p.id} value={p.id}>
-              <PersonaAvatar name={p.name} className="size-4 text-[0.5rem]" />
+              <TeammateAvatar name={p.name} className="size-4 text-[0.5rem]" />
               {p.name}
             </SelectItem>
           ))}
@@ -58,7 +58,7 @@ export function PersonaField({
       <FieldDescription>
         {list.length
           ? "The agent identity working in the sandbox. It can't change later."
-          : "Add personas on the Personas page to give the sandbox an owner."}
+          : "Add teammates on the Teammates page to give the sandbox an owner."}
       </FieldDescription>
     </Field>
   )

@@ -4,7 +4,7 @@
 //
 // Every operation takes an environment ID and filters by it, so nothing crosses
 // environments. Within an environment, rows live in one scope: "shared" or
-// "persona:<id>".
+// "teammate:<id>".
 package memory
 
 import (
@@ -29,32 +29,32 @@ var (
 	ErrCoreBudget = errors.New("core page budget exceeded")
 )
 
-// SharedScope is the team-wide scope every persona can read.
+// SharedScope is the team-wide scope every teammate can read.
 const SharedScope = "shared"
 
 // CoreBudget is the most characters of compiled truth that the always-load (core) pages of
 // one scope may hold together. Core pages go into every session's context pack.
 const CoreBudget = 4000
 
-var personaIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+var teammateIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
-// ValidateScope checks a scope: "shared" or "persona:<id>".
+// ValidateScope checks a scope: "shared" or "teammate:<id>".
 func ValidateScope(scope string) error {
 	if scope == SharedScope {
 		return nil
 	}
-	if id, ok := strings.CutPrefix(scope, "persona:"); ok && personaIDPattern.MatchString(id) {
+	if id, ok := strings.CutPrefix(scope, "teammate:"); ok && teammateIDPattern.MatchString(id) {
 		return nil
 	}
-	return fmt.Errorf("%w: scope %q must be %q or \"persona:<id>\"", ErrInvalid, scope, SharedScope)
+	return fmt.Errorf("%w: scope %q must be %q or \"teammate:<id>\"", ErrInvalid, scope, SharedScope)
 }
 
-// PersonaScope returns the private scope of a persona.
-func PersonaScope(personaID string) string { return "persona:" + personaID }
+// TeammateScope returns the private scope of a teammate.
+func TeammateScope(teammateID string) string { return "teammate:" + teammateID }
 
-func validatePersona(id string) error {
-	if id != "" && !personaIDPattern.MatchString(id) {
-		return fmt.Errorf("%w: persona ID %q", ErrInvalid, id)
+func validateTeammate(id string) error {
+	if id != "" && !teammateIDPattern.MatchString(id) {
+		return fmt.Errorf("%w: teammate ID %q", ErrInvalid, id)
 	}
 	return nil
 }
@@ -90,7 +90,7 @@ var (
 	factKinds   = []string{KindPreference, KindDecision, KindFact, KindProcedure, KindEvent}
 	tiers       = []string{TierUser, TierVerified, TierDocument, TierInferred}
 	sourceKinds = []string{TierUser, TierVerified, TierDocument, TierInferred, SourceConsolidation}
-	pageKinds   = []string{"person", "project", "topic", "procedure", "persona-self"}
+	pageKinds   = []string{"person", "project", "topic", "procedure", "teammate-self"}
 	verdicts    = []string{"contradiction", "temporal_supersession", "context_dependent", "duplicate"}
 	resolutions = []string{"keep_a", "keep_b", "keep_both", "edit"}
 )
@@ -227,13 +227,13 @@ func (s *Service) Scopes(ctx context.Context, envID string) ([]Scope, error) {
 	return out, nil
 }
 
-// checkPersonas makes sure that the personas a write names belong to the environment: the
-// author and, on create, the persona of a persona scope (pass "" for scope otherwise).
-// Memory has no foreign key to personas, so a deleted persona's memory stays readable and
+// checkTeammates makes sure that the teammates a write names belong to the environment: the
+// author and, on create, the teammate of a teammate scope (pass "" for scope otherwise).
+// Memory has no foreign key to teammates, so a deleted teammate's memory stays readable and
 // editable by the user; only new writes for it are refused.
-func checkPersonas(ctx context.Context, tx execer, envID, scope, author string) error {
+func checkTeammates(ctx context.Context, tx execer, envID, scope, author string) error {
 	ids := []string{author}
-	if id, ok := strings.CutPrefix(scope, "persona:"); ok {
+	if id, ok := strings.CutPrefix(scope, "teammate:"); ok {
 		ids = append(ids, id)
 	}
 	for _, id := range ids {
@@ -241,11 +241,11 @@ func checkPersonas(ctx context.Context, tx execer, envID, scope, author string) 
 			continue
 		}
 		var n int
-		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM personas WHERE environment_id = ? AND id = ?", envID, id).Scan(&n); err != nil {
+		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM teammates WHERE environment_id = ? AND id = ?", envID, id).Scan(&n); err != nil {
 			return err
 		}
 		if n == 0 {
-			return fmt.Errorf("%w: persona %q does not exist in this environment", ErrInvalid, id)
+			return fmt.Errorf("%w: teammate %q does not exist in this environment", ErrInvalid, id)
 		}
 	}
 	return nil

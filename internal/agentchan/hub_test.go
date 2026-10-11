@@ -248,7 +248,7 @@ func TestHubCalls(t *testing.T) {
 		}
 		return r
 	}
-	r := call(agentproto.Call{Method: "hook", Params: json.RawMessage(`{"sandbox":"sbx-b","persona":"other"}`)})
+	r := call(agentproto.Call{Method: "hook", Params: json.RawMessage(`{"sandbox":"sbx-b","teammate":"other"}`)})
 	if r.Error != "" || string(r.Result) != `{"ok":"sbx-a"}` {
 		t.Fatalf("reply: %+v", r)
 	}

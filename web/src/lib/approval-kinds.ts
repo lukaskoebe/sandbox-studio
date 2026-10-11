@@ -79,7 +79,7 @@ const kinds: Record<string, ApprovalKind> = {
   "memory.share": {
     title: "Memory share",
     summary: (a) =>
-      `${a.memoryShare?.personaName ?? "A persona"} wants to share a fact with every persona`,
+      `${a.memoryShare?.teammateName ?? "A teammate"} wants to share a fact with every teammate`,
     icon: BrainIcon,
     page: "/e/$env/memory",
   },
@@ -132,12 +132,12 @@ export function approvalKind(a: Approval): ApprovalKind {
   return kinds[a.kind] ?? unknownKind
 }
 
-/** The sandbox or persona that asked, when the payload names one. */
+/** The sandbox or teammate that asked, when the payload names one. */
 export function approvalSource(a: Approval): string | undefined {
   return (
     a.network?.sandboxName ??
     a.git?.review?.sandbox ??
-    a.memoryShare?.personaName ??
+    a.memoryShare?.teammateName ??
     a.browserAction?.sandboxName ??
     a.browserCredential?.sandboxName
   )

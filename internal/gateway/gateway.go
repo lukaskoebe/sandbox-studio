@@ -58,7 +58,7 @@ type Gateway struct {
 	// Virtual are Studio's own services under dnsproxy.VirtualDomain.
 	Virtual []VirtualHost
 	// Driver, if set, names the sandbox whose rules decide a sandbox's connections. A
-	// persona's browser VM is decided by the agent sandbox driving it, or by its persona
+	// teammate's browser VM is decided by the agent sandbox driving it, or by its teammate
 	// while the user drives (internal/browser).
 	Driver func(ctx context.Context, sb store.Sandbox) store.Sandbox
 

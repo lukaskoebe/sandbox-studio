@@ -14,7 +14,7 @@
 //     StartSession line; the guest replies like KindKill.
 //   - KindCall (guest → host): the guest writes a Call line; the host replies with one
 //     CallReply line. Hooks and the MCP tools use it. The host knows the sandbox from the
-//     channel, so a Call never names a sandbox, persona or environment.
+//     channel, so a Call never names a sandbox, teammate or environment.
 package agentproto
 
 import (

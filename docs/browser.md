@@ -1,6 +1,6 @@
 # Browser broker
 
-Agents browse the web through a real Chromium. It runs in a separate microVM per persona,
+Agents browse the web through a real Chromium. It runs in a separate microVM per teammate,
 and Studio is the only client: agents get MCP tools, never CDP. This doc covers the M7
 implementation of PLAN §6.8.
 
@@ -16,19 +16,19 @@ Code:
 - The UI: `web/src/routes/e.$env.browser.tsx`, plus `browser-live.tsx` and
   `browser-approval.tsx` in `web/src/components`.
 
-## One browser VM per persona
+## One browser VM per teammate
 
-Each persona gets one browser VM: a sandbox row of kind `browser`, named `browser-<persona>`.
+Each teammate gets one browser VM: a sandbox row of kind `browser`, named `browser-<teammate>`.
 The API, terminals and previews hide it.
 
-Why per persona:
+Why per teammate:
 
-- **The profile is the identity.** Cookies and logins belong to whoever logged in. A persona
+- **The profile is the identity.** Cookies and logins belong to whoever logged in. A teammate
   is the unit that owns accounts. Its sandboxes are the same "person" working on several
-  things, so they share a session. Two personas never share cookies.
+  things, so they share a session. Two teammates never share cookies.
 - **Per environment would mix identities.** Per sandbox would lose logins on every new
   sandbox and multiply 2 GiB Chromium VMs.
-- **One profile, one browser.** Agent calls are serialized per persona. Only one sandbox
+- **One profile, one browser.** Agent calls are serialized per teammate. Only one sandbox
   drives at a time, and egress is attributed to it.
 
 **Lifecycle:**
@@ -38,8 +38,8 @@ Why per persona:
 - **Stopped when idle.** A VM with no call and no live viewer for 10 minutes stops. The
   profile disk stays.
 - **Deleted on demand.** Delete in the UI removes the VM and its profile but keeps the
-  history. Deleting the persona also drops its history, and its rules go with it. Deleting
-  a persona is refused while it still has agent sandboxes.
+  history. Deleting the teammate also drops its history, and its rules go with it. Deleting
+  a teammate is refused while it still has agent sandboxes.
 
 The image is `sandbox-studio-browser`, at the same version as the base image. Build it with
 `make image-browser`.
@@ -61,7 +61,7 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
 - **Egress goes through the same gateway, MITM CA and rules.**
   - While an agent drives, the gateway's `Driver` hook evaluates the browser VM's
     connections with the driving sandbox's rules. Domain approvals name that sandbox.
-  - While the user drives (takeover), the browser VM's own rules apply: its persona's rules
+  - While the user drives (takeover), the browser VM's own rules apply: its teammate's rules
     plus the environment's.
 
 ## Tools
@@ -76,8 +76,8 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
 - `fill_credential(ref, name)`
 
 **Identity comes from the channel only.** The hub knows which sandbox's agent connection
-carried the call. That gives the persona, and the persona gives the browser. A
-`persona`, `sandbox` or `env` field in the arguments is ignored. A sandbox without a persona
+carried the call. That gives the teammate, and the teammate gives the browser. A
+`teammate`, `sandbox` or `env` field in the arguments is ignored. A sandbox without a teammate
 has no browser. A browser VM cannot call tools.
 
 ## Policy, checked before anything runs
@@ -111,7 +111,7 @@ Unknown actions are denied.
   - Deny beats allow.
   - Text typed into a sensitive field is logged only as a character count.
   - Kinds: `allow`, `deny`, `sensitive`. A sensitive pattern marks fields for redaction.
-- **Approvals.** A `browser.action` approval shows the persona, sandbox, action, origin,
+- **Approvals.** A `browser.action` approval shows the teammate, sandbox, action, origin,
   element and text. "Always for <action> on this origin" stores an allow pattern. The
   calling tool waits up to 30 s for the decision. After that the agent gets a "waiting for
   approval" answer, and an approval granted later holds for 5 minutes for the same action
@@ -141,8 +141,8 @@ Parsing that is not confirmed against a live Chromium is marked `// verify (live
 
 `fill_credential(ref, name)`:
 
-1. Checks that `name` is a vault secret of the environment that the persona may use.
-2. Raises a `browser.credential` approval showing the persona, field, origin and credential
+1. Checks that `name` is a vault secret of the environment that the teammate may use.
+2. Raises a `browser.credential` approval showing the teammate, field, origin and credential
    name.
 3. On Fill, Studio unseals the value and runs `fill @ref <value>` directly in the VM.
 4. The agent gets "filled <name>". It never sees the value.
@@ -175,7 +175,7 @@ The value never enters:
 - **Action log.** Each action is logged: actor, sandbox, action, target, URL, outcome and
   a JPEG screenshot. The log is stored in sqlite (migration 017) and under
   `<data>/browser/`.
-- **Bounds.** The log keeps 500 actions per persona and 200 MiB of screenshots overall,
+- **Bounds.** The log keeps 500 actions per teammate and 200 MiB of screenshots overall,
   dropping the oldest first.
 - **Replay.** The Browser page groups the log by session (one session per VM start) and
   steps through the screenshots.
@@ -195,7 +195,7 @@ The value never enters:
 - idle stop;
 - live view relay and input filtering;
 - MCP tool list and image results;
-- the API (status, takeover, patterns, approval view, remember, persona delete).
+- the API (status, takeover, patterns, approval view, remember, teammate delete).
 
 **Pending a live run.** None of the following is confirmed against a real VM:
 

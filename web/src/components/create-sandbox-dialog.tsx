@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
-import { PersonaField } from "@/components/persona-field"
+import { TeammateField } from "@/components/teammate-field"
 import { $api, errorMessage } from "@/lib/api/client"
 
 const namePattern = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/
@@ -34,7 +34,7 @@ export function CreateSandboxDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [name, setName] = useState("")
-  const [personaId, setPersonaId] = useState("")
+  const [teammateId, setTeammateId] = useState("")
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const create = $api.useMutation("post", "/api/environments/{env}/sandboxes", {
@@ -44,7 +44,7 @@ export function CreateSandboxDialog({
       })
       onOpenChange(false)
       setName("")
-      setPersonaId("")
+      setTeammateId("")
       navigate({ to: "/e/$env/sandboxes/$id", params: { env, id: sb.id } })
     },
     onError: (err) =>
@@ -64,7 +64,7 @@ export function CreateSandboxDialog({
             if (!name || invalid) return
             create.mutate({
               params: { path: { env } },
-              body: { name, personaId: personaId || undefined },
+              body: { name, teammateId: teammateId || undefined },
             })
           }}
         >
@@ -94,11 +94,11 @@ export function CreateSandboxDialog({
               <FieldDescription>Also the sandbox's hostname.</FieldDescription>
             )}
           </Field>
-          <PersonaField
+          <TeammateField
             env={env}
-            id="sandbox-persona"
-            value={personaId}
-            onChange={setPersonaId}
+            id="sandbox-teammate"
+            value={teammateId}
+            onChange={setTeammateId}
           />
           <DialogFooter>
             <Button

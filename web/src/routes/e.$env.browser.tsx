@@ -13,7 +13,7 @@ import {
 } from "@phosphor-icons/react"
 import { BrowserLive } from "@/components/browser-live"
 import { PageHeader } from "@/components/page-header"
-import { PersonaAvatar } from "@/components/persona-avatar"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -52,16 +52,16 @@ export const Route = createFileRoute("/e/$env/browser")({
 })
 
 const explanation =
-  "Each persona has its own browser, a separate VM that only Studio reaches. Its agents drive it with the browser tools; new sites need your approval, and logins come from the vault without the agent seeing them. Take over to drive it yourself: agent calls pause until you hand back."
+  "Each teammate has its own browser, a separate VM that only Studio reaches. Its agents drive it with the browser tools; new sites need your approval, and logins come from the vault without the agent seeing them. Take over to drive it yourself: agent calls pause until you hand back."
 
 function BrowserPage() {
   const { env } = Route.useParams()
-  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
-  const list = useMemo(() => personas.data ?? [], [personas.data])
+  const list = useMemo(() => teammates.data ?? [], [teammates.data])
   const [picked, setPicked] = useState("")
-  const persona = list.some((p) => p.id === picked) ? picked : list.at(0)?.id
+  const teammate = list.some((p) => p.id === picked) ? picked : list.at(0)?.id
 
   return (
     <>
@@ -69,7 +69,7 @@ function BrowserPage() {
         <h1 className="text-sm font-medium">Browser</h1>
         {list.length > 0 && (
           <Select
-            value={persona ?? ""}
+            value={teammate ?? ""}
             onValueChange={(v) => setPicked(v ?? "")}
             items={Object.fromEntries(list.map((p) => [p.id, p.name]))}
           >
@@ -79,7 +79,7 @@ function BrowserPage() {
             <SelectContent>
               {list.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
-                  <PersonaAvatar
+                  <TeammateAvatar
                     name={p.name}
                     className="size-4 text-[0.5rem]"
                   />
@@ -92,16 +92,16 @@ function BrowserPage() {
       </PageHeader>
       <div className="flex flex-col gap-4 p-4">
         <p className="max-w-3xl text-sm text-muted-foreground">{explanation}</p>
-        {personas.isPending ? (
+        {teammates.isPending ? (
           <Spinner />
-        ) : persona ? (
-          <PersonaBrowser key={persona} env={env} persona={persona} />
+        ) : teammate ? (
+          <TeammateBrowser key={teammate} env={env} teammate={teammate} />
         ) : (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>No personas</EmptyTitle>
+              <EmptyTitle>No teammates</EmptyTitle>
               <EmptyDescription>
-                Add a persona on the Personas page; its agents get a browser.
+                Add a teammate on the Teammates page; its agents get a browser.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -111,23 +111,23 @@ function BrowserPage() {
   )
 }
 
-function PersonaBrowser({ env, persona }: { env: string; persona: string }) {
-  const path = { env, persona }
+function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
+  const path = { env, teammate }
   const queryClient = useQueryClient()
   const status = $api.useQuery(
     "get",
-    "/api/environments/{env}/personas/{persona}/browser",
+    "/api/environments/{env}/teammates/{teammate}/browser",
     { params: { path } },
     { refetchInterval: 5000 }
   )
   const refresh = () => {
     queryClient.invalidateQueries({
-      queryKey: ["get", "/api/environments/{env}/personas/{persona}/browser"],
+      queryKey: ["get", "/api/environments/{env}/teammates/{teammate}/browser"],
     })
     queryClient.invalidateQueries({
       queryKey: [
         "get",
-        "/api/environments/{env}/personas/{persona}/browser/actions",
+        "/api/environments/{env}/teammates/{teammate}/browser/actions",
       ],
     })
   }
@@ -135,23 +135,23 @@ function PersonaBrowser({ env, persona }: { env: string; persona: string }) {
     toast.error(`Could not ${what}`, { description: errorMessage(err) })
   const control = $api.useMutation(
     "post",
-    "/api/environments/{env}/personas/{persona}/browser/{action}",
+    "/api/environments/{env}/teammates/{teammate}/browser/{action}",
     { onSettled: refresh, onError: onError("change the browser") }
   )
   const takeover = $api.useMutation(
     "put",
-    "/api/environments/{env}/personas/{persona}/browser/takeover",
+    "/api/environments/{env}/teammates/{teammate}/browser/takeover",
     { onSettled: refresh, onError: onError("change who drives") }
   )
   const remove = $api.useMutation(
     "delete",
-    "/api/environments/{env}/personas/{persona}/browser",
+    "/api/environments/{env}/teammates/{teammate}/browser",
     { onSettled: refresh, onError: onError("delete the browser") }
   )
   const st = status.data
   const running = st?.vm === "running"
   const driving = !!st?.takeover
-  const liveURL = `${window.location.origin}/api/environments/${env}/personas/${persona}/browser/live`
+  const liveURL = `${window.location.origin}/api/environments/${env}/teammates/${teammate}/browser/live`
 
   return (
     <Tabs defaultValue="live">
@@ -257,33 +257,33 @@ function PersonaBrowser({ env, persona }: { env: string; persona: string }) {
         )}
       </TabsContent>
       <TabsContent value="history" className="mt-3">
-        <History env={env} persona={persona} current={st?.sessionId} />
+        <History env={env} teammate={teammate} current={st?.sessionId} />
       </TabsContent>
       <TabsContent value="rules" className="mt-3">
-        <Patterns env={env} persona={persona} />
+        <Patterns env={env} teammate={teammate} />
       </TabsContent>
     </Tabs>
   )
 }
 
-function shotURL(env: string, persona: string, a: BrowserAction) {
-  return `/api/environments/${env}/personas/${persona}/browser/actions/${a.id}/screenshot`
+function shotURL(env: string, teammate: string, a: BrowserAction) {
+  return `/api/environments/${env}/teammates/${teammate}/browser/actions/${a.id}/screenshot`
 }
 
 /** The action log, by session, with a step-through replay of the screenshots. */
 function History({
   env,
-  persona,
+  teammate,
   current,
 }: {
   env: string
-  persona: string
+  teammate: string
   current?: string
 }) {
   const actions = $api.useQuery(
     "get",
-    "/api/environments/{env}/personas/{persona}/browser/actions",
-    { params: { path: { env, persona }, query: { limit: 500 } } },
+    "/api/environments/{env}/teammates/{teammate}/browser/actions",
+    { params: { path: { env, teammate }, query: { limit: 500 } } },
     { refetchInterval: 10000 }
   )
   const sessions = useMemo(() => {
@@ -396,7 +396,7 @@ function History({
         </div>
         {shown ? (
           <img
-            src={shotURL(env, persona, shown)}
+            src={shotURL(env, teammate, shown)}
             alt={`The page after ${shown.action}`}
             className="max-w-4xl rounded-md border"
           />
@@ -455,25 +455,25 @@ function History({
 
 const verdicts = { allow: "Allow", deny: "Deny", sensitive: "Sensitive field" }
 
-/** The persona's browser patterns: allow or deny actions per origin, sensitive fields. */
-function Patterns({ env, persona }: { env: string; persona: string }) {
-  const path = { env, persona }
+/** The teammate's browser patterns: allow or deny actions per origin, sensitive fields. */
+function Patterns({ env, teammate }: { env: string; teammate: string }) {
+  const path = { env, teammate }
   const queryClient = useQueryClient()
   const patterns = $api.useQuery(
     "get",
-    "/api/environments/{env}/personas/{persona}/browser/patterns",
+    "/api/environments/{env}/teammates/{teammate}/browser/patterns",
     { params: { path } }
   )
   const refresh = () =>
     queryClient.invalidateQueries({
       queryKey: [
         "get",
-        "/api/environments/{env}/personas/{persona}/browser/patterns",
+        "/api/environments/{env}/teammates/{teammate}/browser/patterns",
       ],
     })
   const add = $api.useMutation(
     "post",
-    "/api/environments/{env}/personas/{persona}/browser/patterns",
+    "/api/environments/{env}/teammates/{teammate}/browser/patterns",
     {
       onSettled: refresh,
       onError: (err) =>
@@ -484,7 +484,7 @@ function Patterns({ env, persona }: { env: string; persona: string }) {
   )
   const del = $api.useMutation(
     "delete",
-    "/api/environments/{env}/personas/{persona}/browser/patterns/{id}",
+    "/api/environments/{env}/teammates/{teammate}/browser/patterns/{id}",
     { onSettled: refresh }
   )
   const [form, setForm] = useState({

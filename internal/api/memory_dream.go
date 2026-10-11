@@ -11,7 +11,7 @@ import (
 )
 
 // registerMemoryDream adds consolidation: starting a dream, its runs, a conflict with its
-// sources and timeline, and promoting a persona fact to shared memory.
+// sources and timeline, and promoting a teammate fact to shared memory.
 func (s *Server) registerMemoryDream(api huma.API) {
 	tags := []string{"memory"}
 	base := "/api/environments/{env}/memory"
@@ -34,7 +34,7 @@ func (s *Server) registerMemoryDream(api huma.API) {
 	type dreamIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		Body struct {
-			Scope string `json:"scope" doc:"shared or persona:<id>"`
+			Scope string `json:"scope" doc:"shared or teammate:<id>"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -78,7 +78,7 @@ func (s *Server) registerMemoryDream(api huma.API) {
 
 	huma.Register(api, huma.Operation{
 		OperationID: "promoteMemoryFact", Method: http.MethodPost, Path: base + "/facts/{id}/promote", Tags: tags,
-		Description: "Proposes a persona's fact for shared memory through a memory.share approval.",
+		Description: "Proposes a teammate's fact for shared memory through a memory.share approval.",
 	}, func(ctx context.Context, in *memoryPath) (*struct{ Body ApprovalView }, error) {
 		if err := ready(ctx, in.Env); err != nil {
 			return nil, err

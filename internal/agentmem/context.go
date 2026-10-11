@@ -19,7 +19,7 @@ const (
 	projectBudget   = 3000
 	maxChanges      = 10
 	maxConflicts    = 5
-	defaultLookback = 7 * 24 * time.Hour // shared changes shown to a persona's first session
+	defaultLookback = 7 * 24 * time.Hour // shared changes shown to a teammate's first session
 
 	// RecallBudget caps what one prompt injects: about 500 tokens.
 	RecallBudget = 2000
@@ -82,14 +82,14 @@ func (b *budget) add(text string, limit int) bool {
 }
 
 // pack is the session-start context: core pages, the project page, shared changes since
-// the persona's last session and open conflicts on them. The soul is not in it: it is in
+// the teammate's last session and open conflicts on them. The soul is not in it: it is in
 // the harness's instructions file (harness.instructions), which every session reads.
 func (s *Service) pack(ctx context.Context, c caller, se session, remote, source string) (string, error) {
 	b := &budget{left: PackBudget}
 	var logged []entry
 	b.add(openTag+"\n# Memory from Sandbox Studio\n\n", 200)
 
-	// Core pages: the persona's first, then shared.
+	// Core pages: the teammate's first, then shared.
 	var core []memory.Page
 	for _, scope := range []string{c.scope, memory.SharedScope} {
 		pages, err := s.Memory.Pages(ctx, c.env, scope)
@@ -127,7 +127,7 @@ func (s *Service) pack(ctx context.Context, c caller, se session, remote, source
 	if since.IsZero() {
 		since, sinceWhat = se.startedAt.Add(-defaultLookback), "the last week"
 	}
-	changes, err := s.Memory.FactsChangedSince(ctx, c.env, memory.SharedScope, since, c.persona.ID, maxChanges)
+	changes, err := s.Memory.FactsChangedSince(ctx, c.env, memory.SharedScope, since, c.teammate.ID, maxChanges)
 	if err != nil {
 		return "", err
 	}
@@ -136,7 +136,7 @@ func (s *Service) pack(ctx context.Context, c caller, se session, remote, source
 		for _, f := range changes {
 			if b.add("- "+factLine(f)+"\n", 400) {
 				logged = append(logged, entry{kind: LogContext, itemType: "fact", itemID: f.ID,
-					summary: fmt.Sprintf("shared change since %s by %s", since.Format(time.DateOnly), authorLabel(f.AuthorPersona))})
+					summary: fmt.Sprintf("shared change since %s by %s", since.Format(time.DateOnly), authorLabel(f.AuthorTeammate))})
 			}
 		}
 		b.add("\n", 1)
@@ -169,7 +169,7 @@ func (s *Service) pack(ctx context.Context, c caller, se session, remote, source
 }
 
 // projectPage is the page of the repository at remote: by its full slug
-// (project/github.com/acme/api), then by its name (project/api), the persona's first.
+// (project/github.com/acme/api), then by its name (project/api), the teammate's first.
 func (s *Service) projectPage(ctx context.Context, c caller, remote string) (memory.Page, bool, error) {
 	if remote == "" {
 		return memory.Page{}, false, nil
@@ -194,7 +194,7 @@ func (s *Service) projectPage(ctx context.Context, c caller, remote string) (mem
 }
 
 // openConflicts are the open conflicts on the changed facts or their entities, and on the
-// persona's own facts.
+// teammate's own facts.
 func (s *Service) openConflicts(ctx context.Context, c caller, changes []memory.Fact) ([]memory.Conflict, error) {
 	all, err := s.Memory.Conflicts(ctx, c.env, "")
 	if err != nil {
@@ -241,7 +241,7 @@ func (s *Service) recall(ctx context.Context, c caller, se session, prompt strin
 	if len(terms) == 0 {
 		return "", nil
 	}
-	hits, err := s.Memory.Search(ctx, c.env, memory.SearchRequest{Query: prompt, Persona: c.persona.ID, Limit: 10})
+	hits, err := s.Memory.Search(ctx, c.env, memory.SearchRequest{Query: prompt, Teammate: c.teammate.ID, Limit: 10})
 	if errors.Is(err, memory.ErrInvalid) {
 		return "", nil
 	}
@@ -309,7 +309,7 @@ func factLine(f memory.Fact) string {
 	if f.Status == memory.StatusDisputed {
 		disputed = ", disputed"
 	}
-	return fmt.Sprintf("[fact %s, %s, by %s%s] %s", f.ID, f.Tier, authorLabel(f.AuthorPersona), disputed, truncate(f.Text, 300))
+	return fmt.Sprintf("[fact %s, %s, by %s%s] %s", f.ID, f.Tier, authorLabel(f.AuthorTeammate), disputed, truncate(f.Text, 300))
 }
 
 func scopeLabel(scope string) string {
@@ -319,11 +319,11 @@ func scopeLabel(scope string) string {
 	return "yours"
 }
 
-func authorLabel(persona string) string {
-	if persona == "" {
+func authorLabel(teammate string) string {
+	if teammate == "" {
 		return "the user"
 	}
-	return "persona " + persona
+	return "teammate " + teammate
 }
 
 func orDefault(s, d string) string {

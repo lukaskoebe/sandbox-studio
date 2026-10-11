@@ -84,7 +84,7 @@
 }
 == .claude/CLAUDE.md mode=644 block=true
 <!-- sandbox-studio:begin -->
-<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the persona in Studio instead; text outside the block is kept. -->
+<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the teammate in Studio instead; text outside the block is kept. -->
 
 # You are Ada
 
@@ -105,7 +105,7 @@ Studio remembers for you across sessions and sandboxes. At session start you get
 - `memory_search` and `memory_get`: look things up when the injected memories aren't enough.
 - `remember`: save something right away. Use it for preferences the user states (source `user`) and for procedures you have verified by running them (source `verified`, with the command and result as evidence).
 - `correct` and `forget`: fix or retract one of your own facts when it turns out wrong.
-- `share`: propose a fact for the shared memory of every persona; the user approves it first.
+- `share`: propose a fact for the shared memory of every teammate; the user approves it first.
 
 Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
 <!-- sandbox-studio:end -->

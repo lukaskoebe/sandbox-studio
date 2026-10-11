@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // OpenCode is the adapter of OpenCode (opencode-ai on npm).
@@ -23,12 +23,12 @@ type OpenCode struct{}
 //go:embed opencode-plugin.js
 var opencodePlugin string
 
-func (OpenCode) Name() string { return personas.HarnessOpenCode }
+func (OpenCode) Name() string { return teammates.HarnessOpenCode }
 
 // compatibleID is the provider ID Studio gives an openai_compatible endpoint in OpenCode.
 const compatibleID = "studio"
 
-func (OpenCode) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error) {
+func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, error) {
 	cfg := map[string]any{
 		"$schema": "https://opencode.ai/config.json",
 		// The VM is the sandbox: every tool runs without asking.
@@ -43,16 +43,16 @@ func (OpenCode) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, er
 	apiKey := map[string]any{"apiKey": "{env:" + provider.EnvVar + "}"}
 	m := model(p, provider)
 	switch provider.Kind {
-	case personas.KindAnthropicAPI, personas.KindOpenAIAPI:
+	case teammates.KindAnthropicAPI, teammates.KindOpenAIAPI:
 		id := "anthropic"
-		if provider.Kind == personas.KindOpenAIAPI {
+		if provider.Kind == teammates.KindOpenAIAPI {
 			id = "openai"
 		}
 		cfg["provider"] = map[string]any{id: map[string]any{"options": apiKey}}
 		if m != "" {
 			cfg["model"] = id + "/" + m
 		}
-	case personas.KindOpenAICompatible:
+	case teammates.KindOpenAICompatible:
 		if provider.BaseURL == "" || m == "" {
 			return nil, fmt.Errorf("an openai_compatible provider needs a base URL and a model")
 		}
@@ -84,11 +84,11 @@ func (OpenCode) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, er
 
 // ParseHook reads what Studio's plugin writes (opencode-plugin.js).
 func (OpenCode) ParseHook(event string, stdin []byte) (HookEvent, error) {
-	return hookFormat(personas.HarnessOpenCode).Parse(event, stdin)
+	return hookFormat(teammates.HarnessOpenCode).Parse(event, stdin)
 }
 
 func (OpenCode) RenderHookResponse(r HookResult) []byte {
-	return hookFormat(personas.HarnessOpenCode).Render(r)
+	return hookFormat(teammates.HarnessOpenCode).Render(r)
 }
 
 func (OpenCode) TUICommand(SessionOpts) []string { return []string{"opencode"} }
@@ -98,4 +98,4 @@ func (OpenCode) ACPCommand() []string { return []string{"opencode", "acp"} }
 
 // StateDirs: sessions, auth and logs are under the XDG data dir, the TUI's state under the
 // XDG state dir.
-func (OpenCode) StateDirs() []string { return hookFormat(personas.HarnessOpenCode).StateDirs }
+func (OpenCode) StateDirs() []string { return hookFormat(teammates.HarnessOpenCode).StateDirs }

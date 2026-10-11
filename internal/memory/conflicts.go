@@ -57,7 +57,7 @@ func (r *ConflictResolution) validate() error {
 }
 
 // disputes reports which facts of a conflict get the disputed mark. Within one scope both
-// do; across scopes only the persona fact does, because the shared fact wins at recall
+// do; across scopes only the teammate fact does, because the shared fact wins at recall
 // until the conflict is resolved.
 func disputes(a, b Fact) (bool, bool) {
 	if a.Scope == b.Scope {
@@ -270,7 +270,7 @@ func (s *Service) replaceBoth(ctx context.Context, tx execer, envID string, a, b
 	id := newID()
 	ents, _ := jsonMarshal(entities)
 	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_facts (id, environment_id, scope, kind, entity_ids, attribute, text, observed_at,
-		confidence, tier, status, supersedes, author_persona, created_at, updated_at)
+		confidence, tier, status, supersedes, author_teammate, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 'user', 'active', ?, '', ?, ?)`,
 		id, envID, scope, a.Kind, ents, attr, text, now, supersedes, now, now); err != nil {
 		return 0, err
@@ -410,7 +410,7 @@ func (s *Service) Conflicts(ctx context.Context, envID, scope string) ([]Conflic
 
 // FactSources returns the sources of a fact, oldest first.
 func (s *Service) FactSources(ctx context.Context, envID, factID string) ([]Source, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT s.id, s.scope, s.kind, s.session_ref, s.author_persona, s.evidence, s.created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT s.id, s.scope, s.kind, s.session_ref, s.author_teammate, s.evidence, s.created_at
 		FROM memory_sources s JOIN memory_fact_sources fs ON fs.source_id = s.id
 		WHERE s.environment_id = ? AND fs.fact_id = ? ORDER BY s.created_at, fs.rowid`, envID, factID)
 	if err != nil {
@@ -421,7 +421,7 @@ func (s *Service) FactSources(ctx context.Context, envID, factID string) ([]Sour
 	for rows.Next() {
 		var src Source
 		var created int64
-		if err := rows.Scan(&src.ID, &src.Scope, &src.Kind, &src.SessionRef, &src.AuthorPersona, &src.Evidence, &created); err != nil {
+		if err := rows.Scan(&src.ID, &src.Scope, &src.Kind, &src.SessionRef, &src.AuthorTeammate, &src.Evidence, &created); err != nil {
 			return nil, err
 		}
 		src.CreatedAt = time.Unix(created, 0).UTC()
@@ -440,7 +440,7 @@ func (s *Service) FactTimeline(ctx context.Context, envID string, factIDs ...str
 	for _, id := range factIDs {
 		args = append(args, id)
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, page_id, at, text, IFNULL(fact_id, ''), IFNULL(source_id, ''), author_persona, created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT id, page_id, at, text, IFNULL(fact_id, ''), IFNULL(source_id, ''), author_teammate, created_at
 		FROM memory_timeline WHERE environment_id = ? AND fact_id IN (?`+strings.Repeat(", ?", len(factIDs)-1)+`) ORDER BY at, created_at, rowid`, args...)
 	if err != nil {
 		return nil, err
@@ -449,7 +449,7 @@ func (s *Service) FactTimeline(ctx context.Context, envID string, factIDs ...str
 	for rows.Next() {
 		var e TimelineEntry
 		var at, created int64
-		if err := rows.Scan(&e.ID, &e.PageID, &at, &e.Text, &e.FactID, &e.SourceID, &e.AuthorPersona, &created); err != nil {
+		if err := rows.Scan(&e.ID, &e.PageID, &at, &e.Text, &e.FactID, &e.SourceID, &e.AuthorTeammate, &created); err != nil {
 			return nil, err
 		}
 		e.At, e.CreatedAt = time.Unix(at, 0).UTC(), time.Unix(created, 0).UTC()

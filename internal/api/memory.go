@@ -24,14 +24,14 @@ type memoryPath struct {
 }
 
 // registerMemory adds the memory endpoints (PLAN §6.7). Everything written here comes from
-// the user, so it is stored with tier user and no author persona.
+// the user, so it is stored with tier user and no author teammate.
 func (s *Server) registerMemory(api huma.API) {
 	tags := []string{"memory"}
 	base := "/api/environments/{env}/memory"
 
 	huma.Register(api, huma.Operation{
 		OperationID: "listMemoryScopes", Method: http.MethodGet, Path: base + "/scopes", Tags: tags,
-		Description: "The shared scope, always first, and every persona scope that holds facts or pages.",
+		Description: "The shared scope, always first, and every teammate scope that holds facts or pages.",
 	}, func(ctx context.Context, in *envPath) (*struct{ Body []memory.Scope }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
@@ -44,7 +44,7 @@ func (s *Server) registerMemory(api huma.API) {
 
 	type listFactsIn struct {
 		Env    string `path:"env" doc:"Environment ID"`
-		Scope  string `query:"scope" doc:"shared or persona:<id>; empty lists every scope"`
+		Scope  string `query:"scope" doc:"shared or teammate:<id>; empty lists every scope"`
 		Status string `query:"status" doc:"active, superseded, disputed or retracted; empty lists every status"`
 	}
 	huma.Register(api, huma.Operation{
@@ -123,7 +123,7 @@ func (s *Server) registerMemory(api huma.API) {
 
 	type listPagesIn struct {
 		Env   string `path:"env" doc:"Environment ID"`
-		Scope string `query:"scope" doc:"shared or persona:<id>; empty lists every scope"`
+		Scope string `query:"scope" doc:"shared or teammate:<id>; empty lists every scope"`
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "listMemoryPages", Method: http.MethodGet, Path: base + "/pages", Tags: tags,
@@ -209,7 +209,7 @@ func (s *Server) registerMemory(api huma.API) {
 	type searchIn struct {
 		Env               string `path:"env" doc:"Environment ID"`
 		Q                 string `query:"q" required:"true" minLength:"1" maxLength:"500"`
-		Persona           string `query:"persona" doc:"Searches this persona's private scope plus shared; empty searches shared only"`
+		Teammate          string `query:"teammate" doc:"Searches this teammate's private scope plus shared; empty searches shared only"`
 		IncludeSuperseded bool   `query:"includeSuperseded" doc:"Also return superseded and expired facts, marked as such"`
 		Limit             int    `query:"limit" minimum:"0" maximum:"50" doc:"Defaults to 10"`
 	}
@@ -220,7 +220,7 @@ func (s *Server) registerMemory(api huma.API) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
 		}
-		hits, err := s.Memory.Search(ctx, in.Env, memory.SearchRequest{Query: in.Q, Persona: in.Persona, IncludeSuperseded: in.IncludeSuperseded, Limit: in.Limit})
+		hits, err := s.Memory.Search(ctx, in.Env, memory.SearchRequest{Query: in.Q, Teammate: in.Teammate, IncludeSuperseded: in.IncludeSuperseded, Limit: in.Limit})
 		return &struct{ Body []memory.Hit }{hits}, memoryError(err)
 	})
 

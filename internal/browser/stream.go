@@ -30,10 +30,10 @@ const (
 	maxClientMessage = 16 << 10
 )
 
-// Relay bridges the UI's live-view socket and the persona's browser until either ends.
-func (s *Service) Relay(ctx context.Context, envID, personaID string, client *websocket.Conn) error {
-	st := s.state(envID, personaID)
-	sb, status, err := s.VMs.BrowserStatus(ctx, envID, personaID)
+// Relay bridges the UI's live-view socket and the teammate's browser until either ends.
+func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *websocket.Conn) error {
+	st := s.state(envID, teammateID)
+	sb, status, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
 	if err != nil {
 		return err
 	}

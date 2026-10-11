@@ -16,12 +16,6 @@
             "description": "scheme://host[:port] of the page",
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
-          "personaName": {
-            "type": "string"
-          },
           "role": {
             "description": "Accessibility role of the element",
             "type": "string"
@@ -30,6 +24,12 @@
             "type": "string"
           },
           "sandboxName": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
             "type": "string"
           },
           "text": {
@@ -41,8 +41,8 @@
           }
         },
         "required": [
-          "personaId",
-          "personaName",
+          "teammateId",
+          "teammateName",
           "sandboxId",
           "sandboxName",
           "action",
@@ -105,7 +105,7 @@
           },
           "memoryShare": {
             "$ref": "#/components/schemas/SharePayload",
-            "description": "A persona's proposal for shared memory"
+            "description": "A teammate's proposal for shared memory"
           },
           "network": {
             "$ref": "#/components/schemas/NetworkRequest"
@@ -209,9 +209,6 @@
             ],
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
           "sandboxId": {
             "description": "The agent sandbox that drove the action; empty for the user",
             "type": "string"
@@ -227,6 +224,9 @@
             "description": "The element, as role and accessible name",
             "type": "string"
           },
+          "teammateId": {
+            "type": "string"
+          },
           "url": {
             "type": "string"
           }
@@ -234,7 +234,7 @@
         "required": [
           "id",
           "environmentId",
-          "personaId",
+          "teammateId",
           "sessionId",
           "actor",
           "action",
@@ -268,11 +268,11 @@
             "description": "scheme://host[:port]; the host may start with *.",
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
           "role": {
             "description": "Accessibility role of the element; empty matches any",
+            "type": "string"
+          },
+          "teammateId": {
             "type": "string"
           },
           "verdict": {
@@ -287,7 +287,7 @@
         "required": [
           "id",
           "environmentId",
-          "personaId",
+          "teammateId",
           "action",
           "origin",
           "role",
@@ -342,9 +342,6 @@
             "description": "Name of the agent sandbox that drove the browser last",
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
           "sessionId": {
             "description": "The current run's session in the action log",
             "type": "string"
@@ -352,6 +349,9 @@
           "takeover": {
             "description": "The user drives; agent calls are paused",
             "type": "boolean"
+          },
+          "teammateId": {
+            "type": "string"
           },
           "url": {
             "description": "The page the broker last saw",
@@ -373,7 +373,7 @@
           }
         },
         "required": [
-          "personaId",
+          "teammateId",
           "vm",
           "takeover"
         ],
@@ -1028,8 +1028,8 @@
           "name": {
             "type": "string"
           },
-          "personaId": {
-            "description": "The persona that owns the sandbox; omit for an unowned sandbox",
+          "teammateId": {
+            "description": "The teammate that owns the sandbox; omit for an unowned sandbox",
             "type": "string"
           },
           "workspaceMiB": {
@@ -1086,8 +1086,8 @@
             "minLength": 1,
             "type": "string"
           },
-          "personaId": {
-            "description": "The persona that owns the sandbox; omit for an unowned sandbox",
+          "teammateId": {
+            "description": "The teammate that owns the sandbox; omit for an unowned sandbox",
             "type": "string"
           }
         },
@@ -1109,12 +1109,6 @@
           "origin": {
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
-          "personaName": {
-            "type": "string"
-          },
           "ref": {
             "type": "string"
           },
@@ -1127,13 +1121,19 @@
           "sandboxName": {
             "type": "string"
           },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
+            "type": "string"
+          },
           "url": {
             "type": "string"
           }
         },
         "required": [
-          "personaId",
-          "personaName",
+          "teammateId",
+          "teammateName",
           "sandboxId",
           "sandboxName",
           "credential",
@@ -1183,10 +1183,10 @@
           },
           "scope": {
             "default": "environment",
-            "description": "Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment",
+            "description": "Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment",
             "enum": [
               "sandbox",
-              "persona",
+              "teammate",
               "environment"
             ],
             "type": "string"
@@ -1234,7 +1234,7 @@
         "additionalProperties": false,
         "properties": {
           "scope": {
-            "description": "shared or persona:\u003cid\u003e",
+            "description": "shared or teammate:\u003cid\u003e",
             "type": "string"
           }
         },
@@ -1366,10 +1366,6 @@
             "format": "int64",
             "type": "integer"
           },
-          "persona": {
-            "description": "ID of the persona whose provider's utility model judged",
-            "type": "string"
-          },
           "rejected": {
             "description": "Judge answers rejected as malformed; nothing was changed for them",
             "format": "int64",
@@ -1378,6 +1374,10 @@
           "superseded": {
             "format": "int64",
             "type": "integer"
+          },
+          "teammate": {
+            "description": "ID of the teammate whose provider's utility model judged",
+            "type": "string"
           }
         },
         "required": [
@@ -1495,7 +1495,7 @@
           "attribute": {
             "type": "string"
           },
-          "authorPersona": {
+          "authorTeammate": {
             "type": "string"
           },
           "confidence": {
@@ -1848,9 +1848,6 @@
           "owner": {
             "type": "string"
           },
-          "personaName": {
-            "type": "string"
-          },
           "prApprovalId": {
             "type": "string"
           },
@@ -1881,6 +1878,9 @@
               "rejected",
               "superseded"
             ],
+            "type": "string"
+          },
+          "teammateName": {
             "type": "string"
           },
           "updatedAt": {
@@ -1940,7 +1940,7 @@
             "type": "string"
           },
           "overriddenBy": {
-            "description": "A shared fact this persona fact has an open conflict with; the shared fact wins until the user resolves it",
+            "description": "A shared fact this teammate fact has an open conflict with; the shared fact wins until the user resolves it",
             "type": "string"
           },
           "page": {
@@ -2043,9 +2043,6 @@
             ],
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
           "score": {
             "format": "double",
             "type": "number"
@@ -2056,13 +2053,16 @@
           "summary": {
             "type": "string"
           },
+          "teammateId": {
+            "type": "string"
+          },
           "why": {
             "description": "Why it happened: the search explanation, threshold or extraction details"
           }
         },
         "required": [
           "id",
-          "personaId",
+          "teammateId",
           "at",
           "kind",
           "summary"
@@ -2108,7 +2108,7 @@
             "description": "A core page, loaded into every session of the scope",
             "type": "boolean"
           },
-          "authorPersona": {
+          "authorTeammate": {
             "type": "string"
           },
           "compiled": {
@@ -2128,7 +2128,7 @@
               "project",
               "topic",
               "procedure",
-              "persona-self"
+              "teammate-self"
             ],
             "type": "string"
           },
@@ -2195,7 +2195,7 @@
               "project",
               "topic",
               "procedure",
-              "persona-self"
+              "teammate-self"
             ],
             "type": "string"
           },
@@ -2216,123 +2216,6 @@
         "required": [
           "title",
           "kind"
-        ],
-        "type": "object"
-      },
-      "Persona": {
-        "additionalProperties": false,
-        "properties": {
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "environmentId": {
-            "type": "string"
-          },
-          "gitEmail": {
-            "type": "string"
-          },
-          "gitName": {
-            "type": "string"
-          },
-          "harness": {
-            "enum": [
-              "opencode",
-              "claude",
-              "codex"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "providerId": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string"
-          },
-          "soul": {
-            "description": "Personality and working rules, as markdown",
-            "type": "string"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "environmentId",
-          "name",
-          "role",
-          "soul",
-          "harness",
-          "providerId",
-          "model",
-          "gitName",
-          "gitEmail",
-          "createdAt",
-          "updatedAt"
-        ],
-        "type": "object"
-      },
-      "PersonaInput": {
-        "additionalProperties": false,
-        "properties": {
-          "gitEmail": {
-            "description": "Defaults to \u003cslug\u003e@agents.invalid",
-            "maxLength": 254,
-            "type": "string"
-          },
-          "gitName": {
-            "description": "Defaults to the name",
-            "maxLength": 100,
-            "type": "string"
-          },
-          "harness": {
-            "enum": [
-              "opencode",
-              "claude",
-              "codex"
-            ],
-            "type": "string"
-          },
-          "model": {
-            "description": "Required for API-key providers; defaults to the model of an OpenAI-compatible provider",
-            "maxLength": 128,
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 64,
-            "minLength": 1,
-            "type": "string"
-          },
-          "providerId": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "role": {
-            "description": "A short description of what the persona does",
-            "maxLength": 200,
-            "type": "string"
-          },
-          "soul": {
-            "description": "Personality and working rules, as markdown",
-            "maxLength": 16384,
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "harness",
-          "providerId"
         ],
         "type": "object"
       },
@@ -2432,7 +2315,7 @@
             "type": "string"
           },
           "harnesses": {
-            "description": "Harnesses personas using this provider can run",
+            "description": "Harnesses teammates using this provider can run",
             "items": {
               "enum": [
                 "opencode",
@@ -2592,15 +2475,15 @@
           "owner": {
             "type": "string"
           },
-          "persona": {
-            "description": "The persona owning the sandbox; empty for unowned sandboxes",
-            "type": "string"
-          },
           "repo": {
             "type": "string"
           },
           "sandbox": {
             "description": "The sandbox's name",
+            "type": "string"
+          },
+          "teammate": {
+            "description": "The teammate owning the sandbox; empty for unowned sandboxes",
             "type": "string"
           }
         },
@@ -2701,10 +2584,6 @@
           "note": {
             "type": "string"
           },
-          "personaId": {
-            "description": "Set for rules that apply to every sandbox of one persona",
-            "type": "string"
-          },
           "ports": {
             "description": "Empty means any port",
             "items": {
@@ -2717,6 +2596,10 @@
             ]
           },
           "sandboxId": {
+            "type": "string"
+          },
+          "teammateId": {
+            "description": "Set for rules that apply to every sandbox of one teammate",
             "type": "string"
           }
         },
@@ -2791,10 +2674,6 @@
             "maxLength": 500,
             "type": "string"
           },
-          "personaId": {
-            "description": "Limits the rule to the sandboxes one persona of this environment owns; excludes sandboxId",
-            "type": "string"
-          },
           "ports": {
             "description": "Empty or omitted means any port",
             "items": {
@@ -2810,6 +2689,10 @@
           },
           "sandboxId": {
             "description": "Limits the rule to one sandbox of this environment",
+            "type": "string"
+          },
+          "teammateId": {
+            "description": "Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId",
             "type": "string"
           }
         },
@@ -3008,9 +2891,6 @@
             "format": "date-time",
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
           "sandboxId": {
             "type": "string"
           },
@@ -3025,6 +2905,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "teammateId": {
+            "type": "string"
+          },
           "writes": {
             "format": "int64",
             "type": "integer"
@@ -3032,7 +2915,7 @@
         },
         "required": [
           "id",
-          "personaId",
+          "teammateId",
           "sandboxId",
           "sandboxName",
           "harness",
@@ -3063,19 +2946,19 @@
             "type": "string"
           },
           "factId": {
-            "description": "The persona's own fact, when it shared one",
+            "description": "The teammate's own fact, when it shared one",
             "type": "string"
           },
           "kind": {
             "type": "string"
           },
-          "personaId": {
-            "type": "string"
-          },
-          "personaName": {
-            "type": "string"
-          },
           "sessionRef": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
             "type": "string"
           },
           "text": {
@@ -3086,8 +2969,8 @@
           }
         },
         "required": [
-          "personaId",
-          "personaName",
+          "teammateId",
+          "teammateName",
           "text",
           "kind",
           "entityIds",
@@ -3101,16 +2984,16 @@
           "model": {
             "type": "string"
           },
-          "personaId": {
+          "teammateId": {
             "type": "string"
           },
-          "personaName": {
+          "teammateName": {
             "type": "string"
           }
         },
         "required": [
-          "personaId",
-          "personaName",
+          "teammateId",
+          "teammateName",
           "model"
         ],
         "type": "object"
@@ -3118,7 +3001,7 @@
       "Source": {
         "additionalProperties": false,
         "properties": {
-          "authorPersona": {
+          "authorTeammate": {
             "type": "string"
           },
           "createdAt": {
@@ -3185,6 +3068,123 @@
         ],
         "type": "object"
       },
+      "Teammate": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "gitEmail": {
+            "type": "string"
+          },
+          "gitName": {
+            "type": "string"
+          },
+          "harness": {
+            "enum": [
+              "opencode",
+              "claude",
+              "codex"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "soul": {
+            "description": "Personality and working rules, as markdown",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "name",
+          "role",
+          "soul",
+          "harness",
+          "providerId",
+          "model",
+          "gitName",
+          "gitEmail",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TeammateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "gitEmail": {
+            "description": "Defaults to \u003cslug\u003e@agents.invalid",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "gitName": {
+            "description": "Defaults to the name",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "harness": {
+            "enum": [
+              "opencode",
+              "claude",
+              "codex"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "description": "Required for API-key providers; defaults to the model of an OpenAI-compatible provider",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "providerId": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "role": {
+            "description": "A short description of what the teammate does",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "soul": {
+            "description": "Personality and working rules, as markdown",
+            "maxLength": 16384,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "harness",
+          "providerId"
+        ],
+        "type": "object"
+      },
       "TemplateView": {
         "additionalProperties": false,
         "properties": {
@@ -3221,7 +3221,7 @@
             "format": "date-time",
             "type": "string"
           },
-          "authorPersona": {
+          "authorTeammate": {
             "type": "string"
           },
           "createdAt": {
@@ -3435,7 +3435,7 @@
           },
           "sharedJudge": {
             "$ref": "#/components/schemas/SharedJudge",
-            "description": "Whose utility model consolidates shared memory: the persona that has had one the longest"
+            "description": "Whose utility model consolidates shared memory: the teammate that has had one the longest"
           },
           "today": {
             "$ref": "#/components/schemas/Usage"
@@ -3525,10 +3525,6 @@
           "name": {
             "type": "string"
           },
-          "personaId": {
-            "description": "The persona that owns the sandbox; empty for unowned sandboxes",
-            "type": "string"
-          },
           "status": {
             "enum": [
               "absent",
@@ -3540,6 +3536,10 @@
               "stopped",
               "crashed"
             ],
+            "type": "string"
+          },
+          "teammateId": {
+            "description": "The teammate that owns the sandbox; empty for unowned sandboxes",
             "type": "string"
           },
           "templateId": {
@@ -4676,12 +4676,12 @@
             }
           },
           {
-            "description": "shared or persona:\u003cid\u003e; empty lists every scope",
+            "description": "shared or teammate:\u003cid\u003e; empty lists every scope",
             "explode": false,
             "in": "query",
             "name": "scope",
             "schema": {
-              "description": "shared or persona:\u003cid\u003e; empty lists every scope",
+              "description": "shared or teammate:\u003cid\u003e; empty lists every scope",
               "type": "string"
             }
           },
@@ -4931,7 +4931,7 @@
     },
     "/api/environments/{env}/memory/facts/{id}/promote": {
       "post": {
-        "description": "Proposes a persona's fact for shared memory through a memory.share approval.",
+        "description": "Proposes a teammate's fact for shared memory through a memory.share approval.",
         "operationId": "promoteMemoryFact",
         "parameters": [
           {
@@ -5047,12 +5047,12 @@
             }
           },
           {
-            "description": "shared or persona:\u003cid\u003e; empty lists every scope",
+            "description": "shared or teammate:\u003cid\u003e; empty lists every scope",
             "explode": false,
             "in": "query",
             "name": "scope",
             "schema": {
-              "description": "shared or persona:\u003cid\u003e; empty lists every scope",
+              "description": "shared or teammate:\u003cid\u003e; empty lists every scope",
               "type": "string"
             }
           }
@@ -5355,7 +5355,7 @@
     },
     "/api/environments/{env}/memory/scopes": {
       "get": {
-        "description": "The shared scope, always first, and every persona scope that holds facts or pages.",
+        "description": "The shared scope, always first, and every teammate scope that holds facts or pages.",
         "operationId": "listMemoryScopes",
         "parameters": [
           {
@@ -5429,12 +5429,12 @@
             }
           },
           {
-            "description": "Searches this persona's private scope plus shared; empty searches shared only",
+            "description": "Searches this teammate's private scope plus shared; empty searches shared only",
             "explode": false,
             "in": "query",
-            "name": "persona",
+            "name": "teammate",
             "schema": {
-              "description": "Searches this persona's private scope plus shared; empty searches shared only",
+              "description": "Searches this teammate's private scope plus shared; empty searches shared only",
               "type": "string"
             }
           },
@@ -5511,12 +5511,12 @@
             }
           },
           {
-            "description": "Only this persona's sessions",
+            "description": "Only this teammate's sessions",
             "explode": false,
             "in": "query",
-            "name": "persona",
+            "name": "teammate",
             "schema": {
-              "description": "Only this persona's sessions",
+              "description": "Only this teammate's sessions",
               "type": "string"
             }
           },
@@ -5667,738 +5667,6 @@
         ]
       }
     },
-    "/api/environments/{env}/personas": {
-      "get": {
-        "operationId": "listPersonas",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/Persona"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "personas"
-        ]
-      },
-      "post": {
-        "operationId": "createPersona",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PersonaInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Persona"
-                }
-              }
-            },
-            "description": "Created"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "personas"
-        ]
-      }
-    },
-    "/api/environments/{env}/personas/{id}": {
-      "delete": {
-        "description": "Deletes the persona and the network rules scoped to it. Refused while it owns sandboxes.",
-        "operationId": "deletePersona",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "personas"
-        ]
-      },
-      "get": {
-        "operationId": "getPersona",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Persona"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "personas"
-        ]
-      },
-      "put": {
-        "operationId": "updatePersona",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PersonaInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Persona"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "personas"
-        ]
-      }
-    },
-    "/api/environments/{env}/personas/{persona}/browser": {
-      "delete": {
-        "description": "Deletes the browser VM with its profile: cookies and logins. The action log stays.",
-        "operationId": "deleteBrowser",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      },
-      "get": {
-        "operationId": "getBrowser",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BrowserStatus"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      }
-    },
-    "/api/environments/{env}/personas/{persona}/browser/actions": {
-      "get": {
-        "description": "The browser's action log, newest first. Screenshots are at .../actions/{id}/screenshot.",
-        "operationId": "listBrowserActions",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Only this session's actions",
-            "explode": false,
-            "in": "query",
-            "name": "session",
-            "schema": {
-              "description": "Only this session's actions",
-              "type": "string"
-            }
-          },
-          {
-            "explode": false,
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "default": 200,
-              "format": "int64",
-              "maximum": 500,
-              "minimum": 1,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/BrowserAction"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      }
-    },
-    "/api/environments/{env}/personas/{persona}/browser/patterns": {
-      "get": {
-        "operationId": "listBrowserPatterns",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/BrowserPattern"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      },
-      "post": {
-        "operationId": "createBrowserPattern",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BrowserPatternInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BrowserPattern"
-                }
-              }
-            },
-            "description": "Created"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      }
-    },
-    "/api/environments/{env}/personas/{persona}/browser/patterns/{id}": {
-      "delete": {
-        "operationId": "deleteBrowserPattern",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Pattern ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "description": "Pattern ID",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      }
-    },
-    "/api/environments/{env}/personas/{persona}/browser/takeover": {
-      "put": {
-        "operationId": "setBrowserTakeover",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TakeoverInBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BrowserStatus"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      }
-    },
-    "/api/environments/{env}/personas/{persona}/browser/{action}": {
-      "post": {
-        "operationId": "controlBrowser",
-        "parameters": [
-          {
-            "description": "Environment ID",
-            "in": "path",
-            "name": "env",
-            "required": true,
-            "schema": {
-              "description": "Environment ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Persona ID",
-            "in": "path",
-            "name": "persona",
-            "required": true,
-            "schema": {
-              "description": "Persona ID",
-              "type": "string"
-            }
-          },
-          {
-            "description": "start boots the browser VM, stop stops it (its profile stays)",
-            "in": "path",
-            "name": "action",
-            "required": true,
-            "schema": {
-              "description": "start boots the browser VM, stop stops it (its profile stays)",
-              "enum": [
-                "start",
-                "stop"
-              ],
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BrowserStatus"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "browser"
-        ]
-      }
-    },
     "/api/environments/{env}/providers": {
       "get": {
         "operationId": "listProviders",
@@ -6500,7 +5768,7 @@
     },
     "/api/environments/{env}/providers/{id}": {
       "delete": {
-        "description": "Deletes the provider and its key. Refused while a persona uses the provider.",
+        "description": "Deletes the provider and its key. Refused while a teammate uses the provider.",
         "operationId": "deleteProvider",
         "parameters": [
           {
@@ -7875,7 +7143,7 @@
         ]
       },
       "post": {
-        "description": "Starts the owner persona's harness in a new tmux session, after writing its config, instructions and git identity into the agent user's home. Attach like any terminal.",
+        "description": "Starts the owner teammate's harness in a new tmux session, after writing its config, instructions and git identity into the agent user's home. Attach like any terminal.",
         "operationId": "startSession",
         "parameters": [
           {
@@ -8452,6 +7720,738 @@
         },
         "tags": [
           "secrets"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates": {
+      "get": {
+        "operationId": "listTeammates",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Teammate"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      },
+      "post": {
+        "operationId": "createTeammate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeammateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}": {
+      "delete": {
+        "description": "Deletes the teammate and the network rules scoped to it. Refused while it owns sandboxes.",
+        "operationId": "deleteTeammate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      },
+      "get": {
+        "operationId": "getTeammate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      },
+      "put": {
+        "operationId": "updateTeammate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeammateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser": {
+      "delete": {
+        "description": "Deletes the browser VM with its profile: cookies and logins. The action log stays.",
+        "operationId": "deleteBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      },
+      "get": {
+        "operationId": "getBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/actions": {
+      "get": {
+        "description": "The browser's action log, newest first. Screenshots are at .../actions/{id}/screenshot.",
+        "operationId": "listBrowserActions",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this session's actions",
+            "explode": false,
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "description": "Only this session's actions",
+              "type": "string"
+            }
+          },
+          {
+            "explode": false,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 200,
+              "format": "int64",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BrowserAction"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/patterns": {
+      "get": {
+        "operationId": "listBrowserPatterns",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BrowserPattern"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      },
+      "post": {
+        "operationId": "createBrowserPattern",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowserPatternInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserPattern"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/patterns/{id}": {
+      "delete": {
+        "operationId": "deleteBrowserPattern",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Pattern ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Pattern ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/takeover": {
+      "put": {
+        "operationId": "setBrowserTakeover",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeoverInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/{action}": {
+      "post": {
+        "operationId": "controlBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "start boots the browser VM, stop stops it (its profile stays)",
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "description": "start boots the browser VM, stop stops it (its profile stays)",
+              "enum": [
+                "start",
+                "stop"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
         ]
       }
     },

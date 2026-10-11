@@ -26,7 +26,7 @@ var tools = map[string]tool{
 	agentproto.MethodForget:       (*Service).toolForget,
 }
 
-// decode reads tool arguments strictly: unknown fields, such as a persona or scope the
+// decode reads tool arguments strictly: unknown fields, such as a teammate or scope the
 // agent made up, are refused rather than ignored.
 func decode(params json.RawMessage, v any) error {
 	dec := json.NewDecoder(bytes.NewReader(params))
@@ -68,7 +68,7 @@ func (s *Service) toolSearch(ctx context.Context, c caller, params json.RawMessa
 	if in.Limit <= 0 || in.Limit > 20 {
 		in.Limit = 8
 	}
-	hits, err := s.Memory.Search(ctx, c.env, memory.SearchRequest{Query: truncate(in.Query, 2000), Persona: c.persona.ID, Limit: in.Limit})
+	hits, err := s.Memory.Search(ctx, c.env, memory.SearchRequest{Query: truncate(in.Query, 2000), Teammate: c.teammate.ID, Limit: in.Limit})
 	if err != nil {
 		return nil, err
 	}
@@ -191,11 +191,13 @@ func (s *Service) toolRemember(ctx context.Context, c caller, params json.RawMes
 		return nil, err
 	}
 	switch in.Scope {
-	case "", "persona":
+	// persona is the scope's name before teammates were renamed, still sent by a
+	// `studio-agent mcp` that an older Studio started.
+	case "", "teammate", "persona":
 	case "shared":
 		return s.requestShare(ctx, c, se, shareRequest{Text: cand.Text, Kind: cand.Kind, EntityIDs: cand.Entities, Tier: cand.Tier, Evidence: cand.Evidence})
 	default:
-		return nil, userErrorf("scope must be persona or shared")
+		return nil, userErrorf("scope must be teammate or shared")
 	}
 	f, how, err := s.write(ctx, c, se, cand, "remember")
 	if err != nil {
@@ -232,7 +234,7 @@ type writeWhy struct {
 
 // write saves cand in the caller's scope, or reinforces a fact it duplicates.
 func (s *Service) write(ctx context.Context, c caller, se session, cand candidate, via string) (memory.Fact, string, error) {
-	o := memory.Origin{Tier: cand.Tier, AuthorPersona: c.persona.ID, SessionRef: se.ref, Evidence: cand.Evidence}
+	o := memory.Origin{Tier: cand.Tier, AuthorTeammate: c.teammate.ID, SessionRef: se.ref, Evidence: cand.Evidence}
 	dup, reason, err := s.duplicate(ctx, c.env, c.scope, cand)
 	if err != nil {
 		return memory.Fact{}, "", err
@@ -287,7 +289,7 @@ func (s *Service) toolCorrect(ctx context.Context, c caller, params json.RawMess
 		return nil, err
 	}
 	f, err := s.Memory.CreateFact(ctx, c.env, memory.FactInput{Scope: c.scope, Kind: old.Kind, EntityIDs: old.EntityIDs, Attribute: old.Attribute,
-		Text: cand.Text, Supersedes: old.ID}, memory.Origin{Tier: memory.TierInferred, AuthorPersona: c.persona.ID, SessionRef: se.ref, Evidence: "correction of " + old.ID})
+		Text: cand.Text, Supersedes: old.ID}, memory.Origin{Tier: memory.TierInferred, AuthorTeammate: c.teammate.ID, SessionRef: se.ref, Evidence: "correction of " + old.ID})
 	if err != nil {
 		return nil, err
 	}
@@ -317,19 +319,19 @@ func (s *Service) toolForget(ctx context.Context, c caller, params json.RawMessa
 
 // --- sharing ----------------------------------------------------------------------------
 
-// SharePayload is a memory.share approval's payload: the fact a persona proposes for
+// SharePayload is a memory.share approval's payload: the fact a teammate proposes for
 // shared memory.
 type SharePayload struct {
-	PersonaID   string   `json:"personaId"`
-	PersonaName string   `json:"personaName"`
-	FactID      string   `json:"factId,omitempty" doc:"The persona's own fact, when it shared one"`
-	Text        string   `json:"text"`
-	Kind        string   `json:"kind"`
-	EntityIDs   []string `json:"entityIds"`
-	Attribute   string   `json:"attribute,omitempty"`
-	Tier        string   `json:"tier"`
-	Evidence    string   `json:"evidence,omitempty"`
-	SessionRef  string   `json:"sessionRef,omitempty"`
+	TeammateID   string   `json:"teammateId"`
+	TeammateName string   `json:"teammateName"`
+	FactID       string   `json:"factId,omitempty" doc:"The teammate's own fact, when it shared one"`
+	Text         string   `json:"text"`
+	Kind         string   `json:"kind"`
+	EntityIDs    []string `json:"entityIds"`
+	Attribute    string   `json:"attribute,omitempty"`
+	Tier         string   `json:"tier"`
+	Evidence     string   `json:"evidence,omitempty"`
+	SessionRef   string   `json:"sessionRef,omitempty"`
 }
 
 type shareRequest struct {
@@ -397,10 +399,10 @@ func (s *Service) proposeShare(ctx context.Context, c caller, se session, r shar
 	if r.Tier == memory.TierDocument || r.Tier == "" {
 		r.Tier = memory.TierInferred
 	}
-	payload, _ := json.Marshal(SharePayload{PersonaID: c.persona.ID, PersonaName: c.persona.Name, FactID: r.FactID, Text: r.Text, Kind: r.Kind,
+	payload, _ := json.Marshal(SharePayload{TeammateID: c.teammate.ID, TeammateName: c.teammate.Name, FactID: r.FactID, Text: r.Text, Kind: r.Kind,
 		EntityIDs: r.EntityIDs, Attribute: r.Attribute, Tier: r.Tier, Evidence: r.Evidence, SessionRef: se.ref})
 	a, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.env, SandboxID: c.sandbox.ID, Kind: ApprovalKind,
-		Subject: truncate(c.persona.Name+": "+r.Text, 300), Payload: payload})
+		Subject: truncate(c.teammate.Name+": "+r.Text, 300), Payload: payload})
 	if err != nil {
 		return a, err
 	}
@@ -411,31 +413,31 @@ func (s *Service) proposeShare(ctx context.Context, c caller, se session, r shar
 	return a, nil
 }
 
-// Promote proposes a persona's active fact for shared memory on the user's behalf, through
-// the same memory.share approval a persona's share request creates.
+// Promote proposes a teammate's active fact for shared memory on the user's behalf, through
+// the same memory.share approval a teammate's share request creates.
 func (s *Service) Promote(ctx context.Context, env, factID string) (store.Approval, error) {
 	f, err := s.Memory.Fact(ctx, env, factID)
 	if err != nil {
 		return store.Approval{}, err
 	}
-	id, ok := strings.CutPrefix(f.Scope, "persona:")
+	id, ok := strings.CutPrefix(f.Scope, "teammate:")
 	if !ok {
 		return store.Approval{}, fmt.Errorf("%w: fact %s is shared already", memory.ErrInvalid, f.ID)
 	}
 	if f.Status != memory.StatusActive {
 		return store.Approval{}, fmt.Errorf("%w: fact %s is %s", memory.ErrInvalid, f.ID, f.Status)
 	}
-	p, err := s.Store.Persona(ctx, env, id)
+	p, err := s.Store.Teammate(ctx, env, id)
 	if err != nil {
-		return store.Approval{}, fmt.Errorf("%w: the persona of fact %s is gone", memory.ErrInvalid, f.ID)
+		return store.Approval{}, fmt.Errorf("%w: the teammate of fact %s is gone", memory.ErrInvalid, f.ID)
 	}
-	c := caller{env: env, persona: p, scope: f.Scope}
+	c := caller{env: env, teammate: p, scope: f.Scope}
 	return s.proposeShare(ctx, c, session{}, shareRequest{FactID: f.ID, Text: f.Text, Kind: f.Kind, EntityIDs: f.EntityIDs, Attribute: f.Attribute,
 		Tier: f.Tier, Evidence: "promoted by the user"})
 }
 
 // DecideShare settles a pending memory.share approval with status. Approved writes the fact
-// to shared memory with the proposing persona as author and marks the approval approved in
+// to shared memory with the proposing teammate as author and marks the approval approved in
 // the same transaction: if the write fails, the approval stays pending with nothing written
 // and can be decided again; if it was decided meanwhile (store.ErrNotFound), nothing is
 // written. Denied or dismissed writes nothing.
@@ -447,7 +449,7 @@ func (s *Service) DecideShare(ctx context.Context, a store.Approval, status stri
 	if err := json.Unmarshal(a.Payload, &p); err != nil {
 		return nil, fmt.Errorf("share payload: %w", err)
 	}
-	c := caller{env: a.EnvironmentID, sandbox: store.Sandbox{ID: a.SandboxID}, persona: store.Persona{ID: p.PersonaID, Name: p.PersonaName}, scope: memory.SharedScope}
+	c := caller{env: a.EnvironmentID, sandbox: store.Sandbox{ID: a.SandboxID}, teammate: store.Teammate{ID: p.TeammateID, Name: p.TeammateName}, scope: memory.SharedScope}
 	if status != store.StatusApproved {
 		if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, status, ""); err != nil {
 			return nil, err
@@ -455,12 +457,12 @@ func (s *Service) DecideShare(ctx context.Context, a store.Approval, status stri
 		s.log(ctx, c, "", entry{kind: LogWrite, itemType: "approval", itemID: a.ID, summary: "share declined: " + p.Text})
 		return nil, nil
 	}
-	author := p.PersonaID
-	if _, err := s.Store.Persona(ctx, a.EnvironmentID, author); err != nil {
-		author = "" // the persona is gone; the user's approval still stands
+	author := p.TeammateID
+	if _, err := s.Store.Teammate(ctx, a.EnvironmentID, author); err != nil {
+		author = "" // the teammate is gone; the user's approval still stands
 	}
-	o := memory.Origin{Tier: p.Tier, AuthorPersona: author, SessionRef: p.SessionRef,
-		Evidence: truncate("shared by "+p.PersonaName+", approved by the user. "+p.Evidence, 500)}
+	o := memory.Origin{Tier: p.Tier, AuthorTeammate: author, SessionRef: p.SessionRef,
+		Evidence: truncate("shared by "+p.TeammateName+", approved by the user. "+p.Evidence, 500)}
 	cand := candidate{Text: p.Text, Kind: p.Kind, Entities: p.EntityIDs, Attribute: p.Attribute}
 	dup, _, err := s.duplicate(ctx, a.EnvironmentID, memory.SharedScope, cand)
 	if err != nil {

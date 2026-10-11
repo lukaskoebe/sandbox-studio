@@ -3,7 +3,7 @@
 Status: accepted, M0 in progress · 2026-10-09
 
 Sandbox Studio v2 is a full rewrite of v1 (`~/git/sandbox-studio-old`). It runs coding
-agents as persistent "team members" (personas) inside microVM sandboxes, with every
+agents as persistent "team members" (teammates) inside microVM sandboxes, with every
 outward-facing action — network access, git pushes, browser actions, credential use —
 mediated by the host and approvable from a web UI.
 
@@ -13,8 +13,8 @@ mediated by the host and approvable from a web UI.
 |---|---|
 | 2026-10-08 | Go backend; microsandbox runtime; React + shadcn preset + TanStack Router (no Start); Linux, macOS and Windows from the start |
 | 2026-10-08 | Support OpenCode, Claude Code and Codex through harness adapters |
-| 2026-10-08 | Personas with private memory, plus explicit shared memory; gbrain-style consolidation and contradiction handling |
-| 2026-10-09 | **Environments**: isolated top-level containers (e.g. "work", "private") that share no rules, secrets, providers, personas or memory; switched with a dropdown (§6.0) |
+| 2026-10-08 | Teammates with private memory, plus explicit shared memory; gbrain-style consolidation and contradiction handling |
+| 2026-10-09 | **Environments**: isolated top-level containers (e.g. "work", "private") that share no rules, secrets, providers, teammates or memory; switched with a dropdown (§6.0) |
 | 2026-10-09 | **Subscription logins** (Claude Pro/Max, ChatGPT/Codex) are required, not only API keys (S8 is high priority) |
 | 2026-10-09 | **Utility model**: Claude → `haiku` alias (currently `claude-haiku-4-5`); OpenAI/Codex → `gpt-6-luna`; custom OpenAI-compatible endpoint → the single model chosen during onboarding (§6.6) |
 | 2026-10-09 | Open source under **Apache 2.0** at `github.com/lukaskoebe/sandbox-studio`; images at `ghcr.io/lukaskoebe/` |
@@ -35,11 +35,11 @@ mediated by the host and approvable from a web UI.
   - the Caddy rule editor
   - persistent workspaces with snapshots
   - persistent agent state
-- Personas: named agents with their own identity, memory and settings. Each persona can
+- Teammates: named agents with their own identity, memory and settings. Each teammate can
   run OpenCode, Claude Code or Codex.
 - Memory that agents actually use:
   - hybrid search with local embeddings, configured out of the box
-  - per-persona memory plus a shared team memory
+  - per-teammate memory plus a shared team memory
   - consolidation and explicit handling of contradictions
 - An agent-controlled browser whose actions are approved in the UI, with live view and takeover.
 - A single approvals inbox in which every permission request pops up automatically.
@@ -78,10 +78,10 @@ mediated by the host and approvable from a web UI.
 |---|---|
 | NixOS/QEMU VMs, Python manager | microsandbox microVMs, Go manager |
 | DNS → host gateway, per-VM Caddy, pending-domain list | microsandbox's fixed outer policy, plus all egress going to the Studio SOCKS5 gateway. Hold-and-ask approvals. Embedded Caddy for custom rules. |
-| `{env.NAME}` secrets in rules; global and per-VM rule scopes | **Environments** (isolated rule/secret/provider/persona sets with a switcher); secrets referenced as `{secret.NAME}`; guest-side placeholders substituted only for bound hosts |
+| `{env.NAME}` secrets in rules; global and per-VM rule scopes | **Environments** (isolated rule/secret/provider/teammate sets with a switcher); secrets referenced as `{secret.NAME}`; guest-side placeholders substituted only for bound hosts |
 | Custom disk snapshots, live snapshots, suspend/continue | Native microsandbox disk snapshots, full (memory) snapshots and forks |
 | Nix-built guest image | One CI-built OCI base image, plus a per-sandbox spec built with mise and apt into a cached template snapshot |
-| OpenCode only, app-state profiles | OpenCode, Claude Code and Codex through harness adapters; personas |
+| OpenCode only, app-state profiles | OpenCode, Claude Code and Codex through harness adapters; teammates |
 | gbrain on the host with Postgres/Bun/tokens | Built-in memory: SQLite, local embeddings, consolidation |
 | Named tmux browser terminals | Same, over the guest agent channel |
 | No git approvals | Git review: pushes are held until approved |
@@ -99,13 +99,13 @@ mediated by the host and approvable from a web UI.
 - **Environment.** The top-level isolation boundary, e.g. "work" or "private". It owns:
   - its providers and logins
   - its secrets and rules
-  - its personas (and so their sandboxes and private memory)
+  - its teammates (and so their sandboxes and private memory)
   - its shared memory
   - its approvals
 
   Nothing is shared between environments. The UI shows one environment at a time and has a
   switcher dropdown.
-- **Persona.** A named agent identity, treated like a team member. It has:
+- **Teammate.** A named agent identity, treated like a team member. It has:
   - a name, avatar and role description
   - a "soul": personality and working rules, as markdown
   - a harness (OpenCode, Claude Code or Codex), a provider and a model
@@ -113,8 +113,8 @@ mediated by the host and approvable from a web UI.
   - default network scope and approval auto-rules
   - a private memory scope
 
-  A persona owns one or more sandboxes.
-- **Sandbox.** A microVM "machine" that belongs to one persona. It has:
+  A teammate owns one or more sandboxes.
+- **Sandbox.** A microVM "machine" that belongs to one teammate. It has:
   - a workspace disk
   - a Docker data disk
   - harness state (sessions and history)
@@ -124,11 +124,11 @@ mediated by the host and approvable from a web UI.
 - **Spec / Template.** A YAML sandbox spec covering resources, tools, apt packages and a
   setup script. A *template* is the disk snapshot that results from building a spec on the
   base image. It is cached by `hash(spec, base image digest)`.
-- **Session.** One agent conversation by a persona in one of its sandboxes. It runs as a
+- **Session.** One agent conversation by a teammate in one of its sandboxes. It runs as a
   native TUI in tmux; programmatic sessions come later via ACP.
 - **Gateway.** The host-side SOCKS5 and TLS proxy that sees every outbound connection from
   every sandbox and applies rules.
-- **Rule.** A network policy entry scoped to environment, persona or sandbox. Kinds are
+- **Rule.** A network policy entry scoped to environment, teammate or sandbox. Kinds are
   `allow`, `proxy`, `caddy` and `deny`.
 - **Secret.** A named credential in an environment's vault. It is bound to the hosts allowed
   to receive it.
@@ -152,15 +152,15 @@ mediated by the host and approvable from a web UI.
 
   Decisions are allow-once, allow-by-pattern (which creates a rule), deny-once and
   deny-by-pattern.
-- **Memory.** Facts, pages and sources in two scopes: `persona:<id>` (private, shared by all
-  of that persona's sessions) and `shared` (team-wide, written explicitly).
+- **Memory.** Facts, pages and sources in two scopes: `teammate:<id>` (private, shared by all
+  of that teammate's sessions) and `shared` (team-wide, written explicitly).
 
 ## 5. Architecture
 
 ```
 React SPA (embedded) ──HTTP / SSE / WS──┐
 ┌──────────────────────────── sandbox-studio (one Go binary) ────────────────────────┐
-│ API · approvals inbox · secrets vault · personas · specs/templates                 │
+│ API · approvals inbox · secrets vault · teammates · specs/templates                 │
 │ gateway: SOCKS5 in → identify sandbox → SNI/Host/DNS name → rules →                │
 │          passthrough | TLS terminate (Studio CA) + inject/substitute | Caddy | deny│
 │ memory: SQLite (FTS5 + vectors) · llama.cpp embeddings (yzma) · consolidation jobs │
@@ -168,7 +168,7 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
 └──────┬───────────────────────────────────────────────┬─────────────────────────────┘
        │ all TCP egress (SOCKS5, user = sandbox id)    │ vsock host socket per sandbox
  ┌─────┴──────────────┐   ┌──────────────┐      ┌──────┴────────────────────────┐
- │ sandbox (persona A)│   │ sandbox (B)  │      │ studio-agent (in every guest): │
+ │ sandbox (teammate A)│   │ sandbox (B)  │      │ studio-agent (in every guest): │
  │ harness TUI, tmux, │   │ …            │      │ terminals, previews, hooks,    │
  │ dockerd, workspace │   │              │      │ MCP server (memory/browser/…)  │
  └────────────────────┘   └──────────────┘      └───────────────────────────────┘
@@ -200,11 +200,11 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
 
 ### 6.0 Environments
 
-- Every row in the catalog (personas, sandboxes, rules, secrets, providers, memory, approvals,
+- Every row in the catalog (teammates, sandboxes, rules, secrets, providers, memory, approvals,
   integration settings) carries an `environment_id`. Queries are always environment-scoped;
   the store layer requires an environment in its API, so a cross-environment read cannot
   happen by accident.
-- **Gateway lookups** go sandbox → persona → environment, and only that environment's rules
+- **Gateway lookups** go sandbox → teammate → environment, and only that environment's rules
   and secrets are considered. The rule scope formerly called "global" is now the
   environment scope.
 - **UI:**
@@ -216,8 +216,8 @@ React SPA (embedded) ──HTTP / SSE / WS──┐
 - Each environment has its own Studio CA certificate, so certificates and placeholders never
   validate across environments.
 - **Onboarding** creates the first environment: name, provider (login or key), model (for
-  custom endpoints), first persona, first sandbox.
-- Export and import work per environment. Copying a persona to another environment copies
+  custom endpoints), first teammate, first sandbox.
+- Export and import work per environment. Copying a teammate to another environment copies
   its settings but never its memory or secrets.
 
 ### 6.1 Sandbox runtime (microsandbox)
@@ -518,7 +518,7 @@ A small static Linux Go binary (in `cmd/studio-agent`), mounted into every sandb
 2. Determine the name: TLS SNI → HTTP Host → the Studio DNS resolver's IP-to-name map
    (spike S2).
 3. Match rules of the sandbox's environment, most specific scope first (sandbox, then
-   persona, then environment; an environment-level `deny` always wins, as in v1). Rules can carry port lists; the default is 80 and 443.
+   teammate, then environment; an environment-level `deny` always wins, as in v1). Rules can carry port lists; the default is 80 and 443.
 4. Act on the rule kind:
    - `allow`: dial the destination IP and splice the bytes through.
    - `proxy`: terminate TLS with the Studio CA. Optionally:
@@ -583,7 +583,7 @@ shown in the UI and kept for a bounded period.
 ### 6.5 Approvals inbox
 
 - One table, `approvals`, with:
-  - `kind`, `subject` (persona/sandbox/session), `payload` (typed per kind), `status`
+  - `kind`, `subject` (teammate/sandbox/session), `payload` (typed per kind), `status`
   - `created_at`, `expires_at`, `decision`, `decided_by`, `rule_created`
 - Real-time:
   - An SSE stream, `/api/events`, pushes new approvals to every open tab.
@@ -600,26 +600,26 @@ shown in the UI and kept for a bounded period.
   /repos/*/pulls`, `browser.click on github.com/* where label~"Merge"`.
 - Auto-decided requests are logged too, so the inbox doubles as an audit log.
 
-### 6.6 Personas, providers and harness adapters
+### 6.6 Teammates, providers and harness adapters
 
-**Built (M4 part A).** Providers and personas are per-environment records with CRUD pages
-and API (`docs/personas.md`). An API-key provider owns one vault secret bound to the vendor
+**Built (M4 part A).** Providers and teammates are per-environment records with CRUD pages
+and API (`docs/teammates.md`). An API-key provider owns one vault secret bound to the vendor
 host (or the custom base URL's host); subscription providers are records in state
-`login_required` until the login flow exists. A persona's harness must be one its provider
-kind supports (table below). Sandboxes can be owned by a persona, fixed at creation and
-copied by fork. Network rules can be scoped to a persona; the gateway resolves the owner
+`login_required` until the login flow exists. A teammate's harness must be one its provider
+kind supports (table below). Sandboxes can be owned by a teammate, fixed at creation and
+copied by fork. Network rules can be scoped to a teammate; the gateway resolves the owner
 from the catalog. Default rule scope and auto-patterns are not built yet.
 
 **Built (M4 part B).** `internal/harness` has the interface below with OpenCode, Claude Code
 and Codex adapters (`docs/harnesses.md`); hooks and MCP since M5 part B, ACP in M6.
-Starting a session (`POST .../sandboxes/{id}/sessions`) needs an owner persona, a `ready`
+Starting a session (`POST .../sandboxes/{id}/sessions`) needs an owner teammate, a `ready`
 provider and its key bound to the provider's host; it writes the harness config, the soul as
 a managed block in the global instructions file and the git identity into `/home/agent`
 through the guest agent (openat2, no symlinks, bounded), then runs the TUI in a named tmux
 session with the placeholder in the provider's variable. The UI attaches it as a terminal.
 The base image ships node LTS and the three harnesses at pinned versions.
 
-**Persona settings.**
+**Teammate settings.**
 - Identity and soul (markdown).
 - Harness: `opencode | claude | codex`.
 - Provider (one of the environment's) and model.
@@ -653,7 +653,7 @@ type Harness interface {
     Name() string
     // Config files to write into the guest home: instructions block, MCP server
     // registration, hooks, provider/model, auto-approve mode.
-    Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error)
+    Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, error)
     TUICommand(session SessionOpts) []string       // launched in tmux
     ACPCommand() []string                          // programmatic sessions (later)
     StateDirs() []string                           // persisted on the sandbox
@@ -679,18 +679,18 @@ type Harness interface {
 
 - **Inside-sandbox permissions.** Agents run without in-sandbox permission prompts; the VM
   is the boundary. Outward actions go through Studio approvals.
-- **Instructions.** Persona instructions are delivered as SessionStart context together with
+- **Instructions.** Teammate instructions are delivered as SessionStart context together with
   core memory, plus a small managed block in the instructions file that points to the memory
-  tools. Nothing persona-specific lives in the workspace repository.
+  tools. Nothing teammate-specific lives in the workspace repository.
 
 ### 6.7 Memory
 
 **Scopes.**
-- `persona:<id>` is private and shared by every session of that persona across all its
+- `teammate:<id>` is private and shared by every session of that teammate across all its
   sandboxes.
-- `shared` is team-wide. Every persona can read it; writes are explicit (a `share` tool or
-  promotion). Every write records its author persona.
-- When a persona fact conflicts with a shared fact, the result is a `memory.conflict`. Until
+- `shared` is team-wide. Every teammate can read it; writes are explicit (a `share` tool or
+  promotion). Every write records its author teammate.
+- When a teammate fact conflicts with a shared fact, the result is a `memory.conflict`. Until
   it is resolved, the shared fact wins at recall, with a note.
 
 **Data model** (SQLite as the source of truth; inspired by gbrain's compiled-truth and
@@ -700,7 +700,7 @@ timeline split and its takes-vs-facts distinction):
   - Kind: `user` (stated in chat or edited in the UI) | `verified` (the agent ran a check and
     cites the command and result) | `document` (repo or file import) | `inferred` (the
     agent's own conclusion) | `consolidation`.
-  - Plus session ref, persona, timestamp and a short evidence quote. Full transcripts are
+  - Plus session ref, teammate, timestamp and a short evidence quote. Full transcripts are
     **not** stored.
   - Trust tier ranking: `user > verified > document > inferred`.
 - `facts`: atomic claims.
@@ -709,7 +709,7 @@ timeline split and its takes-vs-facts distinction):
     `observed_at`, `valid_from`, `valid_until`, `confidence`, `tier`, `support_count`.
   - Status: `active | superseded | disputed | retracted`.
   - Plus `supersedes`.
-- `pages`: entity and topic pages (person, project/repo, topic, procedure, persona-self).
+- `pages`: entity and topic pages (person, project/repo, topic, procedure, teammate-self).
   - **Compiled truth** above the line: a regenerated synthesis.
   - **Timeline** below: append-only dated entries linking facts and sources.
   - `always_load` marks *core* pages. Their total is capped (about 4k chars per scope);
@@ -723,7 +723,7 @@ timeline split and its takes-vs-facts distinction):
    - runs the *utility model* to extract candidate facts, each with kind, tier, entities and
      an evidence quote
    - deduplicates them by embedding similarity plus attribute key
-   - writes them to the persona scope
+   - writes them to the teammate scope
 
    This removes the dependence on agents remembering to write.
 2. **Explicit tools:**
@@ -739,14 +739,14 @@ timeline split and its takes-vs-facts distinction):
 **Read paths.** Placement follows gbrain's finding that boundaries beat per-message
 retrieval.
 1. **Session start** (also on resume and after compaction), a budgeted *context pack*:
-   - core pages (persona and shared); the soul is in the harness's instructions file instead
+   - core pages (teammate and shared); the soul is in the harness's instructions file instead
    - the project page for the current repo (keyed by git remote)
-   - shared-memory changes since this persona's last session
+   - shared-memory changes since this teammate's last session
    - open conflicts touching those entities
 2. **Per prompt:** local hybrid search over the prompt, injected only when hits clear a
    relevance threshold, capped at about 500 tokens. Every injection is logged.
 3. **Tools:** `memory_search` and `memory_get`, for when the agent wants more.
-4. **Browsable view:** a read-only rendered markdown view at `~/memory/{persona,shared}`
+4. **Browsable view:** a read-only rendered markdown view at `~/memory/{teammate,shared}`
    that agents can `rg` through.
 
 **Retrieval.**
@@ -786,14 +786,14 @@ retrieval.
      showing both facts with their sources. Both stay retrievable, marked `disputed`.
    - Context-dependent: rewrite both facts with explicit qualifiers and link them.
 5. Regenerate the compiled truth of the pages it touched, and append timeline entries.
-6. Suggest promotions from persona to shared memory (facts about the user, shared infra or
+6. Suggest promotions from teammate to shared memory (facts about the user, shared infra or
    shared projects) as `memory.share` approvals.
 7. Suggest core-page candidates.
 
 Judge results are cached by `(fact pair hash, model, prompt version)`. A daily cost budget
 applies, and its usage is shown in the UI.
 
-**Multiple data sources.** Every input — sessions from different personas, imported
+**Multiple data sources.** Every input — sessions from different teammates, imported
 documents or repos, user edits, and later external connectors — enters as a `source` with a
 tier. Consolidation is source-aware, so a disagreement between a user statement and an
 agent inference is never silently resolved in favor of the most recent one.
@@ -803,7 +803,7 @@ synthesis, defaulting to the cheapest model of the configured provider. Calls go
 from Studio, not through a sandbox.
 
 **Memory UI:**
-- persona and shared views of pages, facts and timeline
+- teammate and shared views of pages, facts and timeline
 - the conflicts queue
 - a per-session log of injections and writes
 - "why was this recalled"
@@ -863,11 +863,11 @@ subscriptions (S8), and everything marked verify (S7).
 
 **Implemented (M7, see docs/browser.md):**
 
-- **Browser VM.** There is one browser VM per persona, because the profile, with its
-  cookies and logins, is the persona's identity. It is created lazily, stops after 10
+- **Browser VM.** There is one browser VM per teammate, because the profile, with its
+  cookies and logins, is the teammate's identity. It is created lazily, stops after 10
   minutes idle, and runs from the `sandbox-studio-browser` image (`make image-browser`).
 - **Egress rules.** The VM's egress is judged by the driving sandbox's rules, or by the
-  persona's rules while the user drives.
+  teammate's rules while the user drives.
 - **Tools and approvals.** The broker's tools run over the `browser` agent request kind
   under a guest allow-list. They use `browser.action` and `browser.credential` approvals,
   "allow for this origin" patterns, redaction, and vault fills the agent never sees.
@@ -931,7 +931,7 @@ subscriptions (S8), and everything marked verify (S7).
 - Routes:
   - `/` overview: team, running sandboxes, inbox
   - `/inbox`
-  - `/personas/$id`: identity, sandboxes, sessions, memory, settings
+  - `/teammates/$id`: identity, sandboxes, sessions, memory, settings
   - `/sandboxes/$id`: terminals, previews, snapshots, network log, spec
   - `/memory`: shared memory, conflicts
   - `/network`: rules, secrets, activity
@@ -964,7 +964,7 @@ subscriptions (S8), and everything marked verify (S7).
 
 - SQLite: `modernc.org/sqlite` (pure Go, includes FTS5). Migrations are embedded SQL files.
 - One declarative export/import (`studio-export.yaml`) covering:
-  - personas
+  - teammates
   - specs
   - rules (secrets by name only)
   - providers (credentials excluded)
@@ -996,7 +996,7 @@ sandbox-studio/
     gateway/             # socks5, sni/host sniffing, dns, rules engine, tls mitm, caddy
     secrets/             # vault, keychain, placeholders
     approvals/           # inbox, patterns, SSE fan-out
-    persona/
+    teammate/
     harness/             # opencode, claude, codex adapters
     memory/              # store, embed (yzma), search, extract, consolidate
     browser/             # broker, policy, redaction, stream relay
@@ -1047,19 +1047,19 @@ are part of the acceptance criteria.
   an independent copy; a spec change rebuilds the template and rebases while keeping the
   workspace.
 
-**M4 — Personas and harnesses**
-- Persona CRUD, providers (Anthropic, OpenAI, OpenAI-compatible) with gateway-injected
-  keys, the OpenCode, Claude Code and Codex adapters, git identity per persona, sessions in
+**M4 — Teammates and harnesses**
+- Teammate CRUD, providers (Anthropic, OpenAI, OpenAI-compatible) with gateway-injected
+  keys, the OpenCode, Claude Code and Codex adapters, git identity per teammate, sessions in
   tmux.
-- Accepted when: the same persona can run each of the three harnesses, each reaching its
+- Accepted when: the same teammate can run each of the three harnesses, each reaching its
   provider without a real key in the guest.
 
 **M5 — Memory core**
 - Store, yzma embeddings, hybrid search, hooks (session start, per prompt, pre-compaction,
   end) for all three harnesses, MCP memory tools, automatic extraction, the memory UI.
-- Accepted when: a preference stated in one session of persona A is recalled automatically
+- Accepted when: a preference stated in one session of teammate A is recalled automatically
   in a new session of A on another harness and in another sandbox, and is not visible to
-  persona B.
+  teammate B.
 
 **M6 — Shared memory, consolidation, contradictions**
 - Shared scope, `share`/promotion approvals, the dream job (dedupe, judge, supersession,
@@ -1096,7 +1096,7 @@ are part of the acceptance criteria.
 - Open: the browser image is not in the release yet (it comes with M7). Signing and
   notarization are untested until the certificates exist.
 
-ACP-driven chat sessions (design: [docs/design/chat-mode.md](docs/design/chat-mode.md)) and persona "tasks"/heartbeats (OpenClaw-style proactive work) come
+ACP-driven chat sessions (design: [docs/design/chat-mode.md](docs/design/chat-mode.md)) and teammate "tasks"/heartbeats (OpenClaw-style proactive work) come
 after M9, or slot in after M5 if wanted earlier.
 
 ## 9. Spikes and risks (M0)
@@ -1110,7 +1110,7 @@ after M9, or slot in after M5 if wanted earlier.
 | S5 | Named disk volumes in snapshots and forks vs owned volumes; best rebase mechanism | Decision recorded |
 | S6 | Hold-and-ask: client timeouts for npm, pip, git, curl, docker pull while held | Defaults chosen per client |
 | S7 | Harness hooks: exact OpenCode plugin events for the pinned version; Claude Code managed settings; Codex system-layer managed hooks without trust prompts | Context injection proven in all three |
-| S8 | **(high priority)** Subscription auth: Claude Code OAuth token via placeholder; Codex ChatGPT login (refresh handled by Studio vs guest-side `auth.json`); headless structured output from `claude -p` and `codex exec` for utility jobs | A login-based persona runs in each harness without the long-lived credential in the guest (or the fallback is documented) |
+| S8 | **(high priority)** Subscription auth: Claude Code OAuth token via placeholder; Codex ChatGPT login (refresh handled by Studio vs guest-side `auth.json`); headless structured output from `claude -p` and `codex exec` for utility jobs | A login-based teammate runs in each harness without the long-lived credential in the guest (or the fallback is documented) |
 | S9 | yzma + embeddinggemma on 3 OSes: latency and memory | Under 50 ms per short query on CPU |
 
 Other risks:

@@ -49,7 +49,7 @@ var asked = []string{"click", "fill", "type", "press", "select", "fill_credentia
 // alwaysAsked actions move files across the browser VM's boundary; no pattern allows them.
 var alwaysAsked = []string{"upload", "download"}
 
-// Decide applies the fixed rules and the persona's patterns to an action. The order:
+// Decide applies the fixed rules and the teammate's patterns to an action. The order:
 // the deny list and sensitive get_value, deny patterns, uploads and downloads (always
 // asked), read-only actions, allow patterns, open (the gateway still gates the network),
 // then ask for page changes and deny anything unknown. Sensitive patterns do not decide

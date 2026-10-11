@@ -13,9 +13,9 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // SessionGuest is the part of the guest-agent channel agent sessions use. It is the
@@ -40,13 +40,13 @@ type sessionPath struct {
 	Name string `path:"name" pattern:"^[A-Za-z0-9_-]{1,64}$"`
 }
 
-// registerSessions adds agent sessions: the owner persona's harness TUI in a tmux session
+// registerSessions adds agent sessions: the owner teammate's harness TUI in a tmux session
 // of one of its sandboxes. They are terminals too, so the web terminal attaches to them.
 func (s *Server) registerSessions(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "startSession", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/sessions", Tags: []string{"sessions"},
 		DefaultStatus: http.StatusCreated,
-		Description: "Starts the owner persona's harness in a new tmux session, after writing its config, " +
+		Description: "Starts the owner teammate's harness in a new tmux session, after writing its config, " +
 			"instructions and git identity into the agent user's home. Attach like any terminal.",
 	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body agentproto.Session }, error) {
 		sess, err := s.startSession(ctx, in.Env, in.ID)
@@ -110,12 +110,12 @@ type sessionPlan struct {
 	env     map[string]string
 }
 
-// planSession checks that sb's owner persona can run its harness and renders the files.
+// planSession checks that sb's owner teammate can run its harness and renders the files.
 func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan, error) {
-	if sb.PersonaID == "" {
-		return sessionPlan{}, huma.Error409Conflict("the sandbox has no owner persona; agent sessions run in a persona's sandbox")
+	if sb.TeammateID == "" {
+		return sessionPlan{}, huma.Error409Conflict("the sandbox has no owner teammate; agent sessions run in a teammate's sandbox")
 	}
-	p, err := s.Store.Persona(ctx, sb.EnvironmentID, sb.PersonaID)
+	p, err := s.Store.Teammate(ctx, sb.EnvironmentID, sb.TeammateID)
 	if err != nil {
 		return sessionPlan{}, apiError(err)
 	}
@@ -124,11 +124,11 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 		return sessionPlan{}, apiError(err)
 	}
 	view := providerView(prov)
-	if view.State != personas.StateReady {
+	if view.State != teammates.StateReady {
 		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a login first", prov.Name))
 	}
 	h, ok := harness.Lookup(p.Harness)
-	if !ok || !personas.Supports(prov.Kind, p.Harness) {
+	if !ok || !teammates.Supports(prov.Kind, p.Harness) {
 		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s can't run %s", prov.Name, p.Harness))
 	}
 	// The key must reach the provider's host through the gateway, which swaps the
@@ -147,7 +147,7 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	}
 	hp := harness.Provider{Kind: prov.Kind, BaseURL: prov.BaseURL, Model: prov.Model, EnvVar: view.EnvVar, Placeholder: prov.Placeholder}
 	files, err := harness.Files(h,
-		harness.Persona{Name: p.Name, Role: p.Role, Soul: p.Soul, Model: p.Model, GitName: p.GitName, GitEmail: p.GitEmail},
+		harness.Teammate{Name: p.Name, Role: p.Role, Soul: p.Soul, Model: p.Model, GitName: p.GitName, GitEmail: p.GitEmail},
 		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites}, hp)
 	if err != nil {
 		return sessionPlan{}, huma.Error409Conflict(err.Error())
@@ -157,11 +157,11 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 
 // providerHost is the host a provider's key must be bound to.
 func providerHost(prov store.Provider) (string, error) {
-	if prov.Kind == personas.KindOpenAICompatible {
-		_, host, err := personas.BaseURL(prov.BaseURL)
+	if prov.Kind == teammates.KindOpenAICompatible {
+		_, host, err := teammates.BaseURL(prov.BaseURL)
 		return host, err
 	}
-	k, _ := personas.LookupKind(prov.Kind)
+	k, _ := teammates.LookupKind(prov.Kind)
 	return k.Host, nil
 }
 

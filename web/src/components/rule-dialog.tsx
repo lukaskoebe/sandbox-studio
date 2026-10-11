@@ -176,15 +176,15 @@ function RuleForm({
   )
   const [headers, setHeaders] = useState(() => initialHeaders(rule))
   const [caddyfile, setCaddyfile] = useState(rule?.config.caddyfile ?? "")
-  // "environment", a sandbox ID, or "persona:" and a persona ID.
+  // "environment", a sandbox ID, or "teammate:" and a teammate ID.
   const [scope, setScope] = useState(
     rule?.sandboxId ??
-      (rule?.personaId ? `persona:${rule.personaId}` : "environment")
+      (rule?.teammateId ? `teammate:${rule.teammateId}` : "environment")
   )
-  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
-  const personaList = personas.data ?? []
+  const teammateList = teammates.data ?? []
   const [note, setNote] = useState(rule?.note ?? "")
   const [formError, setFormError] = useState<string>()
   const clearFormError = () => setFormError(undefined)
@@ -238,11 +238,11 @@ function RuleForm({
       ports: portList,
       action,
       sandboxId:
-        scope === "environment" || scope.startsWith("persona:")
+        scope === "environment" || scope.startsWith("teammate:")
           ? undefined
           : scope,
-      personaId: scope.startsWith("persona:")
-        ? scope.slice("persona:".length)
+      teammateId: scope.startsWith("teammate:")
+        ? scope.slice("teammate:".length)
         : undefined,
       note: note.trim() || undefined,
       config:
@@ -375,7 +375,10 @@ function RuleForm({
             environment: "Environment",
             ...Object.fromEntries(sandboxes.map((sb) => [sb.id, sb.name])),
             ...Object.fromEntries(
-              personaList.map((p) => [`persona:${p.id}`, `Persona ${p.name}`])
+              teammateList.map((p) => [
+                `teammate:${p.id}`,
+                `Teammate ${p.name}`,
+              ])
             ),
           }}
         >
@@ -389,16 +392,16 @@ function RuleForm({
                 {sb.name}
               </SelectItem>
             ))}
-            {personaList.map((p) => (
-              <SelectItem key={p.id} value={`persona:${p.id}`}>
-                Persona {p.name}
+            {teammateList.map((p) => (
+              <SelectItem key={p.id} value={`teammate:${p.id}`}>
+                Teammate {p.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {personaList.length > 0 && (
+        {teammateList.length > 0 && (
           <FieldDescription>
-            A persona rule covers every sandbox the persona owns.
+            A teammate rule covers every sandbox the teammate owns.
           </FieldDescription>
         )}
       </Field>

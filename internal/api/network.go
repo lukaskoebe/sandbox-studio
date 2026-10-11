@@ -30,7 +30,7 @@ type ApprovalView struct {
 	Network *policy.NetworkRequest `json:"network,omitempty"`
 	Git     *gitreview.GitDetail   `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
 	// MemoryShare is set for memory.share approvals.
-	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A persona's proposal for shared memory"`
+	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A teammate's proposal for shared memory"`
 	// MemoryConflict is set for memory.conflict approvals.
 	MemoryConflict *agentmem.ConflictPayload `json:"memoryConflict,omitempty" doc:"Two facts that disagree"`
 	// BrowserAction and BrowserCredential are set for browser.action and browser.credential.
@@ -100,13 +100,13 @@ func (s *Server) checkEnvironment(ctx context.Context, env string) error {
 
 // RuleInput is the editable part of a network rule.
 type RuleInput struct {
-	Host      string          `json:"host" minLength:"1" doc:"example.com, *.example.com (includes example.com), or an IP address"`
-	Ports     []int           `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
-	Action    string          `json:"action" enum:"allow,proxy,caddy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile"`
-	Config    RuleConfigInput `json:"config,omitempty"`
-	SandboxID string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
-	PersonaID string          `json:"personaId,omitempty" doc:"Limits the rule to the sandboxes one persona of this environment owns; excludes sandboxId"`
-	Note      string          `json:"note,omitempty" maxLength:"500"`
+	Host       string          `json:"host" minLength:"1" doc:"example.com, *.example.com (includes example.com), or an IP address"`
+	Ports      []int           `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
+	Action     string          `json:"action" enum:"allow,proxy,caddy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile"`
+	Config     RuleConfigInput `json:"config,omitempty"`
+	SandboxID  string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
+	TeammateID string          `json:"teammateId,omitempty" doc:"Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId"`
+	Note       string          `json:"note,omitempty" maxLength:"500"`
 }
 
 // RuleConfigInput is the editable part of a rule's config.
@@ -212,17 +212,17 @@ func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.
 			return store.Rule{}, apiError(err)
 		}
 	}
-	if in.PersonaID != "" && in.SandboxID != "" {
-		return store.Rule{}, huma.Error422UnprocessableEntity("a rule is scoped to a sandbox or a persona, not both")
+	if in.TeammateID != "" && in.SandboxID != "" {
+		return store.Rule{}, huma.Error422UnprocessableEntity("a rule is scoped to a sandbox or a teammate, not both")
 	}
-	if err := s.checkPersona(ctx, env, in.PersonaID); err != nil {
+	if err := s.checkTeammate(ctx, env, in.TeammateID); err != nil {
 		return store.Rule{}, err
 	}
 	config, err := s.ruleConfigFrom(ctx, env, in.Action, in.Config)
 	if err != nil {
 		return store.Rule{}, err
 	}
-	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, PersonaID: in.PersonaID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note}, nil
+	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, TeammateID: in.TeammateID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note}, nil
 }
 
 type rulePath struct {
@@ -263,7 +263,7 @@ func (s *Server) registerNetwork(api huma.API) {
 			Action   string `json:"action" enum:"allow,deny,dismiss" doc:"For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
 			Host     string `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports    []int  `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
-			Scope    string `json:"scope,omitempty" enum:"sandbox,persona,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment"`
+			Scope    string `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
 			Note     string `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
 			Remember bool   `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
 		}

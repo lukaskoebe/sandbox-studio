@@ -47,7 +47,7 @@ image:
 	docker save sandbox-studio-base:dev | msb load -t sandbox-studio-base:dev
 	docker rmi sandbox-studio-base:dev
 
-# Dev only: the browser image for personas' browser VMs (docs/browser.md).
+# Dev only: the browser image for teammates' browser VMs (docs/browser.md).
 image-browser:
 	docker build -t sandbox-studio-browser:dev images/browser
 	docker save sandbox-studio-browser:dev | msb load -t sandbox-studio-browser:dev

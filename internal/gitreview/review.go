@@ -15,7 +15,7 @@ import (
 
 // PushReview is the payload of a git.push approval: what the reviewer sees.
 type PushReview struct {
-	Persona       string   `json:"persona,omitempty" doc:"The persona owning the sandbox; empty for unowned sandboxes"`
+	Teammate      string   `json:"teammate,omitempty" doc:"The teammate owning the sandbox; empty for unowned sandboxes"`
 	Sandbox       string   `json:"sandbox" doc:"The sandbox's name"`
 	Forge         string   `json:"forge"`
 	Owner         string   `json:"owner" doc:"The repository path before its last segment; may contain slashes or be empty"`
@@ -195,8 +195,8 @@ func prProposal(rv PushReview, base string) PullRequest {
 		}
 		pr.Body = b.String()
 	}
-	if rv.Persona != "" {
-		pr.Body = strings.TrimSpace(pr.Body + "\n\nPushed by " + rv.Persona + " from sandbox " + rv.Sandbox + " through Sandbox Studio.")
+	if rv.Teammate != "" {
+		pr.Body = strings.TrimSpace(pr.Body + "\n\nPushed by " + rv.Teammate + " from sandbox " + rv.Sandbox + " through Sandbox Studio.")
 	}
 	pr.Title = truncate(pr.Title, 200)
 	return pr

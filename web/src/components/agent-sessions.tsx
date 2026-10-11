@@ -12,31 +12,31 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, type Harness } from "@/lib/api/client"
-import { harnessLabels } from "@/lib/personas"
+import { harnessLabels } from "@/lib/teammates"
 
 /**
- * Agent sessions of a persona's sandbox: its harness TUI in a tmux session. Starting one
+ * Agent sessions of a teammate's sandbox: its harness TUI in a tmux session. Starting one
  * writes the harness config into the guest and opens it as a terminal tab; attaching to a
  * running one selects its tab.
  */
 export function AgentSessions({
   env,
   id,
-  personaId,
+  teammateId,
   onAttach,
 }: {
   env: string
   id: string
-  personaId: string
+  teammateId: string
   onAttach: (name: string) => void
 }) {
   const queryClient = useQueryClient()
   const path = { params: { path: { env, id } } }
-  const persona = $api.useQuery(
+  const teammate = $api.useQuery(
     "get",
-    "/api/environments/{env}/personas/{id}",
+    "/api/environments/{env}/teammates/{id}",
     {
-      params: { path: { env, id: personaId } },
+      params: { path: { env, id: teammateId } },
     }
   )
   const sessions = $api.useQuery(
@@ -81,7 +81,7 @@ export function AgentSessions({
     }
   )
   const list = sessions.data ?? []
-  const label = persona.data ? harnessLabels[persona.data.harness] : "agent"
+  const label = teammate.data ? harnessLabels[teammate.data.harness] : "agent"
 
   return (
     <>
@@ -89,7 +89,7 @@ export function AgentSessions({
         variant="ghost"
         size="sm"
         disabled={start.isPending}
-        title={`Start a ${label} session as ${persona.data?.name ?? "the owner"}`}
+        title={`Start a ${label} session as ${teammate.data?.name ?? "the owner"}`}
         onClick={() => start.mutate(path)}
       >
         {start.isPending ? <Spinner /> : <RobotIcon />}

@@ -11,11 +11,11 @@ import (
 
 // --- browser broker ---------------------------------------------------------------------
 
-// CreateBrowserSandbox inserts the browser VM row of a persona. There is at most one; a
+// CreateBrowserSandbox inserts the browser VM row of a teammate. There is at most one; a
 // second one is ErrExists.
 func (s *Store) CreateBrowserSandbox(ctx context.Context, sb Sandbox) (Sandbox, error) {
-	if sb.PersonaID == "" {
-		return sb, errors.New("a browser belongs to a persona")
+	if sb.TeammateID == "" {
+		return sb, errors.New("a browser belongs to a teammate")
 	}
 	sb.Kind, sb.TemplateID = SandboxKindBrowser, ""
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -24,11 +24,11 @@ func (s *Store) CreateBrowserSandbox(ctx context.Context, sb Sandbox) (Sandbox, 
 	}
 	defer tx.Rollback()
 	var n int
-	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandboxes WHERE persona_id = ? AND kind = 'browser'", sb.PersonaID).Scan(&n); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM sandboxes WHERE teammate_id = ? AND kind = 'browser'", sb.TeammateID).Scan(&n); err != nil {
 		return sb, err
 	}
 	if n > 0 {
-		return sb, fmt.Errorf("the persona's browser: %w", ErrExists)
+		return sb, fmt.Errorf("the teammate's browser: %w", ErrExists)
 	}
 	if sb, err = insertSandbox(ctx, tx, sb); err != nil {
 		return sb, err
@@ -36,16 +36,16 @@ func (s *Store) CreateBrowserSandbox(ctx context.Context, sb Sandbox) (Sandbox, 
 	return sb, tx.Commit()
 }
 
-// BrowserSandbox returns the browser VM row of a persona.
-func (s *Store) BrowserSandbox(ctx context.Context, envID, personaID string) (Sandbox, error) {
-	sb, err := scanSandbox(s.db.QueryRowContext(ctx, "SELECT "+sandboxCols+" FROM sandboxes WHERE environment_id = ? AND persona_id = ? AND kind = 'browser'", envID, personaID))
+// BrowserSandbox returns the browser VM row of a teammate.
+func (s *Store) BrowserSandbox(ctx context.Context, envID, teammateID string) (Sandbox, error) {
+	sb, err := scanSandbox(s.db.QueryRowContext(ctx, "SELECT "+sandboxCols+" FROM sandboxes WHERE environment_id = ? AND teammate_id = ? AND kind = 'browser'", envID, teammateID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return sb, ErrNotFound
 	}
 	return sb, err
 }
 
-// BrowserSandboxes lists every persona's browser VM row.
+// BrowserSandboxes lists every teammate's browser VM row.
 func (s *Store) BrowserSandboxes(ctx context.Context) ([]Sandbox, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT "+sandboxCols+" FROM sandboxes WHERE kind = 'browser' ORDER BY created_at")
 	if err != nil {
@@ -70,11 +70,11 @@ const (
 	BrowserSensitive = "sensitive"
 )
 
-// BrowserPattern is a persona's rule for its browser; see migration 017.
+// BrowserPattern is a teammate's rule for its browser; see migration 017.
 type BrowserPattern struct {
 	ID            string    `json:"id"`
 	EnvironmentID string    `json:"environmentId"`
-	PersonaID     string    `json:"personaId"`
+	TeammateID    string    `json:"teammateId"`
 	Action        string    `json:"action" doc:"A browser action such as click or fill, or * for every action"`
 	Origin        string    `json:"origin" doc:"scheme://host[:port]; the host may start with *."`
 	Role          string    `json:"role" doc:"Accessibility role of the element; empty matches any"`
@@ -83,12 +83,12 @@ type BrowserPattern struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
-const browserPatternCols = "id, environment_id, persona_id, action, origin, role, label, verdict, created_at"
+const browserPatternCols = "id, environment_id, teammate_id, action, origin, role, label, verdict, created_at"
 
 func scanBrowserPattern(row interface{ Scan(...any) error }) (BrowserPattern, error) {
 	var p BrowserPattern
 	var created int64
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.PersonaID, &p.Action, &p.Origin, &p.Role, &p.Label, &p.Verdict, &created)
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.TeammateID, &p.Action, &p.Origin, &p.Role, &p.Label, &p.Verdict, &created)
 	p.CreatedAt = time.Unix(created, 0)
 	return p, err
 }
@@ -101,21 +101,21 @@ func (s *Store) AddBrowserPattern(ctx context.Context, p BrowserPattern) (Browse
 		return p, fmt.Errorf("unknown verdict %q", p.Verdict)
 	}
 	p.ID, p.CreatedAt = NewID(), time.Unix(now(), 0)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO browser_patterns ("+browserPatternCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (persona_id, action, origin, role, label, verdict) DO NOTHING",
-		p.ID, p.EnvironmentID, p.PersonaID, p.Action, p.Origin, p.Role, p.Label, p.Verdict, p.CreatedAt.Unix())
+	_, err := s.db.ExecContext(ctx, "INSERT INTO browser_patterns ("+browserPatternCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (teammate_id, action, origin, role, label, verdict) DO NOTHING",
+		p.ID, p.EnvironmentID, p.TeammateID, p.Action, p.Origin, p.Role, p.Label, p.Verdict, p.CreatedAt.Unix())
 	if err != nil {
 		if strings.Contains(err.Error(), "FOREIGN KEY") {
-			return p, fmt.Errorf("persona %s: %w", p.PersonaID, ErrNotFound)
+			return p, fmt.Errorf("teammate %s: %w", p.TeammateID, ErrNotFound)
 		}
 		return p, err
 	}
-	return scanBrowserPattern(s.db.QueryRowContext(ctx, "SELECT "+browserPatternCols+" FROM browser_patterns WHERE persona_id = ? AND action = ? AND origin = ? AND role = ? AND label = ? AND verdict = ?",
-		p.PersonaID, p.Action, p.Origin, p.Role, p.Label, p.Verdict))
+	return scanBrowserPattern(s.db.QueryRowContext(ctx, "SELECT "+browserPatternCols+" FROM browser_patterns WHERE teammate_id = ? AND action = ? AND origin = ? AND role = ? AND label = ? AND verdict = ?",
+		p.TeammateID, p.Action, p.Origin, p.Role, p.Label, p.Verdict))
 }
 
-// BrowserPatterns lists a persona's patterns, oldest first.
-func (s *Store) BrowserPatterns(ctx context.Context, envID, personaID string) ([]BrowserPattern, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+browserPatternCols+" FROM browser_patterns WHERE environment_id = ? AND persona_id = ? ORDER BY created_at, id", envID, personaID)
+// BrowserPatterns lists a teammate's patterns, oldest first.
+func (s *Store) BrowserPatterns(ctx context.Context, envID, teammateID string) ([]BrowserPattern, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+browserPatternCols+" FROM browser_patterns WHERE environment_id = ? AND teammate_id = ? ORDER BY created_at, id", envID, teammateID)
 	if err != nil {
 		return nil, err
 	}
@@ -131,9 +131,9 @@ func (s *Store) BrowserPatterns(ctx context.Context, envID, personaID string) ([
 	return out, rows.Err()
 }
 
-// DeleteBrowserPattern removes one pattern of a persona.
-func (s *Store) DeleteBrowserPattern(ctx context.Context, envID, personaID, id string) error {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM browser_patterns WHERE environment_id = ? AND persona_id = ? AND id = ?", envID, personaID, id)
+// DeleteBrowserPattern removes one pattern of a teammate.
+func (s *Store) DeleteBrowserPattern(ctx context.Context, envID, teammateID, id string) error {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM browser_patterns WHERE environment_id = ? AND teammate_id = ? AND id = ?", envID, teammateID, id)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (s *Store) DeleteBrowserPattern(ctx context.Context, envID, personaID, id s
 type BrowserAction struct {
 	ID            int64     `json:"id"`
 	EnvironmentID string    `json:"environmentId"`
-	PersonaID     string    `json:"personaId"`
+	TeammateID    string    `json:"teammateId"`
 	SessionID     string    `json:"sessionId"`
 	SandboxID     string    `json:"sandboxId,omitempty" doc:"The agent sandbox that drove the action; empty for the user"`
 	Actor         string    `json:"actor" enum:"agent,user"`
@@ -160,12 +160,12 @@ type BrowserAction struct {
 	At            time.Time `json:"at"`
 }
 
-const browserActionCols = "id, environment_id, persona_id, session_id, sandbox_id, actor, action, target, url, outcome, detail, screenshot, at"
+const browserActionCols = "id, environment_id, teammate_id, session_id, sandbox_id, actor, action, target, url, outcome, detail, screenshot, at"
 
 func scanBrowserAction(row interface{ Scan(...any) error }) (BrowserAction, error) {
 	var a BrowserAction
 	var at int64
-	err := row.Scan(&a.ID, &a.EnvironmentID, &a.PersonaID, &a.SessionID, &a.SandboxID, &a.Actor, &a.Action, &a.Target, &a.URL, &a.Outcome, &a.Detail, &a.Screenshot, &at)
+	err := row.Scan(&a.ID, &a.EnvironmentID, &a.TeammateID, &a.SessionID, &a.SandboxID, &a.Actor, &a.Action, &a.Target, &a.URL, &a.Outcome, &a.Detail, &a.Screenshot, &at)
 	a.At = time.Unix(at, 0)
 	return a, err
 }
@@ -175,8 +175,8 @@ func (s *Store) AddBrowserAction(ctx context.Context, a BrowserAction) (BrowserA
 	if a.At.IsZero() {
 		a.At = time.Unix(now(), 0)
 	}
-	res, err := s.db.ExecContext(ctx, "INSERT INTO browser_actions (environment_id, persona_id, session_id, sandbox_id, actor, action, target, url, outcome, detail, screenshot, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		a.EnvironmentID, a.PersonaID, a.SessionID, a.SandboxID, a.Actor, a.Action, a.Target, a.URL, a.Outcome, a.Detail, a.Screenshot, a.At.Unix())
+	res, err := s.db.ExecContext(ctx, "INSERT INTO browser_actions (environment_id, teammate_id, session_id, sandbox_id, actor, action, target, url, outcome, detail, screenshot, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		a.EnvironmentID, a.TeammateID, a.SessionID, a.SandboxID, a.Actor, a.Action, a.Target, a.URL, a.Outcome, a.Detail, a.Screenshot, a.At.Unix())
 	if err != nil {
 		return a, err
 	}
@@ -184,12 +184,12 @@ func (s *Store) AddBrowserAction(ctx context.Context, a BrowserAction) (BrowserA
 	return a, err
 }
 
-// BrowserActions lists a persona's action log, newest first; a non-empty sessionID limits
+// BrowserActions lists a teammate's action log, newest first; a non-empty sessionID limits
 // it to one session.
-func (s *Store) BrowserActions(ctx context.Context, envID, personaID, sessionID string, limit int) ([]BrowserAction, error) {
+func (s *Store) BrowserActions(ctx context.Context, envID, teammateID, sessionID string, limit int) ([]BrowserAction, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT "+browserActionCols+` FROM browser_actions
-		WHERE environment_id = ? AND persona_id = ? AND (? = '' OR session_id = ?) ORDER BY id DESC LIMIT ?`,
-		envID, personaID, sessionID, sessionID, limit)
+		WHERE environment_id = ? AND teammate_id = ? AND (? = '' OR session_id = ?) ORDER BY id DESC LIMIT ?`,
+		envID, teammateID, sessionID, sessionID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -205,9 +205,9 @@ func (s *Store) BrowserActions(ctx context.Context, envID, personaID, sessionID 
 	return out, rows.Err()
 }
 
-// BrowserAction returns one entry of a persona's action log.
-func (s *Store) BrowserAction(ctx context.Context, envID, personaID string, id int64) (BrowserAction, error) {
-	a, err := scanBrowserAction(s.db.QueryRowContext(ctx, "SELECT "+browserActionCols+" FROM browser_actions WHERE environment_id = ? AND persona_id = ? AND id = ?", envID, personaID, id))
+// BrowserAction returns one entry of a teammate's action log.
+func (s *Store) BrowserAction(ctx context.Context, envID, teammateID string, id int64) (BrowserAction, error) {
+	a, err := scanBrowserAction(s.db.QueryRowContext(ctx, "SELECT "+browserActionCols+" FROM browser_actions WHERE environment_id = ? AND teammate_id = ? AND id = ?", envID, teammateID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -238,26 +238,26 @@ func (s *Store) ClearBrowserScreenshot(ctx context.Context, id int64) error {
 	return err
 }
 
-// PruneBrowserActions keeps the newest keep entries of a persona's log and returns the
+// PruneBrowserActions keeps the newest keep entries of a teammate's log and returns the
 // screenshots of the dropped ones, for the caller to delete.
-func (s *Store) PruneBrowserActions(ctx context.Context, envID, personaID string, keep int) ([]string, error) {
+func (s *Store) PruneBrowserActions(ctx context.Context, envID, teammateID string, keep int) ([]string, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	const old = "environment_id = ? AND persona_id = ? AND id NOT IN (SELECT id FROM browser_actions WHERE environment_id = ? AND persona_id = ? ORDER BY id DESC LIMIT ?)"
-	shots, err := names(ctx, tx, "SELECT screenshot FROM browser_actions WHERE screenshot <> '' AND "+old, envID, personaID, envID, personaID, keep)
+	const old = "environment_id = ? AND teammate_id = ? AND id NOT IN (SELECT id FROM browser_actions WHERE environment_id = ? AND teammate_id = ? ORDER BY id DESC LIMIT ?)"
+	shots, err := names(ctx, tx, "SELECT screenshot FROM browser_actions WHERE screenshot <> '' AND "+old, envID, teammateID, envID, teammateID, keep)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM browser_actions WHERE "+old, envID, personaID, envID, personaID, keep); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM browser_actions WHERE "+old, envID, teammateID, envID, teammateID, keep); err != nil {
 		return nil, err
 	}
 	return shots, tx.Commit()
 }
 
-// DeleteBrowserActions drops a persona's whole action log and returns its screenshots.
-func (s *Store) DeleteBrowserActions(ctx context.Context, envID, personaID string) ([]string, error) {
-	return s.PruneBrowserActions(ctx, envID, personaID, 0)
+// DeleteBrowserActions drops a teammate's whole action log and returns its screenshots.
+func (s *Store) DeleteBrowserActions(ctx context.Context, envID, teammateID string) ([]string, error) {
+	return s.PruneBrowserActions(ctx, envID, teammateID, 0)
 }
