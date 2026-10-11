@@ -4,6 +4,30 @@ package guest
 
 import "testing"
 
+func TestBrowserArgvKeepsPersistentProfileAndCertificateVerification(t *testing.T) {
+	argv := browserArgv([]string{"open", "https://example.com"})
+	profile := -1
+	for i, arg := range argv {
+		if arg == "--profile" {
+			profile = i
+			break
+		}
+	}
+	if profile < 0 || profile+1 >= len(argv) || argv[profile+1] != browserProfile {
+		t.Fatalf("browser argv does not keep profile %q: %q", browserProfile, argv)
+	}
+	for _, forbidden := range []string{
+		"--ca-cert", "--ignore-https-errors", "--ignore-certificate-errors",
+		"--ignore-certificate-errors-spki-list",
+	} {
+		for _, arg := range argv {
+			if arg == forbidden {
+				t.Errorf("browser argv contains certificate bypass %q: %q", forbidden, argv)
+			}
+		}
+	}
+}
+
 func TestCheckBrowserArgs(t *testing.T) {
 	ok := [][]string{
 		{"open", "https://example.com"},
