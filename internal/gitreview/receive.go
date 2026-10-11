@@ -276,6 +276,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 		return "", refusal("internal error: Sandbox Studio could not describe the push")
 	}
 	rv.Sandbox, rv.Forge, rv.Owner, rv.Repo, rv.Branch = t.sb.Name, t.forge.Name, t.owner, t.repo, cmd.Name.Short()
+	rv.Upstream = upstreamDescription(t.forge, t.path())
 	rv.New = cmd.New.String()
 	if !current.IsZero() {
 		rv.Old = current.String()
@@ -303,7 +304,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	}
 	a, _, err := s.Store.RequestApproval(ctx, store.Approval{
 		EnvironmentID: t.sb.EnvironmentID, SandboxID: t.sb.ID, Kind: KindPush,
-		Subject: fmt.Sprintf("%s/%s/%s:%s", t.forge.Name, t.owner, t.repo, cmd.Name.Short()), Payload: payload,
+		Subject: fmt.Sprintf("%s/%s:%s", t.forge.Name, t.path(), cmd.Name.Short()), Payload: payload,
 	})
 	if err != nil {
 		s.Log.Error("git remote: approval", "err", err)

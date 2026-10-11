@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -35,19 +36,41 @@ func (s *Server) decideIntegration(ctx context.Context, env, id string, d integr
 	return a, true, apiError(err)
 }
 
-// ForgeInput describes a forge to add.
-type ForgeInput struct {
-	Name    string `json:"name" pattern:"^[a-z0-9][a-z0-9-]{0,31}$" doc:"Names the forge in the remote URL: https://git.studio.internal/<name>/<owner>/<repo>.git"`
-	Kind    string `json:"kind" enum:"forgejo,github"`
-	BaseURL string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com"`
-	Token   string `json:"token" minLength:"1" maxLength:"4096" doc:"An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
+// gitRewrites are the managed git config's rewrites of real repository URLs to the
+// virtual remote, for an environment's forges.
+func (s *Server) gitRewrites(ctx context.Context, envID string) ([]harness.GitRewrite, error) {
+	forges, err := s.Store.Forges(ctx, envID)
+	if err != nil {
+		return nil, err
+	}
+	var out []harness.GitRewrite
+	for _, r := range gitreview.Rewrites(forges) {
+		out = append(out, harness.GitRewrite{URL: r.URL, InsteadOf: r.InsteadOf})
+	}
+	return out, nil
 }
 
-// ForgeTest is the outcome of checking a forge's token.
+// ForgeInput describes a forge to add.
+type ForgeInput struct {
+	Name     string `json:"name" pattern:"^[a-z0-9][a-z0-9-]{0,31}$" doc:"Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git"`
+	Kind     string `json:"kind" enum:"forgejo,github,https"`
+	BaseURL  string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com"`
+	Username string `json:"username,omitempty" maxLength:"64" doc:"Kind https: the user git authenticates as with the token; git if empty"`
+	Token    string `json:"token" minLength:"1" maxLength:"4096" doc:"An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
+}
+
+// ForgeTestInput optionally names a repository to test with.
+type ForgeTestInput struct {
+	Repo string `json:"repo,omitempty" maxLength:"800" doc:"A repository path on the forge, such as owner/repo; required for forges without an API"`
+}
+
+// ForgeTest is the outcome of checking a forge's credential.
 type ForgeTest struct {
 	OK        bool       `json:"ok"`
 	User      string     `json:"user,omitempty" doc:"The user the token belongs to"`
 	ExpiresAt *time.Time `json:"expiresAt,omitempty" doc:"When the token expires, if the forge says (GitHub)"`
+	Repo      string     `json:"repo,omitempty" doc:"The repository tested"`
+	Branches  int        `json:"branches,omitempty" doc:"How many branches it has"`
 	Message   string     `json:"message,omitempty"`
 }
 
@@ -79,16 +102,16 @@ func (s *Server) registerForges(api huma.API) {
 			return nil, err
 		}
 		b := in.Body
-		base, host, err := gitreview.CheckForge(b.Name, b.Kind, b.BaseURL)
+		u, err := gitreview.CheckForge(b.Name, b.Kind, b.BaseURL, b.Username)
 		if err != nil {
 			return nil, apiError(err)
 		}
 		secretName := "FORGE_" + strings.ToUpper(strings.ReplaceAll(b.Name, "-", "_")) + "_TOKEN"
-		sec, err := s.Vault.Prepare(in.Env, secretName, b.Token, []string{host}, "Token of forge "+b.Name)
+		sec, err := s.Vault.Prepare(in.Env, secretName, b.Token, []string{u.Host}, "Token of forge "+b.Name)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		f, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind, BaseURL: base}, sec)
+		f, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind, BaseURL: u.Base, Username: u.User}, sec)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -117,10 +140,15 @@ func (s *Server) registerForges(api huma.API) {
 		return nil, nil
 	})
 
+	type testIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Forge ID"`
+		Body *ForgeTestInput
+	}
 	huma.Register(api, huma.Operation{
 		OperationID: "testForge", Method: http.MethodPost, Path: "/api/environments/{env}/forges/{id}/test", Tags: []string{"git"},
-		Description: "Checks that the forge answers and accepts the token.",
-	}, func(ctx context.Context, in *forgePath) (*struct{ Body ForgeTest }, error) {
+		Description: "Checks that the forge answers and accepts Studio's credential: through its API if it has one, and by listing the branches of repo if given.",
+	}, func(ctx context.Context, in *testIn) (*struct{ Body ForgeTest }, error) {
 		f, err := s.Store.Forge(ctx, in.Env, in.ID)
 		if err != nil {
 			return nil, apiError(err)
@@ -128,13 +156,17 @@ func (s *Server) registerForges(api huma.API) {
 		if s.Git == nil {
 			return nil, huma.Error503ServiceUnavailable("the git remote is not running")
 		}
-		acc, err := s.Git.TestForge(ctx, f)
-		if err != nil {
-			return &struct{ Body ForgeTest }{ForgeTest{Message: fmt.Sprint(err)}}, nil
+		var repo string
+		if in.Body != nil {
+			repo = in.Body.Repo
 		}
-		res := ForgeTest{OK: true, User: acc.User}
-		if !acc.Expires.IsZero() {
-			res.ExpiresAt = &acc.Expires
+		c, err := s.Git.TestForge(ctx, f, repo)
+		if err != nil {
+			return &struct{ Body ForgeTest }{ForgeTest{Message: strings.TrimPrefix(fmt.Sprint(err), gitreview.ErrInvalid.Error()+": ")}}, nil
+		}
+		res := ForgeTest{OK: true, User: c.User, Repo: c.Repo, Branches: c.Branches}
+		if !c.Expires.IsZero() {
+			res.ExpiresAt = &c.Expires
 		}
 		return &struct{ Body ForgeTest }{res}, nil
 	})

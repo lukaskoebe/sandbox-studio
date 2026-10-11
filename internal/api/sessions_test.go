@@ -71,6 +71,11 @@ func TestSessionStart(t *testing.T) {
 		t.Fatalf("persona: %d %s", rec.Code, rec.Body)
 	}
 	ada := decode[store.Persona](t, rec)
+	const forgeToken = "github_pat_session-test-token"
+	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/forges",
+		`{"name":"gh","kind":"github","baseUrl":"https://github.com","token":"`+forgeToken+`"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("forge: %d %s", rec.Code, rec.Body)
+	}
 	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, PersonaID: ada.ID})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +98,7 @@ func TestSessionStart(t *testing.T) {
 		F []agentproto.HomeFile
 		S []agentproto.StartSession
 	}{g.files, g.started})
-	if strings.Contains(string(sent), providerKey) {
+	if strings.Contains(string(sent), providerKey) || strings.Contains(string(sent), forgeToken) {
 		t.Fatalf("the key reached the guest: %s", sent)
 	}
 	if g.started[0].Env["ANTHROPIC_API_KEY"] != prov.Placeholder || len(g.started[0].Env) != 1 ||
@@ -107,7 +112,8 @@ func TestSessionStart(t *testing.T) {
 	if !paths[".claude/CLAUDE.md"].Block || !strings.Contains(paths[".claude/CLAUDE.md"].Content, "`remember`") ||
 		!strings.Contains(paths[".claude/CLAUDE.md"].Content, "## Your soul\n\nCareful.") ||
 		!strings.Contains(paths[".claude/settings.json"].Content, `"claude-sonnet-4-5"`) ||
-		!strings.Contains(paths[".config/git/config"].Content, `name = "Ada L"`) {
+		!strings.Contains(paths[".config/git/config"].Content, `name = "Ada L"`) ||
+		!strings.Contains(paths[".config/git/config"].Content, "[url \"https://git.studio.internal/gh/\"]\n\tinsteadOf = \"https://github.com/\"\n\tinsteadOf = \"git@github.com:\"\n") {
 		t.Fatalf("files: %+v", paths)
 	}
 

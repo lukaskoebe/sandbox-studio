@@ -45,7 +45,15 @@ type Provider struct {
 
 // Sandbox is what an adapter needs to know about the sandbox a session runs in.
 type Sandbox struct {
-	Name string
+	Name        string
+	GitRewrites []GitRewrite // the environment's forges, for the managed git config
+}
+
+// GitRewrite points real repository URLs at Studio's virtual git remote: git's
+// url.<URL>.insteadOf. URLs are validated forge base URLs, never containing a credential.
+type GitRewrite struct {
+	URL       string
+	InsteadOf []string
 }
 
 // GuestFile is a file in the agent user's home; Path is relative to it.
@@ -100,8 +108,8 @@ func Env(provider Provider) map[string]string {
 	return env
 }
 
-// Files are all files a session of h for p writes: the harness's own and the persona's
-// git identity.
+// Files are all files a session of h for p writes: the harness's own and the managed git
+// config (the persona's git identity and the forges' URL rewrites).
 func Files(h Harness, p Persona, s Sandbox, provider Provider) ([]GuestFile, error) {
 	if !personas.Supports(provider.Kind, h.Name()) {
 		return nil, fmt.Errorf("%s can't use a %s provider", h.Name(), provider.Kind)
@@ -110,8 +118,8 @@ func Files(h Harness, p Persona, s Sandbox, provider Provider) ([]GuestFile, err
 	if err != nil {
 		return nil, err
 	}
-	if p.GitName != "" && p.GitEmail != "" {
-		files = append(files, GitConfig(p))
+	if p.GitName != "" && p.GitEmail != "" || len(s.GitRewrites) > 0 {
+		files = append(files, GitConfig(p, s.GitRewrites))
 	}
 	return files, nil
 }
@@ -125,15 +133,40 @@ func model(p Persona, provider Provider) string {
 	return provider.Model
 }
 
-// GitConfig is the persona's git identity as the agent user's global git config. It uses
-// the XDG location, which git reads before ~/.gitconfig, so a ~/.gitconfig the user writes
-// in the sandbox still wins. There are no credentials in it: pushes go through the
-// gateway's placeholders like any other request.
-func GitConfig(p Persona) GuestFile {
-	// personas.CheckGitName and CheckGitEmail refuse quotes, backslashes and newlines.
-	content := fmt.Sprintf("# Managed by Sandbox Studio: rewritten when a session starts.\n[user]\n\tname = %q\n\temail = %s\n",
-		p.GitName, p.GitEmail)
-	return GuestFile{Path: ".config/git/config", Content: content, Mode: 0o644}
+// GitConfig is the persona's git identity and the forges' URL rewrites as the agent user's
+// global git config. It uses the XDG location, which git reads before ~/.gitconfig, so a
+// ~/.gitconfig the user writes in the sandbox still wins. There are no credentials in it:
+// the rewrites point at the virtual git remote, where Studio adds them on the host.
+func GitConfig(p Persona, rewrites []GitRewrite) GuestFile {
+	var b strings.Builder
+	b.WriteString("# Managed by Sandbox Studio: rewritten when a session starts.\n")
+	if p.GitName != "" && p.GitEmail != "" {
+		// personas.CheckGitName and CheckGitEmail refuse quotes, backslashes and newlines.
+		fmt.Fprintf(&b, "[user]\n\tname = %q\n\temail = %s\n", p.GitName, p.GitEmail)
+	}
+	for _, r := range rewrites {
+		if !plainValue(r.URL) {
+			continue
+		}
+		fmt.Fprintf(&b, "[url \"%s\"]\n", r.URL)
+		for _, from := range r.InsteadOf {
+			if plainValue(from) {
+				fmt.Fprintf(&b, "\tinsteadOf = \"%s\"\n", from)
+			}
+		}
+	}
+	return GuestFile{Path: ".config/git/config", Content: b.String(), Mode: 0o644}
+}
+
+// plainValue reports whether s can be written between double quotes in a git config file
+// without escaping: printable ASCII other than quotes and backslashes.
+func plainValue(s string) bool {
+	for _, c := range []byte(s) {
+		if c < 0x21 || c > 0x7e || c == '"' || c == '\\' {
+			return false
+		}
+	}
+	return s != ""
 }
 
 // instructions is the managed block: who the persona is, its soul and how its memory

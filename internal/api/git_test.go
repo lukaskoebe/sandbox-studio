@@ -24,6 +24,7 @@ func TestForges(t *testing.T) {
 		`{"name":"cb","kind":"forgejo","baseUrl":"https://git.studio.internal","token":"x"}`,
 		`{"name":"cb","kind":"gitlab","baseUrl":"https://gitlab.com","token":"x"}`,
 		`{"name":"Bad","kind":"forgejo","baseUrl":"https://codeberg.org","token":"x"}`,
+		`{"name":"lab","kind":"https","baseUrl":"https://git.example.com","username":"a:b","token":"x"}`,
 	} {
 		if rec := do(h, "POST", base, body); rec.Code != http.StatusUnprocessableEntity {
 			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
@@ -68,6 +69,18 @@ func TestForges(t *testing.T) {
 	rules := testOrigin + "/api/environments/" + env.ID + "/rules"
 	if rec := do(h, "POST", rules, `{"host":"codeberg.org","action":"proxy","config":{"headers":{"authorization":"token {secret.FORGE_CODE_BERG_TOKEN}"}}}`); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("rule using the token: %d %s", rec.Code, rec.Body)
+	}
+
+	// Kind https: a token and a username, defaulting to git.
+	rec = do(h, "POST", base, `{"name":"lab","kind":"https","baseUrl":"https://git.example.com/scm","token":"lab-token"}`)
+	if lab := decode[store.Forge](t, rec); rec.Code != http.StatusCreated || lab.Username != "git" || lab.BaseURL != "https://git.example.com/scm" {
+		t.Fatalf("create https: %d %s", rec.Code, rec.Body)
+	}
+	// Without an API, a test needs a repository.
+	if s.Git != nil {
+		if got := decode[ForgeTest](t, do(h, "POST", base+"/"+decode[[]store.Forge](t, do(h, "GET", base, ""))[1].ID+"/test", `{}`)); got.OK || !strings.Contains(got.Message, "name a repository") {
+			t.Fatalf("test without a repo: %+v", got)
+		}
 	}
 
 	if rec := do(h, "DELETE", base+"/"+f.ID, ""); rec.Code != http.StatusNoContent {

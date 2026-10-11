@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -92,8 +93,9 @@ func (f *fakeForge) serve(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "auth", http.StatusUnauthorized)
 		return
 	}
-	rest, ok := strings.CutPrefix(r.URL.Path, "/owner/repo.git/")
-	if !ok {
+	// One repository under several paths, for path depths from 1 to 3.
+	prefix, rest, _ := strings.Cut(r.URL.Path, ".git/")
+	if prefix != "/owner/repo" && prefix != "/group/sub/proj" && prefix != "/solo" {
 		http.NotFound(w, r)
 		return
 	}
@@ -688,6 +690,11 @@ func TestBadPathsAndDumbHTTPAreRefused(t *testing.T) {
 		"/forge/../etc/repo.git/info/refs?service=git-upload-pack",
 		"/forge/owner/..git/info/refs?service=git-upload-pack",
 		"/Forge/owner/repo.git/info/refs?service=git-upload-pack",
+		"/forge/group/sub/proj.git/info/refs?service=git-upload-pack", // forgejo: owner/repo only
+		"/forge/solo.git/info/refs?service=git-upload-pack",
+		"/forge/a/b/c/d/e/f/g/h/i.git/info/refs?service=git-upload-pack",
+		"/forge/owner.git/repo.git/info/refs?service=git-upload-pack",
+		"/forge/info/refs?service=git-upload-pack",
 	} {
 		resp, err := http.Get(g.srv.URL + path)
 		if err != nil {
@@ -703,7 +710,7 @@ func TestBadPathsAndDumbHTTPAreRefused(t *testing.T) {
 func TestCheckForge(t *testing.T) {
 	ok := []string{"https://codeberg.org", "https://git.example.com/forgejo/"}
 	for _, u := range ok {
-		if _, _, err := CheckForge("cb", KindForgejo, u); err != nil {
+		if _, err := CheckForge("cb", KindForgejo, u, ""); err != nil {
 			t.Errorf("%s: %v", u, err)
 		}
 	}
@@ -712,20 +719,53 @@ func TestCheckForge(t *testing.T) {
 		"https://127.0.0.1:3000", "https://codeberg.org/?x=1", "https://git.studio.internal", "ftp://codeberg.org", "",
 	}
 	for _, u := range bad {
-		if _, _, err := CheckForge("cb", KindForgejo, u); !errors.Is(err, ErrInvalid) {
-			t.Errorf("%q: %v", u, err)
+		for _, kind := range []string{KindForgejo, KindHTTPS} {
+			if _, err := CheckForge("cb", kind, u, ""); !errors.Is(err, ErrInvalid) {
+				t.Errorf("%s %q: %v", kind, u, err)
+			}
 		}
 	}
 	for _, name := range []string{"", "Upper", "-x", "a_b", strings.Repeat("a", 33)} {
-		if _, _, err := CheckForge(name, KindForgejo, "https://codeberg.org"); !errors.Is(err, ErrInvalid) {
+		if _, err := CheckForge(name, KindForgejo, "https://codeberg.org", ""); !errors.Is(err, ErrInvalid) {
 			t.Errorf("name %q: %v", name, err)
 		}
 	}
-	if base, host, err := CheckForge("gh", KindGitHub, "https://github.com/"); err != nil || base != "https://github.com" || host != "github.com" {
-		t.Errorf("github = %q, %q, %v", base, host, err)
+	if u, err := CheckForge("gh", KindGitHub, "https://github.com/", "ignored"); err != nil || u.Base != "https://github.com" || u.Host != "github.com" || u.User != "" {
+		t.Errorf("github = %+v, %v", u, err)
 	}
-	if _, _, err := CheckForge("x", "gitlab", "https://gitlab.com"); !errors.Is(err, ErrInvalid) {
+	if u, err := CheckForge("x", KindHTTPS, "https://git.example.com/scm", ""); err != nil || u.User != "git" || u.Base != "https://git.example.com/scm" {
+		t.Errorf("https = %+v, %v", u, err)
+	}
+	if u, err := CheckForge("x", KindHTTPS, "https://git.example.com", "deploy.bot"); err != nil || u.User != "deploy.bot" {
+		t.Errorf("https with user = %+v, %v", u, err)
+	}
+	for _, user := range []string{"a:b", "a@b", "a b", "-x", strings.Repeat("a", 65)} {
+		if _, err := CheckForge("x", KindHTTPS, "https://git.example.com", user); !errors.Is(err, ErrInvalid) {
+			t.Errorf("user %q: %v", user, err)
+		}
+	}
+	if _, err := CheckForge("x", "gitlab", "https://gitlab.com", ""); !errors.Is(err, ErrInvalid) {
 		t.Errorf("unknown kind: %v", err)
+	}
+}
+
+func TestSplitPath(t *testing.T) {
+	for in, want := range map[string][2]string{
+		"repo":                {"", "repo"},
+		"repo.git":            {"", "repo"},
+		"owner/repo.git":      {"owner", "repo"},
+		"group/sub/proj":      {"group/sub", "proj"},
+		"a/b/c/d/e/f/g/h.git": {"a/b/c/d/e/f/g", "h"},
+	} {
+		owner, repo, ok := splitPath(in)
+		if !ok || owner != want[0] || repo != want[1] {
+			t.Errorf("%q = %q, %q, %v", in, owner, repo, ok)
+		}
+	}
+	for _, in := range []string{"", "a/b/c/d/e/f/g/h/i", "a//b", "../b", "a/../b", "a/..git", "x.git/y", "a/.b", "a/b c", "/a"} {
+		if _, _, ok := splitPath(in); ok {
+			t.Errorf("%q accepted", in)
+		}
 	}
 }
 
@@ -910,8 +950,95 @@ func TestGitHubForgeEndToEnd(t *testing.T) {
 	if s := g.seen(); strings.Contains(s, forgeToken) || strings.Contains(s, want) {
 		t.Fatal("the token reached the sandbox")
 	}
-	acc, err := h.svc.TestForge(h.ctx, gh)
-	if err != nil || acc.User != "octo-bot" {
-		t.Fatalf("test = %+v, %v", acc, err)
+	c, err := h.svc.TestForge(h.ctx, gh, "")
+	if err != nil || c.User != "octo-bot" || c.Expires.IsZero() {
+		t.Fatalf("test = %+v, %v", c, err)
+	}
+	if c, err = h.svc.TestForge(h.ctx, gh, "owner/repo"); err != nil || c.Repo != "owner/repo" || c.Branches != 2 {
+		t.Fatalf("test with repo = %+v, %v", c, err)
+	}
+	if _, err = h.svc.TestForge(h.ctx, gh, "group/sub/proj"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("test with a deep repo on github: %v", err)
+	}
+}
+
+func TestPlainHTTPSForgeWithDeepPaths(t *testing.T) {
+	h := newHarness(t)
+	plain, err := h.st.CreateForge(h.ctx, store.Forge{ID: store.NewID(), EnvironmentID: h.env.ID, Name: "plain", Kind: KindHTTPS, BaseURL: h.forge.srv.URL, Username: "deploy"},
+		store.Secret{ID: store.NewID(), Name: "FORGE_PLAIN_TOKEN", Sealed: []byte("sealed"), Placeholder: "plain-placeholder"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.svc.Secrets.(fakeSecrets)[h.env.ID+"/"+plain.SecretID] = forgeToken
+	g := h.guest(t, h.env.ID, "one")
+	for _, path := range []string{"/plain/solo.git", "/plain/group/sub/proj"} {
+		if _, err := git.Clone(memory.NewStorage(), memfs.New(), &git.CloneOptions{URL: g.srv.URL + path}); err != nil {
+			t.Fatalf("clone %s: %v", path, err)
+		}
+	}
+	repo, err := git.Clone(memory.NewStorage(), memfs.New(), &git.CloneOptions{URL: g.srv.URL + "/plain/group/sub/proj.git"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitFile(t, repo, "deep.txt", "deep\n", "Deep change")
+	if err := push(repo, "refs/heads/main:refs/heads/deep", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	pending := h.approvals(t, KindPush, store.StatusPending)
+	if len(pending) != 1 || pending[0].Subject != "plain/group/sub/proj:deep" {
+		t.Fatalf("pending = %+v", pending)
+	}
+	var rv PushReview
+	if err := json.Unmarshal(pending[0].Payload, &rv); err != nil || rv.Owner != "group/sub" || rv.Repo != "proj" ||
+		rv.Upstream != "over HTTPS to "+h.forge.srv.URL+"/group/sub/proj.git" {
+		t.Fatalf("detail = %s, %v", pending[0].Payload, err)
+	}
+	h.decide(t, pending[0], integrations.Allow, "")
+	if h.forge.head(t, "deep").IsZero() {
+		t.Fatal("the approved push did not reach the forge")
+	}
+	if prs := h.approvals(t, KindPR, store.StatusPending); len(prs) != 0 {
+		t.Fatalf("a forge without an API got a PR proposal: %+v", prs)
+	}
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("deploy:"+forgeToken))
+	h.forge.mu.Lock()
+	for _, a := range h.forge.auths {
+		if a != want {
+			t.Errorf("forge saw Authorization %q", a)
+		}
+	}
+	h.forge.mu.Unlock()
+	if strings.Contains(g.seen(), forgeToken) {
+		t.Fatal("the token reached the sandbox")
+	}
+	if c, err := h.svc.TestForge(h.ctx, plain, "group/sub/proj"); err != nil || c.Branches != 2 || c.User != "" {
+		t.Fatalf("test = %+v, %v", c, err)
+	}
+	if _, err := h.svc.TestForge(h.ctx, plain, ""); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("test without a repo: %v", err)
+	}
+	if _, err := h.svc.TestForge(h.ctx, plain, "nope/missing"); err == nil || !strings.Contains(err.Error(), "no repository nope/missing") {
+		t.Fatalf("test with a missing repo: %v", err)
+	}
+}
+
+func TestRewrites(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	forges := []store.Forge{
+		{ID: "4", Name: "gh2", Kind: KindGitHub, BaseURL: "https://github.com", CreatedAt: t0.Add(time.Hour)},
+		{ID: "1", Name: "gh", Kind: KindGitHub, BaseURL: "https://github.com", CreatedAt: t0},
+		{ID: "2", Name: "lab", Kind: KindHTTPS, BaseURL: "https://git.example.com/scm", Username: "deploy", CreatedAt: t0},
+		{ID: "3", Name: "olite", Kind: KindSSH, BaseURL: "ssh://gitolite@git.example.org:2222", CreatedAt: t0},
+		{ID: "5", Name: "box", Kind: KindSSH, BaseURL: "ssh://git@box.example.net", CreatedAt: t0},
+	}
+	got := Rewrites(forges)
+	want := []Rewrite{
+		{URL: "https://git.studio.internal/box/", InsteadOf: []string{"ssh://git@box.example.net/", "git@box.example.net:"}},
+		{URL: "https://git.studio.internal/gh/", InsteadOf: []string{"https://github.com/", "git@github.com:", "ssh://git@github.com/"}},
+		{URL: "https://git.studio.internal/lab/", InsteadOf: []string{"https://git.example.com/scm/", "git@git.example.com:", "ssh://git@git.example.com/"}},
+		{URL: "https://git.studio.internal/olite/", InsteadOf: []string{"ssh://gitolite@git.example.org:2222/"}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("rewrites =\n%+v\nwant\n%+v", got, want)
 	}
 }

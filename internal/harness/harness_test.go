@@ -143,3 +143,28 @@ func TestLookup(t *testing.T) {
 		t.Fatal("unknown harness found")
 	}
 }
+
+func TestGitConfig(t *testing.T) {
+	rw := []GitRewrite{
+		{URL: "https://git.studio.internal/gh/", InsteadOf: []string{"https://github.com/", "git@github.com:"}},
+		{URL: "https://git.studio.internal/bad/", InsteadOf: []string{"a\"b", "x\ny", "ssh://git@host/"}},
+	}
+	want := "# Managed by Sandbox Studio: rewritten when a session starts.\n" +
+		"[url \"https://git.studio.internal/gh/\"]\n\tinsteadOf = \"https://github.com/\"\n\tinsteadOf = \"git@github.com:\"\n" +
+		"[url \"https://git.studio.internal/bad/\"]\n\tinsteadOf = \"ssh://git@host/\"\n"
+	if got := GitConfig(Persona{}, rw); got.Content != want || got.Path != ".config/git/config" {
+		t.Fatalf("got:\n%s\nwant:\n%s", got.Content, want)
+	}
+	h, _ := Lookup("claude")
+	files, err := Files(h, Persona{Name: "a"}, Sandbox{Name: "s", GitRewrites: rw}, Provider{Kind: "anthropic_api"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range files {
+		found = found || f.Path == ".config/git/config"
+	}
+	if !found {
+		t.Fatal("rewrites without an identity wrote no git config")
+	}
+}

@@ -35,10 +35,10 @@ func openStaging(path string) (*git.Repository, error) {
 	return r, err
 }
 
-// remote is a host-side connection to a forge repository with the token.
+// remote is a host-side connection to a forge repository with Studio's credential.
 type remote struct {
 	ep   *transport.Endpoint
-	auth *githttp.BasicAuth
+	auth transport.AuthMethod
 	tr   transport.Transport
 }
 

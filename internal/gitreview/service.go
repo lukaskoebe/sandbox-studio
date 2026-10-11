@@ -1,8 +1,9 @@
 // Package gitreview is the virtual git remote. Sandboxes clone, fetch and push through
-// https://git.studio.internal/<forge>/<owner>/<repo>.git, which the gateway serves in
-// process. Fetches are proxied to the forge with its token added on the host; pushes are
-// staged in a bare repository on the host and go upstream only once the user approves the
-// git.push approval they raise. The token never reaches the sandbox.
+// https://git.studio.internal/<forge>/<path>.git, which the gateway serves in process.
+// Fetches are proxied to the forge with its token added on the host (or bridged to SSH with
+// Studio's key); pushes are staged in a bare repository on the host and go upstream only
+// once the user approves the git.push approval they raise. The credential never reaches
+// the sandbox.
 package gitreview
 
 import (
@@ -130,13 +131,42 @@ var (
 	services = map[string]bool{"git-upload-pack": true, "git-receive-pack": true}
 )
 
-// target is a parsed request to the virtual remote.
+// MaxPathSegments bounds the repository path: gitolite's repo, GitHub's owner/repo and
+// GitLab's group/sub/repo all fit.
+const MaxPathSegments = 8
+
+// target is a parsed request to the virtual remote. owner is everything before the last
+// path segment, so it may contain slashes or be empty.
 type target struct {
 	sb          store.Sandbox
 	forge       store.Forge
 	owner, repo string
 	op          string // info/refs, git-upload-pack or git-receive-pack
 	service     string // the service asked for
+}
+
+// path is the repository's path on the forge, without .git.
+func (t target) path() string {
+	if t.owner == "" {
+		return t.repo
+	}
+	return t.owner + "/" + t.repo
+}
+
+// splitPath checks a repository path of 1 to MaxPathSegments segments and splits it into
+// owner and repo. A trailing .git is dropped. Only the last segment may end in .git, so
+// staging repositories never nest.
+func splitPath(p string) (string, string, bool) {
+	parts := strings.Split(strings.TrimSuffix(p, ".git"), "/")
+	if len(parts) > MaxPathSegments {
+		return "", "", false
+	}
+	for i, seg := range parts {
+		if !repoName.MatchString(seg) || strings.Contains(seg, "..") || (i < len(parts)-1 && strings.HasSuffix(seg, ".git")) {
+			return "", "", false
+		}
+	}
+	return strings.Join(parts[:len(parts)-1], "/"), parts[len(parts)-1], true
 }
 
 // Serve returns the handler for one sandbox's connections to the virtual remote.
@@ -159,15 +189,22 @@ func (s *Service) Serve(sb store.Sandbox) http.Handler {
 
 func (s *Service) parse(r *http.Request, sb store.Sandbox) (target, int, string) {
 	t := target{sb: sb}
+	const usage = "Use https://" + Host + "/<forge>/<path>.git"
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	if len(parts) < 4 {
-		return t, http.StatusNotFound, "Use https://" + Host + "/<forge>/<owner>/<repo>.git"
+	// The operation is the last one or two segments; the repository path is in between.
+	n := len(parts)
+	switch {
+	case n >= 4 && parts[n-2] == "info" && parts[n-1] == "refs":
+		t.op, parts = "info/refs", parts[:n-2]
+	case n >= 3 && services[parts[n-1]]:
+		t.op, parts = parts[n-1], parts[:n-1]
+	default:
+		return t, http.StatusNotFound, "Not a git smart HTTP request. " + usage
 	}
-	forge, owner, repo := parts[0], parts[1], strings.TrimSuffix(parts[2], ".git")
-	t.op = strings.Join(parts[3:], "/")
-	if !forgeName.MatchString(forge) || !repoName.MatchString(owner) || !repoName.MatchString(repo) ||
-		strings.Contains(owner, "..") || strings.Contains(repo, "..") {
-		return t, http.StatusNotFound, "Use https://" + Host + "/<forge>/<owner>/<repo>.git"
+	forge := parts[0]
+	owner, repo, ok := splitPath(strings.Join(parts[1:], "/"))
+	if !forgeName.MatchString(forge) || !ok {
+		return t, http.StatusNotFound, usage
 	}
 	t.owner, t.repo = owner, repo
 	switch {
@@ -183,13 +220,16 @@ func (s *Service) parse(r *http.Request, sb store.Sandbox) (target, int, string)
 	}
 	f, err := s.Store.ForgeByName(r.Context(), sb.EnvironmentID, forge)
 	if errors.Is(err, store.ErrNotFound) {
-		return t, http.StatusNotFound, fmt.Sprintf("This environment has no forge %q. Add it on the Forges page in Sandbox Studio.", forge)
+		return t, http.StatusNotFound, fmt.Sprintf("This environment has no forge %q. Add it on the Git page in Sandbox Studio.", forge)
 	}
 	if err != nil {
 		s.Log.Error("git remote: forge", "err", err)
 		return t, http.StatusInternalServerError, "Sandbox Studio could not look up the forge."
 	}
 	t.forge = f
+	if hasAPI(f.Kind) && (owner == "" || strings.Contains(owner, "/")) {
+		return t, http.StatusNotFound, fmt.Sprintf("Repositories on %s are <owner>/<repo>: use https://%s/%s/<owner>/<repo>.git", f.Name, Host, f.Name)
+	}
 	return t, 0, ""
 }
 
@@ -204,7 +244,7 @@ func refuse(w http.ResponseWriter, code int, msg string) {
 }
 
 func (t target) upstreamURL(rest string) string {
-	return t.forge.BaseURL + "/" + t.owner + "/" + t.repo + ".git" + rest
+	return t.forge.BaseURL + "/" + t.path() + ".git" + rest
 }
 
 func (s *Service) token(ctx context.Context, f store.Forge) (string, error) {
@@ -269,9 +309,9 @@ func (s *Service) uploadPack(w http.ResponseWriter, r *http.Request, t target) {
 		msg := fmt.Sprintf("The forge answered %s", resp.Status)
 		switch resp.StatusCode {
 		case http.StatusNotFound:
-			code, msg = http.StatusNotFound, fmt.Sprintf("The forge has no repository %s/%s (or the token can't see it).", t.owner, t.repo)
+			code, msg = http.StatusNotFound, fmt.Sprintf("The forge has no repository %s (or the token can't see it).", t.path())
 		case http.StatusUnauthorized, http.StatusForbidden:
-			msg = "The forge refused Sandbox Studio's token. Check the forge on the Forges page."
+			msg = "The forge refused Sandbox Studio's token. Check the forge on the Git page."
 		}
 		if text := strings.TrimSpace(string(data)); text != "" && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/plain") {
 			msg += "\n" + mask(text, token)
@@ -348,7 +388,7 @@ func oneLine(s string) string {
 
 // stagingPath is the bare repository holding one sandbox's pushes to one repository.
 func (s *Service) stagingPath(t target) string {
-	return filepath.Join(s.Dir, t.sb.EnvironmentID, t.sb.ID, t.forge.ID, t.owner, t.repo+".git")
+	return filepath.Join(s.Dir, t.sb.EnvironmentID, t.sb.ID, t.forge.ID, filepath.FromSlash(t.owner), t.repo+".git")
 }
 
 func (s *Service) publish(envID, approvalID string) {
