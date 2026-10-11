@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -53,10 +54,27 @@ func (s *Server) gitRewrites(ctx context.Context, envID string) ([]harness.GitRe
 // ForgeInput describes a forge to add.
 type ForgeInput struct {
 	Name     string `json:"name" pattern:"^[a-z0-9][a-z0-9-]{0,31}$" doc:"Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git"`
-	Kind     string `json:"kind" enum:"forgejo,github,https"`
-	BaseURL  string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com"`
+	Kind     string `json:"kind" enum:"forgejo,github,https,ssh"`
+	BaseURL  string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222"`
 	Username string `json:"username,omitempty" maxLength:"64" doc:"Kind https: the user git authenticates as with the token; git if empty"`
-	Token    string `json:"token" minLength:"1" maxLength:"4096" doc:"An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
+	Token    string `json:"token,omitempty" maxLength:"4096" doc:"Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
+	HostKey  string `json:"hostKey,omitempty" maxLength:"16384" doc:"Kind ssh: the host key to pin, as scanned and confirmed by the user"`
+}
+
+// ForgeScanInput is an SSH forge to scan for its host key.
+type ForgeScanInput struct {
+	BaseURL string `json:"baseUrl" maxLength:"2048" doc:"The forge's SSH address, such as git@host or ssh://git@host:2222"`
+}
+
+// ForgeScan is a scanned host key.
+type ForgeScan struct {
+	BaseURL string `json:"baseUrl" doc:"The address, normalized"`
+	gitreview.HostKey
+}
+
+// ForgeHostKey is a host key to pin.
+type ForgeHostKey struct {
+	HostKey string `json:"hostKey" minLength:"1" maxLength:"16384"`
 }
 
 // ForgeTestInput optionally names a repository to test with.
@@ -106,12 +124,32 @@ func (s *Server) registerForges(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		secretName := "FORGE_" + strings.ToUpper(strings.ReplaceAll(b.Name, "-", "_")) + "_TOKEN"
-		sec, err := s.Vault.Prepare(in.Env, secretName, b.Token, []string{u.Host}, "Token of forge "+b.Name)
+		f := store.Forge{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind, BaseURL: u.Base, Username: u.User}
+		prefix := "FORGE_" + strings.ToUpper(strings.ReplaceAll(b.Name, "-", "_"))
+		secretName, value, note := prefix+"_TOKEN", b.Token, "Token of forge "+b.Name
+		if b.Kind == gitreview.KindSSH {
+			if b.Token != "" {
+				return nil, huma.Error422UnprocessableEntity("ssh forges use a key Studio generates, not a token")
+			}
+			hk, err := gitreview.CheckHostKey(b.HostKey)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			// The key exists only in memory until the vault seals it.
+			key, pub, err := gitreview.GenerateKey("sandbox-studio/" + in.Env + "/" + b.Name)
+			if err != nil {
+				return nil, err
+			}
+			f.HostKey, f.PublicKey = hk.Key, pub
+			secretName, value, note = prefix+"_SSH_KEY", key, "SSH key of forge "+b.Name
+		} else if b.Token == "" || b.HostKey != "" {
+			return nil, huma.Error422UnprocessableEntity("forges of kind " + b.Kind + " need a token and no host key")
+		}
+		sec, err := s.Vault.Prepare(in.Env, secretName, value, []string{u.Host}, note)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		f, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind, BaseURL: u.Base, Username: u.User}, sec)
+		f, err = s.Store.CreateForge(ctx, f, sec)
 		if err != nil {
 			return nil, apiError(err)
 		}
@@ -184,6 +222,9 @@ func (s *Server) registerForges(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
+		if f.Kind == gitreview.KindSSH {
+			return nil, huma.Error409Conflict("ssh forges have a key, not a token; to get a new key, remove the forge and add it again")
+		}
 		sealed, err := s.Vault.SealValue(f.SecretID, in.Body.Token)
 		if err != nil {
 			return nil, apiError(err)
@@ -192,6 +233,55 @@ func (s *Server) registerForges(api huma.API) {
 			return nil, apiError(err)
 		}
 		s.publishSecrets(in.Env)
+		f, err = s.Store.Forge(ctx, in.Env, in.ID)
+		return &struct{ Body store.Forge }{f}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "scanForgeHostKey", Method: http.MethodPost, Path: "/api/environments/{env}/forges/scan", Tags: []string{"git"},
+		Description: "Connects to an SSH forge and returns its host key, for the user to compare with the fingerprint the forge publishes before pinning it.",
+	}, func(ctx context.Context, in *struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body ForgeScanInput
+	}) (*struct{ Body ForgeScan }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		if s.Git == nil {
+			return nil, huma.Error503ServiceUnavailable("the git remote is not running")
+		}
+		u, hk, err := s.Git.ScanHostKey(ctx, in.Body.BaseURL)
+		if errors.Is(err, gitreview.ErrInvalid) {
+			return nil, apiError(err)
+		}
+		if err != nil {
+			return nil, huma.Error502BadGateway(err.Error())
+		}
+		return &struct{ Body ForgeScan }{ForgeScan{BaseURL: u.Base, HostKey: hk}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "pinForgeHostKey", Method: http.MethodPut, Path: "/api/environments/{env}/forges/{id}/host-key", Tags: []string{"git"},
+		Description: "Pins another host key for an SSH forge, after the user confirmed it with the host's admin.",
+	}, func(ctx context.Context, in *struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Forge ID"`
+		Body ForgeHostKey
+	}) (*struct{ Body store.Forge }, error) {
+		f, err := s.Store.Forge(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if f.Kind != gitreview.KindSSH {
+			return nil, huma.Error409Conflict("only ssh forges have a host key")
+		}
+		hk, err := gitreview.CheckHostKey(in.Body.HostKey)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if err := s.Store.PinForgeHostKey(ctx, in.Env, f.ID, hk.Key); err != nil {
+			return nil, apiError(err)
+		}
 		f, err = s.Store.Forge(ctx, in.Env, in.ID)
 		return &struct{ Body store.Forge }{f}, apiError(err)
 	})

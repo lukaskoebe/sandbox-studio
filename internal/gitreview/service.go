@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -62,8 +63,10 @@ type Service struct {
 	Bus     *events.Bus
 	Dir     string       // staging repositories live here
 	Client  *http.Client // reaches forges; nil means public addresses only, no redirects
-	Log     *slog.Logger
-	Limits  Limits
+	// Dial connects to SSH forges; nil means gateway.DialPublic, public addresses only.
+	Dial   func(ctx context.Context, network, addr string) (net.Conn, error)
+	Log    *slog.Logger
+	Limits Limits
 
 	once   sync.Once
 	client *http.Client
@@ -263,8 +266,12 @@ func (s *Service) uploadPack(w http.ResponseWriter, r *http.Request, t target) {
 	}
 	token, err := s.token(ctx, t.forge)
 	if err != nil {
-		s.Log.Error("git remote: forge token", "forge", t.forge.Name, "err", err)
-		refuse(w, http.StatusInternalServerError, "Sandbox Studio could not read the forge's token.")
+		s.Log.Error("git remote: forge credential", "forge", t.forge.Name, "err", err)
+		refuse(w, http.StatusInternalServerError, "Sandbox Studio could not read the forge's credential.")
+		return
+	}
+	if t.forge.Kind == KindSSH {
+		s.sshUploadPack(w, r, t, token)
 		return
 	}
 	ad, err := adapter(t.forge, s.httpClient())

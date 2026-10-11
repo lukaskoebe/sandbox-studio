@@ -43,6 +43,9 @@ type remote struct {
 }
 
 func (s *Service) remote(t target, token string) (*remote, error) {
+	if t.forge.Kind == KindSSH {
+		return s.sshRemote(t, token)
+	}
 	ad, err := adapter(t.forge, s.httpClient())
 	if err != nil {
 		return nil, err

@@ -30,8 +30,8 @@ func (s *Service) receivePack(w http.ResponseWriter, r *http.Request, t target) 
 	ctx := r.Context()
 	token, err := s.token(ctx, t.forge)
 	if err != nil {
-		s.Log.Error("git remote: forge token", "forge", t.forge.Name, "err", err)
-		refuse(w, http.StatusInternalServerError, "Sandbox Studio could not read the forge's token.")
+		s.Log.Error("git remote: forge credential", "forge", t.forge.Name, "err", err)
+		refuse(w, http.StatusInternalServerError, "Sandbox Studio could not read the forge's credential.")
 		return
 	}
 	rm, err := s.remote(t, token)

@@ -128,7 +128,7 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *P
 	t := target{sb: store.Sandbox{ID: p.SandboxID, EnvironmentID: p.EnvironmentID}, forge: f, owner: p.Owner, repo: p.Repo}
 	token, err := s.token(ctx, f)
 	if err != nil {
-		return "", nil, fmt.Errorf("the forge's token: %w", err)
+		return "", nil, fmt.Errorf("the forge's credential: %w", err)
 	}
 	rm, err := s.remote(t, token)
 	if err != nil {
@@ -144,6 +144,9 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *P
 	result, err := rm.pushUpstream(ctx, repo, p)
 	if err != nil {
 		return "", nil, errors.New(mask(err.Error(), token))
+	}
+	if !hasAPI(f.Kind) {
+		return result, nil, nil
 	}
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {
