@@ -1,0 +1,2 @@
+/internal/harness/testdata/*.golden text eol=lf
+/internal/harness/testdata/hooks/*.golden text eol=lf

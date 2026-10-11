@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -115,12 +116,66 @@ func (l *limitedBody) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// ingestPack first copies and validates a bounded incoming pack in a scratch file, then
+// gives go-git's filesystem pack writer a complete, seekable input. In go-git v5.19.3,
+// PackWriter.Close returns before closing its pack descriptors when its asynchronous
+// parser sees malformed or truncated input. Preflight uses the same parser before that
+// writer is opened, so untrusted input errors cannot leave its descriptors behind.
+func (s *Service) ingestPack(repo *git.Repository, src io.Reader) (retErr error) {
+	tmp, err := os.CreateTemp(s.Dir, "studio-receive-pack-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer func() {
+		if err := tmp.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close staged pack: %w", err))
+		}
+		if err := os.Remove(name); err != nil && !errors.Is(err, os.ErrNotExist) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove staged pack: %w", err))
+		}
+	}()
+
+	if _, err := io.Copy(tmp, src); err != nil {
+		return err
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	if err := validatePack(tmp); errors.Is(err, packfile.ErrEmptyPackfile) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return packfile.UpdateObjectStorage(repo.Storer, tmp)
+}
+
+// validatePack scopes go-git's parser state to the validation pass so it can be
+// collected before UpdateObjectStorage parses the file again to build the pack index.
+func validatePack(r io.ReadSeeker) error {
+	parser, err := packfile.NewParser(packfile.NewScanner(r))
+	if err != nil {
+		return err
+	}
+	_, err = parser.Parse()
+	return err
+}
+
 // stage receives a push into the staging repository and raises a git.push approval for
 // each branch update that passes the checks.
 func (s *Service) stage(w http.ResponseWriter, r *http.Request, t target, repo *git.Repository) {
 	ctx := r.Context()
 	if r.Header.Get("Content-Type") != "application/x-git-receive-pack-request" {
 		refuse(w, http.StatusUnsupportedMediaType, "Expected a git receive-pack request.")
+		return
+	}
+	// Reject known oversized bodies without writing them to the bounded scratch file.
+	if r.ContentLength > s.Limits.MaxPack {
+		s.refuseLarge(w)
 		return
 	}
 	var body io.Reader = http.MaxBytesReader(w, r.Body, s.Limits.MaxPack)
@@ -155,7 +210,7 @@ func (s *Service) stage(w http.ResponseWriter, r *http.Request, t target, repo *
 		return
 	}
 	if req.Packfile != nil {
-		if err := packfile.UpdateObjectStorage(repo.Storer, req.Packfile); err != nil && !errors.Is(err, packfile.ErrEmptyPackfile) {
+		if err := s.ingestPack(repo, req.Packfile); err != nil {
 			if tooLarge(err) {
 				s.refuseLarge(w)
 				return
@@ -164,7 +219,6 @@ func (s *Service) stage(w http.ResponseWriter, r *http.Request, t target, repo *
 			s.reply(w, req, "unpack failed", nil, nil)
 			return
 		}
-		io.Copy(io.Discard, io.LimitReader(req.Packfile, 1<<20))
 	}
 	upstream, err := mirrorRefs(repo)
 	if err != nil {

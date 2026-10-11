@@ -2,6 +2,7 @@ package gitreview
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -588,8 +589,120 @@ func TestOversizePushIsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("an oversize push was accepted")
 	}
+	assertNoReceivePackTempFiles(t, h, g)
 	if n := len(h.approvals(t, KindPush, "")); n != 0 {
 		t.Fatalf("oversize push raised %d approvals", n)
+	}
+}
+
+func TestOversizePushWithUnknownLengthIsRefused(t *testing.T) {
+	h := newHarness(t)
+	h.svc.Limits.MaxPack = 16 << 10
+	g := h.guest(t, h.env.ID, "one")
+
+	status, body := sendReceivePack(t, g, bytes.Repeat([]byte("x"), 20<<10), false, true)
+	if status != http.StatusRequestEntityTooLarge || !strings.Contains(string(body), "larger than") {
+		t.Fatalf("oversize chunked request: status %d, body %q", status, body)
+	}
+	assertNoReceivePackTempFiles(t, h, g)
+	if n := len(h.approvals(t, KindPush, "")); n != 0 {
+		t.Fatalf("oversize push raised %d approvals", n)
+	}
+}
+
+func TestOversizeGzipPushIsRefusedBeforePackWriter(t *testing.T) {
+	h := newHarness(t)
+	h.svc.Limits.MaxPack = 16 << 10
+	g := h.guest(t, h.env.ID, "one")
+
+	status, body := sendReceivePack(t, g, bytes.Repeat([]byte("x"), 20<<10), true, false)
+	if status != http.StatusRequestEntityTooLarge || !strings.Contains(string(body), "larger than") {
+		t.Fatalf("oversize gzip request: status %d, body %q", status, body)
+	}
+	assertNoReceivePackTempFiles(t, h, g)
+}
+
+func TestTruncatedPushPackLeavesNoTemporaryFiles(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	truncated := []byte("PACK\x00\x00\x00\x02\x00\x00\x00\x01")
+
+	status, body := sendReceivePack(t, g, truncated, false, false)
+	if status != http.StatusOK || !bytes.Contains(body, []byte("unpack failed")) {
+		t.Fatalf("truncated pack: status %d, body %q", status, body)
+	}
+	assertNoReceivePackTempFiles(t, h, g)
+}
+
+func sendReceivePack(t *testing.T, g *guest, pack []byte, gzipBody, unknownLength bool) (int, []byte) {
+	t.Helper()
+	var body bytes.Buffer
+	enc := pktline.NewEncoder(&body)
+	command := strings.Repeat("0", 40) + " " + strings.Repeat("1", 40) +
+		" refs/heads/topic\x00report-status side-band-64k ofs-delta no-thin\n"
+	if err := enc.EncodeString(command); err != nil {
+		t.Fatal(err)
+	}
+	if err := enc.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	body.Write(pack)
+	wireBody := body.Bytes()
+	if gzipBody {
+		var compressed bytes.Buffer
+		gz := gzip.NewWriter(&compressed)
+		if _, err := gz.Write(wireBody); err != nil {
+			t.Fatal(err)
+		}
+		if err := gz.Close(); err != nil {
+			t.Fatal(err)
+		}
+		wireBody = compressed.Bytes()
+	}
+
+	req, err := http.NewRequest(http.MethodPost, g.url()+"/git-receive-pack", bytes.NewReader(wireBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-git-receive-pack-request")
+	if gzipBody {
+		req.Header.Set("Content-Encoding", "gzip")
+	}
+	if unknownLength {
+		req.ContentLength = -1 // the transport sends this request with chunked transfer encoding
+	}
+	resp, err := g.srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp.StatusCode, responseBody
+}
+
+func assertNoReceivePackTempFiles(t *testing.T, h *harness, g *guest) {
+	t.Helper()
+	staging := h.svc.stagingPath(target{sb: g.sb, forge: h.f, owner: "owner", repo: "repo"})
+	packEntries, err := os.ReadDir(filepath.Join(staging, "objects", "pack"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range packEntries {
+		if strings.HasPrefix(entry.Name(), "tmp_pack_") {
+			t.Errorf("temporary git pack remains: %s", entry.Name())
+		}
+	}
+	rootEntries, err := os.ReadDir(h.svc.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range rootEntries {
+		if strings.HasPrefix(entry.Name(), "studio-receive-pack-") {
+			t.Errorf("temporary receive-pack input remains: %s", entry.Name())
+		}
 	}
 }
 
