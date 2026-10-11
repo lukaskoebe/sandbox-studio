@@ -34,7 +34,7 @@ forge kinds and keeps everything else.
 An `ssh` forge has a name, a base URL `ssh://<user>@<host>[:<port>]` (the form also accepts
 scp syntax `git@host:` and normalizes it; the user defaults to `git`), the pinned host key and
 the key secret. The host must be a public name or address, the same rule as HTTPS base URLs
-(`personas.BaseURL` with an `ssh` scheme).
+(`teammates.BaseURL` with an `ssh` scheme).
 
 ### Key
 
@@ -50,8 +50,7 @@ the key secret. The host must be a public name or address, the same rule as HTTP
 - Per forge, not per environment or teammate: revoking one forge's key touches nothing else,
   and a deploy key scoped to one repository is the narrowest grant most hosts offer. Who
   asked for a push is already in the approval (teammate, sandbox) and in the commits; the
-  key only identifies Studio acting after the user approved. Personas becoming teammates
-  changes nothing here.
+  key only identifies Studio acting after the user approved.
 - No key import and no regeneration: delete and re-add the forge (the pushes it staged go
   with it, same as today). Studio never uses the user's own `~/.ssh` keys.
 

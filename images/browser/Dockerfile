@@ -1,4 +1,4 @@
-# Sandbox Studio browser image: Debian + Chromium + agent-browser, for a persona's browser
+# Sandbox Studio browser image: Debian + Chromium + agent-browser, for a teammate's browser
 # VM (docs/browser.md). Agents never reach this VM: Studio drives agent-browser over the
 # VM's studio-agent channel and relays the live view itself. Like the base image, the guest
 # agent is not baked in; Studio mounts it at /opt/studio/bin/studio-agent, and microsandbox's

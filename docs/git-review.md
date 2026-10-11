@@ -59,7 +59,7 @@ body is limited to 16 MiB.
    `remote: Sandbox Studio: <branch> queued for review (approval <id>)`. The push
    "succeeds" from git's point of view; the upstream branch is unchanged.
 
-The approval shows persona, sandbox, repository, branch, old and new commit, up to 50
+The approval shows teammate, sandbox, repository, branch, old and new commit, up to 50
 commits, and a unified diff bounded at 512 KiB. Binary files, submodules and files over
 1 MiB are summarized instead of diffed.
 

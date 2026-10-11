@@ -91,7 +91,7 @@ on 2026-10-11:
   - Anthropic's Agent SDK terms say: "Unless previously approved, Anthropic does not allow
     third party developers to offer claude.ai login or rate limits for their products,
     including agents built on the Claude Agent SDK."
-  - So chat mode supports **API-key Claude providers only**. `claude_subscription` personas
+  - So chat mode supports **API-key Claude providers only**. `claude_subscription` teammates
     stay terminal-only, which also keeps S8 out of chat's critical path.
   - The UI calls this agent "Claude" or "Claude Agent", never "Claude Code", per the same
     page's branding rules.
@@ -173,7 +173,7 @@ visible thing, updated in place, not one row per chunk.
 | `usage_update` | on the turn: tokens and cost | turn footer, muted |
 | `session_info_update` (title) | `chats.title` | chat list and header |
 | `notice`, `compaction_*`, stop reasons other than `end_turn` | `marker` | `Marker` ("Context compacted", "Stopped", "Hit the token limit") |
-| `available_commands_update`, `config_option_update`, `current_mode_update` | not stored | not shown (no model or mode picker; the persona decides) |
+| `available_commands_update`, `config_option_update`, `current_mode_update` | not stored | not shown (no model or mode picker; the teammate decides) |
 
 **Sending prompts.**
 
@@ -205,7 +205,7 @@ the turn `interrupted`.
 **Permission requests become approvals.**
 
 - **Approval kind `chat.permission`.**
-  - Its payload: chat ID and title, sandbox and persona name, the tool call's title, kind
+  - Its payload: chat ID and title, sandbox and teammate name, the tool call's title, kind
     and locations, a diff summary (paths and line counts, never file bodies), and the
     offered options (`optionId`, `name`, `kind`).
   - `approvalView` decodes it into `ApprovalView.ChatPermission`, and `approval-kinds.ts`
@@ -301,7 +301,7 @@ CREATE TABLE chats (
     id             TEXT PRIMARY KEY,
     environment_id TEXT NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
     sandbox_id     TEXT NOT NULL REFERENCES sandboxes(id) ON DELETE CASCADE,
-    persona_id     TEXT NOT NULL,
+    teammate_id     TEXT NOT NULL,
     harness        TEXT NOT NULL,
     acp_session_id TEXT NOT NULL DEFAULT '',
     title          TEXT NOT NULL DEFAULT '',
@@ -377,7 +377,7 @@ Paths under `/api/environments/{env}`:
 
 - **Routes.**
   - `routes/e.$env.chats.tsx`: the list, across sandboxes, with "New chat", which picks a
-    sandbox that has an owner persona.
+    sandbox that has an owner teammate.
   - `routes/e.$env.chats.$chat.tsx`: the chat itself.
   - The sidebar gets "Chats" above "Sandboxes".
 - **Chat page.**
@@ -388,7 +388,7 @@ Paths under `/api/environments/{env}`:
   - **The composer** is our own: `Textarea`, attach and send/stop buttons. shadcn ships
     none.
   - **Right:** a `Tabs` side panel with Preview, Files and Changes.
-  - **Header:** persona avatar, sandbox, state badge, and "Open in terminal".
+  - **Header:** teammate avatar, sandbox, state badge, and "Open in terminal".
 - **Components** in `components/chat/`:
   - `chat-items.tsx`: one renderer per item kind.
   - `tool-call-card.tsx`, `plan-card.tsx`, `permission-card.tsx` (reuses
@@ -433,7 +433,7 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
 **Where it doesn't work:**
 
 - **Both at once.** The chat is read-only while its TUI runs.
-- **Subscription Claude personas.** They have no chat at all (section 1).
+- **Subscription Claude teammates.** They have no chat at all (section 1).
 - **After a rebase or fork.** The home directory isn't copied, so the agent's session is
   gone. The chat becomes `orphaned`: read-only, with "Start a new chat".
 - **Subagent child sessions.** They show inside their parent's tool card only.

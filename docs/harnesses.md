@@ -1,6 +1,6 @@
 # Harnesses and agent sessions
 
-An agent session is a persona's harness TUI in a named tmux session in one of its sandboxes
+An agent session is a teammate's harness TUI in a named tmux session in one of its sandboxes
 (PLAN.md §6.6). Code: `internal/harness` (adapters), `internal/api/sessions.go` (API),
 `internal/guest/homefiles.go` and `sessions.go` (guest side).
 
@@ -8,8 +8,8 @@ An agent session is a persona's harness TUI in a named tmux session in one of it
 
 `POST /api/environments/{env}/sandboxes/{id}/sessions` refuses with 409 when:
 
-- the sandbox has no owner persona,
-- the persona's provider is `login_required` (subscriptions, until S8),
+- the sandbox has no owner teammate,
+- the teammate's provider is `login_required` (subscriptions, until S8),
 - the provider's key isn't bound to its host (the vendor host, or the base URL's host for
   `openai_compatible`): the gateway swaps the placeholder only on bound hosts,
 - the sandbox isn't running.
@@ -48,7 +48,7 @@ placeholder and never see the secret. Config files name only the variable (`{env
 Files marked "managed" are rewritten on every session start, so edits made in the sandbox
 are lost. The instructions files hold a managed block between
 `<!-- sandbox-studio:begin -->` and `<!-- sandbox-studio:end -->`: Studio replaces only the
-block, or puts it first, and keeps text outside it. The block has the persona's name,
+block, or puts it first, and keeps text outside it. The block has the teammate's name,
 role and soul and points to the memory tools.
 
 The soul reaches the agent only through this block, never through the session-start
