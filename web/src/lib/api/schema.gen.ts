@@ -1691,6 +1691,8 @@ export interface components {
              * @description Pairs of related facts to judge
              */
             pairs: number;
+            /** @description ID of the persona whose provider's utility model judged */
+            persona?: string;
             /**
              * Format: int64
              * @description Judge answers rejected as malformed; nothing was changed for them
@@ -2238,6 +2240,11 @@ export interface components {
             text: string;
             tier: string;
         };
+        SharedJudge: {
+            model: string;
+            personaId: string;
+            personaName: string;
+        };
         Source: {
             authorPersona?: string;
             /** Format: date-time */
@@ -2344,6 +2351,8 @@ export interface components {
             budget: components["schemas"]["Budget"];
             /** @description Per provider; empty model means no extraction */
             models: components["schemas"]["UtilityModel"][] | null;
+            /** @description Whose utility model consolidates shared memory: the persona that has had one the longest */
+            sharedJudge?: components["schemas"]["SharedJudge"];
             today: components["schemas"]["Usage"];
         };
         UtilityModel: {

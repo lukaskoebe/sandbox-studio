@@ -141,6 +141,13 @@ func (s *Service) insertSource(ctx context.Context, tx execer, envID, scope stri
 // CreateFact writes a fact with its source. With Supersedes set, the old fact (same
 // environment and scope) is marked superseded in the same transaction.
 func (s *Service) CreateFact(ctx context.Context, envID string, in FactInput, o Origin) (Fact, error) {
+	return s.CreateFactWith(ctx, envID, in, o, nil)
+}
+
+// CreateFactWith is CreateFact that also runs also, if set, in the write's transaction just
+// before it commits; an error from also rolls the write back. also must use only tx: the
+// catalog database has one connection.
+func (s *Service) CreateFactWith(ctx context.Context, envID string, in FactInput, o Origin, also func(tx *sql.Tx) error) (Fact, error) {
 	if err := in.validate(); err != nil {
 		return Fact{}, err
 	}
@@ -199,6 +206,11 @@ func (s *Service) CreateFact(ctx context.Context, envID string, in FactInput, o 
 	chunk, err := s.chunkFact(ctx, tx, envID, id, in.Scope, in.Attribute, in.Text)
 	if err != nil {
 		return Fact{}, err
+	}
+	if also != nil {
+		if err := also(tx); err != nil {
+			return Fact{}, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return Fact{}, err

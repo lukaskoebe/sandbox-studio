@@ -100,6 +100,8 @@ type UsageView struct {
 	Today  Usage          `json:"today"`
 	Budget Budget         `json:"budget"`
 	Models []UtilityModel `json:"models" doc:"Per provider; empty model means no extraction"`
+	// SharedJudge is nil when no persona's provider has a utility model.
+	SharedJudge *SharedJudge `json:"sharedJudge,omitempty" doc:"Whose utility model consolidates shared memory: the persona that has had one the longest"`
 }
 
 // UsageReport is the environment's extraction usage today.
@@ -113,6 +115,9 @@ func (s *Service) UsageReport(ctx context.Context, env string) (UsageView, error
 		return UsageView{}, err
 	}
 	v := UsageView{Today: u, Budget: s.Budget, Models: []UtilityModel{}}
+	if v.SharedJudge, err = s.SharedJudge(ctx, env); err != nil {
+		return UsageView{}, err
+	}
 	for _, p := range ps {
 		m, _ := UtilityFor(p)
 		m.Provider = p.Name

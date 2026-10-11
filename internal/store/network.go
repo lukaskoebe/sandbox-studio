@@ -288,8 +288,16 @@ func (s *Store) Approvals(ctx context.Context, envID, status string, limit int) 
 // DecideApproval moves a pending approval to status. It returns ErrNotFound if the
 // approval does not exist or was already decided.
 func (s *Store) DecideApproval(ctx context.Context, envID, id, status, ruleID string) error {
+	return DecideApprovalTx(ctx, s.db, envID, id, status, ruleID)
+}
+
+// DecideApprovalTx is DecideApproval inside tx, a transaction on the catalog database, so
+// that the decision commits together with what it causes or not at all.
+func DecideApprovalTx(ctx context.Context, tx interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}, envID, id, status, ruleID string) error {
 	t := now()
-	res, err := s.db.ExecContext(ctx, `UPDATE approvals SET status = ?, rule_id = ?, decided_at = ?, updated_at = ?
+	res, err := tx.ExecContext(ctx, `UPDATE approvals SET status = ?, rule_id = ?, decided_at = ?, updated_at = ?
 		WHERE environment_id = ? AND id = ? AND status = 'pending'`, status, nullable(ruleID), t, t, envID, id)
 	if err != nil {
 		return err
