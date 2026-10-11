@@ -338,7 +338,7 @@ func (h *Hub) requestLimit(ctx context.Context, id string, hdr agentproto.Header
 	}
 	line, err := bufio.NewReader(io.LimitReader(st, int64(maxReplyBytes)+1)).ReadBytes('\n')
 	if len(line) > maxReplyBytes {
-		return fmt.Errorf("guest control reply exceeds %d KiB", maxReplyBytes>>10)
+		return fmt.Errorf("guest control reply exceeds %d MiB", maxReplyBytes>>20)
 	}
 	if err != nil {
 		return err
