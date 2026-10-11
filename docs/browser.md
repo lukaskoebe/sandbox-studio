@@ -207,16 +207,18 @@ The value never enters:
 - MCP tool list and image results;
 - the API (status, takeover, patterns, approval view, remember, teammate delete).
 
-**Pending a live run.** None of the following is confirmed against a real VM:
+**Verified live on Linux amd64 (2026-10-11):**
 
-- The image builds on amd64 and arm64, and npm `agent-browser@0.39.0` ships its native
-  binary for both.
-- The daemon starts with `--executable-path`, `--profile` and `--download-path` as the
-  guest passes them, and Chromium trusts the environment CA through the NSS db
-  (`certutil`).
-- The stream server listens on 9223 and starts frames on connect. The input message
-  fields and the frame metadata (`deviceWidth`/`deviceHeight` for click mapping) are
-  agent-browser's.
+- Stop then Start from the port-3000 development UI succeeds with the existing profile.
+- agent-browser 0.39.0 launches with the guest's executable, profile and download flags.
+- Chromium loads `https://git.studio.internal/` using the environment CA in its NSS
+  database and still rejects an unrelated self-signed certificate.
+- A fresh live-view connection receives frames and renders them in the UI.
+
+**Pending a live run:**
+
+- The browser image and agent-browser's native binary on arm64.
+- Input message fields and frame metadata (`deviceWidth`/`deviceHeight`) for click mapping.
 - Snapshot details from a live Chromium:
   - password fields show no AX value or a masked one;
   - static text children don't carry values;
