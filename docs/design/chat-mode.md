@@ -379,7 +379,7 @@ Paths under `/api/environments/{env}`:
 | `POST /chats/{chat}/return` | `returnToChat` | 204. Ends the TUI and reconciles |
 | `GET /sandboxes/{id}/files?path=` | `listFiles` | `{entries[], truncated}` |
 | `GET /sandboxes/{id}/files/content?path=` | `readFile` | `{size, mimeType, data, tooLarge, binary, unreadable}`, `data` in base64 |
-| `GET /sandboxes/{id}/previews/{port}/open?embed=true` | `openPreview` | The login URL for an iframe (section 5) |
+| `POST /sandboxes/{id}/previews/{port}/open?embed=true` | `openPreview` | The login URL for an iframe (section 5) |
 | `GET /api/settings/ui` / `PUT /api/settings/ui` | `getUISettings` / `setUISettings` | `{agentView: chat\|terminal, asked}`. `asked` is false until the first `PUT`, which the onboarding dialog waits for |
 
 Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
