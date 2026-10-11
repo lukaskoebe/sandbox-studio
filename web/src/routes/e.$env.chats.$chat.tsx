@@ -6,6 +6,7 @@ import {
   ArrowSquareOutIcon,
   ChatCircleDotsIcon,
   CubeIcon,
+  SidebarSimpleIcon,
   TerminalWindowIcon,
   TrashIcon,
   WarningIcon,
@@ -17,6 +18,12 @@ import {
 } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { PlanCard } from "@/components/chat/plan-card"
+import { TurnFooter } from "@/components/chat/turn-footer"
+import {
+  useWorkspacePanel,
+  WorkspacePanel,
+  type WorkspacePanelState,
+} from "@/components/chat/workspace-panel"
 import { PageHeader } from "@/components/page-header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import {
@@ -49,7 +56,14 @@ import {
 } from "@/components/ui/message-scroller"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
-import { chatTitle, useChat, type Chat, type ChatItem } from "@/lib/chats"
+import {
+  changeCount,
+  chatTitle,
+  useChat,
+  type Chat,
+  type ChatItem,
+  type ChatTurn,
+} from "@/lib/chats"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/chats/$chat")({
@@ -63,8 +77,18 @@ function ChatPage() {
     params: { path: { env } },
   })
   const chat = log.chat
+  const panel = useWorkspacePanel()
   const teammateName =
     teammates.data?.find((t) => t.id === chat?.teammateId)?.name ?? "Teammate"
+
+  // A request's name in lists and dialogs: the start of its message.
+  const label = (t: ChatTurn) => {
+    const text = log.items
+      .find((i) => i.turnId === t.id && i.kind === "user")
+      ?.user?.text.trim()
+    if (!text) return t.origin === "terminal" ? "In the terminal" : "A message"
+    return text.length > 60 ? `${text.slice(0, 60)}…` : text
+  }
 
   if (log.gone) {
     return (
@@ -135,6 +159,19 @@ function ChatPage() {
             <OpenInTerminal env={env} chat={chat} />
           )}
           <DeleteChat env={env} chat={chat} />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title={
+              panel.open
+                ? "Hide changes, files and preview"
+                : "Show changes, files and preview"
+            }
+            aria-pressed={panel.open}
+            onClick={() => panel.setOpen(!panel.open)}
+          >
+            <SidebarSimpleIcon className="-scale-x-100" />
+          </Button>
         </div>
       </PageHeader>
       {(log.status === "error" || !log.live) && (
@@ -148,13 +185,24 @@ function ChatPage() {
             : "Reconnecting… new messages show up once Studio is back."}
         </div>
       )}
-      <ChatLog
-        env={env}
-        chat={chat}
-        items={log.items}
-        turns={log.turns}
-        teammateName={teammateName}
-      />
+      <div className="flex min-h-0 flex-1">
+        <ChatLog
+          env={env}
+          chat={chat}
+          items={log.items}
+          turns={log.turns}
+          teammateName={teammateName}
+          label={label}
+          panel={panel}
+        />
+        <WorkspacePanel
+          env={env}
+          chat={chat}
+          turns={log.turns}
+          label={label}
+          panel={panel}
+        />
+      </div>
     </>
   )
 }
@@ -165,12 +213,16 @@ function ChatLog({
   items,
   turns,
   teammateName,
+  label,
+  panel,
 }: {
   env: string
   chat: Chat
   items: ChatItem[]
-  turns: ReturnType<typeof useChat>["turns"]
+  turns: ChatTurn[]
   teammateName: string
+  label: (t: ChatTurn) => string
+  panel: WorkspacePanelState
 }) {
   const turnById = new Map(turns.map((t) => [t.id, t]))
   const running = chat.state === "running"
@@ -185,7 +237,7 @@ function ChatLog({
 
   return (
     <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport aria-label="Messages">
             <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
@@ -207,14 +259,24 @@ function ChatLog({
               {items.map((item, i) => {
                 const turn = turnById.get(item.turnId)
                 const lastOfTurn = items.at(i + 1)?.turnId !== item.turnId
-                const usage = lastOfTurn && turn?.endedAt ? turnUsage(turn) : ""
+                const footer =
+                  lastOfTurn &&
+                  turn?.endedAt &&
+                  (changeCount(turn) > 0 || turnUsage(turn))
+                    ? turn
+                    : undefined
+                // The note that changes were undone belongs to the undone turn but
+                // stays readable.
+                const dim =
+                  turn?.undoneAt &&
+                  !(item.kind === "marker" && item.marker?.kind === "undo")
                 if (item.id === pinned?.id) return null
                 return (
                   <Fragment key={item.id}>
                     <MessageScrollerItem
                       messageId={item.id}
                       scrollAnchor={item.kind === "user"}
-                      className={cn(turn?.undoneAt && "opacity-50")}
+                      className={cn(dim && "opacity-50")}
                       title={turn?.undoneAt ? "Undone" : undefined}
                     >
                       <ChatItemView
@@ -227,11 +289,18 @@ function ChatLog({
                         }}
                       />
                     </MessageScrollerItem>
-                    {usage && (
-                      <MessageScrollerItem>
-                        <p className="text-[0.6875rem] text-muted-foreground">
-                          {usage}
-                        </p>
+                    {footer && (
+                      <MessageScrollerItem
+                        className={cn(footer.undoneAt && "opacity-50")}
+                      >
+                        <TurnFooter
+                          env={env}
+                          chat={chat}
+                          turn={footer}
+                          turns={turns}
+                          label={label}
+                          onShowChanges={panel.showChanges}
+                        />
                       </MessageScrollerItem>
                     )}
                   </Fragment>

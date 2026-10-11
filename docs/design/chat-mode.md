@@ -3,10 +3,12 @@
 Status: implemented and covered by local tests with fakes: the backend (ACP streams,
 persisted turns, SSE, permissions and form answers), the chat UI (stage 3 and the UI half
 of stage 4), the terminal handover and replay reconciliation (stage 5), turn snapshots with
-undo, the changed files and the read-only file browser on the backend (stage 6), the
-embedded preview login (the backend half of stage 7), and the stored Chat/Terminal choice.
-The Changes, Files and preview panels are not built, and nothing has run in a VM or against
-a real LLM, so this is not release-ready. Researched 2026-10-11.
+undo, the changed files and the read-only file browser (stage 6), the embedded preview
+(stage 7), and the stored Chat/Terminal choice. The chat view's side panel has the Changes,
+Files and Preview tabs, and finished turns show "Changed N files" and Undo. Not built: the
+"Preview ready" marker for a new port (the panel just shows the first listening port) and
+"Attach to message" in the Files tab. Nothing has run in a VM or against a real LLM, so this
+is not release-ready. Researched 2026-10-11.
 Versions marked "verify" have not been run in a VM.
 
 Chat mode puts each agent session in a chat view for people who don't use terminals. The

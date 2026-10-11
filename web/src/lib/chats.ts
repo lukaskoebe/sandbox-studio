@@ -211,3 +211,8 @@ export function readBase64(file: File): Promise<string> {
     r.readAsDataURL(file)
   })
 }
+
+/** How many files a turn changed, counting those left off the list. */
+export function changeCount(t: ChatTurn) {
+  return (t.changes?.files?.length ?? 0) + (t.changes?.more ?? 0)
+}
