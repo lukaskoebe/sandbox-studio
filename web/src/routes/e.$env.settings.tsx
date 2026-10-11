@@ -18,6 +18,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { PageHeader } from "@/components/page-header"
 import { $api, errorMessage, type HostCheck } from "@/lib/api/client"
@@ -34,7 +35,7 @@ function SettingsPage() {
       <PageHeader>
         <h1 className="text-sm font-medium">Settings</h1>
       </PageHeader>
-      <div className="flex-1 space-y-4 overflow-auto p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           These settings apply to this Studio installation and every
           environment.
@@ -42,7 +43,7 @@ function SettingsPage() {
         <RuntimeCard />
         <AutostartCard />
         <UpdatesCard />
-      </div>
+      </ScrollArea>
     </>
   )
 }

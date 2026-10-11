@@ -31,6 +31,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -119,7 +120,7 @@ function MemoryPage() {
           </Select>
         </div>
       </PageHeader>
-      <div className="flex-1 space-y-4 overflow-auto p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           {explanation}
         </p>
@@ -160,7 +161,7 @@ function MemoryPage() {
             />
           </TabsContent>
         </Tabs>
-      </div>
+      </ScrollArea>
     </>
   )
 }

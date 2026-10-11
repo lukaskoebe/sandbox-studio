@@ -23,6 +23,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -83,7 +84,7 @@ function TeammatesPage() {
         <h1 className="text-sm font-medium">Teammates</h1>
         <div className="ml-auto">{addButton}</div>
       </PageHeader>
-      <div className="flex-1 space-y-6 overflow-auto p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           {explanation}
         </p>
@@ -182,7 +183,7 @@ function TeammatesPage() {
             {canAdd && <EmptyContent>{addButton}</EmptyContent>}
           </Empty>
         )}
-      </div>
+      </ScrollArea>
       <TeammateDialog
         env={env}
         teammate={dialog?.teammate}
