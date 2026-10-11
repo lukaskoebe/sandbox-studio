@@ -347,19 +347,30 @@ func (a *Auth) servePreviewLogin(w http.ResponseWriter, r *http.Request, host st
 		http.Error(w, "Open this preview from Sandbox Studio.", http.StatusForbidden)
 		return
 	}
-	a.setSignedCookie(w, r, PreviewCookie, "preview", host, a.now().Add(previewSessionLife), http.SameSiteLaxMode)
+	cookie := a.signedCookie(r, PreviewCookie, "preview", host, a.now().Add(previewSessionLife), http.SameSiteLaxMode)
+	if r.URL.Query().Get("embed") == "1" {
+		// The chat's preview panel frames the preview, which is cross-site to Studio: only a
+		// SameSite=None cookie is sent there. Browsers require Secure for that, and allow it
+		// on *.localhost as a secure context; Partitioned keeps it to frames under Studio.
+		cookie.SameSite, cookie.Secure, cookie.Partitioned = http.SameSiteNoneMode, true, true
+	}
+	http.SetCookie(w, cookie)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (a *Auth) setSignedCookie(w http.ResponseWriter, r *http.Request, name, kind, host string, expires time.Time, sameSite http.SameSite) {
+	http.SetCookie(w, a.signedCookie(r, name, kind, host, expires, sameSite))
+}
+
+func (a *Auth) signedCookie(r *http.Request, name, kind, host string, expires time.Time, sameSite http.SameSite) *http.Cookie {
 	payload := cookiePayload(kind, host, expires.Unix())
 	signature := mac(a.key, "cookie/"+kind+"/v1", payload)
 	value := base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(signature)
 	maxAge := int(expires.Sub(a.now()).Seconds())
-	http.SetCookie(w, &http.Cookie{
+	return &http.Cookie{
 		Name: name, Value: value, Path: "/", Expires: expires, MaxAge: maxAge,
 		HttpOnly: true, Secure: r.TLS != nil, SameSite: sameSite,
-	})
+	}
 }
 
 func (a *Auth) validCookie(r *http.Request, name, kind, host string) bool {
