@@ -18,10 +18,19 @@ import (
 	"io"
 	"strconv"
 	"sync"
+	"time"
 )
 
 // MaxLine bounds one message from the agent. Longer lines are dropped.
 const MaxLine = 8 << 20
+
+const (
+	// Close an overloaded stream instead of queueing unbounded agent work.
+	maxAgentRequests = 32
+	// Agents run over a local guest stream. Even notifications and replies must not
+	// hold the chat indefinitely if its peer stops reading.
+	writeTimeout = 2 * time.Second
+)
 
 // JSON-RPC error codes.
 const (
@@ -79,7 +88,10 @@ type Conn struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 
-	wmu sync.Mutex
+	writeGate chan struct{}
+	closeOnce sync.Once
+	closeErr  error
+	requests  chan struct{}
 
 	mu      sync.Mutex
 	nextID  int64
@@ -92,7 +104,13 @@ type Conn struct {
 // agent closes its output.
 func NewConn(rwc io.ReadWriteCloser, h Handler) *Conn {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &Conn{rwc: rwc, handler: h, ctx: ctx, cancel: cancel, pending: map[int64]chan message{}, done: make(chan struct{})}
+	writeGate := make(chan struct{}, 1)
+	writeGate <- struct{}{}
+	c := &Conn{
+		rwc: rwc, handler: h, ctx: ctx, cancel: cancel,
+		writeGate: writeGate, requests: make(chan struct{}, maxAgentRequests),
+		pending: map[int64]chan message{}, done: make(chan struct{}),
+	}
 	go c.read()
 	return c
 }
@@ -109,9 +127,14 @@ func (c *Conn) Err() error {
 
 // Close ends the connection; the guest then stops the agent process.
 func (c *Conn) Close() error {
-	err := c.rwc.Close()
+	err := c.closeRWC()
 	c.shutdown(ErrClosed)
 	return err
+}
+
+func (c *Conn) closeRWC() error {
+	c.closeOnce.Do(func() { c.closeErr = c.rwc.Close() })
+	return c.closeErr
 }
 
 func (c *Conn) shutdown(err error) {
@@ -139,7 +162,7 @@ func (c *Conn) read() {
 			continue
 		}
 		if err != nil {
-			c.rwc.Close()
+			c.closeRWC()
 			if errors.Is(err, io.EOF) {
 				err = io.ErrUnexpectedEOF
 			}
@@ -152,7 +175,17 @@ func (c *Conn) read() {
 		}
 		switch {
 		case m.Method != "" && len(m.ID) > 0:
-			go c.serve(m)
+			select {
+			case c.requests <- struct{}{}:
+				go func() {
+					defer func() { <-c.requests }()
+					c.serve(m)
+				}()
+			default:
+				c.shutdown(errors.New("the agent has too many concurrent requests"))
+				c.closeRWC()
+				return
+			}
 		case m.Method != "":
 			c.notification(m)
 		case len(m.ID) > 0:
@@ -258,15 +291,89 @@ func (c *Conn) serve(m message) {
 }
 
 func (c *Conn) write(m message) error {
+	err := c.writeContext(c.ctx, m)
+	if err != nil {
+		// Notify and reply writes have no caller context. If one cannot be sent within
+		// the bound, close the stream rather than leave the agent waiting for it.
+		c.Close()
+	}
+	return err
+}
+
+func (c *Conn) writeContext(ctx context.Context, m message) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	_, err = c.rwc.Write(append(b, '\n'))
-	return err
+	writeCtx, cancel := context.WithTimeout(ctx, writeTimeout)
+	defer cancel()
+	if err := c.acquireWrite(writeCtx); err != nil {
+		return err
+	}
+	defer c.releaseWrite()
+	if err := writeCtx.Err(); err != nil {
+		return err
+	}
+
+	line := append(b, '\n')
+	callbackDone := make(chan struct{})
+	stop := context.AfterFunc(writeCtx, func() {
+		defer close(callbackDone)
+		c.Close()
+	})
+	n, writeErr := c.rwc.Write(line)
+	if writeErr == nil && n != len(line) {
+		writeErr = io.ErrShortWrite
+	}
+	ctxErr := writeCtx.Err()
+	if ctxErr != nil || writeErr != nil {
+		// A canceled in-flight write may have emitted a partial JSON line. Any
+		// underlying write error has the same framing risk, so retire the stream.
+		c.Close()
+	}
+	stopped := stop()
+	if !stopped {
+		// Do not release the serialized writer while its cancellation callback can
+		// still close the connection under the next call.
+		<-callbackDone
+	}
+	if ctxErr != nil {
+		return ctxErr
+	}
+	if writeErr != nil {
+		return writeErr
+	}
+	if err := writeCtx.Err(); err != nil {
+		// Cancellation raced with the end of Write. The bytes may have reached the
+		// peer, but the caller must not reuse a connection whose outcome is unclear.
+		c.Close()
+		return err
+	}
+	return nil
 }
+
+func (c *Conn) acquireWrite(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.done:
+		return c.Err()
+	case <-c.writeGate:
+	}
+	if err := ctx.Err(); err != nil {
+		c.releaseWrite()
+		return err
+	}
+	select {
+	case <-c.done:
+		c.releaseWrite()
+		return c.Err()
+	default:
+		return nil
+	}
+}
+
+func (c *Conn) releaseWrite() { c.writeGate <- struct{}{} }
 
 // Call sends a request and decodes its result into result (unless nil). A JSON-RPC error
 // is returned as *Error, an authentication error as ErrAuthRequired.
@@ -292,7 +399,7 @@ func (c *Conn) Call(ctx context.Context, method string, params, result any) erro
 		}
 		c.mu.Unlock()
 	}
-	if err := c.write(message{JSONRPC: "2.0", ID: json.RawMessage(strconv.FormatInt(id, 10)), Method: method, Params: p}); err != nil {
+	if err := c.writeContext(ctx, message{JSONRPC: "2.0", ID: json.RawMessage(strconv.FormatInt(id, 10)), Method: method, Params: p}); err != nil {
 		forget()
 		return err
 	}
