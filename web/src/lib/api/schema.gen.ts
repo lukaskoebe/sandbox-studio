@@ -133,6 +133,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description All chats of the environment, most recently active first. */
+        get: operations["listChats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/chats/{chat}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The chat with its turns and items. Follow it with the chat's stream from chat.rev. */
+        get: operations["getChat"];
+        put?: never;
+        post?: never;
+        /** @description Stops the chat's agent and deletes the chat. The harness keeps its history in the agent user's home. */
+        delete: operations["deleteChat"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/chats/{chat}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stops the running turn, if any. The turn ends on the stream. */
+        post: operations["cancelChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/chats/{chat}/prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Starts a turn, starting the chat's agent first if it isn't running. The turn's items arrive on the chat's stream. 409 while a turn runs. */
+        post: operations["sendPrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/forges": {
         parameters: {
             query?: never;
@@ -622,6 +691,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["deleteSandbox"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSandboxChats"];
+        put?: never;
+        /** @description Starts a chat with the sandbox's owner teammate, sending the prompt if there is one. 409 for the same reasons as startSession, and for Claude subscription providers, which chats don't support. */
+        post: operations["createChat"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1269,6 +1355,12 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        Attachment: {
+            mimeType: string;
+            name: string;
+            /** Format: int64 */
+            size: number;
+        };
         AutostartStatus: {
             /** @description The Studio binary the entry starts */
             command?: string;
@@ -1386,6 +1478,26 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "preparing" | "setting_up" | "exporting" | "ready" | "failed" | "cancelled";
             templateId?: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        Chat: {
+            acpSessionId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            harness: string;
+            id: string;
+            /**
+             * Format: int64
+             * @description The chat's change counter: every change to the chat, its turns or its items raises it
+             */
+            rev: number;
+            sandboxId: string;
+            /** @enum {string} */
+            state: "idle" | "running" | "terminal" | "orphaned";
+            teammateId: string;
+            title: string;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -1520,6 +1632,18 @@ export interface components {
             started: string;
             /** @enum {string} */
             verdict: "pending" | "open" | "allowed" | "denied" | "undecided" | "failed";
+        };
+        ContentBlock: {
+            data?: string;
+            mimeType?: string;
+            name?: string;
+            resource?: unknown;
+            /** Format: int64 */
+            size?: number;
+            text?: string;
+            title?: string;
+            type: string;
+            uri?: string;
         };
         CreateCheckpointInBody: {
             /** @description Human-readable checkpoint name */
@@ -1907,6 +2031,33 @@ export interface components {
             /** @enum {string} */
             status: "ok" | "warn" | "fail";
         };
+        Item: {
+            approvalId?: string;
+            chatId: string;
+            id: string;
+            kind: string;
+            marker?: components["schemas"]["MarkerBody"];
+            permission?: components["schemas"]["PermissionBody"];
+            plan?: components["schemas"]["PlanBody"];
+            question?: components["schemas"]["QuestionBody"];
+            /** Format: int64 */
+            rev: number;
+            /** Format: int64 */
+            seq: number;
+            status?: string;
+            text?: components["schemas"]["TextBody"];
+            tool?: components["schemas"]["ToolBody"];
+            toolCallId?: string;
+            turnId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            user?: components["schemas"]["UserBody"];
+        };
+        Log: {
+            chat: components["schemas"]["Chat"];
+            items: components["schemas"]["Item"][] | null;
+            turns: components["schemas"]["Turn"][] | null;
+        };
         LogEntry: {
             /** Format: date-time */
             at: string;
@@ -1923,6 +2074,11 @@ export interface components {
             teammateId: string;
             /** @description Why it happened: the search explanation, threshold or extraction details */
             why?: unknown;
+        };
+        MarkerBody: {
+            /** @enum {string} */
+            kind: "stopped" | "interrupted" | "error" | "limit" | "notice" | "compaction" | "terminal" | "undo";
+            text: string;
         };
         NetworkRequest: {
             host: string;
@@ -1964,6 +2120,24 @@ export interface components {
             slug?: string;
             title: string;
         };
+        PermissionBody: {
+            options: components["schemas"]["PermissionOption"][] | null;
+            outcome?: string;
+            toolCall: components["schemas"]["ToolCallUpdate"];
+        };
+        PermissionOption: {
+            kind: string;
+            name: string;
+            optionId: string;
+        };
+        PlanBody: {
+            entries: components["schemas"]["PlanEntry"][] | null;
+        };
+        PlanEntry: {
+            content: string;
+            priority: string;
+            status: string;
+        };
         PreviewOpenBody: {
             url: string;
         };
@@ -1971,6 +2145,18 @@ export interface components {
             /** Format: int64 */
             port: number;
             url: string;
+        };
+        PromptFile: {
+            /** @description The file, base64-encoded */
+            data: string;
+            /** @description Detected from the content when empty */
+            mimeType?: string;
+            name: string;
+        };
+        PromptRequest: {
+            /** @description At most 10 MiB in total */
+            attachments?: components["schemas"]["PromptFile"][] | null;
+            text?: string;
         };
         ProviderKind: {
             /** @description Whether the provider is an API key; otherwise it is a subscription login */
@@ -2054,6 +2240,18 @@ export interface components {
             sandbox: string;
             /** @description The teammate owning the sandbox; empty for unowned sandboxes */
             teammate?: string;
+        };
+        QuestionBody: {
+            /**
+             * @description The answer's action, once answered
+             * @enum {string}
+             */
+            action?: "accept" | "decline" | "cancel";
+            /** @description The submitted values, for accept */
+            answer?: unknown;
+            message: string;
+            /** @description The form, as a restricted JSON Schema */
+            schema?: unknown;
         };
         RebaseInBody: {
             /** @description A ready template in the same environment */
@@ -2273,6 +2471,10 @@ export interface components {
             platform: string;
             resources: components["schemas"]["Resources"];
         };
+        TextBody: {
+            text: string;
+            truncated?: boolean;
+        };
         TimelineEntry: {
             /** Format: date-time */
             at: string;
@@ -2297,6 +2499,74 @@ export interface components {
         };
         ToggleInBody: {
             enabled: boolean;
+        };
+        ToolBody: {
+            content?: components["schemas"]["ToolCallContent"][] | null;
+            /** @description The tool's raw input, as the agent reports it */
+            input?: unknown;
+            /** @description read, edit, delete, move, search, execute, think, fetch, switch_mode or other */
+            kind?: string;
+            locations?: components["schemas"]["ToolCallLocation"][] | null;
+            /** @enum {string} */
+            status?: "pending" | "in_progress" | "completed" | "failed";
+            title: string;
+            truncated?: boolean;
+        };
+        ToolCallContent: {
+            content?: components["schemas"]["ContentBlock"];
+            newText?: string;
+            oldText?: string;
+            path?: string;
+            terminalId?: string;
+            type: string;
+        };
+        ToolCallLocation: {
+            /** Format: int64 */
+            line?: number;
+            path: string;
+        };
+        ToolCallUpdate: {
+            content?: components["schemas"]["ToolCallContent"][] | null;
+            kind?: string;
+            locations?: components["schemas"]["ToolCallLocation"][] | null;
+            rawInput?: unknown;
+            status?: string;
+            title?: string;
+            toolCallId: string;
+        };
+        Turn: {
+            chatId: string;
+            /** Format: date-time */
+            endedAt?: string;
+            id: string;
+            /** @enum {string} */
+            origin: "chat" | "terminal";
+            /** Format: int64 */
+            rev: number;
+            /** Format: int64 */
+            seq: number;
+            /** Format: date-time */
+            startedAt: string;
+            stopReason?: string;
+            /** Format: date-time */
+            undoneAt?: string;
+            usage?: components["schemas"]["TurnUsage"];
+        };
+        TurnUsage: {
+            /**
+             * Format: int64
+             * @description Size of the context window
+             */
+            contextSize?: number;
+            /**
+             * Format: int64
+             * @description Tokens in the context window
+             */
+            contextUsed?: number;
+            /** @description The session's cost so far, as the agent reports it */
+            cost?: unknown;
+            /** @description The prompt response's usage, as the agent reports it */
+            tokens?: unknown;
         };
         UpdateProviderInBody: {
             /** @description A new key. Omit it to keep the stored one. */
@@ -2354,6 +2624,10 @@ export interface components {
             /** @description Whose utility model consolidates shared memory: the teammate that has had one the longest */
             sharedJudge?: components["schemas"]["SharedJudge"];
             today: components["schemas"]["Usage"];
+        };
+        UserBody: {
+            attachments?: components["schemas"]["Attachment"][] | null;
+            text: string;
         };
         UtilityModel: {
             kind: string;
@@ -2760,6 +3034,174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildJobLog"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Log"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    sendPrompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Turn"];
                 };
             };
             /** @description Error */
@@ -4212,6 +4654,78 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listSandboxChats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PromptRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Chat"];
+                };
             };
             /** @description Error */
             default: {

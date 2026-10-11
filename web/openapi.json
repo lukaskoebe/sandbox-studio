@@ -145,6 +145,27 @@
         ],
         "type": "object"
       },
+      "Attachment": {
+        "additionalProperties": false,
+        "properties": {
+          "mimeType": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "mimeType",
+          "size"
+        ],
+        "type": "object"
+      },
       "AutostartStatus": {
         "additionalProperties": false,
         "properties": {
@@ -518,6 +539,67 @@
           "environmentId",
           "status",
           "cleanupPending",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "Chat": {
+        "additionalProperties": false,
+        "properties": {
+          "acpSessionId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "harness": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "rev": {
+            "description": "The chat's change counter: every change to the chat, its turns or its items raises it",
+            "format": "int64",
+            "type": "integer"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "running",
+              "terminal",
+              "orphaned"
+            ],
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "sandboxId",
+          "teammateId",
+          "harness",
+          "title",
+          "state",
+          "rev",
           "createdAt",
           "updatedAt"
         ],
@@ -934,6 +1016,41 @@
           "verdict",
           "sent",
           "received"
+        ],
+        "type": "object"
+      },
+      "ContentBlock": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "resource": {},
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
         ],
         "type": "object"
       },
@@ -2016,6 +2133,107 @@
         ],
         "type": "object"
       },
+      "Item": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalId": {
+            "type": "string"
+          },
+          "chatId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "marker": {
+            "$ref": "#/components/schemas/MarkerBody"
+          },
+          "permission": {
+            "$ref": "#/components/schemas/PermissionBody"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PlanBody"
+          },
+          "question": {
+            "$ref": "#/components/schemas/QuestionBody"
+          },
+          "rev": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seq": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "text": {
+            "$ref": "#/components/schemas/TextBody"
+          },
+          "tool": {
+            "$ref": "#/components/schemas/ToolBody"
+          },
+          "toolCallId": {
+            "type": "string"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserBody"
+          }
+        },
+        "required": [
+          "id",
+          "chatId",
+          "turnId",
+          "seq",
+          "kind",
+          "updatedAt",
+          "rev"
+        ],
+        "type": "object"
+      },
+      "Log": {
+        "additionalProperties": false,
+        "properties": {
+          "chat": {
+            "$ref": "#/components/schemas/Chat"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "chat",
+          "turns",
+          "items"
+        ],
+        "type": "object"
+      },
       "LogEntry": {
         "additionalProperties": false,
         "properties": {
@@ -2066,6 +2284,32 @@
           "at",
           "kind",
           "summary"
+        ],
+        "type": "object"
+      },
+      "MarkerBody": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "stopped",
+              "interrupted",
+              "error",
+              "limit",
+              "notice",
+              "compaction",
+              "terminal",
+              "undo"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
         ],
         "type": "object"
       },
@@ -2219,6 +2463,89 @@
         ],
         "type": "object"
       },
+      "PermissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionOption"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "toolCall": {
+            "$ref": "#/components/schemas/ToolCallUpdate"
+          }
+        },
+        "required": [
+          "toolCall",
+          "options"
+        ],
+        "type": "object"
+      },
+      "PermissionOption": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "optionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "optionId",
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "PlanBody": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/PlanEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
+      },
+      "PlanEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "priority",
+          "status"
+        ],
+        "type": "object"
+      },
       "PreviewOpenBody": {
         "additionalProperties": false,
         "properties": {
@@ -2246,6 +2573,52 @@
           "port",
           "url"
         ],
+        "type": "object"
+      },
+      "PromptFile": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "contentEncoding": "base64",
+            "description": "The file, base64-encoded",
+            "type": "string"
+          },
+          "mimeType": {
+            "description": "Detected from the content when empty",
+            "maxLength": 255,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "data"
+        ],
+        "type": "object"
+      },
+      "PromptRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "attachments": {
+            "description": "At most 10 MiB in total",
+            "items": {
+              "$ref": "#/components/schemas/PromptFile"
+            },
+            "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "text": {
+            "maxLength": 262144,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "ProviderKind": {
@@ -2502,6 +2875,33 @@
           "deletions",
           "diff",
           "diffTruncated"
+        ],
+        "type": "object"
+      },
+      "QuestionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "The answer's action, once answered",
+            "enum": [
+              "accept",
+              "decline",
+              "cancel"
+            ],
+            "type": "string"
+          },
+          "answer": {
+            "description": "The submitted values, for accept"
+          },
+          "message": {
+            "type": "string"
+          },
+          "schema": {
+            "description": "The form, as a restricted JSON Schema"
+          }
+        },
+        "required": [
+          "message"
         ],
         "type": "object"
       },
@@ -3214,6 +3614,21 @@
         ],
         "type": "object"
       },
+      "TextBody": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
       "TimelineEntry": {
         "additionalProperties": false,
         "properties": {
@@ -3288,6 +3703,213 @@
         "required": [
           "enabled"
         ],
+        "type": "object"
+      },
+      "ToolBody": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallContent"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "input": {
+            "description": "The tool's raw input, as the agent reports it"
+          },
+          "kind": {
+            "description": "read, edit, delete, move, search, execute, think, fetch, switch_mode or other",
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallLocation"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "ToolCallContent": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/ContentBlock"
+          },
+          "newText": {
+            "type": "string"
+          },
+          "oldText": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "terminalId": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "ToolCallLocation": {
+        "additionalProperties": false,
+        "properties": {
+          "line": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "ToolCallUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallContent"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallLocation"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "rawInput": {},
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "toolCallId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "toolCallId"
+        ],
+        "type": "object"
+      },
+      "Turn": {
+        "additionalProperties": false,
+        "properties": {
+          "chatId": {
+            "type": "string"
+          },
+          "endedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "chat",
+              "terminal"
+            ],
+            "type": "string"
+          },
+          "rev": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "seq": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "stopReason": {
+            "type": "string"
+          },
+          "undoneAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/TurnUsage"
+          }
+        },
+        "required": [
+          "id",
+          "chatId",
+          "seq",
+          "origin",
+          "startedAt",
+          "rev"
+        ],
+        "type": "object"
+      },
+      "TurnUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "contextSize": {
+            "description": "Size of the context window",
+            "format": "int64",
+            "type": "integer"
+          },
+          "contextUsed": {
+            "description": "Tokens in the context window",
+            "format": "int64",
+            "type": "integer"
+          },
+          "cost": {
+            "description": "The session's cost so far, as the agent reports it"
+          },
+          "tokens": {
+            "description": "The prompt response's usage, as the agent reports it"
+          }
+        },
         "type": "object"
       },
       "UpdateProviderInBody": {
@@ -3445,6 +4067,27 @@
           "today",
           "budget",
           "models"
+        ],
+        "type": "object"
+      },
+      "UserBody": {
+        "additionalProperties": false,
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
         ],
         "type": "object"
       },
@@ -4163,6 +4806,261 @@
         },
         "tags": [
           "builds"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats": {
+      "get": {
+        "description": "All chats of the environment, most recently active first.",
+        "operationId": "listChats",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Chat"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}": {
+      "delete": {
+        "description": "Stops the chat's agent and deletes the chat. The harness keeps its history in the agent user's home.",
+        "operationId": "deleteChat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      },
+      "get": {
+        "description": "The chat with its turns and items. Follow it with the chat's stream from chat.rev.",
+        "operationId": "getChat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Log"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/cancel": {
+      "post": {
+        "description": "Stops the running turn, if any. The turn ends on the stream.",
+        "operationId": "cancelChat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/prompt": {
+      "post": {
+        "description": "Starts a turn, starting the chat's agent first if it isn't running. The turn's items arrive on the chat's stream. 409 while a turn runs.",
+        "operationId": "sendPrompt",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Turn"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
         ]
       }
     },
@@ -6428,6 +7326,124 @@
         },
         "tags": [
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/chats": {
+      "get": {
+        "operationId": "listSandboxChats",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Chat"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      },
+      "post": {
+        "description": "Starts a chat with the sandbox's owner teammate, sending the prompt if there is one. 409 for the same reasons as startSession, and for Claude subscription providers, which chats don't support.",
+        "operationId": "createChat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Chat"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
         ]
       }
     },

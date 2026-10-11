@@ -1,0 +1,10 @@
+{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"**Running the tests**"}}
+{"sessionUpdate":"tool_call","toolCallId":"call_a1","title":"Run go test ./...","kind":"execute","status":"in_progress","rawInput":{"command":["bash","-lc","go test ./..."],"cwd":"/workspace"}}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_a1","content":[{"type":"content","content":{"type":"text","text":"ok  \texample.com/app\t0.012s\n"}}]}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_a1","status":"completed"}
+{"sessionUpdate":"plan","entries":[{"content":"Run the tests","priority":"high","status":"completed"},{"content":"Fix the flaky one","priority":"high","status":"in_progress"}]}
+{"sessionUpdate":"tool_call","toolCallId":"call_a2","title":"Edit app_test.go","kind":"edit","status":"in_progress","locations":[{"path":"/workspace/app_test.go"}]}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_a2","status":"failed","content":[{"type":"content","content":{"type":"text","text":"patch rejected: context mismatch"}}]}
+{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"The tests pass; "}}
+{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"the patch to app_test.go didn't apply."}}
+{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"review","description":"Review changes"}]}

@@ -105,9 +105,10 @@ func (s *Server) agentSessions(ctx context.Context, envID, id string) ([]agentpr
 
 // sessionPlan is everything a session start sends to the guest.
 type sessionPlan struct {
-	harness harness.Harness
-	files   []agentproto.HomeFile
-	env     map[string]string
+	harness  harness.Harness
+	provider harness.Provider
+	files    []agentproto.HomeFile
+	env      map[string]string
 }
 
 // planSession checks that sb's owner teammate can run its harness and renders the files.
@@ -148,7 +149,7 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	if err != nil {
 		return sessionPlan{}, huma.Error409Conflict(err.Error())
 	}
-	return sessionPlan{harness: h, files: files, env: harness.Env(hp)}, nil
+	return sessionPlan{harness: h, provider: hp, files: files, env: harness.Env(hp)}, nil
 }
 
 // providerHost is the host a provider's key must be bound to.

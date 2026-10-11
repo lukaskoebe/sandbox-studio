@@ -11,6 +11,7 @@ const (
 	TopicSecrets   = "secrets"
 	TopicBuilds    = "builds"
 	TopicTeammates = "teammates"
+	TopicChats     = "chats" // a chat was created, deleted, renamed or changed state
 )
 
 // Event is one change notification.

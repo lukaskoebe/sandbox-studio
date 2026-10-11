@@ -30,6 +30,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
+	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
@@ -251,6 +252,13 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
 	}
+	// Chats drive the teammates' harnesses over ACP. Turns that ran when Studio stopped
+	// end interrupted before anything new starts.
+	chats := &chat.Service{Store: st, Guest: hub, Bus: bus, Log: log}
+	if err := chats.Recover(ctx); err != nil {
+		return fmt.Errorf("chats: %w", err)
+	}
+	defer chats.Close()
 	if err := gitRemote.Sweep(ctx); err != nil {
 		log.Warn("git staging cleanup", "err", err)
 	}
@@ -288,7 +296,7 @@ func run(addr, image string, log *slog.Logger) error {
 
 	mux := http.NewServeMux()
 	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
-		Integrations: integs, Git: gitRemote, System: system, Browser: brw}).Register(mux)
+		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats}).Register(mux)
 	mux.Handle("/", webui.Handler())
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 

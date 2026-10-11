@@ -1,0 +1,12 @@
+{"sessionUpdate":"session_info_update","title":"Add a health endpoint"}
+{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Let me check "}}
+{"sessionUpdate":"tool_call","toolCallId":"call_1","title":"grep","kind":"search","status":"pending","locations":[],"rawInput":{}}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_1","status":"in_progress","title":"grep \"HandleFunc\"","rawInput":{"pattern":"HandleFunc","path":"/workspace"}}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"server.go:12: http.HandleFunc(\"/\", index)"}}],"rawOutput":{"output":"server.go:12"}}
+{"sessionUpdate":"tool_call","toolCallId":"call_2","title":"bash","kind":"execute","status":"pending","rawInput":{}}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_2","status":"in_progress","title":"go build ./...","rawInput":{"command":"go build ./...","description":"Build"}}
+{"sessionUpdate":"tool_call_update","toolCallId":"call_2","status":"completed","content":[{"type":"content","content":{"type":"text","text":""}}]}
+{"sessionUpdate":"notice","message":"Model switched to the fallback model"}
+{"sessionUpdate":"usage_update","used":9100,"size":128000}
+{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"It builds. See "}}
+{"sessionUpdate":"agent_message_chunk","content":{"type":"resource_link","uri":"file:///workspace/server.go","name":"server.go"}}

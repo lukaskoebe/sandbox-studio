@@ -178,9 +178,10 @@ visible thing, updated in place, not one row per chunk.
 **Sending prompts.**
 
 - Content is text, plus `image` blocks for pasted images.
-- Other attachments are written to `/workspace/attachments/<name>` through the guest and
-  sent as `resource_link` with a `file://` URI. The agent reads them from its own
-  filesystem.
+- Other attachments are sent as embedded `resource` blocks (text, or a base64 blob) with a
+  `file:///attachments/<name>` URI, which needs the agent's `embeddedContext` prompt
+  capability. Nothing is written into the workspace, so undo and the Changes panel never
+  see them. At most 10 MiB per prompt.
 - Only one prompt runs per chat. Studio has no prompt queue.
 
 **Cancelling.** Stop sends `session/cancel`. Studio settles every open `chat.permission`
@@ -294,7 +295,9 @@ browser ──SSE/HTTP──▶ internal/api (chats.go) ──▶ internal/chat 
     kind, so `decideApproval` settles permissions through the existing seam.
 - **`agentchan.Hub.OpenACP(ctx, id, chat, StartACP) (net.Conn, error)`.**
 
-**Persistence: migration "next", currently 018, as `NNN_chats.sql`.**
+**Persistence: migration `020_chats.sql`.** Every table also has a `rev` column: a per-chat
+change counter. Each write to a chat, its turns or its items takes the chat's next rev, so
+the stream resumes from the last rev a client saw without missing anything.
 
 ```sql
 CREATE TABLE chats (
@@ -366,11 +369,14 @@ Paths under `/api/environments/{env}`:
 | `GET /api/settings/ui` / `PUT /api/settings/ui` | `getUISettings` / `setUISettings` | `{agentView: chat\|terminal\|""}` |
 
 **Streaming** is a plain handler like `streamEvents`:
-`GET /api/environments/{env}/chats/{chat}/stream?after=<seq>`.
+`GET /api/environments/{env}/chats/{chat}/stream?after=<rev>` (or `Last-Event-ID`).
 
-- SSE carries `item` events (a whole item's JSON), `turn` events and `chat` events.
-- It first sends everything after `after`, then live changes. A reconnect resumes from the
-  last seen sequence number.
+- SSE carries `item` events (a whole item's JSON), `turn` events and `chat` events, each
+  with its rev as the event ID. `chat` comes after the first batch and whenever the
+  state, title or session changes.
+- It first sends everything changed after `after`, in rev order, then live changes. A
+  reconnect resumes from the last event ID. The stream ends when the chat is deleted.
+- Streaming text is written at most every 250 ms per item, not once per chunk.
 - Chat list changes go to the existing bus as topic `chats`, so other tabs refetch.
 
 **UI** (`web/src/`):

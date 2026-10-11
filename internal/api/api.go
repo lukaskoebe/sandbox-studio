@@ -19,6 +19,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
+	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
@@ -56,6 +57,7 @@ type Server struct {
 	Git          *gitreview.Service
 	Browser      *browser.Service // the browser broker; its endpoints answer 503 without it
 	System       System
+	Chats        *chat.Service // its endpoints answer 503 without it
 }
 
 // BuildService is the optional durable template-build backend. Keeping this
@@ -86,7 +88,9 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerForges(api)
 	s.registerSystem(api)
 	s.registerBrowser(api)
+	s.registerChats(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
+	mux.HandleFunc("GET /api/environments/{env}/chats/{chat}/stream", s.streamChat)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/live", s.browserLive)
 	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/actions/{id}/screenshot", s.browserScreenshot)
@@ -292,7 +296,8 @@ func apiError(err error) error {
 		return huma.Error409Conflict("the sandbox is not running or still booting")
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern),
-		errors.Is(err, secrets.ErrInvalid), errors.Is(err, teammates.ErrInvalid), errors.Is(err, policy.ErrNoTeammate):
+		errors.Is(err, secrets.ErrInvalid), errors.Is(err, teammates.ErrInvalid), errors.Is(err, policy.ErrNoTeammate),
+		errors.Is(err, chat.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())

@@ -1,0 +1,73 @@
+{
+  "items": [
+    {
+      "kind": "agent",
+      "body": {
+        "text": "Let me check "
+      }
+    },
+    {
+      "kind": "tool",
+      "toolCallId": "call_1",
+      "status": "completed",
+      "body": {
+        "title": "grep \"HandleFunc\"",
+        "kind": "search",
+        "status": "completed",
+        "content": [
+          {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "server.go:12: http.HandleFunc(\"/\", index)"
+            }
+          }
+        ],
+        "input": {
+          "pattern": "HandleFunc",
+          "path": "/workspace"
+        }
+      }
+    },
+    {
+      "kind": "tool",
+      "toolCallId": "call_2",
+      "status": "completed",
+      "body": {
+        "title": "go build ./...",
+        "kind": "execute",
+        "status": "completed",
+        "content": [
+          {
+            "type": "content",
+            "content": {
+              "type": "text"
+            }
+          }
+        ],
+        "input": {
+          "command": "go build ./...",
+          "description": "Build"
+        }
+      }
+    },
+    {
+      "kind": "marker",
+      "body": {
+        "kind": "notice",
+        "text": "Model switched to the fallback model"
+      }
+    },
+    {
+      "kind": "agent",
+      "body": {
+        "text": "It builds. See [server.go](file:///workspace/server.go)"
+      }
+    }
+  ],
+  "title": "Add a health endpoint",
+  "usage": {
+    "contextUsed": 9100,
+    "contextSize": 128000
+  }
+}

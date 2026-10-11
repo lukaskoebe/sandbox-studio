@@ -1,0 +1,85 @@
+{
+  "items": [
+    {
+      "kind": "thought",
+      "body": {
+        "text": "**Running the tests**"
+      }
+    },
+    {
+      "kind": "tool",
+      "toolCallId": "call_a1",
+      "status": "completed",
+      "body": {
+        "title": "Run go test ./...",
+        "kind": "execute",
+        "status": "completed",
+        "content": [
+          {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "ok  \texample.com/app\t0.012s\n"
+            }
+          }
+        ],
+        "input": {
+          "command": [
+            "bash",
+            "-lc",
+            "go test ./..."
+          ],
+          "cwd": "/workspace"
+        }
+      }
+    },
+    {
+      "kind": "plan",
+      "body": {
+        "entries": [
+          {
+            "content": "Run the tests",
+            "priority": "high",
+            "status": "completed"
+          },
+          {
+            "content": "Fix the flaky one",
+            "priority": "high",
+            "status": "in_progress"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "tool",
+      "toolCallId": "call_a2",
+      "status": "failed",
+      "body": {
+        "title": "Edit app_test.go",
+        "kind": "edit",
+        "status": "failed",
+        "content": [
+          {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "patch rejected: context mismatch"
+            }
+          }
+        ],
+        "locations": [
+          {
+            "path": "/workspace/app_test.go"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "agent",
+      "body": {
+        "text": "The tests pass; the patch to app_test.go didn't apply."
+      }
+    }
+  ],
+  "usage": {}
+}
