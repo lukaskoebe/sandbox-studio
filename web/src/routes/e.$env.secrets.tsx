@@ -47,7 +47,7 @@ export const Route = createFileRoute("/e/$env/secrets")({
 })
 
 const explanation =
-  "Sandboxes see each secret as an environment variable holding a placeholder. Studio swaps in the real value only in the headers and URLs of HTTPS requests to the secret's hosts, and masks it in their responses, so the value never enters a sandbox."
+  "Sandboxes see each secret as an environment variable holding a placeholder. Studio swaps in the real value only in the headers and URLs of HTTPS requests to the secret's hosts, and masks it in their responses, so the value never enters a sandbox. Forge tokens and SSH keys are not available to sandboxes at all; Studio uses them itself and they are managed on the Git page."
 
 function SecretsPage() {
   const { env } = Route.useParams()

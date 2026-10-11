@@ -906,7 +906,11 @@ subscriptions (S8), and everything marked verify (S7).
   fast-forward checks, `git.push` and Forgejo `git.pr` approvals, forges with studio-only
   tokens on the Git page. The interface in `internal/integrations` has only `ID`, `Routes`
   and `ApprovalKinds` so far; a rejection reaches the agent as a one-time failed fetch
-  (the MCP notification waits for M5). GitHub and GitLab adapters are not built.
+  (the MCP notification waits for M5). Since then ([design](docs/design/git-remotes.md)):
+  GitHub forges (fine-grained token, PRs), kind `https` with a username, kind `ssh` with a
+  Studio-generated key and a pinned host key, repository paths of 1 to 8 segments, and
+  `insteadOf` rules that send the forges' real URLs to the virtual remote. A GitLab MR
+  adapter is not built (GitLab works as kind `https`).
 
 ### 6.10 Terminals, previews and files
 
