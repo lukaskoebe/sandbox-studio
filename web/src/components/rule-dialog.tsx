@@ -37,6 +37,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -87,7 +88,7 @@ export function RuleDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-sm [&:has(form[data-action=caddy])]:sm:max-w-3xl">
+      <DialogContent className="sm:max-w-sm [&:has(form[data-action=caddy])]:sm:max-w-3xl">
         <RuleForm
           key={rule?.id ?? "new"}
           env={env}
@@ -491,9 +492,13 @@ function CaddyField({
               This replaces all current editor content with the example below.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
-            {example}
-          </pre>
+          <ScrollArea
+            className="rounded-md bg-muted"
+            viewportClassName="max-h-48"
+          >
+            <pre className="p-3 font-mono text-xs">{example}</pre>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -535,7 +540,10 @@ function HeadersField({
   return (
     <Field data-invalid={!!error || undefined}>
       <FieldLabel>Headers</FieldLabel>
-      <div className="-mx-0.5 flex max-h-48 flex-col gap-2 overflow-y-auto px-0.5 py-0.5">
+      <ScrollArea
+        className="-mx-0.5"
+        viewportClassName="flex max-h-48 flex-col gap-2 px-0.5 py-0.5 data-has-overflow-y:pr-3"
+      >
         {rows.map((row, i) => (
           <div key={row.id} className="flex items-center gap-1">
             <Input
@@ -602,7 +610,7 @@ function HeadersField({
             </Button>
           </div>
         ))}
-      </div>
+      </ScrollArea>
       <div>
         <Button
           type="button"

@@ -241,9 +241,11 @@ jobs:
         run: |
           prerelease=()
           case "$GITHUB_REF_NAME" in *-*) prerelease=(--prerelease) ;; esac
-          notes="Base image: \`$BASE_IMAGE\`
+          notes="Install on Linux or macOS: \`curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | SANDBOX_STUDIO_VERSION=$GITHUB_REF_NAME sh\`
+
+          Base image: \`$BASE_IMAGE\`
           Browser image: \`$BROWSER_IMAGE\`
 
-          Windows support is a preview. Verify downloads with \`sha256sum -c checksums.txt\` or \`gh attestation verify <file> --repo $GITHUB_REPOSITORY\`."
+          Windows support is a preview. Verify downloads with \`sha256sum -c checksums.txt --ignore-missing\` or \`gh attestation verify <file> --repo $GITHUB_REPOSITORY\`."
           gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "$GITHUB_REF_NAME" --generate-notes --notes "$notes" "${prerelease[@]}"

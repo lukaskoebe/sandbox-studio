@@ -906,7 +906,11 @@ subscriptions (S8), and everything marked verify (S7).
   fast-forward checks, `git.push` and Forgejo `git.pr` approvals, forges with studio-only
   tokens on the Git page. The interface in `internal/integrations` has only `ID`, `Routes`
   and `ApprovalKinds` so far; a rejection reaches the agent as a one-time failed fetch
-  (the MCP notification waits for M5). GitHub and GitLab adapters are not built.
+  (the MCP notification waits for M5). Since then ([design](docs/design/git-remotes.md)):
+  GitHub forges (fine-grained token, PRs), kind `https` with a username, kind `ssh` with a
+  Studio-generated key and a pinned host key, repository paths of 1 to 8 segments, and
+  `insteadOf` rules that send the forges' real URLs to the virtual remote. A GitLab MR
+  adapter is not built (GitLab works as kind `https`).
 
 ### 6.10 Terminals, previews and files
 
@@ -1093,8 +1097,7 @@ are part of the acceptance criteria.
   `release.yml` builds on native runners, because the SDK needs CGO. It pins the base image
   digest through `version.BaseImage`, signs when secrets exist, and publishes checksums and
   attestations. See [docs/release.md](docs/release.md).
-- Open: the browser image is not in the release yet (it comes with M7). Signing and
-  notarization are untested until the certificates exist.
+- Open: signing and notarization are untested until the certificates exist.
 
 ACP-driven chat sessions (design: [docs/design/chat-mode.md](docs/design/chat-mode.md)) and teammate "tasks"/heartbeats (OpenClaw-style proactive work) come
 after M9, or slot in after M5 if wanted earlier.

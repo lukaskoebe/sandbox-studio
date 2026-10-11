@@ -34,7 +34,9 @@ func TestLinux(t *testing.T) {
 		}
 	}
 	link := filepath.Join(s.Home, ".config", "systemd", "user", "default.target.wants", "sandbox-studio.service")
-	if target, err := os.Readlink(link); err != nil || target != "../sandbox-studio.service" {
+	// This simulates Linux on the host filesystem, so the symlink spelling follows the
+	// host's path separators (including Windows when this test runs there).
+	if target, err := os.Readlink(link); err != nil || target != filepath.Join("..", "sandbox-studio.service") {
 		t.Fatalf("wants link: %q %v", target, err)
 	}
 	// Enabling twice is fine.

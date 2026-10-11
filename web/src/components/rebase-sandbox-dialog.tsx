@@ -91,10 +91,7 @@ export function RebaseSandboxDialog({
         <ArrowsClockwiseIcon />
         Rebase
       </DialogTrigger>
-      <DialogContent
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
-        showCloseButton={!pending}
-      >
+      <DialogContent showCloseButton={!pending}>
         <RebaseForm
           env={env}
           sandbox={sandbox}

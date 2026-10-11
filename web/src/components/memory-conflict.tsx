@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
   SheetContent,
@@ -72,7 +73,10 @@ export function ConflictSheet({
             {c ? (verdictText[c.verdict] ?? c.verdict) : "Two facts disagree."}
           </SheetDescription>
         </SheetHeader>
-        <div className="min-h-0 flex-1 space-y-4 overflow-auto px-6 pb-6 text-xs">
+        <ScrollArea
+          className="min-h-0 flex-1 text-xs"
+          viewportClassName="space-y-4 px-6 pb-6"
+        >
           {detail.isPending ? (
             <Spinner className="mx-auto block" />
           ) : detail.isError || !c ? (
@@ -85,7 +89,7 @@ export function ConflictSheet({
               onResolved={() => onOpenChange(false)}
             />
           )}
-        </div>
+        </ScrollArea>
       </SheetContent>
     </Sheet>
   )

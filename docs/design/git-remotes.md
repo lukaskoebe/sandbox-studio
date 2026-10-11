@@ -1,7 +1,10 @@
 # Design: GitHub, HTTPS and SSH git remotes
 
-Status: proposed (2026-10-11). Extends [git review](../git-review.md) and PLAN.md §6.9.
-Nothing here is built yet.
+Status: built (stages 1 to 3, 2026-10-11); the acceptance checks in §5 need the user.
+Extends [git review](../git-review.md) and PLAN.md §6.9. Deviations: the migration is
+`019_git_remotes.sql` (018 went to teammates) and also adds `public_key` and
+`host_key_offered`; re-pinning is `PUT …/forges/{id}/host-key`. The v0 spike passed: v0
+rounds bridge cleanly, so `ssh` forges don't require v2.
 
 Today a forge is a Forgejo instance reached over HTTPS with a studio-only token
 `FORGE_<NAME>_TOKEN`. Sandboxes clone, fetch and push through

@@ -10,6 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -112,8 +115,8 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	return nil
 }
 
-// pushApproved pushes p upstream and, for a Forgejo branch other than the default one,
-// returns the pull request to propose.
+// pushApproved pushes p upstream and, for a branch other than the default one on a forge
+// with an API, returns the pull request to propose.
 func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *PullRequest, error) {
 	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -125,7 +128,7 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *P
 	t := target{sb: store.Sandbox{ID: p.SandboxID, EnvironmentID: p.EnvironmentID}, forge: f, owner: p.Owner, repo: p.Repo}
 	token, err := s.token(ctx, f)
 	if err != nil {
-		return "", nil, fmt.Errorf("the forge's token: %w", err)
+		return "", nil, fmt.Errorf("the forge's credential: %w", err)
 	}
 	rm, err := s.remote(t, token)
 	if err != nil {
@@ -142,8 +145,11 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *P
 	if err != nil {
 		return "", nil, errors.New(mask(err.Error(), token))
 	}
+	if !hasAPI(f.Kind) {
+		return result, nil, nil
+	}
 	ad, err := adapter(f, s.httpClient())
-	if err != nil || f.Kind != KindForgejo {
+	if err != nil {
 		return result, nil, nil
 	}
 	base, err := ad.DefaultBranch(ctx, token, p.Owner, p.Repo)
@@ -235,17 +241,82 @@ func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest) (
 	return ad.OpenPullRequest(ctx, token, p.Owner, p.Repo, pr)
 }
 
-// TestForge checks that a forge's token works and returns the user it belongs to.
-func (s *Service) TestForge(ctx context.Context, f store.Forge) (string, error) {
-	ad, err := adapter(f, s.httpClient())
-	if err != nil {
-		return "", err
+// TestForge checks that a forge's token works and returns the account it belongs to.
+func (s *Service) TestForge(ctx context.Context, f store.Forge, repo string) (Check, error) {
+	var c Check
+	if hasAPI(f.Kind) {
+		ad, err := adapter(f, s.httpClient())
+		if err != nil {
+			return c, err
+		}
+		token, err := s.token(ctx, f)
+		if err != nil {
+			return c, fmt.Errorf("the forge's token: %w", err)
+		}
+		if c.Account, err = ad.Check(ctx, token); err != nil {
+			return c, err
+		}
 	}
-	token, err := s.token(ctx, f)
-	if err != nil {
-		return "", fmt.Errorf("the forge's token: %w", err)
+	if repo == "" {
+		if !hasAPI(f.Kind) {
+			return c, fmt.Errorf("%w: name a repository to test with", ErrInvalid)
+		}
+		return c, nil
 	}
-	return ad.Check(ctx, token)
+	owner, name, ok := splitPath(strings.Trim(repo, "/"))
+	if !ok || hasAPI(f.Kind) && (owner == "" || strings.Contains(owner, "/")) {
+		return c, fmt.Errorf("%w: %q is not a repository path on this forge", ErrInvalid, repo)
+	}
+	t := target{forge: f, owner: owner, repo: name}
+	n, err := s.branches(ctx, t)
+	if err != nil {
+		return c, err
+	}
+	c.Repo, c.Branches = t.path(), n
+	return c, nil
+}
+
+// Check is the outcome of testing a forge.
+type Check struct {
+	Account
+	Repo     string // the repository tested, if any
+	Branches int    // the branches it has
+}
+
+// branches counts a repository's branches, reading its advertisement with Studio's
+// credential.
+func (s *Service) branches(ctx context.Context, t target) (int, error) {
+	token, err := s.token(ctx, t.forge)
+	if err != nil {
+		return 0, fmt.Errorf("the forge's credential: %w", err)
+	}
+	rm, err := s.remote(t, token)
+	if err != nil {
+		return 0, err
+	}
+	sess, err := rm.tr.NewUploadPackSession(rm.ep, rm.auth)
+	if err != nil {
+		return 0, err
+	}
+	defer sess.Close()
+	ar, err := sess.AdvertisedReferencesContext(ctx)
+	switch {
+	case errors.Is(err, transport.ErrEmptyRemoteRepository):
+		return 0, nil
+	case errors.Is(err, transport.ErrRepositoryNotFound):
+		return 0, fmt.Errorf("the forge has no repository %s, or Studio's credential can't see it", t.path())
+	case errors.Is(err, transport.ErrAuthenticationRequired), errors.Is(err, transport.ErrAuthorizationFailed):
+		return 0, fmt.Errorf("the forge refused Studio's credential for %s", t.path())
+	case err != nil:
+		return 0, err
+	}
+	n := 0
+	for name := range ar.References {
+		if plumbing.ReferenceName(name).IsBranch() {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // Forget removes the staging repositories of a forge that was removed from an environment.

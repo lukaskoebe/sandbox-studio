@@ -5,6 +5,8 @@ LDFLAGS += $(if $(BASE_IMAGE),-X github.com/lukaskoebe/sandbox-studio/internal/v
 LDFLAGS += $(if $(BROWSER_IMAGE),-X github.com/lukaskoebe/sandbox-studio/internal/version.BrowserImage=$(BROWSER_IMAGE))
 # Leaves out the databases of Caddy's PKI app, which Studio doesn't use.
 TAGS := nobadger,nomysql,nopgx
+# pipefail in the image recipes needs bash.
+SHELL := bash
 
 .PHONY: all web build agent api test lint dev clean image image-browser
 
@@ -27,8 +29,8 @@ api:
 	cd web && pnpm exec openapi-typescript openapi.json -o src/lib/api/schema.gen.ts
 
 test:
-	go vet ./...
-	go test ./...
+	go vet -tags "$(TAGS)" ./...
+	go test -tags "$(TAGS)" ./...
 
 lint:
 	test -z "$$(gofmt -l .)"
@@ -44,11 +46,11 @@ clean:
 # Releases pull ghcr.io/lukaskoebe/sandbox-studio-base by digest instead.
 image:
 	docker build -t sandbox-studio-base:dev images/base
-	docker save sandbox-studio-base:dev | msb load -t sandbox-studio-base:dev
-	docker rmi sandbox-studio-base:dev
+	set -o pipefail; docker save sandbox-studio-base:dev | msb load -t sandbox-studio-base:dev
+	docker rmi sandbox-studio-base:dev >/dev/null 2>&1 || true
 
 # Dev only: the browser image for teammates' browser VMs (docs/browser.md).
 image-browser:
 	docker build -t sandbox-studio-browser:dev images/browser
-	docker save sandbox-studio-browser:dev | msb load -t sandbox-studio-browser:dev
-	docker rmi sandbox-studio-browser:dev
+	set -o pipefail; docker save sandbox-studio-browser:dev | msb load -t sandbox-studio-browser:dev
+	docker rmi sandbox-studio-browser:dev >/dev/null 2>&1 || true

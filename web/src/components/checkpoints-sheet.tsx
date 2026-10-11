@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
   SheetContent,
@@ -157,7 +158,7 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="px-6 pb-6">
       <form className="grid gap-2 border-b pb-4" onSubmit={createCheckpoint}>
         <Label htmlFor="checkpoint-name">Checkpoint name</Label>
         <div className="flex items-center gap-2">
@@ -356,7 +357,7 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
           })}
         </ul>
       )}
-    </div>
+    </ScrollArea>
   )
 }
 

@@ -10,31 +10,40 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
-// Forge kinds.
+// Forge kinds. forgejo and github have an API (default branch, pull requests); https is
+// any host speaking git over HTTPS with a token; ssh is any host speaking git over SSH with
+// a key Studio generated.
 const (
 	KindForgejo = "forgejo"
-	KindGitHub  = "github" // shares the interface; not implemented yet
+	KindGitHub  = "github"
+	KindHTTPS   = "https"
+	KindSSH     = "ssh"
 )
+
+// hasAPI reports whether a kind has an API adapter, and so <owner>/<repo> paths and PRs.
+func hasAPI(kind string) bool { return kind == KindForgejo || kind == KindGitHub }
+
+// errNoAPI is what API calls answer for kinds without one.
+var errNoAPI = errors.New("this kind of forge has no API")
 
 // ErrInvalid marks a forge the user described wrongly.
 var ErrInvalid = errors.New("invalid forge")
-
-// ErrNotImplemented is returned for forge kinds Studio knows but can't drive yet.
-var ErrNotImplemented = errors.New("not implemented yet")
 
 // Adapter is what Studio needs from a forge beyond plain git over HTTPS.
 type Adapter interface {
 	// GitAuth is the basic-auth pair git requests to the forge carry.
 	GitAuth(token string) (user, password string)
-	// Check verifies that the token works and returns the user it belongs to.
-	Check(ctx context.Context, token string) (string, error)
+	// Check verifies that the token works and returns the account it belongs to.
+	Check(ctx context.Context, token string) (Account, error)
 	// DefaultBranch returns a repository's default branch.
 	DefaultBranch(ctx context.Context, token, owner, repo string) (string, error)
 	// OpenPullRequest proposes merging head into base and returns the PR's web URL.
@@ -49,33 +58,75 @@ type PullRequest struct {
 	Body  string `json:"body"`
 }
 
-// adapter returns the adapter for a forge, talking through client.
+// Account is whom a forge token belongs to.
+type Account struct {
+	User    string
+	Expires time.Time // zero if the forge didn't say
+}
+
+// adapter returns the adapter for a forge reached over HTTPS, talking through client.
 func adapter(f store.Forge, client *http.Client) (Adapter, error) {
 	switch f.Kind {
 	case KindForgejo:
 		return &Forgejo{BaseURL: f.BaseURL, Client: client}, nil
 	case KindGitHub:
-		return nil, fmt.Errorf("github forges are %w", ErrNotImplemented)
+		return &GitHub{BaseURL: f.BaseURL, Client: client}, nil
+	case KindHTTPS:
+		return Plain{User: f.Username}, nil
+	case KindSSH:
+		return nil, fmt.Errorf("%w: ssh forges have no HTTPS adapter", ErrInvalid)
 	}
 	return nil, fmt.Errorf("%w: unknown kind %q", ErrInvalid, f.Kind)
 }
 
-var forgeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+var (
+	forgeName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
+	userName  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$`)
+)
 
-// CheckForge validates the name, kind and base URL of a new forge and returns the
-// normalized base URL and its host.
-func CheckForge(name, kind, baseURL string) (string, string, error) {
+// ForgeURL is a forge's normalized base URL.
+type ForgeURL struct {
+	Base string // https://host[:port][/path], or ssh://user@host[:port]
+	Host string // without port
+	Port int    // ssh only
+	User string // https and ssh: the basic-auth or SSH user
+}
+
+// CheckForge validates the name, kind, base URL and username of a new forge and returns
+// the normalized base URL. Hosts must be public names or addresses, for SSH as for HTTPS.
+// For kind ssh the base URL is ssh://user@host[:port] or scp-style user@host: (the user
+// defaults to git, the port to 22); username is ignored. For kind https the username
+// defaults to git; the other kinds have none.
+func CheckForge(name, kind, baseURL, username string) (ForgeURL, error) {
 	if !forgeName.MatchString(name) {
-		return "", "", fmt.Errorf("%w: the name must be 1 to 32 lower-case letters, digits and dashes, starting with a letter or digit", ErrInvalid)
+		return ForgeURL{}, fmt.Errorf("%w: the name must be 1 to 32 lower-case letters, digits and dashes, starting with a letter or digit", ErrInvalid)
 	}
 	switch kind {
-	case KindForgejo:
-	case KindGitHub:
-		return "", "", fmt.Errorf("github forges are %w", ErrNotImplemented)
+	case KindForgejo, KindGitHub, KindHTTPS:
+	case KindSSH:
+		return ParseSSHURL(baseURL)
 	default:
-		return "", "", fmt.Errorf("%w: unknown kind %q", ErrInvalid, kind)
+		return ForgeURL{}, fmt.Errorf("%w: unknown kind %q", ErrInvalid, kind)
 	}
-	base, host, err := teammates.BaseURL(baseURL)
+	base, host, err := publicBase(baseURL)
+	if err != nil {
+		return ForgeURL{}, err
+	}
+	u := ForgeURL{Base: base, Host: host}
+	if kind == KindHTTPS {
+		u.User = strings.TrimSpace(username)
+		if u.User == "" {
+			u.User = "git"
+		}
+		if !userName.MatchString(u.User) {
+			return ForgeURL{}, fmt.Errorf("%w: the username may only contain letters, digits, dots, dashes and underscores", ErrInvalid)
+		}
+	}
+	return u, nil
+}
+
+func publicBase(raw string) (string, string, error) {
+	base, host, err := teammates.BaseURL(raw)
 	if err != nil {
 		return "", "", fmt.Errorf("%w: %s", ErrInvalid, strings.TrimPrefix(err.Error(), teammates.ErrInvalid.Error()+": "))
 	}
@@ -83,6 +134,96 @@ func CheckForge(name, kind, baseURL string) (string, string, error) {
 		return "", "", fmt.Errorf("%w: the base URL must name a public host", ErrInvalid)
 	}
 	return base, host, nil
+}
+
+// ParseSSHURL normalizes an SSH forge address: ssh://user@host[:port][/], user@host[:] or
+// host, to ssh://user@host[:port] with the port only when it isn't 22.
+func ParseSSHURL(raw string) (ForgeURL, error) {
+	raw = strings.TrimSpace(raw)
+	bad := func(why string) (ForgeURL, error) {
+		return ForgeURL{}, fmt.Errorf("%w: %s", ErrInvalid, why)
+	}
+	if len(raw) > teammates.MaxBaseURLLen {
+		return bad("the address is too long")
+	}
+	var user, hostport string
+	if rest, ok := strings.CutPrefix(raw, "ssh://"); ok {
+		rest = strings.TrimSuffix(rest, "/")
+		if strings.ContainsAny(rest, "/?#") {
+			return bad("the address must not contain a path; give the repository path in the remote URL")
+		}
+		user, hostport, ok = strings.Cut(rest, "@")
+		if !ok {
+			user, hostport = "git", rest
+		}
+	} else {
+		if strings.Contains(raw, "://") {
+			return bad("use ssh://user@host[:port] or user@host")
+		}
+		rest, path, _ := strings.Cut(raw, ":")
+		if path != "" {
+			return bad("the address must not contain a path; give the repository path in the remote URL")
+		}
+		var ok bool
+		user, hostport, ok = strings.Cut(rest, "@")
+		if !ok {
+			user, hostport = "git", rest
+		}
+	}
+	if !userName.MatchString(user) {
+		return bad("the user may only contain letters, digits, dots, dashes and underscores")
+	}
+	if hostport == "" || strings.ContainsAny(hostport, "/?#@ ") {
+		return bad("invalid host")
+	}
+	// The same host rules as an HTTPS base URL: a public name or address.
+	base, host, err := publicBase("https://" + hostport)
+	if err != nil {
+		return ForgeURL{}, err
+	}
+	port := 22
+	if u, err := url.Parse(base); err == nil && u.Port() != "" {
+		p, err := strconv.Atoi(u.Port())
+		if err != nil || p < 1 || p > 65535 {
+			return bad("the port must be between 1 and 65535")
+		}
+		port = p
+	}
+	addr := host
+	if strings.Contains(host, ":") {
+		addr = "[" + host + "]"
+	}
+	if port != 22 {
+		addr += ":" + strconv.Itoa(port)
+	}
+	return ForgeURL{Base: "ssh://" + user + "@" + addr, Host: host, Port: port, User: user}, nil
+}
+
+// upstreamDescription says how Studio reaches a repository of f once a push is approved.
+func upstreamDescription(f store.Forge, path string) string {
+	if f.Kind == KindSSH {
+		d := "over SSH to " + f.BaseURL + "/" + path
+		if f.HostKeyFingerprint != "" {
+			d += ", host key " + f.HostKeyFingerprint
+		}
+		return d
+	}
+	return "over HTTPS to " + f.BaseURL + "/" + path + ".git"
+}
+
+// Plain is the adapter of a forge without an API (kind https): basic auth for git only.
+type Plain struct{ User string }
+
+func (p Plain) GitAuth(token string) (string, string) { return p.User, token }
+
+func (Plain) Check(context.Context, string) (Account, error) { return Account{}, errNoAPI }
+
+func (Plain) DefaultBranch(context.Context, string, string, string) (string, error) {
+	return "", errNoAPI
+}
+
+func (Plain) OpenPullRequest(context.Context, string, string, string, PullRequest) (string, error) {
+	return "", errNoAPI
 }
 
 // --- Forgejo -------------------------------------------------------------------------------
@@ -95,14 +236,14 @@ type Forgejo struct {
 
 func (f *Forgejo) GitAuth(token string) (string, string) { return "sandbox-studio", token }
 
-func (f *Forgejo) Check(ctx context.Context, token string) (string, error) {
+func (f *Forgejo) Check(ctx context.Context, token string) (Account, error) {
 	var user struct {
 		Login string `json:"login"`
 	}
 	if err := f.call(ctx, token, http.MethodGet, "/user", nil, &user); err != nil {
-		return "", err
+		return Account{}, err
 	}
-	return user.Login, nil
+	return Account{User: user.Login}, nil
 }
 
 func (f *Forgejo) DefaultBranch(ctx context.Context, token, owner, repo string) (string, error) {
@@ -131,51 +272,141 @@ func (f *Forgejo) OpenPullRequest(ctx context.Context, token, owner, repo string
 }
 
 func (f *Forgejo) call(ctx context.Context, token, method, path string, in, out any) error {
+	_, err := callJSON(ctx, f.Client, "token "+token, token, method, f.BaseURL+"/api/v1"+path, nil, in, out)
+	return err
+}
+
+// callJSON sends one API request with the given Authorization and decodes the JSON
+// answer into out. Errors carry the forge's message, never the token.
+func callJSON(ctx context.Context, client *http.Client, auth, token, method, url string, headers map[string]string, in, out any) (http.Header, error) {
 	var body io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		body = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, f.BaseURL+"/api/v1"+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Authorization", auth)
 	req.Header.Set("Accept", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := f.Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return errors.New(mask(err.Error(), token))
+		return nil, errors.New(mask(err.Error(), token))
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return err
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusMovedPermanently || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusPermanentRedirect {
+		return nil, fmt.Errorf("the repository moved to %s; update the remote", mask(resp.Header.Get("Location"), token))
 	}
 	if resp.StatusCode/100 != 2 {
 		var e struct {
 			Message string `json:"message"`
+			Errors  []struct {
+				Message string `json:"message"`
+			} `json:"errors"`
 		}
 		msg := strings.TrimSpace(string(data))
 		if json.Unmarshal(data, &e) == nil && e.Message != "" {
 			msg = e.Message
+			if len(e.Errors) > 0 && e.Errors[0].Message != "" {
+				msg += ": " + e.Errors[0].Message
+			}
 		}
 		if len(msg) > 300 {
 			msg = msg[:300] + "..."
 		}
-		return fmt.Errorf("the forge answered %s: %s", resp.Status, mask(msg, token))
+		return nil, fmt.Errorf("the forge answered %s: %s", resp.Status, mask(msg, token))
 	}
 	if out != nil {
 		if err := json.Unmarshal(data, out); err != nil {
-			return fmt.Errorf("the forge's answer: %w", err)
+			return nil, fmt.Errorf("the forge's answer: %w", err)
 		}
 	}
-	return nil
+	return resp.Header, nil
+}
+
+// --- GitHub ---------------------------------------------------------------------------------
+
+// GitHubAPIVersion is the REST API version Studio asks for.
+const GitHubAPIVersion = "2022-11-28"
+
+// GitHub talks to the REST API of github.com (api.github.com) or a GitHub Enterprise
+// Server (/api/v3 under BaseURL) with a fine-grained personal access token.
+type GitHub struct {
+	BaseURL string
+	Client  *http.Client
+}
+
+func (g *GitHub) api() string {
+	if g.BaseURL == "https://github.com" {
+		return "https://api.github.com"
+	}
+	return g.BaseURL + "/api/v3"
+}
+
+func (g *GitHub) GitAuth(token string) (string, string) { return "x-access-token", token }
+
+func (g *GitHub) Check(ctx context.Context, token string) (Account, error) {
+	var user struct {
+		Login string `json:"login"`
+	}
+	h, err := g.call(ctx, token, http.MethodGet, "/user", nil, &user)
+	if err != nil {
+		return Account{}, err
+	}
+	a := Account{User: user.Login}
+	// "2026-10-31 12:00:00 UTC" or "... +0100"; absent for tokens without expiry.
+	if v := h.Get("GitHub-Authentication-Token-Expiration"); v != "" {
+		for _, layout := range []string{"2006-01-02 15:04:05 MST", "2006-01-02 15:04:05 -0700"} {
+			if t, err := time.Parse(layout, v); err == nil {
+				a.Expires = t
+				break
+			}
+		}
+	}
+	return a, nil
+}
+
+func (g *GitHub) DefaultBranch(ctx context.Context, token, owner, repo string) (string, error) {
+	var r struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if _, err := g.call(ctx, token, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo), nil, &r); err != nil {
+		return "", err
+	}
+	return r.DefaultBranch, nil
+}
+
+func (g *GitHub) OpenPullRequest(ctx context.Context, token, owner, repo string, pr PullRequest) (string, error) {
+	var out struct {
+		HTMLURL string `json:"html_url"`
+		Number  int    `json:"number"`
+	}
+	if _, err := g.call(ctx, token, http.MethodPost, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo)+"/pulls", pr, &out); err != nil {
+		return "", err
+	}
+	if out.HTMLURL == "" {
+		return fmt.Sprintf("#%d", out.Number), nil
+	}
+	return out.HTMLURL, nil
+}
+
+func (g *GitHub) call(ctx context.Context, token, method, path string, in, out any) (http.Header, error) {
+	return callJSON(ctx, g.Client, "Bearer "+token, token, method, g.api()+path,
+		map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": GitHubAPIVersion}, in, out)
 }
 
 // mask removes token from text shown to anyone.

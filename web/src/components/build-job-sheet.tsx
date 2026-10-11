@@ -8,6 +8,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Sheet,
@@ -66,37 +67,39 @@ export function BuildJobSheet({
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="gap-0 overflow-y-auto data-[side=right]:sm:max-w-2xl">
+      <SheetContent className="gap-0 data-[side=right]:sm:max-w-2xl">
         <SheetHeader className="border-b pr-12">
           <SheetTitle>Build {shortId(id)}</SheetTitle>
           <SheetDescription>
             Build job details, output, and the submitted template spec.
           </SheetDescription>
         </SheetHeader>
-        {job.isPending ? (
-          <div className="grid flex-1 place-items-center p-6">
-            <Spinner />
-          </div>
-        ) : job.isError ? (
-          <Empty className="m-6">
-            <EmptyHeader>
-              <EmptyTitle>Build unavailable</EmptyTitle>
-              <EmptyDescription>{errorMessage(job.error)}</EmptyDescription>
-            </EmptyHeader>
-            <Button variant="outline" onClick={() => void job.refetch()}>
-              Retry
-            </Button>
-          </Empty>
-        ) : (
-          <BuildJobContents
-            env={env}
-            id={id}
-            job={job.data}
-            refreshMs={refreshMs}
-            onUseSpec={onUseSpec}
-            onCreate={onCreate}
-          />
-        )}
+        <ScrollArea className="min-h-0 flex-1">
+          {job.isPending ? (
+            <div className="grid h-full place-items-center p-6">
+              <Spinner />
+            </div>
+          ) : job.isError ? (
+            <Empty className="m-6">
+              <EmptyHeader>
+                <EmptyTitle>Build unavailable</EmptyTitle>
+                <EmptyDescription>{errorMessage(job.error)}</EmptyDescription>
+              </EmptyHeader>
+              <Button variant="outline" onClick={() => void job.refetch()}>
+                Retry
+              </Button>
+            </Empty>
+          ) : (
+            <BuildJobContents
+              env={env}
+              id={id}
+              job={job.data}
+              refreshMs={refreshMs}
+              onUseSpec={onUseSpec}
+              onCreate={onCreate}
+            />
+          )}
+        </ScrollArea>
       </SheetContent>
     </Sheet>
   )
@@ -274,9 +277,14 @@ function BuildJobContents({
                 or output arrived too quickly.
               </p>
             )}
-            <pre className="max-h-[min(55vh,36rem)] min-h-16 overflow-auto rounded-md bg-muted p-3 font-mono text-[0.6875rem]/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
-              {log.data.text || "No output yet."}
-            </pre>
+            <ScrollArea
+              className="rounded-md bg-muted"
+              viewportClassName="max-h-[min(55vh,36rem)] min-h-16"
+            >
+              <pre className="p-3 font-mono text-[0.6875rem]/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+                {log.data.text || "No output yet."}
+              </pre>
+            </ScrollArea>
           </>
         )}
       </section>
@@ -316,9 +324,14 @@ function BuildJobContents({
             {downloadError}
           </p>
         )}
-        <pre className="max-h-80 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-[0.6875rem]/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
-          {job.source}
-        </pre>
+        <ScrollArea
+          className="rounded-md border bg-muted/40"
+          viewportClassName="max-h-80"
+        >
+          <pre className="p-3 font-mono text-[0.6875rem]/relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
+            {job.source}
+          </pre>
+        </ScrollArea>
       </section>
     </div>
   )

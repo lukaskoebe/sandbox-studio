@@ -142,10 +142,14 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("the key of provider %s is not bound to %s", prov.Name, host))
 	}
 
+	rewrites, err := s.gitRewrites(ctx, sb.EnvironmentID)
+	if err != nil {
+		return sessionPlan{}, apiError(err)
+	}
 	hp := harness.Provider{Kind: prov.Kind, BaseURL: prov.BaseURL, Model: prov.Model, EnvVar: view.EnvVar, Placeholder: prov.Placeholder}
 	files, err := harness.Files(h,
 		harness.Teammate{Name: p.Name, Role: p.Role, Soul: p.Soul, Model: p.Model, GitName: p.GitName, GitEmail: p.GitEmail},
-		harness.Sandbox{Name: sb.Name}, hp)
+		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites}, hp)
 	if err != nil {
 		return sessionPlan{}, huma.Error409Conflict(err.Error())
 	}

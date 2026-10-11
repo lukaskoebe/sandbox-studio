@@ -28,6 +28,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -47,7 +48,7 @@ export const Route = createFileRoute("/e/$env/secrets")({
 })
 
 const explanation =
-  "Sandboxes see each secret as an environment variable holding a placeholder. Studio swaps in the real value only in the headers and URLs of HTTPS requests to the secret's hosts, and masks it in their responses, so the value never enters a sandbox."
+  "Sandboxes see each secret as an environment variable holding a placeholder. Studio swaps in the real value only in the headers and URLs of HTTPS requests to the secret's hosts, and masks it in their responses, so the value never enters a sandbox. Forge tokens and SSH keys are not available to sandboxes at all; Studio uses them itself and they are managed on the Git page."
 
 function SecretsPage() {
   const { env } = Route.useParams()
@@ -76,7 +77,7 @@ function SecretsPage() {
           Add secret
         </Button>
       </PageHeader>
-      <div className="flex-1 space-y-6 overflow-auto p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           {explanation}
         </p>
@@ -109,7 +110,9 @@ function SecretsPage() {
                       )}
                       {s.studioOnly && (
                         <Badge variant="secondary" className="ml-1.5 font-sans">
-                          Forge token
+                          {s.name.endsWith("_SSH_KEY")
+                            ? "Forge SSH key"
+                            : "Forge token"}
                         </Badge>
                       )}
                     </TableCell>
@@ -182,7 +185,7 @@ function SecretsPage() {
             </EmptyContent>
           </Empty>
         )}
-      </div>
+      </ScrollArea>
       <SecretDialog
         env={env}
         secret={dialog?.secret}

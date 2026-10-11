@@ -1815,6 +1815,7 @@
         "additionalProperties": false,
         "properties": {
           "baseUrl": {
+            "description": "https://host[/path], or ssh://user@host[:port] for kind ssh",
             "type": "string"
           },
           "createdAt": {
@@ -1824,26 +1825,48 @@
           "environmentId": {
             "type": "string"
           },
+          "hostKey": {
+            "description": "The pinned SSH host key in authorized_keys format (ssh)",
+            "type": "string"
+          },
+          "hostKeyFingerprint": {
+            "description": "SHA256 fingerprint of the pinned host key",
+            "type": "string"
+          },
+          "hostKeyMismatch": {
+            "description": "Fingerprint of a different host key the host presented since it was pinned; re-pin to clear",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
           "kind": {
             "enum": [
               "forgejo",
-              "github"
+              "github",
+              "https",
+              "ssh"
             ],
             "type": "string"
           },
           "name": {
-            "description": "The URL segment: https://git.studio.internal/\u003cname\u003e/\u003cowner\u003e/\u003crepo\u003e.git",
+            "description": "The URL segment: https://git.studio.internal/\u003cname\u003e/\u003cpath\u003e.git",
+            "type": "string"
+          },
+          "publicKey": {
+            "description": "The public half of the SSH key Studio generated (ssh), to add to the host",
             "type": "string"
           },
           "secretId": {
-            "description": "The studio-only vault secret holding the token",
+            "description": "The studio-only vault secret holding the token or SSH key",
             "type": "string"
           },
           "updatedAt": {
             "format": "date-time",
+            "type": "string"
+          },
+          "username": {
+            "description": "The basic-auth user (https) or SSH user (ssh)",
             "type": "string"
           }
         },
@@ -1859,50 +1882,128 @@
         ],
         "type": "object"
       },
+      "ForgeHostKey": {
+        "additionalProperties": false,
+        "properties": {
+          "hostKey": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "hostKey"
+        ],
+        "type": "object"
+      },
       "ForgeInput": {
         "additionalProperties": false,
         "properties": {
           "baseUrl": {
-            "description": "The forge's public HTTPS URL, such as https://codeberg.org",
+            "description": "The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222",
             "maxLength": 2048,
             "type": "string"
           },
+          "hostKey": {
+            "description": "Kind ssh: the host key to pin, as scanned and confirmed by the user",
+            "maxLength": 16384,
+            "type": "string"
+          },
           "kind": {
-            "description": "github is not implemented yet",
             "enum": [
               "forgejo",
-              "github"
+              "github",
+              "https",
+              "ssh"
             ],
             "type": "string"
           },
           "name": {
-            "description": "Names the forge in the remote URL: https://git.studio.internal/\u003cname\u003e/\u003cowner\u003e/\u003crepo\u003e.git",
+            "description": "Names the forge in the remote URL: https://git.studio.internal/\u003cname\u003e/\u003cpath\u003e.git",
             "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
             "type": "string"
           },
           "token": {
-            "description": "An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it",
+            "description": "Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it",
             "maxLength": 4096,
-            "minLength": 1,
+            "type": "string"
+          },
+          "username": {
+            "description": "Kind https: the user git authenticates as with the token; git if empty",
+            "maxLength": 64,
             "type": "string"
           }
         },
         "required": [
           "name",
           "kind",
+          "baseUrl"
+        ],
+        "type": "object"
+      },
+      "ForgeScan": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "description": "The address, normalized",
+            "type": "string"
+          },
+          "fingerprint": {
+            "description": "Its SHA256 fingerprint, to compare with the forge's published one",
+            "type": "string"
+          },
+          "hostKey": {
+            "description": "The host key in authorized_keys form",
+            "type": "string"
+          }
+        },
+        "required": [
           "baseUrl",
-          "token"
+          "hostKey",
+          "fingerprint",
+          "algorithm"
+        ],
+        "type": "object"
+      },
+      "ForgeScanInput": {
+        "additionalProperties": false,
+        "properties": {
+          "baseUrl": {
+            "description": "The forge's SSH address, such as git@host or ssh://git@host:2222",
+            "maxLength": 2048,
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseUrl"
         ],
         "type": "object"
       },
       "ForgeTest": {
         "additionalProperties": false,
         "properties": {
+          "branches": {
+            "description": "How many branches it has",
+            "format": "int64",
+            "type": "integer"
+          },
+          "expiresAt": {
+            "description": "When the token expires, if the forge says (GitHub)",
+            "format": "date-time",
+            "type": "string"
+          },
           "message": {
             "type": "string"
           },
           "ok": {
             "type": "boolean"
+          },
+          "repo": {
+            "description": "The repository tested",
+            "type": "string"
           },
           "user": {
             "description": "The user the token belongs to",
@@ -1911,6 +2012,31 @@
         },
         "required": [
           "ok"
+        ],
+        "type": "object"
+      },
+      "ForgeTestInput": {
+        "additionalProperties": false,
+        "properties": {
+          "repo": {
+            "description": "A repository path on the forge, such as owner/repo; required for forges without an API",
+            "maxLength": 800,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ForgeToken": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
         ],
         "type": "object"
       },
@@ -2936,6 +3062,7 @@
             "type": "string"
           },
           "owner": {
+            "description": "The repository path before its last segment; may contain slashes or be empty",
             "type": "string"
           },
           "repo": {
@@ -2947,6 +3074,10 @@
           },
           "teammate": {
             "description": "The teammate owning the sandbox; empty for unowned sandboxes",
+            "type": "string"
+          },
+          "upstream": {
+            "description": "How Studio pushes once approved, such as over SSH to ssh://git@host/repo with the pinned host key",
             "type": "string"
           }
         },
@@ -5338,6 +5469,59 @@
         ]
       }
     },
+    "/api/environments/{env}/forges/scan": {
+      "post": {
+        "description": "Connects to an SSH forge and returns its host key, for the user to compare with the fingerprint the forge publishes before pinning it.",
+        "operationId": "scanForgeHostKey",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgeScanInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForgeScan"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/environments/{env}/forges/{id}": {
       "delete": {
         "description": "Removes the forge, its token and the staged pushes to it. Pending pushes can no longer be approved.",
@@ -5384,9 +5568,72 @@
         ]
       }
     },
+    "/api/environments/{env}/forges/{id}/host-key": {
+      "put": {
+        "description": "Pins another host key for an SSH forge, after the user confirmed it with the host's admin.",
+        "operationId": "pinForgeHostKey",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgeHostKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forge"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/environments/{env}/forges/{id}/test": {
       "post": {
-        "description": "Checks that the forge answers and accepts the token.",
+        "description": "Checks that the forge answers and accepts Studio's credential: through its API if it has one, and by listing the branches of repo if given.",
         "operationId": "testForge",
         "parameters": [
           {
@@ -5410,12 +5657,84 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgeTestInput"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ForgeTest"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/forges/{id}/token": {
+      "put": {
+        "description": "Replaces the forge's token in place, for example when it expired. Staged pushes are kept.",
+        "operationId": "replaceForgeToken",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgeToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forge"
                 }
               }
             },

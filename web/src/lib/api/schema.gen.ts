@@ -235,6 +235,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/forges/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Connects to an SSH forge and returns its host key, for the user to compare with the fingerprint the forge publishes before pinning it. */
+        post: operations["scanForgeHostKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/forges/{id}": {
         parameters: {
             query?: never;
@@ -252,6 +269,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/forges/{id}/host-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Pins another host key for an SSH forge, after the user confirmed it with the host's admin. */
+        put: operations["pinForgeHostKey"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/forges/{id}/test": {
         parameters: {
             query?: never;
@@ -261,8 +295,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Checks that the forge answers and accepts the token. */
+        /** @description Checks that the forge answers and accepts Studio's credential: through its API if it has one, and by listing the branches of repo if given. */
         post: operations["testForge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/forges/{id}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Replaces the forge's token in place, for example when it expired. Staged pushes are kept. */
+        put: operations["replaceForgeToken"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1949,38 +2000,85 @@ export interface components {
             validUntil?: string;
         };
         Forge: {
+            /** @description https://host[/path], or ssh://user@host[:port] for kind ssh */
             baseUrl: string;
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
+            /** @description The pinned SSH host key in authorized_keys format (ssh) */
+            hostKey?: string;
+            /** @description SHA256 fingerprint of the pinned host key */
+            hostKeyFingerprint?: string;
+            /** @description Fingerprint of a different host key the host presented since it was pinned; re-pin to clear */
+            hostKeyMismatch?: string;
             id: string;
             /** @enum {string} */
-            kind: "forgejo" | "github";
-            /** @description The URL segment: https://git.studio.internal/<name>/<owner>/<repo>.git */
+            kind: "forgejo" | "github" | "https" | "ssh";
+            /** @description The URL segment: https://git.studio.internal/<name>/<path>.git */
             name: string;
-            /** @description The studio-only vault secret holding the token */
+            /** @description The public half of the SSH key Studio generated (ssh), to add to the host */
+            publicKey?: string;
+            /** @description The studio-only vault secret holding the token or SSH key */
             secretId: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description The basic-auth user (https) or SSH user (ssh) */
+            username?: string;
+        };
+        ForgeHostKey: {
+            hostKey: string;
         };
         ForgeInput: {
-            /** @description The forge's public HTTPS URL, such as https://codeberg.org */
+            /** @description The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222 */
             baseUrl: string;
-            /**
-             * @description github is not implemented yet
-             * @enum {string}
-             */
-            kind: "forgejo" | "github";
-            /** @description Names the forge in the remote URL: https://git.studio.internal/<name>/<owner>/<repo>.git */
+            /** @description Kind ssh: the host key to pin, as scanned and confirmed by the user */
+            hostKey?: string;
+            /** @enum {string} */
+            kind: "forgejo" | "github" | "https" | "ssh";
+            /** @description Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git */
             name: string;
-            /** @description An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it */
-            token: string;
+            /** @description Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it */
+            token?: string;
+            /** @description Kind https: the user git authenticates as with the token; git if empty */
+            username?: string;
+        };
+        ForgeScan: {
+            algorithm: string;
+            /** @description The address, normalized */
+            baseUrl: string;
+            /** @description Its SHA256 fingerprint, to compare with the forge's published one */
+            fingerprint: string;
+            /** @description The host key in authorized_keys form */
+            hostKey: string;
+        };
+        ForgeScanInput: {
+            /** @description The forge's SSH address, such as git@host or ssh://git@host:2222 */
+            baseUrl: string;
         };
         ForgeTest: {
+            /**
+             * Format: int64
+             * @description How many branches it has
+             */
+            branches?: number;
+            /**
+             * Format: date-time
+             * @description When the token expires, if the forge says (GitHub)
+             */
+            expiresAt?: string;
             message?: string;
             ok: boolean;
+            /** @description The repository tested */
+            repo?: string;
             /** @description The user the token belongs to */
             user?: string;
+        };
+        ForgeTestInput: {
+            /** @description A repository path on the forge, such as owner/repo; required for forges without an API */
+            repo?: string;
+        };
+        ForgeToken: {
+            token: string;
         };
         ForkInBody: {
             /** @description Name of the new sandbox */
@@ -2273,12 +2371,15 @@ export interface components {
             new: string;
             /** @description The branch on the forge before the push; empty for a new branch */
             old: string;
+            /** @description The repository path before its last segment; may contain slashes or be empty */
             owner: string;
             repo: string;
             /** @description The sandbox's name */
             sandbox: string;
             /** @description The teammate owning the sandbox; empty for unowned sandboxes */
             teammate?: string;
+            /** @description How Studio pushes once approved, such as over SSH to ssh://git@host/repo with the pinned host key */
+            upstream?: string;
         };
         QuestionAnswer: {
             /** @enum {string} */
@@ -3366,6 +3467,42 @@ export interface operations {
             };
         };
     };
+    scanForgeHostKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgeScanInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForgeScan"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     deleteForge: {
         parameters: {
             query?: never;
@@ -3398,6 +3535,44 @@ export interface operations {
             };
         };
     };
+    pinForgeHostKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgeHostKey"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forge"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     testForge: {
         parameters: {
             query?: never;
@@ -3410,7 +3585,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ForgeTestInput"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3419,6 +3598,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ForgeTest"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    replaceForgeToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgeToken"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forge"];
                 };
             };
             /** @description Error */

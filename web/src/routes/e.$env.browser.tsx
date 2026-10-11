@@ -23,6 +23,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
@@ -90,7 +91,10 @@ function BrowserPage() {
           </Select>
         )}
       </PageHeader>
-      <div className="flex flex-col gap-4 p-4">
+      <ScrollArea
+        className="min-h-0 flex-1"
+        viewportClassName="flex flex-col gap-4 p-4"
+      >
         <p className="max-w-3xl text-sm text-muted-foreground">{explanation}</p>
         {teammates.isPending ? (
           <Spinner />
@@ -106,7 +110,7 @@ function BrowserPage() {
             </EmptyHeader>
           </Empty>
         )}
-      </div>
+      </ScrollArea>
     </>
   )
 }

@@ -18,8 +18,9 @@ type PushReview struct {
 	Teammate      string   `json:"teammate,omitempty" doc:"The teammate owning the sandbox; empty for unowned sandboxes"`
 	Sandbox       string   `json:"sandbox" doc:"The sandbox's name"`
 	Forge         string   `json:"forge"`
-	Owner         string   `json:"owner"`
+	Owner         string   `json:"owner" doc:"The repository path before its last segment; may contain slashes or be empty"`
 	Repo          string   `json:"repo"`
+	Upstream      string   `json:"upstream,omitempty" doc:"How Studio pushes once approved, such as over SSH to ssh://git@host/repo with the pinned host key"`
 	Branch        string   `json:"branch"`
 	Old           string   `json:"old" doc:"The branch on the forge before the push; empty for a new branch"`
 	New           string   `json:"new"`

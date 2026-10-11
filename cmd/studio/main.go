@@ -4,6 +4,7 @@
 //	studio openapi    print the API description (used to generate the web client types)
 //	studio login-url  print a fresh one-time browser login link
 //	studio doctor     check that this host can run Studio
+//	studio version    print the version and the default base image
 //	studio autostart enable|disable|status
 //	                  start Studio at login (a user-scope entry; off by default)
 package main
@@ -20,7 +21,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
@@ -68,6 +72,9 @@ func main() {
 		return
 	}
 	switch flag.Arg(0) {
+	case "version":
+		fmt.Printf("studio %s\nbase image: %s\n", version.Version, *image)
+		return
 	case "doctor":
 		os.Exit(runDoctor(os.Stdout, *addr, *image))
 	case "autostart":
@@ -90,23 +97,40 @@ func main() {
 	}
 }
 
-// gatewayAddr is where sandbox VMs reach the network gateway.
-const gatewayAddr = "127.0.0.1:7879"
-
-// Template image references persist this address; never silently select a new port.
-const templateRegistryAddr = "127.0.0.1:7880"
+// serviceAddrs derives the loopback addresses of the network gateway (port+1) and the
+// template registry (port+2) from the -addr port, so the default is 7878, 7879, 7880.
+// Each VM's configuration stores the gateway address and template image references
+// persist the registry address: both follow -addr deterministically and are never
+// silently chosen, so keep -addr stable for a data directory.
+func serviceAddrs(addr string) (gateway, registry string, err error) {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", "", err
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65533 {
+		return "", "", fmt.Errorf("listen port %q must be between 1 and 65533", port)
+	}
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(n+1)), net.JoinHostPort("127.0.0.1", strconv.Itoa(n+2)), nil
+}
 
 // defaultImage is the digest-pinned base image set by the release build
 // (-X .../version.BaseImage=ghcr.io/...@sha256:...), else the image for this version.
+// Local builds stamped by `git describe` have no published image and use the one
+// `make image` loads.
 func defaultImage() string {
 	if version.BaseImage != "" {
 		return version.BaseImage
 	}
-	if version.Version == "dev" {
-		return "sandbox-studio-base:dev" // built locally with `make image`
+	if !releaseTag.MatchString(version.Version) || strings.HasSuffix(version.Version, "-dirty") {
+		return "sandbox-studio-base:dev"
 	}
 	return "ghcr.io/lukaskoebe/sandbox-studio-base:" + version.Version
 }
+
+// releaseTag matches the tags release.yml builds (v1.2.3, v1.2.3-rc.1), but not
+// `git describe` output such as v1.2.3-4-gabc1234 or a bare commit hash.
+var releaseTag = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$`)
 
 func run(addr, image string, log *slog.Logger) error {
 	host, _, err := net.SplitHostPort(addr)
@@ -115,6 +139,10 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		return errors.New("refusing to listen on a non-loopback address")
+	}
+	gatewayAddr, templateRegistryAddr, err := serviceAddrs(addr)
+	if err != nil {
+		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -178,7 +206,7 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 
 	// Every sandbox connection goes through the gateway. Its address is stored in each VM's
-	// configuration, so it never changes.
+	// configuration, so it only changes with -addr.
 	key, err := st.Secret(ctx, "gateway-key", 32)
 	if err != nil {
 		return err

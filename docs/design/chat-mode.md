@@ -1,7 +1,9 @@
 # Chat mode (design)
 
-Status: design, not built. Researched 2026-10-11. Versions marked "verify" have not been run
-in a VM.
+Status: backend implemented on `chat-backend`: ACP streams, persisted turns, SSE,
+permissions and form answers have local test coverage. The chat UI, terminal handover,
+file changes and undo remain unfinished; this is not release-ready. Researched
+2026-10-11. Versions marked "verify" have not been run in a VM.
 
 Chat mode puts each agent session in a chat view for people who don't use terminals. The
 same harnesses run in the same sandboxes. Studio drives them headless over the Agent Client

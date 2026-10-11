@@ -3,6 +3,9 @@
 Releases are built by [`.github/workflows/release.yml`](../.github/workflows/release.yml) when a
 version tag is pushed:
 
+Before tagging, give the version's section in [CHANGELOG.md](../CHANGELOG.md) its date and
+commit that to main.
+
 ```sh
 git switch main && git pull
 git tag -a v0.1.0 -m v0.1.0     # a tag with a hyphen (v0.1.0-rc.1) becomes a pre-release
@@ -23,9 +26,16 @@ The workflow then:
    `internal/version.BrowserImage` to the image digests.
 4. Signs and notarizes the macOS binary, and signs the Windows binary, when the secrets below
    exist. Without them those steps are skipped and the binaries are unsigned.
-5. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives. It writes
-   `checksums.txt`, adds build provenance attestations, and creates the GitHub release with
-   generated notes.
+5. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives named
+   `sandbox-studio_<tag>_<os>_<arch>`, each holding a directory of the same name with
+   `studio`, `LICENSE` and `README.md`. It writes `checksums.txt`, adds build provenance
+   attestations, and creates the GitHub release with generated notes.
+
+[`install.sh`](../install.sh) depends on those names: it downloads
+`sandbox-studio_<tag>_<os>_<arch>.tar.gz` and `checksums.txt` from the release, so keep them
+in step when changing the workflow. It installs the newest non-prerelease, or the tag in
+`SANDBOX_STUDIO_VERSION`. `sh scripts/test-install.sh` tests it offline against a fake
+release.
 
 Locally, `make build BASE_IMAGE=ghcr.io/…@sha256:…` sets the same ldflag.
 
@@ -35,6 +45,11 @@ Locally, `make build BASE_IMAGE=ghcr.io/…@sha256:…` sets the same ldflag.
   (`sandbox-studio-base` and `sandbox-studio-browser`) public under each package's settings
   (Package settings → Change visibility); otherwise users cannot pull the images.
 - Artifact attestations on a public repository need no setup.
+- Turn on private vulnerability reporting (Settings → Code security → Private vulnerability
+  reporting); [SECURITY.md](../SECURITY.md) points reporters to it.
+- After the release, install it with `install.sh` on Linux and on a Mac, run
+  `studio version` and `studio doctor`, and create a sandbox, which pulls the base image
+  anonymously from ghcr.io.
 
 ## Secrets
 

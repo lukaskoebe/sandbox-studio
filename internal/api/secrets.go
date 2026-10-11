@@ -114,7 +114,7 @@ func (s *Server) checkUnmanaged(ctx context.Context, envID, secretID string) err
 		return apiError(err)
 	}
 	if forge != "" {
-		return huma.Error409Conflict(fmt.Sprintf("the secret is the token of forge %s; change it on the Forges page", forge))
+		return huma.Error409Conflict(fmt.Sprintf("the secret is the credential of forge %s; change it on the Git page", forge))
 	}
 	return nil
 }

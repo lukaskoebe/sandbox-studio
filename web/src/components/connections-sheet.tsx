@@ -8,6 +8,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
   SheetContent,
@@ -108,7 +109,7 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="px-6 pb-6">
       <Table>
         <TableHeader>
           <TableRow>
@@ -149,7 +150,7 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
           ))}
         </TableBody>
       </Table>
-    </div>
+    </ScrollArea>
   )
 }
 

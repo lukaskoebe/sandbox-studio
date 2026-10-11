@@ -166,6 +166,7 @@ export function Terminal({
   }, [active])
 
   return (
+    // No ScrollArea: xterm.js scrolls its own scrollback.
     <div
       className={cn(
         "size-full overflow-hidden bg-[#1c1917] p-2",

@@ -7,31 +7,49 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // --- forges ----------------------------------------------------------------------------
 
 // Forge is a git host an environment's sandboxes push to through the virtual git remote.
-// Its token is a studio-only secret: sandboxes never see it.
+// Its credential (a token, or for kind ssh a private key) is a studio-only secret:
+// sandboxes never see it.
 type Forge struct {
-	ID            string    `json:"id"`
-	EnvironmentID string    `json:"environmentId"`
-	Name          string    `json:"name" doc:"The URL segment: https://git.studio.internal/<name>/<owner>/<repo>.git"`
-	Kind          string    `json:"kind" enum:"forgejo,github"`
-	BaseURL       string    `json:"baseUrl"`
-	SecretID      string    `json:"secretId" doc:"The studio-only vault secret holding the token"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID                 string    `json:"id"`
+	EnvironmentID      string    `json:"environmentId"`
+	Name               string    `json:"name" doc:"The URL segment: https://git.studio.internal/<name>/<path>.git"`
+	Kind               string    `json:"kind" enum:"forgejo,github,https,ssh"`
+	BaseURL            string    `json:"baseUrl" doc:"https://host[/path], or ssh://user@host[:port] for kind ssh"`
+	Username           string    `json:"username,omitempty" doc:"The basic-auth user (https) or SSH user (ssh)"`
+	SecretID           string    `json:"secretId" doc:"The studio-only vault secret holding the token or SSH key"`
+	PublicKey          string    `json:"publicKey,omitempty" doc:"The public half of the SSH key Studio generated (ssh), to add to the host"`
+	HostKey            string    `json:"hostKey,omitempty" doc:"The pinned SSH host key in authorized_keys format (ssh)"`
+	HostKeyFingerprint string    `json:"hostKeyFingerprint,omitempty" doc:"SHA256 fingerprint of the pinned host key"`
+	HostKeyMismatch    string    `json:"hostKeyMismatch,omitempty" doc:"Fingerprint of a different host key the host presented since it was pinned; re-pin to clear"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
-const forgeCols = "id, environment_id, name, kind, base_url, secret_id, created_at, updated_at"
+const forgeCols = "id, environment_id, name, kind, base_url, username, secret_id, public_key, host_key, host_key_offered, created_at, updated_at"
 
 func scanForge(row interface{ Scan(...any) error }) (Forge, error) {
 	var f Forge
 	var created, updated int64
-	err := row.Scan(&f.ID, &f.EnvironmentID, &f.Name, &f.Kind, &f.BaseURL, &f.SecretID, &created, &updated)
+	err := row.Scan(&f.ID, &f.EnvironmentID, &f.Name, &f.Kind, &f.BaseURL, &f.Username, &f.SecretID, &f.PublicKey, &f.HostKey,
+		&f.HostKeyMismatch, &created, &updated)
 	f.CreatedAt, f.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
+	f.HostKeyFingerprint = fingerprint(f.HostKey)
 	return f, err
+}
+
+// fingerprint is the SHA256 fingerprint of a host key in authorized_keys form.
+func fingerprint(hostKey string) string {
+	if k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(hostKey)); err == nil {
+		return ssh.FingerprintSHA256(k)
+	}
+	return ""
 }
 
 // CreateForge inserts f and its token secret, which the caller sealed, in one transaction.
@@ -52,8 +70,8 @@ func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, er
 		return f, err
 	}
 	f.SecretID = sec.ID
-	_, err = tx.ExecContext(ctx, "INSERT INTO forges ("+forgeCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		f.ID, f.EnvironmentID, f.Name, f.Kind, f.BaseURL, f.SecretID, t, t)
+	_, err = tx.ExecContext(ctx, "INSERT INTO forges ("+forgeCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)",
+		f.ID, f.EnvironmentID, f.Name, f.Kind, f.BaseURL, f.Username, f.SecretID, f.PublicKey, f.HostKey, t, t)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return f, fmt.Errorf("a forge named %q: %w", f.Name, ErrExists)
 	}
@@ -61,7 +79,27 @@ func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, er
 		return f, err
 	}
 	f.CreatedAt, f.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
+	f.HostKeyFingerprint, f.HostKeyMismatch = fingerprint(f.HostKey), ""
 	return f, tx.Commit()
+}
+
+// PinForgeHostKey replaces the pinned host key of a forge and clears a recorded mismatch.
+func (s *Store) PinForgeHostKey(ctx context.Context, envID, id, hostKey string) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE forges SET host_key = ?, host_key_offered = '', updated_at = ? WHERE environment_id = ? AND id = ?",
+		hostKey, now(), envID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetForgeHostKeyOffered records the fingerprint of a host key that didn't match the pin.
+func (s *Store) SetForgeHostKeyOffered(ctx context.Context, envID, id, fingerprint string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE forges SET host_key_offered = ? WHERE environment_id = ? AND id = ?", fingerprint, envID, id)
+	return err
 }
 
 // Forges lists the forges of an environment by name.
@@ -100,7 +138,7 @@ func (s *Store) ForgeByName(ctx context.Context, envID, name string) (Forge, err
 	return f, err
 }
 
-// DeleteForge removes a forge and its token. Pushes keep their copy of its name.
+// DeleteForge removes a forge and its token or key. Pushes keep their copy of its name.
 func (s *Store) DeleteForge(ctx context.Context, envID, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -119,6 +157,29 @@ func (s *Store) DeleteForge(ctx context.Context, envID, id string) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, secretID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// SetForgeSecret replaces the sealed value of a forge's secret, such as an expired token.
+// The caller sealed it for the secret's ID.
+func (s *Store) SetForgeSecret(ctx context.Context, envID, id string, sealed []byte) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	t := now()
+	res, err := tx.ExecContext(ctx, `UPDATE secrets SET value = ?, updated_at = ?
+		WHERE environment_id = ? AND id = (SELECT secret_id FROM forges WHERE environment_id = ? AND id = ?)`, sealed, t, envID, envID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE forges SET updated_at = ? WHERE environment_id = ? AND id = ?", t, envID, id); err != nil {
 		return err
 	}
 	return tx.Commit()

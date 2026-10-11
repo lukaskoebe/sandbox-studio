@@ -1,0 +1,11 @@
+/internal/harness/testdata/*.golden text eol=lf
+/internal/harness/testdata/hooks/*.golden text eol=lf
+
+# Keep embedded runtime text and guest scripts byte-stable on autocrlf checkouts.
+/internal/harness/opencode-plugin.js text eol=lf
+/internal/guest/tmux.conf text eol=lf
+/internal/store/migrations/*.sql text eol=lf
+/internal/webui/static/*.html text eol=lf
+/internal/guest/config.go text eol=lf
+/internal/templatebuild/commands.go text eol=lf
+*.sh text eol=lf

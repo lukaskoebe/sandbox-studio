@@ -22,7 +22,7 @@ function RootLayout() {
     <TooltipProvider>
       <Outlet />
       <ApprovalStack />
-      <Toaster position="top-center" />
+      <Toaster position="top-center" closeButton />
     </TooltipProvider>
   )
 }

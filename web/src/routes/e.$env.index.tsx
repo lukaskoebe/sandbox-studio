@@ -17,6 +17,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
@@ -56,7 +57,7 @@ function Overview() {
           New sandbox
         </Button>
       </PageHeader>
-      <div className="flex-1 overflow-auto p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
         {sandboxes.isPending ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Skeleton className="h-24" />
@@ -112,7 +113,7 @@ function Overview() {
             </EmptyContent>
           </Empty>
         )}
-      </div>
+      </ScrollArea>
       <CreateSandboxDialog
         env={env}
         open={creating}
