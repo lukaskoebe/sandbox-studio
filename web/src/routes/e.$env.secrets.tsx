@@ -109,7 +109,9 @@ function SecretsPage() {
                       )}
                       {s.studioOnly && (
                         <Badge variant="secondary" className="ml-1.5 font-sans">
-                          Forge token
+                          {s.name.endsWith("_SSH_KEY")
+                            ? "Forge SSH key"
+                            : "Forge token"}
                         </Badge>
                       )}
                     </TableCell>

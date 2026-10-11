@@ -311,6 +311,9 @@ export function GitReviewSheet({
                 {approval.git?.pullRequest
                   ? "The push was approved and is on the forge. Approving opens this pull request."
                   : "The sandbox pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch."}
+                {!approval.git?.pullRequest &&
+                  approval.git?.review?.upstream &&
+                  ` Approving pushes it ${approval.git.review.upstream}.`}
               </SheetDescription>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">

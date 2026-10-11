@@ -37,7 +37,9 @@ export type ApprovalKind = {
 export function gitSummary(a: Approval): string {
   const git = a.git
   if (!git) return a.subject
-  const where = `${git.push.owner}/${git.push.repo}`
+  const where = [git.push.forgeName, git.push.owner, git.push.repo]
+    .filter(Boolean)
+    .join("/")
   if (git.pullRequest) {
     return `Open a pull request ${git.pullRequest.head} → ${git.pullRequest.base} on ${where}`
   }
