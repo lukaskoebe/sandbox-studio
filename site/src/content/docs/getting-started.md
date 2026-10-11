@@ -23,9 +23,10 @@ cd sandbox-studio
 make web
 make build
 make image
+make image-browser
 ```
 
-`make image` builds the local base image needed for new sandboxes.
+`make image` builds the local base image needed for new sandboxes. `make image-browser` builds the separate image for teammates' browsers; both development images must be loaded locally.
 
 ## Start Studio
 

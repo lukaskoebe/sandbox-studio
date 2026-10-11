@@ -171,6 +171,7 @@ and Docker for the base image.
 make web      # build the UI into the Go binary's embed directory
 make build    # bin/studio, with both Linux guest agents embedded
 make image    # build the base image with Docker and load it into microsandbox
+make image-browser # build and load the separate image for teammates' browsers
 ./bin/studio  # prints a one-time login link for http://127.0.0.1:7878
 ```
 

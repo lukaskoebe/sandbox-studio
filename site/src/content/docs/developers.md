@@ -20,10 +20,11 @@ From the repository root:
 make web
 make build
 make image
+make image-browser
 ./bin/studio
 ```
 
-`make web` builds the UI into the Go embed directory. `make build` builds `bin/studio` and embeds the Linux guest agents. `make image` builds and loads the local `sandbox-studio-base:dev` image through Docker.
+`make web` builds the UI into the Go embed directory. `make build` builds `bin/studio` and embeds the Linux guest agents. `make image` builds and loads the local `sandbox-studio-base:dev` image through Docker; `make image-browser` does the same for `sandbox-studio-browser:dev`. These development images are local builds, not Docker Hub repositories.
 
 For UI work, run the Go server with `go run ./cmd/studio` and run `pnpm dev` from `web/` in another terminal. Vite proxies API requests to Studio. See [CONTRIBUTING.md](https://github.com/lukaskoebe/sandbox-studio/blob/main/CONTRIBUTING.md) for repository checks.
 
