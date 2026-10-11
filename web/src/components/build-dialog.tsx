@@ -215,10 +215,7 @@ export function BuildDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-2xl"
-        showCloseButton={!busy}
-      >
+      <DialogContent className="sm:max-w-2xl" showCloseButton={!busy}>
         <form className="contents" onSubmit={submit}>
           <DialogHeader>
             <DialogTitle>New template build</DialogTitle>

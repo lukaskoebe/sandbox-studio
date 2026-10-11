@@ -80,10 +80,7 @@ export function ForkSandboxDialog({
         <GitForkIcon />
         Fork
       </DialogTrigger>
-      <DialogContent
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto"
-        showCloseButton={!pending}
-      >
+      <DialogContent showCloseButton={!pending}>
         <ForkForm
           sandbox={sandbox}
           pending={pending}

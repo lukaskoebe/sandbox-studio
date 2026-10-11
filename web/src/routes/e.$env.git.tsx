@@ -52,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -113,7 +114,7 @@ function GitPage() {
           Add forge
         </Button>
       </PageHeader>
-      <div className="flex-1 space-y-6 overflow-auto p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           {explanation}
         </p>
@@ -200,7 +201,7 @@ function GitPage() {
             <p className="text-xs text-muted-foreground">No pushes yet.</p>
           )}
         </section>
-      </div>
+      </ScrollArea>
       <ForgeDialog env={env} open={adding} onOpenChange={setAdding} />
       <GitReviewSheet
         approval={pushes.find((a) => a.id === reviewing)}

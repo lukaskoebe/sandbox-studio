@@ -187,6 +187,7 @@ const editorTheme = EditorView.theme({
     outline: "2px solid color-mix(in oklch, var(--ring) 35%, transparent)",
     outlineOffset: "-2px",
   },
+  // No ScrollArea: CodeMirror measures and scrolls its own scroller.
   ".cm-scroller": {
     borderRadius: "inherit",
     maxHeight: "24rem",

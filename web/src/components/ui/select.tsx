@@ -77,6 +77,7 @@ function SelectContent({
         alignItemWithTrigger={alignItemWithTrigger}
         className="isolate z-50"
       >
+        {/* No ScrollArea: Base UI's scroll arrows and trigger alignment drive this popup's own scroll. */}
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}

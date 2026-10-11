@@ -14,6 +14,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -70,7 +71,7 @@ function BuildsWorkspace({ env }: { env: string }) {
           New build
         </Button>
       </PageHeader>
-      <div className="flex-1 space-y-5 overflow-auto p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-5 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           Build reusable sandbox templates from YAML, then start fresh sandboxes
           from ready templates.
@@ -112,7 +113,7 @@ function BuildsWorkspace({ env }: { env: string }) {
               </div>
             )}
             {builds.data?.length ? (
-              <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
+              <div className="overflow-hidden rounded-lg ring-1 ring-foreground/10">
                 <Table className="min-w-[38rem]">
                   <TableHeader>
                     <TableRow>
@@ -184,7 +185,7 @@ function BuildsWorkspace({ env }: { env: string }) {
             )}
           </>
         )}
-      </div>
+      </ScrollArea>
       {selectedId && (
         <BuildJobSheet
           env={env}
