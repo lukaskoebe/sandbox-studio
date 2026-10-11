@@ -124,6 +124,29 @@ func (s *Store) DeleteForge(ctx context.Context, envID, id string) error {
 	return tx.Commit()
 }
 
+// SetForgeSecret replaces the sealed value of a forge's secret, such as an expired token.
+// The caller sealed it for the secret's ID.
+func (s *Store) SetForgeSecret(ctx context.Context, envID, id string, sealed []byte) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	t := now()
+	res, err := tx.ExecContext(ctx, `UPDATE secrets SET value = ?, updated_at = ?
+		WHERE environment_id = ? AND id = (SELECT secret_id FROM forges WHERE environment_id = ? AND id = ?)`, sealed, t, envID, envID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE forges SET updated_at = ? WHERE environment_id = ? AND id = ?", t, envID, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // SecretForge returns the name of the forge whose token a secret is, or "" if none.
 func (s *Store) SecretForge(ctx context.Context, envID, secretID string) (string, error) {
 	var name string

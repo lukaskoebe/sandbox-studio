@@ -82,6 +82,10 @@ func (f *fakeForge) serve(w http.ResponseWriter, r *http.Request) {
 		f.api(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/api/v3/") {
+		f.githubAPI(w, r)
+		return
+	}
 	user, pass, ok := r.BasicAuth()
 	if !ok || pass != forgeToken || user == "" {
 		w.Header().Set("WWW-Authenticate", `Basic realm="forge"`)
@@ -184,6 +188,53 @@ func (f *fakeForge) api(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		io.WriteString(w, `{"message":"not found"}`)
+	}
+}
+
+// githubAPI is the part of GitHub's REST API Studio uses, under /api/v3 as on GitHub
+// Enterprise Server.
+func (f *fakeForge) githubAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Header.Get("Authorization") != "Bearer "+forgeToken {
+		w.WriteHeader(http.StatusUnauthorized)
+		io.WriteString(w, `{"message":"Bad credentials"}`)
+		return
+	}
+	if r.Header.Get("X-GitHub-Api-Version") != GitHubAPIVersion || r.Header.Get("Accept") != "application/vnd.github+json" {
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, `{"message":"missing version or accept header"}`)
+		return
+	}
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user":
+		w.Header().Set("GitHub-Authentication-Token-Expiration", "2030-01-02 03:04:05 UTC")
+		io.WriteString(w, `{"login":"octo-bot"}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/repo":
+		io.WriteString(w, `{"default_branch":"main"}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/old":
+		w.Header().Set("Location", f.srv.URL+"/api/v3/repositories/42")
+		w.WriteHeader(http.StatusMovedPermanently)
+	case r.Method == http.MethodPost && r.URL.Path == "/api/v3/repos/owner/repo/pulls":
+		var pr PullRequest
+		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		for _, p := range f.pulls {
+			if p.Head == pr.Head {
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				io.WriteString(w, `{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"A pull request already exists for owner:`+pr.Head+`."}]}`)
+				return
+			}
+		}
+		f.pulls = append(f.pulls, pr)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"number": len(f.pulls), "html_url": f.srv.URL + "/owner/repo/pull/1"})
+	default:
+		w.WriteHeader(http.StatusNotFound)
+		io.WriteString(w, `{"message":"Not Found"}`)
 	}
 }
 
@@ -670,8 +721,8 @@ func TestCheckForge(t *testing.T) {
 			t.Errorf("name %q: %v", name, err)
 		}
 	}
-	if _, _, err := CheckForge("gh", KindGitHub, "https://github.com"); !errors.Is(err, ErrNotImplemented) {
-		t.Errorf("github: %v", err)
+	if base, host, err := CheckForge("gh", KindGitHub, "https://github.com/"); err != nil || base != "https://github.com" || host != "github.com" {
+		t.Errorf("github = %q, %q, %v", base, host, err)
 	}
 	if _, _, err := CheckForge("x", "gitlab", "https://gitlab.com"); !errors.Is(err, ErrInvalid) {
 		t.Errorf("unknown kind: %v", err)
@@ -682,8 +733,8 @@ func TestForgejoAPI(t *testing.T) {
 	ff := newFakeForge(t)
 	fj := &Forgejo{BaseURL: ff.srv.URL, Client: ff.srv.Client()}
 	ctx := context.Background()
-	if user, err := fj.Check(ctx, forgeToken); err != nil || user != "studio-bot" {
-		t.Fatalf("check = %q, %v", user, err)
+	if acc, err := fj.Check(ctx, forgeToken); err != nil || acc.User != "studio-bot" || !acc.Expires.IsZero() {
+		t.Fatalf("check = %+v, %v", acc, err)
 	}
 	if _, err := fj.Check(ctx, "wrong"); err == nil || !strings.Contains(err.Error(), "token is required") {
 		t.Fatalf("check with a wrong token: %v", err)
@@ -781,4 +832,86 @@ func TestRealGit(t *testing.T) {
 		t.Fatal("the approved push did not reach the forge")
 	}
 	h.assertTokenHidden(t, g)
+}
+
+func TestGitHubAPI(t *testing.T) {
+	ff := newFakeForge(t)
+	client := *ff.srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	gh := &GitHub{BaseURL: ff.srv.URL, Client: &client}
+	if (&GitHub{BaseURL: "https://github.com"}).api() != "https://api.github.com" || gh.api() != ff.srv.URL+"/api/v3" {
+		t.Fatal("API base")
+	}
+	ctx := context.Background()
+	acc, err := gh.Check(ctx, forgeToken)
+	if err != nil || acc.User != "octo-bot" || !acc.Expires.Equal(time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)) {
+		t.Fatalf("check = %+v, %v", acc, err)
+	}
+	if _, err := gh.Check(ctx, "wrong"); err == nil || !strings.Contains(err.Error(), "Bad credentials") {
+		t.Fatalf("check with a wrong token: %v", err)
+	}
+	if b, err := gh.DefaultBranch(ctx, forgeToken, "owner", "repo"); err != nil || b != "main" {
+		t.Fatalf("default branch = %q, %v", b, err)
+	}
+	if _, err := gh.DefaultBranch(ctx, forgeToken, "owner", "old"); err == nil || !strings.Contains(err.Error(), "moved to") {
+		t.Fatalf("moved repository: %v", err)
+	}
+	pr := PullRequest{Head: "f", Base: "main", Title: "T", Body: "B"}
+	url, err := gh.OpenPullRequest(ctx, forgeToken, "owner", "repo", pr)
+	if err != nil || !strings.HasSuffix(url, "/pull/1") || ff.pulls[0] != pr {
+		t.Fatalf("open PR = %q, %v (%+v)", url, err, ff.pulls)
+	}
+	_, err = gh.OpenPullRequest(ctx, forgeToken, "owner", "repo", pr)
+	if err == nil || !strings.Contains(err.Error(), "A pull request already exists") || strings.Contains(err.Error(), forgeToken) {
+		t.Fatalf("second PR: %v", err)
+	}
+	if user, pass := gh.GitAuth(forgeToken); user != "x-access-token" || pass != forgeToken {
+		t.Fatal("git auth")
+	}
+}
+
+func TestGitHubForgeEndToEnd(t *testing.T) {
+	h := newHarness(t)
+	gh, err := h.st.CreateForge(h.ctx, store.Forge{ID: store.NewID(), EnvironmentID: h.env.ID, Name: "gh", Kind: KindGitHub, BaseURL: h.forge.srv.URL},
+		store.Secret{ID: store.NewID(), Name: "FORGE_GH_TOKEN", Sealed: []byte("sealed"), Placeholder: "gh-placeholder"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.svc.Secrets.(fakeSecrets)[h.env.ID+"/"+gh.SecretID] = forgeToken
+	g := h.guest(t, h.env.ID, "one")
+	repo, err := git.Clone(memory.NewStorage(), memfs.New(), &git.CloneOptions{URL: g.srv.URL + "/gh/owner/repo.git"})
+	if err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	commitFile(t, repo, "gh.txt", "gh\n", "From GitHub")
+	if err := push(repo, "refs/heads/main:refs/heads/feature", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	h.decide(t, h.approvals(t, KindPush, store.StatusPending)[0], integrations.Allow, "")
+	if h.forge.head(t, "feature").IsZero() {
+		t.Fatal("the approved push did not reach the forge")
+	}
+	prs := h.approvals(t, KindPR, store.StatusPending)
+	if len(prs) != 1 {
+		t.Fatalf("git.pr approvals = %d", len(prs))
+	}
+	h.decide(t, prs[0], integrations.Allow, "")
+	if len(h.forge.pulls) != 1 || h.forge.pulls[0].Head != "feature" {
+		t.Fatalf("pulls = %+v", h.forge.pulls)
+	}
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+forgeToken))
+	h.forge.mu.Lock()
+	for _, a := range h.forge.auths {
+		if a != want && a != "Bearer "+forgeToken {
+			t.Errorf("forge saw Authorization %q", a)
+		}
+	}
+	h.forge.mu.Unlock()
+	if s := g.seen(); strings.Contains(s, forgeToken) || strings.Contains(s, want) {
+		t.Fatal("the token reached the sandbox")
+	}
+	acc, err := h.svc.TestForge(h.ctx, gh)
+	if err != nil || acc.User != "octo-bot" {
+		t.Fatalf("test = %+v, %v", acc, err)
+	}
 }

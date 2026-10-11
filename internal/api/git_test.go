@@ -22,7 +22,7 @@ func TestForges(t *testing.T) {
 		`{"name":"cb","kind":"forgejo","baseUrl":"http://codeberg.org","token":"x"}`,
 		`{"name":"cb","kind":"forgejo","baseUrl":"https://10.1.2.3","token":"x"}`,
 		`{"name":"cb","kind":"forgejo","baseUrl":"https://git.studio.internal","token":"x"}`,
-		`{"name":"cb","kind":"github","baseUrl":"https://github.com","token":"x"}`,
+		`{"name":"cb","kind":"gitlab","baseUrl":"https://gitlab.com","token":"x"}`,
 		`{"name":"Bad","kind":"forgejo","baseUrl":"https://codeberg.org","token":"x"}`,
 	} {
 		if rec := do(h, "POST", base, body); rec.Code != http.StatusUnprocessableEntity {
@@ -51,6 +51,15 @@ func TestForges(t *testing.T) {
 	}
 	if b, err := s.Vault.Bindings(context.Background(), env.ID); err != nil || len(b) != 0 {
 		t.Fatalf("the forge token is bound for sandboxes: %+v, %v", b, err)
+	}
+	if rec := do(h, "PUT", base+"/"+f.ID+"/token", `{"token":"new-forge-token-456"}`); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "new-forge-token") {
+		t.Fatalf("replace token: %d %s", rec.Code, rec.Body)
+	}
+	if v, err := s.Vault.Value(context.Background(), env.ID, f.SecretID); err != nil || v != "new-forge-token-456" {
+		t.Fatalf("replaced token = %q, %v", v, err)
+	}
+	if rec := do(h, "PUT", base+"/nope/token", `{"token":"x"}`); rec.Code != http.StatusNotFound {
+		t.Fatalf("replace token of a missing forge: %d %s", rec.Code, rec.Body)
 	}
 	secretURL := testOrigin + "/api/environments/" + env.ID + "/secrets/" + f.SecretID
 	if rec := do(h, "DELETE", secretURL, ""); rec.Code != http.StatusConflict {

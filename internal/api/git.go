@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -37,16 +38,22 @@ func (s *Server) decideIntegration(ctx context.Context, env, id string, d integr
 // ForgeInput describes a forge to add.
 type ForgeInput struct {
 	Name    string `json:"name" pattern:"^[a-z0-9][a-z0-9-]{0,31}$" doc:"Names the forge in the remote URL: https://git.studio.internal/<name>/<owner>/<repo>.git"`
-	Kind    string `json:"kind" enum:"forgejo,github" doc:"github is not implemented yet"`
-	BaseURL string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org"`
+	Kind    string `json:"kind" enum:"forgejo,github"`
+	BaseURL string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com"`
 	Token   string `json:"token" minLength:"1" maxLength:"4096" doc:"An access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
 }
 
 // ForgeTest is the outcome of checking a forge's token.
 type ForgeTest struct {
-	OK      bool   `json:"ok"`
-	User    string `json:"user,omitempty" doc:"The user the token belongs to"`
-	Message string `json:"message,omitempty"`
+	OK        bool       `json:"ok"`
+	User      string     `json:"user,omitempty" doc:"The user the token belongs to"`
+	ExpiresAt *time.Time `json:"expiresAt,omitempty" doc:"When the token expires, if the forge says (GitHub)"`
+	Message   string     `json:"message,omitempty"`
+}
+
+// ForgeToken replaces a forge's token.
+type ForgeToken struct {
+	Token string `json:"token" minLength:"1" maxLength:"4096"`
 }
 
 func (s *Server) registerForges(api huma.API) {
@@ -121,10 +128,39 @@ func (s *Server) registerForges(api huma.API) {
 		if s.Git == nil {
 			return nil, huma.Error503ServiceUnavailable("the git remote is not running")
 		}
-		user, err := s.Git.TestForge(ctx, f)
+		acc, err := s.Git.TestForge(ctx, f)
 		if err != nil {
 			return &struct{ Body ForgeTest }{ForgeTest{Message: fmt.Sprint(err)}}, nil
 		}
-		return &struct{ Body ForgeTest }{ForgeTest{OK: true, User: user}}, nil
+		res := ForgeTest{OK: true, User: acc.User}
+		if !acc.Expires.IsZero() {
+			res.ExpiresAt = &acc.Expires
+		}
+		return &struct{ Body ForgeTest }{res}, nil
+	})
+
+	type tokenIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Forge ID"`
+		Body ForgeToken
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "replaceForgeToken", Method: http.MethodPut, Path: "/api/environments/{env}/forges/{id}/token", Tags: []string{"git"},
+		Description: "Replaces the forge's token in place, for example when it expired. Staged pushes are kept.",
+	}, func(ctx context.Context, in *tokenIn) (*struct{ Body store.Forge }, error) {
+		f, err := s.Store.Forge(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		sealed, err := s.Vault.SealValue(f.SecretID, in.Body.Token)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if err := s.Store.SetForgeSecret(ctx, in.Env, f.ID, sealed); err != nil {
+			return nil, apiError(err)
+		}
+		s.publishSecrets(in.Env)
+		f, err = s.Store.Forge(ctx, in.Env, in.ID)
+		return &struct{ Body store.Forge }{f}, apiError(err)
 	})
 }

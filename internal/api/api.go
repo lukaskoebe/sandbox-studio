@@ -298,7 +298,7 @@ func apiError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, sandboxes.ErrCheckpointName):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, gitreview.ErrInvalid), errors.Is(err, gitreview.ErrNotImplemented), errors.Is(err, integrations.ErrAction):
+	case errors.Is(err, gitreview.ErrInvalid), errors.Is(err, integrations.ErrAction):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, policy.ErrDecided):
 		return huma.Error409Conflict(err.Error())

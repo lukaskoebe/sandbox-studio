@@ -112,8 +112,8 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	return nil
 }
 
-// pushApproved pushes p upstream and, for a Forgejo branch other than the default one,
-// returns the pull request to propose.
+// pushApproved pushes p upstream and, for a branch other than the default one on a forge
+// with an API, returns the pull request to propose.
 func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *PullRequest, error) {
 	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -143,7 +143,7 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *P
 		return "", nil, errors.New(mask(err.Error(), token))
 	}
 	ad, err := adapter(f, s.httpClient())
-	if err != nil || f.Kind != KindForgejo {
+	if err != nil {
 		return result, nil, nil
 	}
 	base, err := ad.DefaultBranch(ctx, token, p.Owner, p.Repo)
@@ -235,15 +235,15 @@ func (s *Service) openPR(ctx context.Context, p store.GitPush, pr PullRequest) (
 	return ad.OpenPullRequest(ctx, token, p.Owner, p.Repo, pr)
 }
 
-// TestForge checks that a forge's token works and returns the user it belongs to.
-func (s *Service) TestForge(ctx context.Context, f store.Forge) (string, error) {
+// TestForge checks that a forge's token works and returns the account it belongs to.
+func (s *Service) TestForge(ctx context.Context, f store.Forge) (Account, error) {
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {
-		return "", err
+		return Account{}, err
 	}
 	token, err := s.token(ctx, f)
 	if err != nil {
-		return "", fmt.Errorf("the forge's token: %w", err)
+		return Account{}, fmt.Errorf("the forge's token: %w", err)
 	}
 	return ad.Check(ctx, token)
 }
