@@ -9,8 +9,8 @@ FROM debian:${DEBIAN_VERSION}
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Debian's chromium is built for amd64 and arm64 alike. libnss3-tools provides certutil,
-# which agent-browser's --ca-cert uses to put the environment's CA into Chromium's NSS
-# store (verify (live)).
+# which imports the environment CA into the agent user's NSS store; agent-browser 0.39.0
+# rejects --ca-cert together with the persistent --profile.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates curl xz-utils procps \

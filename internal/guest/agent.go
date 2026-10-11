@@ -48,6 +48,8 @@ type Agent struct {
 	log      *slog.Logger
 	user     *account
 	configMu sync.Mutex
+	// browserTrust serializes and caches Chromium NSS CA preparation per browser agent.
+	browserTrust browserTrustState
 
 	sessMu sync.Mutex
 	sess   *yamux.Session // the live host session, for relayed calls

@@ -64,6 +64,16 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
   - While the user drives (takeover), the browser VM's own rules apply: its teammate's rules
     plus the environment's.
 
+## Browser TLS trust
+
+Before launching agent-browser, the guest imports the configured environment CA into the
+agent user's `~/.pki/nssdb` with `/usr/bin/certutil`. The CA gets `C,,` trust, which marks it
+trusted for SSL only. The NSS database is separate from `/workspace/browser-profile`, so
+certificate updates do not alter persistent cookies or logins. A missing CA fails the
+browser command with a retryable configuration error. This avoids `--ca-cert`, which
+agent-browser 0.39.0 rejects alongside `--profile`. Chromium certificate verification stays
+enabled.
+
 ## Tools
 
 `studio-agent mcp` adds these tools. Each one is forwarded over the call channel as a

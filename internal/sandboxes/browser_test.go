@@ -12,12 +12,22 @@ import (
 
 type specRecordingRuntime struct {
 	*fakeSandboxRuntime
-	specs map[string]runtime.Spec
+	specs    map[string]runtime.Spec
+	onCreate func(string)
 }
 
 func (r *specRecordingRuntime) Create(ctx context.Context, name string, spec runtime.Spec, socket string, labels map[string]string) error {
 	r.specs[name] = spec
-	return r.fakeSandboxRuntime.Create(ctx, name, spec, socket, labels)
+	err := r.fakeSandboxRuntime.Create(ctx, name, spec, socket, labels)
+	if r.onCreate != nil {
+		r.onCreate(name)
+	}
+	return err
+}
+
+type browserEnsureResult struct {
+	sandbox store.Sandbox
+	err     error
 }
 
 func browserTeammate(t *testing.T, f *checkpointFixture) store.Teammate {
@@ -32,11 +42,101 @@ func browserTeammate(t *testing.T, f *checkpointFixture) store.Teammate {
 	return p
 }
 
+func TestEnsureBrowserConfiguresConnectedGuestBeforeReturning(t *testing.T) {
+	f := newCheckpointFixture(t)
+	rt := &specRecordingRuntime{fakeSandboxRuntime: f.runtime, specs: map[string]runtime.Spec{}}
+	f.manager.Runtime = rt
+	p := browserTeammate(t, f)
+	sb, err := f.manager.createBrowser(f.ctx, f.env.ID, p.ID, "sandbox-studio-browser:dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, ctx := setupConfigTest(t, f, sb.ID, newConfigTestSecrets(map[string]string{"TOKEN": "placeholder"}, nil))
+
+	result := make(chan browserEnsureResult, 1)
+	go func() {
+		got, err := f.manager.EnsureBrowser(ctx, f.env.ID, p.ID, "ignored")
+		result <- browserEnsureResult{sandbox: got, err: err}
+	}()
+	call := receive(t, ctx, guest.calls, configTestTimeout, "browser guest configuration")
+	if call.cfg.CA != "test CA PEM" || call.cfg.Env["TOKEN"] != "placeholder" {
+		t.Fatalf("browser guest config = %+v", call.cfg)
+	}
+	assertQuiet(t, ctx, result, "EnsureBrowser before the guest configuration ACK")
+	call.reply <- configTestReply{err: "guest rejected configuration"}
+	out := receive(t, ctx, result, configTestTimeout, "EnsureBrowser rejection result")
+	if out.err == nil || out.err.Error() != "guest rejected configuration" {
+		t.Fatalf("EnsureBrowser rejection error = %v, want guest rejection", out.err)
+	}
+	if f.runtime.countCall("create:"+VMName(sb)) != 1 || f.runtime.countCall("start:"+VMName(sb)) != 0 {
+		t.Fatal("configuration rejection triggered another browser VM create or start")
+	}
+
+	result = make(chan browserEnsureResult, 1)
+	go func() {
+		got, err := f.manager.EnsureBrowser(ctx, f.env.ID, p.ID, "ignored")
+		result <- browserEnsureResult{sandbox: got, err: err}
+	}()
+	call = receive(t, ctx, guest.calls, configTestTimeout, "browser guest configuration retry")
+	if call.cfg.CA != "test CA PEM" || call.cfg.Env["TOKEN"] != "placeholder" {
+		t.Fatalf("browser guest retry config = %+v", call.cfg)
+	}
+	assertQuiet(t, ctx, result, "EnsureBrowser before the retry configuration ACK")
+	call.reply <- configTestReply{}
+	out = receive(t, ctx, result, configTestTimeout, "EnsureBrowser retry result")
+	if out.err != nil || out.sandbox.ID != sb.ID {
+		t.Fatalf("EnsureBrowser retry = %+v, %v", out.sandbox, out.err)
+	}
+}
+
+func TestEnsureBrowserWaitsForNewGuestThenConfiguresIt(t *testing.T) {
+	f := newCheckpointFixture(t)
+	created := make(chan string, 1)
+	rt := &specRecordingRuntime{
+		fakeSandboxRuntime: f.runtime,
+		specs:              map[string]runtime.Spec{},
+		onCreate:           func(name string) { created <- name },
+	}
+	f.manager.Runtime = rt
+	p := browserTeammate(t, f)
+	f.manager.CA = configTestCA{cert: []byte("test CA PEM")}
+	f.manager.Secrets = newConfigTestSecrets(nil, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), configTestTimeout)
+	defer cancel()
+
+	result := make(chan browserEnsureResult, 1)
+	go func() {
+		got, err := f.manager.EnsureBrowser(ctx, f.env.ID, p.ID, "sandbox-studio-browser:dev")
+		result <- browserEnsureResult{sandbox: got, err: err}
+	}()
+	createdVM := receive(t, ctx, created, configTestTimeout, "browser VM creation")
+	sb, err := f.store.BrowserSandbox(ctx, f.env.ID, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if createdVM != VMName(sb) {
+		t.Fatalf("created VM = %q, want %q", createdVM, VMName(sb))
+	}
+	assertQuiet(t, ctx, result, "EnsureBrowser before the new guest connects")
+
+	guest := startConfigTestGuest(t, f, sb.ID)
+	call := receive(t, ctx, guest.calls, configTestTimeout, "new browser guest configuration")
+	if call.cfg.CA != "test CA PEM" {
+		t.Fatalf("new browser guest config = %+v", call.cfg)
+	}
+	assertQuiet(t, ctx, result, "EnsureBrowser before the new guest configuration ACK")
+	call.reply <- configTestReply{}
+	out := receive(t, ctx, result, configTestTimeout, "EnsureBrowser result")
+	if out.err != nil || out.sandbox.ID != sb.ID {
+		t.Fatalf("EnsureBrowser = %+v, %v", out.sandbox, out.err)
+	}
+}
+
 // The browser VM runs the browser image, is one per teammate and stays out of every public
 // sandbox path: the API, terminals and previews (which would reach its DevTools port).
 func TestBrowserVMIsPrivate(t *testing.T) {
 	f := newCheckpointFixture(t)
-	rt := &specRecordingRuntime{f.runtime, map[string]runtime.Spec{}}
+	rt := &specRecordingRuntime{fakeSandboxRuntime: f.runtime, specs: map[string]runtime.Spec{}}
 	f.manager.Runtime = rt
 	p := browserTeammate(t, f)
 

@@ -25,8 +25,8 @@ const browserReady = 90 * time.Second
 // BrowserName is the name of a teammate's browser VM row.
 func BrowserName(teammateID string) string { return "browser-" + teammateID }
 
-// EnsureBrowser returns the teammate's browser VM with its guest agent connected: it creates
-// the VM from image on first use and starts it when stopped.
+// EnsureBrowser returns the teammate's browser VM with its guest agent connected and
+// configured: it creates the VM from image on first use and starts it when stopped.
 func (m *Manager) EnsureBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {
 	rec, err := m.Store.BrowserSandbox(ctx, envID, teammateID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -35,23 +35,37 @@ func (m *Manager) EnsureBrowser(ctx context.Context, envID, teammateID, image st
 	if err != nil {
 		return store.Sandbox{}, err
 	}
-	if _, ok := m.Hub.Connected(rec.ID); ok {
-		return rec, nil
+	if _, ok := m.Hub.Connected(rec.ID); !ok {
+		if err := m.ensureBrowserRunning(ctx, rec); err != nil {
+			return store.Sandbox{}, err
+		}
 	}
+	if err := m.WaitReady(ctx, rec.ID, browserReady); err != nil {
+		return rec, err
+	}
+	if err := m.ConfigureGuest(ctx, envID, rec.ID); err != nil {
+		return rec, err
+	}
+	return rec, nil
+}
+
+// ensureBrowserRunning prepares networking and starts or resumes a disconnected browser VM.
+// The lifecycle lock is released before EnsureBrowser waits for guest configuration.
+func (m *Manager) ensureBrowserRunning(ctx context.Context, rec store.Sandbox) error {
 	unlock, err := m.tryMutation(rec.ID)
 	if err != nil {
-		return store.Sandbox{}, err
+		return err
 	}
 	defer unlock()
 	status, err := m.Runtime.Status(ctx, VMName(rec))
 	if err != nil {
-		return store.Sandbox{}, err
+		return err
 	}
 	if _, err := m.Egress.Attach(rec); err != nil {
-		return store.Sandbox{}, err
+		return err
 	}
 	if err := m.Hub.Listen(rec.ID, m.Paths.AgentSocket(rec.ID)); err != nil {
-		return store.Sandbox{}, err
+		return err
 	}
 	switch status {
 	case runtime.StatusSuspended:
@@ -60,10 +74,7 @@ func (m *Manager) EnsureBrowser(ctx context.Context, envID, teammateID, image st
 	default:
 		err = m.Runtime.Start(ctx, VMName(rec))
 	}
-	if err != nil {
-		return store.Sandbox{}, err
-	}
-	return rec, m.WaitReady(ctx, rec.ID, browserReady)
+	return err
 }
 
 func (m *Manager) createBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {

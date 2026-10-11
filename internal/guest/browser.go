@@ -108,11 +108,6 @@ func checkBrowserBatch(stdin string) error {
 func browserArgv(args []string) []string {
 	argv := []string{"--json", "--session", browserSession, "--profile", browserProfile,
 		"--executable-path", browserChromium, "--download-path", browserDownload}
-	// Chromium on Linux keeps its own trust store; agent-browser imports the environment's
-	// CA into it so intercepted connections verify. verify (live)
-	if _, err := os.Stat(caFile); err == nil {
-		argv = append(argv, "--ca-cert", caFile)
-	}
 	return append(argv, args...)
 }
 
@@ -166,6 +161,25 @@ func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 // non-zero and still prints a response with success false, which is returned as is. The
 // stdin and the arguments are never logged: a batch may carry a credential.
 func (a *Agent) runBrowser(ctx context.Context, args []string, stdin string) (json.RawMessage, error) {
+	return runBrowserAfterTrust(ctx, a.prepareBrowserTrust, func(ctx context.Context) (json.RawMessage, error) {
+		return a.runBrowserTrusted(ctx, args, stdin)
+	})
+}
+
+// runBrowserAfterTrust keeps browser launch behind trust preparation. The injected run
+// function also lets tests verify that a trust failure never starts agent-browser.
+func runBrowserAfterTrust(ctx context.Context, prepare func(context.Context) error, run func(context.Context) (json.RawMessage, error)) (json.RawMessage, error) {
+	if err := prepare(ctx); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("browser command context ended before agent-browser launch: %w", err)
+	}
+	return run(ctx)
+}
+
+// runBrowserTrusted runs agent-browser after the browser user's NSS database is ready.
+func (a *Agent) runBrowserTrusted(ctx context.Context, args []string, stdin string) (json.RawMessage, error) {
 	cmd := a.command(browserBin, browserArgv(args)...)
 	cmd.Env = append(cmd.Env, browserEnv...)
 	cmd.Stdin = strings.NewReader(stdin)
