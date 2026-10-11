@@ -117,12 +117,27 @@ func (s *Service) Start(ctx context.Context, envID, teammateID string) error {
 		return err
 	}
 	st := s.state(envID, teammateID)
+	select {
+	case st.run <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-st.run }()
 	if err := s.boot(ctx, st); err != nil {
 		return err
 	}
 	// Any command launches agent-browser's daemon, and with it Chromium and the live view.
-	_, _, err := s.exec(ctx, st, agentBrowserGetURL)
-	return err
+	data, _, err := s.exec(ctx, st, agentBrowserGetURL)
+	if err != nil {
+		return err
+	}
+	if url := returnedURL(data); url != "" {
+		s.mu.Lock()
+		st.observedURL(url)
+		st.lastUsed = s.now()
+		s.mu.Unlock()
+	}
+	return nil
 }
 
 // Stop stops a teammate's browser VM; its profile stays.
@@ -205,6 +220,20 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID string, on 
 		}
 		return nil
 	}
+	s.mu.Lock()
+	takingOver := st.takeover
+	s.mu.Unlock()
+	if !takingOver {
+		return nil
+	}
+	// Keep paused agents blocked until any user command has finished. Waiting on the raw
+	// command slot (rather than acquire, which waits for handback) avoids a takeover cycle.
+	select {
+	case st.run <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-st.run }()
 	if !s.endTakeover(st) {
 		return nil
 	}

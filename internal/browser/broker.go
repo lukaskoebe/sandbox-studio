@@ -34,6 +34,8 @@ var (
 	ErrNoCalls    = errors.New("browser calls come from agent sandboxes only")
 	ErrPaused     = errors.New("the user is driving the browser, so agent browser calls are paused; try again once the user hands it back")
 	ErrNotLive    = errors.New("the browser is not running")
+	ErrNoTakeover = errors.New("take over the browser before navigating")
+	ErrBadURL     = errors.New("url must be an absolute http or https URL with a host, no userinfo, and at most 4000 characters")
 )
 
 // Runner reaches a browser VM's guest agent (agentchan.Hub).
@@ -314,6 +316,14 @@ func (st *state) reset() {
 // navigated forgets what belonged to the previous page.
 func (st *state) navigated(url string) {
 	st.url, st.refs, st.credRefs, st.visible = url, nil, nil, false
+}
+
+// A URL observation can be a same-document change with credential fields still visible.
+// Invalidate element refs, but keep the screenshot restriction until a confirmed open.
+func (st *state) observedURL(url string) {
+	if url != st.url {
+		st.url, st.refs, st.credRefs = url, nil, nil
+	}
 }
 
 // takeGrant consumes a one-time grant that covers r.

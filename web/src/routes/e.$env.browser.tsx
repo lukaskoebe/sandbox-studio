@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -47,6 +47,52 @@ import { cn, formatAge } from "@/lib/utils"
 
 type BrowserAction = components["schemas"]["BrowserAction"]
 type BrowserPattern = components["schemas"]["BrowserPattern"]
+type BrowserStatus = components["schemas"]["BrowserStatus"]
+
+const browserStatusPath = "/api/environments/{env}/teammates/{teammate}/browser"
+
+function normalizeBrowserAddress(raw: string): {
+  value?: string
+  error?: string
+} {
+  if (/\p{Cc}/u.test(raw))
+    return { error: "Remove control characters from the address." }
+
+  const input = raw.trim()
+  if (!input) return { error: "Enter a website address." }
+
+  const webScheme = /^https?:\/\//i.test(input)
+  const hostWithPort =
+    /^(?:localhost|(?:[a-z\d](?:[a-z\d-]*[a-z\d])?\.)+[a-z\d](?:[a-z\d-]*[a-z\d])?|\d{1,3}(?:\.\d{1,3}){3}|\[[\da-f:.]+\]):\d+(?:[/?#]|$)/i.test(
+      input
+    )
+  if (/^https?:/i.test(input) && !webScheme)
+    return { error: "Enter a complete http:// or https:// address." }
+  if (/^[a-z][a-z\d+.-]*:/i.test(input) && !webScheme && !hostWithPort)
+    return { error: "Only http and https websites are supported." }
+
+  const candidate = input.startsWith("//")
+    ? `https:${input}`
+    : webScheme
+      ? input
+      : `https://${input}`
+  let parsed: URL
+  try {
+    parsed = new URL(candidate)
+  } catch {
+    return { error: "Enter a valid website address." }
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:")
+    return { error: "Only http and https websites are supported." }
+  const authority = candidate.match(/^https?:\/\/([^/?#]*)/i)?.[1] ?? ""
+  if (parsed.username || parsed.password || authority.includes("@"))
+    return { error: "Addresses with usernames or passwords are not supported." }
+  if (parsed.href.length > 4000)
+    return { error: "Address must be 4,000 characters or fewer." }
+
+  return { value: parsed.href }
+}
 
 export const Route = createFileRoute("/e/$env/browser")({
   component: BrowserPage,
@@ -117,13 +163,40 @@ function BrowserPage() {
 
 function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
   const path = { env, teammate }
+  const statusParams = { params: { path } }
   const queryClient = useQueryClient()
-  const status = $api.useQuery(
-    "get",
-    "/api/environments/{env}/teammates/{teammate}/browser",
-    { params: { path } },
-    { refetchInterval: 5000 }
-  )
+  const status = $api.useQuery("get", browserStatusPath, statusParams, {
+    refetchInterval: 5000,
+  })
+  const st = status.data
+  const running = st?.vm === "running"
+  const [streamURL, setStreamURL] = useState<string>()
+  const [statusURLReady, setStatusURLReady] = useState(true)
+  const stoppedStatusAt = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    if (!running) {
+      stoppedStatusAt.current = status.dataUpdatedAt
+      setStreamURL(undefined)
+      setStatusURLReady(false)
+      return
+    }
+    if (
+      stoppedStatusAt.current !== undefined &&
+      status.dataUpdatedAt > stoppedStatusAt.current
+    ) {
+      stoppedStatusAt.current = undefined
+      setStatusURLReady(true)
+    }
+  }, [running, status.dataUpdatedAt])
+  const pageURL = streamURL ?? (statusURLReady ? st?.url : undefined)
+  const addressPageURL = pageURL === "about:blank" ? "" : (pageURL ?? "")
+  const [addressDraft, setAddressDraft] = useState("")
+  const [addressDirty, setAddressDirty] = useState(false)
+  const [addressError, setAddressError] = useState("")
+  const requestedURL = useRef("")
+  useEffect(() => {
+    if (!addressDirty) setAddressDraft(addressPageURL)
+  }, [addressDirty, addressPageURL])
   const refresh = () => {
     queryClient.invalidateQueries({
       queryKey: ["get", "/api/environments/{env}/teammates/{teammate}/browser"],
@@ -152,10 +225,45 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
     "/api/environments/{env}/teammates/{teammate}/browser",
     { onSettled: refresh, onError: onError("delete the browser") }
   )
-  const st = status.data
-  const running = st?.vm === "running"
+  const navigate = $api.useMutation(
+    "post",
+    "/api/environments/{env}/teammates/{teammate}/browser/navigate",
+    {
+      onSuccess: (browserStatus) => {
+        queryClient.setQueryData<BrowserStatus>(
+          ["get", browserStatusPath, statusParams],
+          browserStatus
+        )
+        const actualURL = browserStatus.url ?? requestedURL.current
+        setStreamURL(actualURL)
+        setAddressDraft(actualURL === "about:blank" ? "" : actualURL)
+        setAddressDirty(false)
+        setAddressError("")
+      },
+      onSettled: refresh,
+      onError: (err) => setAddressError(errorMessage(err)),
+    }
+  )
   const driving = !!st?.takeover
+  const navigationBlocked =
+    navigate.isPending ||
+    takeover.isPending ||
+    control.isPending ||
+    remove.isPending
   const liveURL = `${window.location.origin}/api/environments/${env}/teammates/${teammate}/browser/live`
+  const openAddress = (event: FormEvent) => {
+    event.preventDefault()
+    setAddressError("")
+    if (!running || !driving || navigationBlocked) return
+
+    const normalized = normalizeBrowserAddress(addressDraft)
+    if (!normalized.value) {
+      setAddressError(normalized.error ?? "Enter a valid website address.")
+      return
+    }
+    requestedURL.current = normalized.value
+    navigate.mutate({ params: { path }, body: { url: normalized.value } })
+  }
 
   return (
     <Tabs defaultValue="live">
@@ -178,7 +286,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
                 size="sm"
                 variant={driving ? "default" : "outline"}
                 aria-pressed={driving}
-                disabled={takeover.isPending}
+                disabled={takeover.isPending || navigate.isPending}
                 onClick={() =>
                   takeover.mutate({
                     params: { path },
@@ -192,7 +300,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={control.isPending}
+                disabled={control.isPending || navigate.isPending}
                 onClick={() =>
                   control.mutate({
                     params: { path: { ...path, action: "stop" } },
@@ -206,7 +314,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
           ) : (
             <Button
               size="sm"
-              disabled={control.isPending || !st}
+              disabled={control.isPending || navigate.isPending || !st}
               onClick={() =>
                 control.mutate({
                   params: { path: { ...path, action: "start" } },
@@ -221,7 +329,9 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
             size="sm"
             variant="ghost"
             title="Delete the browser VM with its profile: cookies and logins"
-            disabled={remove.isPending || st?.vm === "absent"}
+            disabled={
+              remove.isPending || navigate.isPending || st?.vm === "absent"
+            }
             onClick={() => {
               if (
                 confirm(
@@ -243,11 +353,75 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
           </p>
         )}
         {running ? (
-          <BrowserLive
-            url={liveURL}
-            driving={driving}
-            className="max-w-5xl overflow-hidden rounded-md border"
-          />
+          <>
+            <div className="mb-2 flex max-w-5xl flex-col gap-1.5">
+              <form
+                className="flex min-w-0 flex-col gap-2 sm:flex-row"
+                onSubmit={openAddress}
+              >
+                <label className="sr-only" htmlFor="browser-address">
+                  Browser address
+                </label>
+                <Input
+                  id="browser-address"
+                  aria-label="Browser address"
+                  aria-invalid={!!addressError}
+                  aria-describedby={
+                    [
+                      !driving && "browser-address-hint",
+                      addressError && "browser-address-error",
+                    ]
+                      .filter(Boolean)
+                      .join(" ") || undefined
+                  }
+                  autoComplete="url"
+                  inputMode="url"
+                  placeholder="https://example.com"
+                  value={addressDraft}
+                  readOnly={!driving || navigationBlocked}
+                  className="h-8 min-w-0 flex-1"
+                  onChange={(event) => {
+                    setAddressDraft(event.target.value)
+                    setAddressDirty(true)
+                    setAddressError("")
+                  }}
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={!driving || navigationBlocked}
+                >
+                  {navigate.isPending && <Spinner />}
+                  {navigate.isPending ? "Opening…" : "Open"}
+                </Button>
+              </form>
+              {!driving && (
+                <p
+                  id="browser-address-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  Take over to open a website.
+                </p>
+              )}
+              {addressError && (
+                <p
+                  id="browser-address-error"
+                  role="alert"
+                  className="text-xs text-destructive"
+                >
+                  {addressError}
+                </p>
+              )}
+            </div>
+            <BrowserLive
+              url={liveURL}
+              driving={driving}
+              inputEnabled={!navigate.isPending}
+              pageURL={pageURL}
+              onPageURL={setStreamURL}
+              className="max-w-5xl overflow-hidden rounded-md border"
+            />
+          </>
         ) : (
           <Empty className="max-w-5xl border">
             <EmptyHeader>

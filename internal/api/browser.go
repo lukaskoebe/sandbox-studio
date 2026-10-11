@@ -34,9 +34,9 @@ type BrowserPatternInput struct {
 
 func (s *Server) browserError(err error) error {
 	switch {
-	case errors.Is(err, browser.ErrBadPattern):
+	case errors.Is(err, browser.ErrBadPattern), errors.Is(err, browser.ErrBadURL):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, browser.ErrNotLive):
+	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover):
 		return huma.Error409Conflict(err.Error())
 	}
 	return apiError(err)
@@ -57,6 +57,26 @@ func (s *Server) registerBrowser(api huma.API) {
 		}
 		st, err := s.Browser.Status(ctx, in.Env, in.Teammate)
 		return &struct{ Body browser.BrowserStatus }{st}, s.browserError(err)
+	})
+
+	type navigateBrowserIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Body     struct {
+			URL string `json:"url" minLength:"1" maxLength:"4000" doc:"Absolute http or https URL to open while the user has taken over"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "navigateBrowser", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/{teammate}/browser/navigate", Tags: []string{"browser"},
+	}, func(ctx context.Context, in *navigateBrowserIn) (*struct{ Body browser.BrowserStatus }, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		st, err := s.Browser.Navigate(ctx, in.Env, in.Teammate, in.Body.URL)
+		if err != nil {
+			return nil, s.browserError(err)
+		}
+		return &struct{ Body browser.BrowserStatus }{st}, nil
 	})
 
 	type browserAction struct {

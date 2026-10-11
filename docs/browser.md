@@ -179,6 +179,13 @@ The value never enters:
 - **Takeover.** "Take over" pauses agents. Agent calls wait up to 20 s, then fail with "the
   user is driving the browser…". The user types passwords straight into the page. Hand
   back resumes agent calls.
+- **Open a website.** While taking over, enter a URL in **Browser address** and press
+  Enter or **Open**. Addresses without a scheme use HTTPS. A new browser starts on
+  `about:blank`; the live view explains how to open its first page. The address follows
+  page changes without replacing a draft while the user is typing.
+  `POST .../browser/navigate` accepts only HTTP(S) URLs and requires a running browser
+  under user takeover. Navigation is serialized with agent commands, recorded as a user
+  action, and remains subject to the gateway's network rules and approvals.
 
 ## History
 
@@ -214,6 +221,10 @@ The value never enters:
 - Chromium loads `https://git.studio.internal/` using the environment CA in its NSS
   database and still rejects an unrelated self-signed certificate.
 - A fresh live-view connection receives frames and renders them in the UI.
+- The address form opens a page during takeover, with the actual page content visible in
+  the streamed canvas. A blank start page shows guidance; navigation without takeover
+  and non-HTTP(S) addresses are refused. Draft preservation after a failed navigation
+  was also checked with a mocked error response.
 
 **Pending a live run:**
 

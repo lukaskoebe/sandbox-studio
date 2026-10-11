@@ -1277,6 +1277,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/navigate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["navigateBrowser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/patterns": {
         parameters: {
             query?: never;
@@ -2376,6 +2392,10 @@ export interface components {
             /** @enum {string} */
             kind: "stopped" | "interrupted" | "error" | "limit" | "notice" | "compaction" | "terminal" | "undo";
             text: string;
+        };
+        NavigateBrowserInBody: {
+            /** @description Absolute http or https URL to open while the user has taken over */
+            url: string;
         };
         NetworkRequest: {
             host: string;
@@ -6512,6 +6532,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserAction"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    navigateBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NavigateBrowserInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStatus"];
                 };
             };
             /** @description Error */

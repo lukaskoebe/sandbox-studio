@@ -62,6 +62,12 @@ func TestBrowserAPI(t *testing.T) {
 	if rec := do(h, "PUT", base+"/takeover", `{"on":true}`); rec.Code != 409 {
 		t.Errorf("takeover of a browser that is not running: %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(h, "POST", base+"/navigate", `{"url":"javascript:alert(1)"}`); rec.Code != 422 {
+		t.Errorf("invalid navigation URL: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/navigate", `{"url":"https://example.org"}`); rec.Code != 409 {
+		t.Errorf("navigation without takeover: %d %s", rec.Code, rec.Body)
+	}
 	if rec := do(h, "POST", base+"/patterns", `{"verdict":"allow","action":"click","origin":"javascript:alert(1)"}`); rec.Code != 422 {
 		t.Errorf("bad pattern: %d %s", rec.Code, rec.Body)
 	}

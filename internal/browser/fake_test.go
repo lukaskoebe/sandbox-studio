@@ -26,14 +26,17 @@ type fakeField struct {
 // fakeBrowser stands in for agent-browser in a browser VM: it answers commands in
 // agent-browser 0.39's --json format from a small page model and records what it got.
 type fakeBrowser struct {
-	mu       sync.Mutex
-	url      string
-	fields   []fakeField
-	values   map[string]string // ref → value
-	commands []agentproto.BrowserCommand
-	vms      []string // the VM each command went to
-	failArgs string   // a command (joined args) that fails, echoing its arguments
-	dial     func(port int) (net.Conn, error)
+	mu           sync.Mutex
+	url          string
+	fields       []fakeField
+	values       map[string]string // ref → value
+	commands     []agentproto.BrowserCommand
+	vms          []string // the VM each command went to
+	failArgs     string   // a command (joined args) that fails, echoing its arguments
+	blockArgs    string
+	blockStarted chan struct{}
+	blockRelease chan struct{}
+	dial         func(port int) (net.Conn, error)
 }
 
 func newFakeBrowser() *fakeBrowser {
@@ -109,12 +112,25 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 	return nil, fmt.Errorf("unknown command %q", args[0])
 }
 
-func (f *fakeBrowser) Browser(_ context.Context, vm string, cmd agentproto.BrowserCommand) (agentproto.BrowserResult, error) {
+func (f *fakeBrowser) Browser(ctx context.Context, vm string, cmd agentproto.BrowserCommand) (agentproto.BrowserResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.commands = append(f.commands, cmd)
 	f.vms = append(f.vms, vm)
 	var res agentproto.BrowserResult
+	if strings.Join(cmd.Args, " ") == f.blockArgs && f.blockStarted != nil && f.blockRelease != nil {
+		started, release := f.blockStarted, f.blockRelease
+		f.blockArgs = ""
+		close(started)
+		f.mu.Unlock()
+		select {
+		case <-release:
+		case <-ctx.Done():
+			f.mu.Lock()
+			return res, ctx.Err()
+		}
+		f.mu.Lock()
+	}
 	if cmd.Args[0] == "batch" {
 		var cmds [][]string
 		if err := json.Unmarshal([]byte(cmd.Stdin), &cmds); err != nil {
@@ -171,10 +187,11 @@ func (f *fakeBrowser) allCommands() []agentproto.BrowserCommand {
 
 // fakeVMs keeps browser VM rows in the store and pretends they run.
 type fakeVMs struct {
-	st      *store.Store
-	mu      sync.Mutex
-	stopped map[string]bool
-	stops   int
+	st         *store.Store
+	mu         sync.Mutex
+	stopped    map[string]bool
+	stops      int
+	statusHook func()
 }
 
 func (v *fakeVMs) EnsureBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {
@@ -213,8 +230,12 @@ func (v *fakeVMs) BrowserStatus(ctx context.Context, envID, teammateID string) (
 		return sb, runtime.StatusAbsent, nil
 	}
 	v.mu.Lock()
-	defer v.mu.Unlock()
-	if v.stopped[teammateID] {
+	stopped, hook := v.stopped[teammateID], v.statusHook
+	v.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
+	if stopped {
 		return sb, runtime.StatusStopped, nil
 	}
 	return sb, runtime.StatusRunning, nil

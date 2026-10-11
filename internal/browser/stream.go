@@ -33,6 +33,11 @@ const (
 // Relay bridges the UI's live-view socket and the teammate's browser until either ends.
 func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *websocket.Conn) error {
 	st := s.state(envID, teammateID)
+	// Watching must not wait for an agent command or approval. Remember this run so a
+	// concurrent Stop cannot be undone by adopting the VM from a stale status response.
+	s.mu.Lock()
+	previousVM, previousSession := st.vm, st.session
+	s.mu.Unlock()
 	sb, status, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
 	if err != nil {
 		return err
@@ -41,18 +46,22 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 		return ErrNotLive
 	}
 	s.mu.Lock()
+	if !s.streamCurrentLocked(st, envID, previousVM, previousSession) {
+		s.mu.Unlock()
+		return ErrNotLive
+	}
+	if st.vm != "" && st.vm != sb.ID {
+		st.reset()
+	}
 	st.vm = sb.ID
 	if st.session == "" {
 		st.session = store.NewID()
 	}
+	streamSession := st.session
 	s.mu.Unlock()
 	guest, err := s.dialStream(ctx, sb.ID)
 	if err != nil {
-		// agent-browser starts its daemon, and the stream with it, on the first command.
-		if _, _, err := s.exec(ctx, st, agentBrowserGetURL); err != nil {
-			return err
-		}
-		if guest, err = s.dialStream(ctx, sb.ID); err != nil {
+		if guest, err = s.startStream(ctx, st, envID, sb.ID, streamSession); err != nil {
 			return err
 		}
 	}
@@ -76,6 +85,9 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 			if typ != websocket.MessageText {
 				continue
 			}
+			if !s.syncStreamURL(st, envID, sb.ID, streamSession, data) {
+				return
+			}
 			if client.Write(ctx, websocket.MessageText, data) != nil {
 				return
 			}
@@ -83,7 +95,9 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 				// Someone watching keeps the browser from idling out.
 				last = now
 				s.mu.Lock()
-				st.lastUsed = now
+				if s.streamCurrentLocked(st, envID, sb.ID, streamSession) {
+					st.lastUsed = now
+				}
 				s.mu.Unlock()
 			}
 		}
@@ -100,6 +114,10 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 				continue
 			}
 			s.mu.Lock()
+			if !s.streamCurrentLocked(st, envID, sb.ID, streamSession) {
+				s.mu.Unlock()
+				return
+			}
 			driving := st.takeover
 			if driving {
 				st.lastUsed = s.now()
@@ -114,6 +132,88 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 	}()
 	wg.Wait()
 	return nil
+}
+
+// Only bootstrapping the daemon needs the command slot. An existing stream is readable
+// even while an agent command is waiting for approval.
+func (s *Service) startStream(ctx context.Context, st *state, envID, vmID, sessionID string) (*websocket.Conn, error) {
+	select {
+	case st.run <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-st.run }()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	current := s.streamCurrentLocked(st, envID, vmID, sessionID)
+	s.mu.Unlock()
+	if !current {
+		return nil, ErrNotLive
+	}
+	sb, status, err := s.VMs.BrowserStatus(ctx, envID, st.teammate)
+	if err != nil || status != runtime.StatusRunning || sb.ID != vmID {
+		return nil, ErrNotLive
+	}
+	// A queued Start may already have brought up the daemon.
+	if guest, err := s.dialStream(ctx, vmID); err == nil {
+		return guest, nil
+	}
+	if _, _, err := s.exec(ctx, st, agentBrowserGetURL); err != nil {
+		return nil, err
+	}
+	return s.dialStream(ctx, vmID)
+}
+
+func streamPageURL(data []byte) (string, bool) {
+	var message struct {
+		Type string `json:"type"`
+		URL  string `json:"url"`
+		Tabs []struct {
+			URL    string `json:"url"`
+			Active bool   `json:"active"`
+		} `json:"tabs"`
+	}
+	if json.Unmarshal(data, &message) != nil {
+		return "", false
+	}
+	if message.Type == "url" {
+		return message.URL, message.URL != ""
+	}
+	if message.Type != "tabs" {
+		return "", false
+	}
+	var activeURL string
+	activeCount := 0
+	for _, tab := range message.Tabs {
+		if tab.Active {
+			if tab.URL == "" {
+				return "", false
+			}
+			activeURL = tab.URL
+			activeCount++
+		}
+	}
+	return activeURL, activeCount == 1
+}
+
+func (s *Service) streamCurrentLocked(st *state, envID, vmID, sessionID string) bool {
+	return st != nil && s.states[st.teammate] == st && st.env == envID && st.vm == vmID && st.session == sessionID
+}
+
+func (s *Service) syncStreamURL(st *state, envID, vmID, sessionID string, data []byte) bool {
+	url, ok := streamPageURL(data)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.streamCurrentLocked(st, envID, vmID, sessionID) {
+		return false
+	}
+	if ok {
+		st.observedURL(url)
+		st.lastUsed = s.now()
+	}
+	return true
 }
 
 // dialStream opens the screencast WebSocket in the VM through its channel. It sends no
