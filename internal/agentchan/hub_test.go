@@ -60,6 +60,17 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 					}
 					agentproto.WriteJSONLine(st, struct{}{})
 					configs <- cfg
+				case agentproto.KindACP:
+					var req agentproto.StartACP
+					agentproto.ReadJSONLine(br, &req)
+					if req.Harness == "missing" {
+						agentproto.WriteJSONLine(st, agentproto.Error{Error: "not installed", Code: agentproto.CodeHarness})
+						return
+					}
+					// The ack and the agent's first line in one write: the hub must not lose
+					// what it buffered.
+					st.Write([]byte("{}\n{\"hello\":\"" + req.Chat + "\"}\n"))
+					io.Copy(st, br)
 				case agentproto.KindPTY:
 					// Echo input upper-cased, then exit on "exit".
 					for {
@@ -267,5 +278,41 @@ func TestHubCalls(t *testing.T) {
 	case g := <-calls:
 		t.Fatalf("oversized call reached OnCall: %s", g.method)
 	default:
+	}
+}
+
+func TestOpenACP(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.sock")
+	h := NewHub(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := h.Listen("sb1", path); err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close("sb1")
+	g := fakeGuest(t, path, make(chan agentproto.Config, 1))
+	defer g.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.WaitConnected(ctx, "sb1"); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := h.OpenACP(ctx, "sb1", agentproto.StartACP{Chat: "c1", Harness: "missing", Command: []string{"x"}})
+	var he HarnessError
+	if !errors.As(err, &he) {
+		t.Fatalf("missing adapter: %v", err)
+	}
+	rwc, err := h.OpenACP(ctx, "sb1", agentproto.StartACP{Chat: "c1", Harness: "opencode", Command: []string{"opencode", "acp"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rwc.Close()
+	br := bufio.NewReader(rwc)
+	if line, _ := br.ReadString('\n'); line != `{"hello":"c1"}`+"\n" {
+		t.Fatalf("first line = %q", line)
+	}
+	io.WriteString(rwc, "echo\n")
+	if line, _ := br.ReadString('\n'); line != "echo\n" {
+		t.Fatalf("echo = %q", line)
 	}
 }

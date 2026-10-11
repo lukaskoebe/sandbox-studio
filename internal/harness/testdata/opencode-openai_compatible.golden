@@ -180,3 +180,6 @@ Memory marked disputed is part of an open conflict: prefer the shared fact and c
 [user]
 	name = "Ada Lovelace"
 	email = ada@example.com
+== acp command
+["opencode" "acp"]
+== acp env OPENAI_API_KEY=studio-0123456789abcdef0123456789abcdef

@@ -15,6 +15,8 @@
 //   - KindCall (guest → host): the guest writes a Call line; the host replies with one
 //     CallReply line. Hooks and the MCP tools use it. The host knows the sandbox from the
 //     channel, so a Call never names a sandbox, teammate or environment.
+//   - KindACP (host → guest): the host writes a StartACP line; after the guest's {} the
+//     stream carries an ACP agent's stdin and stdout (see acp.go).
 package agentproto
 
 import (

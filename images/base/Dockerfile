@@ -55,6 +55,18 @@ RUN set -eu; \
     npm cache clean --force; \
     rm -rf /root/.npm
 
+# The ACP adapters chats run (docs/design/chat-mode.md). --omit=optional skips their own
+# copies of the Claude Code and Codex binaries: CLAUDE_CODE_EXECUTABLE and CODEX_PATH point
+# them at the pinned ones above. --before makes their caret-range dependencies resolve
+# the same way on every build.
+ARG CLAUDE_AGENT_ACP_VERSION=0.87.0
+ARG CODEX_ACP_VERSION=2.1.1
+RUN npm install -g --no-fund --no-audit --no-update-notifier --omit=optional \
+        --before=2026-10-08T00:00:00Z \
+        "@agentclientprotocol/claude-agent-acp@${CLAUDE_AGENT_ACP_VERSION}" \
+        "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}" \
+    && npm cache clean --force && rm -rf /root/.npm
+
 RUN useradd --create-home --uid 1000 --shell /bin/bash --groups sudo,docker agent \
     && mkdir -p /workspace /opt/studio/bin \
     && chown agent:agent /workspace

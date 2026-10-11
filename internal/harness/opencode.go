@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
@@ -95,6 +96,12 @@ func (OpenCode) TUICommand(SessionOpts) []string { return []string{"opencode"} }
 
 // ACPCommand: https://opencode.ai/docs/acp/.
 func (OpenCode) ACPCommand() []string { return []string{"opencode", "acp"} }
+
+// ACPEnv is empty: `opencode acp` reads the same config as the TUI.
+func (OpenCode) ACPEnv(Provider) map[string]string { return nil }
+
+// ACPMCPServers is empty: OpenCode reads its mcp section from opencode.json.
+func (OpenCode) ACPMCPServers() []acp.MCPServer { return nil }
 
 // StateDirs: sessions, auth and logs are under the XDG data dir, the TUI's state under the
 // XDG state dir.

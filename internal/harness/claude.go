@@ -3,6 +3,7 @@ package harness
 import (
 	"fmt"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
@@ -81,8 +82,22 @@ func (Claude) RenderHookResponse(r HookResult) []byte {
 	return hookFormat(teammates.HarnessClaude).Render(r)
 }
 
-// ACPCommand is nil: Claude Code speaks ACP through a separate adapter (M6).
-func (Claude) ACPCommand() []string { return nil }
+// ACPCommand is the Claude Agent adapter (@agentclientprotocol/claude-agent-acp), which
+// runs the Claude Code binary through the Claude Agent SDK. It reads the user settings, so
+// the managed settings.json (model, bypassPermissions, hooks) applies to chats too.
+func (Claude) ACPCommand() []string { return []string{"claude-agent-acp"} }
+
+// ACPEnv points the SDK at the image's Claude Code: the adapter is installed without the
+// SDK's own copy of the binary, so chat and TUI run the same pinned version.
+func (Claude) ACPEnv(Provider) map[string]string {
+	return map[string]string{"CLAUDE_CODE_EXECUTABLE": "/usr/local/bin/claude"}
+}
+
+// ACPMCPServers: the TUI gets Studio's MCP server from --mcp-config, which the adapter has
+// no way to pass, so a chat session gets it in session/new.
+func (Claude) ACPMCPServers() []acp.MCPServer {
+	return []acp.MCPServer{{Name: mcpServerName, Command: AgentPath, Args: []string{"mcp"}, Env: []acp.EnvVariable{}}}
+}
 
 // StateDirs: sessions and history are in ~/.claude (projects/, history.jsonl); account
 // and onboarding state is in the file ~/.claude.json next to it.

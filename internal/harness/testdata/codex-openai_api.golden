@@ -117,3 +117,10 @@ Memory marked disputed is part of an open conflict: prefer the shared fact and c
 [user]
 	name = "Ada Lovelace"
 	email = ada@example.com
+== acp command
+["codex-acp"]
+== acp env CODEX_PATH=/usr/local/bin/codex
+== acp env INITIAL_AGENT_MODE=agent-full-access
+== acp env MODEL_PROVIDER=studio
+== acp env NO_BROWSER=1
+== acp env OPENAI_API_KEY=studio-0123456789abcdef0123456789abcdef

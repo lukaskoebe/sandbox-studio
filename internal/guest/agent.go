@@ -51,6 +51,8 @@ type Agent struct {
 
 	sessMu sync.Mutex
 	sess   *yamux.Session // the live host session, for relayed calls
+
+	acp acpSlots // the running ACP agents, one per chat
 }
 
 // New prepares an agent; it fails if the terminal user does not exist.
@@ -166,6 +168,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.startSession(st, br)
 	case agentproto.KindBrowser:
 		err = a.browser(st, br)
+	case agentproto.KindACP:
+		err = a.serveACP(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}

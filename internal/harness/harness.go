@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
@@ -65,9 +66,15 @@ type Harness interface {
 	Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, error)
 	// TUICommand is the command line of the interactive TUI, run in a login shell.
 	TUICommand(opts SessionOpts) []string
-	// ACPCommand is the command line of the harness's ACP agent, or nil if it has none
-	// built in (the API surface is M6).
+	// ACPCommand is the command line of the harness's ACP agent for chats, run in a login
+	// shell like TUICommand (docs/design/chat-mode.md).
 	ACPCommand() []string
+	// ACPEnv is what the ACP agent needs besides Env: fixed paths and modes, never a
+	// secret (see ACPEnvironment).
+	ACPEnv(provider Provider) map[string]string
+	// ACPMCPServers are the MCP servers a chat session gets in session/new, for agents
+	// that don't read the ones in the harness's config.
+	ACPMCPServers() []acp.MCPServer
 	// StateDirs are the directories, relative to the home, where the harness keeps its
 	// sessions and history.
 	StateDirs() []string
@@ -96,6 +103,16 @@ func Env(provider Provider) map[string]string {
 	env := map[string]string{}
 	if provider.EnvVar != "" && provider.Placeholder != "" {
 		env[provider.EnvVar] = provider.Placeholder
+	}
+	return env
+}
+
+// ACPEnvironment is the environment of a chat's ACP agent: Env plus the harness's ACP
+// variables. Like Env it holds placeholders only.
+func ACPEnvironment(h Harness, provider Provider) map[string]string {
+	env := Env(provider)
+	for name, value := range h.ACPEnv(provider) {
+		env[name] = value
 	}
 	return env
 }

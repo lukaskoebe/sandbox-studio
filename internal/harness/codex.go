@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
@@ -122,8 +123,28 @@ func (Codex) RenderHookResponse(r HookResult) []byte {
 	return hookFormat(teammates.HarnessCodex).Render(r)
 }
 
-// ACPCommand is nil: Codex speaks ACP through a separate adapter (M6).
-func (Codex) ACPCommand() []string { return nil }
+// ACPCommand is the Codex adapter (@agentclientprotocol/codex-acp), which runs
+// `codex app-server` and translates; it reads ~/.codex/config.toml like the TUI.
+func (Codex) ACPCommand() []string { return []string{"codex-acp"} }
+
+// ACPEnv points the adapter at the image's Codex (it is installed without its own copy),
+// hides the ChatGPT browser login and starts in full access, like the TUI's
+// approval_policy "never". Providers with Studio's model_providers entry select it here
+// too, so the adapter doesn't fall back to the built-in openai provider.
+func (Codex) ACPEnv(provider Provider) map[string]string {
+	env := map[string]string{
+		"CODEX_PATH":         "/usr/local/bin/codex",
+		"NO_BROWSER":         "1",
+		"INITIAL_AGENT_MODE": "agent-full-access",
+	}
+	if provider.Kind == teammates.KindOpenAIAPI || provider.Kind == teammates.KindOpenAICompatible {
+		env["MODEL_PROVIDER"] = codexProvider
+	}
+	return env
+}
+
+// ACPMCPServers is empty: codex app-server reads mcp_servers from config.toml.
+func (Codex) ACPMCPServers() []acp.MCPServer { return nil }
 
 // StateDirs: sessions, history and auth are in CODEX_HOME, which defaults to ~/.codex.
 func (Codex) StateDirs() []string { return hookFormat(teammates.HarnessCodex).StateDirs }

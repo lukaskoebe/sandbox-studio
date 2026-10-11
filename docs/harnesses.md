@@ -115,6 +115,29 @@ The base image (`images/base/Dockerfile`) installs these versions.
 | `opencode-ai` | 1.18.35 | npm, exact version |
 | `@anthropic-ai/claude-code` | 2.1.287 (stable tag) | npm, exact version |
 | `@openai/codex` | 0.162.1 | npm, exact version |
+| `@agentclientprotocol/claude-agent-acp` | 0.87.0 | npm, exact version, `--omit=optional --before=2026-10-08` |
+| `@agentclientprotocol/codex-acp` | 2.1.1 | npm, exact version, `--omit=optional --before=2026-10-08` |
+
+## Chats (ACP)
+
+Chats run each harness's Agent Client Protocol agent instead of its TUI
+(`docs/design/chat-mode.md`). The guest starts it on a `KindACP` stream, in `/workspace`
+through a login shell, with the session's environment plus the harness's ACP variables.
+Like a terminal session's, that environment holds only placeholders and the fixed values
+below; a golden test enforces it.
+
+| Harness | Command | Extra environment | MCP servers in `session/new` |
+|---|---|---|---|
+| OpenCode | `opencode acp` | none | none (read from `opencode.json`) |
+| Claude | `claude-agent-acp` | `CLAUDE_CODE_EXECUTABLE=/usr/local/bin/claude` | `studio`: `studio-agent mcp` |
+| Codex | `codex-acp` | `CODEX_PATH=/usr/local/bin/codex`, `NO_BROWSER=1`, `INITIAL_AGENT_MODE=agent-full-access`, `MODEL_PROVIDER=studio` (API-key providers) | none (read from `config.toml`) |
+
+The adapters are installed without their own copies of the Claude Code and Codex binaries,
+so chats and terminals run the same pinned versions. Studio advertises no file system or
+terminal capability, and chats refuse `claude_subscription` teammates: Claude chats need an
+API-key provider. The guest kills the agent's process group when the stream closes (SIGTERM,
+SIGKILL after 5 s) and runs at most 4 per sandbox, one per chat; its stderr goes to
+`/run/studio-agent/acp-<chat>.log`, capped at 256 KiB.
 
 ## Verified vs pending
 

@@ -1,14 +1,17 @@
 package harness
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
@@ -57,7 +60,10 @@ func TestGolden(t *testing.T) {
 				if !maps.Equal(env, map[string]string{provider.EnvVar: placeholder}) {
 					t.Fatalf("env: %v", env)
 				}
-				got := dump(files, env, h.TUICommand(SessionOpts{Workdir: "/workspace"}))
+				acpEnv := ACPEnvironment(h, provider)
+				checkACPEnv(t, acpEnv)
+				got := dump(files, env, h.TUICommand(SessionOpts{Workdir: "/workspace"})) +
+					dumpACP(h.ACPCommand(), acpEnv, h.ACPMCPServers())
 				// No file carries a credential, not even the placeholder: the harness reads
 				// it from the environment.
 				for _, f := range files {
@@ -93,6 +99,54 @@ func dump(files []GuestFile, env map[string]string, cmd []string) string {
 		fmt.Fprintf(&b, "== %s mode=%o block=%t\n%s", f.Path, f.Mode, f.Block, f.Content)
 	}
 	return b.String()
+}
+
+// dumpACP is the chat side of a golden: the ACP command, its environment sorted, and the
+// MCP servers of session/new.
+func dumpACP(cmd []string, env map[string]string, servers []acp.MCPServer) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "== acp command\n%q\n", cmd)
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		fmt.Fprintf(&b, "== acp env %s=%s\n", k, env[k])
+	}
+	for _, m := range servers {
+		fmt.Fprintf(&b, "== acp mcp %s: %s %q\n", m.Name, m.Command, m.Args)
+	}
+	return b.String()
+}
+
+// acpConstants are the only values besides placeholders an ACP agent's environment may
+// hold: paths and modes, nothing secret.
+var acpConstants = map[string]string{
+	"CLAUDE_CODE_EXECUTABLE": "/usr/local/bin/claude",
+	"CODEX_PATH":             "/usr/local/bin/codex",
+	"NO_BROWSER":             "1",
+	"INITIAL_AGENT_MODE":     "agent-full-access",
+	"MODEL_PROVIDER":         "studio",
+}
+
+// checkACPEnv: an ACP agent sees placeholders and acpConstants, never anything else.
+func checkACPEnv(t *testing.T, env map[string]string) {
+	t.Helper()
+	for k, v := range env {
+		if v == placeholder {
+			continue
+		}
+		if want, ok := acpConstants[k]; !ok || v != want {
+			t.Errorf("ACP env %s=%s is neither a placeholder nor an allowed constant", k, v)
+		}
+	}
+}
+
+func TestACPEnvSubscription(t *testing.T) {
+	// No placeholder, no credential variable: only the constants.
+	for _, h := range all {
+		env := ACPEnvironment(h, Provider{Kind: teammates.KindChatGPTSubscription, EnvVar: "OPENAI_API_KEY"})
+		checkACPEnv(t, env)
+		if _, ok := env["OPENAI_API_KEY"]; ok {
+			t.Errorf("%s: credential variable without a placeholder", h.Name())
+		}
+	}
 }
 
 func TestInstructionsBlock(t *testing.T) {
@@ -141,5 +195,22 @@ func TestLookup(t *testing.T) {
 	}
 	if _, ok := Lookup("aider"); ok {
 		t.Fatal("unknown harness found")
+	}
+}
+
+// TestRecordedACPInitialize reads the initialize reply spikes/acp recorded from the image's
+// `opencode acp`: Studio relies on session/resume (no replay) and image prompts.
+func TestRecordedACPInitialize(t *testing.T) {
+	b, err := os.ReadFile("testdata/acp/opencode.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res acp.InitializeResponse
+	if err := json.Unmarshal(b, &res); err != nil {
+		t.Fatal(err)
+	}
+	caps := res.AgentCapabilities
+	if res.ProtocolVersion != acp.ProtocolVersion || !caps.LoadSession || !caps.CanResume() || !caps.CanClose() || !caps.PromptCapabilities.Image {
+		t.Fatalf("capabilities: %+v", res)
 	}
 }

@@ -1,0 +1,31 @@
+{
+  "agentCapabilities": {
+    "loadSession": true,
+    "mcpCapabilities": {
+      "http": true,
+      "sse": true
+    },
+    "promptCapabilities": {
+      "embeddedContext": true,
+      "image": true
+    },
+    "sessionCapabilities": {
+      "close": {},
+      "fork": {},
+      "list": {},
+      "resume": {}
+    }
+  },
+  "agentInfo": {
+    "name": "OpenCode",
+    "version": "1.18.35"
+  },
+  "authMethods": [
+    {
+      "description": "Run `opencode auth login` in the terminal",
+      "id": "opencode-login",
+      "name": "Login with opencode"
+    }
+  ],
+  "protocolVersion": 1
+}
