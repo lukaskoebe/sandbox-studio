@@ -234,6 +234,12 @@ type sshHarness struct {
 // fake server accepts and its host key pinned, and a repository owner/repo.
 func newSSHHarness(t *testing.T) *sshHarness {
 	t.Helper()
+	// Keep the key-leak scan within this test, including any temporary files
+	// opened by the SSH transport. Shared temp directories can contain FIFOs.
+	tmp := t.TempDir()
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, tmp)
+	}
 	fs := newFakeSSH(t)
 	h := newHarness(t)
 	h.svc.Dial = fs.dialer
@@ -266,7 +272,7 @@ func (sh *sshHarness) assertKeyHidden(t *testing.T, g *guest) {
 			if err != nil || d.IsDir() {
 				return nil
 			}
-			if info, _ := d.Info(); info == nil || info.Size() > 1<<20 {
+			if info, _ := d.Info(); info == nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
 				return nil
 			}
 			if data, _ := os.ReadFile(path); strings.Contains(string(data), body) {

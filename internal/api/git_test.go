@@ -125,6 +125,11 @@ func testSSHHost(t *testing.T) (ssh.PublicKey, func(context.Context, string, str
 }
 
 func TestSSHForges(t *testing.T) {
+	// Inspect temporary key files without scanning unrelated processes' files.
+	tmp := t.TempDir()
+	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+		t.Setenv(name, tmp)
+	}
 	h, s := newTestServer(t)
 	hostKey, dial := testSSHHost(t)
 	staging := t.TempDir()
@@ -178,7 +183,7 @@ func TestSSHForges(t *testing.T) {
 			if err != nil || d.IsDir() {
 				return nil
 			}
-			if info, _ := d.Info(); info == nil || info.Size() > 1<<20 {
+			if info, _ := d.Info(); info == nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
 				return nil
 			}
 			if data, _ := os.ReadFile(path); strings.Contains(string(data), body) {
