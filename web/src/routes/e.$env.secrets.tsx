@@ -41,6 +41,7 @@ import {
 import { PageHeader } from "@/components/page-header"
 import { SecretDialog } from "@/components/secret-dialog"
 import { $api, errorMessage, type Secret } from "@/lib/api/client"
+import { copyText } from "@/lib/clipboard"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/secrets")({
@@ -200,7 +201,7 @@ function SecretsPage() {
 
 async function copy(text: string) {
   try {
-    await navigator.clipboard.writeText(text)
+    await copyText(text)
     toast.success("Copied")
   } catch {
     toast.error("Could not copy")

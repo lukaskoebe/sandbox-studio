@@ -71,6 +71,7 @@ import { PageHeader } from "@/components/page-header"
 import { ApprovalStatusBadge } from "@/components/status-badge"
 import { $api, errorMessage, fetchClient, type Forge } from "@/lib/api/client"
 import { gitSummary } from "@/lib/approval-kinds"
+import { copyText } from "@/lib/clipboard"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/git")({
@@ -637,7 +638,7 @@ function PinForm({
 
 async function copy(text: string) {
   try {
-    await navigator.clipboard.writeText(text)
+    await copyText(text)
     toast.success("Copied")
   } catch {
     toast.error("Could not copy")

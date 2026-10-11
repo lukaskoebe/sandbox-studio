@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { $api } from "@/lib/api/client"
 import { rememberEnvironment } from "@/lib/environment"
+import { useVisualViewportHeight } from "@/hooks/use-visual-viewport-height"
 
 export const Route = createFileRoute("/e/$env")({
   loader: async ({ context, params }) => {
@@ -17,12 +18,19 @@ export const Route = createFileRoute("/e/$env")({
 
 function EnvironmentLayout() {
   const { env } = Route.useParams()
+  const viewportHeight = useVisualViewportHeight()
+  const viewportStyle = viewportHeight
+    ? { height: viewportHeight, minHeight: viewportHeight }
+    : undefined
   useEffect(() => rememberEnvironment(env), [env])
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={viewportStyle}>
       <AppSidebar env={env} />
-      <SidebarInset className="h-svh min-w-0 overflow-hidden">
+      <SidebarInset
+        className="h-svh min-w-0 overflow-hidden"
+        style={viewportHeight ? { height: viewportHeight } : undefined}
+      >
         <Outlet />
       </SidebarInset>
     </SidebarProvider>
