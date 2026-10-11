@@ -1,9 +1,13 @@
 # Chat mode (design)
 
 Status: backend implemented on `chat-backend`: ACP streams, persisted turns, SSE,
-permissions and form answers have local test coverage. The chat UI, terminal handover,
-file changes and undo remain unfinished; this is not release-ready. Researched
-2026-10-11. Versions marked "verify" have not been run in a VM.
+permissions and form answers have local test coverage. The chat UI (stage 3 and the UI
+half of stage 4) is built on `chat-ui`: chat list and view, item renderers, composer,
+permission cards in the chat and the approval stack, and the Chat/Terminal choice. Until
+the terminal handover and `/api/settings/ui` endpoints land, the UI calls them through
+`web/src/lib/api/pending.ts`, which keeps the choice in the browser. File changes, undo
+and preview remain unfinished; this is not release-ready. Researched 2026-10-11.
+Versions marked "verify" have not been run in a VM.
 
 Chat mode puts each agent session in a chat view for people who don't use terminals. The
 same harnesses run in the same sandboxes. Studio drives them headless over the Agent Client

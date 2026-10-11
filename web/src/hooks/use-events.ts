@@ -10,6 +10,10 @@ const stale: Record<string, string[]> = {
     "/api/environments/{env}/teammates",
     "/api/environments/{env}/providers",
   ],
+  chats: [
+    "/api/environments/{env}/chats",
+    "/api/environments/{env}/sandboxes/{id}/chats",
+  ],
   builds: [
     "/api/environments/{env}/builds",
     "/api/environments/{env}/builds/{id}",

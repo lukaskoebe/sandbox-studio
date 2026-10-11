@@ -1,5 +1,6 @@
 import { Outlet, createRootRouteWithContext } from "@tanstack/react-router"
 import type { QueryClient } from "@tanstack/react-query"
+import { AgentViewOnboarding } from "@/components/agent-view"
 import { ApprovalStack } from "@/components/approval-stack"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
@@ -22,6 +23,7 @@ function RootLayout() {
     <TooltipProvider>
       <Outlet />
       <ApprovalStack />
+      <AgentViewOnboarding />
       <Toaster position="top-center" closeButton />
     </TooltipProvider>
   )

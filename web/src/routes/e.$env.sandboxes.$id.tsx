@@ -46,6 +46,7 @@ import { ConnectionsSheet } from "@/components/connections-sheet"
 import { ExportSandboxButton } from "@/components/export-sandbox-button"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { AgentSessions } from "@/components/agent-sessions"
+import { SandboxChats } from "@/components/chat/sandbox-chats"
 import { PageHeader } from "@/components/page-header"
 import { SandboxOwner } from "@/components/teammate-avatar"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
@@ -60,16 +61,24 @@ import {
   isReady,
   type Sandbox,
 } from "@/lib/api/client"
+import { useAgentView } from "@/lib/api/pending"
 import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/sandboxes/$id")({
   component: SandboxPage,
+  // terminal: a tmux session to open, such as a chat handed over to the terminal.
+  validateSearch: (s: Record<string, unknown>): { terminal?: string } =>
+    typeof s.terminal === "string" ? { terminal: s.terminal } : {},
 })
 
 function SandboxPage() {
   const { env, id } = Route.useParams()
+  const { terminal } = Route.useSearch()
+  const { view } = useAgentView()
   // The terminal tab an agent session asked to show; seq makes repeated asks count.
-  const [focus, setFocus] = useState<Focus | null>(null)
+  const [focus, setFocus] = useState<Focus | null>(
+    terminal ? { name: terminal, seq: 1 } : null
+  )
   const sandbox = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}",
@@ -109,6 +118,9 @@ function SandboxPage() {
           className="text-xs text-muted-foreground"
         />
         <div className="ml-auto flex items-center gap-1">
+          {sb.teammateId && view !== "terminal" && (
+            <SandboxChats env={env} id={sb.id} />
+          )}
           {sb.teammateId && isReady(sb) && (
             <AgentSessions
               env={env}
@@ -118,6 +130,10 @@ function SandboxPage() {
                 setFocus((f) => ({ name, seq: (f?.seq ?? 0) + 1 }))
               }
             />
+          )}
+          {/* Chat or terminal comes first by preference; the other is one click away. */}
+          {sb.teammateId && view === "terminal" && (
+            <SandboxChats env={env} id={sb.id} />
           )}
           <ConnectionsSheet env={env} sandbox={sb} />
           <CheckpointsSheet env={env} sandbox={sb} />

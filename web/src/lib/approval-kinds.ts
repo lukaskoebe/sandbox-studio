@@ -1,5 +1,6 @@
 import {
   BrainIcon,
+  ChatCircleDotsIcon,
   CursorClickIcon,
   GitBranchIcon,
   GitPullRequestIcon,
@@ -31,6 +32,7 @@ export type ApprovalKind = {
     | "/e/$env/git"
     | "/e/$env/memory"
     | "/e/$env/browser"
+    | "/e/$env/chats"
 }
 
 /** What a git approval asks for. */
@@ -120,6 +122,12 @@ const kinds: Record<string, ApprovalKind> = {
     icon: KeyIcon,
     page: "/e/$env/browser",
   },
+  "chat.permission": {
+    title: "Agent permission",
+    summary: (a) => a.chatPermission?.title ?? a.subject,
+    icon: ChatCircleDotsIcon,
+    page: "/e/$env/chats",
+  },
 }
 
 /** A kind this UI does not know yet: the server's subject line describes it. */
@@ -141,6 +149,7 @@ export function approvalSource(a: Approval): string | undefined {
     a.git?.review?.sandbox ??
     a.memoryShare?.teammateName ??
     a.browserAction?.sandboxName ??
-    a.browserCredential?.sandboxName
+    a.browserCredential?.sandboxName ??
+    a.chatPermission?.sandboxName
   )
 }
