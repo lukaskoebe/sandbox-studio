@@ -27,14 +27,22 @@ export function BrowserLive({
   useEffect(() => {
     let stopped = false
     let retry: ReturnType<typeof setTimeout> | undefined
+    let activeSocket: WebSocket | null = null
     const connect = () => {
+      if (stopped) return
       const ws = new WebSocket(url.replace(/^http/, "ws"))
+      activeSocket = ws
       socket.current = ws
       setState("connecting")
+      setNotice("")
+      const isCurrent = () =>
+        !stopped && activeSocket === ws && socket.current === ws
       ws.onopen = () => {
+        if (!isCurrent()) return
         ws.send(JSON.stringify({ type: "config", maxFps: 10 }))
       }
       ws.onmessage = (ev) => {
+        if (!isCurrent()) return
         if (typeof ev.data !== "string") return
         let msg: {
           type?: string
@@ -56,6 +64,7 @@ export function BrowserLive({
         if (w && h) device.current = { width: w, height: h }
         const img = new Image()
         img.onload = () => {
+          if (!isCurrent()) return
           const c = canvas.current
           if (!c) return
           if (c.width !== img.width || c.height !== img.height) {
@@ -68,6 +77,8 @@ export function BrowserLive({
         setState("live")
       }
       ws.onclose = (ev) => {
+        if (!isCurrent()) return
+        activeSocket = null
         socket.current = null
         setState("closed")
         setNotice(ev.reason || "The live view disconnected")
@@ -78,7 +89,10 @@ export function BrowserLive({
     return () => {
       stopped = true
       clearTimeout(retry)
-      socket.current?.close()
+      const ws = activeSocket
+      activeSocket = null
+      if (socket.current === ws) socket.current = null
+      ws?.close()
     }
   }, [url])
 
