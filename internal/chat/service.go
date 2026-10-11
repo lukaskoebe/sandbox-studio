@@ -365,11 +365,12 @@ type live struct {
 
 // run is a running turn.
 type run struct {
-	turn      store.ChatTurn
-	f         *folder
-	cancelled bool
-	ended     bool
-	done      chan struct{}
+	turn       store.ChatTurn
+	f          *folder
+	cancelled  bool
+	ended      bool
+	promptSent chan struct{} // closed after session/prompt is written
+	done       chan struct{}
 }
 
 func (s *Service) get(chatID string) *live {
@@ -598,7 +599,7 @@ func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Atta
 		return t, err
 	}
 	t = l.s.snapshot(ctx, c, t)
-	r := &run{turn: t, f: newFolder(store.NewID), done: make(chan struct{})}
+	r := &run{turn: t, f: newFolder(store.NewID), promptSent: make(chan struct{}), done: make(chan struct{})}
 	l.mu.Lock()
 	l.turn = r
 	_, ch := r.f.add(KindUser, &UserBody{Text: text, Attachments: atts})
@@ -607,7 +608,15 @@ func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Atta
 	if c.Title == "" {
 		l.s.retitle(c, titleOf(text, atts))
 	}
-	go l.run(r, blocks)
+	// Publish the turn before writing so early updates are retained. Cancel waits on
+	// promptSent, which preserves wire order without holding l.mu during the write.
+	prompt, err := l.conn.StartPrompt(context.Background(), l.session, blocks)
+	close(r.promptSent)
+	if err != nil {
+		go l.end(r, acp.PromptResponse{}, err)
+	} else {
+		go l.run(r, prompt)
+	}
 	return t, nil
 }
 
@@ -632,8 +641,8 @@ func titleOf(text string, atts []Attachment) string {
 	return line
 }
 
-// run sends the prompt and ends the turn when the agent answers or goes away.
-func (l *live) run(r *run, blocks []acp.ContentBlock) {
+// run ends the turn when the prompt response arrives or the agent goes away.
+func (l *live) run(r *run, prompt <-chan acp.PromptResult) {
 	stop := make(chan struct{})
 	go func() {
 		tick := time.NewTicker(flushEvery)
@@ -649,9 +658,9 @@ func (l *live) run(r *run, blocks []acp.ContentBlock) {
 			}
 		}
 	}()
-	resp, err := l.conn.Prompt(context.Background(), l.session, blocks)
+	result := <-prompt
 	close(stop)
-	l.end(r, resp, err)
+	l.end(r, result.Response, result.Err)
 }
 
 // end closes the turn: the last writes, a marker saying why it stopped, the usage.
@@ -742,6 +751,7 @@ func (s *Service) Cancel(ctx context.Context, envID, chatID string) error {
 	if r == nil {
 		return nil
 	}
+	<-r.promptSent
 	if err := l.conn.Cancel(l.session); err != nil {
 		l.conn.Close()
 		return nil

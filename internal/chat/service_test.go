@@ -347,21 +347,52 @@ func TestChatTurn(t *testing.T) {
 }
 
 func TestChatBusyAndEmpty(t *testing.T) {
-	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Steps: []acptest.Step{{WaitCancel: true}}}}})
+	promptStarted := make(chan struct{})
+	releasePrompt := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releasePrompt) }) }
+	defer release()
+	f := newFixture(t, &acptest.Agent{
+		Turns:        []acptest.Turn{{Steps: []acptest.Step{{WaitCancel: true}}}},
+		BeforePrompt: func() { close(promptStarted); <-releasePrompt },
+	})
 	ctx := context.Background()
 	if _, err := f.s.Send(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "  "}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("empty prompt: %v", err)
 	}
 	turn := f.send(t, "work")
-	if _, err := f.s.Send(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "more"}); !errors.Is(err, ErrBusy) || !errors.Is(err, store.ErrConflict) {
-		t.Fatalf("second prompt: %v", err)
-	}
 	if err := f.s.Cancel(ctx, f.sb.EnvironmentID, f.chat.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := f.s.Send(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "more"}); !errors.Is(err, ErrBusy) || !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("second prompt: %v", err)
+	}
+	select {
+	case <-promptStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the agent did not receive the prompt")
+	}
+	waitCtx, cancelWait := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelWait()
+	if err := f.agent.WaitForCall(waitCtx, "session/cancel"); err != nil {
+		t.Fatal(err)
+	}
+	release()
 	turn, log := f.wait(t, turn.ID)
 	if turn.StopReason != "cancelled" || kinds(log.Items) != "user,marker:stopped" {
 		t.Fatalf("stop %q items %s", turn.StopReason, kinds(log.Items))
+	}
+	promptAt, cancelAt := -1, -1
+	for i, method := range f.agent.Called() {
+		if method == "session/prompt" && promptAt < 0 {
+			promptAt = i
+		}
+		if method == "session/cancel" && cancelAt < 0 {
+			cancelAt = i
+		}
+	}
+	if promptAt < 0 || cancelAt <= promptAt {
+		t.Fatalf("ACP calls did not put prompt before cancel: %v", f.agent.Called())
 	}
 }
 

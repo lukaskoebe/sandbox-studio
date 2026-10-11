@@ -375,53 +375,72 @@ func (c *Conn) acquireWrite(ctx context.Context) error {
 
 func (c *Conn) releaseWrite() { c.writeGate <- struct{}{} }
 
-// Call sends a request and decodes its result into result (unless nil). A JSON-RPC error
-// is returned as *Error, an authentication error as ErrAuthRequired.
-func (c *Conn) Call(ctx context.Context, method string, params, result any) error {
+type pendingCall struct {
+	id int64
+	ch chan message
+}
+
+func (c *Conn) beginCall(ctx context.Context, method string, params any) (pendingCall, error) {
 	p, err := json.Marshal(params)
 	if err != nil {
-		return err
+		return pendingCall{}, err
 	}
 	ch := make(chan message, 1)
 	c.mu.Lock()
 	if c.pending == nil {
 		c.mu.Unlock()
-		return ErrClosed
+		return pendingCall{}, ErrClosed
 	}
 	c.nextID++
 	id := c.nextID
 	c.pending[id] = ch
 	c.mu.Unlock()
-	forget := func() {
-		c.mu.Lock()
-		if c.pending != nil {
-			delete(c.pending, id)
-		}
-		c.mu.Unlock()
-	}
 	if err := c.writeContext(ctx, message{JSONRPC: "2.0", ID: json.RawMessage(strconv.FormatInt(id, 10)), Method: method, Params: p}); err != nil {
-		forget()
-		return err
+		c.forgetCall(id)
+		return pendingCall{}, err
 	}
+	return pendingCall{id: id, ch: ch}, nil
+}
+
+func (c *Conn) forgetCall(id int64) {
+	c.mu.Lock()
+	if c.pending != nil {
+		delete(c.pending, id)
+	}
+	c.mu.Unlock()
+}
+
+func (c *Conn) waitCall(ctx context.Context, call pendingCall) (message, error) {
 	select {
-	case m, ok := <-ch:
+	case m, ok := <-call.ch:
 		if !ok {
-			return c.Err()
+			return message{}, c.Err()
 		}
 		if m.Error != nil {
 			if m.Error.Code == CodeAuthRequired {
-				return ErrAuthRequired
+				return message{}, ErrAuthRequired
 			}
-			return m.Error
+			return message{}, m.Error
 		}
-		if result == nil || len(m.Result) == 0 {
-			return nil
-		}
-		return json.Unmarshal(m.Result, result)
+		return m, nil
 	case <-ctx.Done():
-		forget()
-		return ctx.Err()
+		c.forgetCall(call.id)
+		return message{}, ctx.Err()
 	}
+}
+
+// Call sends a request and decodes its result into result (unless nil). A JSON-RPC error
+// is returned as *Error, an authentication error as ErrAuthRequired.
+func (c *Conn) Call(ctx context.Context, method string, params, result any) error {
+	call, err := c.beginCall(ctx, method, params)
+	if err != nil {
+		return err
+	}
+	m, err := c.waitCall(ctx, call)
+	if err != nil || result == nil || len(m.Result) == 0 {
+		return err
+	}
+	return json.Unmarshal(m.Result, result)
 }
 
 // Notify sends a notification.
@@ -470,11 +489,40 @@ func (c *Conn) LoadSession(ctx context.Context, id, cwd string, servers []MCPSer
 	return c.Call(ctx, MethodSessionLoad, LoadSessionRequest{SessionID: id, Cwd: cwd, MCPServers: nonNil(servers)}, nil)
 }
 
+// PromptResult is the completed response to a started prompt.
+type PromptResult struct {
+	Response PromptResponse
+	Err      error
+}
+
+// StartPrompt sends a prompt and returns after its request has been written. The result
+// channel receives the agent's response when the turn ends.
+func (c *Conn) StartPrompt(ctx context.Context, id string, prompt []ContentBlock) (<-chan PromptResult, error) {
+	call, err := c.beginCall(ctx, MethodSessionPrompt, PromptRequest{SessionID: id, Prompt: prompt})
+	if err != nil {
+		return nil, err
+	}
+	done := make(chan PromptResult, 1)
+	go func() {
+		m, err := c.waitCall(ctx, call)
+		var response PromptResponse
+		if err == nil && len(m.Result) > 0 {
+			err = json.Unmarshal(m.Result, &response)
+		}
+		done <- PromptResult{Response: response, Err: err}
+		close(done)
+	}()
+	return done, nil
+}
+
 // Prompt runs one turn and returns its stop reason.
 func (c *Conn) Prompt(ctx context.Context, id string, prompt []ContentBlock) (PromptResponse, error) {
-	var out PromptResponse
-	err := c.Call(ctx, MethodSessionPrompt, PromptRequest{SessionID: id, Prompt: prompt}, &out)
-	return out, err
+	done, err := c.StartPrompt(ctx, id, prompt)
+	if err != nil {
+		return PromptResponse{}, err
+	}
+	result := <-done
+	return result.Response, result.Err
 }
 
 // Cancel asks the agent to end the running turn.

@@ -4,6 +4,7 @@ package acptest
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -48,14 +49,18 @@ type Agent struct {
 	History []json.RawMessage
 	// MissingSessions makes session/resume and session/load fail as unknown sessions.
 	MissingSessions bool
+	// BeforePrompt runs in the prompt handler after session/prompt is received. Tests can
+	// hold it while Serve continues reading later messages from the wire.
+	BeforePrompt func()
 
-	mu       sync.Mutex
-	Calls    []string          // methods called, in order, with notifications
-	Prompts  []json.RawMessage // prompt arrays received
-	Initial  json.RawMessage   // the initialize params received
-	NewReq   json.RawMessage   // the session/new params received
-	Outcomes []json.RawMessage // permission answers
-	Answers  []json.RawMessage // elicitation answers
+	mu           sync.Mutex
+	Calls        []string          // methods called, in order, with notifications
+	Prompts      []json.RawMessage // prompt arrays received
+	Initial      json.RawMessage   // the initialize params received
+	NewReq       json.RawMessage   // the session/new params received
+	Outcomes     []json.RawMessage // permission answers
+	Answers      []json.RawMessage // elicitation answers
+	callsChanged chan struct{}
 
 	cancel chan struct{}
 	turn   int
@@ -85,6 +90,7 @@ func (a *Agent) Serve(rw io.ReadWriteCloser) {
 	a.w = bufio.NewWriter(rw)
 	a.cancel = make(chan struct{}, 1)
 	a.waits = map[int]chan json.RawMessage{}
+	a.callsChanged = make(chan struct{})
 	a.mu.Unlock()
 	br := bufio.NewReader(rw)
 	for {
@@ -123,9 +129,6 @@ func (a *Agent) Serve(rw io.ReadWriteCloser) {
 			}
 			continue
 		}
-		a.mu.Lock()
-		a.Calls = append(a.Calls, m.Method)
-		a.mu.Unlock()
 		if len(m.ID) == 0 {
 			if m.Method == "session/cancel" {
 				select {
@@ -133,10 +136,28 @@ func (a *Agent) Serve(rw io.ReadWriteCloser) {
 				default:
 				}
 			}
+			a.recordCall(m.Method)
 			continue
+		}
+		a.recordCall(m.Method)
+		if m.Method == "session/prompt" {
+			// Discard only cancels that arrived before this prompt on the wire. Draining
+			// in call() can lose a later cancel when its goroutine starts late.
+			select {
+			case <-a.cancel:
+			default:
+			}
 		}
 		go a.call(m.ID, m.Method, m.Params)
 	}
+}
+
+func (a *Agent) recordCall(method string) {
+	a.mu.Lock()
+	a.Calls = append(a.Calls, method)
+	close(a.callsChanged)
+	a.callsChanged = make(chan struct{})
+	a.mu.Unlock()
 }
 
 // Called reports the methods called so far.
@@ -144,6 +165,26 @@ func (a *Agent) Called() []string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return append([]string(nil), a.Calls...)
+}
+
+// WaitForCall waits until Serve has received method from the client.
+func (a *Agent) WaitForCall(ctx context.Context, method string) error {
+	for {
+		a.mu.Lock()
+		for _, called := range a.Calls {
+			if called == method {
+				a.mu.Unlock()
+				return nil
+			}
+		}
+		changed := a.callsChanged
+		a.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-changed:
+		}
+	}
 }
 
 // Snapshot returns copies of what the agent recorded.
@@ -154,6 +195,9 @@ func (a *Agent) Snapshot() (prompts, outcomes, answers []json.RawMessage) {
 }
 
 func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) {
+	if method == "session/prompt" && a.BeforePrompt != nil {
+		a.BeforePrompt()
+	}
 	var p struct {
 		SessionID string          `json:"sessionId"`
 		Prompt    json.RawMessage `json:"prompt"`
@@ -196,11 +240,6 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 		a.Prompts = append(a.Prompts, p.Prompt)
 		n := a.turn
 		a.turn++
-		// A cancel sent before this turn is not for it.
-		select {
-		case <-a.cancel:
-		default:
-		}
 		a.mu.Unlock()
 		var t Turn
 		if n < len(a.Turns) {

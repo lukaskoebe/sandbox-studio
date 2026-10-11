@@ -9,6 +9,7 @@
   full-width view on small screens and a toggle to hide it without stopping the browser.
 - Copy buttons work on the local HTTP development server, including when accessed over the LAN.
 - Memory hooks load in both OpenCode V1 and V2, fixing the plugin error in upgraded VMs.
+- Stopping a chat immediately after sending a message preserves prompt/cancel ordering.
 - The browser has an address bar and guidance for a blank start page.
 - Dev-server previews handle IPv6 loopback listeners and closed idle connections.
 - Long network approval patterns stay inside their cards, and the guest agent's directory
