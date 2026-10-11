@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
 /**
- * The live view of a persona's browser: agent-browser's screencast, relayed by Studio over
+ * The live view of a teammate's browser: agent-browser's screencast, relayed by Studio over
  * a WebSocket, drawn on a canvas. Each frame is {"type":"frame","data":<base64 JPEG>,
  * "metadata":{deviceWidth,deviceHeight,...}}. While `driving`, mouse and keyboard events go
  * back as input_mouse and input_keyboard messages; Studio drops them otherwise.

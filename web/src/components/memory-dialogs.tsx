@@ -46,7 +46,7 @@ export const pageKinds: MemoryPage["kind"][] = [
   "project",
   "person",
   "procedure",
-  "persona-self",
+  "teammate-self",
 ]
 
 /** Refetches every memory query of the environment after a change. */

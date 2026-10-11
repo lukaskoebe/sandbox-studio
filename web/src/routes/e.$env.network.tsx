@@ -57,10 +57,12 @@ function NetworkPage() {
   // Git approvals are reviewed on the Git page.
   const networkRequests = requests.data?.filter((a) => a.kind === "network")
   const names = new Map((sandboxes.data ?? []).map((sb) => [sb.id, sb.name]))
-  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
-  const personaNames = new Map((personas.data ?? []).map((p) => [p.id, p.name]))
+  const teammateNames = new Map(
+    (teammates.data ?? []).map((p) => [p.id, p.name])
+  )
 
   return (
     <>
@@ -111,8 +113,8 @@ function NetworkPage() {
                       <TableCell>
                         {r.sandboxId
                           ? (names.get(r.sandboxId) ?? "Other sandbox")
-                          : r.personaId
-                            ? `Persona ${personaNames.get(r.personaId) ?? ""}`
+                          : r.teammateId
+                            ? `Teammate ${teammateNames.get(r.teammateId) ?? ""}`
                             : "Environment"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">

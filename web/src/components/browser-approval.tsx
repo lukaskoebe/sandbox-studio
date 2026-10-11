@@ -25,7 +25,7 @@ function useDecide(what: string) {
         queryClient.invalidateQueries({
           queryKey: [
             "get",
-            "/api/environments/{env}/personas/{persona}/browser/patterns",
+            "/api/environments/{env}/teammates/{teammate}/browser/patterns",
           ],
         })
       },
@@ -41,7 +41,7 @@ function useDecide(what: string) {
 
 /**
  * Decides a browser.action approval: an agent wants to click, fill or type on an origin its
- * persona's browser has no rule for. "For this origin" stores a pattern for the action.
+ * teammate's browser has no rule for. "For this origin" stores a pattern for the action.
  */
 export function BrowserActionDecision({ approval }: { approval: Approval }) {
   const act = approval.browserAction
@@ -52,7 +52,7 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
       params: { path: { env: approval.environmentId, id: approval.id } },
       body: {
         action,
-        scope: "persona",
+        scope: "teammate",
         remember: action !== "dismiss" && remember,
       },
     })
@@ -117,12 +117,12 @@ export function BrowserCredentialDecision({
   const send = (action: "allow" | "deny") =>
     decide.mutate({
       params: { path: { env: approval.environmentId, id: approval.id } },
-      body: { action, scope: "persona" },
+      body: { action, scope: "teammate" },
     })
   return (
     <div className="grid gap-2">
       <p className="text-xs text-muted-foreground">
-        {`Studio fills the secret into ${cred?.label ? `“${cred.label}”` : "the field"}; ${cred?.personaName ?? "the agent"} sees only its name.`}
+        {`Studio fills the secret into ${cred?.label ? `“${cred.label}”` : "the field"}; ${cred?.teammateName ?? "the agent"} sees only its name.`}
       </p>
       {cred?.url && (
         <p className="truncate text-xs" title={cred.url}>

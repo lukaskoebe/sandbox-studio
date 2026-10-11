@@ -32,7 +32,7 @@ import {
   type Provider,
   type ProviderKind,
 } from "@/lib/api/client"
-import { isSubscription, kindLabels, providerKinds } from "@/lib/personas"
+import { isSubscription, kindLabels, providerKinds } from "@/lib/teammates"
 
 export function ProviderDialog({
   env,
@@ -152,7 +152,7 @@ function ProviderForm({
       <DialogHeader>
         <DialogTitle>{provider ? "Edit provider" : "Add provider"}</DialogTitle>
         <DialogDescription>
-          How personas reach a model. API keys are stored as secrets, so
+          How teammates reach a model. API keys are stored as secrets, so
           sandboxes only ever see a placeholder.
         </DialogDescription>
       </DialogHeader>
@@ -200,8 +200,8 @@ function ProviderForm({
       </Field>
       {subscription ? (
         <p className="rounded-md bg-muted px-3 py-2 text-xs/relaxed text-muted-foreground">
-          Login flow coming soon. Until then, personas can use this provider but
-          can't sign in with it.
+          Login flow coming soon. Until then, teammates can use this provider
+          but can't sign in with it.
         </p>
       ) : (
         <>

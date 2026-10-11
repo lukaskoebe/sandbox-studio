@@ -31,10 +31,10 @@ import {
   errorMessage,
   errorStatus,
   type Harness,
-  type Persona,
+  type Teammate,
   type Provider,
 } from "@/lib/api/client"
-import { harnessLabels, isSubscription, kindLabels } from "@/lib/personas"
+import { harnessLabels, isSubscription, kindLabels } from "@/lib/teammates"
 
 const maxSoulBytes = 16 * 1024
 
@@ -46,16 +46,16 @@ function slug(name: string) {
     .replace(/^-+|-+$/g, "")
 }
 
-export function PersonaDialog({
+export function TeammateDialog({
   env,
-  persona,
+  teammate,
   providers,
   open,
   onOpenChange,
 }: {
   env: string
-  /** The persona to edit; absent for a new one. */
-  persona?: Persona
+  /** The teammate to edit; absent for a new one. */
+  teammate?: Teammate
   providers: Provider[]
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -63,10 +63,10 @@ export function PersonaDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
-        <PersonaForm
-          key={persona?.id ?? "new"}
+        <TeammateForm
+          key={teammate?.id ?? "new"}
           env={env}
-          persona={persona}
+          teammate={teammate}
           providers={providers}
           onDone={() => onOpenChange(false)}
         />
@@ -75,32 +75,32 @@ export function PersonaDialog({
   )
 }
 
-function PersonaForm({
+function TeammateForm({
   env,
-  persona,
+  teammate,
   providers,
   onDone,
 }: {
   env: string
-  persona?: Persona
+  teammate?: Teammate
   providers: Provider[]
   onDone: () => void
 }) {
   const queryClient = useQueryClient()
-  const [name, setName] = useState(persona?.name ?? "")
-  const [role, setRole] = useState(persona?.role ?? "")
+  const [name, setName] = useState(teammate?.name ?? "")
+  const [role, setRole] = useState(teammate?.role ?? "")
   const [providerId, setProviderId] = useState(
-    persona?.providerId ?? providers.at(0)?.id ?? ""
+    teammate?.providerId ?? providers.at(0)?.id ?? ""
   )
   const provider = providers.find((p) => p.id === providerId)
   const supported = provider?.harnesses ?? []
   const [harness, setHarness] = useState<Harness | undefined>(
-    persona?.harness ?? supported[0]
+    teammate?.harness ?? supported[0]
   )
-  const [model, setModel] = useState(persona?.model ?? "")
-  const [gitName, setGitName] = useState(persona?.gitName ?? "")
-  const [gitEmail, setGitEmail] = useState(persona?.gitEmail ?? "")
-  const [soul, setSoul] = useState(persona?.soul ?? "")
+  const [model, setModel] = useState(teammate?.model ?? "")
+  const [gitName, setGitName] = useState(teammate?.gitName ?? "")
+  const [gitEmail, setGitEmail] = useState(teammate?.gitEmail ?? "")
+  const [soul, setSoul] = useState(teammate?.soul ?? "")
   const [formError, setFormError] = useState<string>()
 
   const soulBytes = new TextEncoder().encode(soul).length
@@ -118,7 +118,7 @@ function PersonaForm({
 
   const onSaved = () => {
     queryClient.invalidateQueries({
-      queryKey: ["get", "/api/environments/{env}/personas"],
+      queryKey: ["get", "/api/environments/{env}/teammates"],
     })
     onDone()
   }
@@ -126,17 +126,17 @@ function PersonaForm({
     const status = errorStatus(err)
     if (status === 409 || status === 422) setFormError(errorMessage(err))
     else
-      toast.error("Could not save the persona", {
+      toast.error("Could not save the teammate", {
         description: errorMessage(err),
       })
   }
-  const create = $api.useMutation("post", "/api/environments/{env}/personas", {
+  const create = $api.useMutation("post", "/api/environments/{env}/teammates", {
     onSuccess: onSaved,
     onError: onFailed,
   })
   const update = $api.useMutation(
     "put",
-    "/api/environments/{env}/personas/{id}",
+    "/api/environments/{env}/teammates/{id}",
     { onSuccess: onSaved, onError: onFailed }
   )
   const saving = create.isPending || update.isPending
@@ -154,8 +154,8 @@ function PersonaForm({
       gitName: gitName.trim() || undefined,
       gitEmail: gitEmail.trim() || undefined,
     }
-    if (persona)
-      update.mutate({ params: { path: { env, id: persona.id } }, body })
+    if (teammate)
+      update.mutate({ params: { path: { env, id: teammate.id } }, body })
     else create.mutate({ params: { path: { env } }, body })
   }
 
@@ -168,7 +168,7 @@ function PersonaForm({
       }}
     >
       <DialogHeader>
-        <DialogTitle>{persona ? "Edit persona" : "Add persona"}</DialogTitle>
+        <DialogTitle>{teammate ? "Edit teammate" : "Add a teammate"}</DialogTitle>
         <DialogDescription>
           An agent identity: who it is, the harness it runs in, the model it
           uses and the name it commits under.
@@ -176,9 +176,9 @@ function PersonaForm({
       </DialogHeader>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="persona-name">Name</FieldLabel>
+          <FieldLabel htmlFor="teammate-name">Name</FieldLabel>
           <Input
-            id="persona-name"
+            id="teammate-name"
             autoFocus
             autoComplete="off"
             maxLength={64}
@@ -188,9 +188,9 @@ function PersonaForm({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="persona-role">Role</FieldLabel>
+          <FieldLabel htmlFor="teammate-role">Role</FieldLabel>
           <Input
-            id="persona-role"
+            id="teammate-role"
             autoComplete="off"
             maxLength={200}
             placeholder="Code reviewer"
@@ -200,7 +200,7 @@ function PersonaForm({
         </Field>
       </div>
       <Field>
-        <FieldLabel htmlFor="persona-provider">Provider</FieldLabel>
+        <FieldLabel htmlFor="teammate-provider">Provider</FieldLabel>
         <Select
           value={providerId}
           onValueChange={(v) => {
@@ -214,7 +214,7 @@ function PersonaForm({
           }}
           items={Object.fromEntries(providers.map((p) => [p.id, p.name]))}
         >
-          <SelectTrigger id="persona-provider" className="w-full">
+          <SelectTrigger id="teammate-provider" className="w-full">
             <SelectValue placeholder="Add a provider first" />
           </SelectTrigger>
           <SelectContent>
@@ -252,9 +252,9 @@ function PersonaForm({
         </FieldDescription>
       </Field>
       <Field>
-        <FieldLabel htmlFor="persona-model">Model</FieldLabel>
+        <FieldLabel htmlFor="teammate-model">Model</FieldLabel>
         <Input
-          id="persona-model"
+          id="teammate-model"
           className="font-mono"
           autoComplete="off"
           spellCheck={false}
@@ -272,20 +272,20 @@ function PersonaForm({
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="persona-git-name">Git name</FieldLabel>
+          <FieldLabel htmlFor="teammate-git-name">Git name</FieldLabel>
           <Input
-            id="persona-git-name"
+            id="teammate-git-name"
             autoComplete="off"
             maxLength={100}
-            placeholder={name.trim() || "The persona's name"}
+            placeholder={name.trim() || "The teammate's name"}
             value={gitName}
             onChange={(e) => setGitName(e.target.value)}
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="persona-git-email">Git email</FieldLabel>
+          <FieldLabel htmlFor="teammate-git-email">Git email</FieldLabel>
           <Input
-            id="persona-git-email"
+            id="teammate-git-email"
             autoComplete="off"
             spellCheck={false}
             maxLength={254}
@@ -296,9 +296,9 @@ function PersonaForm({
         </Field>
       </div>
       <Field data-invalid={soulBytes > maxSoulBytes || undefined}>
-        <FieldLabel htmlFor="persona-soul">Soul</FieldLabel>
+        <FieldLabel htmlFor="teammate-soul">Soul</FieldLabel>
         <textarea
-          id="persona-soul"
+          id="teammate-soul"
           rows={8}
           spellCheck
           placeholder={"# Ada\n\nYou review changes carefully and explain why."}
@@ -319,7 +319,7 @@ function PersonaForm({
       <DialogFooter>
         <Button type="submit" disabled={!valid || saving}>
           {saving && <Spinner />}
-          {persona ? "Save" : "Add persona"}
+          {teammate ? "Save" : "Add a teammate"}
         </Button>
       </DialogFooter>
     </form>

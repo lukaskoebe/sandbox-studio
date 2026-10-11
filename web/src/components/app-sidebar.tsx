@@ -54,7 +54,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
-import { PersonaAvatar } from "@/components/persona-avatar"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { StatusDot } from "@/components/status-badge"
 import { $api, errorMessage } from "@/lib/api/client"
 
@@ -70,10 +70,10 @@ export function AppSidebar({ env }: { env: string }) {
   const updates = $api.useQuery("get", "/api/system/updates", undefined, {
     refetchInterval: 60 * 60 * 1000,
   })
-  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
-  const owners = new Map(personas.data?.map((p) => [p.id, p.name]))
+  const owners = new Map(teammates.data?.map((p) => [p.id, p.name]))
   const matchRoute = useMatchRoute()
 
   return (
@@ -148,14 +148,14 @@ export function AppSidebar({ env }: { env: string }) {
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
-                tooltip="Personas"
+                tooltip="Teammates"
                 isActive={
-                  !!matchRoute({ to: "/e/$env/personas", params: { env } })
+                  !!matchRoute({ to: "/e/$env/teammates", params: { env } })
                 }
-                render={<Link to="/e/$env/personas" params={{ env }} />}
+                render={<Link to="/e/$env/teammates" params={{ env }} />}
               >
                 <RobotIcon />
-                <span>Personas</span>
+                <span>Teammates</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
@@ -229,9 +229,9 @@ export function AppSidebar({ env }: { env: string }) {
                       />
                     }
                   >
-                    {sb.personaId && owners.has(sb.personaId) ? (
-                      <PersonaAvatar
-                        name={owners.get(sb.personaId) ?? ""}
+                    {sb.teammateId && owners.has(sb.teammateId) ? (
+                      <TeammateAvatar
+                        name={owners.get(sb.teammateId) ?? ""}
                         className="size-4 text-[0.5rem]"
                       />
                     ) : (

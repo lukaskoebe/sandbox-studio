@@ -33,34 +33,34 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { PageHeader } from "@/components/page-header"
-import { PersonaAvatar } from "@/components/persona-avatar"
-import { PersonaDialog } from "@/components/persona-dialog"
+import { TeammateAvatar } from "@/components/teammate-avatar"
+import { TeammateDialog } from "@/components/teammate-dialog"
 import {
   $api,
   errorMessage,
-  type Persona,
+  type Teammate,
   type Provider,
 } from "@/lib/api/client"
-import { harnessLabels } from "@/lib/personas"
+import { harnessLabels } from "@/lib/teammates"
 
-export const Route = createFileRoute("/e/$env/personas")({
-  component: PersonasPage,
+export const Route = createFileRoute("/e/$env/teammates")({
+  component: TeammatesPage,
 })
 
 const explanation =
-  "Personas are the agents of an environment: a name, a role and a soul, the harness they run in, the provider and model they use, and the identity they commit under. Sandboxes can belong to a persona, and network rules can be scoped to one."
+  "Teammates are the agents of an environment: a name, a role and a soul, the harness they run in, the provider and model they use, and the identity they commit under. Sandboxes can belong to a teammate, and network rules can be scoped to one."
 
-function PersonasPage() {
+function TeammatesPage() {
   const { env } = Route.useParams()
-  // The open dialog: an empty object adds a persona, a persona edits it, null is closed.
-  const [dialog, setDialog] = useState<{ persona?: Persona } | null>(null)
-  const personas = $api.useQuery("get", "/api/environments/{env}/personas", {
+  // The open dialog: an empty object adds a teammate, a teammate edits it, null is closed.
+  const [dialog, setDialog] = useState<{ teammate?: Teammate } | null>(null)
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  const list = personas.data ?? []
+  const list = teammates.data ?? []
   const providerList = providers.data ?? []
   const providerById = new Map(providerList.map((p) => [p.id, p]))
   const canAdd = providerList.length > 0
@@ -73,21 +73,21 @@ function PersonasPage() {
       onClick={() => setDialog({})}
     >
       <PlusIcon />
-      Add persona
+      Add a teammate
     </Button>
   )
 
   return (
     <>
       <PageHeader>
-        <h1 className="text-sm font-medium">Personas</h1>
+        <h1 className="text-sm font-medium">Teammates</h1>
         <div className="ml-auto">{addButton}</div>
       </PageHeader>
       <div className="flex-1 space-y-6 overflow-auto p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           {explanation}
         </p>
-        {personas.isPending || providers.isPending ? (
+        {teammates.isPending || providers.isPending ? (
           <Spinner className="mx-auto block" />
         ) : list.length ? (
           <div className="rounded-lg ring-1 ring-foreground/10">
@@ -110,7 +110,7 @@ function PersonasPage() {
                   <TableRow key={p.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <PersonaAvatar name={p.name} />
+                        <TeammateAvatar name={p.name} />
                         <div className="min-w-0">
                           <div className="font-medium">{p.name}</div>
                           <div className="max-w-56 truncate text-muted-foreground">
@@ -134,7 +134,7 @@ function PersonasPage() {
                     </TableCell>
                     <TableCell>
                       <Readiness
-                        persona={p}
+                        teammate={p}
                         provider={providerById.get(p.providerId)}
                       />
                     </TableCell>
@@ -148,12 +148,12 @@ function PersonasPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="Edit persona"
-                          onClick={() => setDialog({ persona: p })}
+                          title="Edit teammate"
+                          onClick={() => setDialog({ teammate: p })}
                         >
                           <PencilSimpleIcon />
                         </Button>
-                        <DeletePersona env={env} persona={p} />
+                        <DeleteTeammate env={env} teammate={p} />
                       </div>
                     </TableCell>
                   </TableRow>
@@ -164,13 +164,13 @@ function PersonasPage() {
         ) : (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>No personas yet</EmptyTitle>
+              <EmptyTitle>No teammates yet</EmptyTitle>
               <EmptyDescription>
                 {canAdd ? (
                   explanation
                 ) : (
                   <>
-                    A persona needs a provider for its model.{" "}
+                    A teammate needs a provider for its model.{" "}
                     <Link to="/e/$env/providers" params={{ env }}>
                       Add a provider
                     </Link>{" "}
@@ -183,9 +183,9 @@ function PersonasPage() {
           </Empty>
         )}
       </div>
-      <PersonaDialog
+      <TeammateDialog
         env={env}
-        persona={dialog?.persona}
+        teammate={dialog?.teammate}
         providers={providerList}
         open={dialog !== null}
         onOpenChange={(open) => {
@@ -196,22 +196,28 @@ function PersonasPage() {
   )
 }
 
-function DeletePersona({ env, persona }: { env: string; persona: Persona }) {
+function DeleteTeammate({
+  env,
+  teammate,
+}: {
+  env: string
+  teammate: Teammate
+}) {
   const queryClient = useQueryClient()
   const remove = $api.useMutation(
     "delete",
-    "/api/environments/{env}/personas/{id}",
+    "/api/environments/{env}/teammates/{id}",
     {
       onSettled: () => {
         queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/personas"],
+          queryKey: ["get", "/api/environments/{env}/teammates"],
         })
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/rules"],
         })
       },
       onError: (err) =>
-        toast.error("Could not delete the persona", {
+        toast.error("Could not delete the teammate", {
           description: errorMessage(err),
         }),
     }
@@ -221,17 +227,17 @@ function DeletePersona({ env, persona }: { env: string; persona: Persona }) {
     <AlertDialog>
       <AlertDialogTrigger
         render={
-          <Button variant="ghost" size="icon-sm" title="Delete persona" />
+          <Button variant="ghost" size="icon-sm" title="Delete teammate" />
         }
       >
         <TrashIcon />
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {persona.name}?</AlertDialogTitle>
+          <AlertDialogTitle>Delete {teammate.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Network rules scoped to {persona.name} are deleted too. Sandboxes it
-            owns must be deleted first.
+            Network rules scoped to {teammate.name} are deleted too. Sandboxes
+            it owns must be deleted first.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -240,7 +246,7 @@ function DeletePersona({ env, persona }: { env: string; persona: Persona }) {
             variant="destructive"
             disabled={remove.isPending}
             onClick={() =>
-              remove.mutate({ params: { path: { env, id: persona.id } } })
+              remove.mutate({ params: { path: { env, id: teammate.id } } })
             }
           >
             {remove.isPending && <Spinner />}
@@ -253,14 +259,14 @@ function DeletePersona({ env, persona }: { env: string; persona: Persona }) {
 }
 
 /**
- * Whether the persona's agent sessions can start: its harness is in the base image, so it
+ * Whether the teammate's agent sessions can start: its harness is in the base image, so it
  * comes down to the provider being able to run that harness with a key.
  */
 function Readiness({
-  persona,
+  teammate,
   provider,
 }: {
-  persona: Persona
+  teammate: Teammate
   provider?: Provider
 }) {
   if (!provider) return null
@@ -274,17 +280,17 @@ function Readiness({
       </Badge>
     )
   }
-  if (!(provider.harnesses ?? []).includes(persona.harness)) {
+  if (!(provider.harnesses ?? []).includes(teammate.harness)) {
     return (
       <Badge variant="outline">
-        {provider.name} can't run {harnessLabels[persona.harness]}
+        {provider.name} can't run {harnessLabels[teammate.harness]}
       </Badge>
     )
   }
   return (
     <Badge
       variant="secondary"
-      title={`${harnessLabels[persona.harness]} reads the key from ${provider.envVar}`}
+      title={`${harnessLabels[teammate.harness]} reads the key from ${provider.envVar}`}
     >
       Ready
     </Badge>

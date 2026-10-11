@@ -12,15 +12,15 @@ function initials(name: string) {
   return letters.map((w) => Array.from(w)[0]?.toUpperCase() ?? "").join("")
 }
 
-/** A hue derived from the name, so a persona keeps its color everywhere. */
+/** A hue derived from the name, so a teammate keeps its color everywhere. */
 function hue(name: string) {
   let h = 0
   for (const c of name) h = (h * 31 + (c.codePointAt(0) ?? 0)) % 360
   return h
 }
 
-/** A persona's initials on a color derived from its name. */
-export function PersonaAvatar({
+/** A teammate's initials on a color derived from its name. */
+export function TeammateAvatar({
   name,
   className,
 }: {
@@ -41,30 +41,30 @@ export function PersonaAvatar({
   )
 }
 
-/** The persona owning a sandbox, as an avatar and name; nothing for an unowned sandbox. */
+/** The teammate owning a sandbox, as an avatar and name; nothing for an unowned sandbox. */
 export function SandboxOwner({
   env,
-  personaId,
+  teammateId,
   className,
 }: {
   env: string
-  personaId?: string
+  teammateId?: string
   className?: string
 }) {
-  const personas = $api.useQuery(
+  const teammates = $api.useQuery(
     "get",
-    "/api/environments/{env}/personas",
+    "/api/environments/{env}/teammates",
     { params: { path: { env } } },
-    { enabled: !!personaId }
+    { enabled: !!teammateId }
   )
-  if (!personaId) return null
-  const name = personas.data?.find((p) => p.id === personaId)?.name ?? "…"
+  if (!teammateId) return null
+  const name = teammates.data?.find((p) => p.id === teammateId)?.name ?? "…"
   return (
     <span
       className={cn("inline-flex min-w-0 items-center gap-1.5", className)}
       title={`Owned by ${name}`}
     >
-      <PersonaAvatar name={name} className="size-5 text-[0.5625rem]" />
+      <TeammateAvatar name={name} className="size-5 text-[0.5625rem]" />
       <span className="truncate">{name}</span>
     </span>
   )

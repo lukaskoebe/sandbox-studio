@@ -17,10 +17,10 @@ import { Route as EEnvBuildsRouteImport } from './routes/e.$env.builds'
 import { Route as EEnvGitRouteImport } from './routes/e.$env.git'
 import { Route as EEnvMemoryRouteImport } from './routes/e.$env.memory'
 import { Route as EEnvNetworkRouteImport } from './routes/e.$env.network'
-import { Route as EEnvPersonasRouteImport } from './routes/e.$env.personas'
 import { Route as EEnvProvidersRouteImport } from './routes/e.$env.providers'
 import { Route as EEnvSecretsRouteImport } from './routes/e.$env.secrets'
 import { Route as EEnvSettingsRouteImport } from './routes/e.$env.settings'
+import { Route as EEnvTeammatesRouteImport } from './routes/e.$env.teammates'
 import { Route as EEnvSandboxesIdRouteImport } from './routes/e.$env.sandboxes.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -63,11 +63,6 @@ const EEnvNetworkRoute = EEnvNetworkRouteImport.update({
   path: '/network',
   getParentRoute: () => EEnvRoute,
 } as any)
-const EEnvPersonasRoute = EEnvPersonasRouteImport.update({
-  id: '/personas',
-  path: '/personas',
-  getParentRoute: () => EEnvRoute,
-} as any)
 const EEnvProvidersRoute = EEnvProvidersRouteImport.update({
   id: '/providers',
   path: '/providers',
@@ -81,6 +76,11 @@ const EEnvSecretsRoute = EEnvSecretsRouteImport.update({
 const EEnvSettingsRoute = EEnvSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvTeammatesRoute = EEnvTeammatesRouteImport.update({
+  id: '/teammates',
+  path: '/teammates',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSandboxesIdRoute = EEnvSandboxesIdRouteImport.update({
@@ -97,10 +97,10 @@ export interface FileRoutesByFullPath {
   '/e/$env/git': typeof EEnvGitRoute
   '/e/$env/memory': typeof EEnvMemoryRoute
   '/e/$env/network': typeof EEnvNetworkRoute
-  '/e/$env/personas': typeof EEnvPersonasRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRoute
+  '/e/$env/teammates': typeof EEnvTeammatesRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRoute
 }
@@ -111,10 +111,10 @@ export interface FileRoutesByTo {
   '/e/$env/git': typeof EEnvGitRoute
   '/e/$env/memory': typeof EEnvMemoryRoute
   '/e/$env/network': typeof EEnvNetworkRoute
-  '/e/$env/personas': typeof EEnvPersonasRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRoute
+  '/e/$env/teammates': typeof EEnvTeammatesRoute
   '/e/$env': typeof EEnvIndexRoute
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRoute
 }
@@ -127,10 +127,10 @@ export interface FileRoutesById {
   '/e/$env/git': typeof EEnvGitRoute
   '/e/$env/memory': typeof EEnvMemoryRoute
   '/e/$env/network': typeof EEnvNetworkRoute
-  '/e/$env/personas': typeof EEnvPersonasRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRoute
+  '/e/$env/teammates': typeof EEnvTeammatesRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRoute
 }
@@ -144,10 +144,10 @@ export interface FileRouteTypes {
     | '/e/$env/git'
     | '/e/$env/memory'
     | '/e/$env/network'
-    | '/e/$env/personas'
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env/settings'
+    | '/e/$env/teammates'
     | '/e/$env/'
     | '/e/$env/sandboxes/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -158,10 +158,10 @@ export interface FileRouteTypes {
     | '/e/$env/git'
     | '/e/$env/memory'
     | '/e/$env/network'
-    | '/e/$env/personas'
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env/settings'
+    | '/e/$env/teammates'
     | '/e/$env'
     | '/e/$env/sandboxes/$id'
   id:
@@ -173,10 +173,10 @@ export interface FileRouteTypes {
     | '/e/$env/git'
     | '/e/$env/memory'
     | '/e/$env/network'
-    | '/e/$env/personas'
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env/settings'
+    | '/e/$env/teammates'
     | '/e/$env/'
     | '/e/$env/sandboxes/$id'
   fileRoutesById: FileRoutesById
@@ -244,13 +244,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvNetworkRouteImport
       parentRoute: typeof EEnvRoute
     }
-    '/e/$env/personas': {
-      id: '/e/$env/personas'
-      path: '/personas'
-      fullPath: '/e/$env/personas'
-      preLoaderRoute: typeof EEnvPersonasRouteImport
-      parentRoute: typeof EEnvRoute
-    }
     '/e/$env/providers': {
       id: '/e/$env/providers'
       path: '/providers'
@@ -272,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvSettingsRouteImport
       parentRoute: typeof EEnvRoute
     }
+    '/e/$env/teammates': {
+      id: '/e/$env/teammates'
+      path: '/teammates'
+      fullPath: '/e/$env/teammates'
+      preLoaderRoute: typeof EEnvTeammatesRouteImport
+      parentRoute: typeof EEnvRoute
+    }
     '/e/$env/sandboxes/$id': {
       id: '/e/$env/sandboxes/$id'
       path: '/sandboxes/$id'
@@ -288,10 +288,10 @@ interface EEnvRouteChildren {
   EEnvGitRoute: typeof EEnvGitRoute
   EEnvMemoryRoute: typeof EEnvMemoryRoute
   EEnvNetworkRoute: typeof EEnvNetworkRoute
-  EEnvPersonasRoute: typeof EEnvPersonasRoute
   EEnvProvidersRoute: typeof EEnvProvidersRoute
   EEnvSecretsRoute: typeof EEnvSecretsRoute
   EEnvSettingsRoute: typeof EEnvSettingsRoute
+  EEnvTeammatesRoute: typeof EEnvTeammatesRoute
   EEnvIndexRoute: typeof EEnvIndexRoute
   EEnvSandboxesIdRoute: typeof EEnvSandboxesIdRoute
 }
@@ -302,10 +302,10 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvGitRoute: EEnvGitRoute,
   EEnvMemoryRoute: EEnvMemoryRoute,
   EEnvNetworkRoute: EEnvNetworkRoute,
-  EEnvPersonasRoute: EEnvPersonasRoute,
   EEnvProvidersRoute: EEnvProvidersRoute,
   EEnvSecretsRoute: EEnvSecretsRoute,
   EEnvSettingsRoute: EEnvSettingsRoute,
+  EEnvTeammatesRoute: EEnvTeammatesRoute,
   EEnvIndexRoute: EEnvIndexRoute,
   EEnvSandboxesIdRoute: EEnvSandboxesIdRoute,
 }

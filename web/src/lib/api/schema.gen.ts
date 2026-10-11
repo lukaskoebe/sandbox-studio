@@ -310,7 +310,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Proposes a persona's fact for shared memory through a memory.share approval. */
+        /** @description Proposes a teammate's fact for shared memory through a memory.share approval. */
         post: operations["promoteMemoryFact"];
         delete?: never;
         options?: never;
@@ -393,7 +393,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The shared scope, always first, and every persona scope that holds facts or pages. */
+        /** @description The shared scope, always first, and every teammate scope that holds facts or pages. */
         get: operations["listMemoryScopes"];
         put?: never;
         post?: never;
@@ -471,137 +471,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/environments/{env}/personas": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listPersonas"];
-        put?: never;
-        post: operations["createPersona"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/environments/{env}/personas/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getPersona"];
-        put: operations["updatePersona"];
-        post?: never;
-        /** @description Deletes the persona and the network rules scoped to it. Refused while it owns sandboxes. */
-        delete: operations["deletePersona"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/environments/{env}/personas/{persona}/browser": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getBrowser"];
-        put?: never;
-        post?: never;
-        /** @description Deletes the browser VM with its profile: cookies and logins. The action log stays. */
-        delete: operations["deleteBrowser"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/environments/{env}/personas/{persona}/browser/actions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The browser's action log, newest first. Screenshots are at .../actions/{id}/screenshot. */
-        get: operations["listBrowserActions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/environments/{env}/personas/{persona}/browser/patterns": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["listBrowserPatterns"];
-        put?: never;
-        post: operations["createBrowserPattern"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/environments/{env}/personas/{persona}/browser/patterns/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["deleteBrowserPattern"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/environments/{env}/personas/{persona}/browser/takeover": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put: operations["setBrowserTakeover"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/environments/{env}/personas/{persona}/browser/{action}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["controlBrowser"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/environments/{env}/providers": {
         parameters: {
             query?: never;
@@ -630,7 +499,7 @@ export interface paths {
         /** @description The name and kind are fixed at creation. Omitted fields keep their values. */
         put: operations["updateProvider"];
         post?: never;
-        /** @description Deletes the provider and its key. Refused while a persona uses the provider. */
+        /** @description Deletes the provider and its key. Refused while a teammate uses the provider. */
         delete: operations["deleteProvider"];
         options?: never;
         head?: never;
@@ -945,7 +814,7 @@ export interface paths {
         /** @description The agent sessions running in a sandbox: its terminals that run a harness. */
         get: operations["listSessions"];
         put?: never;
-        /** @description Starts the owner persona's harness in a new tmux session, after writing its config, instructions and git identity into the agent user's home. Attach like any terminal. */
+        /** @description Starts the owner teammate's harness in a new tmux session, after writing its config, instructions and git identity into the agent user's home. Attach like any terminal. */
         post: operations["startSession"];
         delete?: never;
         options?: never;
@@ -1080,6 +949,137 @@ export interface paths {
         put: operations["updateSecret"];
         post?: never;
         delete: operations["deleteSecret"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listTeammates"];
+        put?: never;
+        post: operations["createTeammate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTeammate"];
+        put: operations["updateTeammate"];
+        post?: never;
+        /** @description Deletes the teammate and the network rules scoped to it. Refused while it owns sandboxes. */
+        delete: operations["deleteTeammate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getBrowser"];
+        put?: never;
+        post?: never;
+        /** @description Deletes the browser VM with its profile: cookies and logins. The action log stays. */
+        delete: operations["deleteBrowser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The browser's action log, newest first. Screenshots are at .../actions/{id}/screenshot. */
+        get: operations["listBrowserActions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listBrowserPatterns"];
+        put?: never;
+        post: operations["createBrowserPattern"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser/patterns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteBrowserPattern"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser/takeover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setBrowserTakeover"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["controlBrowser"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1228,12 +1228,12 @@ export interface components {
             label?: string;
             /** @description scheme://host[:port] of the page */
             origin: string;
-            personaId: string;
-            personaName: string;
             /** @description Accessibility role of the element */
             role?: string;
             sandboxId: string;
             sandboxName: string;
+            teammateId: string;
+            teammateName: string;
             /** @description What the agent wants to type or select */
             text?: string;
             url: string;
@@ -1258,7 +1258,7 @@ export interface components {
             kind: string;
             /** @description Two facts that disagree */
             memoryConflict?: components["schemas"]["ConflictPayload"];
-            /** @description A persona's proposal for shared memory */
+            /** @description A teammate's proposal for shared memory */
             memoryShare?: components["schemas"]["SharePayload"];
             network?: components["schemas"]["NetworkRequest"];
             ruleId?: string;
@@ -1290,7 +1290,6 @@ export interface components {
             id: number;
             /** @enum {string} */
             outcome: "ok" | "denied" | "pending" | "failed";
-            personaId: string;
             /** @description The agent sandbox that drove the action; empty for the user */
             sandboxId?: string;
             /** @description File name of the screenshot taken after the action */
@@ -1298,6 +1297,7 @@ export interface components {
             sessionId: string;
             /** @description The element, as role and accessible name */
             target?: string;
+            teammateId: string;
             url?: string;
         };
         BrowserPattern: {
@@ -1311,9 +1311,9 @@ export interface components {
             label: string;
             /** @description scheme://host[:port]; the host may start with *. */
             origin: string;
-            personaId: string;
             /** @description Accessibility role of the element; empty matches any */
             role: string;
+            teammateId: string;
             /** @enum {string} */
             verdict: "allow" | "deny" | "sensitive";
         };
@@ -1331,11 +1331,11 @@ export interface components {
         BrowserStatus: {
             /** @description Name of the agent sandbox that drove the browser last */
             driver?: string;
-            personaId: string;
             /** @description The current run's session in the action log */
             sessionId?: string;
             /** @description The user drives; agent calls are paused */
             takeover: boolean;
+            teammateId: string;
             /** @description The page the broker last saw */
             url?: string;
             /**
@@ -1549,8 +1549,8 @@ export interface components {
             /** Format: int64 */
             memoryMiB?: number;
             name: string;
-            /** @description The persona that owns the sandbox; omit for an unowned sandbox */
-            personaId?: string;
+            /** @description The teammate that owns the sandbox; omit for an unowned sandbox */
+            teammateId?: string;
             /** Format: int64 */
             workspaceMiB?: number;
         };
@@ -1565,20 +1565,20 @@ export interface components {
         };
         CreateTemplateSandboxInBody: {
             name: string;
-            /** @description The persona that owns the sandbox; omit for an unowned sandbox */
-            personaId?: string;
+            /** @description The teammate that owns the sandbox; omit for an unowned sandbox */
+            teammateId?: string;
         };
         CredentialPayload: {
             /** @description Name of the vault secret */
             credential: string;
             label?: string;
             origin: string;
-            personaId: string;
-            personaName: string;
             ref: string;
             role?: string;
             sandboxId: string;
             sandboxName: string;
+            teammateId: string;
+            teammateName: string;
             url: string;
         };
         DecideInBody: {
@@ -1596,11 +1596,11 @@ export interface components {
             /** @description For browser.action: allow (or deny) the action on the origin from now on */
             remember?: boolean;
             /**
-             * @description Whether the rule covers only the requesting sandbox, the sandboxes of its persona, or the environment
+             * @description Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment
              * @default environment
              * @enum {string}
              */
-            scope: "sandbox" | "persona" | "environment";
+            scope: "sandbox" | "teammate" | "environment";
         };
         DoctorReport: {
             /** Format: date-time */
@@ -1613,7 +1613,7 @@ export interface components {
             status: "ok" | "warn" | "fail";
         };
         DreamInBody: {
-            /** @description shared or persona:<id> */
+            /** @description shared or teammate:<id> */
             scope: string;
         };
         DreamRun: {
@@ -1691,8 +1691,6 @@ export interface components {
              * @description Pairs of related facts to judge
              */
             pairs: number;
-            /** @description ID of the persona whose provider's utility model judged */
-            persona?: string;
             /**
              * Format: int64
              * @description Judge answers rejected as malformed; nothing was changed for them
@@ -1700,6 +1698,8 @@ export interface components {
             rejected: number;
             /** Format: int64 */
             superseded: number;
+            /** @description ID of the teammate whose provider's utility model judged */
+            teammate?: string;
         };
         Environment: {
             /** Format: date-time */
@@ -1750,7 +1750,7 @@ export interface components {
         };
         Fact: {
             attribute?: string;
-            authorPersona?: string;
+            authorTeammate?: string;
             /** Format: double */
             confidence: number;
             /** Format: date-time */
@@ -1859,7 +1859,6 @@ export interface components {
             note?: string;
             oldSha: string;
             owner: string;
-            personaName?: string;
             prApprovalId?: string;
             prResult?: string;
             prUrl?: string;
@@ -1870,6 +1869,7 @@ export interface components {
             sandboxId: string;
             /** @enum {string} */
             state: "pending" | "pushed" | "failed" | "rejected" | "superseded";
+            teammateName?: string;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -1883,7 +1883,7 @@ export interface components {
             disputed?: boolean;
             fact?: components["schemas"]["Fact"];
             id: string;
-            /** @description A shared fact this persona fact has an open conflict with; the shared fact wins until the user resolves it */
+            /** @description A shared fact this teammate fact has an open conflict with; the shared fact wins until the user resolves it */
             overriddenBy?: string;
             page?: components["schemas"]["Page"];
             scope: string;
@@ -1916,11 +1916,11 @@ export interface components {
             itemType?: string;
             /** @enum {string} */
             kind: "context" | "recall" | "write" | "extraction" | "tool";
-            personaId: string;
             /** Format: double */
             score?: number;
             sessionId?: string;
             summary: string;
+            teammateId: string;
             /** @description Why it happened: the search explanation, threshold or extraction details */
             why?: unknown;
         };
@@ -1935,14 +1935,14 @@ export interface components {
         Page: {
             /** @description A core page, loaded into every session of the scope */
             alwaysLoad: boolean;
-            authorPersona?: string;
+            authorTeammate?: string;
             /** @description The compiled truth: a regenerated synthesis, as markdown */
             compiled: string;
             /** Format: date-time */
             createdAt: string;
             id: string;
             /** @enum {string} */
-            kind: "person" | "project" | "topic" | "procedure" | "persona-self";
+            kind: "person" | "project" | "topic" | "procedure" | "teammate-self";
             scope: string;
             slug: string;
             /** @enum {string} */
@@ -1957,46 +1957,12 @@ export interface components {
             alwaysLoad?: boolean;
             compiled?: string;
             /** @enum {string} */
-            kind: "person" | "project" | "topic" | "procedure" | "persona-self";
+            kind: "person" | "project" | "topic" | "procedure" | "teammate-self";
             /** @description Required on create */
             scope?: string;
             /** @description Required on create; lowercase words joined by - or /, e.g. project/sandbox-studio */
             slug?: string;
             title: string;
-        };
-        Persona: {
-            /** Format: date-time */
-            createdAt: string;
-            environmentId: string;
-            gitEmail: string;
-            gitName: string;
-            /** @enum {string} */
-            harness: "opencode" | "claude" | "codex";
-            id: string;
-            model: string;
-            name: string;
-            providerId: string;
-            role: string;
-            /** @description Personality and working rules, as markdown */
-            soul: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        PersonaInput: {
-            /** @description Defaults to <slug>@agents.invalid */
-            gitEmail?: string;
-            /** @description Defaults to the name */
-            gitName?: string;
-            /** @enum {string} */
-            harness: "opencode" | "claude" | "codex";
-            /** @description Required for API-key providers; defaults to the model of an OpenAI-compatible provider */
-            model?: string;
-            name: string;
-            providerId: string;
-            /** @description A short description of what the persona does */
-            role?: string;
-            /** @description Personality and working rules, as markdown */
-            soul?: string;
         };
         PreviewOpenBody: {
             url: string;
@@ -2026,7 +1992,7 @@ export interface components {
             /** @description The variable guests get the placeholder in */
             envVar?: string;
             environmentId: string;
-            /** @description Harnesses personas using this provider can run */
+            /** @description Harnesses teammates using this provider can run */
             harnesses: ("opencode" | "claude" | "codex")[] | null;
             /** @description Hosts the key is sent to */
             hosts?: string[] | null;
@@ -2083,11 +2049,11 @@ export interface components {
             /** @description The branch on the forge before the push; empty for a new branch */
             old: string;
             owner: string;
-            /** @description The persona owning the sandbox; empty for unowned sandboxes */
-            persona?: string;
             repo: string;
             /** @description The sandbox's name */
             sandbox: string;
+            /** @description The teammate owning the sandbox; empty for unowned sandboxes */
+            teammate?: string;
         };
         RebaseInBody: {
             /** @description A ready template in the same environment */
@@ -2116,11 +2082,11 @@ export interface components {
             host: string;
             id: string;
             note: string;
-            /** @description Set for rules that apply to every sandbox of one persona */
-            personaId?: string;
             /** @description Empty means any port */
             ports: number[] | null;
             sandboxId?: string;
+            /** @description Set for rules that apply to every sandbox of one teammate */
+            teammateId?: string;
         };
         RuleConfig: {
             caddyfile?: string;
@@ -2146,12 +2112,12 @@ export interface components {
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
             note?: string;
-            /** @description Limits the rule to the sandboxes one persona of this environment owns; excludes sandboxId */
-            personaId?: string;
             /** @description Empty or omitted means any port */
             ports?: number[] | null;
             /** @description Limits the rule to one sandbox of this environment */
             sandboxId?: string;
+            /** @description Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId */
+            teammateId?: string;
         };
         SandboxImport: {
             buildJobId?: string;
@@ -2217,13 +2183,13 @@ export interface components {
             injections: number;
             /** Format: date-time */
             lastEventAt: string;
-            personaId: string;
             sandboxId: string;
             sandboxName: string;
             /** @description The harness's session ID; "tools" for tool calls outside a hooked session */
             sessionRef: string;
             /** Format: date-time */
             startedAt: string;
+            teammateId: string;
             /** Format: int64 */
             writes: number;
         };
@@ -2231,22 +2197,22 @@ export interface components {
             attribute?: string;
             entityIds: string[] | null;
             evidence?: string;
-            /** @description The persona's own fact, when it shared one */
+            /** @description The teammate's own fact, when it shared one */
             factId?: string;
             kind: string;
-            personaId: string;
-            personaName: string;
             sessionRef?: string;
+            teammateId: string;
+            teammateName: string;
             text: string;
             tier: string;
         };
         SharedJudge: {
             model: string;
-            personaId: string;
-            personaName: string;
+            teammateId: string;
+            teammateName: string;
         };
         Source: {
-            authorPersona?: string;
+            authorTeammate?: string;
             /** Format: date-time */
             createdAt: string;
             /** @description A short quote; full transcripts are never stored */
@@ -2265,6 +2231,40 @@ export interface components {
             /** @description true: the user drives and agent calls pause; false: hand back to the agents */
             on: boolean;
         };
+        Teammate: {
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            gitEmail: string;
+            gitName: string;
+            /** @enum {string} */
+            harness: "opencode" | "claude" | "codex";
+            id: string;
+            model: string;
+            name: string;
+            providerId: string;
+            role: string;
+            /** @description Personality and working rules, as markdown */
+            soul: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TeammateInput: {
+            /** @description Defaults to <slug>@agents.invalid */
+            gitEmail?: string;
+            /** @description Defaults to the name */
+            gitName?: string;
+            /** @enum {string} */
+            harness: "opencode" | "claude" | "codex";
+            /** @description Required for API-key providers; defaults to the model of an OpenAI-compatible provider */
+            model?: string;
+            name: string;
+            providerId: string;
+            /** @description A short description of what the teammate does */
+            role?: string;
+            /** @description Personality and working rules, as markdown */
+            soul?: string;
+        };
         TemplateView: {
             /** Format: date-time */
             createdAt: string;
@@ -2276,7 +2276,7 @@ export interface components {
         TimelineEntry: {
             /** Format: date-time */
             at: string;
-            authorPersona?: string;
+            authorTeammate?: string;
             /** Format: date-time */
             createdAt: string;
             factId?: string;
@@ -2351,7 +2351,7 @@ export interface components {
             budget: components["schemas"]["Budget"];
             /** @description Per provider; empty model means no extraction */
             models: components["schemas"]["UtilityModel"][] | null;
-            /** @description Whose utility model consolidates shared memory: the persona that has had one the longest */
+            /** @description Whose utility model consolidates shared memory: the teammate that has had one the longest */
             sharedJudge?: components["schemas"]["SharedJudge"];
             today: components["schemas"]["Usage"];
         };
@@ -2385,10 +2385,10 @@ export interface components {
             /** Format: int64 */
             memoryMiB: number;
             name: string;
-            /** @description The persona that owns the sandbox; empty for unowned sandboxes */
-            personaId?: string;
             /** @enum {string} */
             status: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed";
+            /** @description The teammate that owns the sandbox; empty for unowned sandboxes */
+            teammateId?: string;
             templateId?: string;
             /** Format: int64 */
             workspaceMiB: number;
@@ -3089,7 +3089,7 @@ export interface operations {
     listMemoryFacts: {
         parameters: {
             query?: {
-                /** @description shared or persona:<id>; empty lists every scope */
+                /** @description shared or teammate:<id>; empty lists every scope */
                 scope?: string;
                 /** @description active, superseded, disputed or retracted; empty lists every status */
                 status?: string;
@@ -3329,7 +3329,7 @@ export interface operations {
     listMemoryPages: {
         parameters: {
             query?: {
-                /** @description shared or persona:<id>; empty lists every scope */
+                /** @description shared or teammate:<id>; empty lists every scope */
                 scope?: string;
             };
             header?: never;
@@ -3572,8 +3572,8 @@ export interface operations {
         parameters: {
             query: {
                 q: string;
-                /** @description Searches this persona's private scope plus shared; empty searches shared only */
-                persona?: string;
+                /** @description Searches this teammate's private scope plus shared; empty searches shared only */
+                teammate?: string;
                 /** @description Also return superseded and expired facts, marked as such */
                 includeSuperseded?: boolean;
                 /** @description Defaults to 10 */
@@ -3611,8 +3611,8 @@ export interface operations {
     listMemorySessions: {
         parameters: {
             query?: {
-                /** @description Only this persona's sessions */
-                persona?: string;
+                /** @description Only this teammate's sessions */
+                teammate?: string;
                 /** @description At most this many, newest first; 50 by default */
                 limit?: number;
             };
@@ -3697,462 +3697,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageView"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    listPersonas: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Persona"][] | null;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    createPersona: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PersonaInput"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Persona"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    getPersona: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Persona"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    updatePersona: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PersonaInput"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Persona"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    deletePersona: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    getBrowser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrowserStatus"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    deleteBrowser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    listBrowserActions: {
-        parameters: {
-            query?: {
-                /** @description Only this session's actions */
-                session?: string;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrowserAction"][] | null;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    listBrowserPatterns: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrowserPattern"][] | null;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    createBrowserPattern: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BrowserPatternInput"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrowserPattern"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    deleteBrowserPattern: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-                /** @description Pattern ID */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    setBrowserTakeover: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TakeoverInBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrowserStatus"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    controlBrowser: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Environment ID */
-                env: string;
-                /** @description Persona ID */
-                persona: string;
-                /** @description start boots the browser VM, stop stops it (its profile stays) */
-                action: "start" | "stop";
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BrowserStatus"];
                 };
             };
             /** @description Error */
@@ -5466,6 +5010,462 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTeammates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeammateInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeammateInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listBrowserActions: {
+        parameters: {
+            query?: {
+                /** @description Only this session's actions */
+                session?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserAction"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listBrowserPatterns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserPattern"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createBrowserPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserPatternInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserPattern"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    deleteBrowserPattern: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+                /** @description Pattern ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setBrowserTakeover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TakeoverInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    controlBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+                /** @description start boots the browser VM, stop stops it (its profile stays) */
+                action: "start" | "stop";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStatus"];
+                };
             };
             /** @description Error */
             default: {
