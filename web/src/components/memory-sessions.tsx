@@ -9,6 +9,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -182,9 +183,12 @@ function SessionLog({ env, id }: { env: string; id: string }) {
               <summary className="cursor-pointer text-muted-foreground">
                 Why
               </summary>
-              <pre className="mt-1 overflow-auto rounded bg-muted/50 p-2 font-mono text-[0.625rem]">
-                {JSON.stringify(e.why, null, 2)}
-              </pre>
+              <ScrollArea className="mt-1 rounded bg-muted/50">
+                <pre className="p-2 font-mono text-[0.625rem]">
+                  {JSON.stringify(e.why, null, 2)}
+                </pre>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
             </details>
           )}
         </li>

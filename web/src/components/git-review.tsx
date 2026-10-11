@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { GitBranchIcon, GitPullRequestIcon } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import {
   Sheet,
   SheetContent,
@@ -165,9 +165,14 @@ export function GitReview({ approval }: { approval: Approval }) {
         <section className="grid gap-1.5">
           <h3 className="text-xs font-medium">{pr.title}</h3>
           {pr.body && (
-            <pre className="max-h-60 overflow-auto rounded-md bg-muted/50 p-2 text-xs/relaxed whitespace-pre-wrap">
-              {pr.body}
-            </pre>
+            <ScrollArea
+              className="rounded-md bg-muted/50"
+              viewportClassName="max-h-60"
+            >
+              <pre className="p-2 text-xs/relaxed whitespace-pre-wrap">
+                {pr.body}
+              </pre>
+            </ScrollArea>
           )}
         </section>
       )}
@@ -276,13 +281,19 @@ function lineClass(line: string) {
 export function UnifiedDiff({ diff }: { diff: string }) {
   if (!diff) return <p className="text-xs text-muted-foreground">No changes.</p>
   return (
-    <pre className="max-h-[60vh] overflow-auto rounded-md bg-muted/40 py-2 font-mono text-[11px]/[1.45] ring-1 ring-foreground/10">
-      {diff.split("\n").map((line, i) => (
-        <div key={i} className={cn("px-2 whitespace-pre", lineClass(line))}>
-          {line || " "}
-        </div>
-      ))}
-    </pre>
+    <ScrollArea
+      className="rounded-md bg-muted/40 ring-1 ring-foreground/10"
+      viewportClassName="max-h-[60vh]"
+    >
+      <pre className="py-2 font-mono text-[11px]/[1.45]">
+        {diff.split("\n").map((line, i) => (
+          <div key={i} className={cn("px-2 whitespace-pre", lineClass(line))}>
+            {line || " "}
+          </div>
+        ))}
+      </pre>
+      <ScrollBar orientation="horizontal" />
+    </ScrollArea>
   )
 }
 
