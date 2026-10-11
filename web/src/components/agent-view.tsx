@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { errorMessage } from "@/lib/api/client"
-import { useAgentView, type AgentView } from "@/lib/api/pending"
+import { useAgentView } from "@/lib/agent-view"
 import { cn } from "@/lib/utils"
 
 const choices = [
@@ -33,7 +33,7 @@ const choices = [
  */
 export function AgentViewOnboarding() {
   const { view, set } = useAgentView()
-  const choose = (v: AgentView) =>
+  const choose = (v: "chat" | "terminal") =>
     set.mutate(v, {
       onError: (err) =>
         toast.error("Could not save your choice", {
@@ -92,7 +92,7 @@ export function AgentViewToggle() {
       value={view ? [view] : []}
       disabled={view === undefined || set.isPending}
       onValueChange={(v) => {
-        const next = v[0] as AgentView | undefined
+        const next = v[0] as "chat" | "terminal" | undefined
         if (next)
           set.mutate(next, {
             onError: (err) =>

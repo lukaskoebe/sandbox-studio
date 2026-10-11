@@ -49,7 +49,6 @@ import {
 } from "@/components/ui/message-scroller"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
-import { openChatInTerminal, returnToChat } from "@/lib/api/pending"
 import { chatTitle, useChat, type Chat, type ChatItem } from "@/lib/chats"
 import { cn } from "@/lib/utils"
 
@@ -329,7 +328,11 @@ function InTerminal({ env, chat }: { env: string; chat: Chat }) {
   const back = async () => {
     setBusy(true)
     try {
-      await returnToChat(env, chat.id)
+      const { error } = await fetchClient.POST(
+        "/api/environments/{env}/chats/{chat}/return",
+        { params: { path: { env, chat: chat.id } } }
+      )
+      if (error) throw error
     } catch (err) {
       toast.error(errorMessage(err))
     } finally {
@@ -370,7 +373,12 @@ function OpenInTerminal({ env, chat }: { env: string; chat: Chat }) {
   const open = async () => {
     setBusy(true)
     try {
-      const { name } = await openChatInTerminal(env, chat.id)
+      const { data, error } = await fetchClient.POST(
+        "/api/environments/{env}/chats/{chat}/terminal",
+        { params: { path: { env, chat: chat.id } } }
+      )
+      if (error) throw error
+      const name = data.session
       void navigate({
         to: "/e/$env/sandboxes/$id",
         params: { env, id: chat.sandboxId },
