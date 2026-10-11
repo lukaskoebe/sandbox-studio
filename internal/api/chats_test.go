@@ -132,6 +132,88 @@ func TestChats(t *testing.T) {
 	}
 }
 
+func TestAnswerQuestionAPIValidation(t *testing.T) {
+	agent := &acptest.Agent{SessionID: "ses_question", Turns: []acptest.Turn{{Steps: []acptest.Step{{Elicit: json.RawMessage(
+		`{"mode":"form","message":"Which database?","requestedSchema":{"type":"object","properties":{"db":{"type":"string","enum":["sqlite","postgres"]}},"required":["db"]}}`)}}}}}
+	h, s, _, env := newChatServer(t, agent)
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+	c := decode[store.Chat](t, do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"set up"}`))
+	base := envBase + "/chats/" + c.ID
+	var question chat.Item
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && question.ID == "" {
+		log := decode[chat.Log](t, do(h, "GET", base, ""))
+		for _, item := range log.Items {
+			if item.Kind == chat.KindQuestion {
+				question = item
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if question.ID == "" {
+		t.Fatal("no question item")
+	}
+	answerURL := base + "/items/" + question.ID + "/answer"
+	if rec := do(h, "POST", answerURL, `{"action":"accept","content":{"db":"mysql"}}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid answer: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", answerURL, `{"action":"accept","content":{"db":"sqlite"}}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("valid answer: %d %s", rec.Code, rec.Body)
+	}
+	waitIdle(t, h, base)
+	if rec := do(h, "POST", answerURL, `{"action":"decline"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("answer after turn: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestChatPermissionDecisionAPIValidation(t *testing.T) {
+	permission := `{"toolCall":{"toolCallId":"t1","title":"Run","kind":"execute"},"options":[{"optionId":"allow","name":"Allow","kind":"allow_always"}]}`
+	agent := &acptest.Agent{SessionID: "ses_permission", Turns: []acptest.Turn{{Steps: []acptest.Step{{Permission: json.RawMessage(permission)}, {WaitCancel: true}}}}}
+	h, s, _, env := newChatServer(t, agent)
+	s.Integrations = append(s.Integrations, s.Chats)
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+	created := do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"run"}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create chat: %d %s", created.Code, created.Body)
+	}
+	c := decode[store.Chat](t, created)
+	var approval store.Approval
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && approval.ID == "" {
+		list, err := s.Store.Approvals(context.Background(), env.ID, store.StatusPending, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range list {
+			if item.Kind == chat.ApprovalKind {
+				approval = item
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if approval.ID == "" {
+		t.Fatal("no permission approval")
+	}
+	decideURL := envBase + "/approvals/" + approval.ID + "/decide"
+	if rec := do(h, "POST", decideURL, `{"action":"deny"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unavailable deny option: %d %s", rec.Code, rec.Body)
+	}
+	if got, _ := s.Store.Approval(context.Background(), env.ID, approval.ID); got.Status != store.StatusPending {
+		t.Fatalf("invalid decision consumed approval: %s", got.Status)
+	}
+	base := envBase + "/chats/" + c.ID
+	if rec := do(h, "POST", base+"/cancel", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("cancel: %d %s", rec.Code, rec.Body)
+	}
+	waitIdle(t, h, base)
+}
+
 // Claude subscriptions can't drive the Agent SDK: chats refuse them with a reason.
 func TestChatsRefuseClaudeSubscription(t *testing.T) {
 	h, s, _, env := newChatServer(t, &acptest.Agent{})

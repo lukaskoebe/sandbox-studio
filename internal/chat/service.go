@@ -52,6 +52,12 @@ var ErrBusy = Conflict("the agent is still working on the last request; stop it 
 // ErrInvalid marks a prompt the agent can't take.
 var ErrInvalid = errors.New("invalid prompt")
 
+// ErrInvalidAnswer marks a question response that does not match its form.
+var ErrInvalidAnswer = errors.New("invalid chat answer")
+
+// ErrInvalidDecision marks a permission decision that cannot be mapped to the agent's options.
+var ErrInvalidDecision = errors.New("invalid chat permission decision")
+
 // Guest is the part of the guest channel chats use: the sandbox manager's Hub.
 type Guest interface {
 	OpenACP(ctx context.Context, id string, req agentproto.StartACP) (io.ReadWriteCloser, error)
@@ -337,6 +343,7 @@ type run struct {
 	turn      store.ChatTurn
 	f         *folder
 	cancelled bool
+	ended     bool
 	done      chan struct{}
 }
 
@@ -502,7 +509,7 @@ func (l *live) write(r *run, changes []change) {
 
 // save inserts or updates an entry.
 func (s *Service) save(t store.ChatTurn, e *entry) error {
-	it := store.ChatItem{ID: e.id, ChatID: t.ChatID, TurnID: t.ID, Kind: e.kind, ToolCallID: e.toolCallID, Status: e.status, Body: encodeBody(e.body)}
+	it := store.ChatItem{ID: e.id, ChatID: t.ChatID, TurnID: t.ID, Kind: e.kind, ToolCallID: e.toolCallID, Status: e.status, ApprovalID: e.approvalID, Body: encodeBody(e.body)}
 	var err error
 	if e.saved {
 		_, err = s.Store.UpdateChatItem(context.Background(), it)
@@ -603,6 +610,9 @@ func (l *live) run(r *run, blocks []acp.ContentBlock) {
 // end closes the turn: the last writes, a marker saying why it stopped, the usage.
 func (l *live) end(r *run, resp acp.PromptResponse, err error) {
 	ctx := context.Background()
+	l.mu.Lock()
+	r.ended = true
+	l.mu.Unlock()
 	l.dismissAsks(r, "the turn ended")
 	l.mu.Lock()
 	l.write(r, r.f.finish())
@@ -676,8 +686,10 @@ func (s *Service) Cancel(ctx context.Context, envID, chatID string) error {
 	}
 	l.mu.Lock()
 	r := l.turn
-	if r != nil {
+	if r != nil && !r.ended {
 		r.cancelled = true
+	} else {
+		r = nil
 	}
 	l.mu.Unlock()
 	if r == nil {

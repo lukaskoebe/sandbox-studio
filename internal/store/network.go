@@ -232,6 +232,78 @@ func (s *Store) RequestApproval(ctx context.Context, a Approval) (out Approval, 
 		return a, false, err
 	}
 	defer tx.Rollback()
+	out, created, err = requestApprovalTx(ctx, tx, a)
+	if err != nil {
+		return out, created, err
+	}
+	return out, created, tx.Commit()
+}
+
+// RequestApprovalAndUpdateChatItem creates an approval and links it to its chat item in
+// the same transaction. A permission approval is not visible without its item link.
+func (s *Store) RequestApprovalAndUpdateChatItem(ctx context.Context, a Approval, it ChatItem) (out Approval, updated ChatItem, created bool, err error) {
+	err = s.inChatTx(ctx, it.ChatID, func(tx *sql.Tx, rev int64) error {
+		var chatEnvironmentID, chatSandboxID string
+		if err := tx.QueryRowContext(ctx, "SELECT environment_id, IFNULL(sandbox_id, '') FROM chats WHERE id = ?", it.ChatID).
+			Scan(&chatEnvironmentID, &chatSandboxID); errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if it.ID == "" || it.Kind != "permission" || a.Kind != "chat.permission" ||
+			a.EnvironmentID != chatEnvironmentID || a.SandboxID != chatSandboxID ||
+			a.Subject != "chat/"+it.ChatID+"/"+it.ID {
+			return ErrConflict
+		}
+		var requestErr error
+		out, created, requestErr = requestApprovalTx(ctx, tx, a)
+		if requestErr != nil {
+			return requestErr
+		}
+		it.ApprovalID = out.ID
+		updated, requestErr = updateChatItemTx(ctx, tx, rev, it)
+		return requestErr
+	})
+	return out, updated, created, err
+}
+
+// DecideApprovalAndUpdateChatItem changes an approval and its chat item atomically.
+func (s *Store) DecideApprovalAndUpdateChatItem(ctx context.Context, envID, id, status, ruleID string, it ChatItem) (updated ChatItem, err error) {
+	err = s.inChatTx(ctx, it.ChatID, func(tx *sql.Tx, rev int64) error {
+		var chatEnvironmentID, chatSandboxID string
+		if err := tx.QueryRowContext(ctx, "SELECT environment_id, IFNULL(sandbox_id, '') FROM chats WHERE id = ?", it.ChatID).
+			Scan(&chatEnvironmentID, &chatSandboxID); errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		var approvalSandboxID, approvalSubject, approvalKind string
+		if err := tx.QueryRowContext(ctx, "SELECT IFNULL(sandbox_id, ''), subject, kind FROM approvals WHERE environment_id = ? AND id = ?", envID, id).
+			Scan(&approvalSandboxID, &approvalSubject, &approvalKind); errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		} else if err != nil {
+			return err
+		}
+		if envID != chatEnvironmentID || approvalSandboxID != chatSandboxID || approvalKind != "chat.permission" ||
+			it.Kind != "permission" || it.ApprovalID != id || approvalSubject != "chat/"+it.ChatID+"/"+it.ID {
+			return ErrConflict
+		}
+		if err := DecideApprovalTx(ctx, tx, envID, id, status, ruleID); err != nil {
+			return err
+		}
+		var updateErr error
+		updated, updateErr = updateChatItemTx(ctx, tx, rev, it)
+		return updateErr
+	})
+	return updated, err
+}
+
+type approvalQuerier interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func requestApprovalTx(ctx context.Context, tx approvalQuerier, a Approval) (out Approval, created bool, err error) {
 	t := now()
 	const match = "environment_id = ? AND IFNULL(sandbox_id, '') = ? AND kind = ? AND subject = ? AND status = 'pending'"
 	res, err := tx.ExecContext(ctx, "UPDATE approvals SET attempts = attempts + 1, updated_at = ? WHERE "+match,
@@ -252,7 +324,7 @@ func (s *Store) RequestApproval(ctx context.Context, a Approval) (out Approval, 
 	if err != nil {
 		return a, false, err
 	}
-	return out, created, tx.Commit()
+	return out, created, nil
 }
 
 // Approval returns one approval of an environment.
@@ -270,6 +342,26 @@ func (s *Store) Approvals(ctx context.Context, envID, status string, limit int) 
 	rows, err := s.db.QueryContext(ctx, "SELECT "+approvalCols+` FROM approvals
 		WHERE (? = '' OR environment_id = ?) AND (? = '' OR status = ?)
 		ORDER BY updated_at DESC LIMIT ?`, envID, envID, status, status, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Approval{}
+	for rows.Next() {
+		a, err := scanApproval(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ApprovalsByKind lists approvals of one kind, newest first.
+func (s *Store) ApprovalsByKind(ctx context.Context, kind, status string, limit int) ([]Approval, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+approvalCols+` FROM approvals
+		WHERE kind = ? AND (? = '' OR status = ?)
+		ORDER BY updated_at DESC LIMIT ?`, kind, status, status, limit)
 	if err != nil {
 		return nil, err
 	}

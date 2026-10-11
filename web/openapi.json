@@ -82,6 +82,10 @@
             "$ref": "#/components/schemas/CredentialPayload",
             "description": "An agent asks Studio to fill a vault credential into a page"
           },
+          "chatPermission": {
+            "$ref": "#/components/schemas/PermissionPayload",
+            "description": "A chat's agent asks to run a tool"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -1314,6 +1318,28 @@
         ],
         "type": "object"
       },
+      "DiffSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "path": {
+            "type": "string"
+          },
+          "removed": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "added",
+          "removed"
+        ],
+        "type": "object"
+      },
       "DoctorReport": {
         "additionalProperties": false,
         "properties": {
@@ -2508,6 +2534,70 @@
         ],
         "type": "object"
       },
+      "PermissionPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "chatId": {
+            "type": "string"
+          },
+          "chatTitle": {
+            "type": "string"
+          },
+          "diffs": {
+            "items": {
+              "$ref": "#/components/schemas/DiffSummary"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "itemId": {
+            "type": "string"
+          },
+          "locations": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallLocation"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionOption"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "teammateName": {
+            "type": "string"
+          },
+          "title": {
+            "description": "The tool call's title",
+            "type": "string"
+          },
+          "toolKind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chatId",
+          "chatTitle",
+          "itemId",
+          "sandboxName",
+          "teammateName",
+          "title",
+          "options"
+        ],
+        "type": "object"
+      },
       "PlanBody": {
         "additionalProperties": false,
         "properties": {
@@ -2875,6 +2965,26 @@
           "deletions",
           "diff",
           "diffTruncated"
+        ],
+        "type": "object"
+      },
+      "QuestionAnswer": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "accept",
+              "decline",
+              "cancel"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "description": "The form's values, for accept: a JSON object matching the question's schema"
+          }
+        },
+        "required": [
+          "action"
         ],
         "type": "object"
       },
@@ -4981,6 +5091,72 @@
             }
           }
         ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/items/{item}/answer": {
+      "post": {
+        "description": "Answers a question item the agent waits on. 409 once the agent no longer waits.",
+        "operationId": "answerQuestion",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Question item ID",
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "description": "Question item ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionAnswer"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "204": {
             "description": "No Content"

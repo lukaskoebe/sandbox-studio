@@ -14,6 +14,7 @@ type entry struct {
 	kind       string
 	toolCallID string
 	status     string
+	approvalID string
 	body       any
 	saved      bool // inserted into the store
 	dirty      bool // changed since it was last written

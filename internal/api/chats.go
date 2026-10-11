@@ -169,6 +169,30 @@ func (s *Server) registerChats(api huma.API) {
 		}
 		return nil, apiError(chats.Cancel(ctx, in.Env, in.Chat))
 	})
+
+	type answerIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Chat string `path:"chat" doc:"Chat ID"`
+		Item string `path:"item" doc:"Question item ID"`
+		Body QuestionAnswer
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "answerQuestion", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/items/{item}/answer", Tags: []string{"chats"},
+		DefaultStatus: http.StatusNoContent,
+		Description:   "Answers a question item the agent waits on. 409 once the agent no longer waits.",
+	}, func(ctx context.Context, in *answerIn) (*struct{}, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		return nil, apiError(chats.Answer(ctx, in.Env, in.Chat, in.Item, in.Body.Action, in.Body.Content))
+	})
+}
+
+// QuestionAnswer answers an agent's question.
+type QuestionAnswer struct {
+	Action  string          `json:"action" enum:"accept,decline,cancel"`
+	Content json.RawMessage `json:"content,omitempty" doc:"The form's values, for accept: a JSON object matching the question's schema"`
 }
 
 func (s *Server) chats() (*chat.Service, error) {

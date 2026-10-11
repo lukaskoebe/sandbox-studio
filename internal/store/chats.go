@@ -373,12 +373,16 @@ func (s *Store) AddChatItem(ctx context.Context, it ChatItem) (ChatItem, error) 
 func (s *Store) UpdateChatItem(ctx context.Context, it ChatItem) (ChatItem, error) {
 	err := s.inChatTx(ctx, it.ChatID, func(tx *sql.Tx, rev int64) error {
 		var err error
-		it, err = scanChatItem(tx.QueryRowContext(ctx, `UPDATE chat_items SET tool_call_id = ?, status = ?, approval_id = ?, body = ?, updated_at = ?, rev = ?
-			WHERE chat_id = ? AND id = ? RETURNING `+chatItemCols,
-			it.ToolCallID, it.Status, it.ApprovalID, []byte(it.Body), now(), rev, it.ChatID, it.ID))
+		it, err = updateChatItemTx(ctx, tx, rev, it)
 		return err
 	})
 	return it, err
+}
+
+func updateChatItemTx(ctx context.Context, tx *sql.Tx, rev int64, it ChatItem) (ChatItem, error) {
+	return scanChatItem(tx.QueryRowContext(ctx, `UPDATE chat_items SET tool_call_id = ?, status = ?, approval_id = ?, body = ?, updated_at = ?, rev = ?
+		WHERE chat_id = ? AND id = ? RETURNING `+chatItemCols,
+		it.ToolCallID, it.Status, it.ApprovalID, []byte(it.Body), now(), rev, it.ChatID, it.ID))
 }
 
 // ChatItem returns one item.

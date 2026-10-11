@@ -297,7 +297,7 @@ func apiError(err error) error {
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern),
 		errors.Is(err, secrets.ErrInvalid), errors.Is(err, teammates.ErrInvalid), errors.Is(err, policy.ErrNoTeammate),
-		errors.Is(err, chat.ErrInvalid):
+		errors.Is(err, chat.ErrInvalid), errors.Is(err, chat.ErrInvalidAnswer), errors.Is(err, chat.ErrInvalidDecision):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())

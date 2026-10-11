@@ -17,6 +17,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/browser"
+	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
@@ -36,6 +37,8 @@ type ApprovalView struct {
 	// BrowserAction and BrowserCredential are set for browser.action and browser.credential.
 	BrowserAction     *browser.ActionPayload     `json:"browserAction,omitempty" doc:"An agent's browser action on a new origin"`
 	BrowserCredential *browser.CredentialPayload `json:"browserCredential,omitempty" doc:"An agent asks Studio to fill a vault credential into a page"`
+	// ChatPermission is set for chat.permission approvals.
+	ChatPermission *chat.PermissionPayload `json:"chatPermission,omitempty" doc:"A chat's agent asks to run a tool"`
 }
 
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
@@ -64,6 +67,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p browser.CredentialPayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.BrowserCredential = &p
+		}
+	case chat.ApprovalKind:
+		var p chat.PermissionPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.ChatPermission = &p
 		}
 	case agentmem.ConflictApprovalKind:
 		var p agentmem.ConflictPayload

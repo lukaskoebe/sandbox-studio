@@ -185,6 +185,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/chats/{chat}/items/{item}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Answers a question item the agent waits on. 409 once the agent no longer waits. */
+        post: operations["answerQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/chats/{chat}/prompt": {
         parameters: {
             query?: never;
@@ -1335,6 +1352,8 @@ export interface components {
             browserAction?: components["schemas"]["ActionPayload"];
             /** @description An agent asks Studio to fill a vault credential into a page */
             browserCredential?: components["schemas"]["CredentialPayload"];
+            /** @description A chat's agent asks to run a tool */
+            chatPermission?: components["schemas"]["PermissionPayload"];
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
@@ -1725,6 +1744,13 @@ export interface components {
              * @enum {string}
              */
             scope: "sandbox" | "teammate" | "environment";
+        };
+        DiffSummary: {
+            /** Format: int64 */
+            added: number;
+            path: string;
+            /** Format: int64 */
+            removed: number;
         };
         DoctorReport: {
             /** Format: date-time */
@@ -2130,6 +2156,19 @@ export interface components {
             name: string;
             optionId: string;
         };
+        PermissionPayload: {
+            chatId: string;
+            chatTitle: string;
+            diffs?: components["schemas"]["DiffSummary"][] | null;
+            itemId: string;
+            locations?: components["schemas"]["ToolCallLocation"][] | null;
+            options: components["schemas"]["PermissionOption"][] | null;
+            sandboxName: string;
+            teammateName: string;
+            /** @description The tool call's title */
+            title: string;
+            toolKind?: string;
+        };
         PlanBody: {
             entries: components["schemas"]["PlanEntry"][] | null;
         };
@@ -2240,6 +2279,12 @@ export interface components {
             sandbox: string;
             /** @description The teammate owning the sandbox; empty for unowned sandboxes */
             teammate?: string;
+        };
+        QuestionAnswer: {
+            /** @enum {string} */
+            action: "accept" | "decline" | "cancel";
+            /** @description The form's values, for accept: a JSON object matching the question's schema */
+            content?: unknown;
         };
         QuestionBody: {
             /**
@@ -3158,6 +3203,44 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    answerQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+                /** @description Question item ID */
+                item: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionAnswer"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {

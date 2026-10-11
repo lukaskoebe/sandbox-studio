@@ -259,6 +259,7 @@ func run(addr, image string, log *slog.Logger) error {
 		return fmt.Errorf("chats: %w", err)
 	}
 	defer chats.Close()
+	integs = append(integs, chats) // settles chat.permission approvals; it serves no hosts
 	if err := gitRemote.Sweep(ctx); err != nil {
 		log.Warn("git staging cleanup", "err", err)
 	}
