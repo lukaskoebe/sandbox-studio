@@ -27,6 +27,12 @@ jobs:
       - name: guest agent (linux)
         shell: bash
         run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/studio-agent
+      - name: install.sh
+        if: runner.os != 'Windows'
+        run: sh scripts/test-install.sh
+      - name: shellcheck
+        if: runner.os == 'Linux'
+        run: shellcheck install.sh scripts/test-install.sh
 
   web:
     runs-on: ubuntu-latest
