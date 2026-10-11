@@ -11,6 +11,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -142,15 +143,7 @@ func (s *Server) registerChats(api huma.API) {
 		if err != nil {
 			return nil, err
 		}
-		c, err := s.Store.Chat(ctx, in.Env, in.Chat)
-		if err != nil {
-			return nil, apiError(err)
-		}
-		sb, err := s.sessionSandbox(ctx, in.Env, c.SandboxID)
-		if err != nil {
-			return nil, err
-		}
-		launch, err := s.chatLaunch(ctx, sb)
+		launch, err := s.chatLaunchFor(ctx, in.Env, in.Chat)
 		if err != nil {
 			return nil, err
 		}
@@ -168,6 +161,45 @@ func (s *Server) registerChats(api huma.API) {
 			return nil, err
 		}
 		return nil, apiError(chats.Cancel(ctx, in.Env, in.Chat))
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "openChatInTerminal", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/terminal", Tags: []string{"chats"},
+		Description: "Hands the chat's agent session to its harness's TUI in a tmux session tagged with the chat. The chat " +
+			"is read-only in state terminal until returnToChat. Calling it again restarts the TUI if it exited. " +
+			"409 while a turn runs, and before the chat's first prompt.",
+	}, func(ctx context.Context, in *chatPath) (*struct{ Body ChatTerminal }, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		launch, err := s.chatLaunchFor(ctx, in.Env, in.Chat)
+		if err != nil {
+			return nil, err
+		}
+		name, err := chats.OpenInTerminal(context.WithoutCancel(ctx), in.Env, in.Chat, launch)
+		var he agentchan.HarnessError
+		if errors.As(err, &he) {
+			return nil, huma.Error409Conflict(he.Error())
+		}
+		return &struct{ Body ChatTerminal }{ChatTerminal{Session: name}}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "returnToChat", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/return", Tags: []string{"chats"},
+		DefaultStatus: http.StatusNoContent,
+		Description: "Ends the chat's TUI and reattaches the agent; turns made in the terminal arrive on the stream with " +
+			"origin terminal. Does nothing for a chat that isn't in the terminal.",
+	}, func(ctx context.Context, in *chatPath) (*struct{}, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		launch, err := s.chatLaunchFor(ctx, in.Env, in.Chat)
+		if err != nil {
+			return nil, err
+		}
+		return nil, apiError(chats.ReturnToChat(context.WithoutCancel(ctx), in.Env, in.Chat, launch))
 	})
 
 	type answerIn struct {
@@ -217,7 +249,25 @@ func (s *Server) chatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch,
 	if err != nil {
 		return chat.Launch{}, err
 	}
-	return chat.Launch{Harness: plan.harness, Files: plan.files, Env: harness.ACPEnvironment(plan.harness, plan.provider)}, nil
+	return chat.Launch{Harness: plan.harness, Files: plan.files, Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env}, nil
+}
+
+// chatLaunchFor plans the agent of an existing chat.
+func (s *Server) chatLaunchFor(ctx context.Context, envID, chatID string) (chat.Launch, error) {
+	c, err := s.Store.Chat(ctx, envID, chatID)
+	if err != nil {
+		return chat.Launch{}, apiError(err)
+	}
+	sb, err := s.sessionSandbox(ctx, envID, c.SandboxID)
+	if err != nil {
+		return chat.Launch{}, err
+	}
+	return s.chatLaunch(ctx, sb)
+}
+
+// ChatTerminal is the tmux session a chat continues in.
+type ChatTerminal struct {
+	Session string `json:"session" doc:"The tmux session's name; attach to it like any agent session"`
 }
 
 // --- streaming ------------------------------------------------------------------------

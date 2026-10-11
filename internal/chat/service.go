@@ -62,14 +62,19 @@ var ErrInvalidDecision = errors.New("invalid chat permission decision")
 type Guest interface {
 	OpenACP(ctx context.Context, id string, req agentproto.StartACP) (io.ReadWriteCloser, error)
 	WriteHomeFiles(ctx context.Context, id string, files []agentproto.HomeFile) error
+	Sessions(ctx context.Context, id string) ([]agentproto.Session, error)
+	StartSession(ctx context.Context, id string, req agentproto.StartSession) error
+	KillSession(ctx context.Context, id, name string) error
 }
 
 // Launch is how to start a chat's agent, planned like an agent session: the harness,
-// its config files and its ACP environment (placeholders only).
+// its config files, its ACP environment and, for the terminal, the TUI session's
+// environment (placeholders only).
 type Launch struct {
 	Harness harness.Harness
 	Files   []agentproto.HomeFile
 	Env     map[string]string
+	TUIEnv  map[string]string
 }
 
 // Service runs the chats of every environment.
@@ -184,11 +189,17 @@ func (s *Service) Get(ctx context.Context, envID, chatID string) (Log, error) {
 
 // Delete ends the chat's agent, if it runs, and removes the chat.
 func (s *Service) Delete(ctx context.Context, envID, chatID string) error {
-	if _, err := s.Store.Chat(ctx, envID, chatID); err != nil {
+	c, err := s.Store.Chat(ctx, envID, chatID)
+	if err != nil {
 		return err
 	}
 	if l := s.get(chatID); l != nil {
 		l.shutdown(ctx)
+	}
+	if c.State == store.ChatTerminal {
+		if err := s.killTUI(ctx, c); err != nil {
+			s.log().Debug("chat: end the terminal of a deleted chat", "chat", chatID, "err", err)
+		}
 	}
 	if err := s.Store.DeleteChat(ctx, envID, chatID); err != nil {
 		return err
@@ -362,31 +373,40 @@ func (s *Service) ensure(ctx context.Context, c store.Chat, launch Launch) (*liv
 			return l, nil
 		}
 	}
+	l, _, err := s.startAgent(ctx, c, launch, false)
+	return l, err
+}
+
+// startAgent starts the chat's agent and creates or reattaches its session. With reload,
+// an existing session is reattached with session/load where the agent can, and the
+// replay comes back folded (nil otherwise).
+func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, reload bool) (*live, *folder, error) {
 	if launch.Harness == nil || launch.Harness.Name() != c.Harness {
-		return nil, Conflict(fmt.Sprintf("the teammate no longer runs %s; start a new chat", c.Harness))
+		return nil, nil, Conflict(fmt.Sprintf("the teammate no longer runs %s; start a new chat", c.Harness))
 	}
 	ctx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
 	h := launch.Harness
 	if err := s.Guest.WriteHomeFiles(ctx, c.SandboxID, launch.Files); err != nil {
-		return nil, fmt.Errorf("writing the harness config: %w", err)
+		return nil, nil, fmt.Errorf("writing the harness config: %w", err)
 	}
 	rwc, err := s.Guest.OpenACP(ctx, c.SandboxID, agentproto.StartACP{Chat: c.ID, Harness: h.Name(), Command: h.ACPCommand(), Env: launch.Env})
 	var he agentchan.HarnessError
 	if errors.As(err, &he) {
-		return nil, Conflict(he.Error())
+		return nil, nil, Conflict(he.Error())
 	}
 	if err != nil {
-		return nil, fmt.Errorf("starting %s's chat agent: %w", h.Name(), err)
+		return nil, nil, fmt.Errorf("starting %s's chat agent: %w", h.Name(), err)
 	}
 	l := &live{s: s, envID: c.EnvironmentID, chatID: c.ID, asks: map[string]*ask{}}
 	l.conn = acp.NewConn(rwc, l)
-	if err := l.open(ctx, c, h.ACPMCPServers()); err != nil {
+	replay, err := l.open(ctx, c, h.ACPMCPServers(), reload)
+	if err != nil {
 		l.conn.Close()
 		if errors.Is(err, acp.ErrAuthRequired) {
-			return nil, Conflict(fmt.Sprintf("%s asks for a login, which chats don't do: check the teammate's provider", h.Name()))
+			return nil, nil, Conflict(fmt.Sprintf("%s asks for a login, which chats don't do: check the teammate's provider", h.Name()))
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	s.mu.Lock()
 	if s.live == nil {
@@ -402,38 +422,45 @@ func (s *Service) ensure(ctx context.Context, c store.Chat, launch Launch) (*liv
 		}
 		s.mu.Unlock()
 	}()
-	return l, nil
+	return l, replay, nil
 }
 
-// open initializes the agent and creates or resumes the chat's session.
-func (l *live) open(ctx context.Context, c store.Chat, servers []acp.MCPServer) error {
+// open initializes the agent and creates or reattaches the chat's session: with
+// session/resume, or session/load where the agent can't resume or reload asks for the
+// replay.
+func (l *live) open(ctx context.Context, c store.Chat, servers []acp.MCPServer, reload bool) (*folder, error) {
 	init, err := l.conn.Initialize(ctx, acp.Implementation{Name: "sandbox-studio", Version: version.Version})
 	if err != nil {
-		return fmt.Errorf("initialize: %w", err)
+		return nil, fmt.Errorf("initialize: %w", err)
 	}
 	l.caps = init.AgentCapabilities
 	if c.ACPSessionID == "" {
 		id, err := l.conn.NewSession(ctx, Workdir, servers)
 		if err != nil {
-			return fmt.Errorf("new session: %w", err)
+			return nil, fmt.Errorf("new session: %w", err)
 		}
 		l.session = id
-		return l.s.Store.SetChatSession(ctx, c.ID, id)
+		return nil, l.s.Store.SetChatSession(ctx, c.ID, id)
 	}
 	l.session = c.ACPSessionID
-	if l.caps.CanResume() {
+	var replay *folder
+	switch {
+	case l.caps.LoadSession && (reload || !l.caps.CanResume()):
+		replay, err = l.load(ctx, servers)
+	case l.caps.CanResume():
 		err = l.conn.ResumeSession(ctx, l.session, Workdir, servers)
-	} else if l.caps.LoadSession {
-		_, err = l.load(ctx, servers)
-	} else {
+	default:
 		err = &acp.Error{Message: "the agent can resume no sessions"}
 	}
 	var ae *acp.Error
 	if errors.As(err, &ae) {
 		l.s.orphan(c)
-		return Conflict("the agent's session of this chat is gone (" + ae.Message + "); start a new chat")
+		return nil, Conflict("the agent's session of this chat is gone (" + ae.Message + "); start a new chat")
 	}
-	return err
+	if !reload {
+		replay = nil
+	}
+	return replay, err
 }
 
 // load reattaches with session/load and returns its replay folded into entries.

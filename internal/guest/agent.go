@@ -271,7 +271,7 @@ func validSessionName(s string) bool {
 
 // sessionFormat separates fields with "|": session names can't contain it, and tmux 3.5
 // prints tabs in format output as "_".
-const sessionFormat = "#{session_name}|#{session_attached}|#{session_windows}|#{session_created}|#{" + agentproto.HarnessOption + "}"
+const sessionFormat = "#{session_name}|#{session_attached}|#{session_windows}|#{session_created}|#{" + agentproto.HarnessOption + "}|#{" + agentproto.ChatOption + "}"
 
 func (a *Agent) replySessions(st net.Conn) error {
 	out, err := a.command("tmux", "list-sessions", "-F", sessionFormat).Output()
@@ -283,18 +283,22 @@ func (a *Agent) replySessions(st net.Conn) error {
 }
 
 // parseSessions reads list-sessions output in sessionFormat. Sessions with names Studio
-// couldn't address are skipped.
+// couldn't address are skipped. Agents before the chat tag print five fields.
 func parseSessions(out string) []agentproto.Session {
 	sessions := []agentproto.Session{}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		f := strings.Split(line, "|")
-		if len(f) != 5 || !validSessionName(f[0]) {
+		if (len(f) != 5 && len(f) != 6) || !validSessionName(f[0]) {
 			continue
+		}
+		chat := ""
+		if len(f) == 6 && validSessionName(f[5]) {
+			chat = f[5]
 		}
 		att, _ := strconv.Atoi(f[1])
 		win, _ := strconv.Atoi(f[2])
 		created, _ := strconv.ParseInt(f[3], 10, 64)
-		sessions = append(sessions, agentproto.Session{Name: f[0], Attached: att, Windows: win, Created: created, Harness: f[4]})
+		sessions = append(sessions, agentproto.Session{Name: f[0], Attached: att, Windows: win, Created: created, Harness: f[4], Chat: chat})
 	}
 	return sessions
 }

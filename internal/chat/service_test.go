@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -17,13 +18,39 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// fakeGuest serves every ACP stream with one scripted agent.
+// fakeGuest serves every ACP stream with one scripted agent and keeps tmux sessions as a
+// list.
 type fakeGuest struct {
-	agent *acptest.Agent
-	mu    sync.Mutex
-	opens []agentproto.StartACP
-	files int
-	conns []io.ReadWriteCloser
+	agent    *acptest.Agent
+	mu       sync.Mutex
+	opens    []agentproto.StartACP
+	files    int
+	conns    []io.ReadWriteCloser
+	sessions []agentproto.Session
+	started  []agentproto.StartSession
+	killed   []string
+}
+
+func (g *fakeGuest) Sessions(context.Context, string) ([]agentproto.Session, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]agentproto.Session(nil), g.sessions...), nil
+}
+
+func (g *fakeGuest) StartSession(_ context.Context, _ string, req agentproto.StartSession) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.started = append(g.started, req)
+	g.sessions = append(g.sessions, agentproto.Session{Name: req.Name, Harness: req.Harness, Chat: req.Chat, Windows: 1})
+	return nil
+}
+
+func (g *fakeGuest) KillSession(_ context.Context, _, name string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.killed = append(g.killed, name)
+	g.sessions = slices.DeleteFunc(g.sessions, func(x agentproto.Session) bool { return x.Name == name })
+	return nil
 }
 
 func (g *fakeGuest) OpenACP(_ context.Context, _ string, req agentproto.StartACP) (io.ReadWriteCloser, error) {

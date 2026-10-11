@@ -55,7 +55,7 @@ func (g *fakeGuest) StartSession(_ context.Context, _ string, req agentproto.Sta
 		return g.startErr
 	}
 	g.started = append(g.started, req)
-	g.sessions = append(g.sessions, agentproto.Session{Name: req.Name, Harness: req.Harness, Windows: 1})
+	g.sessions = append(g.sessions, agentproto.Session{Name: req.Name, Harness: req.Harness, Chat: req.Chat, Windows: 1})
 	return nil
 }
 

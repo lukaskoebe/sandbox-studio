@@ -124,6 +124,26 @@ func TestChats(t *testing.T) {
 	if rec := do(h, "POST", base+"/cancel", ""); rec.Code != http.StatusNoContent {
 		t.Fatalf("cancel: %d %s", rec.Code, rec.Body)
 	}
+
+	// Chat to terminal and back.
+	rec = do(h, "POST", base+"/terminal", "")
+	if rec.Code != http.StatusOK || decode[ChatTerminal](t, rec).Session != "chat-"+c.ID {
+		t.Fatalf("terminal: %d %s", rec.Code, rec.Body)
+	}
+	if len(g.started) != 1 || g.started[0].Chat != c.ID || g.started[0].Command[1] != "--resume" ||
+		g.started[0].Env["ANTHROPIC_API_KEY"] != prov.Placeholder {
+		t.Fatalf("started %+v", g.started)
+	}
+	if rec := do(h, "POST", base+"/prompt", `{"text":"x"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("prompt in terminal: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/return", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("return: %d %s", rec.Code, rec.Body)
+	}
+	if log := decode[chat.Log](t, do(h, "GET", base, "")); log.Chat.State != store.ChatIdle || len(g.killed) != 1 {
+		t.Fatalf("returned: %+v killed %v", log.Chat, g.killed)
+	}
+
 	if rec := do(h, "DELETE", base, ""); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}

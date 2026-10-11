@@ -56,6 +56,9 @@ func checkStartSession(req agentproto.StartSession) error {
 	if !harnessName.MatchString(req.Harness) {
 		return errors.New("invalid harness name")
 	}
+	if req.Chat != "" && !validSessionName(req.Chat) {
+		return errors.New("invalid chat")
+	}
 	if len(req.Command) == 0 || len(req.Command) > 32 {
 		return errors.New("the command must have between 1 and 32 arguments")
 	}
@@ -99,9 +102,13 @@ func startCommand(req agentproto.StartSession) []string {
 		args = append(args, name+"="+req.Env[name])
 	}
 	args = append(args, req.Command...)
-	return append(args,
+	args = append(args,
 		";", "set-option", "-w", "-t", "="+req.Name+":", "remain-on-exit", "on",
 		";", "set-option", "-t", "="+req.Name, agentproto.HarnessOption, req.Harness)
+	if req.Chat != "" {
+		args = append(args, ";", "set-option", "-t", "="+req.Name, agentproto.ChatOption, req.Chat)
+	}
+	return args
 }
 
 // Starting a harness waits this long for it to exit right away before the session counts
