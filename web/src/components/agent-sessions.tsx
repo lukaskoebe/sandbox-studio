@@ -59,8 +59,13 @@ export function AgentSessions({
       onSuccess: (s) => onAttach(s.name),
       onSettled: refresh,
       onError: (err) =>
+        // A harness that exits right away brings its last output lines.
         toast.error("Could not start the session", {
-          description: errorMessage(err),
+          description: (
+            <span className="break-words whitespace-pre-wrap">
+              {errorMessage(err)}
+            </span>
+          ),
         }),
     }
   )

@@ -136,10 +136,11 @@ func GitConfig(p Persona) GuestFile {
 	return GuestFile{Path: ".config/git/config", Content: content, Mode: 0o644}
 }
 
-// instructions is the managed block: who the persona is and how its memory works. It goes
-// into the harness's global instructions file in the home, not into /workspace, so it never
-// ends up in the project's repository. The soul and the persona's memory arrive as context
-// at session start (PLAN §6.6), so the block stays small and the same across sessions.
+// instructions is the managed block: who the persona is, its soul and how its memory
+// works. It goes into the harness's global instructions file in the home, not into
+// /workspace, so it never ends up in the project's repository. The harness reads the file
+// in every session, resumed ones too, so this is the only place the soul reaches the
+// agent; the persona's memory arrives as context at session start (PLAN §6.6).
 func instructions(p Persona, s Sandbox) GuestFile {
 	var b strings.Builder
 	b.WriteString(agentproto.BlockBegin + "\n")
@@ -151,6 +152,9 @@ func instructions(p Persona, s Sandbox) GuestFile {
 	fmt.Fprintf(&b, "You work in the Sandbox Studio sandbox %q. The project is in /workspace. "+
 		"Network access goes through Studio's gateway and its policy. API keys in your environment are "+
 		"placeholders that only work through the gateway; there is no need to look for real ones.\n", s.Name)
+	if soul := strings.TrimSpace(p.Soul); soul != "" {
+		b.WriteString("\n## Your soul\n\n" + soul + "\n")
+	}
 	b.WriteString(memoryInstructions)
 	b.WriteString(agentproto.BlockEnd + "\n")
 	return GuestFile{Content: defuseMarkers(b.String()), Mode: 0o644, Block: true}
@@ -160,7 +164,7 @@ func instructions(p Persona, s Sandbox) GuestFile {
 const memoryInstructions = `
 ## Memory
 
-Studio remembers for you across sessions and sandboxes. At session start you get your soul, your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The ` + "`studio`" + ` MCP server has tools for more:
+Studio remembers for you across sessions and sandboxes. At session start you get your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The ` + "`studio`" + ` MCP server has tools for more:
 
 - ` + "`memory_search`" + ` and ` + "`memory_get`" + `: look things up when the injected memories aren't enough.
 - ` + "`remember`" + `: save something right away. Use it for preferences the user states (source ` + "`user`" + `) and for procedures you have verified by running them (source ` + "`verified`" + `, with the command and result as evidence).

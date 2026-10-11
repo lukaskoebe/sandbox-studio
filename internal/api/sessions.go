@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/personas"
@@ -186,6 +188,10 @@ func (s *Server) startSession(ctx context.Context, envID, id string) (agentproto
 		Env:     plan.env,
 	}
 	if err := s.guest().StartSession(ctx, id, req); err != nil {
+		var he agentchan.HarnessError
+		if errors.As(err, &he) {
+			return agentproto.Session{}, huma.Error409Conflict(he.Error())
+		}
 		return agentproto.Session{}, apiError(fmt.Errorf("starting %s: %w", name, err))
 	}
 	return agentproto.Session{Name: name, Harness: req.Harness, Windows: 1}, nil

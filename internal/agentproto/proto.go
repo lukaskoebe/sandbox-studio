@@ -160,7 +160,12 @@ type Port struct {
 // Error is the reply when a request fails.
 type Error struct {
 	Error string `json:"error"`
+	Code  string `json:"code,omitempty"`
 }
+
+// CodeHarness marks a KindStartSession error about the harness itself: it is not installed
+// or exits right away. The message is meant for the user.
+const CodeHarness = "harness"
 
 // WriteJSONLine writes v as one line of JSON.
 func WriteJSONLine(w io.Writer, v any) error {

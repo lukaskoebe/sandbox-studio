@@ -115,11 +115,12 @@ stdin, answers within 5 s (2.5 s at session end) and on any failure prints the n
 answer (`{}`) and exits 0.
 
 - *Session start* (also resume and compact) injects a context pack of at most 12 000
-  characters inside `<studio-memory>` tags: the soul (4000), core pages (persona, then
-  shared), the project page for the repository's normalized git remote
-  (`project/<host/owner/repo>`, then `project/<repo>`, persona scope first), shared facts
+  characters inside `<studio-memory>` tags: core pages (persona, then shared), the project
+  page for the repository's normalized git remote (`project/<host/owner/repo>`, then
+  `project/<repo>`, persona scope first), shared facts
   other personas changed since the persona's previous session (or the last 7 days, at most
-  10), and up to 5 open conflicts that touch them or the persona's own facts.
+  10), and up to 5 open conflicts that touch them or the persona's own facts. The soul is not
+  in it: it is in the harness's instructions file ([harnesses.md](harnesses.md#files)).
 - *Prompt* runs hybrid search and injects at most 5 hits, about 500 tokens (2000
   characters), each with similarity ≥ 0.45 or at least 2 matching prompt words, and none
   already given to the session.

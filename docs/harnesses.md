@@ -27,6 +27,13 @@ Then Studio:
    - The provider's variable is set to the placeholder after the profile has run.
    - The session is named after the harness (`claude`, `claude-2`, …) and tagged with the
      tmux option `@studio_harness`.
+   - The harness must be on the login shell's `PATH`. If it isn't (an image built before
+     the harnesses were added), the start fails with 409 and says to rebuild the base image
+     and create a new sandbox.
+   - The pane is kept with `remain-on-exit` for the first 1.5 s. A harness that exits in
+     that time fails the start with 409, its exit status and its last output lines (at most
+     600 characters, without the command line); its session is removed. After that the
+     option goes back to the default, so a harness that exits later ends its session.
 
 `GET .../sessions` lists the tagged tmux sessions. `DELETE .../sessions/{name}` ends one.
 Sessions are terminals too, so the sandbox page opens them as terminal tabs.
@@ -41,8 +48,13 @@ placeholder and never see the secret. Config files name only the variable (`{env
 Files marked "managed" are rewritten on every session start, so edits made in the sandbox
 are lost. The instructions files hold a managed block between
 `<!-- sandbox-studio:begin -->` and `<!-- sandbox-studio:end -->`: Studio replaces only the
-block, or puts it first, and keeps text outside it. The block has the persona's name and
-role and points to the memory tools. The soul comes with memory's session-start context.
+block, or puts it first, and keeps text outside it. The block has the persona's name,
+role and soul and points to the memory tools.
+
+The soul reaches the agent only through this block, never through the session-start
+hook: the harness reads its instructions file in every session, including resumed ones and
+those whose hook didn't fire, so the soul is there exactly once. A soul edited in Studio
+takes effect with the next session start, which rewrites the block.
 
 | | OpenCode | Claude Code | Codex |
 |---|---|---|---|

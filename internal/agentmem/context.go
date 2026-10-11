@@ -16,7 +16,6 @@ import (
 // Context budgets, in characters (about four per token).
 const (
 	PackBudget      = 12000 // a whole session-start pack
-	soulBudget      = 4000
 	projectBudget   = 3000
 	maxChanges      = 10
 	maxConflicts    = 5
@@ -82,16 +81,13 @@ func (b *budget) add(text string, limit int) bool {
 	return true
 }
 
-// pack is the session-start context: the soul, core pages, the project page, shared
-// changes since the persona's last session and open conflicts on them.
+// pack is the session-start context: core pages, the project page, shared changes since
+// the persona's last session and open conflicts on them. The soul is not in it: it is in
+// the harness's instructions file (harness.instructions), which every session reads.
 func (s *Service) pack(ctx context.Context, c caller, se session, remote, source string) (string, error) {
 	b := &budget{left: PackBudget}
 	var logged []entry
 	b.add(openTag+"\n# Memory from Sandbox Studio\n\n", 200)
-	if strings.TrimSpace(c.persona.Soul) != "" {
-		b.add("## Your soul\n\n"+strings.TrimSpace(c.persona.Soul)+"\n\n", soulBudget)
-		logged = append(logged, entry{kind: LogContext, itemType: "soul", itemID: "soul:" + c.persona.ID, summary: "soul of " + c.persona.Name})
-	}
 
 	// Core pages: the persona's first, then shared.
 	var core []memory.Page

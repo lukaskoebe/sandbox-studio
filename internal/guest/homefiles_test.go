@@ -166,7 +166,9 @@ func TestStartSessionCommand(t *testing.T) {
 	}
 	got := startCommand(req)
 	want := []string{"-f", tmuxConfPath, "new-session", "-d", "-s", "claude", "-c", Workdir,
-		"bash", "-lc", `exec env "$@"`, "studio-session", "ANTHROPIC_API_KEY=studio-abc", "B=1", "claude"}
+		"bash", "-lc", `exec env "$@"`, "studio-session", "ANTHROPIC_API_KEY=studio-abc", "B=1", "claude",
+		";", "set-option", "-w", "-t", "=claude:", "remain-on-exit", "on",
+		";", "set-option", "-t", "=claude", agentproto.HarnessOption, "claude"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("command:\n got %q\nwant %q", got, want)
 	}
@@ -176,6 +178,8 @@ func TestStartSessionCommand(t *testing.T) {
 		{Name: "a", Harness: "claude"},
 		{Name: "a", Harness: "claude", Command: []string{"X=1"}},
 		{Name: "a", Harness: "claude", Command: []string{"-i"}},
+		// tmux would split its command line at an argument ending in ";".
+		{Name: "a", Harness: "claude", Command: []string{"claude", "x;"}},
 		{Name: "a", Harness: "claude", Command: []string{"claude"}, Env: map[string]string{"A": "$(id)"}},
 		{Name: "a", Harness: "claude", Command: []string{"claude"}, Env: map[string]string{"a-b": "1"}},
 	} {

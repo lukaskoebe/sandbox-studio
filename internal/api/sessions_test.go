@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ type fakeGuest struct {
 	started  []agentproto.StartSession
 	killed   []string
 	offline  bool
+	startErr error
 }
 
 func (g *fakeGuest) Sessions(context.Context, string) ([]agentproto.Session, error) {
@@ -49,6 +51,9 @@ func (g *fakeGuest) WriteHomeFiles(_ context.Context, _ string, files []agentpro
 func (g *fakeGuest) StartSession(_ context.Context, _ string, req agentproto.StartSession) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.startErr != nil {
+		return g.startErr
+	}
 	g.started = append(g.started, req)
 	g.sessions = append(g.sessions, agentproto.Session{Name: req.Name, Harness: req.Harness, Windows: 1})
 	return nil
@@ -100,6 +105,7 @@ func TestSessionStart(t *testing.T) {
 		paths[f.Path] = f
 	}
 	if !paths[".claude/CLAUDE.md"].Block || !strings.Contains(paths[".claude/CLAUDE.md"].Content, "`remember`") ||
+		!strings.Contains(paths[".claude/CLAUDE.md"].Content, "## Your soul\n\nCareful.") ||
 		!strings.Contains(paths[".claude/settings.json"].Content, `"claude-sonnet-4-5"`) ||
 		!strings.Contains(paths[".config/git/config"].Content, `name = "Ada L"`) {
 		t.Fatalf("files: %+v", paths)
@@ -116,6 +122,18 @@ func TestSessionStart(t *testing.T) {
 	if rec := do(h, "DELETE", base+"/claude-2", ""); rec.Code != http.StatusNoContent || len(g.killed) != 1 || g.killed[0] != "claude-2" {
 		t.Fatalf("stop: %d %v", rec.Code, g.killed)
 	}
+
+	// A harness that can't run is the user's to fix: a conflict with the guest's message as is.
+	g.startErr = agentchan.HarnessError("claude is not installed in this sandbox")
+	rec = do(h, "POST", base, "")
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"detail":"claude is not installed in this sandbox"`) {
+		t.Fatalf("harness error: %d %s", rec.Code, rec.Body)
+	}
+	g.startErr = errors.New("tmux: no server")
+	if rec := do(h, "POST", base, ""); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("guest failure: %d %s", rec.Code, rec.Body)
+	}
+	g.startErr = nil
 
 	// A stopped sandbox has no guest to talk to.
 	g.offline = true
