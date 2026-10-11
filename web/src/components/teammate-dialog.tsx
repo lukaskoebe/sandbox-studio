@@ -168,7 +168,9 @@ function TeammateForm({
       }}
     >
       <DialogHeader>
-        <DialogTitle>{teammate ? "Edit teammate" : "Add a teammate"}</DialogTitle>
+        <DialogTitle>
+          {teammate ? "Edit teammate" : "Add a teammate"}
+        </DialogTitle>
         <DialogDescription>
           An agent identity: who it is, the harness it runs in, the model it
           uses and the name it commits under.
