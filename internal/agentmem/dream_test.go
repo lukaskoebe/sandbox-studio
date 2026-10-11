@@ -589,3 +589,72 @@ func TestShareDecisionIsAtomic(t *testing.T) {
 		t.Fatalf("a decided share wrote: %d shared facts", n)
 	}
 }
+
+// Shared memory is consolidated with the utility model of the persona that has had one the
+// longest (by creation time, then ID), whatever the names, and the usage report says whose.
+func TestSharedJudgeIsTheOldestPersonaWithAUtilityModel(t *testing.T) {
+	f := newFixture(t)
+	created := func(p store.Persona, at time.Time) {
+		if _, err := f.st.DB().ExecContext(f.ctx, "UPDATE personas SET created_at = ? WHERE id = ?", at.Unix(), p.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	judgeOf := func() string {
+		t.Helper()
+		v, err := f.svc.UsageReport(f.ctx, f.env)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v.SharedJudge == nil {
+			return ""
+		}
+		if v.SharedJudge.Model != "claude-haiku-4-5" {
+			t.Fatalf("judge %+v", v.SharedJudge)
+		}
+		return v.SharedJudge.PersonaID
+	}
+	// Bob is the oldest but has a subscription, which has no utility model.
+	created(f.bob, day(1))
+	created(f.ada, day(5))
+	if got := judgeOf(); got != f.ada.ID {
+		t.Fatalf("judge %s, want ada", got)
+	}
+	// aaron sorts first by name but is younger than ada.
+	aaron, err := f.st.CreatePersona(f.ctx, store.Persona{EnvironmentID: f.env, Name: "aaron", Harness: "claude", ProviderID: "anth"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created(aaron, day(9))
+	if got := judgeOf(); got != f.ada.ID {
+		t.Fatalf("judge %s, want ada over the younger aaron", got)
+	}
+	// At the same creation time the lower ID wins.
+	created(aaron, day(5))
+	want := min(f.ada.ID, aaron.ID)
+	for range 3 {
+		if got := judgeOf(); got != want {
+			t.Fatalf("judge %s, want %s", got, want)
+		}
+	}
+	created(aaron, day(2))
+
+	f.mk(memory.SharedScope, "The api listens on port 8080", memory.TierUser, "", "api", "api.port", day(3))
+	f.mk(memory.SharedScope, "The api listens on port 9090", memory.TierUser, "", "api", "api.port", day(4))
+	f.llm.respond = judge()
+	r := f.dream(memory.SharedScope)
+	if r.Status != DreamDone || r.Stats.Judged != 1 || r.Stats.Persona != aaron.ID || judgeOf() != aaron.ID {
+		t.Fatalf("run %+v", r)
+	}
+	// The calls count against the environment's daily budget.
+	if u, _ := f.svc.usage(f.ctx, f.env); u.Calls != 1 || u.CostMicros == 0 {
+		t.Fatalf("usage %+v", u)
+	}
+
+	// Without any utility model there is no judge to name.
+	if _, err := f.st.DB().ExecContext(f.ctx, "UPDATE personas SET provider_id = 'sub'"); err != nil {
+		t.Fatal(err)
+	}
+	if got := judgeOf(); got != "" {
+		t.Fatalf("judge %s with no utility model", got)
+	}
+}

@@ -90,7 +90,7 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `POST facts/{id}/promote` | propose a persona fact for shared memory (`memory.share` approval) |
 
 | `GET sessions?persona=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
-| `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider |
+| `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider, and `sharedJudge`: whose utility model consolidates shared memory |
 
 The Memory page in the environment sidebar has a scope switcher, the extraction budget line,
 and tabs for pages, facts (with "promote to shared" on persona facts), conflicts (with
@@ -178,9 +178,14 @@ ends included); a persona's run also takes new shared facts.
 2. Pairs: each new fact against up to 8 related active facts (same attribute or a shared
    entity) of its scope and shared; new shared facts against the persona's facts. At most
    100 pairs per run; pairs with a conflict are skipped.
-3. Judge: the persona's utility model and budget, as for extraction (the first persona with
-   one for the shared scope; none for subscriptions, S8, so those runs only dedupe and
-   compile). The answer must be exactly `{"verdict", "reason"}` with a verdict of
+3. Judge: the persona's utility model, as for extraction; none for subscriptions, S8, so
+   those runs only dedupe and compile. Shared memory uses the persona that has had a
+   utility model the longest. Studio does not record when a persona's provider was set, so
+   that is the oldest persona whose provider has one (by creation time, then ID); there is
+   no fallback to another persona if its key or client fails. The run records the persona,
+   `GET usage` reports it as `sharedJudge`, and the memory page shows "Consolidated with
+   <persona>'s model" on the shared scope. Calls count against the environment's daily
+   budget, which extraction shares; there is no per-persona budget. The answer must be exactly `{"verdict", "reason"}` with a verdict of
    `no_conflict`, `duplicate`, `supersedes` or `contradiction`; `supersedes` needs B
    observed after A. Anything else is counted as rejected and changes nothing. Valid
    verdicts are cached per pair, model and prompt version.
@@ -196,6 +201,6 @@ ends included); a persona's run also takes new shared facts.
 
 Runs record their window, trigger, status (`running`, `done`, `stopped`, `failed`), stats
 (facts, pairs, judged, cached, rejected, merged, superseded, conflicts, pages, tokens,
-cost) and a note. An exhausted budget or the pair limit stops a run cleanly; the next run
+cost, model and persona) and a note. An exhausted budget or the pair limit stops a run cleanly; the next run
 covers the same window again, and cached verdicts make that cheap. A run interrupted by a
 shutdown stays `running` and resumes; every step is idempotent.

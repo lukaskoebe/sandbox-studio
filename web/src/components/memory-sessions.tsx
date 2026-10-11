@@ -41,26 +41,38 @@ const kindVariant: Record<
   tool: "outline",
 }
 
-/** Today's extraction spending against the daily budget. */
-export function MemoryUsage({ env }: { env: string }) {
+/**
+ * Today's extraction spending against the daily budget and, for shared memory, whose
+ * utility model consolidates it.
+ */
+export function MemoryUsage({ env, shared }: { env: string; shared: boolean }) {
   const usage = $api.useQuery("get", "/api/environments/{env}/memory/usage", {
     params: { path: { env } },
   })
   if (!usage.data) return null
-  const { today, budget, models } = usage.data
+  const { today, budget, models, sharedJudge } = usage.data
   const dollars = (micros: number) => `$${(micros / 1e6).toFixed(2)}`
   const extracting = (models ?? []).filter((m) => m.model)
   return (
-    <p className="text-xs text-muted-foreground">
-      Extraction today: {today.calls} calls, {dollars(today.costMicros)} of{" "}
-      {dollars(budget.maxCostMicros)}
-      {today.skipped > 0 && `, ${today.skipped} skipped`}
-      {extracting.length > 0
-        ? ` · ${extracting.map((m) => `${m.provider}: ${m.model}`).join(", ")}`
-        : " · no provider can extract (subscriptions can't yet)"}
-      {extracting.some((m) => !m.priced) &&
-        ` · unpriced models: at most ${budget.maxCalls} calls a day`}
-    </p>
+    <>
+      <p className="text-xs text-muted-foreground">
+        Extraction today: {today.calls} calls, {dollars(today.costMicros)} of{" "}
+        {dollars(budget.maxCostMicros)}
+        {today.skipped > 0 && `, ${today.skipped} skipped`}
+        {extracting.length > 0
+          ? ` · ${extracting.map((m) => `${m.provider}: ${m.model}`).join(", ")}`
+          : " · no provider can extract (subscriptions can't yet)"}
+        {extracting.some((m) => !m.priced) &&
+          ` · unpriced models: at most ${budget.maxCalls} calls a day`}
+      </p>
+      {shared && (
+        <p className="text-xs text-muted-foreground">
+          {sharedJudge
+            ? `Consolidated with ${sharedJudge.personaName}'s model (${sharedJudge.model}), the persona that has had a utility model the longest.`
+            : "No persona has a utility model, so consolidation only merges duplicates and compiles pages."}
+        </p>
+      )}
+    </>
   )
 }
 

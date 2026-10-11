@@ -1366,6 +1366,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "persona": {
+            "description": "ID of the persona whose provider's utility model judged",
+            "type": "string"
+          },
           "rejected": {
             "description": "Judge answers rejected as malformed; nothing was changed for them",
             "format": "int64",
@@ -3091,6 +3095,26 @@
         ],
         "type": "object"
       },
+      "SharedJudge": {
+        "additionalProperties": false,
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "personaId": {
+            "type": "string"
+          },
+          "personaName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "personaId",
+          "personaName",
+          "model"
+        ],
+        "type": "object"
+      },
       "Source": {
         "additionalProperties": false,
         "properties": {
@@ -3408,6 +3432,10 @@
               "array",
               "null"
             ]
+          },
+          "sharedJudge": {
+            "$ref": "#/components/schemas/SharedJudge",
+            "description": "Whose utility model consolidates shared memory: the persona that has had one the longest"
           },
           "today": {
             "$ref": "#/components/schemas/Usage"

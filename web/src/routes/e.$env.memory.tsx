@@ -129,7 +129,7 @@ function MemoryPage() {
             {current.coreChars} of {current.coreBudget} characters.
           </p>
         )}
-        <MemoryUsage env={env} />
+        <MemoryUsage env={env} shared={scope === shared} />
         <Tabs defaultValue="pages">
           <TabsList>
             <TabsTrigger value="pages">Pages</TabsTrigger>

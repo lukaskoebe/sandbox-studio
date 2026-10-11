@@ -77,6 +77,7 @@ type DreamStats struct {
 	OutputTokens int    `json:"outputTokens"`
 	CostMicros   int64  `json:"costMicros"`
 	Model        string `json:"model,omitempty"`
+	Persona      string `json:"persona,omitempty" doc:"ID of the persona whose provider's utility model judged"`
 }
 
 // DreamRun is one consolidation of a scope.
@@ -549,58 +550,103 @@ func (d *dreamer) pairs(ctx context.Context, fresh []memory.Fact) ([][2]memory.F
 	return out, nil
 }
 
-// setupJudge picks the utility model: the persona's provider, or for shared memory the
-// first persona's provider that has one. Subscriptions have none (TODO S8).
+// SharedJudge is the persona whose provider's utility model consolidates shared memory.
+type SharedJudge struct {
+	PersonaID   string `json:"personaId"`
+	PersonaName string `json:"personaName"`
+	Model       string `json:"model"`
+}
+
+// sharedJudge picks the persona whose model consolidates shared memory: of the personas
+// whose provider has a utility model, the one that has had it the longest. Studio does not
+// record when a persona's provider was set, so that is the oldest persona (created first,
+// then the lowest ID). ok is false when no persona has a utility model.
+func (s *Service) sharedJudge(ctx context.Context, env string) (p store.Persona, prov store.Provider, ok bool, err error) {
+	personas, err := s.Store.Personas(ctx, env)
+	if err != nil {
+		return p, prov, false, err
+	}
+	slices.SortFunc(personas, func(a, b store.Persona) int {
+		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	for _, p = range personas {
+		if prov, err = s.Store.Provider(ctx, env, p.ProviderID); errors.Is(err, store.ErrNotFound) {
+			continue
+		} else if err != nil {
+			return p, prov, false, err
+		}
+		if _, ok := UtilityFor(prov); ok {
+			return p, prov, true, nil
+		}
+	}
+	return store.Persona{}, store.Provider{}, false, nil
+}
+
+// SharedJudge reports whose utility model consolidates shared memory; nil if no persona's
+// provider has one.
+func (s *Service) SharedJudge(ctx context.Context, env string) (*SharedJudge, error) {
+	p, prov, ok, err := s.sharedJudge(ctx, env)
+	if err != nil || !ok {
+		return nil, err
+	}
+	m, _ := UtilityFor(prov)
+	return &SharedJudge{PersonaID: p.ID, PersonaName: p.Name, Model: m.Model}, nil
+}
+
+// setupJudge picks the utility model: the persona's provider's, or for shared memory the
+// one of sharedJudge. Subscriptions have none (TODO S8). The chosen persona never falls
+// back to another one, so the persona the memory page names is the one that is used.
 func (d *dreamer) setupJudge(ctx context.Context) {
 	s := d.s
-	var personas []store.Persona
+	var p store.Persona
+	var prov store.Provider
 	if id, ok := strings.CutPrefix(d.r.Scope, "persona:"); ok {
-		p, err := s.Store.Persona(ctx, d.env, id)
-		if err != nil {
+		var err error
+		if p, err = s.Store.Persona(ctx, d.env, id); err != nil {
 			d.noJudge = "the persona is gone"
 			return
 		}
-		personas = []store.Persona{p}
-	} else {
-		var err error
-		if personas, err = s.Store.Personas(ctx, d.env); err != nil {
-			d.noJudge = "listing personas failed"
+		if prov, err = s.Store.Provider(ctx, d.env, p.ProviderID); err != nil {
+			d.noJudge = "the persona's provider is gone"
 			return
-		}
-	}
-	d.noJudge = "no persona with a utility model (subscriptions have none yet)"
-	for _, p := range personas {
-		if p.ProviderID == "" {
-			continue
-		}
-		prov, err := s.Store.Provider(ctx, d.env, p.ProviderID)
-		if err != nil {
-			continue
 		}
 		if m, ok := UtilityFor(prov); !ok {
 			d.noJudge = m.Note
-			continue
+			return
 		}
-		key := ""
-		if prov.SecretID != "" {
-			if key, err = s.Keys.Value(ctx, d.env, prov.SecretID); err != nil {
-				d.noJudge = "reading the provider key failed"
-				continue
-			}
+	} else {
+		var ok bool
+		var err error
+		if p, prov, ok, err = s.sharedJudge(ctx, d.env); err != nil {
+			d.noJudge = "listing personas failed"
+			return
+		} else if !ok {
+			d.noJudge = "no persona with a utility model (subscriptions have none yet)"
+			return
 		}
-		utility := s.Utility
-		if utility == nil {
-			utility = DefaultUtility
+	}
+	key := ""
+	if prov.SecretID != "" {
+		var err error
+		if key, err = s.Keys.Value(ctx, d.env, prov.SecretID); err != nil {
+			d.noJudge = "reading the provider key failed"
+			return
 		}
-		llm, m, err := utility(prov, key)
-		if err != nil {
-			d.noJudge = err.Error()
-			continue
-		}
-		d.llm, d.model, d.noJudge = llm, m, ""
-		d.r.Stats.Model = m.Model
+	}
+	utility := s.Utility
+	if utility == nil {
+		utility = DefaultUtility
+	}
+	llm, m, err := utility(prov, key)
+	if err != nil {
+		d.noJudge = err.Error()
 		return
 	}
+	d.llm, d.model, d.noJudge = llm, m, ""
+	d.r.Stats.Model, d.r.Stats.Persona = m.Model, p.ID
 }
 
 // --- the judge ---------------------------------------------------------------------------
