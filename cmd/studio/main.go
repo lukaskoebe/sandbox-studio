@@ -241,6 +241,7 @@ func run(addr, image string, log *slog.Logger) error {
 		Secrets:   vault,
 		Paths:     p,
 		Log:       log,
+		Forget:    gitRemote.ForgetSandbox,
 	}
 	hub.OnConnect = mgr.Configure
 	hub.OnCall = routeCalls(brw, agentMem.HandleCall)
@@ -249,6 +250,9 @@ func run(addr, image string, log *slog.Logger) error {
 	go mgr.FollowEnvironments(ctx, bus)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
+	}
+	if err := gitRemote.Sweep(ctx); err != nil {
+		log.Warn("git staging cleanup", "err", err)
 	}
 	builds, err := templatebuild.New(templatebuild.Options{Store: st, Runtime: rt, Guests: mgr, Registry: registry, Bus: bus, Log: log})
 	if err != nil {

@@ -56,6 +56,9 @@ type Manager struct {
 	Log   *slog.Logger
 	// Builds builds the templates of imported sandboxes; nil disables template imports.
 	Builds Builds
+	// Forget removes host-side state kept for a sandbox elsewhere (git staging repos) once
+	// it is deleted; nil keeps none.
+	Forget func(envID, id string) error
 
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
@@ -524,7 +527,22 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 	}
 	m.Hub.Close(rec.ID)
 	m.Egress.Detach(rec.ID)
-	return m.Store.DeleteSandbox(ctx, envID, id)
+	if err := m.Store.DeleteSandbox(ctx, envID, id); err != nil {
+		return err
+	}
+	m.forget(envID, id)
+	return nil
+}
+
+// forget removes a deleted sandbox's host-side state. Failures are logged, not returned:
+// the sandbox is gone, and Studio sweeps leftovers at its next start.
+func (m *Manager) forget(envID, id string) {
+	if m.Forget == nil {
+		return
+	}
+	if err := m.Forget(envID, id); err != nil {
+		m.Log.Error("sandbox state cleanup", "sandbox", id, "err", err)
+	}
 }
 
 // WaitReady waits until the sandbox's guest agent is connected.

@@ -161,5 +161,9 @@ func (m *Manager) RemoveBrowser(ctx context.Context, envID, personaID string) er
 	}
 	m.Hub.Close(rec.ID)
 	m.Egress.Detach(rec.ID)
-	return m.Store.DeleteSandbox(ctx, envID, rec.ID)
+	if err := m.Store.DeleteSandbox(ctx, envID, rec.ID); err != nil {
+		return err
+	}
+	m.forget(envID, rec.ID)
+	return nil
 }
