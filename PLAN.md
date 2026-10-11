@@ -1097,8 +1097,7 @@ are part of the acceptance criteria.
   `release.yml` builds on native runners, because the SDK needs CGO. It pins the base image
   digest through `version.BaseImage`, signs when secrets exist, and publishes checksums and
   attestations. See [docs/release.md](docs/release.md).
-- Open: the browser image is not in the release yet (it comes with M7). Signing and
-  notarization are untested until the certificates exist.
+- Open: signing and notarization are untested until the certificates exist.
 
 ACP-driven chat sessions (design: [docs/design/chat-mode.md](docs/design/chat-mode.md)) and teammate "tasks"/heartbeats (OpenClaw-style proactive work) come
 after M9, or slot in after M5 if wanted earlier.
