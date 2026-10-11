@@ -22,7 +22,10 @@ func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool) d
 	p := doctor.HostProbes()
 	p.MSBPath = runtime.MSBPath
 	p.ImageCached = runtime.ImageCached
-	ports := []string{addr, gatewayAddr, templateRegistryAddr}
+	ports := []string{addr}
+	if gatewayAddr, registryAddr, err := serviceAddrs(addr); err == nil {
+		ports = append(ports, gatewayAddr, registryAddr)
+	}
 	o := doctor.Options{DataDir: dataDir, Image: image, MSBVersion: runtime.MSBVersion(), Ports: ports, Owned: map[string]bool{}}
 	for _, port := range ports {
 		o.Owned[port] = owned

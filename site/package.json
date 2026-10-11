@@ -1,0 +1,18 @@
+{
+  "name": "sandbox-studio-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.6",
+    "astro": "^7.3.8"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.0"
+  }
+}

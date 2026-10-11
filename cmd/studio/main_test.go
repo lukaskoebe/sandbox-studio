@@ -30,3 +30,21 @@ func TestDefaultImage(t *testing.T) {
 		t.Errorf("defaultImage() = %q, want the pinned digest", got)
 	}
 }
+
+func TestServiceAddrs(t *testing.T) {
+	for addr, want := range map[string][2]string{
+		"127.0.0.1:7878": {"127.0.0.1:7879", "127.0.0.1:7880"},
+		"127.0.0.1:7978": {"127.0.0.1:7979", "127.0.0.1:7980"},
+		"[::1]:9000":     {"127.0.0.1:9001", "127.0.0.1:9002"},
+	} {
+		gateway, registry, err := serviceAddrs(addr)
+		if err != nil || gateway != want[0] || registry != want[1] {
+			t.Errorf("serviceAddrs(%q) = %q, %q, %v; want %q, %q", addr, gateway, registry, err, want[0], want[1])
+		}
+	}
+	for _, addr := range []string{"127.0.0.1", "127.0.0.1:http", "127.0.0.1:0", "127.0.0.1:65534"} {
+		if _, _, err := serviceAddrs(addr); err == nil {
+			t.Errorf("serviceAddrs(%q) succeeded", addr)
+		}
+	}
+}
