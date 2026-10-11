@@ -21,8 +21,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
-// acpKillGrace is how long an ACP agent gets between SIGTERM and SIGKILL once its stream
-// closed.
+// acpKillGrace is how long an ACP process group gets to drain after its leader exits or
+// receives SIGTERM before remaining group members receive SIGKILL.
 var acpKillGrace = 5 * time.Second
 
 // acpEnvValue admits the fixed paths of the ACP environment (CLAUDE_CODE_EXECUTABLE,
@@ -113,8 +113,9 @@ func (a *Agent) serveACP(st net.Conn, br *bufio.Reader) error {
 
 // runACP starts cmd for chat, replies {} and then pipes the stream to its stdin and its
 // stdout to the stream. When the host closes the stream the agent's stdin is closed and
-// its process group gets SIGTERM, then SIGKILL after acpKillGrace; when the agent exits
-// the stream is closed. cmd must start a new process group (Setsid or Setpgid).
+// its process group gets SIGTERM, then SIGKILL after acpKillGrace. Leader exit is monitored
+// from startup so descendants that keep stdout or stderr open are also stopped. cmd must
+// start a new process group (Setsid or Setpgid).
 func runACP(slots *acpSlots, st net.Conn, br *bufio.Reader, cmd *exec.Cmd, chat, logPath string) error {
 	if err := slots.acquire(chat); err != nil {
 		return replyError(st, err)
@@ -138,77 +139,143 @@ func runACP(slots *acpSlots, st net.Conn, br *bufio.Reader, cmd *exec.Cmd, chat,
 	if err := cmd.Start(); err != nil {
 		return replyError(st, err)
 	}
-	p := &acpProcess{cmd: cmd, grace: acpKillGrace}
+	outputDrained := make(chan struct{})
+	p := &acpProcess{
+		cmd: cmd, grace: acpKillGrace, done: make(chan struct{}),
+		leaderDone: make(chan struct{}), stopRequested: make(chan struct{}),
+	}
+	// Observe the leader from startup. A descendant can keep stdout open after the
+	// leader exits, which would otherwise leave the output copy waiting forever.
+	go p.monitor(outputDrained)
 	if err := replyError(st, nil); err != nil {
-		p.stop()
-		p.wait()
+		close(outputDrained)
+		_ = st.Close()
+		_ = stdin.Close()
+		stopAndWait(p)
 		return err
 	}
 
 	// Host → agent. The stream ending (host closed it, or the channel died) stops the agent.
+	hostToAgentDone := make(chan struct{})
 	go func() {
-		io.Copy(stdin, br)
-		stdin.Close()
+		defer close(hostToAgentDone)
+		_, _ = io.Copy(stdin, br)
+		_ = stdin.Close()
 		p.stop()
 	}()
 	// Agent → host until the agent closes its stdout, normally by exiting.
-	io.Copy(st, stdout)
-	err = p.wait()
-	st.Close()
+	_, streamErr := io.Copy(st, stdout)
+	close(outputDrained)
+	// A closed stdout is the end of this ACP stream even if the process or one of its
+	// children is still alive. Close the other direction, then stop and reap the group.
+	_ = st.Close()
+	err = stopAndWait(p)
+	<-hostToAgentDone
+	if streamErr != nil {
+		return fmt.Errorf("chat %s: forwarding ACP output: %w", chat, streamErr)
+	}
 	if err != nil {
 		return fmt.Errorf("chat %s: the ACP agent exited: %w", chat, err)
 	}
 	return nil
 }
 
+// stopAndWait asks the leader to stop, waits for the startup monitor to kill any remaining
+// group members, and then performs the sole cmd.Wait after stream copying has finished.
+func stopAndWait(p *acpProcess) error {
+	p.stop()
+	return p.wait()
+}
+
 // acpProcess signals an agent's process group only while its leader is unreaped, so its
 // PID can't have been reused.
 type acpProcess struct {
-	cmd    *exec.Cmd
-	grace  time.Duration
-	mu     sync.Mutex
-	exited bool
-	done   chan struct{}
-	once   sync.Once
-}
-
-func (p *acpProcess) doneCh() chan struct{} {
-	p.once.Do(func() { p.done = make(chan struct{}) })
-	return p.done
+	cmd           *exec.Cmd
+	grace         time.Duration
+	mu            sync.Mutex
+	leaderExited  bool
+	exited        bool
+	done          chan struct{}
+	leaderDone    chan struct{}
+	stopRequested chan struct{}
+	stopOnce      sync.Once
 }
 
 func (p *acpProcess) signal(sig syscall.Signal) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if !p.exited {
+	if !p.exited && !p.leaderExited {
 		syscall.Kill(-p.cmd.Process.Pid, sig)
 	}
 }
 
-// stop sends SIGTERM to the process group and SIGKILL after acpKillGrace unless the
-// agent exited in between.
+// stop requests shutdown, sends SIGTERM while the leader is still running, and escalates
+// only if the leader has not exited within the grace period. The monitor handles remaining
+// descendants once it has observed leader exit.
 func (p *acpProcess) stop() {
+	p.stopOnce.Do(func() { close(p.stopRequested) })
 	p.signal(syscall.SIGTERM)
+	timer := time.NewTimer(p.grace)
+	defer timer.Stop()
 	select {
-	case <-p.doneCh():
-	case <-time.After(p.grace):
-		p.signal(syscall.SIGKILL)
+	case <-p.leaderDone:
+	case <-timer.C:
+		select {
+		case <-p.leaderDone:
+		default:
+			p.signal(syscall.SIGKILL)
+		}
 	}
 }
 
-// wait waits for the agent to exit without reaping it, marks it exited and then reaps it.
-func (p *acpProcess) wait() error {
+// monitor observes leader exit from startup without reaping it. It lets the stdout copy
+// drain normally, but kills the group after the grace period if a descendant still holds
+// stdout or stderr. Once output is drained or shutdown was requested, it kills immediately.
+func (p *acpProcess) monitor(outputDrained <-chan struct{}) {
 	var info unix.Siginfo
+	var waitErr error
 	for {
-		err := unix.Waitid(unix.P_PID, p.cmd.Process.Pid, &info, unix.WEXITED|unix.WNOWAIT, nil)
-		if err != unix.EINTR {
+		waitErr = unix.Waitid(unix.P_PID, p.cmd.Process.Pid, &info, unix.WEXITED|unix.WNOWAIT, nil)
+		if waitErr != unix.EINTR {
 			break
 		}
 	}
+	if waitErr != nil {
+		// Without Waitid confirmation, the process-group ID is not safe to signal.
+		// Wake the sole waiter so cmd.Wait can report the underlying failure.
+		p.mu.Lock()
+		p.leaderExited = true
+		close(p.leaderDone)
+		p.exited = true
+		close(p.done)
+		p.mu.Unlock()
+		return
+	}
+
 	p.mu.Lock()
-	p.exited = true
+	p.leaderExited = true
+	close(p.leaderDone)
 	p.mu.Unlock()
-	close(p.doneCh())
+
+	timer := time.NewTimer(p.grace)
+	defer timer.Stop()
+	select {
+	case <-outputDrained:
+	case <-p.stopRequested:
+	case <-timer.C:
+	}
+
+	// Waitid(WNOWAIT) leaves the exited leader as a zombie, pinning its PID and
+	// process-group ID until the sole cmd.Wait below reaps it.
+	p.mu.Lock()
+	syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
+	p.exited = true
+	close(p.done)
+	p.mu.Unlock()
+}
+
+func (p *acpProcess) wait() error {
+	<-p.done
 	return p.cmd.Wait()
 }
 
