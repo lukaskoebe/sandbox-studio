@@ -23,6 +23,7 @@ import {
   AttachmentMedia,
   AttachmentTitle,
 } from "@/components/ui/attachment"
+import { Badge } from "@/components/ui/badge"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import {
   Collapsible,
@@ -31,8 +32,14 @@ import {
 } from "@/components/ui/collapsible"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import { Message, MessageContent } from "@/components/ui/message"
+import { Spinner } from "@/components/ui/spinner"
 import type { components } from "@/lib/api/schema.gen"
-import type { ChatItem, ChatTurn } from "@/lib/chats"
+import {
+  chatStateLabels,
+  type Chat,
+  type ChatItem,
+  type ChatTurn,
+} from "@/lib/chats"
 import { cn, formatBytes } from "@/lib/utils"
 
 type MarkerKind = components["schemas"]["MarkerBody"]["kind"]
@@ -223,4 +230,14 @@ export function turnUsage(t: ChatTurn): string {
       `${Math.round((u.contextUsed / u.contextSize) * 100)}% of memory used`
     )
   return parts.join(" · ")
+}
+
+/** What the chat is doing, as a badge. */
+export function ChatStateBadge({ chat }: { chat: Chat }) {
+  return (
+    <Badge variant={chat.state === "running" ? "secondary" : "outline"}>
+      {chat.state === "running" && <Spinner className="size-2.5" />}
+      {chatStateLabels[chat.state]}
+    </Badge>
+  )
 }

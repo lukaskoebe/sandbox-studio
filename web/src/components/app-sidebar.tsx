@@ -6,6 +6,7 @@ import {
   BrainIcon,
   BrowserIcon,
   CaretUpDownIcon,
+  ChatsCircleIcon,
   CheckIcon,
   CubeIcon,
   GearIcon,
@@ -98,6 +99,22 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <SquaresFourIcon />
                 <span>Overview</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Chats"
+                isActive={
+                  !!matchRoute({
+                    to: "/e/$env/chats",
+                    params: { env },
+                    fuzzy: true,
+                  })
+                }
+                render={<Link to="/e/$env/chats" params={{ env }} />}
+              >
+                <ChatsCircleIcon />
+                <span>Chats</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
