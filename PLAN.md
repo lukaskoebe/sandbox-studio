@@ -1096,7 +1096,7 @@ are part of the acceptance criteria.
 - Open: the browser image is not in the release yet (it comes with M7). Signing and
   notarization are untested until the certificates exist.
 
-ACP-driven chat sessions and persona "tasks"/heartbeats (OpenClaw-style proactive work) come
+ACP-driven chat sessions (design: [docs/design/chat-mode.md](docs/design/chat-mode.md)) and persona "tasks"/heartbeats (OpenClaw-style proactive work) come
 after M9, or slot in after M5 if wanted earlier.
 
 ## 9. Spikes and risks (M0)
