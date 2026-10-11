@@ -609,6 +609,19 @@
         ],
         "type": "object"
       },
+      "ChatTerminal": {
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "description": "The tmux session's name; attach to it like any agent session",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "type": "object"
+      },
       "Checkpoint": {
         "additionalProperties": false,
         "properties": {
@@ -1808,6 +1821,139 @@
         "required": [
           "kind",
           "text"
+        ],
+        "type": "object"
+      },
+      "FileChange": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "description": "Lines added",
+            "format": "int64",
+            "type": "integer"
+          },
+          "binary": {
+            "description": "Not text, or too large to compare by line",
+            "type": "boolean"
+          },
+          "diff": {
+            "description": "Unified diff of the file",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "removed": {
+            "description": "Lines removed",
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "added",
+              "modified",
+              "deleted"
+            ],
+            "type": "string"
+          },
+          "truncated": {
+            "description": "The diff was cut, or left out to keep the reply small",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "status",
+          "added",
+          "removed"
+        ],
+        "type": "object"
+      },
+      "FileContent": {
+        "additionalProperties": false,
+        "properties": {
+          "binary": {
+            "description": "Neither text nor a shown image type",
+            "type": "boolean"
+          },
+          "data": {
+            "contentEncoding": "base64",
+            "description": "The file, base64-encoded",
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tooLarge": {
+            "description": "Larger than 1 MiB",
+            "type": "boolean"
+          },
+          "unreadable": {
+            "description": "The sandbox's agent user can't read it",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "size"
+        ],
+        "type": "object"
+      },
+      "FileEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "modTime": {
+            "description": "Unix seconds",
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "file",
+              "dir",
+              "symlink",
+              "other"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "size",
+          "modTime"
+        ],
+        "type": "object"
+      },
+      "FileList": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "truncated": {
+            "description": "More than 1,000 entries",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entries"
         ],
         "type": "object"
       },
@@ -3487,6 +3633,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "chat": {
+            "description": "The chat this session continues, when a chat was opened in the terminal",
+            "type": "string"
+          },
           "created": {
             "format": "int64",
             "type": "integer"
@@ -4081,6 +4231,10 @@
       "Turn": {
         "additionalProperties": false,
         "properties": {
+          "changes": {
+            "$ref": "#/components/schemas/TurnChanges",
+            "description": "The files the turn changed, once it ended"
+          },
           "chatId": {
             "type": "string"
           },
@@ -4113,6 +4267,10 @@
           "stopReason": {
             "type": "string"
           },
+          "undoable": {
+            "description": "The workspace can be put back as it was before this turn",
+            "type": "boolean"
+          },
           "undoneAt": {
             "format": "date-time",
             "type": "string"
@@ -4122,12 +4280,36 @@
           }
         },
         "required": [
+          "undoable",
           "id",
           "chatId",
           "seq",
           "origin",
           "startedAt",
           "rev"
+        ],
+        "type": "object"
+      },
+      "TurnChanges": {
+        "additionalProperties": false,
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileChange"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "more": {
+            "description": "Changed files not listed",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files"
         ],
         "type": "object"
       },
@@ -4151,6 +4333,44 @@
             "description": "The prompt response's usage, as the agent reports it"
           }
         },
+        "type": "object"
+      },
+      "UISettings": {
+        "additionalProperties": false,
+        "properties": {
+          "agentView": {
+            "description": "How agent sessions open by default",
+            "enum": [
+              "chat",
+              "terminal"
+            ],
+            "type": "string"
+          },
+          "asked": {
+            "description": "The user chose agentView; until then it is chat and the UI asks once",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "agentView",
+          "asked"
+        ],
+        "type": "object"
+      },
+      "UISettingsUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "agentView": {
+            "enum": [
+              "chat",
+              "terminal"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentView"
+        ],
         "type": "object"
       },
       "UpdateProviderInBody": {
@@ -5354,6 +5574,224 @@
               }
             },
             "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/return": {
+      "post": {
+        "description": "Ends the chat's TUI and reattaches the agent; turns made in the terminal arrive on the stream with origin terminal. Does nothing for a chat that isn't in the terminal.",
+        "operationId": "returnToChat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/terminal": {
+      "post": {
+        "description": "Hands the chat's agent session to its harness's TUI in a tmux session tagged with the chat. The chat is read-only in state terminal until returnToChat. Calling it again restarts the TUI if it exited. 409 while a turn runs, and before the chat's first prompt.",
+        "operationId": "openChatInTerminal",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTerminal"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/turns/{turn}/changes": {
+      "get": {
+        "description": "The files the turn changed, with unified diffs of text files (at most 128 KiB each and 512 KiB in all; truncated marks the rest). Without diffs once the turn's snapshots are gone.",
+        "operationId": "getTurnChanges",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Turn ID",
+            "in": "path",
+            "name": "turn",
+            "required": true,
+            "schema": {
+              "description": "Turn ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TurnChanges"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/turns/{turn}/undo": {
+      "post": {
+        "description": "Puts the sandbox's workspace back as it was before the turn, undoing it and every later turn (.git and ignored files stay). The turns get undoneAt and the next prompt tells the agent. 409 while a turn runs, in the terminal, and for turns that aren't undoable.",
+        "operationId": "undoTurn",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Turn ID",
+            "in": "path",
+            "name": "turn",
+            "required": true,
+            "schema": {
+              "description": "Turn ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "default": {
             "content": {
@@ -8292,6 +8730,134 @@
         ]
       }
     },
+    "/api/environments/{env}/sandboxes/{id}/files": {
+      "get": {
+        "description": "Lists a directory of the sandbox's workspace, directories first, at most 1,000 entries. Symlinks are listed, never followed.",
+        "operationId": "listFiles",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Relative to /workspace; empty for /workspace itself",
+            "explode": false,
+            "in": "query",
+            "name": "path",
+            "schema": {
+              "description": "Relative to /workspace; empty for /workspace itself",
+              "maxLength": 4096,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/files/content": {
+      "get": {
+        "description": "Reads a file of the sandbox's workspace: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come with their data; otherwise tooLarge, binary or unreadable (the agent user can't read it) says why not.",
+        "operationId": "readFile",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Relative to /workspace; empty for /workspace itself",
+            "explode": false,
+            "in": "query",
+            "name": "path",
+            "schema": {
+              "description": "Relative to /workspace; empty for /workspace itself",
+              "maxLength": 4096,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes/{id}/fork": {
       "post": {
         "description": "Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
@@ -8449,6 +9015,16 @@
               "maximum": 65535,
               "minimum": 1,
               "type": "integer"
+            }
+          },
+          {
+            "description": "Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned",
+            "explode": false,
+            "in": "query",
+            "name": "embed",
+            "schema": {
+              "description": "Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned",
+              "type": "boolean"
             }
           }
         ],
@@ -10193,6 +10769,74 @@
         },
         "tags": [
           "providers"
+        ]
+      }
+    },
+    "/api/settings/ui": {
+      "get": {
+        "operationId": "getUISettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UISettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "setUISettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UISettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UISettings"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "settings"
         ]
       }
     },
