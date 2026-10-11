@@ -15,6 +15,7 @@ import {
   MemoryConflictDecision,
 } from "@/components/memory-conflict"
 import { MemoryShareDecision } from "@/components/memory-sessions"
+import { PermissionDecision } from "@/components/chat/permission-card"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -50,12 +51,18 @@ export function ApprovalStack() {
   const all = pending.data ?? []
   useTitleCount(all.length)
 
+  // Pages that show these requests themselves: the network page its environment's
+  // network requests, a chat its own permission requests.
   const onNetwork = matchRoute({ to: "/e/$env/network" })
-  const items = onNetwork
-    ? all.filter(
-        (a) => a.kind !== "network" || a.environmentId !== onNetwork.env
-      )
-    : all
+  const onChat = matchRoute({ to: "/e/$env/chats/$chat" })
+  const items = all.filter(
+    (a) =>
+      !(
+        onNetwork &&
+        a.kind === "network" &&
+        a.environmentId === onNetwork.env
+      ) && !(onChat && a.chatPermission?.chatId === onChat.chat)
+  )
   const review = all.find((a) => a.id === reviewing)
   const sheet = (
     <>
@@ -194,6 +201,8 @@ function ApprovalCard({
           <BrowserActionDecision approval={approval} />
         ) : approval.kind === "browser.credential" ? (
           <BrowserCredentialDecision approval={approval} />
+        ) : approval.kind === "chat.permission" && approval.chatPermission ? (
+          <ChatPermissionSummary approval={approval} />
         ) : approval.kind === "network" ? (
           <ApprovalDecision approval={approval} compact />
         ) : (
@@ -203,6 +212,45 @@ function ApprovalCard({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** An agent's permission request: the files it touches, a link to its chat, and the decision. */
+function ChatPermissionSummary({ approval }: { approval: Approval }) {
+  const p = approval.chatPermission
+  if (!p) return null
+  const env = approval.environmentId
+  return (
+    <div className="grid gap-2 text-xs">
+      {p.diffs && p.diffs.length > 0 && (
+        <ul className="grid gap-0.5 font-mono text-[0.6875rem] text-muted-foreground">
+          {p.diffs.slice(0, 3).map((d) => (
+            <li key={d.path} className="flex gap-1.5">
+              <span className="min-w-0 flex-1 truncate" title={d.path}>
+                {d.path}
+              </span>
+              <span className="text-emerald-700 dark:text-emerald-400">
+                +{d.added}
+              </span>
+              <span className="text-destructive">−{d.removed}</span>
+            </li>
+          ))}
+          {p.diffs.length > 3 && <li>and {p.diffs.length - 3} more files</li>}
+        </ul>
+      )}
+      <Link
+        to="/e/$env/chats/$chat"
+        params={{ env, chat: p.chatId }}
+        className="text-muted-foreground underline-offset-2 hover:underline"
+      >
+        In {p.teammateName}'s chat “{p.chatTitle || "New chat"}”
+      </Link>
+      <PermissionDecision
+        env={env}
+        approvalId={approval.id}
+        options={p.options ?? []}
+      />
+    </div>
   )
 }
 
