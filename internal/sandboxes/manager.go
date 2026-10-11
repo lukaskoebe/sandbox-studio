@@ -118,7 +118,7 @@ type CreateRequest struct {
 	MaxMemoryMiB int    `json:"maxMemoryMiB,omitempty"`
 	WorkspaceMiB int    `json:"workspaceMiB,omitempty"`
 	DockerMiB    int    `json:"dockerMiB,omitempty"`
-	PersonaID    string `json:"personaId,omitempty" doc:"The persona that owns the sandbox; omit for an unowned sandbox"`
+	TeammateID   string `json:"teammateId,omitempty" doc:"The teammate that owns the sandbox; omit for an unowned sandbox"`
 }
 
 // VMName is the microsandbox name of the current generation of sb.
@@ -208,18 +208,18 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err := runtime.ValidName(req.Name); err != nil {
 		return View{}, err
 	}
-	rec, err := m.createOwnedRecord(ctx, envID, req.Name, resolved, "", req.PersonaID)
+	rec, err := m.createOwnedRecord(ctx, envID, req.Name, resolved, "", req.TeammateID)
 	if err != nil {
 		return View{}, err
 	}
 	return m.bootSandbox(ctx, rec, resolved, nil, false)
 }
 
-// CreateFromTemplateFor starts a fresh sandbox, owned by personaID if it is set, from one
+// CreateFromTemplateFor starts a fresh sandbox, owned by teammateID if it is set, from one
 // ready, same-environment template. The catalog row pins the template before registry
 // metadata is resolved or the VM is allocated. The runtime receives credentials only in
 // its host-side image options.
-func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, name, personaID string) (View, error) {
+func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, name, teammateID string) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
 	}
@@ -227,7 +227,7 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 	if err != nil {
 		return View{}, err
 	}
-	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, templateID, personaID)
+	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, templateID, teammateID)
 	if err != nil {
 		return View{}, err
 	}

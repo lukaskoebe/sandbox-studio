@@ -13,13 +13,13 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, envID, templateID, nam
 	return m.CreateFromTemplateFor(ctx, envID, templateID, name, "")
 }
 
-// createOwnedRecord inserts the catalog record of a new sandbox. personaID, if set, must be
-// a persona of the environment; ownership never changes afterwards.
-func (m *Manager) createOwnedRecord(ctx context.Context, envID, name string, resolved resources.Resources, templateID, personaID string) (store.Sandbox, error) {
+// createOwnedRecord inserts the catalog record of a new sandbox. teammateID, if set, must be
+// a teammate of the environment; ownership never changes afterwards.
+func (m *Manager) createOwnedRecord(ctx context.Context, envID, name string, resolved resources.Resources, templateID, teammateID string) (store.Sandbox, error) {
 	return m.Store.CreateSandbox(ctx, store.Sandbox{
 		EnvironmentID: envID,
 		TemplateID:    templateID,
-		PersonaID:     personaID,
+		TeammateID:    teammateID,
 		Name:          name,
 		CPUs:          int(resolved.CPUs),
 		MemoryMiB:     int(resolved.MemoryMiB),

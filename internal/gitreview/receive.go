@@ -280,9 +280,9 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	if !current.IsZero() {
 		rv.Old = current.String()
 	}
-	if t.sb.PersonaID != "" {
-		if p, err := s.Store.Persona(ctx, t.sb.EnvironmentID, t.sb.PersonaID); err == nil {
-			rv.Persona = p.Name
+	if t.sb.TeammateID != "" {
+		if p, err := s.Store.Teammate(ctx, t.sb.EnvironmentID, t.sb.TeammateID); err == nil {
+			rv.Teammate = p.Name
 		}
 	}
 
@@ -314,7 +314,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 		return "", refusal("internal error: Sandbox Studio could not stage the push")
 	}
 	_, err = s.Store.CreateGitPush(ctx, store.GitPush{
-		ID: id, EnvironmentID: t.sb.EnvironmentID, SandboxID: t.sb.ID, PersonaName: rv.Persona,
+		ID: id, EnvironmentID: t.sb.EnvironmentID, SandboxID: t.sb.ID, TeammateName: rv.Teammate,
 		ForgeID: t.forge.ID, ForgeName: t.forge.Name, Owner: t.owner, Repo: t.repo, Ref: cmd.Name.String(),
 		OldSHA: current.String(), NewSHA: cmd.New.String(), ApprovalID: a.ID,
 	})

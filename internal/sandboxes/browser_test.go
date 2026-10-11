@@ -20,31 +20,31 @@ func (r *specRecordingRuntime) Create(ctx context.Context, name string, spec run
 	return r.fakeSandboxRuntime.Create(ctx, name, spec, socket, labels)
 }
 
-func browserPersona(t *testing.T, f *checkpointFixture) store.Persona {
+func browserTeammate(t *testing.T, f *checkpointFixture) store.Teammate {
 	t.Helper()
 	if _, err := f.store.CreateProvider(f.ctx, store.Provider{ID: "sub", EnvironmentID: f.env.ID, Name: "sub", Kind: "claude_subscription"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	p, err := f.store.CreatePersona(f.ctx, store.Persona{EnvironmentID: f.env.ID, Name: "ada", Harness: "claude", ProviderID: "sub", GitName: "ada", GitEmail: "ada@agents.invalid"})
+	p, err := f.store.CreateTeammate(f.ctx, store.Teammate{EnvironmentID: f.env.ID, Name: "ada", Harness: "claude", ProviderID: "sub", GitName: "ada", GitEmail: "ada@agents.invalid"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return p
 }
 
-// The browser VM runs the browser image, is one per persona and stays out of every public
+// The browser VM runs the browser image, is one per teammate and stays out of every public
 // sandbox path: the API, terminals and previews (which would reach its DevTools port).
 func TestBrowserVMIsPrivate(t *testing.T) {
 	f := newCheckpointFixture(t)
 	rt := &specRecordingRuntime{f.runtime, map[string]runtime.Spec{}}
 	f.manager.Runtime = rt
-	p := browserPersona(t, f)
+	p := browserTeammate(t, f)
 
 	sb, err := f.manager.createBrowser(f.ctx, f.env.ID, p.ID, "sandbox-studio-browser:dev")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sb.Kind != store.SandboxKindBrowser || sb.PersonaID != p.ID || sb.Name != BrowserName(p.ID) {
+	if sb.Kind != store.SandboxKindBrowser || sb.TeammateID != p.ID || sb.Name != BrowserName(p.ID) {
 		t.Fatalf("browser row %+v", sb)
 	}
 	if spec := rt.specs[VMName(sb)]; spec.BaseImage != "sandbox-studio-browser:dev" || spec.Image != nil {

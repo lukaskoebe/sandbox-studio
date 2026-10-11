@@ -77,7 +77,7 @@ type DreamStats struct {
 	OutputTokens int    `json:"outputTokens"`
 	CostMicros   int64  `json:"costMicros"`
 	Model        string `json:"model,omitempty"`
-	Persona      string `json:"persona,omitempty" doc:"ID of the persona whose provider's utility model judged"`
+	Teammate     string `json:"teammate,omitempty" doc:"ID of the teammate whose provider's utility model judged"`
 }
 
 // DreamRun is one consolidation of a scope.
@@ -169,14 +169,14 @@ func (s *Service) unlockScope(env, scope string) {
 	delete(s.dreaming, env+"|"+scope)
 }
 
-// checkScope accepts shared and the scopes of the environment's personas.
+// checkScope accepts shared and the scopes of the environment's teammates.
 func (s *Service) checkScope(ctx context.Context, env, scope string) error {
 	if err := memory.ValidateScope(scope); err != nil {
 		return err
 	}
-	if id, ok := strings.CutPrefix(scope, "persona:"); ok {
-		if _, err := s.Store.Persona(ctx, env, id); err != nil {
-			return fmt.Errorf("%w: no persona %s", memory.ErrInvalid, id)
+	if id, ok := strings.CutPrefix(scope, "teammate:"); ok {
+		if _, err := s.Store.Teammate(ctx, env, id); err != nil {
+			return fmt.Errorf("%w: no teammate %s", memory.ErrInvalid, id)
 		}
 	}
 	return nil
@@ -243,7 +243,7 @@ func (s *Service) saveRun(ctx context.Context, r *DreamRun) error {
 	return err
 }
 
-// Dream consolidates a scope ("shared" or "persona:<id>") and returns the finished run.
+// Dream consolidates a scope ("shared" or "teammate:<id>") and returns the finished run.
 // An interrupted run of the scope is resumed; everything it already did is skipped or
 // repeated without effect. A cancelled ctx leaves the run to be resumed.
 func (s *Service) Dream(ctx context.Context, env, scope, trigger string) (DreamRun, error) {
@@ -331,9 +331,9 @@ func (d *dreamer) run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	persona := scope != memory.SharedScope
-	if persona {
-		// New shared facts are compared with this persona's facts, which they may supersede.
+	teammate := scope != memory.SharedScope
+	if teammate {
+		// New shared facts are compared with this teammate's facts, which they may supersede.
 		shared, err := s.Memory.FactsCreatedBetween(ctx, d.env, memory.SharedScope, d.r.WindowStart, d.r.WindowEnd)
 		if err != nil {
 			return err
@@ -550,29 +550,29 @@ func (d *dreamer) pairs(ctx context.Context, fresh []memory.Fact) ([][2]memory.F
 	return out, nil
 }
 
-// SharedJudge is the persona whose provider's utility model consolidates shared memory.
+// SharedJudge is the teammate whose provider's utility model consolidates shared memory.
 type SharedJudge struct {
-	PersonaID   string `json:"personaId"`
-	PersonaName string `json:"personaName"`
-	Model       string `json:"model"`
+	TeammateID   string `json:"teammateId"`
+	TeammateName string `json:"teammateName"`
+	Model        string `json:"model"`
 }
 
-// sharedJudge picks the persona whose model consolidates shared memory: of the personas
+// sharedJudge picks the teammate whose model consolidates shared memory: of the teammates
 // whose provider has a utility model, the one that has had it the longest. Studio does not
-// record when a persona's provider was set, so that is the oldest persona (created first,
-// then the lowest ID). ok is false when no persona has a utility model.
-func (s *Service) sharedJudge(ctx context.Context, env string) (p store.Persona, prov store.Provider, ok bool, err error) {
-	personas, err := s.Store.Personas(ctx, env)
+// record when a teammate's provider was set, so that is the oldest teammate (created first,
+// then the lowest ID). ok is false when no teammate has a utility model.
+func (s *Service) sharedJudge(ctx context.Context, env string) (p store.Teammate, prov store.Provider, ok bool, err error) {
+	teammates, err := s.Store.Teammates(ctx, env)
 	if err != nil {
 		return p, prov, false, err
 	}
-	slices.SortFunc(personas, func(a, b store.Persona) int {
+	slices.SortFunc(teammates, func(a, b store.Teammate) int {
 		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
 			return c
 		}
 		return strings.Compare(a.ID, b.ID)
 	})
-	for _, p = range personas {
+	for _, p = range teammates {
 		if prov, err = s.Store.Provider(ctx, env, p.ProviderID); errors.Is(err, store.ErrNotFound) {
 			continue
 		} else if err != nil {
@@ -582,10 +582,10 @@ func (s *Service) sharedJudge(ctx context.Context, env string) (p store.Persona,
 			return p, prov, true, nil
 		}
 	}
-	return store.Persona{}, store.Provider{}, false, nil
+	return store.Teammate{}, store.Provider{}, false, nil
 }
 
-// SharedJudge reports whose utility model consolidates shared memory; nil if no persona's
+// SharedJudge reports whose utility model consolidates shared memory; nil if no teammate's
 // provider has one.
 func (s *Service) SharedJudge(ctx context.Context, env string) (*SharedJudge, error) {
 	p, prov, ok, err := s.sharedJudge(ctx, env)
@@ -593,24 +593,24 @@ func (s *Service) SharedJudge(ctx context.Context, env string) (*SharedJudge, er
 		return nil, err
 	}
 	m, _ := UtilityFor(prov)
-	return &SharedJudge{PersonaID: p.ID, PersonaName: p.Name, Model: m.Model}, nil
+	return &SharedJudge{TeammateID: p.ID, TeammateName: p.Name, Model: m.Model}, nil
 }
 
-// setupJudge picks the utility model: the persona's provider's, or for shared memory the
-// one of sharedJudge. Subscriptions have none (TODO S8). The chosen persona never falls
-// back to another one, so the persona the memory page names is the one that is used.
+// setupJudge picks the utility model: the teammate's provider's, or for shared memory the
+// one of sharedJudge. Subscriptions have none (TODO S8). The chosen teammate never falls
+// back to another one, so the teammate the memory page names is the one that is used.
 func (d *dreamer) setupJudge(ctx context.Context) {
 	s := d.s
-	var p store.Persona
+	var p store.Teammate
 	var prov store.Provider
-	if id, ok := strings.CutPrefix(d.r.Scope, "persona:"); ok {
+	if id, ok := strings.CutPrefix(d.r.Scope, "teammate:"); ok {
 		var err error
-		if p, err = s.Store.Persona(ctx, d.env, id); err != nil {
-			d.noJudge = "the persona is gone"
+		if p, err = s.Store.Teammate(ctx, d.env, id); err != nil {
+			d.noJudge = "the teammate is gone"
 			return
 		}
 		if prov, err = s.Store.Provider(ctx, d.env, p.ProviderID); err != nil {
-			d.noJudge = "the persona's provider is gone"
+			d.noJudge = "the teammate's provider is gone"
 			return
 		}
 		if m, ok := UtilityFor(prov); !ok {
@@ -621,10 +621,10 @@ func (d *dreamer) setupJudge(ctx context.Context) {
 		var ok bool
 		var err error
 		if p, prov, ok, err = s.sharedJudge(ctx, d.env); err != nil {
-			d.noJudge = "listing personas failed"
+			d.noJudge = "listing teammates failed"
 			return
 		} else if !ok {
-			d.noJudge = "no persona with a utility model (subscriptions have none yet)"
+			d.noJudge = "no teammate with a utility model (subscriptions have none yet)"
 			return
 		}
 	}
@@ -646,7 +646,7 @@ func (d *dreamer) setupJudge(ctx context.Context) {
 		return
 	}
 	d.llm, d.model, d.noJudge = llm, m, ""
-	d.r.Stats.Model, d.r.Stats.Persona = m.Model, p.ID
+	d.r.Stats.Model, d.r.Stats.Teammate = m.Model, p.ID
 }
 
 // --- the judge ---------------------------------------------------------------------------
@@ -800,7 +800,7 @@ func (d *dreamer) judgeAndApply(ctx context.Context, p [2]memory.Fact) (called b
 }
 
 // apply carries out a verdict on A (older) and B (newer). Automatic changes never lower
-// trust: B supersedes A only with at least A's tier, and a persona fact never replaces a
+// trust: B supersedes A only with at least A's tier, and a teammate fact never replaces a
 // shared one. Everything else goes to the user as a conflict.
 func (d *dreamer) apply(ctx context.Context, a, b memory.Fact, v verdictOut) error {
 	s := d.s
@@ -809,7 +809,7 @@ func (d *dreamer) apply(ctx context.Context, a, b memory.Fact, v verdictOut) err
 		return nil
 	case VerdictDuplicate:
 		if a.Scope != b.Scope {
-			return nil // a persona's copy of a shared fact is harmless
+			return nil // a teammate's copy of a shared fact is harmless
 		}
 		ok, err := s.Memory.MergeFacts(ctx, d.env, a.ID, b.ID)
 		if ok {
@@ -965,13 +965,13 @@ func (s *Service) dueDreams(ctx context.Context) ([]dueDream, error) {
 	nightly := time.Date(local.Year(), local.Month(), local.Day(), DreamHour, 0, 0, 0, time.Local)
 	var out []dueDream
 	for _, e := range envs {
-		personas, err := s.Store.Personas(ctx, e.ID)
+		teammates, err := s.Store.Teammates(ctx, e.ID)
 		if err != nil {
 			return nil, err
 		}
 		scopes := []string{memory.SharedScope}
-		for _, p := range personas {
-			scopes = append(scopes, memory.PersonaScope(p.ID))
+		for _, p := range teammates {
+			scopes = append(scopes, memory.TeammateScope(p.ID))
 		}
 		for _, scope := range scopes {
 			var running int

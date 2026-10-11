@@ -40,7 +40,7 @@ const (
 	MaxString    = 4096
 )
 
-// Event is a harness's hook payload in neutral form. It names no sandbox, persona or
+// Event is a harness's hook payload in neutral form. It names no sandbox, teammate or
 // environment: Studio knows the sandbox from the channel the event arrives on.
 type Event struct {
 	Harness   string `json:"harness"`

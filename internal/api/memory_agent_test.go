@@ -25,11 +25,11 @@ func TestMemoryShareApproval(t *testing.T) {
 	base += env.ID
 	ctx := t.Context()
 	prov, _ := s.Store.CreateProvider(ctx, store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "claude", Kind: "claude_subscription"}, nil)
-	dev, err := s.Store.CreatePersona(ctx, store.Persona{EnvironmentID: env.ID, Name: "dev", Harness: "claude", ProviderID: prov.ID, GitName: "Dev", GitEmail: "dev@example.com"})
+	dev, err := s.Store.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: "dev", Harness: "claude", ProviderID: prov.ID, GitName: "Dev", GitEmail: "dev@example.com"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sb, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "dev-1", CPUs: 1, PersonaID: dev.ID})
+	sb, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "dev-1", CPUs: 1, TeammateID: dev.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestMemoryShareApproval(t *testing.T) {
 
 	id := share("CI runs on the self-hosted runner")
 	rec := do(h, "GET", base+"/approvals?status=pending", "")
-	if !strings.Contains(rec.Body.String(), `"memoryShare":{"personaId":"`+dev.ID) {
+	if !strings.Contains(rec.Body.String(), `"memoryShare":{"teammateId":"`+dev.ID) {
 		t.Fatalf("inbox: %s", rec.Body)
 	}
 	if rec := do(h, "POST", base+"/approvals/"+id+"/decide", `{"action":"allow"}`); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"approved"`) {
@@ -53,7 +53,7 @@ func TestMemoryShareApproval(t *testing.T) {
 		t.Fatalf("second decision: %d %s", rec.Code, rec.Body)
 	}
 	shared, _ := s.Memory.Facts(ctx, env.ID, memory.FactFilter{Scope: memory.SharedScope})
-	if len(shared) != 1 || shared[0].AuthorPersona != dev.ID || shared[0].SupportCount != 1 {
+	if len(shared) != 1 || shared[0].AuthorTeammate != dev.ID || shared[0].SupportCount != 1 {
 		t.Fatalf("shared: %+v", shared)
 	}
 
@@ -88,14 +88,14 @@ func TestMemoryDreamAPI(t *testing.T) {
 	base := testOrigin + "/api/environments/" + env.ID + "/memory"
 	ctx := t.Context()
 	prov, _ := s.Store.CreateProvider(ctx, store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "claude", Kind: "claude_subscription"}, nil)
-	dev, err := s.Store.CreatePersona(ctx, store.Persona{EnvironmentID: env.ID, Name: "dev", Harness: "claude", ProviderID: prov.ID, GitName: "Dev", GitEmail: "dev@example.com"})
+	dev, err := s.Store.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: "dev", Harness: "claude", ProviderID: prov.ID, GitName: "Dev", GitEmail: "dev@example.com"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope := memory.PersonaScope(dev.ID)
+	scope := memory.TeammateScope(dev.ID)
 
-	if rec := do(h, "POST", base+"/dream", `{"scope":"persona:nobody"}`); rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("unknown persona: %d %s", rec.Code, rec.Body)
+	if rec := do(h, "POST", base+"/dream", `{"scope":"teammate:nobody"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown teammate: %d %s", rec.Code, rec.Body)
 	}
 	rec := do(h, "POST", base+"/dream", `{"scope":"`+scope+`"}`)
 	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"trigger":"manual"`) {
@@ -112,7 +112,7 @@ func TestMemoryDreamAPI(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	a, _ := s.Memory.CreateFact(ctx, env.ID, memory.FactInput{Scope: scope, Kind: memory.KindFact, Text: "Use tabs"}, memory.Origin{Tier: memory.TierInferred, AuthorPersona: dev.ID})
+	a, _ := s.Memory.CreateFact(ctx, env.ID, memory.FactInput{Scope: scope, Kind: memory.KindFact, Text: "Use tabs"}, memory.Origin{Tier: memory.TierInferred, AuthorTeammate: dev.ID})
 	b, _ := s.Memory.CreateFact(ctx, env.ID, memory.FactInput{Scope: memory.SharedScope, Kind: memory.KindFact, Text: "Use spaces"}, memory.Origin{Tier: memory.TierUser})
 	c, err := s.Memory.CreateConflict(ctx, env.ID, a.ID, b.ID, "contradiction", "indentation differs")
 	if err != nil {
@@ -129,7 +129,7 @@ func TestMemoryDreamAPI(t *testing.T) {
 	if rec := do(h, "POST", base+"/facts/"+a.ID+"/promote", ""); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("promote a disputed fact: %d", rec.Code)
 	}
-	p, _ := s.Memory.CreateFact(ctx, env.ID, memory.FactInput{Scope: scope, Kind: memory.KindFact, Text: "CI is Buildkite"}, memory.Origin{Tier: memory.TierInferred, AuthorPersona: dev.ID})
+	p, _ := s.Memory.CreateFact(ctx, env.ID, memory.FactInput{Scope: scope, Kind: memory.KindFact, Text: "CI is Buildkite"}, memory.Origin{Tier: memory.TierInferred, AuthorTeammate: dev.ID})
 	rec = do(h, "POST", base+"/facts/"+p.ID+"/promote", "")
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"memoryShare":{`) {
 		t.Fatalf("promote: %d %s", rec.Code, rec.Body)

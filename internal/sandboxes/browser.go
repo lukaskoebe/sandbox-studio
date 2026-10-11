@@ -10,7 +10,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// A persona's browser VM (PLAN §6.8, internal/browser) is a sandbox row of kind browser.
+// A teammate's browser VM (PLAN §6.8, internal/browser) is a sandbox row of kind browser.
 // It runs the browser image, is created on the first browser call, stopped when idle and
 // never shown or reachable as a sandbox: Public hides it from the sandbox API, terminals
 // and previews.
@@ -22,15 +22,15 @@ var browserResources = resources.Resources{CPUs: 2, MemoryMiB: 2048, MaxMemoryMi
 // browserReady bounds the wait for a booting browser VM's guest agent.
 const browserReady = 90 * time.Second
 
-// BrowserName is the name of a persona's browser VM row.
-func BrowserName(personaID string) string { return "browser-" + personaID }
+// BrowserName is the name of a teammate's browser VM row.
+func BrowserName(teammateID string) string { return "browser-" + teammateID }
 
-// EnsureBrowser returns the persona's browser VM with its guest agent connected: it creates
+// EnsureBrowser returns the teammate's browser VM with its guest agent connected: it creates
 // the VM from image on first use and starts it when stopped.
-func (m *Manager) EnsureBrowser(ctx context.Context, envID, personaID, image string) (store.Sandbox, error) {
-	rec, err := m.Store.BrowserSandbox(ctx, envID, personaID)
+func (m *Manager) EnsureBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {
+	rec, err := m.Store.BrowserSandbox(ctx, envID, teammateID)
 	if errors.Is(err, store.ErrNotFound) {
-		rec, err = m.createBrowser(ctx, envID, personaID, image)
+		rec, err = m.createBrowser(ctx, envID, teammateID, image)
 	}
 	if err != nil {
 		return store.Sandbox{}, err
@@ -66,16 +66,16 @@ func (m *Manager) EnsureBrowser(ctx context.Context, envID, personaID, image str
 	return rec, m.WaitReady(ctx, rec.ID, browserReady)
 }
 
-func (m *Manager) createBrowser(ctx context.Context, envID, personaID, image string) (store.Sandbox, error) {
+func (m *Manager) createBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {
 	r := browserResources
 	rec, err := m.Store.CreateBrowserSandbox(ctx, store.Sandbox{
-		EnvironmentID: envID, PersonaID: personaID, Name: BrowserName(personaID),
+		EnvironmentID: envID, TeammateID: teammateID, Name: BrowserName(teammateID),
 		CPUs: int(r.CPUs), MemoryMiB: int(r.MemoryMiB), MaxMemoryMiB: int(r.MaxMemoryMiB),
 		WorkspaceMiB: int(r.WorkspaceMiB), DockerMiB: int(r.DockerMiB),
 	})
 	if errors.Is(err, store.ErrExists) {
 		// Another call created it first.
-		return m.Store.BrowserSandbox(ctx, envID, personaID)
+		return m.Store.BrowserSandbox(ctx, envID, teammateID)
 	}
 	if err != nil {
 		return store.Sandbox{}, err
@@ -111,9 +111,9 @@ func (m *Manager) createBrowser(ctx context.Context, envID, personaID, image str
 	return rec, nil
 }
 
-// BrowserStatus returns the persona's browser VM and its state; the VM may not exist.
-func (m *Manager) BrowserStatus(ctx context.Context, envID, personaID string) (store.Sandbox, runtime.Status, error) {
-	rec, err := m.Store.BrowserSandbox(ctx, envID, personaID)
+// BrowserStatus returns the teammate's browser VM and its state; the VM may not exist.
+func (m *Manager) BrowserStatus(ctx context.Context, envID, teammateID string) (store.Sandbox, runtime.Status, error) {
+	rec, err := m.Store.BrowserSandbox(ctx, envID, teammateID)
 	if errors.Is(err, store.ErrNotFound) {
 		return store.Sandbox{}, runtime.StatusAbsent, nil
 	}
@@ -124,9 +124,9 @@ func (m *Manager) BrowserStatus(ctx context.Context, envID, personaID string) (s
 	return rec, st, err
 }
 
-// StopBrowser stops the persona's browser VM, keeping its profile disk.
-func (m *Manager) StopBrowser(ctx context.Context, envID, personaID string) error {
-	rec, err := m.Store.BrowserSandbox(ctx, envID, personaID)
+// StopBrowser stops the teammate's browser VM, keeping its profile disk.
+func (m *Manager) StopBrowser(ctx context.Context, envID, teammateID string) error {
+	rec, err := m.Store.BrowserSandbox(ctx, envID, teammateID)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
 	}
@@ -141,10 +141,10 @@ func (m *Manager) StopBrowser(ctx context.Context, envID, personaID string) erro
 	return m.Runtime.Stop(ctx, VMName(rec))
 }
 
-// RemoveBrowser deletes the persona's browser VM, its profile (cookies, logins) and its
-// row. The persona can then be deleted.
-func (m *Manager) RemoveBrowser(ctx context.Context, envID, personaID string) error {
-	rec, err := m.Store.BrowserSandbox(ctx, envID, personaID)
+// RemoveBrowser deletes the teammate's browser VM, its profile (cookies, logins) and its
+// row. The teammate can then be deleted.
+func (m *Manager) RemoveBrowser(ctx context.Context, envID, teammateID string) error {
+	rec, err := m.Store.BrowserSandbox(ctx, envID, teammateID)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
 	}

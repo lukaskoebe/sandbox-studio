@@ -55,7 +55,7 @@ func (s *Service) decideAction(ctx context.Context, a store.Approval, d integrat
 		if status == store.StatusDenied {
 			verdict = store.BrowserDeny
 		}
-		pat, err := CheckPattern(store.BrowserPattern{EnvironmentID: a.EnvironmentID, PersonaID: p.PersonaID, Action: p.Action, Origin: p.Origin, Verdict: verdict})
+		pat, err := CheckPattern(store.BrowserPattern{EnvironmentID: a.EnvironmentID, TeammateID: p.TeammateID, Action: p.Action, Origin: p.Origin, Verdict: verdict})
 		if err != nil {
 			return err
 		}
@@ -64,7 +64,7 @@ func (s *Service) decideAction(ctx context.Context, a store.Approval, d integrat
 		}
 	}
 	if status == store.StatusApproved {
-		s.addGrant(a.EnvironmentID, p.PersonaID, r)
+		s.addGrant(a.EnvironmentID, p.TeammateID, r)
 	}
 	return nil
 }
@@ -83,40 +83,40 @@ func (s *Service) decideCredentialKind(ctx context.Context, a store.Approval, d 
 	return s.decideCredential(ctx, a, status == store.StatusApproved)
 }
 
-// BrowserStatus is the state of a persona's browser, for the Browser page.
+// BrowserStatus is the state of a teammate's browser, for the Browser page.
 type BrowserStatus struct {
-	PersonaID string `json:"personaId"`
-	VM        string `json:"vm" enum:"absent,created,starting,running,draining,suspended,stopped,crashed" doc:"State of the browser VM"`
-	Takeover  bool   `json:"takeover" doc:"The user drives; agent calls are paused"`
-	SessionID string `json:"sessionId,omitempty" doc:"The current run's session in the action log"`
-	URL       string `json:"url,omitempty" doc:"The page the broker last saw"`
-	Driver    string `json:"driver,omitempty" doc:"Name of the agent sandbox that drove the browser last"`
+	TeammateID string `json:"teammateId"`
+	VM         string `json:"vm" enum:"absent,created,starting,running,draining,suspended,stopped,crashed" doc:"State of the browser VM"`
+	Takeover   bool   `json:"takeover" doc:"The user drives; agent calls are paused"`
+	SessionID  string `json:"sessionId,omitempty" doc:"The current run's session in the action log"`
+	URL        string `json:"url,omitempty" doc:"The page the broker last saw"`
+	Driver     string `json:"driver,omitempty" doc:"Name of the agent sandbox that drove the browser last"`
 }
 
-// Status reports a persona's browser.
-func (s *Service) Status(ctx context.Context, envID, personaID string) (BrowserStatus, error) {
-	if _, err := s.Store.Persona(ctx, envID, personaID); err != nil {
+// Status reports a teammate's browser.
+func (s *Service) Status(ctx context.Context, envID, teammateID string) (BrowserStatus, error) {
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return BrowserStatus{}, err
 	}
-	_, vm, err := s.VMs.BrowserStatus(ctx, envID, personaID)
+	_, vm, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
 	if err != nil {
 		return BrowserStatus{}, err
 	}
-	out := BrowserStatus{PersonaID: personaID, VM: string(vm)}
+	out := BrowserStatus{TeammateID: teammateID, VM: string(vm)}
 	s.mu.Lock()
-	if st := s.states[personaID]; st != nil && st.env == envID {
+	if st := s.states[teammateID]; st != nil && st.env == envID {
 		out.Takeover, out.SessionID, out.URL, out.Driver = st.takeover, st.session, st.url, st.driver.Name
 	}
 	s.mu.Unlock()
 	return out, nil
 }
 
-// Start boots a persona's browser for the user, so the live view has something to show.
-func (s *Service) Start(ctx context.Context, envID, personaID string) error {
-	if _, err := s.Store.Persona(ctx, envID, personaID); err != nil {
+// Start boots a teammate's browser for the user, so the live view has something to show.
+func (s *Service) Start(ctx context.Context, envID, teammateID string) error {
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return err
 	}
-	st := s.state(envID, personaID)
+	st := s.state(envID, teammateID)
 	if err := s.boot(ctx, st); err != nil {
 		return err
 	}
@@ -125,9 +125,9 @@ func (s *Service) Start(ctx context.Context, envID, personaID string) error {
 	return err
 }
 
-// Stop stops a persona's browser VM; its profile stays.
-func (s *Service) Stop(ctx context.Context, envID, personaID string) error {
-	st := s.state(envID, personaID)
+// Stop stops a teammate's browser VM; its profile stays.
+func (s *Service) Stop(ctx context.Context, envID, teammateID string) error {
+	st := s.state(envID, teammateID)
 	select {
 	case st.run <- struct{}{}:
 	case <-ctx.Done():
@@ -135,7 +135,7 @@ func (s *Service) Stop(ctx context.Context, envID, personaID string) error {
 	}
 	defer func() { <-st.run }()
 	s.endTakeover(st)
-	if err := s.VMs.StopBrowser(ctx, envID, personaID); err != nil {
+	if err := s.VMs.StopBrowser(ctx, envID, teammateID); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -145,10 +145,10 @@ func (s *Service) Stop(ctx context.Context, envID, personaID string) error {
 	return nil
 }
 
-// Remove deletes a persona's browser VM with its profile (cookies and logins). The
+// Remove deletes a teammate's browser VM with its profile (cookies and logins). The
 // action log stays.
-func (s *Service) Remove(ctx context.Context, envID, personaID string) error {
-	st := s.state(envID, personaID)
+func (s *Service) Remove(ctx context.Context, envID, teammateID string) error {
+	st := s.state(envID, teammateID)
 	select {
 	case st.run <- struct{}{}:
 	case <-ctx.Done():
@@ -156,7 +156,7 @@ func (s *Service) Remove(ctx context.Context, envID, personaID string) error {
 	}
 	defer func() { <-st.run }()
 	s.endTakeover(st)
-	if err := s.VMs.RemoveBrowser(ctx, envID, personaID); err != nil {
+	if err := s.VMs.RemoveBrowser(ctx, envID, teammateID); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -166,31 +166,31 @@ func (s *Service) Remove(ctx context.Context, envID, personaID string) error {
 	return nil
 }
 
-// ForgetPersona removes a persona's browser and its action log; the persona can then be
+// ForgetTeammate removes a teammate's browser and its action log; the teammate can then be
 // deleted.
-func (s *Service) ForgetPersona(ctx context.Context, envID, personaID string) error {
-	if err := s.Remove(ctx, envID, personaID); err != nil {
+func (s *Service) ForgetTeammate(ctx context.Context, envID, teammateID string) error {
+	if err := s.Remove(ctx, envID, teammateID); err != nil {
 		return err
 	}
-	if err := s.DeleteHistory(ctx, envID, personaID); err != nil {
+	if err := s.DeleteHistory(ctx, envID, teammateID); err != nil {
 		return err
 	}
 	s.mu.Lock()
-	delete(s.states, personaID)
+	delete(s.states, teammateID)
 	s.mu.Unlock()
 	return nil
 }
 
 // SetTakeover hands the browser to the user (on) or back to the agents. While the user
 // drives, the live view forwards input, agent calls wait and then are refused, and the
-// persona's rules decide the browser's connections.
-func (s *Service) SetTakeover(ctx context.Context, envID, personaID string, on bool) error {
-	if _, err := s.Store.Persona(ctx, envID, personaID); err != nil {
+// teammate's rules decide the browser's connections.
+func (s *Service) SetTakeover(ctx context.Context, envID, teammateID string, on bool) error {
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return err
 	}
-	st := s.state(envID, personaID)
+	st := s.state(envID, teammateID)
 	if on {
-		if _, vm, err := s.VMs.BrowserStatus(ctx, envID, personaID); err != nil || vm != runtime.StatusRunning {
+		if _, vm, err := s.VMs.BrowserStatus(ctx, envID, teammateID); err != nil || vm != runtime.StatusRunning {
 			return ErrNotLive
 		}
 		s.mu.Lock()
@@ -235,17 +235,17 @@ func (s *Service) endTakeover(st *state) bool {
 	return true
 }
 
-// Patterns lists a persona's browser patterns.
-func (s *Service) Patterns(ctx context.Context, envID, personaID string) ([]store.BrowserPattern, error) {
-	if _, err := s.Store.Persona(ctx, envID, personaID); err != nil {
+// Patterns lists a teammate's browser patterns.
+func (s *Service) Patterns(ctx context.Context, envID, teammateID string) ([]store.BrowserPattern, error) {
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return nil, err
 	}
-	return s.Store.BrowserPatterns(ctx, envID, personaID)
+	return s.Store.BrowserPatterns(ctx, envID, teammateID)
 }
 
-// AddPattern stores a pattern for a persona.
+// AddPattern stores a pattern for a teammate.
 func (s *Service) AddPattern(ctx context.Context, p store.BrowserPattern) (store.BrowserPattern, error) {
-	if _, err := s.Store.Persona(ctx, p.EnvironmentID, p.PersonaID); err != nil {
+	if _, err := s.Store.Teammate(ctx, p.EnvironmentID, p.TeammateID); err != nil {
 		return p, err
 	}
 	p, err := CheckPattern(p)

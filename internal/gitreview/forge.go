@@ -13,8 +13,8 @@ import (
 	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // Forge kinds.
@@ -75,9 +75,9 @@ func CheckForge(name, kind, baseURL string) (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("%w: unknown kind %q", ErrInvalid, kind)
 	}
-	base, host, err := personas.BaseURL(baseURL)
+	base, host, err := teammates.BaseURL(baseURL)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: %s", ErrInvalid, strings.TrimPrefix(err.Error(), personas.ErrInvalid.Error()+": "))
+		return "", "", fmt.Errorf("%w: %s", ErrInvalid, strings.TrimPrefix(err.Error(), teammates.ErrInvalid.Error()+": "))
 	}
 	if dnsproxy.IsVirtual(host) {
 		return "", "", fmt.Errorf("%w: the base URL must name a public host", ErrInvalid)

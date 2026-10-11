@@ -58,7 +58,7 @@ func (s *Service) Run(ctx context.Context) {
 		case j := <-s.jobs:
 			jctx, cancel := context.WithTimeout(ctx, extractTimeout)
 			if err := s.extract(jctx, j); err != nil {
-				s.Log.Warn("memory extraction failed", "sandbox", j.c.sandbox.ID, "persona", j.c.persona.ID, "err", err)
+				s.Log.Warn("memory extraction failed", "sandbox", j.c.sandbox.ID, "teammate", j.c.teammate.ID, "err", err)
 			}
 			cancel()
 		}
@@ -90,10 +90,10 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 		done("extraction skipped: " + reason)
 		return nil
 	}
-	if c.persona.ProviderID == "" {
-		return skip("the persona has no provider")
+	if c.teammate.ProviderID == "" {
+		return skip("the teammate has no provider")
 	}
-	p, err := s.Store.Provider(ctx, c.env, c.persona.ProviderID)
+	p, err := s.Store.Provider(ctx, c.env, c.teammate.ProviderID)
 	if err != nil {
 		return fmt.Errorf("provider: %w", err)
 	}
@@ -179,7 +179,7 @@ var factsSchema = map[string]any{
 
 func extractionPrompt(c caller, transcript string) (system, user string) {
 	schema, _ := json.Marshal(factsSchema)
-	system = `You extract durable memories from a coding agent's session for the agent's persona "` + c.persona.Name + `".
+	system = `You extract durable memories from a coding agent's session for the agent's teammate "` + c.teammate.Name + `".
 Keep only what will still matter in a later session: the user's preferences, decisions and their reasons, facts about people, projects and systems, and procedures that worked. Skip chit-chat, transient state, things any engineer knows, anything already marked as memory, and secrets of any kind.
 Each fact is one short self-contained sentence. tier is "user" only when the user said it, otherwise "inferred". entities are short lowercase names (a project, person, service or tool). attribute is a short key such as "test_command" when the fact sets one property of an entity, else "". evidence is a verbatim quote of at most 300 characters from the transcript that supports the fact.
 Answer with JSON only, no prose, matching this schema: ` + string(schema) + `
@@ -297,11 +297,11 @@ func saidByUser(transcript, evidence string) bool {
 
 // duplicate finds an active fact of scope that cand repeats, and says why it matched.
 func (s *Service) duplicate(ctx context.Context, env, scope string, cand candidate) (*memory.Fact, string, error) {
-	persona := strings.TrimPrefix(scope, "persona:")
+	teammate := strings.TrimPrefix(scope, "teammate:")
 	if scope == memory.SharedScope {
-		persona = ""
+		teammate = ""
 	}
-	hits, err := s.Memory.Search(ctx, env, memory.SearchRequest{Query: cand.Text, Persona: persona, Limit: 10})
+	hits, err := s.Memory.Search(ctx, env, memory.SearchRequest{Query: cand.Text, Teammate: teammate, Limit: 10})
 	if errors.Is(err, memory.ErrInvalid) {
 		return nil, "", nil // no searchable words
 	}

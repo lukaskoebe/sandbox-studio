@@ -14,9 +14,9 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// The action log keeps what agents and the user did in a persona's browser, with a JPEG
+// The action log keeps what agents and the user did in a teammate's browser, with a JPEG
 // of the page after each action that changed it. It is bounded twice: Keep entries per
-// persona and ShotBudget bytes of screenshots in all, the oldest going first. It never
+// teammate and ShotBudget bytes of screenshots in all, the oldest going first. It never
 // holds a credential: details are scrubbed, a credential fill is logged by name, and no
 // screenshot is taken while a filled credential may be visible.
 
@@ -44,7 +44,7 @@ func (s *Service) record(ctx context.Context, st *state, e entry) {
 		session = "-"
 	}
 	a := store.BrowserAction{
-		EnvironmentID: st.env, PersonaID: st.persona, SessionID: session, SandboxID: e.sandbox,
+		EnvironmentID: st.env, TeammateID: st.teammate, SessionID: session, SandboxID: e.sandbox,
 		Actor: e.actor, Action: e.action, Target: clip(Scrub(e.target, secrets), 300), URL: clip(Scrub(e.url, secrets), 2000),
 		Outcome: e.outcome, Detail: clip(Scrub(e.detail, secrets), 500), At: s.now(),
 	}
@@ -60,7 +60,7 @@ func (s *Service) record(ctx context.Context, st *state, e entry) {
 		s.removeShot(a.Screenshot)
 		return
 	}
-	s.prune(ctx, st.env, st.persona)
+	s.prune(ctx, st.env, st.teammate)
 }
 
 func (s *Service) saveShot(data []byte) (string, error) {
@@ -80,8 +80,8 @@ func (s *Service) removeShot(name string) {
 }
 
 // ShotPath returns the file of an action's screenshot.
-func (s *Service) ShotPath(ctx context.Context, envID, personaID string, id int64) (string, error) {
-	a, err := s.Store.BrowserAction(ctx, envID, personaID, id)
+func (s *Service) ShotPath(ctx context.Context, envID, teammateID string, id int64) (string, error) {
+	a, err := s.Store.BrowserAction(ctx, envID, teammateID, id)
 	if err != nil {
 		return "", err
 	}
@@ -91,9 +91,9 @@ func (s *Service) ShotPath(ctx context.Context, envID, personaID string, id int6
 	return filepath.Join(s.Dir, a.Screenshot), nil
 }
 
-// prune keeps the newest Keep actions of a persona and ShotBudget bytes of screenshots.
-func (s *Service) prune(ctx context.Context, envID, personaID string) {
-	dropped, err := s.Store.PruneBrowserActions(ctx, envID, personaID, or(s.Keep, defaultKeep))
+// prune keeps the newest Keep actions of a teammate and ShotBudget bytes of screenshots.
+func (s *Service) prune(ctx context.Context, envID, teammateID string) {
+	dropped, err := s.Store.PruneBrowserActions(ctx, envID, teammateID, or(s.Keep, defaultKeep))
 	if err != nil {
 		s.log().Warn("pruning the browser action log failed", "err", err)
 		return
@@ -151,24 +151,24 @@ func (s *Service) sweepScreenshots(ctx context.Context) {
 	s.enforceBudget(ctx)
 }
 
-// DeleteHistory drops a persona's action log and its screenshots.
-func (s *Service) DeleteHistory(ctx context.Context, envID, personaID string) error {
-	names, err := s.Store.DeleteBrowserActions(ctx, envID, personaID)
+// DeleteHistory drops a teammate's action log and its screenshots.
+func (s *Service) DeleteHistory(ctx context.Context, envID, teammateID string) error {
+	names, err := s.Store.DeleteBrowserActions(ctx, envID, teammateID)
 	for _, n := range names {
 		s.removeShot(n)
 	}
 	return err
 }
 
-// Actions lists a persona's action log, newest first.
-func (s *Service) Actions(ctx context.Context, envID, personaID, sessionID string, limit int) ([]store.BrowserAction, error) {
-	if _, err := s.Store.Persona(ctx, envID, personaID); err != nil {
+// Actions lists a teammate's action log, newest first.
+func (s *Service) Actions(ctx context.Context, envID, teammateID, sessionID string, limit int) ([]store.BrowserAction, error) {
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return nil, err
 	}
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	return s.Store.BrowserActions(ctx, envID, personaID, sessionID, limit)
+	return s.Store.BrowserActions(ctx, envID, teammateID, sessionID, limit)
 }
 
 func clip(s string, n int) string {

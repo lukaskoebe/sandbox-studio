@@ -1,7 +1,7 @@
 // Package harness renders the guest-side configuration of the agent harnesses Studio runs:
 // OpenCode, Claude Code and Codex (PLAN.md §6.6, docs/harnesses.md).
 //
-// An adapter turns a persona and its provider into files in the agent user's home and the
+// An adapter turns a teammate and its provider into files in the agent user's home and the
 // command that starts the harness's TUI. It never sees a secret: the provider's credential
 // reaches the guest only as its placeholder in an environment variable, which the gateway
 // swaps for the real key on the way to the provider's host.
@@ -20,11 +20,11 @@ import (
 	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
-// Persona is what an adapter needs to know about a persona.
-type Persona struct {
+// Teammate is what an adapter needs to know about a teammate.
+type Teammate struct {
 	Name     string
 	Role     string
 	Soul     string // markdown
@@ -33,10 +33,10 @@ type Persona struct {
 	GitEmail string
 }
 
-// Provider is what an adapter needs to know about a persona's provider. It has no field
+// Provider is what an adapter needs to know about a teammate's provider. It has no field
 // for a credential on purpose: only the placeholder ever reaches the guest.
 type Provider struct {
-	Kind        string // personas.Kind*
+	Kind        string // teammates.Kind*
 	BaseURL     string // openai_compatible only
 	Model       string // the provider's default model
 	EnvVar      string // where the harness reads its credential from
@@ -62,7 +62,7 @@ type Harness interface {
 	// Render returns the harness's config files: the managed instructions block, the
 	// provider and model, the auto-approve mode, the hooks that call `studio-agent hook`
 	// and the registration of `studio-agent mcp`.
-	Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error)
+	Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, error)
 	// TUICommand is the command line of the interactive TUI, run in a login shell.
 	TUICommand(opts SessionOpts) []string
 	// ACPCommand is the command line of the harness's ACP agent, or nil if it has none
@@ -80,7 +80,7 @@ type Harness interface {
 
 var all = []Harness{OpenCode{}, Claude{}, Codex{}}
 
-// Lookup returns the adapter of a harness by its name (personas.Harness*).
+// Lookup returns the adapter of a harness by its name (teammates.Harness*).
 func Lookup(name string) (Harness, bool) {
 	for _, h := range all {
 		if h.Name() == name {
@@ -100,10 +100,10 @@ func Env(provider Provider) map[string]string {
 	return env
 }
 
-// Files are all files a session of h for p writes: the harness's own and the persona's
+// Files are all files a session of h for p writes: the harness's own and the teammate's
 // git identity.
-func Files(h Harness, p Persona, s Sandbox, provider Provider) ([]GuestFile, error) {
-	if !personas.Supports(provider.Kind, h.Name()) {
+func Files(h Harness, p Teammate, s Sandbox, provider Provider) ([]GuestFile, error) {
+	if !teammates.Supports(provider.Kind, h.Name()) {
 		return nil, fmt.Errorf("%s can't use a %s provider", h.Name(), provider.Kind)
 	}
 	files, err := h.Render(p, s, provider)
@@ -116,35 +116,35 @@ func Files(h Harness, p Persona, s Sandbox, provider Provider) ([]GuestFile, err
 	return files, nil
 }
 
-// model is the model a session uses: the persona's, else the provider's. It is empty for
+// model is the model a session uses: the teammate's, else the provider's. It is empty for
 // subscription providers without either, and then the harness picks its default.
-func model(p Persona, provider Provider) string {
+func model(p Teammate, provider Provider) string {
 	if p.Model != "" {
 		return p.Model
 	}
 	return provider.Model
 }
 
-// GitConfig is the persona's git identity as the agent user's global git config. It uses
+// GitConfig is the teammate's git identity as the agent user's global git config. It uses
 // the XDG location, which git reads before ~/.gitconfig, so a ~/.gitconfig the user writes
 // in the sandbox still wins. There are no credentials in it: pushes go through the
 // gateway's placeholders like any other request.
-func GitConfig(p Persona) GuestFile {
-	// personas.CheckGitName and CheckGitEmail refuse quotes, backslashes and newlines.
+func GitConfig(p Teammate) GuestFile {
+	// teammates.CheckGitName and CheckGitEmail refuse quotes, backslashes and newlines.
 	content := fmt.Sprintf("# Managed by Sandbox Studio: rewritten when a session starts.\n[user]\n\tname = %q\n\temail = %s\n",
 		p.GitName, p.GitEmail)
 	return GuestFile{Path: ".config/git/config", Content: content, Mode: 0o644}
 }
 
-// instructions is the managed block: who the persona is, its soul and how its memory
+// instructions is the managed block: who the teammate is, its soul and how its memory
 // works. It goes into the harness's global instructions file in the home, not into
 // /workspace, so it never ends up in the project's repository. The harness reads the file
 // in every session, resumed ones too, so this is the only place the soul reaches the
-// agent; the persona's memory arrives as context at session start (PLAN §6.6).
-func instructions(p Persona, s Sandbox) GuestFile {
+// agent; the teammate's memory arrives as context at session start (PLAN §6.6).
+func instructions(p Teammate, s Sandbox) GuestFile {
 	var b strings.Builder
 	b.WriteString(agentproto.BlockBegin + "\n")
-	b.WriteString("<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the persona in Studio instead; text outside the block is kept. -->\n\n")
+	b.WriteString("<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the teammate in Studio instead; text outside the block is kept. -->\n\n")
 	fmt.Fprintf(&b, "# You are %s\n\n", p.Name)
 	if p.Role != "" {
 		fmt.Fprintf(&b, "Role: %s\n\n", p.Role)
@@ -169,12 +169,12 @@ Studio remembers for you across sessions and sandboxes. At session start you get
 - ` + "`memory_search`" + ` and ` + "`memory_get`" + `: look things up when the injected memories aren't enough.
 - ` + "`remember`" + `: save something right away. Use it for preferences the user states (source ` + "`user`" + `) and for procedures you have verified by running them (source ` + "`verified`" + `, with the command and result as evidence).
 - ` + "`correct`" + ` and ` + "`forget`" + `: fix or retract one of your own facts when it turns out wrong.
-- ` + "`share`" + `: propose a fact for the shared memory of every persona; the user approves it first.
+- ` + "`share`" + `: propose a fact for the shared memory of every teammate; the user approves it first.
 
 Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
 `
 
-// defuseMarkers keeps text from the persona from closing or opening the managed block:
+// defuseMarkers keeps text from the teammate from closing or opening the managed block:
 // only the outer markers stay intact.
 func defuseMarkers(block string) string {
 	inner := strings.TrimSuffix(strings.TrimPrefix(block, agentproto.BlockBegin), agentproto.BlockEnd+"\n")

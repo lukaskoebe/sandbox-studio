@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // Codex is the adapter of the Codex CLI (@openai/codex on npm).
@@ -19,13 +19,13 @@ import (
 // (mcp_servers.<id>.command and args).
 type Codex struct{}
 
-func (Codex) Name() string { return personas.HarnessCodex }
+func (Codex) Name() string { return teammates.HarnessCodex }
 
 // codexProvider is the model_providers ID Studio uses. The built-in IDs (openai, ollama,
 // lmstudio) are reserved.
 const codexProvider = "studio"
 
-func (Codex) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error) {
+func (Codex) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, error) {
 	var b strings.Builder
 	b.WriteString("# Managed by Sandbox Studio: rewritten when a session starts.\n")
 	m := model(p, provider)
@@ -40,14 +40,14 @@ func (Codex) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error
 
 	var baseURL string
 	switch provider.Kind {
-	case personas.KindOpenAIAPI:
+	case teammates.KindOpenAIAPI:
 		baseURL = "https://api.openai.com/v1"
-	case personas.KindOpenAICompatible:
+	case teammates.KindOpenAICompatible:
 		if provider.BaseURL == "" || m == "" {
 			return nil, fmt.Errorf("an openai_compatible provider needs a base URL and a model")
 		}
 		baseURL = provider.BaseURL
-	case personas.KindChatGPTSubscription:
+	case teammates.KindChatGPTSubscription:
 		// The built-in openai provider with the ChatGPT login (S8).
 	default:
 		return nil, fmt.Errorf("codex can't use a %s provider", provider.Kind)
@@ -70,7 +70,7 @@ func (Codex) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error
 
 	hooks, err := marshalJSON(map[string]any{
 		"description": "Managed by Sandbox Studio: rewritten when a session starts. Forwards to Studio's memory.",
-		"hooks":       claudeStyleHooks(personas.HarnessCodex),
+		"hooks":       claudeStyleHooks(teammates.HarnessCodex),
 	})
 	if err != nil {
 		return nil, err
@@ -115,15 +115,15 @@ func (Codex) TUICommand(SessionOpts) []string {
 // ParseHook reads Codex's hook stdin, which uses Claude Code's field names. verify (S7):
 // the payloads of 0.162.1.
 func (Codex) ParseHook(event string, stdin []byte) (HookEvent, error) {
-	return hookFormat(personas.HarnessCodex).Parse(event, stdin)
+	return hookFormat(teammates.HarnessCodex).Parse(event, stdin)
 }
 
 func (Codex) RenderHookResponse(r HookResult) []byte {
-	return hookFormat(personas.HarnessCodex).Render(r)
+	return hookFormat(teammates.HarnessCodex).Render(r)
 }
 
 // ACPCommand is nil: Codex speaks ACP through a separate adapter (M6).
 func (Codex) ACPCommand() []string { return nil }
 
 // StateDirs: sessions, history and auth are in CODEX_HOME, which defaults to ~/.codex.
-func (Codex) StateDirs() []string { return hookFormat(personas.HarnessCodex).StateDirs }
+func (Codex) StateDirs() []string { return hookFormat(teammates.HarnessCodex).StateDirs }

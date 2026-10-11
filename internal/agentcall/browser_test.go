@@ -22,7 +22,7 @@ func TestBrowserTools(t *testing.T) {
 		names[tl.Name] = true
 		// No tool takes an identity: Studio knows the caller from the channel.
 		props, _ := tl.InputSchema["properties"].(map[string]any)
-		for _, k := range []string{"persona", "sandbox", "persona_id", "sandbox_id", "environment"} {
+		for _, k := range []string{"teammate", "sandbox", "teammate_id", "sandbox_id", "environment"} {
 			if _, ok := props[k]; ok {
 				t.Errorf("%s takes %s", tl.Name, k)
 			}

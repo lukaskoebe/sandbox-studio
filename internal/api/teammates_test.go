@@ -40,7 +40,7 @@ func TestProvidersCRUD(t *testing.T) {
 		t.Fatalf("created: %+v", p)
 	}
 	expectEvent(t, ch, events.Event{Topic: events.TopicSecrets, EnvironmentID: env.ID})
-	expectEvent(t, ch, events.Event{Topic: events.TopicPersonas, EnvironmentID: env.ID})
+	expectEvent(t, ch, events.Event{Topic: events.TopicTeammates, EnvironmentID: env.ID})
 	if got := boundValue(t, s, env.ID); got != providerKey {
 		t.Fatalf("bound key %q", got)
 	}
@@ -151,11 +151,11 @@ func TestProviderValidation(t *testing.T) {
 	}
 }
 
-func TestPersonasCRUD(t *testing.T) {
+func TestTeammatesCRUD(t *testing.T) {
 	h, s := newTestServer(t)
 	env := newEnvironment(t, s, "work")
 	other := newEnvironment(t, s, "other")
-	base := testOrigin + "/api/environments/" + env.ID + "/personas"
+	base := testOrigin + "/api/environments/" + env.ID + "/teammates"
 	anthropic := createProvider(t, h, env, `{"name":"anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
 	compat := createProvider(t, h, env, `{"name":"local","kind":"openai_compatible","apiKey":"k","baseUrl":"https://llm.example.com/v1","model":"qwen3-coder"}`)
 	foreign := createProvider(t, h, other, `{"name":"anthropic","kind":"anthropic_api","apiKey":"k"}`)
@@ -164,12 +164,12 @@ func TestPersonasCRUD(t *testing.T) {
 	if rec.Code != http.StatusCreated || strings.Contains(rec.Body.String(), providerKey) {
 		t.Fatalf("create: %d %s", rec.Code, rec.Body)
 	}
-	ada := decode[store.Persona](t, rec)
+	ada := decode[store.Teammate](t, rec)
 	if ada.GitName != "Ada Lovelace" || ada.GitEmail != "ada-lovelace@agents.invalid" || ada.Soul != "# Ada\nCareful." {
 		t.Fatalf("defaults: %+v", ada)
 	}
 	rec = do(h, "POST", base, `{"name":"Bob","harness":"opencode","providerId":"`+compat.ID+`","gitEmail":"bob@example.com"}`)
-	bob := decode[store.Persona](t, rec)
+	bob := decode[store.Teammate](t, rec)
 	if rec.Code != http.StatusCreated || bob.Model != "qwen3-coder" || bob.GitEmail != "bob@example.com" {
 		t.Fatalf("compatible model default: %d %+v", rec.Code, bob)
 	}
@@ -195,83 +195,83 @@ func TestPersonasCRUD(t *testing.T) {
 	}
 
 	rec = do(h, "PUT", base+"/"+ada.ID, `{"name":"Ada","role":"Author","harness":"opencode","providerId":"`+anthropic.ID+`","model":"claude-opus-4-1","gitName":"Ada L.","gitEmail":"ada@example.com"}`)
-	if got := decode[store.Persona](t, rec); rec.Code != http.StatusOK || got.Role != "Author" || got.Harness != "opencode" || got.GitName != "Ada L." {
+	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.Role != "Author" || got.Harness != "opencode" || got.GitName != "Ada L." {
 		t.Fatalf("update: %d %+v", rec.Code, got)
 	}
-	if rec := do(h, "PUT", testOrigin+"/api/environments/"+other.ID+"/personas/"+ada.ID, `{"name":"Ada","harness":"claude","providerId":"`+foreign.ID+`","model":"m"}`); rec.Code != http.StatusNotFound {
+	if rec := do(h, "PUT", testOrigin+"/api/environments/"+other.ID+"/teammates/"+ada.ID, `{"name":"Ada","harness":"claude","providerId":"`+foreign.ID+`","model":"m"}`); rec.Code != http.StatusNotFound {
 		t.Fatalf("cross-environment update: %d %s", rec.Code, rec.Body)
 	}
-	if got := decode[[]store.Persona](t, do(h, "GET", base, "")); len(got) != 2 {
+	if got := decode[[]store.Teammate](t, do(h, "GET", base, "")); len(got) != 2 {
 		t.Fatalf("list: %+v", got)
 	}
-	if got := decode[[]store.Persona](t, do(h, "GET", testOrigin+"/api/environments/"+other.ID+"/personas", "")); len(got) != 0 {
-		t.Fatalf("personas leak across environments: %+v", got)
+	if got := decode[[]store.Teammate](t, do(h, "GET", testOrigin+"/api/environments/"+other.ID+"/teammates", "")); len(got) != 0 {
+		t.Fatalf("teammates leak across environments: %+v", got)
 	}
 
-	// A provider in use and a persona owning sandboxes can't be deleted.
+	// A provider in use and a teammate owning sandboxes can't be deleted.
 	if rec := do(h, "DELETE", testOrigin+"/api/environments/"+env.ID+"/providers/"+anthropic.ID, ""); rec.Code != http.StatusConflict ||
 		!strings.Contains(rec.Body.String(), "Ada") {
 		t.Fatalf("delete provider in use: %d %s", rec.Code, rec.Body)
 	}
-	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, PersonaID: ada.ID})
+	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rec := do(h, "DELETE", base+"/"+ada.ID, ""); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "ada-dev") {
-		t.Fatalf("delete persona owning a sandbox: %d %s", rec.Code, rec.Body)
+		t.Fatalf("delete teammate owning a sandbox: %d %s", rec.Code, rec.Body)
 	}
 	if err := s.Store.DeleteSandbox(context.Background(), env.ID, sb.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	// Persona-scoped rules: one scope, same environment; they go with the persona.
+	// Teammate-scoped rules: one scope, same environment; they go with the teammate.
 	rules := testOrigin + "/api/environments/" + env.ID + "/rules"
 	other2 := newSandbox(t, s, env, "free")
-	if rec := do(h, "POST", rules, `{"host":"example.com","action":"allow","personaId":"`+ada.ID+`","sandboxId":"`+other2.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
+	if rec := do(h, "POST", rules, `{"host":"example.com","action":"allow","teammateId":"`+ada.ID+`","sandboxId":"`+other2.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("rule with two scopes: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(h, "POST", testOrigin+"/api/environments/"+other.ID+"/rules", `{"host":"example.com","action":"allow","personaId":"`+ada.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("rule for another environment's persona: %d %s", rec.Code, rec.Body)
+	if rec := do(h, "POST", testOrigin+"/api/environments/"+other.ID+"/rules", `{"host":"example.com","action":"allow","teammateId":"`+ada.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("rule for another environment's teammate: %d %s", rec.Code, rec.Body)
 	}
-	rec = do(h, "POST", rules, `{"host":"example.com","action":"allow","personaId":"`+ada.ID+`"}`)
-	if got := decode[store.Rule](t, rec); rec.Code != http.StatusCreated || got.PersonaID != ada.ID {
-		t.Fatalf("persona rule: %d %s", rec.Code, rec.Body)
+	rec = do(h, "POST", rules, `{"host":"example.com","action":"allow","teammateId":"`+ada.ID+`"}`)
+	if got := decode[store.Rule](t, rec); rec.Code != http.StatusCreated || got.TeammateID != ada.ID {
+		t.Fatalf("teammate rule: %d %s", rec.Code, rec.Body)
 	}
 
 	if rec := do(h, "DELETE", base+"/"+ada.ID, ""); rec.Code != http.StatusNoContent {
 		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
 	}
 	if got := decode[[]store.Rule](t, do(h, "GET", rules, "")); len(got) != 0 {
-		t.Fatalf("persona rules survived it: %+v", got)
+		t.Fatalf("teammate rules survived it: %+v", got)
 	}
 	if rec := do(h, "DELETE", base+"/"+ada.ID, ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("delete twice: %d", rec.Code)
 	}
 }
 
-func TestSandboxPersonaValidation(t *testing.T) {
+func TestSandboxTeammateValidation(t *testing.T) {
 	h, s := newTestServer(t)
 	env := newEnvironment(t, s, "work")
 	other := newEnvironment(t, s, "other")
 	sub := createProvider(t, h, other, `{"name":"sub","kind":"claude_subscription"}`)
-	rec := do(h, "POST", testOrigin+"/api/environments/"+other.ID+"/personas", `{"name":"Eve","harness":"claude","providerId":"`+sub.ID+`"}`)
-	eve := decode[store.Persona](t, rec)
+	rec := do(h, "POST", testOrigin+"/api/environments/"+other.ID+"/teammates", `{"name":"Eve","harness":"claude","providerId":"`+sub.ID+`"}`)
+	eve := decode[store.Teammate](t, rec)
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("persona: %d %s", rec.Code, rec.Body)
+		t.Fatalf("teammate: %d %s", rec.Code, rec.Body)
 	}
-	// The persona is checked before anything boots.
-	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/sandboxes", `{"name":"dev","personaId":"`+eve.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("sandbox owned by another environment's persona: %d %s", rec.Code, rec.Body)
+	// The teammate is checked before anything boots.
+	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/sandboxes", `{"name":"dev","teammateId":"`+eve.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("sandbox owned by another environment's teammate: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/templates/t1/sandboxes", `{"name":"dev","personaId":"`+eve.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("template sandbox owned by another environment's persona: %d %s", rec.Code, rec.Body)
+	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/templates/t1/sandboxes", `{"name":"dev","teammateId":"`+eve.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("template sandbox owned by another environment's teammate: %d %s", rec.Code, rec.Body)
 	}
 }
 
-func TestPersonaEndpointsGuarded(t *testing.T) {
+func TestTeammateEndpointsGuarded(t *testing.T) {
 	h, s := newTestServer(t)
 	env := newEnvironment(t, s, "work")
-	for _, path := range []string{"/providers", "/personas"} {
+	for _, path := range []string{"/providers", "/teammates"} {
 		url := testOrigin + "/api/environments/" + env.ID + path
 		if rec := do(h, "POST", url, `{"name":"x","kind":"claude_subscription"}`, "Origin", "http://3000-x.localhost:7878"); rec.Code != http.StatusForbidden {
 			t.Errorf("cross-site POST %s: %d", path, rec.Code)
@@ -279,7 +279,7 @@ func TestPersonaEndpointsGuarded(t *testing.T) {
 	}
 	s.Auth = previewTestAuth(t, func(string) bool { return false })
 	authed := Guard(s.Auth.Middleware(h))
-	for _, path := range []string{"/providers", "/personas", "/../../provider-kinds"} {
+	for _, path := range []string{"/providers", "/teammates", "/../../provider-kinds"} {
 		if rec := do(authed, "GET", testOrigin+"/api/environments/"+env.ID+path, ""); rec.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s without a session: %d", path, rec.Code)
 		}

@@ -24,7 +24,7 @@ type fixture struct {
 	svc      *Service
 	llm      *fakeLLM
 	env      string
-	ada, bob store.Persona
+	ada, bob store.Teammate
 	sbAda    store.Sandbox
 	sbBob    store.Sandbox
 	sbPlain  store.Sandbox
@@ -77,8 +77,8 @@ func newFixture(t *testing.T) *fixture {
 	if _, err := st.CreateProvider(ctx, store.Provider{ID: "sub", EnvironmentID: env.ID, Name: "sub", Kind: "claude_subscription"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	mk := func(name, provider string) store.Persona {
-		p, err := st.CreatePersona(ctx, store.Persona{EnvironmentID: env.ID, Name: name, Harness: "claude", ProviderID: provider,
+	mk := func(name, provider string) store.Teammate {
+		p, err := st.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: name, Harness: "claude", ProviderID: provider,
 			Soul: name + " is careful and terse.", GitName: name, GitEmail: name + "@agents.invalid"})
 		if err != nil {
 			t.Fatal(err)
@@ -86,8 +86,8 @@ func newFixture(t *testing.T) *fixture {
 		return p
 	}
 	f.ada, f.bob = mk("ada", "anth"), mk("bob", "sub")
-	sb := func(name, persona string) store.Sandbox {
-		s, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: name, CPUs: 1, PersonaID: persona})
+	sb := func(name, teammate string) store.Sandbox {
+		s, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: name, CPUs: 1, TeammateID: teammate})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -169,10 +169,22 @@ func (f *fixture) logOf(sessionRef string) []LogEntry {
 	return nil
 }
 
+// An older studio-agent still names the private scope persona.
+func TestRememberOldScopeName(t *testing.T) {
+	f := newFixture(t)
+	var out struct{ Fact memory.Fact }
+	if err := json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodRemember, map[string]any{"text": "Ada deploys on Fridays", "kind": "fact", "scope": "persona"}), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Fact.Scope != memory.TeammateScope(f.ada.ID) {
+		t.Fatalf("remembered %+v", out.Fact)
+	}
+}
+
 func TestScopeEnforcement(t *testing.T) {
 	f := newFixture(t)
 	secret := f.remember(f.sbAda.ID, "Ada's deploy target is the staging cluster")
-	if secret.Scope != memory.PersonaScope(f.ada.ID) || secret.AuthorPersona != f.ada.ID || secret.Tier != memory.TierUser {
+	if secret.Scope != memory.TeammateScope(f.ada.ID) || secret.AuthorTeammate != f.ada.ID || secret.Tier != memory.TierUser {
 		t.Fatalf("remembered %+v", secret)
 	}
 
@@ -187,7 +199,7 @@ func TestScopeEnforcement(t *testing.T) {
 			p = map[string]any{"id": secret.ID}
 		}
 		if _, err := f.call(f.sbBob.ID, m, p); err == nil {
-			t.Errorf("%s on another persona's fact succeeded", m)
+			t.Errorf("%s on another teammate's fact succeeded", m)
 		}
 	}
 	if got, _ := f.mem.Fact(f.ctx, f.env, secret.ID); got.Status != memory.StatusActive || got.Text != secret.Text {
@@ -196,17 +208,17 @@ func TestScopeEnforcement(t *testing.T) {
 
 	// Forged payloads: unknown fields are refused, other scopes too.
 	for _, p := range []map[string]any{
-		{"text": "x y", "kind": "fact", "persona": f.ada.ID},
-		{"text": "x y", "kind": "fact", "scope": memory.PersonaScope(f.ada.ID)},
+		{"text": "x y", "kind": "fact", "teammate": f.ada.ID},
+		{"text": "x y", "kind": "fact", "scope": memory.TeammateScope(f.ada.ID)},
 		{"text": "x y", "kind": "fact", "sandboxId": f.sbAda.ID},
 	} {
 		if _, err := f.call(f.sbBob.ID, agentproto.MethodRemember, p); err == nil {
 			t.Errorf("forged remember %v accepted", p)
 		}
 	}
-	// A hook naming another persona and sandbox is Bob's anyway.
+	// A hook naming another teammate and sandbox is Bob's anyway.
 	f.hook(f.sbBob.ID, map[string]any{"harness": "claude", "event": agenthook.SessionStart, "sessionId": "s-bob",
-		"persona": f.ada.ID, "personaId": f.ada.ID, "sandboxId": f.sbAda.ID, "environmentId": "other"})
+		"teammate": f.ada.ID, "teammateId": f.ada.ID, "sandboxId": f.sbAda.ID, "environmentId": "other"})
 	ss, _ := f.svc.Sessions(f.ctx, f.env, f.ada.ID, 0)
 	for _, s := range ss {
 		if s.SessionRef == "s-bob" {
@@ -222,11 +234,11 @@ func TestScopeEnforcement(t *testing.T) {
 		t.Fatalf("bob's sessions %+v", ss)
 	}
 
-	// No persona, no memory: hooks are neutral, tools fail.
+	// No teammate, no memory: hooks are neutral, tools fail.
 	if r := f.hook(f.sbPlain.ID, map[string]any{"event": agenthook.SessionStart, "sessionId": "s"}); r.Context != "" {
 		t.Fatalf("plain sandbox got context %q", r.Context)
 	}
-	if _, err := f.call(f.sbPlain.ID, agentproto.MethodRemember, map[string]any{"text": "a b", "kind": "fact"}); !errors.Is(err, ErrNoPersona) {
+	if _, err := f.call(f.sbPlain.ID, agentproto.MethodRemember, map[string]any{"text": "a b", "kind": "fact"}); !errors.Is(err, ErrNoTeammate) {
 		t.Fatalf("plain remember: %v", err)
 	}
 	if _, err := f.call("nope", agentproto.MethodMemorySearch, map[string]any{"query": "a"}); err == nil {
@@ -254,7 +266,7 @@ func TestShareNeedsApproval(t *testing.T) {
 	}
 	var p SharePayload
 	json.Unmarshal(a.Payload, &p)
-	if p.PersonaID != f.ada.ID || p.FactID != fact.ID || p.Text != fact.Text {
+	if p.TeammateID != f.ada.ID || p.FactID != fact.ID || p.Text != fact.Text {
 		t.Fatalf("payload %+v", p)
 	}
 	shared, _ := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.SharedScope})
@@ -268,7 +280,7 @@ func TestShareNeedsApproval(t *testing.T) {
 	}
 
 	sf, err := f.svc.DecideShare(f.ctx, a, store.StatusApproved)
-	if err != nil || sf == nil || sf.Scope != memory.SharedScope || sf.AuthorPersona != f.ada.ID || sf.Text != fact.Text {
+	if err != nil || sf == nil || sf.Scope != memory.SharedScope || sf.AuthorTeammate != f.ada.ID || sf.Text != fact.Text {
 		t.Fatalf("decide: %+v %v", sf, err)
 	}
 	if a, _ := f.st.Approval(f.ctx, f.env, a.ID); a.Status != store.StatusApproved {
@@ -296,7 +308,7 @@ func TestShareNeedsApproval(t *testing.T) {
 
 func TestSessionStartPack(t *testing.T) {
 	f := newFixture(t)
-	scope := memory.PersonaScope(f.ada.ID)
+	scope := memory.TeammateScope(f.ada.ID)
 	mk := func(in memory.PageInput) memory.Page {
 		p, err := f.mem.CreatePage(f.ctx, f.env, in, memory.Origin{Tier: memory.TierUser})
 		if err != nil {
@@ -304,9 +316,9 @@ func TestSessionStartPack(t *testing.T) {
 		}
 		return p
 	}
-	core := mk(memory.PageInput{Scope: scope, Slug: "me", Title: "Me", Kind: "persona-self", Compiled: "I prefer small commits.", AlwaysLoad: true})
+	core := mk(memory.PageInput{Scope: scope, Slug: "me", Title: "Me", Kind: "teammate-self", Compiled: "I prefer small commits.", AlwaysLoad: true})
 	proj := mk(memory.PageInput{Scope: memory.SharedScope, Slug: "project/github.com/acme/api", Title: "Acme API", Kind: "project", Compiled: "Go service; make check runs tests."})
-	other := mk(memory.PageInput{Scope: memory.PersonaScope(f.bob.ID), Slug: "bob-core", Title: "Bob", Kind: "topic", Compiled: "bob private", AlwaysLoad: true})
+	other := mk(memory.PageInput{Scope: memory.TeammateScope(f.bob.ID), Slug: "bob-core", Title: "Bob", Kind: "topic", Compiled: "bob private", AlwaysLoad: true})
 
 	r := f.hook(f.sbAda.ID, map[string]any{"event": agenthook.SessionStart, "sessionId": "s1", "source": "resume",
 		"gitRemote": "github.com/Acme/api"})
@@ -400,7 +412,7 @@ func TestExtraction(t *testing.T) {
 	if f.llm.n() != 1 || !strings.Contains(f.llm.calls[0].User, "golangci-lint") {
 		t.Fatalf("llm calls %+v", f.llm.calls)
 	}
-	facts, _ := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.PersonaScope(f.ada.ID)})
+	facts, _ := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.TeammateScope(f.ada.ID)})
 	if len(facts) != 2 {
 		t.Fatalf("facts %+v", facts)
 	}
@@ -411,7 +423,7 @@ func TestExtraction(t *testing.T) {
 				t.Errorf("duplicate not reinforced: %+v", x)
 			}
 		default:
-			if x.Tier != memory.TierUser || x.AuthorPersona != f.ada.ID || len(x.EntityIDs) != 1 || x.EntityIDs[0] != "go-lint" {
+			if x.Tier != memory.TierUser || x.AuthorTeammate != f.ada.ID || len(x.EntityIDs) != 1 || x.EntityIDs[0] != "go-lint" {
 				t.Errorf("extracted %+v", x)
 			}
 		}
@@ -424,7 +436,7 @@ func TestExtraction(t *testing.T) {
 	// Assistant-only evidence can't claim the user said it.
 	f.llm.reply = `{"facts": [{"text": "Go 1.26 is the toolchain", "kind": "fact", "tier": "user", "entities": [], "attribute": "", "evidence": "The project uses Go 1.26"}]}`
 	f.stop(f.sbAda.ID, "s2", transcript)
-	facts, _ = f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.PersonaScope(f.ada.ID)})
+	facts, _ = f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.TeammateScope(f.ada.ID)})
 	for _, x := range facts {
 		if x.Text == "Go 1.26 is the toolchain" && x.Tier != memory.TierInferred {
 			t.Fatalf("tier not downgraded: %+v", x)
@@ -449,7 +461,7 @@ func TestExtractionRejects(t *testing.T) {
 			f := newFixture(t)
 			f.llm.reply = reply
 			f.stop(f.sbAda.ID, "s1", transcript)
-			facts, _ := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.PersonaScope(f.ada.ID)})
+			facts, _ := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.TeammateScope(f.ada.ID)})
 			if len(facts) != 0 {
 				t.Fatalf("wrote %+v", facts)
 			}

@@ -16,18 +16,18 @@ import (
 // browserVMs keeps browser rows in the store; nothing runs.
 type browserVMs struct{ st *store.Store }
 
-func (v browserVMs) EnsureBrowser(ctx context.Context, env, persona, _ string) (store.Sandbox, error) {
-	return v.st.CreateBrowserSandbox(ctx, store.Sandbox{EnvironmentID: env, PersonaID: persona, Name: "browser-" + persona, CPUs: 1})
+func (v browserVMs) EnsureBrowser(ctx context.Context, env, teammate, _ string) (store.Sandbox, error) {
+	return v.st.CreateBrowserSandbox(ctx, store.Sandbox{EnvironmentID: env, TeammateID: teammate, Name: "browser-" + teammate, CPUs: 1})
 }
 func (browserVMs) StopBrowser(context.Context, string, string) error { return nil }
-func (v browserVMs) RemoveBrowser(ctx context.Context, env, persona string) error {
-	if sb, err := v.st.BrowserSandbox(ctx, env, persona); err == nil {
+func (v browserVMs) RemoveBrowser(ctx context.Context, env, teammate string) error {
+	if sb, err := v.st.BrowserSandbox(ctx, env, teammate); err == nil {
 		return v.st.DeleteSandbox(ctx, env, sb.ID)
 	}
 	return nil
 }
-func (v browserVMs) BrowserStatus(ctx context.Context, env, persona string) (store.Sandbox, runtime.Status, error) {
-	sb, err := v.st.BrowserSandbox(ctx, env, persona)
+func (v browserVMs) BrowserStatus(ctx context.Context, env, teammate string) (store.Sandbox, runtime.Status, error) {
+	sb, err := v.st.BrowserSandbox(ctx, env, teammate)
 	if err != nil {
 		return sb, runtime.StatusAbsent, nil
 	}
@@ -48,13 +48,13 @@ func TestBrowserAPI(t *testing.T) {
 	if _, err := s.Store.CreateProvider(ctx, store.Provider{ID: "sub", EnvironmentID: env.ID, Name: "sub", Kind: "claude_subscription"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	p, err := s.Store.CreatePersona(ctx, store.Persona{EnvironmentID: env.ID, Name: "ada", Harness: "claude", ProviderID: "sub", GitName: "ada", GitEmail: "ada@agents.invalid"})
+	p, err := s.Store.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: "ada", Harness: "claude", ProviderID: "sub", GitName: "ada", GitEmail: "ada@agents.invalid"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.Browser = &browser.Service{Store: s.Store, VMs: browserVMs{s.Store}, Runner: noRunner{}, Dir: t.TempDir()}
 	s.Integrations = integrations.Set{s.Browser}
-	base := "http://localhost:7878/api/environments/" + env.ID + "/personas/" + p.ID + "/browser"
+	base := "http://localhost:7878/api/environments/" + env.ID + "/teammates/" + p.ID + "/browser"
 
 	if rec := do(h, "GET", base, ""); rec.Code != 200 || !json.Valid(rec.Body.Bytes()) {
 		t.Fatalf("status: %d %s", rec.Code, rec.Body)
@@ -71,12 +71,12 @@ func TestBrowserAPI(t *testing.T) {
 	}
 	var pat store.BrowserPattern
 	json.Unmarshal(rec.Body.Bytes(), &pat)
-	if pat.PersonaID != p.ID || pat.Action != "*" {
+	if pat.TeammateID != p.ID || pat.Action != "*" {
 		t.Errorf("pattern %+v", pat)
 	}
 
 	// Allow for this origin from the approval stores a pattern.
-	payload, _ := json.Marshal(browser.ActionPayload{PersonaID: p.ID, PersonaName: "ada", Action: "click", Origin: "https://example.com", Label: "Buy"})
+	payload, _ := json.Marshal(browser.ActionPayload{TeammateID: p.ID, TeammateName: "ada", Action: "click", Origin: "https://example.com", Label: "Buy"})
 	a, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: env.ID, Kind: browser.KindAction, Subject: "ada: click on https://example.com", Payload: payload})
 	if err != nil {
 		t.Fatal(err)
@@ -99,14 +99,14 @@ func TestBrowserAPI(t *testing.T) {
 		t.Errorf("delete pattern: %d", rec.Code)
 	}
 
-	// Deleting the persona removes its browser first.
+	// Deleting the teammate removes its browser first.
 	if _, err := s.Browser.VMs.EnsureBrowser(ctx, env.ID, p.ID, ""); err != nil {
 		t.Fatal(err)
 	}
-	if rec := do(h, "DELETE", "http://localhost:7878/api/environments/"+env.ID+"/personas/"+p.ID, ""); rec.Code != 204 {
-		t.Fatalf("delete persona: %d %s", rec.Code, rec.Body)
+	if rec := do(h, "DELETE", "http://localhost:7878/api/environments/"+env.ID+"/teammates/"+p.ID, ""); rec.Code != 204 {
+		t.Fatalf("delete teammate: %d %s", rec.Code, rec.Body)
 	}
 	if _, err := s.Store.BrowserSandbox(ctx, env.ID, p.ID); err == nil {
-		t.Error("the browser outlived its persona")
+		t.Error("the browser outlived its teammate")
 	}
 }

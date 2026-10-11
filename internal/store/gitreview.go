@@ -150,7 +150,7 @@ type GitPush struct {
 	ID            string    `json:"id"`
 	EnvironmentID string    `json:"environmentId"`
 	SandboxID     string    `json:"sandboxId"`
-	PersonaName   string    `json:"personaName,omitempty"`
+	TeammateName  string    `json:"teammateName,omitempty"`
 	ForgeID       string    `json:"forgeId"`
 	ForgeName     string    `json:"forgeName"`
 	Owner         string    `json:"owner"`
@@ -171,14 +171,14 @@ type GitPush struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
-const pushCols = `id, environment_id, sandbox_id, persona_name, forge_id, forge_name, owner, repo, ref,
+const pushCols = `id, environment_id, sandbox_id, teammate_name, forge_id, forge_name, owner, repo, ref,
 	old_sha, new_sha, default_branch, approval_id, state, result, note, delivered_at IS NOT NULL,
 	pr_approval_id, pr_url, pr_result, created_at, updated_at`
 
 func scanPush(row interface{ Scan(...any) error }) (GitPush, error) {
 	var p GitPush
 	var created, updated int64
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.SandboxID, &p.PersonaName, &p.ForgeID, &p.ForgeName, &p.Owner, &p.Repo, &p.Ref,
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.SandboxID, &p.TeammateName, &p.ForgeID, &p.ForgeName, &p.Owner, &p.Repo, &p.Ref,
 		&p.OldSHA, &p.NewSHA, &p.DefaultBranch, &p.ApprovalID, &p.State, &p.Result, &p.Note, &p.Delivered,
 		&p.PRApprovalID, &p.PRURL, &p.PRResult, &created, &updated)
 	p.CreatedAt, p.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
@@ -189,10 +189,10 @@ func scanPush(row interface{ Scan(...any) error }) (GitPush, error) {
 func (s *Store) CreateGitPush(ctx context.Context, p GitPush) (GitPush, error) {
 	t := now()
 	p.State = PushPending
-	_, err := s.db.ExecContext(ctx, `INSERT INTO git_pushes (id, environment_id, sandbox_id, persona_name, forge_id, forge_name,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO git_pushes (id, environment_id, sandbox_id, teammate_name, forge_id, forge_name,
 		owner, repo, ref, old_sha, new_sha, default_branch, approval_id, state, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.EnvironmentID, p.SandboxID, p.PersonaName, p.ForgeID, p.ForgeName, p.Owner, p.Repo, p.Ref,
+		p.ID, p.EnvironmentID, p.SandboxID, p.TeammateName, p.ForgeID, p.ForgeName, p.Owner, p.Repo, p.Ref,
 		p.OldSHA, p.NewSHA, p.DefaultBranch, p.ApprovalID, p.State, t, t)
 	p.CreatedAt, p.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
 	return p, err

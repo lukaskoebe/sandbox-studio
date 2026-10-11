@@ -17,7 +17,7 @@ import (
 // The MCP server is the minimal subset of the Model Context Protocol the harnesses use:
 // newline-delimited JSON-RPC 2.0 over stdio with initialize, ping, tools/list and
 // tools/call. Notifications are ignored. Every tool call goes to Studio, which decides
-// what the sandbox's persona may read and write.
+// what the sandbox's teammate may read and write.
 
 // mcpVersions are the protocol revisions the server speaks; it answers with the client's
 // if listed, else the newest.
@@ -90,11 +90,11 @@ var Tools = []Tool{
 			"text":     str("One self-contained claim", "maxLength", 2000),
 			"kind":     str("What sort of fact", "enum", kinds),
 			"entity":   str("What it is about, e.g. a repo, service or person"),
-			"scope":    str("persona (default) saves privately; shared proposes it for everyone and needs the user's approval", "enum", []string{"persona", "shared"}),
+			"scope":    str("teammate (default) saves privately; shared proposes it for everyone and needs the user's approval", "enum", []string{"teammate", "shared"}),
 			"source":   str("user: the user said so; verified: you ran it and it worked; inferred (default): your conclusion", "enum", []string{"user", "verified", "inferred"}),
 			"evidence": str("A short quote or the command and its result", "maxLength", 500),
 		})},
-	{agentproto.MethodShare, "Propose a fact for shared memory, which every persona reads. The user approves it first.",
+	{agentproto.MethodShare, "Propose a fact for shared memory, which every teammate reads. The user approves it first.",
 		obj(nil, map[string]any{
 			"fact_id": str("One of your facts to share"),
 			"text":    str("Or a new claim to share", "maxLength", 2000),

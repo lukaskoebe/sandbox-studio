@@ -24,12 +24,12 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
@@ -81,15 +81,15 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerMemory(api)
 	s.registerMemoryAgent(api)
 	s.registerMemoryDream(api)
-	s.registerPersonas(api)
+	s.registerTeammates(api)
 	s.registerSessions(api)
 	s.registerForges(api)
 	s.registerSystem(api)
 	s.registerBrowser(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
-	mux.HandleFunc("GET /api/environments/{env}/personas/{persona}/browser/live", s.browserLive)
-	mux.HandleFunc("GET /api/environments/{env}/personas/{persona}/browser/actions/{id}/screenshot", s.browserScreenshot)
+	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/live", s.browserLive)
+	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/actions/{id}/screenshot", s.browserScreenshot)
 	return api
 }
 
@@ -181,7 +181,7 @@ func (s *Server) registerSandboxes(api huma.API) {
 		if _, err := s.Store.Environment(ctx, in.Env); err != nil {
 			return nil, apiError(err)
 		}
-		if err := s.checkPersona(ctx, in.Env, in.Body.PersonaID); err != nil {
+		if err := s.checkTeammate(ctx, in.Env, in.Body.TeammateID); err != nil {
 			return nil, err
 		}
 		// Booting continues even if the client goes away; the manager rolls back on failure.
@@ -292,7 +292,7 @@ func apiError(err error) error {
 		return huma.Error409Conflict("the sandbox is not running or still booting")
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern),
-		errors.Is(err, secrets.ErrInvalid), errors.Is(err, personas.ErrInvalid), errors.Is(err, policy.ErrNoPersona):
+		errors.Is(err, secrets.ErrInvalid), errors.Is(err, teammates.ErrInvalid), errors.Is(err, policy.ErrNoTeammate):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())

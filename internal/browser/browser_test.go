@@ -212,8 +212,8 @@ func TestScrub(t *testing.T) {
 	}
 }
 
-// The browser and persona come from the channel: the payload cannot name another, browser
-// VMs and sandboxes without a persona get no browser.
+// The browser and teammate come from the channel: the payload cannot name another, browser
+// VMs and sandboxes without a teammate get no browser.
 func TestIdentityFromChannel(t *testing.T) {
 	f := newFixture(t)
 	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
@@ -221,7 +221,7 @@ func TestIdentityFromChannel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{"persona":"`+f.bob.ID+`","sandbox":"`+f.sbBob.ID+`"}`); err == nil || !strings.Contains(err.Error(), "unknown field") {
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{"teammate":"`+f.bob.ID+`","sandbox":"`+f.sbBob.ID+`"}`); err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Errorf("identity in the payload: %v", err)
 	}
 	f.mustCall(f.sbBob, agentproto.MethodBrowserSnapshot, `{}`)
@@ -238,8 +238,8 @@ func TestIdentityFromChannel(t *testing.T) {
 	if _, err := f.call(adaVM, agentproto.MethodBrowserSnapshot, `{}`); !errors.Is(err, ErrNoCalls) {
 		t.Errorf("a call from the browser VM: %v", err)
 	}
-	if _, err := f.call(f.sbPlain, agentproto.MethodBrowserSnapshot, `{}`); !errors.Is(err, ErrNoPersona) {
-		t.Errorf("a call without persona: %v", err)
+	if _, err := f.call(f.sbPlain, agentproto.MethodBrowserSnapshot, `{}`); !errors.Is(err, ErrNoTeammate) {
+		t.Errorf("a call without teammate: %v", err)
 	}
 	if _, err := f.svc.HandleCall(f.ctx, "nope", agentproto.MethodBrowserSnapshot, nil); err == nil {
 		t.Error("a call from an unknown sandbox")
@@ -265,7 +265,7 @@ func TestPausedGate(t *testing.T) {
 	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	// While the user drives, the persona's rules decide the browser's connections.
+	// While the user drives, the teammate's rules decide the browser's connections.
 	if d := f.svc.Driver(f.ctx, adaVM); d.ID != adaVM.ID {
 		t.Errorf("driver during takeover: %s", d.Name)
 	}
@@ -338,7 +338,7 @@ func TestActionApprovalAndRemember(t *testing.T) {
 		a := f.pending(KindAction)
 		var p ActionPayload
 		json.Unmarshal(a.Payload, &p)
-		if p.Action != "click" || p.Origin != "https://example.com" || p.Label != "Sign in" || p.SandboxName != "ada-dev" || p.PersonaName != "ada" {
+		if p.Action != "click" || p.Origin != "https://example.com" || p.Label != "Sign in" || p.SandboxName != "ada-dev" || p.TeammateName != "ada" {
 			t.Errorf("payload %+v", p)
 		}
 		decide(a, integrations.Decision{Action: integrations.Allow})
@@ -388,7 +388,7 @@ func TestCredentialNeverLeaks(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.keys[sec.ID] = sentinel
-	if _, err := f.st.AddBrowserPattern(f.ctx, store.BrowserPattern{EnvironmentID: f.env, PersonaID: f.ada.ID, Action: "*", Origin: "https://example.com", Verdict: store.BrowserAllow}); err != nil {
+	if _, err := f.st.AddBrowserPattern(f.ctx, store.BrowserPattern{EnvironmentID: f.env, TeammateID: f.ada.ID, Action: "*", Origin: "https://example.com", Verdict: store.BrowserAllow}); err != nil {
 		t.Fatal(err)
 	}
 	var results []any
@@ -533,7 +533,7 @@ func TestHistoryBound(t *testing.T) {
 	f := newFixture(t)
 	f.svc.Keep = 5
 	f.svc.ShotBudget = 3 * 64 // about three fake screenshots
-	if _, err := f.st.AddBrowserPattern(f.ctx, store.BrowserPattern{EnvironmentID: f.env, PersonaID: f.ada.ID, Action: "*", Origin: "https://example.com", Verdict: store.BrowserAllow}); err != nil {
+	if _, err := f.st.AddBrowserPattern(f.ctx, store.BrowserPattern{EnvironmentID: f.env, TeammateID: f.ada.ID, Action: "*", Origin: "https://example.com", Verdict: store.BrowserAllow}); err != nil {
 		t.Fatal(err)
 	}
 	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)

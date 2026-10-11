@@ -15,7 +15,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// call is one agent tool call: the persona's browser state and the calling sandbox, which
+// call is one agent tool call: the teammate's browser state and the calling sandbox, which
 // the channel named.
 type call struct {
 	s  *Service
@@ -47,7 +47,7 @@ var tools = map[string]tool{
 }
 
 // HandleCall answers one browser call of sandboxID's guest. The caller is the sandbox the
-// channel belongs to; nothing in params can name another sandbox or persona.
+// channel belongs to; nothing in params can name another sandbox or teammate.
 func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, params json.RawMessage) (any, error) {
 	t, ok := tools[method]
 	if !ok {
@@ -60,10 +60,10 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 	if sb.Kind != "" || sb.BuildJobID != "" {
 		return nil, ErrNoCalls
 	}
-	if sb.PersonaID == "" {
-		return nil, ErrNoPersona
+	if sb.TeammateID == "" {
+		return nil, ErrNoTeammate
 	}
-	st := s.state(sb.EnvironmentID, sb.PersonaID)
+	st := s.state(sb.EnvironmentID, sb.TeammateID)
 	release, err := s.acquire(ctx, st)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 	st.driver, st.lastUsed = sb, s.now()
 	s.mu.Unlock()
 	if err := s.boot(ctx, st); err != nil {
-		s.log().Warn("browser VM unavailable", "persona", sb.PersonaID, "err", err)
+		s.log().Warn("browser VM unavailable", "teammate", sb.TeammateID, "err", err)
 		return nil, errors.New("the browser could not be started; the user can look at the Browser page in Studio")
 	}
 	res, err := t(&call{s: s, st: st, sb: sb}, ctx, params)
@@ -143,7 +143,7 @@ func (c *call) element(ref string) (string, refInfo, error) {
 
 // authorize applies the policy to an action, asking the user when it says so.
 func (c *call) authorize(ctx context.Context, r Request, url, text string) error {
-	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.persona)
+	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.teammate)
 	if err != nil {
 		return err
 	}
@@ -158,11 +158,11 @@ func (c *call) authorize(ctx context.Context, r Request, url, text string) error
 	if c.s.takeGrant(c.st, r) {
 		return nil
 	}
-	persona, _ := c.s.Store.Persona(ctx, c.st.env, c.st.persona)
-	p := ActionPayload{PersonaID: c.st.persona, PersonaName: persona.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
+	teammate, _ := c.s.Store.Teammate(ctx, c.st.env, c.st.teammate)
+	p := ActionPayload{TeammateID: c.st.teammate, TeammateName: teammate.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
 		Action: r.Action, Origin: r.Origin, URL: url, Role: r.Role, Label: r.Label, Text: clip(text, 500)}
 	raw, _ := json.Marshal(p)
-	subject := fmt.Sprintf("%s: %s %s on %s", persona.Name, r.Action, target(r.Role, r.Label), r.Origin)
+	subject := fmt.Sprintf("%s: %s %s on %s", teammate.Name, r.Action, target(r.Role, r.Label), r.Origin)
 	a, created, err := c.s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindAction, Subject: clip(subject, 500), Payload: raw})
 	if err != nil {
 		return err
@@ -329,7 +329,7 @@ func (c *call) snapshot(ctx context.Context, params json.RawMessage) (any, error
 // redactSnapshot reads the attributes of the snapshot's valued fields and blanks the
 // sensitive ones; it returns the text the agent may see and the refs it knows.
 func (s *Service) redactSnapshot(ctx context.Context, st *state, snap snapshotData) (string, map[string]refInfo, error) {
-	patterns, err := s.Store.BrowserPatterns(ctx, st.env, st.persona)
+	patterns, err := s.Store.BrowserPatterns(ctx, st.env, st.teammate)
 	if err != nil {
 		return "", nil, err
 	}

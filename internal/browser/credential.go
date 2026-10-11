@@ -22,30 +22,30 @@ import (
 
 // ActionPayload is the request of a browser.action approval.
 type ActionPayload struct {
-	PersonaID   string `json:"personaId"`
-	PersonaName string `json:"personaName"`
-	SandboxID   string `json:"sandboxId"`
-	SandboxName string `json:"sandboxName"`
-	Action      string `json:"action" doc:"The browser action, such as click or fill"`
-	Origin      string `json:"origin" doc:"scheme://host[:port] of the page"`
-	URL         string `json:"url"`
-	Role        string `json:"role,omitempty" doc:"Accessibility role of the element"`
-	Label       string `json:"label,omitempty" doc:"Accessible name of the element"`
-	Text        string `json:"text,omitempty" doc:"What the agent wants to type or select"`
+	TeammateID   string `json:"teammateId"`
+	TeammateName string `json:"teammateName"`
+	SandboxID    string `json:"sandboxId"`
+	SandboxName  string `json:"sandboxName"`
+	Action       string `json:"action" doc:"The browser action, such as click or fill"`
+	Origin       string `json:"origin" doc:"scheme://host[:port] of the page"`
+	URL          string `json:"url"`
+	Role         string `json:"role,omitempty" doc:"Accessibility role of the element"`
+	Label        string `json:"label,omitempty" doc:"Accessible name of the element"`
+	Text         string `json:"text,omitempty" doc:"What the agent wants to type or select"`
 }
 
 // CredentialPayload is the request of a browser.credential approval.
 type CredentialPayload struct {
-	PersonaID   string `json:"personaId"`
-	PersonaName string `json:"personaName"`
-	SandboxID   string `json:"sandboxId"`
-	SandboxName string `json:"sandboxName"`
-	Credential  string `json:"credential" doc:"Name of the vault secret"`
-	Ref         string `json:"ref"`
-	Origin      string `json:"origin"`
-	URL         string `json:"url"`
-	Role        string `json:"role,omitempty"`
-	Label       string `json:"label,omitempty"`
+	TeammateID   string `json:"teammateId"`
+	TeammateName string `json:"teammateName"`
+	SandboxID    string `json:"sandboxId"`
+	SandboxName  string `json:"sandboxName"`
+	Credential   string `json:"credential" doc:"Name of the vault secret"`
+	Ref          string `json:"ref"`
+	Origin       string `json:"origin"`
+	URL          string `json:"url"`
+	Role         string `json:"role,omitempty"`
+	Label        string `json:"label,omitempty"`
 }
 
 // credOutcome is the result of filling one approved credential, for the agent call that
@@ -54,7 +54,7 @@ type credOutcome struct {
 	done chan struct{}
 	err  error
 	at   time.Time
-	key  string // persona, sandbox and subject, to find it on a retry
+	key  string // teammate, sandbox and subject, to find it on a retry
 }
 
 func (s *Service) outcome(approvalID, key string) *credOutcome {
@@ -146,7 +146,7 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 	if _, err := c.s.credential(ctx, c.st.env, in.Name, pageURL); err != nil {
 		return nil, err
 	}
-	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.persona)
+	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.teammate)
 	if err != nil {
 		return nil, err
 	}
@@ -155,9 +155,9 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		c.s.record(ctx, c.st, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(info.Role, info.Name), url: pageURL, outcome: "denied", detail: reason})
 		return nil, refuse("%s", reason)
 	}
-	persona, _ := c.s.Store.Persona(ctx, c.st.env, c.st.persona)
-	subject := clip(fmt.Sprintf("%s: credential %s into %s on %s", persona.Name, in.Name, target(info.Role, info.Name), origin), 500)
-	key := c.st.persona + "\x00" + c.sb.ID + "\x00" + subject + "\x00" + ref
+	teammate, _ := c.s.Store.Teammate(ctx, c.st.env, c.st.teammate)
+	subject := clip(fmt.Sprintf("%s: credential %s into %s on %s", teammate.Name, in.Name, target(info.Role, info.Name), origin), 500)
+	key := c.st.teammate + "\x00" + c.sb.ID + "\x00" + subject + "\x00" + ref
 	result := map[string]string{"filled": ref, "credential": in.Name}
 	// A retry after the user approved while the agent was not waiting.
 	if o, ok := c.s.finishedOutcome(key); ok {
@@ -166,7 +166,7 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		}
 		return result, nil
 	}
-	raw, _ := json.Marshal(CredentialPayload{PersonaID: c.st.persona, PersonaName: persona.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
+	raw, _ := json.Marshal(CredentialPayload{TeammateID: c.st.teammate, TeammateName: teammate.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
 		Credential: in.Name, Ref: ref, Origin: origin, URL: pageURL, Role: info.Role, Label: info.Name})
 	a, created, err := c.s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindCredential, Subject: subject, Payload: raw})
 	if err != nil {
@@ -228,7 +228,7 @@ func (s *Service) decideCredential(ctx context.Context, a store.Approval, allow 
 }
 
 func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPayload) error {
-	st := s.state(envID, p.PersonaID)
+	st := s.state(envID, p.TeammateID)
 	select {
 	case st.run <- struct{}{}:
 	case <-ctx.Done():

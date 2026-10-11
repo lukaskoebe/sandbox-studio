@@ -1,11 +1,11 @@
 // Package agentmem is the host side of memory in agent sessions (PLAN §6.7): it answers
 // the hooks and memory tools that guests call over their channel, keeps a log of what was
 // recalled and written in each session, and extracts facts from transcripts with the
-// persona's provider's utility model.
+// teammate's provider's utility model.
 //
 // Identity comes only from the channel: the sandbox whose socket a call arrived on, its
-// environment and its owning persona. Nothing in a call's payload can name another one.
-// A persona reads the shared scope and its own and writes only its own; shared memory
+// environment and its owning teammate. Nothing in a call's payload can name another one.
+// A teammate reads the shared scope and its own and writes only its own; shared memory
 // changes only through an approved memory.share request.
 package agentmem
 
@@ -25,11 +25,11 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// ApprovalKind is the approval a persona's share request creates.
+// ApprovalKind is the approval a teammate's share request creates.
 const ApprovalKind = "memory.share"
 
-// ErrNoPersona means the calling sandbox has no persona, so it has no memory.
-var ErrNoPersona = errors.New("this sandbox has no persona, so it has no memory")
+// ErrNoTeammate means the calling sandbox has no teammate, so it has no memory.
+var ErrNoTeammate = errors.New("this sandbox has no teammate, so it has no memory")
 
 // Keys returns the real value of a vault secret.
 type Keys interface {
@@ -86,10 +86,10 @@ func (s *Service) now() time.Time { return s.Now().UTC() }
 
 // caller is who a call comes from, as Studio knows it.
 type caller struct {
-	env     string
-	sandbox store.Sandbox
-	persona store.Persona
-	scope   string
+	env      string
+	sandbox  store.Sandbox
+	teammate store.Teammate
+	scope    string
 }
 
 func (s *Service) who(ctx context.Context, sandboxID string) (caller, error) {
@@ -97,14 +97,14 @@ func (s *Service) who(ctx context.Context, sandboxID string) (caller, error) {
 	if err != nil {
 		return caller{}, fmt.Errorf("unknown sandbox: %w", err)
 	}
-	if sb.PersonaID == "" {
-		return caller{}, ErrNoPersona
+	if sb.TeammateID == "" {
+		return caller{}, ErrNoTeammate
 	}
-	p, err := s.Store.Persona(ctx, sb.EnvironmentID, sb.PersonaID)
+	p, err := s.Store.Teammate(ctx, sb.EnvironmentID, sb.TeammateID)
 	if err != nil {
-		return caller{}, fmt.Errorf("persona of the sandbox: %w", err)
+		return caller{}, fmt.Errorf("teammate of the sandbox: %w", err)
 	}
-	return caller{env: sb.EnvironmentID, sandbox: sb, persona: p, scope: memory.PersonaScope(p.ID)}, nil
+	return caller{env: sb.EnvironmentID, sandbox: sb, teammate: p, scope: memory.TeammateScope(p.ID)}, nil
 }
 
 // HandleCall answers one call of sandboxID's guest; it is agentchan.Hub.OnCall.
@@ -112,7 +112,7 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 	c, err := s.who(ctx, sandboxID)
 	if method == agentproto.MethodHook {
 		if err != nil {
-			// No persona, no memory: the harness goes on without it.
+			// No teammate, no memory: the harness goes on without it.
 			return agenthook.Result{}, nil
 		}
 		var ev agenthook.Event
@@ -160,11 +160,11 @@ type session struct {
 func (s *Service) session(ctx context.Context, c caller, ref, remote string) (session, error) {
 	now := s.now().Unix()
 	_, err := s.db.ExecContext(ctx, `INSERT INTO memory_agent_sessions
-		(id, environment_id, persona_id, sandbox_id, sandbox_name, harness, session_ref, git_remote, started_at, last_event_at)
+		(id, environment_id, teammate_id, sandbox_id, sandbox_name, harness, session_ref, git_remote, started_at, last_event_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (environment_id, sandbox_id, harness, session_ref) DO UPDATE SET last_event_at = excluded.last_event_at,
 			git_remote = CASE WHEN excluded.git_remote != '' THEN excluded.git_remote ELSE git_remote END`,
-		store.NewID(), c.env, c.persona.ID, c.sandbox.ID, c.sandbox.Name, c.persona.Harness, ref, remote, now, now)
+		store.NewID(), c.env, c.teammate.ID, c.sandbox.ID, c.sandbox.Name, c.teammate.Harness, ref, remote, now, now)
 	if err != nil {
 		return session{}, err
 	}
@@ -172,7 +172,7 @@ func (s *Service) session(ctx context.Context, c caller, ref, remote string) (se
 	var started int64
 	err = s.db.QueryRowContext(ctx, `SELECT id, session_ref, started_at FROM memory_agent_sessions
 		WHERE environment_id = ? AND sandbox_id = ? AND harness = ? AND session_ref = ?`,
-		c.env, c.sandbox.ID, c.persona.Harness, ref).Scan(&se.id, &se.ref, &started)
+		c.env, c.sandbox.ID, c.teammate.Harness, ref).Scan(&se.id, &se.ref, &started)
 	se.startedAt = time.Unix(started, 0).UTC()
 	return se, err
 }
@@ -187,8 +187,8 @@ func (s *Service) latestSession(ctx context.Context, c caller) (session, error) 
 	var se session
 	var started int64
 	err := s.db.QueryRowContext(ctx, `SELECT id, session_ref, started_at FROM memory_agent_sessions
-		WHERE environment_id = ? AND sandbox_id = ? AND persona_id = ? ORDER BY last_event_at DESC, started_at DESC LIMIT 1`,
-		c.env, c.sandbox.ID, c.persona.ID).Scan(&se.id, &se.ref, &started)
+		WHERE environment_id = ? AND sandbox_id = ? AND teammate_id = ? ORDER BY last_event_at DESC, started_at DESC LIMIT 1`,
+		c.env, c.sandbox.ID, c.teammate.ID).Scan(&se.id, &se.ref, &started)
 	if errors.Is(err, sql.ErrNoRows) {
 		return s.session(ctx, c, toolSessionRef, "")
 	}
@@ -196,12 +196,12 @@ func (s *Service) latestSession(ctx context.Context, c caller) (session, error) 
 	return se, err
 }
 
-// previousSessionStart is when the persona's session before se started; zero if none.
+// previousSessionStart is when the teammate's session before se started; zero if none.
 func (s *Service) previousSessionStart(ctx context.Context, c caller, se session) (time.Time, error) {
 	var started sql.NullInt64
 	err := s.db.QueryRowContext(ctx, `SELECT MAX(started_at) FROM memory_agent_sessions
-		WHERE environment_id = ? AND persona_id = ? AND id != ? AND started_at <= ? AND session_ref != ?`,
-		c.env, c.persona.ID, se.id, se.startedAt.Unix(), toolSessionRef).Scan(&started)
+		WHERE environment_id = ? AND teammate_id = ? AND id != ? AND started_at <= ? AND session_ref != ?`,
+		c.env, c.teammate.ID, se.id, se.startedAt.Unix(), toolSessionRef).Scan(&started)
 	if err != nil || !started.Valid {
 		return time.Time{}, err
 	}
@@ -244,9 +244,9 @@ func (s *Service) log(ctx context.Context, c caller, sessionID string, entries .
 			sid = sessionID
 		}
 		if _, err := s.db.ExecContext(ctx, `INSERT INTO memory_session_log
-			(environment_id, session_id, persona_id, sandbox_id, at, kind, item_type, item_id, score, why, summary)
+			(environment_id, session_id, teammate_id, sandbox_id, at, kind, item_type, item_id, score, why, summary)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			c.env, sid, c.persona.ID, c.sandbox.ID, now, e.kind, e.itemType, e.itemID, score, why, truncate(e.summary, 500)); err != nil {
+			c.env, sid, c.teammate.ID, c.sandbox.ID, now, e.kind, e.itemType, e.itemID, score, why, truncate(e.summary, 500)); err != nil {
 			s.Log.Warn("writing the memory session log failed", "err", err)
 		}
 	}

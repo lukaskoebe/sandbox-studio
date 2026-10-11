@@ -11,35 +11,35 @@ import (
 
 // Source is where a piece of information came from.
 type Source struct {
-	ID            string    `json:"id"`
-	Scope         string    `json:"scope"`
-	Kind          string    `json:"kind" enum:"user,verified,document,inferred,consolidation"`
-	SessionRef    string    `json:"sessionRef,omitempty"`
-	AuthorPersona string    `json:"authorPersona,omitempty"`
-	Evidence      string    `json:"evidence,omitempty" doc:"A short quote; full transcripts are never stored"`
-	CreatedAt     time.Time `json:"createdAt"`
+	ID             string    `json:"id"`
+	Scope          string    `json:"scope"`
+	Kind           string    `json:"kind" enum:"user,verified,document,inferred,consolidation"`
+	SessionRef     string    `json:"sessionRef,omitempty"`
+	AuthorTeammate string    `json:"authorTeammate,omitempty"`
+	Evidence       string    `json:"evidence,omitempty" doc:"A short quote; full transcripts are never stored"`
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 // Fact is an atomic claim.
 type Fact struct {
-	ID            string     `json:"id"`
-	Scope         string     `json:"scope"`
-	Kind          string     `json:"kind" enum:"preference,decision,fact,procedure,event"`
-	EntityIDs     []string   `json:"entityIds"`
-	Attribute     string     `json:"attribute,omitempty"`
-	Text          string     `json:"text"`
-	ObservedAt    time.Time  `json:"observedAt"`
-	ValidFrom     *time.Time `json:"validFrom,omitempty"`
-	ValidUntil    *time.Time `json:"validUntil,omitempty"`
-	Confidence    float64    `json:"confidence"`
-	Tier          string     `json:"tier" enum:"user,verified,document,inferred"`
-	SupportCount  int        `json:"supportCount"`
-	Status        string     `json:"status" enum:"active,superseded,disputed,retracted"`
-	Supersedes    string     `json:"supersedes,omitempty"`
-	AuthorPersona string     `json:"authorPersona,omitempty"`
-	SourceIDs     []string   `json:"sourceIds"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
+	ID             string     `json:"id"`
+	Scope          string     `json:"scope"`
+	Kind           string     `json:"kind" enum:"preference,decision,fact,procedure,event"`
+	EntityIDs      []string   `json:"entityIds"`
+	Attribute      string     `json:"attribute,omitempty"`
+	Text           string     `json:"text"`
+	ObservedAt     time.Time  `json:"observedAt"`
+	ValidFrom      *time.Time `json:"validFrom,omitempty"`
+	ValidUntil     *time.Time `json:"validUntil,omitempty"`
+	Confidence     float64    `json:"confidence"`
+	Tier           string     `json:"tier" enum:"user,verified,document,inferred"`
+	SupportCount   int        `json:"supportCount"`
+	Status         string     `json:"status" enum:"active,superseded,disputed,retracted"`
+	Supersedes     string     `json:"supersedes,omitempty"`
+	AuthorTeammate string     `json:"authorTeammate,omitempty"`
+	SourceIDs      []string   `json:"sourceIds"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 // FactInput creates or edits a fact. Zero values take defaults: observedAt now, confidence 1.
@@ -58,11 +58,11 @@ type FactInput struct {
 
 // Origin says who writes and on what evidence. Every write records it as a source.
 type Origin struct {
-	Tier          string // trust tier of the written fact or page
-	SourceKind    string // defaults to Tier
-	AuthorPersona string // "" for the user
-	SessionRef    string
-	Evidence      string
+	Tier           string // trust tier of the written fact or page
+	SourceKind     string // defaults to Tier
+	AuthorTeammate string // "" for the user
+	SessionRef     string
+	Evidence       string
 }
 
 // UserOrigin is the origin of edits made in the UI.
@@ -77,7 +77,7 @@ func (o Origin) validate() error {
 			return err
 		}
 	}
-	return validatePersona(o.AuthorPersona)
+	return validateTeammate(o.AuthorTeammate)
 }
 
 func (in *FactInput) validate() error {
@@ -103,7 +103,7 @@ func (in *FactInput) validate() error {
 }
 
 const factCols = `id, scope, kind, entity_ids, attribute, text, observed_at, valid_from, valid_until, confidence, tier,
-	support_count, status, IFNULL(supersedes, ''), author_persona, created_at, updated_at`
+	support_count, status, IFNULL(supersedes, ''), author_teammate, created_at, updated_at`
 
 func scanFact(row interface{ Scan(...any) error }) (Fact, error) {
 	var f Fact
@@ -111,7 +111,7 @@ func scanFact(row interface{ Scan(...any) error }) (Fact, error) {
 	var observed, created, updated int64
 	var from, until sql.NullInt64
 	err := row.Scan(&f.ID, &f.Scope, &f.Kind, &entities, &f.Attribute, &f.Text, &observed, &from, &until, &f.Confidence,
-		&f.Tier, &f.SupportCount, &f.Status, &f.Supersedes, &f.AuthorPersona, &created, &updated)
+		&f.Tier, &f.SupportCount, &f.Status, &f.Supersedes, &f.AuthorTeammate, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, ErrNotFound
 	}
@@ -133,8 +133,8 @@ func (s *Service) insertSource(ctx context.Context, tx execer, envID, scope stri
 		kind = o.Tier
 	}
 	id := newID()
-	_, err := tx.ExecContext(ctx, `INSERT INTO memory_sources (id, environment_id, scope, kind, session_ref, author_persona, evidence, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id, envID, scope, kind, o.SessionRef, o.AuthorPersona, o.Evidence, s.unix())
+	_, err := tx.ExecContext(ctx, `INSERT INTO memory_sources (id, environment_id, scope, kind, session_ref, author_teammate, evidence, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id, envID, scope, kind, o.SessionRef, o.AuthorTeammate, o.Evidence, s.unix())
 	return id, err
 }
 
@@ -159,7 +159,7 @@ func (s *Service) CreateFactWith(ctx context.Context, envID string, in FactInput
 		return Fact{}, err
 	}
 	defer tx.Rollback()
-	if err := checkPersonas(ctx, tx, envID, in.Scope, o.AuthorPersona); err != nil {
+	if err := checkTeammates(ctx, tx, envID, in.Scope, o.AuthorTeammate); err != nil {
 		return Fact{}, err
 	}
 	if in.Supersedes != "" {
@@ -194,10 +194,10 @@ func (s *Service) CreateFactWith(ctx context.Context, envID string, in FactInput
 	entities, _ := json.Marshal(in.EntityIDs)
 	id := newID()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_facts (id, environment_id, scope, kind, entity_ids, attribute, text, observed_at,
-		valid_from, valid_until, confidence, tier, status, supersedes, author_persona, created_at, updated_at)
+		valid_from, valid_until, confidence, tier, status, supersedes, author_teammate, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
 		id, envID, in.Scope, in.Kind, string(entities), in.Attribute, in.Text, observed, nullTime(in.ValidFrom), nullTime(in.ValidUntil),
-		confidence, o.Tier, nullString(in.Supersedes), o.AuthorPersona, now, now); err != nil {
+		confidence, o.Tier, nullString(in.Supersedes), o.AuthorTeammate, now, now); err != nil {
 		return Fact{}, err
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO memory_fact_sources (fact_id, source_id) VALUES (?, ?)", id, sourceID); err != nil {
@@ -239,7 +239,7 @@ func (s *Service) UpdateFact(ctx context.Context, envID, id string, in FactInput
 		return Fact{}, err
 	}
 	defer tx.Rollback()
-	if err := checkPersonas(ctx, tx, envID, "", o.AuthorPersona); err != nil {
+	if err := checkTeammates(ctx, tx, envID, "", o.AuthorTeammate); err != nil {
 		return Fact{}, err
 	}
 	observed := old.ObservedAt.Unix()
@@ -360,9 +360,9 @@ func (s *Service) Facts(ctx context.Context, envID string, f FactFilter) ([]Fact
 func (s *Service) Source(ctx context.Context, envID, id string) (Source, error) {
 	var src Source
 	var created int64
-	err := s.db.QueryRowContext(ctx, `SELECT id, scope, kind, session_ref, author_persona, evidence, created_at
+	err := s.db.QueryRowContext(ctx, `SELECT id, scope, kind, session_ref, author_teammate, evidence, created_at
 		FROM memory_sources WHERE environment_id = ? AND id = ?`, envID, id).
-		Scan(&src.ID, &src.Scope, &src.Kind, &src.SessionRef, &src.AuthorPersona, &src.Evidence, &created)
+		Scan(&src.ID, &src.Scope, &src.Kind, &src.SessionRef, &src.AuthorTeammate, &src.Evidence, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return src, ErrNotFound
 	}

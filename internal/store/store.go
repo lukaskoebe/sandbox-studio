@@ -156,7 +156,7 @@ func now() int64 { return time.Now().Unix() }
 
 // --- environments ---------------------------------------------------------------------
 
-// Environment is an isolated set of personas, sandboxes, rules, secrets and memory.
+// Environment is an isolated set of teammates, sandboxes, rules, secrets and memory.
 type Environment struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -213,7 +213,7 @@ type Sandbox struct {
 	EnvironmentID string    `json:"environmentId"`
 	BuildJobID    string    `json:"-"`
 	TemplateID    string    `json:"templateId,omitempty"`
-	PersonaID     string    `json:"personaId,omitempty" doc:"The persona that owns the sandbox; empty for unowned sandboxes"`
+	TeammateID    string    `json:"teammateId,omitempty" doc:"The teammate that owns the sandbox; empty for unowned sandboxes"`
 	Name          string    `json:"name"`
 	Generation    int       `json:"generation"`
 	CPUs          int       `json:"cpus"`
@@ -223,15 +223,15 @@ type Sandbox struct {
 	DockerMiB     int       `json:"dockerMiB"`
 	CreatedAt     time.Time `json:"createdAt"`
 	DNSPort       int       `json:"-"` // loopback port of the sandbox's Studio resolver
-	// Kind is empty for ordinary sandboxes and SandboxKindBrowser for a persona's browser
+	// Kind is empty for ordinary sandboxes and SandboxKindBrowser for a teammate's browser
 	// VM, which Studio drives and never shows as a sandbox.
 	Kind string `json:"-"`
 }
 
-// SandboxKindBrowser marks a persona's browser VM (internal/browser).
+// SandboxKindBrowser marks a teammate's browser VM (internal/browser).
 const SandboxKindBrowser = "browser"
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(persona_id, ''), kind"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
 const firstDNSPort = 17100
@@ -239,7 +239,7 @@ const firstDNSPort = 17100
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created int64
-	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.PersonaID, &sb.Kind)
+	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind)
 	sb.CreatedAt = time.Unix(created, 0)
 	return sb, err
 }
@@ -285,10 +285,10 @@ func insertSandbox(ctx context.Context, tx *sql.Tx, sb Sandbox) (Sandbox, error)
 			return sb, ErrConflict
 		}
 	}
-	if sb.PersonaID != "" {
-		err := tx.QueryRowContext(ctx, "SELECT 1 FROM personas WHERE environment_id = ? AND id = ?", sb.EnvironmentID, sb.PersonaID).Scan(new(int))
+	if sb.TeammateID != "" {
+		err := tx.QueryRowContext(ctx, "SELECT 1 FROM teammates WHERE environment_id = ? AND id = ?", sb.EnvironmentID, sb.TeammateID).Scan(new(int))
 		if errors.Is(err, sql.ErrNoRows) {
-			return sb, fmt.Errorf("persona %s: %w", sb.PersonaID, ErrNotFound)
+			return sb, fmt.Errorf("teammate %s: %w", sb.TeammateID, ErrNotFound)
 		}
 		if err != nil {
 			return sb, err
@@ -300,8 +300,8 @@ func insertSandbox(ctx context.Context, tx *sql.Tx, sb Sandbox) (Sandbox, error)
 		return sb, err
 	}
 	sb.DNSPort = port
-	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, persona_id, kind) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)",
-		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort, sb.PersonaID, sb.Kind)
+	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, teammate_id, kind) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)",
+		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort, sb.TeammateID, sb.Kind)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}

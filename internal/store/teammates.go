@@ -166,7 +166,7 @@ func (s *Store) Providers(ctx context.Context, envID string) ([]Provider, error)
 	return out, rows.Err()
 }
 
-// DeleteProvider removes a provider and its secret. It refuses while a persona uses it.
+// DeleteProvider removes a provider and its secret. It refuses while a teammate uses it.
 func (s *Store) DeleteProvider(ctx context.Context, envID, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -181,10 +181,10 @@ func (s *Store) DeleteProvider(ctx context.Context, envID, id string) error {
 	if err != nil {
 		return err
 	}
-	if names, err := names(ctx, tx, "SELECT name FROM personas WHERE environment_id = ? AND provider_id = ? ORDER BY name", envID, id); err != nil {
+	if names, err := names(ctx, tx, "SELECT name FROM teammates WHERE environment_id = ? AND provider_id = ? ORDER BY name", envID, id); err != nil {
 		return err
 	} else if len(names) > 0 {
-		return InUseError{fmt.Sprintf("the provider is used by %s; change or delete them first", describeNames("persona", names))}
+		return InUseError{fmt.Sprintf("the provider is used by %s; change or delete them first", describeNames("teammate", names))}
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM providers WHERE environment_id = ? AND id = ?", envID, id); err != nil {
 		return err
@@ -207,10 +207,10 @@ func (s *Store) SecretProvider(ctx context.Context, envID, secretID string) (str
 	return name, err
 }
 
-// --- personas -------------------------------------------------------------------------
+// --- teammates -------------------------------------------------------------------------
 
-// Persona is a named agent identity of an environment.
-type Persona struct {
+// Teammate is a named agent identity of an environment.
+type Teammate struct {
 	ID            string    `json:"id"`
 	EnvironmentID string    `json:"environmentId"`
 	Name          string    `json:"name"`
@@ -225,19 +225,19 @@ type Persona struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
-const personaCols = "id, environment_id, name, role, soul, harness, provider_id, model, git_name, git_email, created_at, updated_at"
+const teammateCols = "id, environment_id, name, role, soul, harness, provider_id, model, git_name, git_email, created_at, updated_at"
 
-func scanPersona(row interface{ Scan(...any) error }) (Persona, error) {
-	var p Persona
+func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
+	var p Teammate
 	var created, updated int64
 	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated)
 	p.CreatedAt, p.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return p, err
 }
 
-func personaExists(err error, name string) error {
+func teammateExists(err error, name string) error {
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
-		return fmt.Errorf("a persona named %q: %w", name, ErrExists)
+		return fmt.Errorf("a teammate named %q: %w", name, ErrExists)
 	}
 	if err != nil && strings.Contains(err.Error(), "FOREIGN KEY") {
 		return fmt.Errorf("provider: %w", ErrNotFound)
@@ -245,52 +245,52 @@ func personaExists(err error, name string) error {
 	return err
 }
 
-// CreatePersona inserts p, assigning its times and, if it has none, its ID. Its provider
+// CreateTeammate inserts p, assigning its times and, if it has none, its ID. Its provider
 // must be in the same environment.
-func (s *Store) CreatePersona(ctx context.Context, p Persona) (Persona, error) {
+func (s *Store) CreateTeammate(ctx context.Context, p Teammate) (Teammate, error) {
 	t := now()
 	if p.ID == "" {
 		p.ID = NewID()
 	}
 	p.CreatedAt, p.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO personas ("+personaCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err := s.db.ExecContext(ctx, "INSERT INTO teammates ("+teammateCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		p.ID, p.EnvironmentID, p.Name, p.Role, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, t, t)
-	return p, personaExists(err, p.Name)
+	return p, teammateExists(err, p.Name)
 }
 
-// UpdatePersona replaces the editable fields of a persona.
-func (s *Store) UpdatePersona(ctx context.Context, p Persona) (Persona, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE personas SET name = ?, role = ?, soul = ?, harness = ?, provider_id = ?, model = ?,
+// UpdateTeammate replaces the editable fields of a teammate.
+func (s *Store) UpdateTeammate(ctx context.Context, p Teammate) (Teammate, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET name = ?, role = ?, soul = ?, harness = ?, provider_id = ?, model = ?,
 		git_name = ?, git_email = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
 		p.Name, p.Role, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, now(), p.EnvironmentID, p.ID)
-	if err := personaExists(err, p.Name); err != nil {
+	if err := teammateExists(err, p.Name); err != nil {
 		return p, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return p, ErrNotFound
 	}
-	return s.Persona(ctx, p.EnvironmentID, p.ID)
+	return s.Teammate(ctx, p.EnvironmentID, p.ID)
 }
 
-// Persona returns one persona of an environment.
-func (s *Store) Persona(ctx context.Context, envID, id string) (Persona, error) {
-	p, err := scanPersona(s.db.QueryRowContext(ctx, "SELECT "+personaCols+" FROM personas WHERE environment_id = ? AND id = ?", envID, id))
+// Teammate returns one teammate of an environment.
+func (s *Store) Teammate(ctx context.Context, envID, id string) (Teammate, error) {
+	p, err := scanTeammate(s.db.QueryRowContext(ctx, "SELECT "+teammateCols+" FROM teammates WHERE environment_id = ? AND id = ?", envID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
 	return p, err
 }
 
-// Personas lists the personas of an environment by name.
-func (s *Store) Personas(ctx context.Context, envID string) ([]Persona, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+personaCols+" FROM personas WHERE environment_id = ? ORDER BY name", envID)
+// Teammates lists the teammates of an environment by name.
+func (s *Store) Teammates(ctx context.Context, envID string) ([]Teammate, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+teammateCols+" FROM teammates WHERE environment_id = ? ORDER BY name", envID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []Persona{}
+	out := []Teammate{}
 	for rows.Next() {
-		p, err := scanPersona(rows)
+		p, err := scanTeammate(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -299,20 +299,20 @@ func (s *Store) Personas(ctx context.Context, envID string) ([]Persona, error) {
 	return out, rows.Err()
 }
 
-// DeletePersona removes a persona and the rules scoped to it. It refuses while the
-// persona owns sandboxes.
-func (s *Store) DeletePersona(ctx context.Context, envID, id string) error {
+// DeleteTeammate removes a teammate and the rules scoped to it. It refuses while the
+// teammate owns sandboxes.
+func (s *Store) DeleteTeammate(ctx context.Context, envID, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if names, err := names(ctx, tx, "SELECT name FROM sandboxes WHERE environment_id = ? AND persona_id = ? ORDER BY name", envID, id); err != nil {
+	if names, err := names(ctx, tx, "SELECT name FROM sandboxes WHERE environment_id = ? AND teammate_id = ? ORDER BY name", envID, id); err != nil {
 		return err
 	} else if len(names) > 0 {
-		return InUseError{fmt.Sprintf("the persona owns %s; delete them first", describeNames("sandbox", names))}
+		return InUseError{fmt.Sprintf("the teammate owns %s; delete them first", describeNames("sandbox", names))}
 	}
-	res, err := tx.ExecContext(ctx, "DELETE FROM personas WHERE environment_id = ? AND id = ?", envID, id)
+	res, err := tx.ExecContext(ctx, "DELETE FROM teammates WHERE environment_id = ? AND id = ?", envID, id)
 	if err != nil {
 		return err
 	}
@@ -322,9 +322,9 @@ func (s *Store) DeletePersona(ctx context.Context, envID, id string) error {
 	return tx.Commit()
 }
 
-// SandboxPersonas maps the sandboxes of an environment that a persona owns to it.
-func (s *Store) SandboxPersonas(ctx context.Context, envID string) (map[string]string, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, persona_id FROM sandboxes WHERE environment_id = ? AND persona_id IS NOT NULL", envID)
+// SandboxTeammates maps the sandboxes of an environment that a teammate owns to it.
+func (s *Store) SandboxTeammates(ctx context.Context, envID string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, teammate_id FROM sandboxes WHERE environment_id = ? AND teammate_id IS NOT NULL", envID)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +357,7 @@ func names(ctx context.Context, tx *sql.Tx, query string, args ...any) ([]string
 	return out, rows.Err()
 }
 
-// describeNames reads "persona Ada" or "3 personas (Ada, Bob, Cy)".
+// describeNames reads "teammate Ada" or "3 teammates (Ada, Bob, Cy)".
 func describeNames(noun string, names []string) string {
 	if len(names) == 1 {
 		return fmt.Sprintf("%s %q", noun, names[0])

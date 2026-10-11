@@ -23,7 +23,7 @@ func (f *fixture) mk(scope, text, tier, author, entity, attr string, observed ti
 	if entity != "" {
 		in.EntityIDs = []string{entity}
 	}
-	fact, err := f.mem.CreateFact(f.ctx, f.env, in, memory.Origin{Tier: tier, AuthorPersona: author, Evidence: "test"})
+	fact, err := f.mem.CreateFact(f.ctx, f.env, in, memory.Origin{Tier: tier, AuthorTeammate: author, Evidence: "test"})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func judge(rules ...[3]string) func(Request) (string, error) {
 
 func TestDreamAcceptance(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	// Contradictory facts from two sources: ada's session and the user in shared memory.
 	mine := f.mk(ada, "Deploy the api with make ship", memory.TierInferred, f.ada.ID, "api", "deploy.command", day(1))
 	shared := f.mk(memory.SharedScope, "Deploy the api with make release", memory.TierUser, "", "api", "deploy.command", day(2))
@@ -124,7 +124,7 @@ func TestDreamAcceptance(t *testing.T) {
 	}
 
 	// Until resolved, the shared fact wins at recall.
-	hits, err := f.mem.Search(f.ctx, f.env, memory.SearchRequest{Query: "make ship", Persona: f.ada.ID})
+	hits, err := f.mem.Search(f.ctx, f.env, memory.SearchRequest{Query: "make ship", Teammate: f.ada.ID})
 	hits = factHits(hits)
 	if err != nil || len(hits) != 2 || hits[0].ID != shared.ID || hits[1].ID != mine.ID || hits[1].OverriddenBy != shared.ID {
 		t.Fatalf("recall before %+v %v", hits, err)
@@ -134,7 +134,7 @@ func TestDreamAcceptance(t *testing.T) {
 	if _, err := f.svc.ResolveConflict(f.ctx, f.env, c.ID, memory.ConflictResolution{Resolution: "keep_a", Note: "ship is right"}); err != nil {
 		t.Fatal(err)
 	}
-	hits, _ = f.mem.Search(f.ctx, f.env, memory.SearchRequest{Query: "make ship", Persona: f.ada.ID})
+	hits, _ = f.mem.Search(f.ctx, f.env, memory.SearchRequest{Query: "make ship", Teammate: f.ada.ID})
 	hits = factHits(hits)
 	if len(hits) == 0 || hits[0].ID != mine.ID || hits[0].Disputed || contains(hits, shared.ID) {
 		t.Fatalf("recall after %+v", hits)
@@ -215,7 +215,7 @@ func TestParseVerdictIsStrict(t *testing.T) {
 
 func TestMalformedVerdictChangesNothing(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	x := f.mk(ada, "CI runs on GitHub Actions", memory.TierUser, "", "ci", "ci.system", day(1))
 	y := f.mk(ada, "CI runs on Buildkite", memory.TierUser, "", "ci", "ci.system", day(2))
 	f.llm.reply = `{"verdict": "supersedes", "reason": "newer", "extra": true}`
@@ -247,7 +247,7 @@ func (f *fixture) sixFacts(scope string) []memory.Fact {
 
 func TestBudgetStopsDreamCleanly(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	facts := f.sixFacts(ada)
 	f.llm.respond = judge()
 	f.svc.Budget = Budget{MaxCostMicros: 16_000, MaxCalls: 200} // three calls of $0.002 with headroom for the estimate
@@ -273,7 +273,7 @@ func TestBudgetStopsDreamCleanly(t *testing.T) {
 
 func TestInterruptedDreamResumesIdempotently(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	f.sixFacts(ada)
 	ctx, cancel := context.WithCancel(f.ctx)
 	defer cancel()
@@ -312,7 +312,7 @@ func TestInterruptedDreamResumesIdempotently(t *testing.T) {
 
 func TestDreamScopeIsolation(t *testing.T) {
 	f := newFixture(t)
-	ada, bob := memory.PersonaScope(f.ada.ID), memory.PersonaScope(f.bob.ID)
+	ada, bob := memory.TeammateScope(f.ada.ID), memory.TeammateScope(f.bob.ID)
 	a1 := f.mk(ada, "The api uses REST", memory.TierUser, "", "api", "api.style", day(1))
 	a2 := f.mk(ada, "The api uses gRPC", memory.TierUser, "", "api", "api.style", day(2))
 	b1 := f.mk(bob, "The api uses GraphQL", memory.TierUser, "", "api", "api.style", day(1))
@@ -344,7 +344,7 @@ func TestDreamScopeIsolation(t *testing.T) {
 
 func TestDreamWithoutUtilityModel(t *testing.T) {
 	f := newFixture(t)
-	bob := memory.PersonaScope(f.bob.ID)
+	bob := memory.TeammateScope(f.bob.ID)
 	keep := f.mk(bob, "Bob prefers dark mode in the editor", memory.TierInferred, f.bob.ID, "editor", "", day(1))
 	f.mk(bob, "Bob prefers dark mode in the editor.", memory.TierUser, "", "editor", "", day(2))
 	f.mk(bob, "Bob uses vim keybindings in the editor", memory.TierUser, "", "editor", "", day(3))
@@ -357,9 +357,9 @@ func TestDreamWithoutUtilityModel(t *testing.T) {
 	}
 }
 
-func TestSharedSupersedesPersonaInPersonaDream(t *testing.T) {
+func TestSharedSupersedesTeammateInTeammateDream(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	old := f.mk(ada, "Staging is at staging.old.example", memory.TierInferred, f.ada.ID, "staging", "staging.url", day(1))
 	f.dream(ada) // old is not new any more
 	newer := f.mk(memory.SharedScope, "Staging is at staging.new.example", memory.TierUser, "", "staging", "staging.url", day(5))
@@ -368,15 +368,15 @@ func TestSharedSupersedesPersonaInPersonaDream(t *testing.T) {
 	if r.Stats.Superseded != 1 || f.get(old.ID).Status != memory.StatusSuperseded || f.get(newer.ID).Status != memory.StatusActive {
 		t.Fatalf("run %+v", r)
 	}
-	// The other way round, a newer persona fact never replaces a shared one by itself.
+	// The other way round, a newer teammate fact never replaces a shared one by itself.
 	f2 := newFixture(t)
-	ada2 := memory.PersonaScope(f2.ada.ID)
+	ada2 := memory.TeammateScope(f2.ada.ID)
 	s := f2.mk(memory.SharedScope, "Staging is at staging.old.example", memory.TierUser, "", "staging", "staging.url", day(1))
 	p := f2.mk(ada2, "Staging is at staging.new.example", memory.TierUser, f2.ada.ID, "staging", "staging.url", day(5))
 	f2.llm.respond = judge([3]string{"old.example", "new.example", VerdictSupersedes})
 	r = f2.dream(ada2)
 	if r.Stats.Superseded != 0 || r.Stats.Conflicts != 1 || f2.get(s.ID).Status != memory.StatusActive || f2.get(p.ID).Status != memory.StatusDisputed {
-		t.Fatalf("persona over shared %+v", r)
+		t.Fatalf("teammate over shared %+v", r)
 	}
 	if c, _ := f2.mem.Conflicts(f2.ctx, f2.env, ""); c[0].Verdict != "temporal_supersession" {
 		t.Fatalf("verdict %s", c[0].Verdict)
@@ -385,7 +385,7 @@ func TestSharedSupersedesPersonaInPersonaDream(t *testing.T) {
 
 func TestLowerTierNewerFactOpensConflict(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	f.mk(ada, "Releases are tagged vMAJOR.MINOR", memory.TierUser, "", "release", "release.tag", day(1))
 	f.mk(ada, "Releases are tagged with dates", memory.TierInferred, f.ada.ID, "release", "release.tag", day(9))
 	f.llm.respond = judge([3]string{"MAJOR", "dates", VerdictSupersedes})
@@ -397,7 +397,7 @@ func TestLowerTierNewerFactOpensConflict(t *testing.T) {
 
 func TestDreamLockAndManualStart(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	if !f.svc.lockScope(f.env, ada) {
 		t.Fatal("lock")
 	}
@@ -408,8 +408,8 @@ func TestDreamLockAndManualStart(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 	f.svc.unlockScope(f.env, ada)
-	if _, err := f.svc.Dream(f.ctx, f.env, "persona:nobody", TriggerManual); !errors.Is(err, memory.ErrInvalid) {
-		t.Fatalf("unknown persona: %v", err)
+	if _, err := f.svc.Dream(f.ctx, f.env, "teammate:nobody", TriggerManual); !errors.Is(err, memory.ErrInvalid) {
+		t.Fatalf("unknown teammate: %v", err)
 	}
 	r, err := f.svc.StartDream(f.ctx, f.env, ada)
 	if err != nil || r.Status != DreamRunning || r.Trigger != TriggerManual {
@@ -430,7 +430,7 @@ func TestDreamLockAndManualStart(t *testing.T) {
 
 func TestDueDreams(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	for i := range DreamAfterFacts {
 		f.mk(ada, fmt.Sprintf("Fact number %d", i), memory.TierUser, "", "", "", day(1))
 	}
@@ -473,7 +473,7 @@ func TestDueDreams(t *testing.T) {
 
 func TestConflictApprovalDecisions(t *testing.T) {
 	f := newFixture(t)
-	ada := memory.PersonaScope(f.ada.ID)
+	ada := memory.TeammateScope(f.ada.ID)
 	f.mk(ada, "Use tabs", memory.TierUser, "", "style", "indent", day(1))
 	f.mk(ada, "Use spaces", memory.TierUser, "", "style", "indent", day(2))
 	f.llm.respond = judge([3]string{"tabs", "spaces", VerdictContradiction})
@@ -506,13 +506,13 @@ func TestConflictApprovalDecisions(t *testing.T) {
 
 func TestPromote(t *testing.T) {
 	f := newFixture(t)
-	mine := f.mk(memory.PersonaScope(f.ada.ID), "The api has rate limits of 100 rps", memory.TierVerified, f.ada.ID, "api", "", day(1))
+	mine := f.mk(memory.TeammateScope(f.ada.ID), "The api has rate limits of 100 rps", memory.TierVerified, f.ada.ID, "api", "", day(1))
 	a, err := f.svc.Promote(f.ctx, f.env, mine.ID)
 	if err != nil || a.Kind != ApprovalKind || a.Status != store.StatusPending || a.SandboxID != "" {
 		t.Fatalf("promote %+v %v", a, err)
 	}
 	var p SharePayload
-	if err := json.Unmarshal(a.Payload, &p); err != nil || p.FactID != mine.ID || p.PersonaID != f.ada.ID || p.Tier != memory.TierVerified {
+	if err := json.Unmarshal(a.Payload, &p); err != nil || p.FactID != mine.ID || p.TeammateID != f.ada.ID || p.Tier != memory.TierVerified {
 		t.Fatalf("payload %+v", p)
 	}
 	fact, err := f.svc.DecideShare(f.ctx, a, store.StatusApproved)
@@ -528,7 +528,7 @@ func TestPromote(t *testing.T) {
 // pending, with nothing in shared memory, and deciding again works.
 func TestShareDecisionIsAtomic(t *testing.T) {
 	f := newFixture(t)
-	mine := f.mk(memory.PersonaScope(f.ada.ID), "Releases are tagged from main", memory.TierVerified, f.ada.ID, "api", "", day(1))
+	mine := f.mk(memory.TeammateScope(f.ada.ID), "Releases are tagged from main", memory.TierVerified, f.ada.ID, "api", "", day(1))
 	a, err := f.svc.Promote(f.ctx, f.env, mine.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -575,7 +575,7 @@ func TestShareDecisionIsAtomic(t *testing.T) {
 	}
 
 	// An approval decided meanwhile writes nothing: the write rolls back with the decision.
-	b, err := f.svc.Promote(f.ctx, f.env, f.mk(memory.PersonaScope(f.ada.ID), "The staging database is reset nightly", memory.TierVerified, f.ada.ID, "db", "", day(2)).ID)
+	b, err := f.svc.Promote(f.ctx, f.env, f.mk(memory.TeammateScope(f.ada.ID), "The staging database is reset nightly", memory.TierVerified, f.ada.ID, "db", "", day(2)).ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -590,12 +590,12 @@ func TestShareDecisionIsAtomic(t *testing.T) {
 	}
 }
 
-// Shared memory is consolidated with the utility model of the persona that has had one the
+// Shared memory is consolidated with the utility model of the teammate that has had one the
 // longest (by creation time, then ID), whatever the names, and the usage report says whose.
-func TestSharedJudgeIsTheOldestPersonaWithAUtilityModel(t *testing.T) {
+func TestSharedJudgeIsTheOldestTeammateWithAUtilityModel(t *testing.T) {
 	f := newFixture(t)
-	created := func(p store.Persona, at time.Time) {
-		if _, err := f.st.DB().ExecContext(f.ctx, "UPDATE personas SET created_at = ? WHERE id = ?", at.Unix(), p.ID); err != nil {
+	created := func(p store.Teammate, at time.Time) {
+		if _, err := f.st.DB().ExecContext(f.ctx, "UPDATE teammates SET created_at = ? WHERE id = ?", at.Unix(), p.ID); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -611,7 +611,7 @@ func TestSharedJudgeIsTheOldestPersonaWithAUtilityModel(t *testing.T) {
 		if v.SharedJudge.Model != "claude-haiku-4-5" {
 			t.Fatalf("judge %+v", v.SharedJudge)
 		}
-		return v.SharedJudge.PersonaID
+		return v.SharedJudge.TeammateID
 	}
 	// Bob is the oldest but has a subscription, which has no utility model.
 	created(f.bob, day(1))
@@ -620,7 +620,7 @@ func TestSharedJudgeIsTheOldestPersonaWithAUtilityModel(t *testing.T) {
 		t.Fatalf("judge %s, want ada", got)
 	}
 	// aaron sorts first by name but is younger than ada.
-	aaron, err := f.st.CreatePersona(f.ctx, store.Persona{EnvironmentID: f.env, Name: "aaron", Harness: "claude", ProviderID: "anth"})
+	aaron, err := f.st.CreateTeammate(f.ctx, store.Teammate{EnvironmentID: f.env, Name: "aaron", Harness: "claude", ProviderID: "anth"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,7 +642,7 @@ func TestSharedJudgeIsTheOldestPersonaWithAUtilityModel(t *testing.T) {
 	f.mk(memory.SharedScope, "The api listens on port 9090", memory.TierUser, "", "api", "api.port", day(4))
 	f.llm.respond = judge()
 	r := f.dream(memory.SharedScope)
-	if r.Status != DreamDone || r.Stats.Judged != 1 || r.Stats.Persona != aaron.ID || judgeOf() != aaron.ID {
+	if r.Status != DreamDone || r.Stats.Judged != 1 || r.Stats.Teammate != aaron.ID || judgeOf() != aaron.ID {
 		t.Fatalf("run %+v", r)
 	}
 	// The calls count against the environment's daily budget.
@@ -651,7 +651,7 @@ func TestSharedJudgeIsTheOldestPersonaWithAUtilityModel(t *testing.T) {
 	}
 
 	// Without any utility model there is no judge to name.
-	if _, err := f.st.DB().ExecContext(f.ctx, "UPDATE personas SET provider_id = 'sub'"); err != nil {
+	if _, err := f.st.DB().ExecContext(f.ctx, "UPDATE teammates SET provider_id = 'sub'"); err != nil {
 		t.Fatal(err)
 	}
 	if got := judgeOf(); got != "" {

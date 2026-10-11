@@ -31,7 +31,7 @@ func (s *Service) FactsChangedSince(ctx context.Context, envID, scope string, si
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx, "SELECT "+factCols+` FROM memory_facts
-		WHERE environment_id = ? AND scope = ? AND updated_at > ? AND author_persona != ? AND status IN ('active', 'disputed')
+		WHERE environment_id = ? AND scope = ? AND updated_at > ? AND author_teammate != ? AND status IN ('active', 'disputed')
 		ORDER BY updated_at DESC, id LIMIT ?`, envID, scope, since.Unix(), exceptAuthor, limit)
 	if err != nil {
 		return nil, err
@@ -72,7 +72,7 @@ func (s *Service) ReinforceWith(ctx context.Context, envID, id string, o Origin,
 		return Fact{}, err
 	}
 	defer tx.Rollback()
-	if err := checkPersonas(ctx, tx, envID, "", o.AuthorPersona); err != nil {
+	if err := checkTeammates(ctx, tx, envID, "", o.AuthorTeammate); err != nil {
 		return Fact{}, err
 	}
 	sourceID, err := s.insertSource(ctx, tx, envID, old.Scope, o)

@@ -3,7 +3,7 @@ package harness
 import (
 	"fmt"
 
-	"github.com/lukaskoebe/sandbox-studio/internal/personas"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // Claude is the adapter of Claude Code (@anthropic-ai/claude-code on npm).
@@ -22,11 +22,11 @@ type Claude struct{}
 // servers live in ~/.claude.json, which Claude Code owns, so Studio passes its own file.
 const claudeMCPConfig = ".claude/studio-mcp.json"
 
-func (Claude) Name() string { return personas.HarnessClaude }
+func (Claude) Name() string { return teammates.HarnessClaude }
 
-func (Claude) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, error) {
+func (Claude) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, error) {
 	switch provider.Kind {
-	case personas.KindAnthropicAPI, personas.KindClaudeSubscription:
+	case teammates.KindAnthropicAPI, teammates.KindClaudeSubscription:
 	default:
 		return nil, fmt.Errorf("claude can't use a %s provider", provider.Kind)
 	}
@@ -38,7 +38,7 @@ func (Claude) Render(p Persona, s Sandbox, provider Provider) ([]GuestFile, erro
 		// The binary is installed by the image; the agent user can't update it.
 		"env": map[string]any{"DISABLE_AUTOUPDATER": "1"},
 		// Memory: every hook forwards to Studio through the guest agent.
-		"hooks": claudeStyleHooks(personas.HarnessClaude),
+		"hooks": claudeStyleHooks(teammates.HarnessClaude),
 	}
 	// verify (S7): the first start with ANTHROPIC_API_KEY set may ask once whether to use
 	// the key, and a fresh home shows the onboarding screens. Both are answered in the TUI
@@ -74,11 +74,11 @@ func (Claude) TUICommand(SessionOpts) []string {
 // ParseHook reads Claude Code's hook stdin. verify (S7): the field names and that
 // SessionStart fires with source "compact" after compaction, against 2.1.287.
 func (Claude) ParseHook(event string, stdin []byte) (HookEvent, error) {
-	return hookFormat(personas.HarnessClaude).Parse(event, stdin)
+	return hookFormat(teammates.HarnessClaude).Parse(event, stdin)
 }
 
 func (Claude) RenderHookResponse(r HookResult) []byte {
-	return hookFormat(personas.HarnessClaude).Render(r)
+	return hookFormat(teammates.HarnessClaude).Render(r)
 }
 
 // ACPCommand is nil: Claude Code speaks ACP through a separate adapter (M6).
@@ -86,4 +86,4 @@ func (Claude) ACPCommand() []string { return nil }
 
 // StateDirs: sessions and history are in ~/.claude (projects/, history.jsonl); account
 // and onboarding state is in the file ~/.claude.json next to it.
-func (Claude) StateDirs() []string { return hookFormat(personas.HarnessClaude).StateDirs }
+func (Claude) StateDirs() []string { return hookFormat(teammates.HarnessClaude).StateDirs }

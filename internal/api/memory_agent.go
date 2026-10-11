@@ -25,9 +25,9 @@ func (s *Server) registerMemoryAgent(api huma.API) {
 	}
 
 	type sessionsIn struct {
-		Env     string `path:"env" doc:"Environment ID"`
-		Persona string `query:"persona" doc:"Only this persona's sessions"`
-		Limit   int    `query:"limit" minimum:"0" maximum:"200" doc:"At most this many, newest first; 50 by default"`
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `query:"teammate" doc:"Only this teammate's sessions"`
+		Limit    int    `query:"limit" minimum:"0" maximum:"200" doc:"At most this many, newest first; 50 by default"`
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "listMemorySessions", Method: http.MethodGet, Path: base + "/sessions", Tags: tags,
@@ -36,7 +36,7 @@ func (s *Server) registerMemoryAgent(api huma.API) {
 		if err := ready(ctx, in.Env); err != nil {
 			return nil, err
 		}
-		list, err := s.AgentMem.Sessions(ctx, in.Env, in.Persona, in.Limit)
+		list, err := s.AgentMem.Sessions(ctx, in.Env, in.Teammate, in.Limit)
 		return &struct{ Body []agentmem.SessionView }{list}, apiError(err)
 	})
 

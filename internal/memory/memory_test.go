@@ -36,13 +36,13 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	addPersonas(t, st.DB(), e1.ID, "p1", "a", "b", "x", "p")
+	addTeammates(t, st.DB(), e1.ID, "p1", "a", "b", "x", "p")
 	emb := &FakeEmbedder{Aliases: map[string]string{"node": "javascript", "npm": "javascript", "ship": "deploy", "backend": "api"}}
 	return &fixture{t: t, st: st, svc: New(st.DB(), emb, nil), emb: emb, env: e1.ID, env2: e2.ID}
 }
 
-// addPersonas inserts personas with fixed IDs (and a provider for them) directly.
-func addPersonas(t *testing.T, db *sql.DB, envID string, ids ...string) {
+// addTeammates inserts teammates with fixed IDs (and a provider for them) directly.
+func addTeammates(t *testing.T, db *sql.DB, envID string, ids ...string) {
 	t.Helper()
 	prov := "prov-" + envID
 	if _, err := db.Exec(`INSERT OR IGNORE INTO providers (id, environment_id, name, kind, created_at, updated_at)
@@ -50,7 +50,7 @@ func addPersonas(t *testing.T, db *sql.DB, envID string, ids ...string) {
 		t.Fatal(err)
 	}
 	for _, id := range ids {
-		if _, err := db.Exec(`INSERT INTO personas (id, environment_id, name, harness, provider_id, git_name, git_email, created_at, updated_at)
+		if _, err := db.Exec(`INSERT INTO teammates (id, environment_id, name, harness, provider_id, git_name, git_email, created_at, updated_at)
 			VALUES (?, ?, ?, 'claude', ?, ?, ?, 0, 0)`, id, envID, id, prov, id, id+"@example.com"); err != nil {
 			t.Fatal(err)
 		}
@@ -104,12 +104,12 @@ func contains(hits []Hit, id string) bool {
 }
 
 func TestValidateScope(t *testing.T) {
-	for _, ok := range []string{"shared", "persona:abc", "persona:A_b-9"} {
+	for _, ok := range []string{"shared", "teammate:abc", "teammate:A_b-9"} {
 		if err := ValidateScope(ok); err != nil {
 			t.Errorf("%q: %v", ok, err)
 		}
 	}
-	for _, bad := range []string{"", "Shared", "persona:", "persona:a b", "persona:a/b", "team", "persona:" + strings.Repeat("a", 65)} {
+	for _, bad := range []string{"", "Shared", "teammate:", "teammate:a b", "teammate:a/b", "team", "teammate:" + strings.Repeat("a", 65)} {
 		if err := ValidateScope(bad); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%q accepted", bad)
 		}
@@ -153,21 +153,21 @@ func TestMigrationAndFTSStayInSync(t *testing.T) {
 func TestFactLifecycleRecordsAuthorAndSource(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	o := Origin{Tier: TierInferred, AuthorPersona: "p1", SessionRef: "sess-1", Evidence: "user said: use pnpm"}
-	fact := f.fact(f.env, "persona:p1", KindPreference, "Use pnpm, not npm", o, func(in *FactInput) {
+	o := Origin{Tier: TierInferred, AuthorTeammate: "p1", SessionRef: "sess-1", Evidence: "user said: use pnpm"}
+	fact := f.fact(f.env, "teammate:p1", KindPreference, "Use pnpm, not npm", o, func(in *FactInput) {
 		in.Attribute, in.EntityIDs = "js.package_manager", []string{"user"}
 	})
-	if fact.AuthorPersona != "p1" || fact.Tier != TierInferred || fact.Status != StatusActive || fact.SupportCount != 1 ||
+	if fact.AuthorTeammate != "p1" || fact.Tier != TierInferred || fact.Status != StatusActive || fact.SupportCount != 1 ||
 		len(fact.SourceIDs) != 1 || fact.Attribute != "js.package_manager" || fact.EntityIDs[0] != "user" || fact.Confidence != 1 {
 		t.Fatalf("fact %+v", fact)
 	}
 	src, err := f.svc.Source(ctx, f.env, fact.SourceIDs[0])
-	if err != nil || src.Kind != TierInferred || src.AuthorPersona != "p1" || src.SessionRef != "sess-1" || src.Evidence != o.Evidence {
+	if err != nil || src.Kind != TierInferred || src.AuthorTeammate != "p1" || src.SessionRef != "sess-1" || src.Evidence != o.Evidence {
 		t.Fatalf("source %+v %v", src, err)
 	}
 	// A UI edit makes it user tier and adds a source.
 	edited, err := f.svc.UpdateFact(ctx, f.env, fact.ID, FactInput{Scope: "shared", Kind: KindPreference, Text: "Use pnpm everywhere"}, UserOrigin)
-	if err != nil || edited.Tier != TierUser || edited.Scope != "persona:p1" || len(edited.SourceIDs) != 2 || edited.Text != "Use pnpm everywhere" {
+	if err != nil || edited.Tier != TierUser || edited.Scope != "teammate:p1" || len(edited.SourceIDs) != 2 || edited.Text != "Use pnpm everywhere" {
 		t.Fatalf("edited %+v %v", edited, err)
 	}
 	retracted, err := f.svc.SetFactStatus(ctx, f.env, fact.ID, StatusRetracted)
@@ -180,8 +180,8 @@ func TestFactLifecycleRecordsAuthorAndSource(t *testing.T) {
 	if _, err := f.svc.CreateFact(ctx, f.env, FactInput{Scope: "shared", Kind: KindFact, Text: "x"}, Origin{Tier: "gossip"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("bad tier: %v", err)
 	}
-	if _, err := f.svc.CreateFact(ctx, f.env, FactInput{Scope: "shared", Kind: KindFact, Text: "x"}, Origin{Tier: TierUser, AuthorPersona: "a b"}); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("bad persona: %v", err)
+	if _, err := f.svc.CreateFact(ctx, f.env, FactInput{Scope: "shared", Kind: KindFact, Text: "x"}, Origin{Tier: TierUser, AuthorTeammate: "a b"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad teammate: %v", err)
 	}
 }
 
@@ -225,11 +225,11 @@ func TestEnvironmentIsolation(t *testing.T) {
 	if _, err := f.svc.CreateFact(ctx, f.env2, FactInput{Scope: "shared", Kind: KindFact, Text: "x", Supersedes: fact.ID}, UserOrigin); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("supersede across environments: %v", err)
 	}
-	// Personas belong to one environment.
-	if _, err := f.svc.CreateFact(ctx, f.env2, FactInput{Scope: "persona:a", Kind: KindFact, Text: "x"}, UserOrigin); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("persona of another environment: %v", err)
+	// Teammates belong to one environment.
+	if _, err := f.svc.CreateFact(ctx, f.env2, FactInput{Scope: "teammate:a", Kind: KindFact, Text: "x"}, UserOrigin); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("teammate of another environment: %v", err)
 	}
-	if _, err := f.svc.CreatePage(ctx, f.env2, PageInput{Scope: "shared", Slug: "x", Title: "x", Kind: "topic"}, Origin{Tier: TierInferred, AuthorPersona: "a"}); !errors.Is(err, ErrInvalid) {
+	if _, err := f.svc.CreatePage(ctx, f.env2, PageInput{Scope: "shared", Slug: "x", Title: "x", Kind: "topic"}, Origin{Tier: TierInferred, AuthorTeammate: "a"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("author of another environment: %v", err)
 	}
 	for _, env := range []string{f.env, f.env2} {
@@ -242,22 +242,22 @@ func TestEnvironmentIsolation(t *testing.T) {
 	}
 }
 
-func TestPersonaScopeIsolation(t *testing.T) {
+func TestTeammateScopeIsolation(t *testing.T) {
 	f := newFixture(t)
-	a := f.fact(f.env, "persona:a", KindPreference, "Prefers tabs over spaces in Go code", Origin{Tier: TierUser, AuthorPersona: "a"})
-	b := f.fact(f.env, "persona:b", KindPreference, "Prefers spaces over tabs in Go code", Origin{Tier: TierUser, AuthorPersona: "b"})
+	a := f.fact(f.env, "teammate:a", KindPreference, "Prefers tabs over spaces in Go code", Origin{Tier: TierUser, AuthorTeammate: "a"})
+	b := f.fact(f.env, "teammate:b", KindPreference, "Prefers spaces over tabs in Go code", Origin{Tier: TierUser, AuthorTeammate: "b"})
 	shared := f.fact(f.env, "shared", KindFact, "Go code is formatted with gofmt, which uses tabs", UserOrigin)
 	for _, ready := range []bool{false, true} {
 		if ready {
 			f.embedAll()
 		}
-		hitsA := f.search(f.env, SearchRequest{Query: "tabs spaces go code", Persona: "a"})
+		hitsA := f.search(f.env, SearchRequest{Query: "tabs spaces go code", Teammate: "a"})
 		if !contains(hitsA, a.ID) || !contains(hitsA, shared.ID) || contains(hitsA, b.ID) {
-			t.Fatalf("persona a (vectors %v): %v", ready, ids(hitsA))
+			t.Fatalf("teammate a (vectors %v): %v", ready, ids(hitsA))
 		}
-		hitsB := f.search(f.env, SearchRequest{Query: "tabs spaces go code", Persona: "b"})
+		hitsB := f.search(f.env, SearchRequest{Query: "tabs spaces go code", Teammate: "b"})
 		if !contains(hitsB, b.ID) || contains(hitsB, a.ID) {
-			t.Fatalf("persona b: %v", ids(hitsB))
+			t.Fatalf("teammate b: %v", ids(hitsB))
 		}
 		sharedOnly := f.search(f.env, SearchRequest{Query: "tabs spaces go code"})
 		if len(sharedOnly) != 1 || sharedOnly[0].ID != shared.ID {
@@ -265,11 +265,11 @@ func TestPersonaScopeIsolation(t *testing.T) {
 		}
 	}
 	scopes, err := f.svc.Scopes(context.Background(), f.env)
-	if err != nil || len(scopes) != 3 || scopes[0].Scope != "shared" || scopes[1].Scope != "persona:a" {
+	if err != nil || len(scopes) != 3 || scopes[0].Scope != "shared" || scopes[1].Scope != "teammate:a" {
 		t.Fatalf("scopes %+v %v", scopes, err)
 	}
-	if _, err := f.svc.Search(context.Background(), f.env, SearchRequest{Query: "x", Persona: "a:b"}); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("bad persona: %v", err)
+	if _, err := f.svc.Search(context.Background(), f.env, SearchRequest{Query: "x", Teammate: "a:b"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad teammate: %v", err)
 	}
 }
 
@@ -381,15 +381,15 @@ func TestStatusFiltering(t *testing.T) {
 	if _, err := f.svc.SetFactStatus(ctx, f.env, retracted.ID, StatusRetracted); err != nil {
 		t.Fatal(err)
 	}
-	a := f.fact(f.env, "persona:x", KindFact, "The deploy command is make alpha", UserOrigin)
+	a := f.fact(f.env, "teammate:x", KindFact, "The deploy command is make alpha", UserOrigin)
 	b := f.fact(f.env, "shared", KindFact, "The deploy command is make beta", UserOrigin)
 	conflict, err := f.svc.CreateConflict(ctx, f.env, a.ID, b.ID, "contradiction", "two commands")
-	// Across scopes only the persona fact is disputed: the shared one wins until resolved.
+	// Across scopes only the teammate fact is disputed: the shared one wins until resolved.
 	if err != nil || conflict.FactA.Status != StatusDisputed || conflict.FactB.Status != StatusActive || conflict.Status != "open" || conflict.Reason != "two commands" {
 		t.Fatalf("conflict %+v %v", conflict, err)
 	}
 
-	hits := f.search(f.env, SearchRequest{Query: "deploy command", Persona: "x", Limit: 50})
+	hits := f.search(f.env, SearchRequest{Query: "deploy command", Teammate: "x", Limit: 50})
 	if contains(hits, old.ID) || contains(hits, expired.ID) || contains(hits, retracted.ID) || !contains(hits, newer.ID) {
 		t.Fatalf("default: %v", ids(hits))
 	}
@@ -411,7 +411,7 @@ func TestStatusFiltering(t *testing.T) {
 		}
 	}
 	// Superseding only works within one scope.
-	if _, err := f.svc.CreateFact(ctx, f.env, FactInput{Scope: "persona:x", Kind: KindFact, Text: "y", Supersedes: b.ID}, UserOrigin); !errors.Is(err, ErrInvalid) {
+	if _, err := f.svc.CreateFact(ctx, f.env, FactInput{Scope: "teammate:x", Kind: KindFact, Text: "y", Supersedes: b.ID}, UserOrigin); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("cross-scope supersede: %v", err)
 	}
 
@@ -422,7 +422,7 @@ func TestStatusFiltering(t *testing.T) {
 	if resolved.FactA.Status != StatusRetracted || resolved.FactB.Status != StatusActive {
 		t.Fatalf("keep_b: a %s b %s", resolved.FactA.Status, resolved.FactB.Status)
 	}
-	if hits := f.search(f.env, SearchRequest{Query: "deploy command", Persona: "x", Limit: 50}); contains(hits, a.ID) || !contains(hits, b.ID) {
+	if hits := f.search(f.env, SearchRequest{Query: "deploy command", Teammate: "x", Limit: 50}); contains(hits, a.ID) || !contains(hits, b.ID) {
 		t.Fatalf("after keep_b: %v", ids(hits))
 	}
 	if _, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, ConflictResolution{Resolution: "keep_a"}); !errors.Is(err, ErrExists) {
@@ -434,11 +434,11 @@ func TestStatusFiltering(t *testing.T) {
 	if _, err := f.svc.ResolveConflict(ctx, f.env, conflict.ID, ConflictResolution{Resolution: "maybe"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("bad resolution: %v", err)
 	}
-	list, err := f.svc.Conflicts(ctx, f.env, "persona:x")
+	list, err := f.svc.Conflicts(ctx, f.env, "teammate:x")
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list %v %v", list, err)
 	}
-	if list, _ := f.svc.Conflicts(ctx, f.env, "persona:y"); len(list) != 0 {
+	if list, _ := f.svc.Conflicts(ctx, f.env, "teammate:y"); len(list) != 0 {
 		t.Fatalf("other scope %v", list)
 	}
 }
@@ -465,7 +465,7 @@ func TestCoreBudget(t *testing.T) {
 	if _, err := page("big", 5000, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "persona:p", Slug: "self", Title: "Self", Kind: "persona-self", Compiled: strings.Repeat("x", 4000), AlwaysLoad: true}, UserOrigin); err != nil {
+	if _, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "teammate:p", Slug: "self", Title: "Self", Kind: "teammate-self", Compiled: strings.Repeat("x", 4000), AlwaysLoad: true}, UserOrigin); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.CreatePage(ctx, f.env2, PageInput{Scope: "shared", Slug: "x", Title: "x", Kind: "topic", Compiled: strings.Repeat("x", 4000), AlwaysLoad: true}, UserOrigin); err != nil {
@@ -494,22 +494,22 @@ func TestCoreBudget(t *testing.T) {
 func TestPagesAndTimeline(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	p, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "persona:p", Slug: "project/studio", Title: "Sandbox Studio", Kind: "project",
-		Compiled: "Go backend.\n\nReact frontend with TanStack Router."}, Origin{Tier: TierInferred, AuthorPersona: "p"})
-	if err != nil || p.AuthorPersona != "p" || p.Tier != TierInferred || len(p.Timeline) != 0 {
+	p, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "teammate:p", Slug: "project/studio", Title: "Sandbox Studio", Kind: "project",
+		Compiled: "Go backend.\n\nReact frontend with TanStack Router."}, Origin{Tier: TierInferred, AuthorTeammate: "p"})
+	if err != nil || p.AuthorTeammate != "p" || p.Tier != TierInferred || len(p.Timeline) != 0 {
 		t.Fatalf("page %+v %v", p, err)
 	}
-	if _, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "persona:p", Slug: "project/studio", Title: "x", Kind: "project"}, UserOrigin); !errors.Is(err, ErrExists) {
+	if _, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "teammate:p", Slug: "project/studio", Title: "x", Kind: "project"}, UserOrigin); !errors.Is(err, ErrExists) {
 		t.Fatalf("duplicate slug: %v", err)
 	}
-	if _, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "persona:p", Slug: "Bad Slug", Title: "x", Kind: "project"}, UserOrigin); !errors.Is(err, ErrInvalid) {
+	if _, err := f.svc.CreatePage(ctx, f.env, PageInput{Scope: "teammate:p", Slug: "Bad Slug", Title: "x", Kind: "project"}, UserOrigin); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("bad slug: %v", err)
 	}
-	fact := f.fact(f.env, "persona:p", KindDecision, "Chose SQLite FTS5 for keyword search", UserOrigin)
+	fact := f.fact(f.env, "teammate:p", KindDecision, "Chose SQLite FTS5 for keyword search", UserOrigin)
 	sharedFact := f.fact(f.env, "shared", KindDecision, "shared thing", UserOrigin)
 	day := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	e1, err := f.svc.AppendTimeline(ctx, f.env, p.ID, TimelineInput{Text: "Decided on hybrid search with zeppelin fusion", FactID: fact.ID, At: &day}, Origin{Tier: TierUser, AuthorPersona: "p"})
-	if err != nil || !e1.At.Equal(day) || e1.FactID != fact.ID || e1.AuthorPersona != "p" {
+	e1, err := f.svc.AppendTimeline(ctx, f.env, p.ID, TimelineInput{Text: "Decided on hybrid search with zeppelin fusion", FactID: fact.ID, At: &day}, Origin{Tier: TierUser, AuthorTeammate: "p"})
+	if err != nil || !e1.At.Equal(day) || e1.FactID != fact.ID || e1.AuthorTeammate != "p" {
 		t.Fatalf("entry %+v %v", e1, err)
 	}
 	if _, err := f.svc.AppendTimeline(ctx, f.env, p.ID, TimelineInput{Text: "first entry"}, UserOrigin); err != nil {
@@ -528,7 +528,7 @@ func TestPagesAndTimeline(t *testing.T) {
 	}
 	// Timeline entries and compiled truth are searchable and resolve to the page.
 	for _, q := range []string{"zeppelin", "tanstack"} {
-		hits := f.search(f.env, SearchRequest{Query: q, Persona: "p"})
+		hits := f.search(f.env, SearchRequest{Query: q, Teammate: "p"})
 		if len(hits) != 1 || hits[0].Type != "page" || hits[0].ID != p.ID || hits[0].Page.Title != "Sandbox Studio" {
 			t.Fatalf("%s: %+v", q, hits)
 		}
@@ -544,7 +544,7 @@ func TestPagesAndTimeline(t *testing.T) {
 	if err := f.svc.DeletePage(ctx, f.env, p.ID); err != nil {
 		t.Fatal(err)
 	}
-	if hits := f.search(f.env, SearchRequest{Query: "zeppelin", Persona: "p"}); len(hits) != 0 {
+	if hits := f.search(f.env, SearchRequest{Query: "zeppelin", Teammate: "p"}); len(hits) != 0 {
 		t.Fatalf("deleted page found: %v", ids(hits))
 	}
 }

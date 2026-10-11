@@ -91,7 +91,7 @@ func TestParseHookRefuses(t *testing.T) {
 		t.Error("claude: mismatched event parsed")
 	}
 	// Prompts are bounded; fields Studio decides on are never taken from the payload.
-	long := `{"prompt":"` + strings.Repeat("x", agenthook.MaxPrompt+10) + `","hook_event_name":"UserPromptSubmit","persona":"other","sandbox":"other"}`
+	long := `{"prompt":"` + strings.Repeat("x", agenthook.MaxPrompt+10) + `","hook_event_name":"UserPromptSubmit","teammate":"other","sandbox":"other"}`
 	ev, err := (Claude{}).ParseHook(HookUserPrompt, []byte(long))
 	if err != nil || len(ev.Prompt) != agenthook.MaxPrompt {
 		t.Fatalf("prompt: %v %d", err, len(ev.Prompt))

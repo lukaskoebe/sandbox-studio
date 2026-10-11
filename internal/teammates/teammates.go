@@ -1,7 +1,7 @@
-// Package personas holds the fixed tables and validation rules of personas and providers:
-// which provider kinds exist, which harnesses each supports, and what a persona's fields
+// Package teammates holds the fixed tables and validation rules of teammates and providers:
+// which provider kinds exist, which harnesses each supports, and what a teammate's fields
 // may contain. The store keeps the records; the API validates with this package.
-package personas
+package teammates
 
 import (
 	"errors"
@@ -17,7 +17,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 )
 
-// ErrInvalid is wrapped by errors describing a persona or provider field that is refused.
+// ErrInvalid is wrapped by errors describing a teammate or provider field that is refused.
 var ErrInvalid = errors.New("invalid")
 
 // Harnesses.
@@ -78,7 +78,7 @@ func Supports(kind, harness string) bool {
 	return ok && slices.Contains(k.Harnesses, harness)
 }
 
-// Limits of persona and provider fields.
+// Limits of teammate and provider fields.
 const (
 	MaxNameLen     = 64
 	MaxRoleLen     = 200
@@ -89,7 +89,7 @@ const (
 	MaxBaseURLLen  = 2048
 )
 
-// CheckName validates the name of a persona or provider: one line of printable text.
+// CheckName validates the name of a teammate or provider: one line of printable text.
 func CheckName(what, name string) error {
 	if strings.TrimSpace(name) != name || name == "" {
 		return fmt.Errorf("%w: the %s name must not be empty or start or end with spaces", ErrInvalid, what)
@@ -100,7 +100,7 @@ func CheckName(what, name string) error {
 	return checkLine(what+" name", name)
 }
 
-// CheckRole validates a persona's short role description.
+// CheckRole validates a teammate's short role description.
 func CheckRole(role string) error {
 	if utf8.RuneCountInString(role) > MaxRoleLen {
 		return fmt.Errorf("%w: the role is longer than %d characters", ErrInvalid, MaxRoleLen)
@@ -108,7 +108,7 @@ func CheckRole(role string) error {
 	return checkLine("role", role)
 }
 
-// CheckSoul validates a persona's soul: markdown of bounded size without NUL bytes.
+// CheckSoul validates a teammate's soul: markdown of bounded size without NUL bytes.
 func CheckSoul(soul string) error {
 	switch {
 	case len(soul) > MaxSoulBytes:

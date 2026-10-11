@@ -1,4 +1,4 @@
-package personas
+package teammates
 
 import (
 	"errors"

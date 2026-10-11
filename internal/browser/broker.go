@@ -1,7 +1,7 @@
-// Package browser is the browser broker (PLAN §6.8). Each persona has one browser VM, a
+// Package browser is the browser broker (PLAN §6.8). Each teammate has one browser VM, a
 // sandbox of kind browser running Chromium under agent-browser. Agents drive it with the
 // browser tools of `studio-agent mcp`; the calls arrive on their own sandbox's channel, so
-// the broker knows the persona from the channel and never from what the call says. Every
+// the broker knows the teammate from the channel and never from what the call says. Every
 // action goes through the policy before it runs, snapshots come back with sensitive values
 // blanked, credentials are filled by Studio itself after the user approves, and the user
 // can watch and take over through the live view.
@@ -30,10 +30,10 @@ const (
 
 // Errors an agent may see.
 var (
-	ErrNoPersona = errors.New("this sandbox has no persona, so it has no browser")
-	ErrNoCalls   = errors.New("browser calls come from agent sandboxes only")
-	ErrPaused    = errors.New("the user is driving the browser, so agent browser calls are paused; try again once the user hands it back")
-	ErrNotLive   = errors.New("the browser is not running")
+	ErrNoTeammate = errors.New("this sandbox has no teammate, so it has no browser")
+	ErrNoCalls    = errors.New("browser calls come from agent sandboxes only")
+	ErrPaused     = errors.New("the user is driving the browser, so agent browser calls are paused; try again once the user hands it back")
+	ErrNotLive    = errors.New("the browser is not running")
 )
 
 // Runner reaches a browser VM's guest agent (agentchan.Hub).
@@ -44,10 +44,10 @@ type Runner interface {
 
 // VMs creates, starts and stops browser VMs (sandboxes.Manager).
 type VMs interface {
-	EnsureBrowser(ctx context.Context, envID, personaID, image string) (store.Sandbox, error)
-	StopBrowser(ctx context.Context, envID, personaID string) error
-	RemoveBrowser(ctx context.Context, envID, personaID string) error
-	BrowserStatus(ctx context.Context, envID, personaID string) (store.Sandbox, runtime.Status, error)
+	EnsureBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error)
+	StopBrowser(ctx context.Context, envID, teammateID string) error
+	RemoveBrowser(ctx context.Context, envID, teammateID string) error
+	BrowserStatus(ctx context.Context, envID, teammateID string) (store.Sandbox, runtime.Status, error)
 }
 
 // Keys unseals a vault secret (secrets.Vault).
@@ -60,7 +60,7 @@ const (
 	defaultHold        = 30 * time.Second // an approval is awaited within the call this long
 	defaultPauseWait   = 20 * time.Second // an agent call waits this long for the user to hand back
 	defaultIdleStop    = 10 * time.Minute
-	defaultKeep        = 500       // actions kept per persona
+	defaultKeep        = 500       // actions kept per teammate
 	defaultShotBudget  = 200 << 20 // bytes of screenshots kept in all
 	commandTimeout     = 25 * time.Second
 	grantTTL           = 5 * time.Minute
@@ -90,15 +90,15 @@ type Service struct {
 	ShotBudget int64
 
 	mu       sync.Mutex
-	states   map[string]*state // by persona ID
+	states   map[string]*state // by teammate ID
 	outcomes map[string]*credOutcome
 }
 
-// state is what the broker keeps about one persona's browser. Fields below run are
+// state is what the broker keeps about one teammate's browser. Fields below run are
 // guarded by Service.mu.
 type state struct {
-	env, persona string
-	run          chan struct{} // one command at a time
+	env, teammate string
+	run           chan struct{} // one command at a time
 
 	vm       string // the browser sandbox's ID, once known
 	session  string // groups the action log of one run of the VM
@@ -150,33 +150,33 @@ func or[T comparable](v, def T) T {
 	return v
 }
 
-func (s *Service) state(envID, personaID string) *state {
+func (s *Service) state(envID, teammateID string) *state {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.stateLocked(envID, personaID)
+	return s.stateLocked(envID, teammateID)
 }
 
-func (s *Service) stateLocked(envID, personaID string) *state {
+func (s *Service) stateLocked(envID, teammateID string) *state {
 	if s.states == nil {
 		s.states = map[string]*state{}
 	}
-	st := s.states[personaID]
+	st := s.states[teammateID]
 	if st == nil || st.env != envID {
-		st = &state{env: envID, persona: personaID, run: make(chan struct{}, 1), lastUsed: s.now()}
-		s.states[personaID] = st
+		st = &state{env: envID, teammate: teammateID, run: make(chan struct{}, 1), lastUsed: s.now()}
+		s.states[teammateID] = st
 	}
 	return st
 }
 
 // Driver is gateway.Gateway.Driver: whose rules decide the browser VM's connections.
 // While the user drives, or before any agent did, the browser VM's own row decides, which
-// means the persona's rules; otherwise the agent sandbox that drove it last.
+// means the teammate's rules; otherwise the agent sandbox that drove it last.
 func (s *Service) Driver(ctx context.Context, sb store.Sandbox) store.Sandbox {
 	if sb.Kind != store.SandboxKindBrowser {
 		return sb
 	}
 	s.mu.Lock()
-	st := s.states[sb.PersonaID]
+	st := s.states[sb.TeammateID]
 	var driver store.Sandbox
 	if st != nil && !st.takeover {
 		driver = st.driver
@@ -187,13 +187,13 @@ func (s *Service) Driver(ctx context.Context, sb store.Sandbox) store.Sandbox {
 	}
 	// The driver may have been deleted since.
 	cur, err := s.Store.LookupSandbox(ctx, driver.ID)
-	if err != nil || cur.EnvironmentID != sb.EnvironmentID || cur.PersonaID != sb.PersonaID {
+	if err != nil || cur.EnvironmentID != sb.EnvironmentID || cur.TeammateID != sb.TeammateID {
 		return sb
 	}
 	return cur
 }
 
-// acquire waits for the persona's browser to be free and not driven by the user.
+// acquire waits for the teammate's browser to be free and not driven by the user.
 func (s *Service) acquire(ctx context.Context, st *state) (func(), error) {
 	deadline := time.NewTimer(or(s.PauseWait, defaultPauseWait))
 	defer deadline.Stop()
@@ -241,7 +241,7 @@ type batchItem struct {
 	Error   string          `json:"error"`
 }
 
-// exec runs one agent-browser command in the persona's browser VM. Errors are scrubbed.
+// exec runs one agent-browser command in the teammate's browser VM. Errors are scrubbed.
 func (s *Service) exec(ctx context.Context, st *state, cmd agentproto.BrowserCommand) (json.RawMessage, []byte, error) {
 	s.mu.Lock()
 	vm, secrets := st.vm, st.secrets
@@ -290,9 +290,9 @@ func (s *Service) batch(ctx context.Context, st *state, cmds [][]string) ([]batc
 	return items, nil
 }
 
-// boot makes sure the persona's browser VM is running and its state knows it.
+// boot makes sure the teammate's browser VM is running and its state knows it.
 func (s *Service) boot(ctx context.Context, st *state) error {
-	vm, err := s.VMs.EnsureBrowser(ctx, st.env, st.persona, s.Image)
+	vm, err := s.VMs.EnsureBrowser(ctx, st.env, st.teammate, s.Image)
 	if err != nil {
 		return fmt.Errorf("starting the browser: %w", err)
 	}
@@ -333,10 +333,10 @@ func (s *Service) takeGrant(st *state, r Request) bool {
 	return false
 }
 
-func (s *Service) addGrant(envID, personaID string, r Request) {
+func (s *Service) addGrant(envID, teammateID string, r Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	st := s.stateLocked(envID, personaID)
+	st := s.stateLocked(envID, teammateID)
 	now := s.now()
 	live := st.grants[:0]
 	for _, g := range st.grants {
@@ -384,7 +384,7 @@ func (s *Service) Run(ctx context.Context) {
 	if rows, err := s.Store.BrowserSandboxes(ctx); err == nil {
 		s.mu.Lock()
 		for _, sb := range rows {
-			st := s.stateLocked(sb.EnvironmentID, sb.PersonaID)
+			st := s.stateLocked(sb.EnvironmentID, sb.TeammateID)
 			st.vm = sb.ID
 		}
 		s.mu.Unlock()
@@ -423,10 +423,10 @@ func (s *Service) stopIdle(ctx context.Context, idle time.Duration) {
 		still := !st.takeover && s.now().Sub(st.lastUsed) > idle
 		s.mu.Unlock()
 		if still {
-			_, status, err := s.VMs.BrowserStatus(ctx, st.env, st.persona)
+			_, status, err := s.VMs.BrowserStatus(ctx, st.env, st.teammate)
 			if err == nil && status != runtime.StatusStopped && status != runtime.StatusAbsent {
-				if err := s.VMs.StopBrowser(ctx, st.env, st.persona); err != nil {
-					s.log().Warn("stopping an idle browser failed", "persona", st.persona, "err", err)
+				if err := s.VMs.StopBrowser(ctx, st.env, st.teammate); err != nil {
+					s.log().Warn("stopping an idle browser failed", "teammate", st.teammate, "err", err)
 				}
 			}
 			s.mu.Lock()

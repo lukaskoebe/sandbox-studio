@@ -2,8 +2,8 @@ package agentcall
 
 import "github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 
-// The browser tools drive the persona's browser, a separate VM Studio runs; Studio checks
-// each action against the persona's rules before it runs and may ask the user first.
+// The browser tools drive the teammate's browser, a separate VM Studio runs; Studio checks
+// each action against the teammate's rules before it runs and may ask the user first.
 
 const browserInstructions = " Studio's browser: browser_open a page, browser_snapshot it to get element refs (e1, e2, ...), " +
 	"then click, fill, type or select by ref. Actions on a new site wait for the user's approval; if a tool says to call again, " +

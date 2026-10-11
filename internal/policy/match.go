@@ -14,15 +14,15 @@ import (
 // ErrInvalidPattern is returned for host patterns rules can't use.
 var ErrInvalidPattern = errors.New("host patterns are a name (example.com), a wildcard (*.example.com), an IP address, or *")
 
-// Match returns the rule that decides a connection from sandboxID, owned by personaID
+// Match returns the rule that decides a connection from sandboxID, owned by teammateID
 // (empty for an unowned sandbox), to host:port.
 //
 // An environment-wide deny always wins, so it works as a fence the sandbox can't
-// override. Otherwise sandbox rules come before persona rules, persona rules before
+// override. Otherwise sandbox rules come before teammate rules, teammate rules before
 // environment rules, and within a scope the most specific host pattern wins, then rules
-// that name ports, then deny over allow. Persona rules apply only to that persona's
+// that name ports, then deny over allow. Teammate rules apply only to that teammate's
 // sandboxes.
-func Match(rules []store.Rule, sandboxID, personaID, host string, port int) (store.Rule, bool) {
+func Match(rules []store.Rule, sandboxID, teammateID, host string, port int) (store.Rule, bool) {
 	host = Normalize(host)
 	var best store.Rule
 	var bestRank rank
@@ -31,7 +31,7 @@ func Match(rules []store.Rule, sandboxID, personaID, host string, port int) (sto
 		if r.SandboxID != "" && r.SandboxID != sandboxID {
 			continue
 		}
-		if r.PersonaID != "" && r.PersonaID != personaID {
+		if r.TeammateID != "" && r.TeammateID != teammateID {
 			continue
 		}
 		if len(r.Ports) > 0 && !slices.Contains(r.Ports, port) {
@@ -42,7 +42,7 @@ func Match(rules []store.Rule, sandboxID, personaID, host string, port int) (sto
 			continue
 		}
 		rk := rank{
-			fence:       r.SandboxID == "" && r.PersonaID == "" && r.Action == store.ActionDeny,
+			fence:       r.SandboxID == "" && r.TeammateID == "" && r.Action == store.ActionDeny,
 			scope:       scopeOf(r),
 			specificity: specificity,
 			ports:       len(r.Ports) > 0,
@@ -57,7 +57,7 @@ func Match(rules []store.Rule, sandboxID, personaID, host string, port int) (sto
 
 type rank struct {
 	fence       bool
-	scope       int // 2 sandbox, 1 persona, 0 environment
+	scope       int // 2 sandbox, 1 teammate, 0 environment
 	specificity int
 	ports, deny bool
 }
@@ -66,7 +66,7 @@ func scopeOf(r store.Rule) int {
 	switch {
 	case r.SandboxID != "":
 		return 2
-	case r.PersonaID != "":
+	case r.TeammateID != "":
 		return 1
 	}
 	return 0
