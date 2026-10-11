@@ -32,6 +32,7 @@ export default defineConfig({
         {
           label: 'Use Studio',
           items: [
+            'chat',
             'sandboxes',
             'network',
             'secrets',

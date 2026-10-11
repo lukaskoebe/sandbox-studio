@@ -32,6 +32,8 @@ Add or rotate provider keys on the Providers page. The key remains in Studio's h
 3. Create a sandbox and assign that teammate.
 4. Open the sandbox and choose **Start session**. Studio opens the harness in a terminal tab.
 
+To work with the teammate in a chat instead, see [Chat mode](../chat/).
+
 The provider key must be bound to the correct API host, and the sandbox must be running. A sandbox without a teammate still has a terminal, but it cannot start an agent session or use teammate memory/browser tools.
 
 Studio sets up the harness inside the sandbox. The teammate's name, role, and soul appear in its managed instruction file. The harness configuration uses the provider placeholder; it does not contain the real key. Changes to the teammate instructions take effect on the next session start.
