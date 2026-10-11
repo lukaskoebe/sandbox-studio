@@ -4,6 +4,7 @@
 //	studio openapi    print the API description (used to generate the web client types)
 //	studio login-url  print a fresh one-time browser login link
 //	studio doctor     check that this host can run Studio
+//	studio version    print the version and the default base image
 //	studio autostart enable|disable|status
 //	                  start Studio at login (a user-scope entry; off by default)
 package main
@@ -20,7 +21,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	goruntime "runtime"
+	"strings"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
@@ -67,6 +70,9 @@ func main() {
 		return
 	}
 	switch flag.Arg(0) {
+	case "version":
+		fmt.Printf("studio %s\nbase image: %s\n", version.Version, *image)
+		return
 	case "doctor":
 		os.Exit(runDoctor(os.Stdout, *addr, *image))
 	case "autostart":
@@ -97,15 +103,21 @@ const templateRegistryAddr = "127.0.0.1:7880"
 
 // defaultImage is the digest-pinned base image set by the release build
 // (-X .../version.BaseImage=ghcr.io/...@sha256:...), else the image for this version.
+// Local builds stamped by `git describe` have no published image and use the one
+// `make image` loads.
 func defaultImage() string {
 	if version.BaseImage != "" {
 		return version.BaseImage
 	}
-	if version.Version == "dev" {
-		return "sandbox-studio-base:dev" // built locally with `make image`
+	if !releaseTag.MatchString(version.Version) || strings.HasSuffix(version.Version, "-dirty") {
+		return "sandbox-studio-base:dev"
 	}
 	return "ghcr.io/lukaskoebe/sandbox-studio-base:" + version.Version
 }
+
+// releaseTag matches the tags release.yml builds (v1.2.3, v1.2.3-rc.1), but not
+// `git describe` output such as v1.2.3-4-gabc1234 or a bare commit hash.
+var releaseTag = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$`)
 
 func run(addr, image string, log *slog.Logger) error {
 	host, _, err := net.SplitHostPort(addr)
