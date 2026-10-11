@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { GitBranchIcon, GitPullRequestIcon } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
   SheetContent,
@@ -313,9 +314,12 @@ export function GitReviewSheet({
                   : "The sandbox pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch."}
               </SheetDescription>
             </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-auto px-6 pb-6">
+            <ScrollArea
+              className="min-h-0 flex-1"
+              viewportClassName="px-6 pb-6"
+            >
               <GitReview key={approval.id} approval={approval} />
-            </div>
+            </ScrollArea>
           </>
         )}
       </SheetContent>
