@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.1 — 2026-10-12
+
+- Mobile terminals have touch controls for Ctrl, Esc, Tab, arrows and the keyboard.
+- Browser takeover accepts mobile text input, including composed text and paste, and offers
+  touch keyboard controls.
+- Teammate sandboxes can show their current browser in a resizable side panel, with a
+  full-width view on small screens and a toggle to hide it without stopping the browser.
+- Copy buttons work on the local HTTP development server, including when accessed over the LAN.
+- Memory hooks load in both OpenCode V1 and V2, fixing the plugin error in upgraded VMs.
+- The browser has an address bar and guidance for a blank start page.
+- Dev-server previews handle IPv6 loopback listeners and closed idle connections.
+- Long network approval patterns stay inside their cards, and the guest agent's directory
+  is traversable by the sandbox user.
+
 ## v0.1.0 — 2026-10-11
 
 The first public release.
