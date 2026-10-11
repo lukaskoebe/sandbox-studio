@@ -36,6 +36,7 @@ function DropdownMenuContent({
         side={side}
         sideOffset={sideOffset}
       >
+        {/* No ScrollArea: Base UI caps this popup to the available height and scrolls highlighted items into view. */}
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
