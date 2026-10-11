@@ -1,0 +1,7 @@
+packages: []
+
+allowBuilds:
+  esbuild: true
+
+# Same supply-chain cutoff as web/ (pnpm default is one day).
+minimumReleaseAge: 1440
