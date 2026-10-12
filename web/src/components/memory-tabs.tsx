@@ -53,7 +53,7 @@ import { MemorySessionsTab } from "@/components/memory-sessions"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
-/** The sharedScope scope's name; a teammate's private scope is "teammate:<id>". */
+/** The scope name of shared memory; a teammate's private memory is scoped "teammate:<id>". */
 export const sharedScope = "shared"
 
 /** One scope's memory: its pages, facts, conflicts, search, and the sessions that used it. */

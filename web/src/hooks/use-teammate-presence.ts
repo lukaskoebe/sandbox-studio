@@ -1,11 +1,6 @@
 import { useMemo } from "react"
 import { $api } from "@/lib/api/client"
 
-/**
- * A teammate is waiting for you while one of its approvals is pending: a browser action or
- * credential, a memory share, or a tool permission in one of its chats. It is working while one
- * of its chats runs. Otherwise it is idle.
- */
 export type Presence = "working" | "waiting" | "idle"
 
 export const presenceLabels: Record<Presence, string> = {
@@ -14,7 +9,12 @@ export const presenceLabels: Record<Presence, string> = {
   idle: "Idle",
 }
 
-/** Each teammate's presence in an environment, from the chats and approvals the UI loads anyway. */
+/**
+ * Each teammate's presence in an environment, from the chats and approvals the UI loads anyway.
+ * A teammate is waiting for you while one of its approvals is pending: a browser action or
+ * credential, a memory share, or a tool permission in one of its chats. It is working while one
+ * of its chats runs. Otherwise it is idle.
+ */
 export function usePresence(env: string): (teammateId: string) => Presence {
   const chats = $api.useQuery("get", "/api/environments/{env}/chats", {
     params: { path: { env } },
