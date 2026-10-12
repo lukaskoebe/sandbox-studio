@@ -50,11 +50,9 @@ test("the options menu lists the sandbox's actions", async ({
   const id = await api.createSandbox(sandboxName("menu"))
   await page.goto(`/e/${env}/sandboxes/${id}`)
   // Creation runs in the background; a sandbox that is still creating offers only Delete.
-  await expect(
-    page
-      .getByRole("region", { name: "Overview" })
-      .getByText("Running", { exact: true })
-  ).toBeVisible()
+  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
+    "Running"
+  )
   await page.getByRole("button", { name: "Sandbox options" }).click()
   for (const action of [
     "Fork",
