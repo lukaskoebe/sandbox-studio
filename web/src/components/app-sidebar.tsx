@@ -121,9 +121,14 @@ export function AppSidebar({ env }: { env: string }) {
               <SidebarMenuButton
                 tooltip="Builds"
                 isActive={
-                  !!matchRoute({ to: "/e/$env/settings/templates", params: { env } })
+                  !!matchRoute({
+                    to: "/e/$env/settings/templates",
+                    params: { env },
+                  })
                 }
-                render={<Link to="/e/$env/settings/templates" params={{ env }} />}
+                render={
+                  <Link to="/e/$env/settings/templates" params={{ env }} />
+                }
               >
                 <HammerIcon />
                 <span>Builds</span>
@@ -181,9 +186,14 @@ export function AppSidebar({ env }: { env: string }) {
               <SidebarMenuButton
                 tooltip="Providers"
                 isActive={
-                  !!matchRoute({ to: "/e/$env/settings/providers", params: { env } })
+                  !!matchRoute({
+                    to: "/e/$env/settings/providers",
+                    params: { env },
+                  })
                 }
-                render={<Link to="/e/$env/settings/providers" params={{ env }} />}
+                render={
+                  <Link to="/e/$env/settings/providers" params={{ env }} />
+                }
               >
                 <PlugIcon />
                 <span>Providers</span>
@@ -271,7 +281,11 @@ export function AppSidebar({ env }: { env: string }) {
             <SidebarMenuButton
               tooltip="Settings"
               isActive={
-                !!matchRoute({ to: "/e/$env/settings", params: { env }, fuzzy: true })
+                !!matchRoute({
+                  to: "/e/$env/settings",
+                  params: { env },
+                  fuzzy: true,
+                })
               }
               render={<Link to="/e/$env/settings" params={{ env }} />}
             >

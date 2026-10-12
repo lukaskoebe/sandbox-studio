@@ -16,7 +16,9 @@ function SettingsLayout() {
         aria-label="Settings"
         className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-48 md:flex-col md:overflow-visible md:border-r-0 md:border-b-0 md:p-3"
       >
-        <p className="hidden px-2 pb-2 text-sm font-medium md:block">Settings</p>
+        <p className="hidden px-2 pb-2 text-sm font-medium md:block">
+          Settings
+        </p>
         <SettingsLink to="/e/$env/settings/general" env={env}>
           General
         </SettingsLink>
@@ -45,7 +47,12 @@ function SettingsLink({
   env,
   children,
 }: {
-  to: "/e/$env/settings/general" | "/e/$env/settings/providers" | "/e/$env/settings/git" | "/e/$env/settings/templates" | "/e/$env/settings/runtime"
+  to:
+    | "/e/$env/settings/general"
+    | "/e/$env/settings/providers"
+    | "/e/$env/settings/git"
+    | "/e/$env/settings/templates"
+    | "/e/$env/settings/runtime"
   env: string
   children: string
 }) {
