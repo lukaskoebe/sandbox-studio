@@ -172,7 +172,7 @@ function TeammatesPage() {
                 ) : (
                   <>
                     A teammate needs a provider for its model.{" "}
-                    <Link to="/e/$env/providers" params={{ env }}>
+                    <Link to="/e/$env/settings/providers" params={{ env }}>
                       Add a provider
                     </Link>{" "}
                     first.

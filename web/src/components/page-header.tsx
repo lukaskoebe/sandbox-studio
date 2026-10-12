@@ -1,6 +1,8 @@
 import type { ReactNode } from "react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { $api } from "@/lib/api/client"
 
 export function PageHeader({ children }: { children: ReactNode }) {
   return (
@@ -13,4 +15,11 @@ export function PageHeader({ children }: { children: ReactNode }) {
       {children}
     </header>
   )
+}
+
+/** The environment a page's settings apply to, named in its header. */
+export function EnvironmentLabel({ env }: { env: string }) {
+  const envs = $api.useQuery("get", "/api/environments")
+  const name = envs.data?.find((e) => e.id === env)?.name
+  return name ? <Badge variant="outline">{name}</Badge> : null
 }

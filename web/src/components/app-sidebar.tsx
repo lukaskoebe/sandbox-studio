@@ -121,9 +121,9 @@ export function AppSidebar({ env }: { env: string }) {
               <SidebarMenuButton
                 tooltip="Builds"
                 isActive={
-                  !!matchRoute({ to: "/e/$env/builds", params: { env } })
+                  !!matchRoute({ to: "/e/$env/settings/templates", params: { env } })
                 }
-                render={<Link to="/e/$env/builds" params={{ env }} />}
+                render={<Link to="/e/$env/settings/templates" params={{ env }} />}
               >
                 <HammerIcon />
                 <span>Builds</span>
@@ -156,8 +156,10 @@ export function AppSidebar({ env }: { env: string }) {
             <SidebarMenuItem>
               <SidebarMenuButton
                 tooltip="Git"
-                isActive={!!matchRoute({ to: "/e/$env/git", params: { env } })}
-                render={<Link to="/e/$env/git" params={{ env }} />}
+                isActive={
+                  !!matchRoute({ to: "/e/$env/settings/git", params: { env } })
+                }
+                render={<Link to="/e/$env/settings/git" params={{ env }} />}
               >
                 <GitBranchIcon />
                 <span>Git</span>
@@ -179,9 +181,9 @@ export function AppSidebar({ env }: { env: string }) {
               <SidebarMenuButton
                 tooltip="Providers"
                 isActive={
-                  !!matchRoute({ to: "/e/$env/providers", params: { env } })
+                  !!matchRoute({ to: "/e/$env/settings/providers", params: { env } })
                 }
-                render={<Link to="/e/$env/providers" params={{ env }} />}
+                render={<Link to="/e/$env/settings/providers" params={{ env }} />}
               >
                 <PlugIcon />
                 <span>Providers</span>
@@ -269,7 +271,7 @@ export function AppSidebar({ env }: { env: string }) {
             <SidebarMenuButton
               tooltip="Settings"
               isActive={
-                !!matchRoute({ to: "/e/$env/settings", params: { env } })
+                !!matchRoute({ to: "/e/$env/settings", params: { env }, fuzzy: true })
               }
               render={<Link to="/e/$env/settings" params={{ env }} />}
             >
