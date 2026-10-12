@@ -685,7 +685,7 @@ export interface paths {
         };
         get: operations["listProviders"];
         put?: never;
-        /** @description API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. */
+        /** @description API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. A provider added to an environment without teammates also creates the default teammate. */
         post: operations["createProvider"];
         delete?: never;
         options?: never;
@@ -809,6 +809,7 @@ export interface paths {
         };
         get: operations["listSandboxes"];
         put?: never;
+        /** @description Returns at once with the sandbox in state creating. Its VM is created and booted in the background: the view's progress names the step, and a failed create stays as a failed sandbox until it is deleted. The sandboxes topic of /api/events announces each change. */
         post: operations["createSandbox"];
         delete?: never;
         options?: never;
@@ -983,7 +984,7 @@ export interface paths {
         put?: never;
         /**
          * Copy a sandbox into a new one
-         * @description Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
+         * @description Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
          */
         post: operations["forkSandbox"];
         delete?: never;
@@ -1398,6 +1399,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Creates a sandbox from a template like createSandbox: it returns at once in state creating, and a failed create stays as a failed sandbox until it is deleted. */
         post: operations["createTemplateSandbox"];
         delete?: never;
         options?: never;
@@ -2476,6 +2478,23 @@ export interface components {
             port: number;
             url: string;
         };
+        Progress: {
+            /** @description Why the step failed */
+            error?: string;
+            /** @enum {string} */
+            operation: "create" | "fork";
+            /** @description The image pull, once it reports sizes */
+            pull?: components["schemas"]["PullProgress"];
+            /** @enum {string} */
+            state: "running" | "failed";
+            /**
+             * @description The step that runs, or the one that failed
+             * @enum {string}
+             */
+            step: "pull" | "vm" | "copy" | "boot" | "services" | "agent" | "configure";
+            /** @description The operation's steps, in order */
+            steps: ("pull" | "vm" | "copy" | "boot" | "services" | "agent" | "configure")[] | null;
+        };
         PromptFile: {
             /** @description The file, base64-encoded */
             data: string;
@@ -2530,6 +2549,16 @@ export interface components {
             state: "ready" | "login_required";
             /** Format: date-time */
             updatedAt: string;
+        };
+        PullProgress: {
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            layers: number;
+            /** Format: int64 */
+            layersDone: number;
+            /** Format: int64 */
+            totalBytes: number;
         };
         PullRequest: {
             /** @description Branch to merge into */
@@ -3025,8 +3054,13 @@ export interface components {
             /** Format: int64 */
             memoryMiB: number;
             name: string;
-            /** @enum {string} */
-            status: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed";
+            /** @description The create or fork that runs or failed */
+            progress?: components["schemas"]["Progress"];
+            /**
+             * @description The VM's runtime status; creating or failed while a create or fork runs or after it failed
+             * @enum {string}
+             */
+            status: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed" | "creating" | "failed";
             /** @description The teammate that owns the sandbox; empty for unowned sandboxes */
             teammateId?: string;
             templateId?: string;

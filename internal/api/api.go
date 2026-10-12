@@ -182,6 +182,7 @@ func (s *Server) registerSandboxes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "createSandbox", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes", Tags: []string{"sandboxes"},
 		DefaultStatus: http.StatusCreated,
+		Description:   "Returns at once with the sandbox in state creating. Its VM is created and booted in the background: the view's progress names the step, and a failed create stays as a failed sandbox until it is deleted. The sandboxes topic of /api/events announces each change.",
 	}, func(ctx context.Context, in *createIn) (*sandboxOut, error) {
 		if _, err := s.Store.Environment(ctx, in.Env); err != nil {
 			return nil, apiError(err)
