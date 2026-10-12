@@ -135,7 +135,7 @@ function RulesTab() {
             setFilter({ action: ruleActions.find((a) => a === v) })
           }
         />
-        <Button size="sm" className="ml-auto" onClick={() => setDialog({})}>
+        <Button size="sm" className="sm:ml-auto" onClick={() => setDialog({})}>
           <PlusIcon />
           Add rule
         </Button>
@@ -263,7 +263,11 @@ function FilterSelect({
       onValueChange={(v) => v && onChange(v)}
       items={options}
     >
-      <SelectTrigger size="sm" aria-label={label} className="w-full sm:w-36">
+      <SelectTrigger
+        size="sm"
+        aria-label={label}
+        className="min-w-0 flex-1 sm:w-36 sm:flex-none"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
