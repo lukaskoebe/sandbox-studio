@@ -204,8 +204,8 @@ disconnecting clears the local input buffer.
   under user takeover. Navigation is serialized with agent commands, recorded as a user
   action, and remains subject to the gateway's network rules and approvals.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
-  (device size, offset and page scale) and the letterbox of the canvas. Drags continue when
-  the pointer leaves the canvas. On touch, the tap is sent before the hidden input takes
+  (device size, offset and page scale) and the letterbox of the canvas. Presses in the bars
+  and above the page are not sent. A drag that leaves the canvas still releases at its edge. On touch, the tap is sent before the hidden input takes
   focus, so the keyboard does not move the page under the tap. Wheel deltas are pixels, with
   lines and pages converted.
 
@@ -233,9 +233,10 @@ An agent can open a throwaway session next to the persistent profile:
   patterns, the same `browser.action` and `browser.credential` approvals. An approval names
   the session. A one-time grant holds for its session only. An "Always" rule is per origin for
   the teammate, so it covers every session.
-- **Live view.** The live view and the Browser panel have a session switcher: **Profile**,
-  then each open ephemeral session. Take over, Hand back and the address form act on the
-  selected session. Taking over one session pauses agent calls to that session only.
+- **Live view.** While an ephemeral session is open, the live view and the Browser panel show
+  a session switcher: **Profile**, then each open ephemeral session. Take over, Hand back and
+  the address form act on the selected session. Taking over one session pauses agent calls to
+  that session only. A picked session that closes falls back to Profile.
 - **History.** The action log files each session's actions under its ID, and the Browser page
   marks them as ephemeral. Egress is attributed to the VM and its driving sandbox, not to a
   session, so the connection history does not split by session.
