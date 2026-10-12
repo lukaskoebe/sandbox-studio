@@ -9,8 +9,17 @@ const KindBrowser = "browser"
 
 // BrowserStreamPort is the guest loopback port of agent-browser's live-view WebSocket in
 // a browser VM. Studio reaches it with KindTCP over the VM's channel, never through a
-// network.
+// network. Ephemeral session n streams on BrowserStreamPort+n.
 const BrowserStreamPort = 9223
+
+// MaxBrowserEphemeral is how many ephemeral sessions a browser VM runs beside its
+// persistent profile. Each is its own agent-browser session with a throwaway profile on
+// the VM's tmpfs (docs/browser.md#ephemeral-sessions).
+const MaxBrowserEphemeral = 2
+
+// ErrBrowserEphemeralGone is the guest's error for a command on an ephemeral session whose
+// profile no longer exists, for example because the VM restarted.
+const ErrBrowserEphemeralGone = "the ephemeral browser session is gone"
 
 // Limits of a browser command.
 const (
@@ -27,6 +36,12 @@ const (
 // allow-list.
 type BrowserCommand struct {
 	Args []string `json:"args"`
+	// Ephemeral picks the session: 0 is the persistent profile, 1 to MaxBrowserEphemeral an
+	// ephemeral slot. On a slot, Args ["close"] ends the session and deletes its profile.
+	Ephemeral int `json:"ephemeral,omitempty"`
+	// Fresh, on an ephemeral slot, ends whatever ran there and starts an empty profile
+	// before the command runs.
+	Fresh bool `json:"fresh,omitempty"`
 	// Stdin feeds `batch`, which keeps values such as credentials out of the process list.
 	Stdin string `json:"stdin,omitempty"`
 	// Screenshot asks for a JPEG of the viewport after the command, for the action log.
@@ -56,6 +71,7 @@ const (
 	MethodBrowserWait           = "browser_wait"
 	MethodBrowserBack           = "browser_back"
 	MethodBrowserFillCredential = "browser_fill_credential"
+	MethodBrowserClose          = "browser_close"
 )
 
 // BrowserMethodPrefix starts every browser method.

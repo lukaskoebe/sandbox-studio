@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -32,7 +33,32 @@ const (
 	browserDownload = Workdir + "/downloads"
 	browserSession  = "studio"
 	browserTimeout  = 30 * time.Second
+	// Ephemeral sessions keep their profile and downloads on a tmpfs the guest mounts,
+	// never on /workspace: they vanish on close, and at the latest when the VM stops.
+	browserEphemeralRoot = "/run/studio-browser"
+	browserEphemeralSize = "size=640m"
+	tmpfsMagic           = 0x01021994
 )
+
+// browserSlot is where one agent-browser session keeps its state.
+type browserSlot struct {
+	session, profile, downloads string
+	port                        int
+	ephemeral                   bool
+}
+
+// browserSlotFor is the persistent profile for 0 and ephemeral slot n otherwise.
+func browserSlotFor(n int) browserSlot {
+	if n == 0 {
+		return browserSlot{session: browserSession, profile: browserProfile, downloads: browserDownload, port: agentproto.BrowserStreamPort}
+	}
+	dir := filepath.Join(browserEphemeralRoot, "e"+strconv.Itoa(n))
+	return browserSlot{session: browserSession + "-e" + strconv.Itoa(n), profile: filepath.Join(dir, "profile"),
+		downloads: filepath.Join(dir, "downloads"), port: agentproto.BrowserStreamPort + n, ephemeral: true}
+}
+
+// dir is an ephemeral slot's directory, which holds its profile and downloads.
+func (b browserSlot) dir() string { return filepath.Dir(b.profile) }
 
 // browserCommands are the agent-browser commands Studio may run, with the flags each may
 // carry. Studio's broker builds every command itself; the list is a second line of defense
@@ -87,6 +113,17 @@ func checkBrowserArgs(args []string, batch bool) error {
 	return nil
 }
 
+// checkBrowserSession picks the command's session. close is allowed only as the whole
+// command on an ephemeral slot, where it ends the session; the profile is never closed.
+func checkBrowserSession(req agentproto.BrowserCommand) (browserSlot, bool, error) {
+	if req.Ephemeral < 0 || req.Ephemeral > agentproto.MaxBrowserEphemeral || (req.Fresh && req.Ephemeral == 0) {
+		return browserSlot{}, false, errors.New("bad browser session")
+	}
+	slot := browserSlotFor(req.Ephemeral)
+	closing := slot.ephemeral && len(req.Args) == 1 && req.Args[0] == "close" && !req.Fresh && req.Stdin == "" && !req.Screenshot
+	return slot, closing, nil
+}
+
 // checkBrowserBatch checks every command of a batch.
 func checkBrowserBatch(stdin string) error {
 	var cmds [][]string
@@ -104,24 +141,37 @@ func checkBrowserBatch(stdin string) error {
 	return nil
 }
 
-// browserArgv adds the fixed options to a command.
-func browserArgv(args []string) []string {
-	argv := []string{"--json", "--session", browserSession, "--profile", browserProfile,
-		"--executable-path", browserChromium, "--download-path", browserDownload}
+// browserArgv adds the fixed options to a command. Each slot is its own agent-browser
+// session: a daemon with its own Chromium and profile.
+func browserArgv(slot browserSlot, args []string) []string {
+	argv := []string{"--json", "--session", slot.session, "--profile", slot.profile,
+		"--executable-path", browserChromium, "--download-path", slot.downloads}
 	return append(argv, args...)
 }
 
 // browserEnv is added to the agent user's environment.
-var browserEnv = []string{
-	"AGENT_BROWSER_STREAM_PORT=" + strconv.Itoa(agentproto.BrowserStreamPort),
-	"AGENT_BROWSER_NO_WEBMCP=1",
-	"AGENT_BROWSER_IDLE_TIMEOUT_MS=0", // Studio stops the whole VM when idle
+func browserEnv(slot browserSlot) []string {
+	return []string{
+		"AGENT_BROWSER_STREAM_PORT=" + strconv.Itoa(slot.port),
+		"AGENT_BROWSER_NO_WEBMCP=1",
+		"AGENT_BROWSER_IDLE_TIMEOUT_MS=0", // Studio stops the whole VM, and ephemeral sessions, when idle
+	}
 }
 
 func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 	var req agentproto.BrowserCommand
 	if err := readBody(br, agentproto.MaxCallLine, &req); err != nil {
 		return replyError(st, err)
+	}
+	slot, closing, err := checkBrowserSession(req)
+	if err != nil {
+		return replyError(st, err)
+	}
+	if closing {
+		if err := a.endEphemeral(slot); err != nil {
+			return replyError(st, err)
+		}
+		return agentproto.WriteJSONLine(st, agentproto.BrowserResult{Output: json.RawMessage(`{"success":true,"data":null,"error":null}`)})
 	}
 	if err := checkBrowserArgs(req.Args, false); err != nil {
 		return replyError(st, err)
@@ -142,27 +192,117 @@ func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	for _, dir := range []string{browserProfile, browserDownload} {
-		os.MkdirAll(dir, 0o700)
-		os.Chown(dir, int(a.user.uid), int(a.user.gid))
+	switch {
+	case req.Fresh:
+		if err := a.endEphemeral(slot); err != nil {
+			return replyError(st, err)
+		}
+		if err := a.beginEphemeral(slot); err != nil {
+			return replyError(st, err)
+		}
+	case slot.ephemeral:
+		// Only Fresh creates an ephemeral profile: a missing one means the session ended,
+		// and a command must not quietly start an empty browser in its place.
+		if _, err := os.Stat(slot.profile); err != nil {
+			return replyError(st, errors.New(agentproto.ErrBrowserEphemeralGone))
+		}
+	default:
+		for _, dir := range []string{browserProfile, browserDownload} {
+			os.MkdirAll(dir, 0o700)
+			os.Chown(dir, int(a.user.uid), int(a.user.gid))
+		}
 	}
-	out, err := a.runBrowser(ctx, req.Args, req.Stdin)
+	out, err := a.runBrowser(ctx, slot, req.Args, req.Stdin)
 	if err != nil {
 		return replyError(st, err)
 	}
 	res := agentproto.BrowserResult{Output: out}
 	if req.Screenshot {
-		res.Screenshot = a.browserScreenshot(ctx)
+		res.Screenshot = a.browserScreenshot(ctx, slot)
 	}
 	return agentproto.WriteJSONLine(st, res)
+}
+
+// beginEphemeral creates an empty profile for an ephemeral slot on the tmpfs.
+func (a *Agent) beginEphemeral(slot browserSlot) error {
+	if err := ensureTmpfs(browserEphemeralRoot); err != nil {
+		return fmt.Errorf("ephemeral browser storage: %w", err)
+	}
+	for _, dir := range []string{slot.dir(), slot.profile, slot.downloads} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			return err
+		}
+		if err := os.Chown(dir, int(a.user.uid), int(a.user.gid)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// endEphemeral closes an ephemeral slot's agent-browser session, makes sure no process of
+// it survives, and deletes its profile and downloads.
+func (a *Agent) endEphemeral(slot browserSlot) error {
+	// agent-browser keeps a session's socket, pid and stream port files here.
+	sockets := filepath.Join(a.user.home, ".agent-browser")
+	if _, err := os.Stat(filepath.Join(sockets, slot.session+".sock")); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		a.runBrowserTrusted(ctx, slot, []string{"close"}, "") // the daemon may already be gone
+		cancel()
+	}
+	killSession(slot)
+	for _, ext := range []string{".sock", ".pid", ".stream", ".version", ".engine"} {
+		os.Remove(filepath.Join(sockets, slot.session+ext))
+	}
+	if err := os.RemoveAll(slot.dir()); err != nil {
+		return fmt.Errorf("deleting the ephemeral profile: %w", err)
+	}
+	return nil
+}
+
+// ensureTmpfs makes dir a tmpfs mount point unless it already is one.
+func ensureTmpfs(dir string) error {
+	if err := os.MkdirAll(dir, 0o711); err != nil {
+		return err
+	}
+	var fs syscall.Statfs_t
+	if err := syscall.Statfs(dir, &fs); err == nil && fs.Type == tmpfsMagic {
+		return nil
+	}
+	if err := syscall.Mount("tmpfs", dir, "tmpfs", syscall.MS_NOSUID|syscall.MS_NODEV, browserEphemeralSize+",mode=0711"); err != nil {
+		return err
+	}
+	if err := syscall.Statfs(dir, &fs); err != nil || fs.Type != tmpfsMagic {
+		return errors.New("not a tmpfs")
+	}
+	return nil
+}
+
+// killSession kills what an agent-browser session runs: its daemon, which carries the
+// session in AGENT_BROWSER_SESSION, and the Chromium processes it started, which inherit
+// that environment and name the profile in --user-data-dir.
+func killSession(slot browserSlot) {
+	env := "\x00AGENT_BROWSER_SESSION=" + slot.session + "\x00"
+	arg := "\x00--user-data-dir=" + slot.profile + "\x00"
+	entries, _ := os.ReadDir("/proc")
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid == os.Getpid() {
+			continue
+		}
+		environ, _ := os.ReadFile(filepath.Join("/proc", e.Name(), "environ"))
+		cmdline, _ := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
+		if strings.Contains("\x00"+string(environ), env) || strings.Contains("\x00"+string(cmdline), arg) {
+			syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}
 }
 
 // runBrowser runs agent-browser and returns its JSON response. A failed command exits
 // non-zero and still prints a response with success false, which is returned as is. The
 // stdin and the arguments are never logged: a batch may carry a credential.
-func (a *Agent) runBrowser(ctx context.Context, args []string, stdin string) (json.RawMessage, error) {
+func (a *Agent) runBrowser(ctx context.Context, slot browserSlot, args []string, stdin string) (json.RawMessage, error) {
 	return runBrowserAfterTrust(ctx, a.prepareBrowserTrust, func(ctx context.Context) (json.RawMessage, error) {
-		return a.runBrowserTrusted(ctx, args, stdin)
+		return a.runBrowserTrusted(ctx, slot, args, stdin)
 	})
 }
 
@@ -179,9 +319,9 @@ func runBrowserAfterTrust(ctx context.Context, prepare func(context.Context) err
 }
 
 // runBrowserTrusted runs agent-browser after the browser user's NSS database is ready.
-func (a *Agent) runBrowserTrusted(ctx context.Context, args []string, stdin string) (json.RawMessage, error) {
-	cmd := a.command(browserBin, browserArgv(args)...)
-	cmd.Env = append(cmd.Env, browserEnv...)
+func (a *Agent) runBrowserTrusted(ctx context.Context, slot browserSlot, args []string, stdin string) (json.RawMessage, error) {
+	cmd := a.command(browserBin, browserArgv(slot, args)...)
+	cmd.Env = append(cmd.Env, browserEnv(slot)...)
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr capped
 	stdout.max, stderr.max = agentproto.MaxBrowserOutput, 4<<10
@@ -215,12 +355,12 @@ func (a *Agent) runBrowserTrusted(ctx context.Context, args []string, stdin stri
 }
 
 // browserScreenshot takes a JPEG of the viewport, or nil if that fails or it is too large.
-func (a *Agent) browserScreenshot(ctx context.Context) []byte {
+func (a *Agent) browserScreenshot(ctx context.Context, slot browserSlot) []byte {
 	var b [8]byte
 	rand.Read(b[:])
 	path := filepath.Join(os.TempDir(), "studio-shot-"+hex.EncodeToString(b[:])+".jpg")
 	defer os.Remove(path)
-	if _, err := a.runBrowser(ctx, []string{"screenshot", path, "--screenshot-format", "jpeg", "--screenshot-quality", "60"}, ""); err != nil {
+	if _, err := a.runBrowser(ctx, slot, []string{"screenshot", path, "--screenshot-format", "jpeg", "--screenshot-quality", "60"}, ""); err != nil {
 		return nil
 	}
 	data, err := os.ReadFile(path)
