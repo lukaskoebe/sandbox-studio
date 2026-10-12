@@ -67,11 +67,20 @@ RUN npm install -g --no-fund --no-audit --no-update-notifier --omit=optional \
         "@agentclientprotocol/codex-acp@${CODEX_ACP_VERSION}" \
     && npm cache clean --force && rm -rf /root/.npm
 
+# Template toolchains live in /opt/mise, not in the agent's home: a sandbox's home disk
+# replaces /home/agent (docs/sandboxes.md). rootfs/etc/profile.d/studio-mise.sh points
+# login shells there.
 RUN useradd --create-home --uid 1000 --shell /bin/bash --groups sudo,docker agent \
-    && mkdir -p /workspace /opt/studio/bin \
-    && chown agent:agent /workspace
+    && mkdir -p /workspace /opt/studio/bin /opt/mise \
+    && chown agent:agent /workspace /opt/mise
 
 COPY rootfs/ /
+
+# The agent's home as the image leaves it. A new sandbox's home disk is seeded from this
+# copy on its first boot, and template builds replace it with their own (docs/template-builds.md).
+RUN mkdir -p /usr/share/sandbox-studio \
+    && cp -a /home/agent /usr/share/sandbox-studio/home-skel \
+    && chown -Rh agent:agent /usr/share/sandbox-studio/home-skel
 
 ENV LANG=en_US.UTF-8
 CMD ["/bin/bash"]

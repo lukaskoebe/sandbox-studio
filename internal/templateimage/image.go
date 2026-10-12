@@ -20,7 +20,9 @@ const (
 	MediaConfig   = "application/vnd.oci.image.config.v1+json"
 	MediaLayer    = "application/vnd.oci.image.layer.v1.tar+gzip"
 
-	ExporterVersion = "1"
+	// ExporterVersion is part of every template's cache key. Version 2: toolchains moved
+	// from /home/agent to /opt/mise, and the template keeps a home skeleton for new sandboxes.
+	ExporterVersion = "2"
 )
 
 const (

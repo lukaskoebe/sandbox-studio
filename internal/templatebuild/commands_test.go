@@ -28,10 +28,10 @@ func TestCommandsPlansRootAptThenAgentMiseAndSetup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Commands() error = %v", err)
 	}
-	if len(stages) != 3 {
-		t.Fatalf("stage count = %d, want 3", len(stages))
+	if len(stages) != 4 {
+		t.Fatalf("stage count = %d, want 4", len(stages))
 	}
-	if got := []string{stages[0].Name, stages[1].Name, stages[2].Name}; !reflect.DeepEqual(got, []string{"apt", "mise", "setup"}) {
+	if got := []string{stages[0].Name, stages[1].Name, stages[2].Name, stages[3].Name}; !reflect.DeepEqual(got, []string{"apt", "mise", "setup", "home"}) {
 		t.Fatalf("stage order = %v", got)
 	}
 
@@ -69,6 +69,15 @@ func TestCommandsPlansRootAptThenAgentMiseAndSetup(t *testing.T) {
 	}
 	if strings.Contains(userSetup.Args[2], setup) {
 		t.Fatal("user setup was interpolated into the fixed Bash wrapper")
+	}
+
+	// The home stage runs last, as root, and copies the agent's home to the skeleton.
+	home := stages[3].Command
+	if home.Path != "/bin/bash" || home.User != "root" || home.Cwd != "/" || home.Timeout != homeTimeout {
+		t.Fatalf("home command = %+v", home)
+	}
+	if !reflect.DeepEqual(home.Args, bashArgs(homeScript, "studio-template-home", []string{homeSkelDir})) {
+		t.Fatalf("home argv = %#v", home.Args)
 	}
 }
 
@@ -116,24 +125,31 @@ func TestCommandsSetExplicitEnvironmentAndHomePaths(t *testing.T) {
 		{name: "apt", commandTimeout: stages[0].Command.Timeout},
 		{name: "mise", commandTimeout: stages[1].Command.Timeout},
 		{name: "setup", commandTimeout: stages[2].Command.Timeout},
+		{name: "home", commandTimeout: stages[3].Command.Timeout},
 	} {
 		if command.commandTimeout <= 0 || command.commandTimeout > 30*time.Minute {
 			t.Errorf("%s timeout = %s, want a positive bound of at most 30 minutes", command.name, command.commandTimeout)
 		}
 	}
 
-	if stages[1].Command.Env["MISE_CONFIG_DIR"] != agentHome+"/.config/mise" ||
-		stages[1].Command.Env["MISE_DATA_DIR"] != agentHome+"/.local/share/mise" ||
-		stages[1].Command.Env["MISE_INSTALLS_DIR"] != agentHome+"/.local/share/mise/installs" ||
-		stages[1].Command.Env["MISE_SHIMS_DIR"] != agentHome+"/.local/share/mise/shims" ||
+	if stages[1].Command.Env["MISE_CONFIG_DIR"] != "/opt/mise/config" ||
+		stages[1].Command.Env["MISE_DATA_DIR"] != "/opt/mise" ||
+		stages[1].Command.Env["MISE_INSTALLS_DIR"] != "/opt/mise/installs" ||
+		stages[1].Command.Env["MISE_SHIMS_DIR"] != "/opt/mise/shims" ||
 		stages[1].Command.Env["MISE_CACHE_DIR"] != miseCacheDir ||
 		stages[1].Command.Env["MISE_DOWNLOADS_DIR"] != miseDownloadsDir ||
 		stages[1].Command.Env["MISE_STATE_DIR"] != miseStateDir {
 		t.Fatalf("mise install/config and transient paths are misplaced: %#v", stages[1].Command.Env)
 	}
-	if strings.Contains(miseScript, workspaceDir) || !strings.Contains(miseScript, `"$HOME/.profile"`) ||
-		!strings.Contains(miseScript, `"$HOME/.bash_profile"`) || !strings.Contains(miseScript, `"$HOME/.bash_login"`) {
-		t.Fatal("mise config, toolchains, and login profile must be placed under the agent home")
+	// A sandbox's home disk hides the image's /home/agent, so nothing mise needs may be there.
+	for key, value := range stages[1].Command.Env {
+		if strings.HasPrefix(key, "MISE_") && (strings.HasPrefix(value, agentHome) || strings.Contains(value, workspaceDir)) {
+			t.Fatalf("%s = %q: mise state must stay out of the agent home and the workspace", key, value)
+		}
+	}
+	if strings.Contains(miseBody, workspaceDir) || strings.Contains(miseBody, agentHome) || strings.Contains(miseBody, "$HOME") ||
+		strings.HasPrefix(agentPath, agentHome) {
+		t.Fatal("mise config, toolchains, and shims must stay out of the workspace and the agent home")
 	}
 	hookIndex := strings.Index(setupScript, ". "+shellLiteral(studioHook))
 	pathIndex := strings.LastIndex(setupScript, "export PATH="+shellLiteral(agentPath))
@@ -159,29 +175,12 @@ func TestCommandsSetExplicitEnvironmentAndHomePaths(t *testing.T) {
 	}
 	useIndex := strings.Index(miseScript, `/usr/local/bin/mise use --global "$@"`)
 	reshimIndex := strings.Index(miseScript, "/usr/local/bin/mise reshim")
-	profileWriteIndex := strings.Index(miseScript, `cat >> "$profilePath" <<'STUDIO_MISE_PROFILE'`)
-	if profileWriteIndex < 0 {
-		t.Fatal("mise wrapper must append a persistent login profile")
+	guardIndex := strings.Index(miseScript, `if [ ! -d "$MISE_DATA_DIR" ] || [ ! -w "$MISE_DATA_DIR" ]; then`)
+	if guardIndex < 0 || useIndex <= guardIndex || reshimIndex <= useIndex {
+		t.Fatal("mise must check its base directory, then install and resolve the pins")
 	}
-	profileMarkerOffset := strings.Index(miseScript[profileWriteIndex:], "# sandbox-studio managed mise login profile\n")
-	profileMarkerIndex := profileWriteIndex + profileMarkerOffset
-	if profileMarkerOffset < 0 {
-		t.Fatal("managed profile block is missing from the profile heredoc")
-	}
-	profileHookIndex := strings.Index(miseScript[profileMarkerIndex:], ". "+shellLiteral(studioHook))
-	profileClearIndex := strings.Index(miseScript[profileMarkerIndex:], "for name in ${!MISE_@}; do unset")
-	profileEnvIndex := strings.Index(miseScript[profileMarkerIndex:], "export MISE_CONFIG_DIR=")
-	activateIndex := strings.Index(miseScript, `eval "$(/usr/local/bin/mise activate bash)"`)
-	profileHookIndex += profileMarkerIndex
-	profileClearIndex += profileMarkerIndex
-	profileEnvIndex += profileMarkerIndex
-	if useIndex < 0 || reshimIndex <= useIndex || profileWriteIndex <= reshimIndex ||
-		profileMarkerIndex <= profileWriteIndex || profileHookIndex <= profileMarkerIndex ||
-		profileClearIndex <= profileHookIndex || profileEnvIndex <= profileClearIndex || activateIndex <= profileEnvIndex {
-		t.Fatal("mise pins must be installed and resolved before the persistent login profile is written")
-	}
-	if !strings.Contains(miseScript, `profilePath="$HOME/.profile"`) || !strings.Contains(miseScript, `cat >> "$profilePath"`) {
-		t.Fatal("mise login activation must append to an existing agent profile")
+	if strings.Contains(miseScript, ".profile") {
+		t.Fatal("the mise stage must not write a login profile into the home")
 	}
 }
 
@@ -215,8 +214,8 @@ func TestCommandsEmptySpecDoesNotRequestNetworkWork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Commands() error = %v", err)
 	}
-	if len(stages) != 3 {
-		t.Fatalf("stage count = %d, want 3", len(stages))
+	if len(stages) != 4 {
+		t.Fatalf("stage count = %d, want 4", len(stages))
 	}
 	if len(stages[0].Command.Args) != 5 || len(stages[1].Command.Args) != 5 {
 		t.Fatalf("empty spec supplied package or tool arguments: apt=%#v mise=%#v", stages[0].Command.Args, stages[1].Command.Args)
