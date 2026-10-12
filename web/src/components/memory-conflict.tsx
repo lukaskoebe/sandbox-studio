@@ -77,7 +77,7 @@ export function ConflictSheet({
     <Sheet open={conflictId !== undefined} onOpenChange={onOpenChange}>
       <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-3xl">
         <SheetHeader>
-          <KindChip area="memory" icon={ScalesIcon}>
+          <KindChip area="memory" icon={ScalesIcon} className="self-start">
             Memory conflict
           </KindChip>
           <SheetTitle>Conflicting facts</SheetTitle>
