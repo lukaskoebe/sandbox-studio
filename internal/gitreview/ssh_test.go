@@ -251,7 +251,7 @@ func newSSHHarness(t *testing.T) *sshHarness {
 	}
 	fs.authorize(pub)
 	f, err := h.st.CreateForge(h.ctx, store.Forge{ID: store.NewID(), EnvironmentID: h.env.ID, Name: "box", Kind: KindSSH,
-		BaseURL: "ssh://git@git.example.com:2222", Username: "git", PublicKey: pub, HostKey: fs.hostKey()},
+		BaseURL: "ssh://git@git.example.com:2222", Username: "git", Auth: store.ForgeAuthKey, PublicKey: pub, HostKey: fs.hostKey()},
 		store.Secret{ID: store.NewID(), Name: "FORGE_BOX_SSH_KEY", Sealed: []byte("sealed"), Placeholder: "box-placeholder"})
 	if err != nil {
 		t.Fatal(err)
