@@ -286,7 +286,7 @@ function SandboxTable({
               <span className="shrink-0 justify-self-end lg:col-start-6">
                 <WaitingCount count={waiting.get(sb.id) ?? 0} />
               </span>
-              <span className="flex min-w-0 basis-full items-center gap-x-3 gap-y-1 text-xs lg:contents">
+              <span className="flex min-w-0 basis-full flex-wrap items-center gap-x-3 gap-y-1 text-xs lg:contents">
                 {owner ? (
                   <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
                     <TeammateAvatar

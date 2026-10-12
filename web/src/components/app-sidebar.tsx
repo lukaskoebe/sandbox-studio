@@ -216,7 +216,7 @@ export function AppSidebar({ env }: { env: string }) {
             Teammates
           </SidebarGroupLabel>
           <SidebarGroupAction
-            className="top-2"
+            className="top-1.5"
             title={canAddTeammate ? "New teammate" : "Add a provider first"}
             disabled={!canAddTeammate}
             onClick={() => setAddingTeammate(true)}
@@ -270,7 +270,7 @@ export function AppSidebar({ env }: { env: string }) {
             Sandboxes
           </SidebarGroupLabel>
           <SidebarGroupAction
-            className="top-2"
+            className="top-1.5"
             title="New sandbox"
             onClick={() => setCreating(true)}
           >

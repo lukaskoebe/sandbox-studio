@@ -27,7 +27,7 @@ to an environment.
 
 | Route | Page |
 |---|---|
-| `/e/$env` | Home: the environment's sandboxes, create, import |
+| `/e/$env` | Home: the environment at a glance (the sandbox table with the approvals waiting on each, the family tree, the approvals and teammates), create, import |
 | `/e/$env/sandboxes/$id` | one sandbox's dashboard: status, owner, resources, ports, recent connections, checkpoints, chats and terminal sessions (each opens in the workspace), and its history (lineage timeline) |
 | `/e/$env/sandboxes/$id/work` | its workspace: terminal tabs and chats in one strip, the picked one in full, and one side panel. `?terminal=` and `?chat=` pick a tab; `?panel=` names the open panel (browser, connections or files) |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)) |
@@ -52,16 +52,19 @@ settings pages and teammate browsers above. `/browser?teammate=<id>` opens that 
 browser.
 
 The sidebar holds the environment switcher, the navigation (Home, Chats, Network, Secrets,
-Memory, Settings), the teammates and the sandboxes. A teammate's dot shows its presence:
+Memory, Settings), the teammates and the sandboxes. A sandbox row has its status dot (the word
+is its tooltip) and the count of approvals waiting on it. A teammate's dot shows its presence:
 waiting for you while one of its approvals is pending (a browser action or credential, a
 memory share, or a tool permission in one of its chats), working while one of its chats is
 running, and idle otherwise. The Settings pages for an environment name it in their header.
 The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
 on every page.
 
-Both sandbox pages share a header: the page switch (Dashboard, Workspace) and the options
-menu (fork, rebase, export, suspend or resume, stop, delete). The dashboard's start and stop
-buttons and the workspace's tabs are the everyday path; the menu holds the rest.
+Both sandbox pages share a header: the sandbox's name and ID, its status, the page switch
+(Dashboard, Workspace) and the options menu (fork, rebase, export, suspend or resume, stop,
+delete). The dashboard's start and stop buttons and the workspace's tabs are the everyday
+path; the menu holds the rest. The workspace ends in a status line: state, ID, template,
+listening ports, approvals waiting and generation.
 
 Side panels (`components/side-panel.tsx`) hold what you watch next to the terminal or chat:
 the teammate browser, connections, and files with changes. The chat page uses the same panel
