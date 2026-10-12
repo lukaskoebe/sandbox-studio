@@ -70,7 +70,7 @@ export const Route = createFileRoute("/e/$env/memory")({
 const shared = "shared"
 
 const explanation =
-  "What teammates remember about you and your work; your edits here outrank anything they inferred."
+  "What teammates remember about you and your work: shared memory is visible to all of them, and your edits here outrank anything inferred."
 
 function MemoryPage() {
   const { env } = Route.useParams()
