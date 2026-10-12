@@ -4,18 +4,20 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { StatusDot, type Status } from "@/components/status-dot"
 import type { Approval, Connection, Rule, Sandbox } from "@/lib/api/client"
 import { cn } from "@/lib/utils"
 
-type Phase =
+export type Phase =
   "creating" | "ready" | "booting" | "suspended" | "stopped" | "failed"
 
-export function phase(sb: Sandbox): Phase {
-  switch (sb.status) {
+/** A sandbox's phase from its microsandbox status. A running one is ready once its agent is up. */
+export function phaseOf(status: string, agent: boolean): Phase {
+  switch (status) {
     case "creating":
       return "creating"
     case "running":
-      return sb.agent ? "ready" : "booting"
+      return agent ? "ready" : "booting"
     case "starting":
     case "created":
       return "booting"
@@ -31,6 +33,10 @@ export function phase(sb: Sandbox): Phase {
   }
 }
 
+export function phase(sb: Sandbox): Phase {
+  return phaseOf(sb.status, !!sb.agent)
+}
+
 const labels: Record<Phase, string> = {
   creating: "Creating",
   ready: "Running",
@@ -40,40 +46,26 @@ const labels: Record<Phase, string> = {
   failed: "Failed",
 }
 
-const dots: Record<Phase, string> = {
-  creating: "bg-amber-500 animate-pulse",
-  ready: "bg-emerald-500",
-  booting: "bg-amber-500 animate-pulse",
-  suspended: "bg-sky-500",
-  stopped: "bg-muted-foreground/40",
-  failed: "bg-destructive",
+/** The four statuses a phase shows as. Phases in progress pulse and keep their own word. */
+const dots: Record<Phase, { status: Status; pulse?: boolean }> = {
+  creating: { status: "running", pulse: true },
+  ready: { status: "running" },
+  booting: { status: "running", pulse: true },
+  suspended: { status: "stopped" },
+  stopped: { status: "stopped" },
+  failed: { status: "failed" },
 }
 
-export function StatusDot({
-  sandbox,
-  className,
-}: {
-  sandbox: Sandbox
-  className?: string
-}) {
-  return (
-    <span
-      className={cn(
-        "size-2 shrink-0 rounded-full",
-        dots[phase(sandbox)],
-        className
-      )}
-    />
-  )
+/** The shared StatusDot's props for a phase: its status and its own word. */
+export function phaseDot(p: Phase) {
+  return { ...dots[p], label: labels[p] }
 }
 
 export function StatusBadge({ sandbox }: { sandbox: Sandbox }) {
-  const p = phase(sandbox)
   return (
-    <Badge variant="outline" title={`microsandbox status: ${sandbox.status}`}>
-      <StatusDot sandbox={sandbox} />
-      {labels[p]}
-    </Badge>
+    <span title={`microsandbox status: ${sandbox.status}`}>
+      <StatusDot {...phaseDot(phase(sandbox))} />
+    </span>
   )
 }
 

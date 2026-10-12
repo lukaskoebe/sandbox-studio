@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react"
+import { Ident } from "@/components/ident"
+import { StatusDot, type Status } from "@/components/status-dot"
 import {
   Empty,
   EmptyDescription,
@@ -9,19 +11,10 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { VerdictBadge } from "@/components/status-badge"
 import {
   $api,
   errorMessage,
@@ -55,6 +48,24 @@ export function ConnectionsPanel({
       <ConnectionLog env={env} id={sandbox.id} />
     </>
   )
+}
+
+/** A verdict as one of the four statuses: held for you is waiting, allowed is running. */
+const verdictStatus: Record<string, Status> = {
+  open: "stopped",
+  allowed: "running",
+  denied: "failed",
+  failed: "failed",
+  undecided: "waiting",
+  pending: "waiting",
+}
+
+/** A connection's dot and its verdict as its word. */
+function verdictDot(conn: Connection) {
+  return {
+    status: verdictStatus[conn.verdict] ?? "stopped",
+    label: conn.verdict,
+  }
 }
 
 /**
@@ -91,16 +102,17 @@ export function RecentConnections({
     )
   }
   return (
-    <ul className="divide-y">
+    <ul className="overflow-hidden rounded-(--radius) border bg-card">
       {list.slice(0, limit).map((c) => (
-        <li key={c.id} className="flex items-center gap-2 py-2 text-xs">
-          <span className="min-w-0 flex-1 truncate font-mono">
-            {hostPort(c.host, c.port)}
-          </span>
-          <VerdictBadge conn={c} />
+        <li
+          key={c.id}
+          className="flex min-h-(--wb-row) items-center gap-3 border-b px-3 py-1.5 text-xs last:border-b-0"
+        >
+          <StatusDot {...verdictDot(c)} className="shrink-0" />
+          <Ident className="min-w-0 flex-1">{hostPort(c.host, c.port)}</Ident>
           <time
             dateTime={c.started}
-            className="shrink-0 text-muted-foreground tabular-nums"
+            className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground tabular-nums"
           >
             {new Date(c.started).toLocaleTimeString()}
           </time>
@@ -143,46 +155,31 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
 
   return (
     <ScrollArea className="min-h-0 flex-1" viewportClassName="px-4 pb-4">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Time</TableHead>
-            <TableHead>Destination</TableHead>
-            <TableHead>Verdict</TableHead>
-            <TableHead className="hidden sm:table-cell">Source</TableHead>
-            <TableHead className="text-right">Traffic</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {list.map((c) => (
-            <TableRow key={c.id}>
-              <TableCell className="text-muted-foreground tabular-nums">
-                {new Date(c.started).toLocaleTimeString()}
-              </TableCell>
-              <TableCell className="font-mono break-all">
+      <ul>
+        {list.map((c) => (
+          <li key={c.id} className="grid gap-1 border-b py-2 text-xs">
+            <div className="flex min-w-0 items-center gap-2">
+              <StatusDot {...verdictDot(c)} className="shrink-0" />
+              <Ident className="min-w-0 flex-1">
                 {hostPort(c.host, c.port)}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1.5">
-                  <VerdictBadge conn={c} />
-                  {c.intercepted && <InterceptedMarker conn={c} />}
-                </div>
-              </TableCell>
-              <TableCell className="hidden text-muted-foreground sm:table-cell">
-                {c.source}
-              </TableCell>
-              <TableCell className="text-right text-muted-foreground tabular-nums">
-                <span className="whitespace-nowrap">
-                  ↑ {formatBytes(c.sent)}
-                </span>{" "}
-                <span className="whitespace-nowrap">
-                  ↓ {formatBytes(c.received)}
-                </span>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+              </Ident>
+              <time
+                dateTime={c.started}
+                className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground tabular-nums"
+              >
+                {new Date(c.started).toLocaleTimeString()}
+              </time>
+            </div>
+            <div className="flex min-w-0 items-center gap-2 pl-4 text-[0.6875rem] text-muted-foreground">
+              <span className="min-w-0 truncate">{c.source}</span>
+              {c.intercepted && <InterceptedMarker conn={c} />}
+              <span className="ml-auto shrink-0 font-mono whitespace-nowrap tabular-nums">
+                ↑ {formatBytes(c.sent)} ↓ {formatBytes(c.received)}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </ScrollArea>
   )
 }

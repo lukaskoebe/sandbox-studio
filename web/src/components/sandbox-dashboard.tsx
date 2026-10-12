@@ -2,21 +2,28 @@ import type { ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import {
   ArrowSquareOutIcon,
+  BroadcastIcon,
   ChatCircleDotsIcon,
+  GitForkIcon,
+  PlugsConnectedIcon,
   PlusIcon,
   RobotIcon,
   TerminalWindowIcon,
+  type Icon,
 } from "@phosphor-icons/react"
 import { CheckpointsSection } from "@/components/checkpoints-section"
 import { RecentConnections } from "@/components/connections-panel"
-import { StartButton, StopButton } from "@/components/sandbox-lifecycle"
+import { Ident } from "@/components/ident"
 import { LineageTimeline } from "@/components/lineage-timeline"
+import { StartButton, StopButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import { SandboxProgress } from "@/components/sandbox-progress"
+import { SectionHeader } from "@/components/section-header"
 import { phase } from "@/components/status-badge"
 import { SandboxOwner } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
+import type { Area } from "@/lib/accents"
 import { $api, isReady, type Sandbox } from "@/lib/api/client"
 import { chatStateLabels, chatTitle } from "@/lib/chats"
 import { harnessLabels } from "@/lib/teammates"
@@ -24,8 +31,8 @@ import { onStudioMachine, openPreviewTab } from "@/lib/previews"
 import { formatAge } from "@/lib/utils"
 
 /**
- * A sandbox at a glance: its state and what it runs on, then its ports, connections,
- * checkpoints and the chats and terminals it has. Each list opens its item in the workspace.
+ * A sandbox at a glance: its facts, then its ports, connections, history, checkpoints, chats
+ * and terminals as lists. Each list opens its item in the workspace.
  */
 export function SandboxDashboard() {
   const { env, sandbox: sb } = useSandboxPage()
@@ -33,7 +40,7 @@ export function SandboxDashboard() {
   const building = sb.status === "creating" || sb.status === "failed"
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto grid w-full max-w-5xl gap-4 p-4 sm:p-6">
+      <div className="grid w-full content-start gap-6 p-3 md:p-4">
         {building && (
           <SandboxProgress
             sandbox={sb}
@@ -45,16 +52,18 @@ export function SandboxDashboard() {
           />
         )}
         <Overview env={env} sandbox={sb} />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Section title="Ports">
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Section title="Ports" icon={BroadcastIcon}>
             <Ports env={env} sandbox={sb} />
           </Section>
           <Section
             title="Recent connections"
-            action={
+            icon={PlugsConnectedIcon}
+            area="network"
+            actions={
               <Button
                 variant="ghost"
-                size="sm"
+                size="xs"
                 render={
                   <Link
                     to="/e/$env/sandboxes/$id/work"
@@ -70,22 +79,20 @@ export function SandboxDashboard() {
             <RecentConnections env={env} id={sb.id} />
           </Section>
         </div>
-        <Section title="History">
+        <Section title="History" icon={GitForkIcon}>
           <LineageTimeline environmentId={env} sandboxId={sb.id} />
         </Section>
-        {!building && (
-          <div className="rounded-lg border p-4">
-            <CheckpointsSection env={env} sandbox={sb} />
-          </div>
-        )}
-        <div className="grid gap-4 lg:grid-cols-2">
+        {!building && <CheckpointsSection env={env} sandbox={sb} />}
+        <div className="grid gap-6 xl:grid-cols-2">
           {sb.teammateId && (
             <Section
               title="Chats"
-              action={
+              icon={ChatCircleDotsIcon}
+              area="chat"
+              actions={
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="xs"
                   render={
                     <Link
                       to="/e/$env/chats/new"
@@ -102,7 +109,7 @@ export function SandboxDashboard() {
               <Chats env={env} sandbox={sb} />
             </Section>
           )}
-          <Section title="Terminals">
+          <Section title="Terminals" icon={TerminalWindowIcon}>
             <Terminals env={env} sandbox={sb} />
           </Section>
         </div>
@@ -111,7 +118,7 @@ export function SandboxDashboard() {
   )
 }
 
-/** The status, owner, template, resources and age of a sandbox, with its start and stop. */
+/** The status, owner, template, resources, age and ID of a sandbox, with its start and stop. */
 function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const p = phase(sb)
   const note =
@@ -123,14 +130,45 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           ? "The sandbox stopped unexpectedly. Your workspace is kept. Start it again to continue."
           : undefined
   return (
-    <section
-      aria-labelledby="overview-heading"
-      className="grid gap-4 rounded-lg border p-4"
-    >
+    <section aria-labelledby="overview-heading" className="grid gap-3">
+      <h2 id="overview-heading" className="sr-only">
+        Overview
+      </h2>
+      <dl className="grid grid-cols-2 border-y sm:grid-cols-3 xl:grid-cols-5">
+        <Fact label="Owner">
+          {sb.teammateId ? (
+            <SandboxOwner env={env} teammateId={sb.teammateId} />
+          ) : (
+            "Unowned"
+          )}
+        </Fact>
+        <Fact label="Template">
+          <span className="font-mono">{sb.templateId ?? "None"}</span>
+        </Fact>
+        <Fact label="Resources">
+          <span
+            title={`${sb.cpus} CPUs, ${formatMiB(sb.memoryMiB)} memory, ${formatMiB(sb.workspaceMiB)} workspace`}
+          >
+            {sb.cpus} CPUs · {formatMiB(sb.memoryMiB)} ·{" "}
+            {formatMiB(sb.workspaceMiB)} workspace
+          </span>
+        </Fact>
+        <Fact label="Created">
+          <time
+            dateTime={sb.createdAt}
+            title={new Date(sb.createdAt).toLocaleString()}
+          >
+            {formatAge(sb.createdAt)}
+          </time>
+        </Fact>
+        <Fact label="ID">
+          <Ident copy>{sb.id}</Ident>
+        </Fact>
+      </dl>
       <div className="flex flex-wrap items-center gap-2">
-        <h2 id="overview-heading" className="sr-only">
-          Overview
-        </h2>
+        {note && (
+          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{note}</p>
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {(p === "stopped" || p === "failed") && (
             <StartButton env={env} sandbox={sb} />
@@ -154,62 +192,38 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           )}
         </div>
       </div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-4">
-        <Fact label="Owner">
-          {sb.teammateId ? (
-            <SandboxOwner env={env} teammateId={sb.teammateId} />
-          ) : (
-            "Unowned"
-          )}
-        </Fact>
-        <Fact label="Template">
-          <span className="font-mono">{sb.templateId ?? "None"}</span>
-        </Fact>
-        <Fact label="Resources">
-          {sb.cpus} CPUs, {formatMiB(sb.memoryMiB)} memory,{" "}
-          {formatMiB(sb.workspaceMiB)} workspace
-        </Fact>
-        <Fact label="Created">
-          <time
-            dateTime={sb.createdAt}
-            title={new Date(sb.createdAt).toLocaleString()}
-          >
-            {formatAge(sb.createdAt)}
-          </time>
-        </Fact>
-      </dl>
-      {note && <p className="text-xs text-muted-foreground">{note}</p>}
     </section>
   )
 }
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid min-w-0 content-start gap-1">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate font-medium">{children}</dd>
+    <div className="min-w-0 border-r px-4 py-2.5 last:border-r-0">
+      <dt className="font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase">
+        {label}
+      </dt>
+      <dd className="mt-1 min-w-0 truncate">{children}</dd>
     </div>
   )
 }
 
+/** A dashboard section: its header, then its content. Its title names the region. */
 function Section({
   title,
-  action,
+  icon,
+  area,
+  actions,
   children,
 }: {
   title: string
-  action?: ReactNode
+  icon: Icon
+  area?: Area
+  actions?: ReactNode
   children: ReactNode
 }) {
   return (
-    <section
-      aria-label={title}
-      className="grid content-start gap-2 rounded-lg border p-4"
-    >
-      <div className="flex min-h-7 items-center gap-2">
-        <h2 className="text-sm font-medium">{title}</h2>
-        {action && <div className="ml-auto">{action}</div>}
-      </div>
+    <section aria-label={title} className="grid min-w-0 content-start gap-2">
+      <SectionHeader title={title} icon={icon} area={area} actions={actions} />
       {children}
     </section>
   )
@@ -237,13 +251,16 @@ function Ports({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
     )
   return (
     <>
-      <ul className="divide-y">
+      <ul className="overflow-hidden rounded-(--radius) border bg-card">
         {list.map((p) => (
-          <li key={p.port} className="flex items-center gap-2 py-1.5 text-xs">
-            <span className="font-mono">:{p.port}</span>
+          <li
+            key={p.port}
+            className="flex h-(--wb-row) items-center gap-2 border-b px-3 text-xs last:border-b-0"
+          >
+            <Ident>{`:${p.port}`}</Ident>
             <Button
               variant="ghost"
-              size="sm"
+              size="xs"
               className="ml-auto"
               onClick={() => void openPreviewTab(env, sb.id, p.port)}
             >
@@ -279,20 +296,23 @@ function Chats({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
       </p>
     )
   return (
-    <ul className="divide-y">
+    <ul className="overflow-hidden rounded-(--radius) border bg-card">
       {list.map((c) => (
-        <li key={c.id} className="flex items-center gap-2 py-1.5 text-xs">
-          <ChatCircleDotsIcon className="shrink-0 text-muted-foreground" />
+        <li
+          key={c.id}
+          className="flex h-(--wb-row) items-center gap-2 border-b px-3 text-xs last:border-b-0"
+        >
+          <ChatCircleDotsIcon className="shrink-0 text-(--acc-chat)" />
           <span className="min-w-0 flex-1 truncate">{chatTitle(c)}</span>
           <span
-            className="shrink-0 text-muted-foreground"
+            className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground"
             title={chatStateLabels[c.state]}
           >
             {c.state === "running" ? "Working" : formatAge(c.updatedAt)}
           </span>
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             render={
               <Link
                 to="/e/$env/sandboxes/$id/work"
@@ -330,9 +350,12 @@ function Terminals({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
       </p>
     )
   return (
-    <ul className="divide-y">
+    <ul className="overflow-hidden rounded-(--radius) border bg-card">
       {list.map((s) => (
-        <li key={s.name} className="flex items-center gap-2 py-1.5 text-xs">
+        <li
+          key={s.name}
+          className="flex h-(--wb-row) items-center gap-2 border-b px-3 text-xs last:border-b-0"
+        >
           {s.harness ? (
             <RobotIcon className="shrink-0 text-muted-foreground" />
           ) : (
@@ -348,7 +371,7 @@ function Terminals({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           )}
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             render={
               <Link
                 to="/e/$env/sandboxes/$id/work"

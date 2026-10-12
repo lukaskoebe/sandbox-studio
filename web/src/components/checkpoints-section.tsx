@@ -25,6 +25,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
+import { SectionHeader } from "@/components/section-header"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
@@ -38,16 +39,15 @@ export function CheckpointsSection({
   sandbox: Sandbox
 }) {
   return (
-    <section aria-labelledby="checkpoints-heading" className="grid gap-3">
-      <div>
-        <h2 id="checkpoints-heading" className="text-sm font-medium">
-          Checkpoints
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          Checkpoints save disks, not running processes. Stop applications
-          before stopping the sandbox for consistent data.
-        </p>
-      </div>
+    <section
+      aria-label="Checkpoints"
+      className="grid min-w-0 content-start gap-2"
+    >
+      <SectionHeader title="Checkpoints" icon={FloppyDiskIcon} />
+      <p className="text-xs text-muted-foreground">
+        Checkpoints save disks, not running processes. Stop applications before
+        stopping the sandbox for consistent data.
+      </p>
       <CheckpointPanel env={env} sandbox={sandbox} />
     </section>
   )

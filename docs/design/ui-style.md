@@ -19,9 +19,9 @@ clean but interchangeable. The chosen direction adds three things shadcn does no
 ## Accents and status
 
 One hue per area: network sky, git violet, browser orange, memory teal, chat and agent green.
-They mark nav icons, approval cards (the rule on the left edge and the icon tile), kind chips,
-section icon tiles of that area, and the lineage view. Never body text, buttons or card
-backgrounds.
+They mark nav icons, the icons of the workspace's panel buttons, approval cards (the rule on the
+left edge and the icon tile), kind chips, section icon tiles of that area, and the lineage view.
+Never body text, buttons or card backgrounds.
 
 The accents are about 20 to 25 % less chroma than in the mockups; hue and lightness are
 unchanged. Tints are softer too: icon tiles use 11 % of the hue (was 14 %). Icons on their
@@ -81,9 +81,15 @@ Pitch: a tool you keep open all day. Dense, tabular, graphite neutrals, identifi
 - **Section headers.** A 20 px square tile with a small icon (in the area's hue where the
   section belongs to one), a 13 px semibold title, and a count.
 - **Status bar.** Each sandbox has one slim bar along the bottom of its workspace: state, ID,
-  template, CPU, memory, ports, pending approvals, uptime, generation.
-- **Home.** A stat strip (sandboxes, approvals, teammates, egress, host), the sandbox table
-  with CPU and memory bars, approvals beside it, then activity.
+  template, ports, pending approvals, generation. CPU, memory and uptime wait for the API to
+  report them.
+- **Home.** A stat strip (sandboxes running, approvals waiting, teammates working), the
+  sandbox table (name and ID, owner, template, status, ports, approvals waiting) with the
+  family tree under it, and the approvals and teammates on the right. Each number is one the
+  API already gives. Egress, host load and an activity feed wait for endpoints that do not
+  exist yet.
+- **Presence.** Teammates use the status colors: working is running (pulsing), waiting for
+  you is waiting, idle is stopped.
 - **Tokens** (`web/src/styles.css`). Background `oklch(0.993 0.001 255)` / `oklch(0.168 0.006
   255)`. Card `oklch(1 0 0)` / `oklch(0.198 0.007 255)`. Border `oklch(0.912 0.005 255)` /
   `oklch(1 0 0 / 8.5%)`. Foreground `oklch(0.21 0.008 255)` / `oklch(0.94 0.004 255)`. Muted
@@ -107,11 +113,14 @@ Shared pieces for the rollout. Use them instead of local styling.
 - **`KindChip`** (`components/kind-chip.tsx`). An approval kind's name with its icon on the
   area's tile. Approval cards pass `approvalKind(a).area`; unknown kinds have none.
 - **`StatusDot`** (`components/status-dot.tsx`). One of the four statuses, always with its
-  word. Sandbox phases still use the dot in `components/status-badge.tsx` until the sandbox
-  pages move over.
+  word. `label` replaces the word for a state the four do not name, and `pulse` marks a state
+  in progress. Sandbox phases map onto it in `components/status-badge.tsx` (`phaseDot`).
+  Dense lists show the dot alone (`compact`): the sidebar is the one place that does, and the
+  word becomes its tooltip and the text screen readers read.
+- **`WaitingCount`** (`components/waiting-count.tsx`). The number of approvals waiting for you,
+  on a chip in the waiting color. It shows nothing at zero.
 - **`ThemeToggle`** (`components/theme-toggle.tsx`). System, light and dark, stored by
-  `lib/theme.ts`. It goes in the sidebar footer once the navigation lands (N3); nothing mounts
-  it yet.
+  `lib/theme.ts`. It sits in the sidebar footer.
 - **Table rows and headers** (`components/ui/table.tsx`). Workbench heights by default; pages
   do not set their own.
 
@@ -138,6 +147,31 @@ teammates shown as people. Kept in the mockups only.
   oklch(0.4 0.03 60 / 6%), 0 4px 16px oklch(0.4 0.03 60 / 6%)`, and a heavier one in dark.
   Terminal `oklch(0.972 0.01 85)` / `oklch(0.165 0.007 65)`.
 
+## Rollout status
+
+Pages move over one at a time, each behind the e2e suite (N4). A page that has moved uses the
+primitives above and keeps the e2e selectors it had.
+
+- **Done: sidebar.** Compact rows. Sandboxes show their name in mono, their status dot and the
+  approvals waiting on them. Teammates show presence. Nav icons take their area's hue, and the
+  theme toggle sits in the footer.
+- **Done: Home.** Stat strip, sandbox table (stacks below the large breakpoint), family tree,
+  approvals summary and teammates, with a `{/* setup */}` slot at the top of the main column.
+  Not shown: an activity feed (no data source yet), and egress or host load (no endpoint).
+  The template column shows the template's ID until the API names templates.
+- **Done: sandbox dashboard and workspace.** Header with the name and ID in mono, sections
+  with headers and area tiles (connections and chats only), ports and connections as lists,
+  and a status line on the workspace. CPU, memory and uptime are not shown until the API
+  reports them.
+- **Done: network.** Rules (grouped by domain, filters in the URL), requests and activity tabs.
+- **Done: secrets.**
+- **Done: memory.** Pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.
+- **Done: teammates.** List, overview, chats, browser and settings tabs; the teammate form.
+- **Done: chat.** The chat page header and the new chat notice.
+- **Done: git.** Settings (forges, pushes and forge dialogs) and the git review sheet.
+- **Done: settings.** General, providers, templates and runtime; the build log and template
+  spec sheets; template resources.
+
 ## Open points
 
 - **Two greens.** Chat green (chroma 0.11 light, 0.12 dark) and running green (0.17) are
@@ -147,18 +181,3 @@ teammates shown as people. Kept in the mockups only.
   degrees). If a browser approval and a waiting sandbox still read alike, move browser redder.
 - **Faint waiting dot in light.** Amber on white reaches only 2.0:1 for the dot. Reaching 3:1
   turns it brown, so the word carries the state for now.
-- **Rollout.** Pages keep their old layout until they move over, one at a time, behind the e2e
-  suite (N4). The list below says which have moved.
-
-## Rollout status
-
-Pages on Workbench, one line each. Pages not listed keep their old layout.
-
-- **Network:** rules (grouped by domain, filters in the URL), requests and activity tabs.
-- **Secrets.**
-- **Memory:** pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.
-- **Teammates:** list, overview, chats, browser and settings tabs; the teammate form.
-- **Chat:** the chat page header and the new chat notice.
-- **Git:** settings (forges, pushes and forge dialogs) and the git review sheet.
-- **Settings:** general, providers, templates and runtime; the build log and template spec
-  sheets; template resources.
