@@ -45,10 +45,10 @@ export function LineageTree({
         <div
           key={template.id}
           role="group"
-          aria-label={templateLabel(template.id)}
+          aria-label={template.name || templateLabel(template.id)}
         >
           <p className="text-xs text-muted-foreground">
-            {templateLabel(template.id)}
+            {template.name || templateLabel(template.id)}
             {isSet(template.createdAt) && ` · ${formatAge(template.createdAt)}`}
           </p>
           <Forest

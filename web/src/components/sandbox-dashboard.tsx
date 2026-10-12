@@ -163,7 +163,9 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           )}
         </Fact>
         <Fact label="Template">
-          <span className="font-mono">{sb.templateId ?? "None"}</span>
+          <span className="font-mono">
+            {sb.templateName ?? sb.templateId ?? "None"}
+          </span>
         </Fact>
         <Fact label="Resources">
           {sb.cpus} CPUs, {formatMiB(sb.memoryMiB)} memory,{" "}
