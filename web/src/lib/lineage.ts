@@ -20,12 +20,12 @@ export function statusTone(status: string): Tone {
   }
 }
 
-/** The fill of a status dot, per tone. */
+/** The fill of a status marker, per tone: the status colors of the shared StatusDot. */
 export const toneDot: Record<Tone, string> = {
-  green: "bg-emerald-500",
-  amber: "bg-amber-500",
-  red: "bg-destructive",
-  neutral: "bg-muted-foreground/40",
+  green: "bg-(--st-running)",
+  amber: "bg-(--st-waiting)",
+  red: "bg-(--st-failed)",
+  neutral: "bg-(--st-stopped)",
 }
 
 /** "Template 1a2b3c4d", or "No template" for a sandbox without one. */

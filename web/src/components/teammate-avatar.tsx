@@ -42,10 +42,11 @@ export function TeammateAvatar({
   )
 }
 
+/** Presence uses the status colors: working is running, waiting for you is waiting. */
 const presenceDots: Record<Presence, string> = {
-  working: "bg-sky-500 animate-pulse",
-  waiting: "bg-amber-500",
-  idle: "bg-muted-foreground/40",
+  working: "bg-(--st-running) animate-pulse",
+  waiting: "bg-(--st-waiting)",
+  idle: "bg-(--st-stopped)",
 }
 
 /** A teammate's presence as a dot. The words go in the title and beside it where there is room. */

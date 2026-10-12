@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router"
+import { phaseDot, phaseOf } from "@/components/status-badge"
+import { StatusDot } from "@/components/status-dot"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
-import { isSet, statusTone, templateLabel, toneDot } from "@/lib/lineage"
+import { isSet, templateLabel } from "@/lib/lineage"
 import { cn, formatAge } from "@/lib/utils"
 
 type TreeNode = components["schemas"]["LineageTreeNode"]
@@ -51,7 +53,7 @@ export function LineageTree({
           role="group"
           aria-label={templateLabel(template.id)}
         >
-          <p className="text-xs text-muted-foreground">
+          <p className="font-mono text-[0.6875rem] text-muted-foreground">
             {templateLabel(template.id)}
             {isSet(template.createdAt) && ` · ${formatAge(template.createdAt)}`}
           </p>
@@ -110,26 +112,25 @@ function TreeRow({
     <>
       <span
         className={cn(
-          "size-2 shrink-0 rounded-full",
-          toneDot[statusTone(node.status)]
-        )}
-      />
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate",
+          "min-w-0 flex-1 truncate font-mono",
           node.deleted && "line-through"
         )}
       >
         {node.name}
       </span>
-      <span className="shrink-0 text-muted-foreground">
-        {node.deleted ? "deleted" : node.status}
-      </span>
+      {node.deleted ? (
+        <span className="shrink-0 text-muted-foreground">deleted</span>
+      ) : (
+        <StatusDot
+          {...phaseDot(phaseOf(node.status, true))}
+          className="shrink-0 font-sans text-[0.6875rem]"
+        />
+      )}
     </>
   )
   if (node.deleted) {
     return (
-      <div className="flex items-center gap-2 px-2 py-1 text-muted-foreground">
+      <div className="flex items-center gap-2 px-2 py-1.5 text-muted-foreground">
         {content}
       </div>
     )
@@ -138,7 +139,7 @@ function TreeRow({
     <Link
       to="/e/$env/sandboxes/$id"
       params={{ env: environmentId, id: node.id }}
-      className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted"
+      className="flex items-center gap-2 rounded-[4px] px-2 py-1.5 transition-colors hover:bg-muted"
     >
       {content}
     </Link>
