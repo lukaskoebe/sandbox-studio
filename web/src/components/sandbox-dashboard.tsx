@@ -13,7 +13,7 @@ import { StartButton, StopButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import { SandboxProgress } from "@/components/sandbox-progress"
-import { phase, StatusBadge } from "@/components/status-badge"
+import { phase } from "@/components/status-badge"
 import { SandboxOwner } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
 import { $api, isReady, type Sandbox } from "@/lib/api/client"
@@ -128,7 +128,6 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
         <h2 id="overview-heading" className="sr-only">
           Overview
         </h2>
-        <StatusBadge sandbox={sb} />
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {(p === "stopped" || p === "failed") && (
             <StartButton env={env} sandbox={sb} />

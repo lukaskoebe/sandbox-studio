@@ -100,7 +100,7 @@ export function SidePanel({
       aria-label={label}
       className={cn(
         "flex min-h-0 min-w-0 flex-col bg-background",
-        wide ? "relative shrink-0 border-l" : "fixed inset-0 z-40"
+        wide ? "relative shrink-0 border-l" : "fixed inset-0 z-30"
       )}
       style={wide ? { width } : undefined}
       onKeyDown={(event) => {
