@@ -18,7 +18,7 @@ on before anything is built.
 |---|---|---|
 | D1 | New dev dependencies `@playwright/test` (e2e) and `@codemirror/lang-yaml` (spec editor) | Approved |
 | D2 | Resizable panels: shadcn `Resizable` or our own splitter | Our own splitter as a shared component, no new dependency |
-| D3 | Visual direction for the redesign (N4) | Open: chosen from the mockups |
+| D3 | Visual direction for the redesign (N4) | A, "Workbench" (2026-10-13), with the accent colors toned down slightly |
 | D4 | Default teammate | "Iris", generalist engineer: curious, careful and direct; short soul |
 | D5 | Network security levels (Concept C1) | Open: concept to review, not built yet |
 | D6 | Host ssh-agent by default (reverses "never use the host agent") | Approved. When signing waits on a host confirmation (hardware key, password manager), show a dismissible hint to set up a dedicated Studio key |
