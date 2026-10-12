@@ -1,19 +1,38 @@
-# M0 spike results
+# Spikes and qualifications
 
-Host for all Linux results: Ryzen 5 3450U laptop (4 cores/8 threads, 14 GiB RAM), Linux 7.0,
-microsandbox 0.7.7, Go 1.26. Spike code lives in `spikes/` and is not production code.
+The M0 spikes answered the risky questions before the build; later sections record live
+qualifications of template builds. Host for all Linux results: Ryzen 5 3450U laptop (4
+cores/8 threads, 14 GiB RAM), Linux 7.0, microsandbox 0.7.7, Go 1.26. Spike code lives in
+`spikes/` and is not production code. Sections are records of what was true when they were
+written; current behavior is in the component pages linked from the [index](README.md).
 
-| # | Topic | Linux | macOS | Windows |
-|---|---|---|---|---|
-| S1 | Gateway + Docker-in-sandbox | ✅ | ⏳ needs the Mac | ⏳ no machine |
-| S2 | Studio DNS resolver | ✅ (with caveats) | ⏳ | ⏳ |
-| S3 | vsock agent channel | ✅ | ⏳ | ⏳ (named pipes) |
-| S4 | CA injection / MITM | ✅ (Docker containers open) | n/a (guest-side) | n/a |
-| S5 | Volumes, snapshots, forks | ✅ (decision made, one upstream gap) | ⏳ | ⏳ |
-| S6 | Hold-and-ask client timeouts | ✅ | n/a (guest-side) | n/a |
-| S7 | Harness hooks | ⏳ | | |
-| S8 | Subscription auth | ⏳ needs your logins | | |
-| S9 | Local embeddings | ✅ | ⏳ | ⏳ |
+| # | Question | Done when | Linux | macOS | Windows |
+|---|---|---|---|---|---|
+| S1 | Gateway and Docker-in-sandbox | nested container egress attributed to the sandbox, SNI deny works | ✅ | ⏳ needs the Mac | ⏳ no machine |
+| S2 | Per-sandbox Studio DNS resolver, IP→name for non-TLS ports | ssh to `github.com:22` matched by name | ✅ (with caveats) | ⏳ | ⏳ |
+| S3 | vsock host-socket channel with yamux, both directions (Unix socket vs named pipe) | terminal and port forward over the channel | ✅ | ⏳ | ⏳ (named pipes) |
+| S4 | CA injection: guest trust store, runtimes, nested Docker | curl, node, python, git and a container trust intercepted hosts | ✅ | n/a (guest-side) | n/a |
+| S5 | Owned vs named volumes in snapshots and forks; rebase mechanism | decision recorded | ✅ (one upstream gap) | ⏳ | ⏳ |
+| S6 | Client timeouts while a connection is held | defaults chosen per client | ✅ | n/a (guest-side) | n/a |
+| S7 | Harness hooks for the pinned versions, without trust prompts | context injection proven in all three harnesses | ⏳ | | |
+| S8 | Subscription auth (Claude OAuth token via placeholder, Codex ChatGPT login, headless utility calls) | a login-based teammate runs without the long-lived credential in the guest, or the fallback is documented | ⏳ needs the logins | | |
+| S9 | yzma + embeddinggemma latency and memory | under 50 ms per short query on CPU | ✅ works; 70 ms per query, over the target | ⏳ | ⏳ |
+
+S7 and S8 details: [harnesses](harnesses.md#verified-vs-pending).
+
+## Risks
+
+- **Windows support in microsandbox is a preview, and there is no Windows machine.**
+  Windows gets CI builds and unit tests on every commit; VM-level checks (S1, S3) need a
+  cloud Windows VM with nested virtualization. Release notes mark Windows as a preview.
+- **CGO.** The SDK needs CGO, so releases build on native runners per OS and arch.
+- **Hosted CI can't run VMs on macOS or Windows** (no nested virtualization on hosted
+  runners). VM tests run by hand on Linux; macOS and Windows need real hardware or
+  self-hosted runners.
+- **Harness churn.** Config formats and hooks change often. The base image pins harness
+  versions; adapters have contract tests against recorded payloads.
+- **microsandbox is pre-1.0 (0.7.x).** The SDK version is pinned, wrapped in
+  `internal/runtime` and upgraded deliberately.
 
 ## S1 — Gateway and Docker in a sandbox
 
@@ -55,7 +74,8 @@ microsandbox 0.7.7, Go 1.26. Spike code lives in `spikes/` and is not production
 - The guest dials CID 2 port 5000; the host accepts on a Unix socket; yamux runs on top.
 - Streams in both directions work: guest→host round trip about 5 ms, host→guest about 1.4 ms.
 - Mounting the agent binary as a single read-only file works, so updating Studio updates the
-  guest agent with no image rebuild.
+  guest agent with no image rebuild. (Production binds the directory `<data>/guest`
+  read-only at `/opt/studio` instead.)
 
 ## S4 — CA injection and TLS interception
 
@@ -79,7 +99,7 @@ documented helper (`studio-ca mount`) that adds `-v /etc/ssl/certs:/etc/ssl/cert
 env vars.
 
 Update (M2): no helper after all. A `runc` shim in the guest adds the CA to every container
-and build step; see PLAN.md, CA trust. Verified live with curl, wget, Python, git and Node in
+and build step; see [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest). Verified live with curl, wget, Python, git and Node in
 `python`, `node` and `alpine/git` containers and in a `docker build` step.
 
 ## S5 — Volumes, snapshots and forks
@@ -123,7 +143,7 @@ adoption path additionally checks persisted init configuration as a regression g
 Catalog/recovery tests use a supported fake runtime; they do not qualify real restore.
 
 M3 update, guests without an init: with agentd as PID 1, microsandbox 0.7.7 freezes the guest
-for every capture, so Studio dropped systemd (see PLAN.md 6.1, Init). On the base image, a
+for every capture, so Studio dropped systemd (see [sandboxes](sandboxes.md#boot-and-shutdown)). On the base image, a
 live disk checkpoint through Studio took 0.65 s (msb marks it crash-consistent), a full
 snapshot 3 to 6 s while the source kept running, and a fork of a running sandbox 2.8 s.
 #1676 no longer matters: Start runs `studio-agent boot` whether or not the VM has an init.
@@ -182,6 +202,10 @@ Follow-ups: tune threads and context size for query latency; measure on the Mac 
 Windows.
 
 ## M3 — OCI template image spike
+
+Written while M3 was in progress. Notes below that the builder, cache invocation, recovery
+jobs, API or UI are "not wired" are superseded: all of them are built
+([template builds](template-builds.md)).
 
 ### Historical disposable-registry spike
 
@@ -324,9 +348,15 @@ does not complete all M3 work.
 See the [kernel overlay documentation](https://docs.kernel.org/filesystems/overlayfs.html)
 and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze.8.html).
 
-## Remaining M0 work
+## Still open
 
 - S1–S3 and S9 on the Mac; Windows needs a cloud VM with nested virtualization.
 - S7: verify hook payloads and context injection for OpenCode, Claude Code and Codex against
   a fake model endpoint (no credentials needed).
-- S8: subscription logins — needs your Claude and ChatGPT accounts in an interactive session.
+- S8: subscription logins; needs Claude and ChatGPT accounts in an interactive session.
+- Template builds: live qualification of the exec export path including network installs,
+  cold-cache base pulls, a build on a release base, arm64 guests, oversized or backpressured
+  captures ([template builds](template-builds.md#current-qualification-boundary)).
+- No live run of suspend/resume (`spikes/suspend`) is recorded.
+- Browser broker items pending a live run, including arm64
+  ([browser](browser.md#verified-vs-pending-live)).

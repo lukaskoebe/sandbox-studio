@@ -1,8 +1,8 @@
 # Browser broker
 
 Agents browse the web through a real Chromium. It runs in a separate microVM per teammate,
-and Studio is the only client: agents get MCP tools, never CDP. This doc covers the M7
-implementation of PLAN §6.8.
+and Studio is the only client: agents get MCP tools, never CDP. This doc covers the
+implementation (milestone M7).
 
 Code:
 - `internal/browser`: the broker, policy, redaction, credentials, history and live view relay.
@@ -255,7 +255,8 @@ disconnecting clears the local input buffer.
   sandbox that drove.
 - A "sensitive" pattern blanks a field's value line. A textarea whose own text forges
   snapshot lines could still slip text past it.
-- The release workflow does not build or publish the browser image yet. With a
-  digest-pinned base image, Studio uses `sandbox-studio-browser:<version>`.
+- Releases build and publish the browser image and pin it by digest
+  (`version.BrowserImage`). With another digest-pinned base image, Studio uses
+  `sandbox-studio-browser:<version>` from the same registry.
 - A credential fill runs inside the approval's decide request, bounded by the command
   timeout.

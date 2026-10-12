@@ -1,4 +1,4 @@
-// Package memory is Studio's built-in memory (PLAN §6.7): sources, facts, pages with an
+// Package memory is Studio's built-in memory (docs/memory.md): sources, facts, pages with an
 // append-only timeline, conflicts, and hybrid retrieval over chunks with BM25 (FTS5) and
 // local int8 embeddings fused by reciprocal rank.
 //

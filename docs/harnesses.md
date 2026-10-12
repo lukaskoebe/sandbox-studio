@@ -1,7 +1,7 @@
 # Harnesses and agent sessions
 
 An agent session is a teammate's harness TUI in a named tmux session in one of its sandboxes
-(PLAN.md §6.6). Code: `internal/harness` (adapters), `internal/api/sessions.go` (API),
+(teammates and providers: [teammates](teammates.md)). Code: `internal/harness` (adapters), `internal/api/sessions.go` (API),
 `internal/guest/homefiles.go` and `sessions.go` (guest side).
 
 ## Starting a session

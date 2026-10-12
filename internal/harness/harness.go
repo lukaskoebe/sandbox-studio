@@ -1,5 +1,5 @@
 // Package harness renders the guest-side configuration of the agent harnesses Studio runs:
-// OpenCode, Claude Code and Codex (PLAN.md §6.6, docs/harnesses.md).
+// OpenCode, Claude Code and Codex (docs/harnesses.md).
 //
 // An adapter turns a teammate and its provider into files in the agent user's home and the
 // command that starts the harness's TUI. It never sees a secret: the provider's credential
@@ -68,7 +68,7 @@ type SessionOpts struct {
 	Resume string
 }
 
-// Harness is an adapter for one agent harness (PLAN.md §6.6).
+// Harness is an adapter for one agent harness (docs/harnesses.md).
 type Harness interface {
 	Name() string
 	// Render returns the harness's config files: the managed instructions block, the
@@ -193,7 +193,7 @@ func plainValue(s string) bool {
 // works. It goes into the harness's global instructions file in the home, not into
 // /workspace, so it never ends up in the project's repository. The harness reads the file
 // in every session, resumed ones too, so this is the only place the soul reaches the
-// agent; the teammate's memory arrives as context at session start (PLAN §6.6).
+// agent; the teammate's memory arrives as context at session start (docs/harnesses.md).
 func instructions(p Teammate, s Sandbox) GuestFile {
 	var b strings.Builder
 	b.WriteString(agentproto.BlockBegin + "\n")

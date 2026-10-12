@@ -14,7 +14,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
-// ProviderKind is one row of the fixed provider table (PLAN.md §6.6).
+// ProviderKind is one row of the fixed provider table (docs/teammates.md).
 type ProviderKind struct {
 	Kind      string   `json:"kind" enum:"anthropic_api,openai_api,openai_compatible,claude_subscription,chatgpt_subscription"`
 	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses that can use a provider of this kind"`

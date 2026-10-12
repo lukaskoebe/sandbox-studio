@@ -1,4 +1,4 @@
--- Memory (PLAN §6.7). Every row belongs to one environment and one scope: 'shared' or
+-- Memory (docs/memory.md). Every row belongs to one environment and one scope: 'shared' or
 -- 'persona:<id>'. Persona IDs are opaque here; they get a foreign key once personas land.
 -- author_persona is '' when the author is the user or unknown.
 

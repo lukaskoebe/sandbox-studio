@@ -476,7 +476,7 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
   can't do per-request undo:
   1. **Restore is gated off.** Upstream
      [#1736](https://github.com/superradcompany/microsandbox/issues/1736) is still open, and
-     the restored VM would lose Studio's egress (PLAN.md 6.1).
+     the restored VM would lose Studio's egress ([sandboxes](../sandboxes.md#checkpoints)).
   2. **A restore is too much.** It needs a stopped sandbox and a new generation, which
      kills the ACP process and dev servers. It would also roll back the root and Docker
      disks, not just the request's file changes.

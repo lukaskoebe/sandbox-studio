@@ -42,7 +42,7 @@ const (
 	StateLoginRequired = "login_required"
 )
 
-// Kind describes a provider kind. The table is fixed (PLAN.md §6.6).
+// Kind describes a provider kind. The table is fixed (docs/teammates.md).
 type Kind struct {
 	Kind      string
 	Harnesses []string

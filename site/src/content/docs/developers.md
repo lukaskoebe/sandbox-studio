@@ -40,9 +40,9 @@ For an isolated second instance, set a separate `SANDBOX_STUDIO_HOME` and pass a
 | Sandboxes and runtime | `internal/sandboxes`, `internal/runtime`, `images/base` |
 | Browser broker | `internal/browser`, `images/browser` |
 | Web UI | `web/` |
-| Public guides and detailed design notes | `docs/` |
+| Developer docs: architecture, components, decisions | `docs/` |
 
-Useful source guides include [template builds](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/template-builds.md), [memory](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/memory.md), [browser](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/browser.md), and [Git review](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/git-review.md).
+Start with the [developer docs index](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/README.md) and the [architecture overview](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/architecture.md). Other source guides include [template builds](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/template-builds.md), [memory](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/memory.md), [browser](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/browser.md), and [Git review](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/git-review.md).
 
 ## Release process
 

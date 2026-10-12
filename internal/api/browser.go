@@ -15,7 +15,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// The browser broker's endpoints (PLAN §6.8): a teammate's browser VM, the user's takeover,
+// The browser broker's endpoints (docs/browser.md): a teammate's browser VM, the user's takeover,
 // the action log and the teammate's browser patterns. The live view is a WebSocket.
 
 type browserPath struct {

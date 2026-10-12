@@ -1,4 +1,4 @@
-// Package browser is the browser broker (PLAN §6.8). Each teammate has one browser VM, a
+// Package browser is the browser broker (docs/browser.md). Each teammate has one browser VM, a
 // sandbox of kind browser running Chromium under agent-browser. Agents drive it with the
 // browser tools of `studio-agent mcp`; the calls arrive on their own sandbox's channel, so
 // the broker knows the teammate from the channel and never from what the call says. Every

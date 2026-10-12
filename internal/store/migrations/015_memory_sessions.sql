@@ -1,4 +1,4 @@
--- Memory in agent sessions (PLAN §6.7). A harness session as Studio saw it through hooks;
+-- Memory in agent sessions (docs/memory.md). A harness session as Studio saw it through hooks;
 -- sandbox_id has no foreign key so the log outlives the sandbox.
 CREATE TABLE memory_agent_sessions (
     id             TEXT PRIMARY KEY,

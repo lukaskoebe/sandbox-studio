@@ -1,7 +1,7 @@
 # Contributing
 
 Issues and pull requests are welcome. For anything larger than a fix, open an issue first:
-Studio has one opinionated way to do each thing (see [PLAN.md](PLAN.md), §2), so a new
+Studio has one opinionated way to do each thing (see [principles](docs/architecture.md#principles)), so a new
 option or alternative needs a good reason. Report security problems privately, as described
 in [SECURITY.md](SECURITY.md).
 

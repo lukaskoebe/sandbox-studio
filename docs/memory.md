@@ -1,6 +1,6 @@
 # Memory
 
-What teammates remember, per environment (PLAN.md §6.7): the store, search, embeddings,
+What teammates remember, per environment: the store, search, embeddings,
 API and UI, memory in agent sessions (hooks, tools, extraction) and consolidation (the
 dream job and conflicts).
 

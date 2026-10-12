@@ -1,4 +1,4 @@
-// Package agentcall is the guest side of memory in agent sessions (PLAN §6.7): the
+// Package agentcall is the guest side of memory in agent sessions (docs/memory.md): the
 // `studio-agent hook` and `studio-agent mcp` commands that harnesses run as the agent
 // user. Both reach Studio through the connect daemon's call socket, so Studio learns the
 // sandbox from the channel and never from what they send.

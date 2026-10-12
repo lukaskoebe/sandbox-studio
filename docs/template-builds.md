@@ -123,10 +123,9 @@ The worker takes its base reference only from Studio runtime configuration. The 
 `sandbox-studio-base:dev` alias is accepted for local development. Other references must
 be canonical OCI repository references pinned by lowercase `sha256` digest. Base
 preparation records its temporary VM owner before SDK creation, uses a deny-all 512 MiB
-prewarm VM, and inspects the actual resolved digest and platform through the SDK. A
-release default digest pin is not configured yet; release wiring must provide a controlled
-digest-pinned base before release template builds are enabled. This applies to template
-builds; ordinary Studio application releases are unaffected.
+prewarm VM, and inspects the actual resolved digest and platform through the SDK. Release
+builds set the base to the digest-pinned image they publish (`version.BaseImage`, see
+[release](release.md)); a template build on a release base has not been run live.
 
 The cache key includes the canonical spec, inspected base digest, platform, and exporter
 version. On a cache hit, the worker still prepares and inspects the base, then verifies
@@ -214,8 +213,7 @@ UI validation used mocked desktop/mobile workflows and web checks; no live-worke
 build or workflow was run. Earlier Linux amd64 registry and exporter/source-import
 qualifications remain in the [M3 spike report](spikes.md#persistent-registry-qualification-2026-10-09)
 and its [layer-transfer results](spikes.md#layer-transfer-and-capture-foundations).
-M3 remains incomplete: rebase, live qualification of the exec export path including apt/mise
-network installs, cold-cache base pulls, macOS and
-Windows host VM runs, arm64, the release template base digest pin, and oversized/backpressured
-capture qualification remain open. Restore remains blocked by microsandbox
-[#1736](https://github.com/superradcompany/microsandbox/issues/1736).
+Still open: live qualification of the exec export path including apt/mise network
+installs, cold-cache base pulls, a template build on a release base, macOS and Windows host
+VM runs, arm64, and oversized or backpressured captures. Restore remains blocked by
+microsandbox [#1736](https://github.com/superradcompany/microsandbox/issues/1736).

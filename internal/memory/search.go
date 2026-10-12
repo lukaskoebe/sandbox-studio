@@ -13,7 +13,7 @@ import (
 	"unicode/utf8"
 )
 
-// Retrieval tuning. One set of values, no knobs (PLAN §2).
+// Retrieval tuning. One set of values, no knobs (docs/architecture.md, Principles).
 const (
 	rrfK          = 60  // reciprocal-rank fusion constant
 	candidates    = 200 // chunks taken from each ranker before fusion

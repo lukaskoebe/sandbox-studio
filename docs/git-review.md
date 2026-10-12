@@ -161,7 +161,7 @@ commits, and a unified diff bounded at 512 KiB. Binary files, submodules and fil
 - **Reject** (optionally with a note) or **ignore:** the push becomes `rejected`.
 - A rejected or failed push is delivered to the sandbox on its next fetch of that
   repository: that fetch fails once with the reason and note, and the next one works.
-  `TODO(M5)`: also notify the agent over MCP.
+  Not built: also notifying the agent over MCP.
 - **Pull request** (Forgejo, GitHub): after an approved push to a branch other than the
   repository's default branch, Studio raises a `git.pr` approval proposing
   `<branch> → <default>` with a title and body from the commits. Approving it calls
@@ -175,7 +175,7 @@ endpoint (`note` is optional); the integration owning the approval kind handles 
 
 ## Integration interface
 
-`internal/integrations` holds the minimal compiled-in interface from PLAN.md §6.9:
+`internal/integrations` holds a minimal compiled-in interface:
 
 ```go
 type Integration interface {
@@ -192,6 +192,5 @@ integration needs them.
 
 - Only branches; tags and deletes are refused.
 - The approve push runs inside the decide request (up to five minutes).
-- Staging repos are removed with their forge, not yet with their sandbox.
 - Computing a review walks the new commits (`revlist`); very large first pushes are slow.
 - No GitLab merge requests yet (GitLab works as kind `https`), no GitHub App sign-in.
