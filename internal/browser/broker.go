@@ -65,8 +65,8 @@ const (
 	defaultPauseWait   = 20 * time.Second // an agent call waits this long for the user to hand back
 	defaultIdleStop    = 10 * time.Minute
 	defaultEphemeral   = 10 * time.Minute // an unused ephemeral session ends after this
-	defaultKeep        = 500       // actions kept per teammate
-	defaultShotBudget  = 200 << 20 // bytes of screenshots kept in all
+	defaultKeep        = 500              // actions kept per teammate
+	defaultShotBudget  = 200 << 20        // bytes of screenshots kept in all
 	commandTimeout     = 25 * time.Second
 	grantTTL           = 5 * time.Minute
 	maxProbes          = 50
