@@ -201,7 +201,7 @@ export function GitReview({ approval }: { approval: Approval }) {
             {(rv.commits ?? []).map((c) => (
               <li key={c.sha} className="grid gap-0.5 px-2 py-1.5">
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <Ident copy className="text-muted-foreground">
+                  <Ident copy value={c.sha} className="text-muted-foreground">
                     {short(c.sha)}
                   </Ident>
                   <span className="truncate font-medium">{c.subject}</span>

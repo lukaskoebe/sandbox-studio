@@ -6,15 +6,18 @@ import { cn } from "@/lib/utils"
 
 /**
  * An identifier in monospace: a host, port, sandbox or template ID, path or command. Long
- * values wrap rather than widen their container. With `copy`, a button copies the value.
+ * values wrap rather than widen their container. With `copy`, a button copies the value, or
+ * `value` when the shown text is shorter, such as a short commit SHA.
  */
 export function Ident({
   children,
   copy = false,
+  value = children,
   className,
 }: {
   children: string
   copy?: boolean
+  value?: string
   className?: string
 }) {
   return (
@@ -30,8 +33,8 @@ export function Ident({
           variant="ghost"
           size="icon-xs"
           title="Copy"
-          aria-label={`Copy ${children}`}
-          onClick={() => copyValue(children)}
+          aria-label={`Copy ${value}`}
+          onClick={() => copyValue(value)}
         >
           <CopyIcon />
         </Button>
