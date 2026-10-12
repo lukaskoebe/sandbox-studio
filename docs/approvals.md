@@ -42,4 +42,5 @@ There is no allow-once for network requests: an answer is a rule (or a dismissal
 - New approvals raise a browser notification (Notification API) once the user allows it.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
-  side by side, chat permission options.
+  side by side, chat permission options. Every card names its kind in a chip and marks the
+  kind's area with a colored left edge ([UI style](design/ui-style.md#primitives)).
