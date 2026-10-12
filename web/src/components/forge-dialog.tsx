@@ -113,10 +113,12 @@ export function HostKeyCheck({
 
 function useInvalidateForges() {
   const queryClient = useQueryClient()
-  return () =>
+  return () => {
     queryClient.invalidateQueries({
       queryKey: ["get", "/api/environments/{env}/forges"],
     })
+    queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
+  }
 }
 
 async function copy(text: string) {

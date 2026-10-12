@@ -122,6 +122,11 @@ function ProviderForm({
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/secrets"],
         })
+        // The first provider brings the default teammate, and both are steps of the setup.
+        queryClient.invalidateQueries({
+          queryKey: ["get", "/api/environments/{env}/teammates"],
+        })
+        queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
         onDone()
         return
       }

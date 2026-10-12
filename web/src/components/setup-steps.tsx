@@ -258,10 +258,12 @@ function SandboxStep({ env }: { env: string }) {
   })
   const [name, setName] = useState("")
   const create = $api.useMutation("post", "/api/environments/{env}/sandboxes", {
-    onSuccess: () =>
+    onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["get", "/api/environments/{env}/sandboxes"],
-      }),
+      })
+      queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
+    },
     onError: (err) =>
       toast.error("Could not create the sandbox", {
         description: errorMessage(err),

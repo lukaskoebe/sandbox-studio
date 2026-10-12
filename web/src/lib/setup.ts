@@ -59,9 +59,14 @@ export async function setupOnFirstLoad(queryClient: QueryClient, env: string) {
  */
 export function useSetup(env: string) {
   const queryClient = useQueryClient()
-  const query = $api.useQuery("get", "/api/setup", {
-    params: { query: { env } },
-  })
+  // Each read runs the host checks, so the answer is kept for a while; the steps that change
+  // it invalidate it.
+  const query = $api.useQuery(
+    "get",
+    "/api/setup",
+    { params: { query: { env } } },
+    { staleTime: 30_000 }
+  )
   const update = $api.useMutation("put", "/api/setup", {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] }),

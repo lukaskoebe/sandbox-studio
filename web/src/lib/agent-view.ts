@@ -9,8 +9,11 @@ export function useAgentView() {
   const queryClient = useQueryClient()
   const query = $api.useQuery("get", "/api/settings/ui")
   const set = $api.useMutation("put", "/api/settings/ui", {
-    onSuccess: (data) =>
-      queryClient.setQueryData(["get", "/api/settings/ui"], data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["get", "/api/settings/ui"], data)
+      // A chosen work mode is a step of the guided setup.
+      queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
+    },
   })
   const view: AgentView | undefined = query.data
     ? query.data.asked

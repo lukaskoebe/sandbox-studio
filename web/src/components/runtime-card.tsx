@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import {
   ArrowClockwiseIcon,
   CheckCircleIcon,
@@ -36,6 +37,7 @@ export function RuntimeCard() {
 
 /** The host checks with their fixes, and a button to run them again. */
 export function HostChecks() {
+  const queryClient = useQueryClient()
   const doctor = $api.useQuery("get", "/api/system/doctor", undefined, {
     staleTime: 60_000,
   })
@@ -47,7 +49,11 @@ export function HostChecks() {
           size="sm"
           variant="outline"
           disabled={doctor.isFetching}
-          onClick={() => doctor.refetch()}
+          onClick={() => {
+            doctor.refetch()
+            // The setup's host check reads the same checks.
+            queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
+          }}
         >
           {doctor.isFetching ? <Spinner /> : <ArrowClockwiseIcon />}
           Check again
