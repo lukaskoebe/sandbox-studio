@@ -19,9 +19,11 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
       expect(row(title)).toHaveAttribute("aria-expanded", "true")
     const next = () => page.getByRole("button", { name: "Next", exact: true })
 
-    // Host check: it passes on some machines and not on others. Either way the step can go.
-    await open("Host check")
-    await page.getByRole("button", { name: /^(Skip|Next)$/ }).click()
+    // Host check: done where the checks pass, as on a machine with the runtime; where they fail,
+    // the step waits for a skip.
+    await expect(row("Host check")).toBeVisible()
+    if ((await row("Host check").getAttribute("aria-expanded")) === "true")
+      await page.getByRole("button", { name: "Skip", exact: true }).click()
 
     // Work mode: the choice is saved as it is made, which makes the step done.
     await open("Work mode")

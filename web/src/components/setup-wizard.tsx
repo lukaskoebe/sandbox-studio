@@ -4,8 +4,14 @@ import { CheckIcon, MinusIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { SetupStepBody } from "@/components/setup-steps"
-import { errorMessage } from "@/lib/api/client"
-import { doneSteps, firstOpenStep, setupSteps, useSetup } from "@/lib/setup"
+import { errorMessage, type Setup } from "@/lib/api/client"
+import {
+  doneSteps,
+  firstOpenStep,
+  setupSteps,
+  useSetup,
+  type SetupSteps,
+} from "@/lib/setup"
 import { cn } from "@/lib/utils"
 
 type Outcome = "done" | "skipped"
@@ -18,13 +24,11 @@ const outcomeWords: Record<Outcome | "todo", string> = {
 
 /**
  * The guided setup as a vertical stepper. Each step is a row; the open one shows its body and
- * the buttons to move on. Steps are skippable and resumable: the first step without an outcome
- * opens first, and any row can be picked.
+ * the buttons to move on. Steps are skippable and resumable: the setup opens on the first step
+ * without an outcome, and any row can be picked.
  */
 export function SetupWizard({ env }: { env: string }) {
-  const navigate = useNavigate()
   const { setup, record, saving, isPending, error } = useSetup(env)
-  const [picked, setPicked] = useState<number>()
   if (!setup)
     return isPending ? (
       <Spinner className="mx-auto block" />
@@ -33,15 +37,33 @@ export function SetupWizard({ env }: { env: string }) {
         {error ? errorMessage(error) : "The setup could not be loaded."}
       </p>
     )
+  return <Stepper env={env} setup={setup} record={record} saving={saving} />
+}
 
-  const current = picked ?? firstOpenStep(setup)
+/**
+ * The steps as they were when the setup loaded. The open step stays put while the page
+ * changes the outcomes, so a step's own buttons remain until the user moves on.
+ */
+function Stepper({
+  env,
+  setup,
+  record,
+  saving,
+}: {
+  env: string
+  setup: Setup
+  record: (steps: SetupSteps) => void
+  saving: boolean
+}) {
+  const navigate = useNavigate()
+  const [current, setCurrent] = useState(() => firstOpenStep(setup))
   const last = setupSteps.length - 1
   // Records the step's outcome with the others as they stand. The last step ends the setup on
   // Home; any other moves to the next row.
   const finish = (i: number, outcome: Outcome) => {
     record({ ...setup.steps, [setupSteps[i].key]: outcome })
     if (i === last) navigate({ to: "/e/$env", params: { env } })
-    else setPicked(i + 1)
+    else setCurrent(i + 1)
   }
 
   return (
@@ -66,7 +88,7 @@ export function SetupWizard({ env }: { env: string }) {
               <button
                 type="button"
                 aria-expanded={open}
-                onClick={() => setPicked(i)}
+                onClick={() => setCurrent(i)}
                 className="flex w-full items-center gap-3 rounded-lg p-3 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/30"
               >
                 <Mark n={i + 1} outcome={outcome} />
@@ -80,7 +102,7 @@ export function SetupWizard({ env }: { env: string }) {
                   <SetupStepBody step={step.key} env={env} />
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {i > 0 && (
-                      <Button variant="ghost" onClick={() => setPicked(i - 1)}>
+                      <Button variant="ghost" onClick={() => setCurrent(i - 1)}>
                         Back
                       </Button>
                     )}
