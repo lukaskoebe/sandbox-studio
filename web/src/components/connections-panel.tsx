@@ -60,12 +60,24 @@ const verdictStatus: Record<string, Status> = {
   pending: "waiting",
 }
 
-/** A connection's dot and its verdict as its word. */
-function verdictDot(conn: Connection) {
-  return {
-    status: verdictStatus[conn.verdict] ?? "stopped",
-    label: conn.verdict,
-  }
+/** A connection's dot and its verdict as its word. A failed one explains itself in a tooltip. */
+function VerdictDot({ conn }: { conn: Connection }) {
+  const dot = (
+    <StatusDot
+      status={verdictStatus[conn.verdict] ?? "stopped"}
+      label={conn.verdict}
+      className="shrink-0"
+    />
+  )
+  if (conn.verdict !== "failed" || !conn.error) return dot
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+        {dot}
+      </TooltipTrigger>
+      <TooltipContent>{conn.error}</TooltipContent>
+    </Tooltip>
+  )
 }
 
 /**
@@ -108,7 +120,7 @@ export function RecentConnections({
           key={c.id}
           className="flex min-h-(--wb-row) items-center gap-3 border-b px-3 py-1.5 text-xs last:border-b-0"
         >
-          <StatusDot {...verdictDot(c)} className="shrink-0" />
+          <VerdictDot conn={c} />
           <Ident className="min-w-0 flex-1">{hostPort(c.host, c.port)}</Ident>
           <time
             dateTime={c.started}
@@ -159,7 +171,7 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
         {list.map((c) => (
           <li key={c.id} className="grid gap-1 border-b py-2 text-xs">
             <div className="flex min-w-0 items-center gap-2">
-              <StatusDot {...verdictDot(c)} className="shrink-0" />
+              <VerdictDot conn={c} />
               <Ident className="min-w-0 flex-1">
                 {hostPort(c.host, c.port)}
               </Ident>
