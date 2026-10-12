@@ -35,7 +35,7 @@ func init() {
 			obj([]string{"url"}, map[string]any{
 				"url": str("An http or https URL", "maxLength", 4000),
 				"ephemeral": map[string]any{"type": "boolean", "description": "Open in a new ephemeral session: an empty profile whose cookies and storage are deleted on browser_close, " +
-					"after 10 minutes unused, or when your session ends. Not together with session."},
+					"after 10 minutes unused, or when the browser stops. Not together with session."},
 			})},
 		{agentproto.MethodBrowserSnapshot, "The page as an accessibility tree with element refs. Sensitive field values are redacted.",
 			obj(nil, map[string]any{"full": map[string]any{"type": "boolean", "description": "Every node, not only interactive ones"}})},
