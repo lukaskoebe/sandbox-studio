@@ -10,6 +10,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/resources"
+	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
 
 func templateForEnvironment(envID string, cacheChar string) Template {
@@ -242,6 +245,67 @@ func TestTemplateEnvironmentCascadeRemovesArtifacts(t *testing.T) {
 	}
 	if templates != 0 || artifacts != 0 {
 		t.Fatalf("environment cascade left templates=%d artifacts=%d", templates, artifacts)
+	}
+}
+
+func TestTemplateNamesNumberEachStackInCreationOrder(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, err := s.CreateEnvironment(ctx, "names")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.CreateEnvironment(ctx, "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := func(tools []templatespec.ToolPin, apt []string) string {
+		t.Helper()
+		encoded, err := templatespec.CanonicalJSON(templatespec.Spec{Resources: resources.Defaults(), Tools: tools, Apt: apt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(encoded)
+	}
+	// created_at has one-second resolution, so each test template gets its own second.
+	create := func(envID, spec string, cacheChar string, createdAt int64) string {
+		t.Helper()
+		in := templateForEnvironment(envID, cacheChar)
+		in.Spec = spec
+		created, err := s.CreateTemplate(ctx, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.DB().ExecContext(ctx, "UPDATE templates SET created_at = ? WHERE id = ?", createdAt, created.ID); err != nil {
+			t.Fatal(err)
+		}
+		return created.ID
+	}
+	node := []templatespec.ToolPin{{Name: "node", Version: "22"}, {Name: "python", Version: "3.13"}}
+	nodeFirst := create(env.ID, canonical(node, nil), "1", 1)
+	base := create(env.ID, canonical(nil, nil), "2", 2)
+	nodeSecond := create(env.ID, canonical(node, []string{"git"}), "3", 3)
+	create(env.ID, templateForEnvironment(env.ID, "4").Spec, "4", 4)
+	otherNode := create(other.ID, canonical(node, nil), "5", 1)
+
+	names, err := s.TemplateNames(ctx, env.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{nodeFirst: "node-22+python-3.13@1", base: "base@1", nodeSecond: "node-22+python-3.13@2"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("TemplateNames() = %v, want %v", names, want)
+	}
+	otherNames, err := s.TemplateNames(ctx, other.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if otherNames[otherNode] != "node-22+python-3.13@1" || len(otherNames) != 1 {
+		t.Fatalf("other environment names = %v", otherNames)
 	}
 }
 

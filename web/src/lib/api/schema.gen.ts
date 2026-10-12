@@ -945,7 +945,7 @@ export interface paths {
         put?: never;
         /**
          * Create a disk checkpoint
-         * @description Stop the sandbox first; checkpoint capture requires a stopped sandbox.
+         * @description Captures the disks of a running or stopped sandbox. A running sandbox is frozen while its filesystems are flushed; one created with systemd as its init must be stopped first.
          */
         post: operations["createCheckpoint"];
         delete?: never;
@@ -2619,6 +2619,8 @@ export interface components {
              */
             createdAt: string;
             id: string;
+            /** @description The template's display name; empty for sandboxes without one, or for a template that is gone */
+            name?: string;
             sandboxes: components["schemas"]["LineageTreeNode"][] | null;
         };
         LineageTree: {
@@ -3161,6 +3163,8 @@ export interface components {
             createdAt: string;
             environmentId: string;
             id: string;
+            /** @description The display name: the template's stack and version, such as node-22+python-3.13@2 */
+            name: string;
             platform: string;
             resources: components["schemas"]["Resources"];
         };
@@ -3383,6 +3387,8 @@ export interface components {
             name: string;
             /** @description The create or fork that runs or failed */
             progress?: components["schemas"]["Progress"];
+            /** Format: date-time */
+            startedAt?: string;
             /**
              * @description The VM's runtime status; creating or failed while a create or fork runs or after it failed
              * @enum {string}
@@ -3391,6 +3397,8 @@ export interface components {
             /** @description The teammate that owns the sandbox; empty for unowned sandboxes */
             teammateId?: string;
             templateId?: string;
+            /** @description The display name of the template the sandbox runs, such as node-22+python-3.13@2 */
+            templateName?: string;
             /** Format: int64 */
             workspaceMiB: number;
         };

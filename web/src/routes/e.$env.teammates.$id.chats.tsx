@@ -40,7 +40,13 @@ function TeammateChats() {
         actions={
           <Button
             size="sm"
-            render={<Link to="/e/$env/chats/new" params={{ env }} />}
+            render={
+              <Link
+                to="/e/$env/chats/new"
+                params={{ env }}
+                search={{ teammate: id }}
+              />
+            }
           >
             <PlusIcon />
             New chat

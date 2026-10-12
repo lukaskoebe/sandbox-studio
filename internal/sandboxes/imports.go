@@ -312,6 +312,7 @@ func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.
 	if err := rt.Boot(ctx, VMName(rec)); err != nil {
 		return err
 	}
+	m.markStarted(ctx, rec)
 	if err := m.Store.FinishSandboxImport(ctx, rec.EnvironmentID, imp.ID, store.ImportReady, ""); err != nil {
 		return errImportCancelled
 	}

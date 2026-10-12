@@ -87,6 +87,7 @@ type LineageTree struct {
 // LineageTemplate groups the sandboxes of one template. ID is empty for sandboxes without one.
 type LineageTemplate struct {
 	ID        string            `json:"id"`
+	Name      string            `json:"name,omitempty" doc:"The template's display name; empty for sandboxes without one, or for a template that is gone"`
 	CreatedAt time.Time         `json:"createdAt" doc:"When the template was built; zero if it no longer exists"`
 	Sandboxes []LineageTreeNode `json:"sandboxes"`
 }
@@ -210,6 +211,10 @@ func (m *Manager) LineageTree(ctx context.Context, envID string) (LineageTree, e
 	if err != nil {
 		return LineageTree{}, err
 	}
+	names, err := m.Store.TemplateNames(ctx, envID)
+	if err != nil {
+		return LineageTree{}, err
+	}
 
 	type entry struct {
 		node     LineageNode
@@ -269,7 +274,7 @@ func (m *Manager) LineageTree(ctx context.Context, envID string) (LineageTree, e
 	})
 	out := LineageTree{Templates: []LineageTemplate{}}
 	for _, id := range ids {
-		group := LineageTemplate{ID: id, CreatedAt: createdAt[id], Sandboxes: []LineageTreeNode{}}
+		group := LineageTemplate{ID: id, Name: names[id], CreatedAt: createdAt[id], Sandboxes: []LineageTreeNode{}}
 		for _, i := range roots[id] {
 			group.Sandboxes = append(group.Sandboxes, build(i))
 		}
@@ -280,6 +285,7 @@ func (m *Manager) LineageTree(ctx context.Context, envID string) (LineageTree, e
 
 // RenameCheckpoint gives a ready checkpoint another name. Its disks are not touched.
 func (m *Manager) RenameCheckpoint(ctx context.Context, envID, id, checkpointID, name string) (store.Checkpoint, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return store.Checkpoint{}, err
 	}

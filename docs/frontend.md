@@ -13,7 +13,10 @@ binary embeds (`//go:embed`) and serves at `/`.
   `src/routeTree.gen.ts`.
 - Data: `openapi-fetch` and `openapi-react-query` over the types generated from Studio's
   OpenAPI document (`src/lib/api`, see [API](api.md)). `src/hooks/use-events.ts` subscribes
-  to `/api/events` and invalidates the affected queries.
+  to `/api/events` and invalidates the affected queries. Lineage views don't poll: every
+  sandbox start, stop, suspend, resume, rebase, checkpoint change and history change
+  publishes on the `sandboxes` topic. A VM that stops on its own publishes nothing, so its
+  lineage status updates at the next change or reload.
 - Terminals: xterm.js. Editors: CodeMirror (YAML specs, Caddyfiles). Toasts: sonner.
 - Theme: the design tokens are in `src/styles.css` (the Workbench theme, see
   [design/ui-style.md](design/ui-style.md)). `src/lib/theme.ts` applies the system, light or
@@ -30,7 +33,7 @@ to an environment.
 | `/e/$env` | Home: the environment at a glance (the sandbox table with the approvals waiting on each, the family tree, the approvals and teammates), create, import |
 | `/e/$env/sandboxes/$id` | one sandbox's dashboard: status, owner, resources, ports, recent connections, checkpoints, chats and terminal sessions (each opens in the workspace), and its history (lineage timeline) |
 | `/e/$env/sandboxes/$id/work` | its workspace: terminal tabs and chats in one strip, the picked one in full, and one side panel. `?terminal=` and `?chat=` pick a tab; `?panel=` names the open panel (browser, connections or files) |
-| `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)) |
+| `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
 | `/e/$env/network/rules`, `/requests`, `/activity` | network rules (filters in the URL, grouped by registrable domain), requests waiting for a decision, decided requests; `/e/$env/network` opens requests when any wait, else rules |
 | `/e/$env/secrets` | secrets |
 | `/e/$env/memory` | shared memory: pages, facts, conflicts, search, sessions |

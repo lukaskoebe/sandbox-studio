@@ -64,7 +64,8 @@ type Manager struct {
 	// Forget removes host-side state kept for a sandbox elsewhere (git staging repos) once
 	// it is deleted; nil keeps none.
 	Forget func(envID, id string) error
-	// Bus, if set, gets an events.TopicSandboxes notice whenever a create or fork moves on.
+	// Bus, if set, gets an events.TopicSandboxes notice whenever a sandbox changes: its
+	// lifecycle, checkpoints, rebases, forks or history.
 	Bus *events.Bus
 
 	opsMu sync.Mutex
@@ -113,6 +114,7 @@ type View struct {
 	CheckpointRestoreSupported bool           `json:"checkpointRestoreSupported"`
 	Agent                      *AgentInfo     `json:"agent,omitempty"`
 	Progress                   *Progress      `json:"progress,omitempty" doc:"The create or fork that runs or failed"`
+	TemplateName               string         `json:"templateName,omitempty" doc:"The display name of the template the sandbox runs, such as node-22+python-3.13@2"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -366,6 +368,7 @@ func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved r
 		if err != nil {
 			return m.removeFailedVM(ctx, rec, err, image != nil)
 		}
+		m.markStarted(ctx, rec)
 		m.recordEvent(ctx, eventFor(rec, store.EventCreate))
 		return nil
 	})
@@ -488,19 +491,24 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 	if err != nil {
 		return nil, err
 	}
+	names, err := m.Store.TemplateNames(ctx, envID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]View, 0, len(recs))
 	for _, rec := range recs {
 		st, ok := statuses[VMName(rec)]
 		if !ok {
 			st = runtime.StatusAbsent
 		}
-		out = append(out, m.withAgent(View{Sandbox: rec, Status: st}))
+		out = append(out, m.withAgent(View{Sandbox: rec, Status: st, TemplateName: names[rec.TemplateID]}))
 	}
 	return out, nil
 }
 
 // Start boots a stopped sandbox.
 func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -537,11 +545,12 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	if err := m.Runtime.Start(ctx, VMName(rec)); err != nil {
 		return View{}, err
 	}
-	return m.view(ctx, rec)
+	return m.view(ctx, m.markStarted(ctx, rec))
 }
 
 // Stop shuts a sandbox down. Its disks and catalog record are kept.
 func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -702,7 +711,26 @@ func (m *Manager) view(ctx context.Context, rec store.Sandbox) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	return m.withAgent(View{Sandbox: rec, Status: st}), nil
+	name := ""
+	if rec.TemplateID != "" {
+		names, err := m.Store.TemplateNames(ctx, rec.EnvironmentID)
+		if err != nil {
+			return View{}, err
+		}
+		name = names[rec.TemplateID]
+	}
+	return m.withAgent(View{Sandbox: rec, Status: st, TemplateName: name}), nil
+}
+
+// markStarted records that rec's VM has just started, and returns rec with that time. A
+// failed write is logged: the VM runs either way, and only its uptime is lost.
+func (m *Manager) markStarted(ctx context.Context, rec store.Sandbox) store.Sandbox {
+	now := time.Now()
+	if err := m.Store.MarkSandboxStarted(ctx, rec.EnvironmentID, rec.ID, now); err != nil {
+		m.Log.Warn("record sandbox start", "sandbox", rec.ID, "err", err)
+	}
+	rec.StartedAt = &now
+	return rec
 }
 
 func (m *Manager) withAgent(v View) View {

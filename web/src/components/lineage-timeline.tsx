@@ -90,9 +90,7 @@ export function LineageTimeline({
   const lineage = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/lineage",
-    path,
-    // Checkpoints send no change event, so the history also refreshes on a timer.
-    { refetchInterval: 5000 }
+    path
   )
   const sandbox = $api.useQuery(
     "get",

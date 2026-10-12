@@ -23,3 +23,29 @@ func TestDeleteForgetsHostState(t *testing.T) {
 		t.Fatalf("forgot %v", forgot)
 	}
 }
+
+func TestStartRecordsWhenTheVMStarted(t *testing.T) {
+	f := newCheckpointFixture(t)
+	if f.sandbox.StartedAt != nil {
+		t.Fatalf("new sandbox StartedAt = %v, want none", f.sandbox.StartedAt)
+	}
+	started, err := f.manager.Start(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := f.store.Sandbox(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.StartedAt == nil || stored.StartedAt == nil || stored.StartedAt.Unix() != started.StartedAt.Unix() {
+		t.Fatalf("StartedAt: view %v, stored %v", started.StartedAt, stored.StartedAt)
+	}
+	// A stop keeps the time: it is when the VM last started, not whether it runs now.
+	stopped, err := f.manager.Stop(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stopped.StartedAt == nil || stopped.StartedAt.Unix() != started.StartedAt.Unix() {
+		t.Fatalf("stopped view StartedAt = %v, want %v", stopped.StartedAt, started.StartedAt)
+	}
+}

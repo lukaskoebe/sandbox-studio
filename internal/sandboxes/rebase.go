@@ -18,6 +18,7 @@ import (
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
 // catalog switches, any failure removes the new VM and returns the source to its state.
 func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -95,6 +96,9 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 		}
 		// The switch may have taken effect. Recovery finishes it; the target is never removed.
 		return View{}, errors.Join(err, readErr)
+	}
+	if wasRunning {
+		target = m.markStarted(ctx, target)
 	}
 	cleanupCtx, cancel := cleanupContext(ctx)
 	err = m.Runtime.Remove(cleanupCtx, VMName(sb))
@@ -182,6 +186,7 @@ func (m *Manager) rollbackRebase(ctx context.Context, sb store.Sandbox, op store
 	if err := m.Runtime.Start(cleanupCtx, VMName(current)); err != nil {
 		return errors.Join(cause, fmt.Errorf("source restart failed: %w", err))
 	}
+	m.markStarted(cleanupCtx, current)
 	return cause
 }
 

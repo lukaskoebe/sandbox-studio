@@ -66,6 +66,11 @@ See [network](network.md) for what happens at the gateway.
 Runtime statuses: `absent`, `created`, `starting`, `running`, `draining`, `suspended`,
 `stopped`, `crashed`. The API adds `creating` and `failed` for a create or fork (below).
 
+A sandbox view's `startedAt` is when its VM last started: a create, fork, template create,
+import, transfer, rebase, start or resume that Studio completed. It is kept in the catalog,
+so Studio restarts don't change it, and it stays after a stop. Show uptime only while the
+sandbox runs. Sandboxes started before this field existed have none until their next start.
+
 ## Creation progress
 
 A create, a create from a template and a fork return at once with the sandbox in state

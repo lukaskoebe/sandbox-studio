@@ -85,7 +85,7 @@ func TestTemplateAPIExposesOnlyReadyScopedPublicFields(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &views); err != nil || list.Code != http.StatusOK {
 		t.Fatalf("list templates: status=%d body=%s err=%v", list.Code, list.Body, err)
 	}
-	if len(views) != 1 || views[0].ID != ready.ID || views[0].EnvironmentID != env.ID || views[0].Platform != ready.Platform ||
+	if len(views) != 1 || views[0].ID != ready.ID || views[0].Name != "base@1" || views[0].EnvironmentID != env.ID || views[0].Platform != ready.Platform ||
 		views[0].Resources.CPUs != 3 || views[0].Resources.DockerMiB != 12288 {
 		t.Fatalf("template list = %+v", views)
 	}

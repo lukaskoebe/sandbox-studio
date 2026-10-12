@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
+	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -149,6 +150,47 @@ func TestRestoreCheckpointKeepsTheSandboxEgress(t *testing.T) {
 	if want := (fakeEgress{}).egress(f.sandbox.ID); f.runtime.restoredEgress != want {
 		t.Fatalf("restored with egress %+v; want the sandbox's %+v", f.runtime.restoredEgress, want)
 	}
+}
+
+// Checkpoint changes are what the lineage shows, and clients refetch on the sandboxes topic
+// instead of polling, so each one must publish.
+func TestCheckpointChangesPublishSandboxEvents(t *testing.T) {
+	f := newCheckpointFixture(t)
+	f.runtime.setStatus(VMName(f.sandbox), runtime.StatusStopped)
+	f.manager.Bus = &events.Bus{}
+	subscription, unsubscribe := f.manager.Bus.Subscribe()
+	defer unsubscribe()
+	published := func(action string) {
+		t.Helper()
+		n := 0
+		for drained := false; !drained; {
+			select {
+			case e := <-subscription:
+				if e.Topic == events.TopicSandboxes && e.ID == f.sandbox.ID {
+					n++
+				}
+			default:
+				drained = true
+			}
+		}
+		if n == 0 {
+			t.Fatalf("%s published no sandboxes event", action)
+		}
+	}
+
+	checkpoint, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	published("create checkpoint")
+	if _, err := f.manager.RenameCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, checkpoint.ID, "second"); err != nil {
+		t.Fatal(err)
+	}
+	published("rename checkpoint")
+	if err := f.manager.DeleteCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, checkpoint.ID); err != nil {
+		t.Fatal(err)
+	}
+	published("delete checkpoint")
 }
 
 func TestCheckpointCreationRequiresRunningOrStoppedGuest(t *testing.T) {

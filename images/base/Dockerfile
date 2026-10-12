@@ -24,8 +24,13 @@ RUN apt-get update \
     && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# mise manages per-sandbox language toolchains declared in the sandbox spec.
-RUN curl -fsSL https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh
+# mise manages per-sandbox language toolchains declared in the sandbox spec. The installer is
+# saved before it runs: piped into sh, a failed download would still succeed, because RUN's
+# /bin/sh has no pipefail.
+RUN curl -fsSL https://mise.run -o /tmp/mise-install.sh \
+    && MISE_INSTALL_PATH=/usr/local/bin/mise sh /tmp/mise-install.sh \
+    && rm /tmp/mise-install.sh \
+    && /usr/local/bin/mise --version
 
 # Node LTS from the official tarball, checked against its published sha256, and the agent
 # harnesses pinned to exact versions (docs/harnesses.md). They live in /usr/local, owned by

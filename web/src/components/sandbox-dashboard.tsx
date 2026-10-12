@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import {
   ArrowSquareOutIcon,
@@ -28,7 +28,7 @@ import { $api, isReady, type Sandbox } from "@/lib/api/client"
 import { chatStateLabels, chatTitle } from "@/lib/chats"
 import { harnessLabels } from "@/lib/teammates"
 import { onStudioMachine, openPreviewTab } from "@/lib/previews"
-import { formatAge } from "@/lib/utils"
+import { formatAge, formatUptime } from "@/lib/utils"
 
 /**
  * A sandbox at a glance: its facts, then its ports, connections, history, checkpoints, chats
@@ -121,6 +121,12 @@ export function SandboxDashboard() {
 /** The status, owner, template, resources, age and ID of a sandbox, with its start and stop. */
 function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const p = phase(sb)
+  // Uptime is relative to now, so the clock is read again every minute.
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
   const note =
     p === "stopped"
       ? "Your workspace, home directory and Docker images are kept."
@@ -143,7 +149,9 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           )}
         </Fact>
         <Fact label="Template">
-          <span className="font-mono">{sb.templateId ?? "None"}</span>
+          <span className="font-mono">
+            {sb.templateName ?? sb.templateId ?? "None"}
+          </span>
         </Fact>
         <Fact label="Resources">
           <span
@@ -153,6 +161,9 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
             {formatMiB(sb.workspaceMiB)} workspace
           </span>
         </Fact>
+        {p === "ready" && sb.startedAt && (
+          <Fact label="Status">{formatUptime(sb.startedAt, now)}</Fact>
+        )}
         <Fact label="Created">
           <time
             dateTime={sb.createdAt}

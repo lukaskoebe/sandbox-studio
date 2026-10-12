@@ -22,8 +22,19 @@ import { $api, errorMessage, fetchClient, isReady } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/chats/new")({
   component: NewChatPage,
-  validateSearch: (s: Record<string, unknown>): { sandbox?: string } =>
-    typeof s.sandbox === "string" ? { sandbox: s.sandbox } : {},
+  // teammate and sandbox preselect; origin=workspace opens the new chat in the sandbox's
+  // workspace instead of the chat page.
+  validateSearch: (s: Record<string, unknown>) => {
+    const search: {
+      sandbox?: string
+      teammate?: string
+      origin?: "workspace"
+    } = {}
+    if (typeof s.sandbox === "string") search.sandbox = s.sandbox
+    if (typeof s.teammate === "string") search.teammate = s.teammate
+    if (s.origin === "workspace") search.origin = "workspace"
+    return search
+  },
 })
 
 /**
@@ -44,8 +55,16 @@ function NewChatPage() {
   // Chats talk to the sandbox's owner, so only owned sandboxes qualify.
   const owned = (sandboxes.data ?? []).filter((s) => s.teammateId)
   const [picked, setPicked] = useState(search.sandbox ?? "")
+  // A teammate's chat goes to one of its sandboxes: the ready one, else the first.
+  const teammateSandboxes = owned.filter(
+    (s) => s.teammateId === search.teammate
+  )
   const sandbox =
-    owned.find((s) => s.id === picked) ?? owned.find(isReady) ?? owned.at(0)
+    owned.find((s) => s.id === picked) ??
+    teammateSandboxes.find(isReady) ??
+    teammateSandboxes.at(0) ??
+    owned.find(isReady) ??
+    owned.at(0)
   const owner = teammates.data?.find((t) => t.id === sandbox?.teammateId)
   const [error, setError] = useState<string>()
 
@@ -63,11 +82,20 @@ function NewChatPage() {
     void queryClient.invalidateQueries({
       queryKey: ["get", "/api/environments/{env}/chats"],
     })
-    void navigate({
-      to: "/e/$env/chats/$chat",
-      params: { env, chat: res.data.id },
-      replace: true,
-    })
+    if (search.origin === "workspace") {
+      void navigate({
+        to: "/e/$env/sandboxes/$id/work",
+        params: { env, id: sandbox.id },
+        search: { chat: res.data.id },
+        replace: true,
+      })
+    } else {
+      void navigate({
+        to: "/e/$env/chats/$chat",
+        params: { env, chat: res.data.id },
+        replace: true,
+      })
+    }
     return true
   }
 
