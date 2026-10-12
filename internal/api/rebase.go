@@ -23,7 +23,7 @@ func (s *Server) registerTransfers(api huma.API) {
 		OperationID: "rebaseSandbox", Method: http.MethodPost,
 		Path: "/api/environments/{env}/sandboxes/{id}/rebase", Tags: []string{"sandboxes"},
 		Summary: "Move a sandbox onto another template",
-		Description: "Copies /workspace into a new VM built from the template, with the template's resources. " +
+		Description: "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. " +
 			"Docker images, containers and volumes are lost. Tmux sessions end. " +
 			"A running sandbox is stopped for the copy and started again; a stopped one stays stopped. " +
 			"If the rebase fails, the sandbox stays on its old template in the state it was in.",
@@ -45,7 +45,7 @@ func (s *Server) registerTransfers(api huma.API) {
 		OperationID: "forkSandbox", Method: http.MethodPost,
 		Path: "/api/environments/{env}/sandboxes/{id}/fork", Tags: []string{"sandboxes"},
 		Summary: "Copy a sandbox into a new one",
-		Description: "Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. " +
+		Description: "Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. " +
 			"Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *forkIn) (*sandboxOut, error) {
