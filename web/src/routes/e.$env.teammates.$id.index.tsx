@@ -110,7 +110,7 @@ function TeammateOverview() {
         description="Personality and working rules, in markdown."
       >
         {t.soul ? (
-          <pre className="font-mono text-xs/relaxed whitespace-pre-wrap">
+          <pre className="font-mono text-xs/relaxed break-words whitespace-pre-wrap">
             {t.soul}
           </pre>
         ) : (
