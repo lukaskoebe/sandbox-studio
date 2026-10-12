@@ -12,7 +12,7 @@ The first time you open Studio, it asks **How do you want to work with agents?**
 - **Chat** (recommended): write to your teammates, see what they do, and approve risky steps with a click.
 - **Terminal**: run each agent's own command-line app in the sandbox, as a developer would.
 
-Closing the dialog without choosing picks Chat. You can change it any time under **Settings → Agents**. The choice only decides what a sandbox page offers first: with Chat, **New chat** comes before the agent sessions; with Terminal, the agent sessions come first. Both stay available either way.
+Closing the dialog without choosing picks Chat. You can change it any time under **Settings → Agents**. The choice only decides what a sandbox workspace shows first: with Chat, its latest chat; with Terminal, its terminals. Both stay one click away in the workspace strip either way.
 
 ## What chats need
 
@@ -26,12 +26,12 @@ A chat talks to the teammate that owns a sandbox, so you need:
 
 ## Start a chat
 
-Open **Chats** in the sidebar and choose **New chat**, or choose **New chat** on a sandbox page. Pick the sandbox at the top, write what the teammate should do, and send. The chat starts with that first message, so there are no empty chats.
+Open **Chats** in the sidebar and choose **New chat**, or choose **New chat** on a sandbox's dashboard or in its workspace. Pick the sandbox at the top, write what the teammate should do, and send. The chat starts with that first message, so there are no empty chats.
 
 - **Enter** sends; **Shift+Enter** starts a new line.
 - Use the paperclip to attach files, up to 10 MiB per message in total.
 - While the teammate works, **Stop** ends the current request. You can write your next message meanwhile and send it once the teammate is done.
-- The agent may give the chat a title as it goes. **Chats** lists every chat of the environment; a sandbox page lists its own under **Chats**.
+- The agent may give the chat a title as it goes. **Chats** lists every chat of the environment; a sandbox lists its own on its dashboard and in its workspace.
 
 The chat shows the agent's replies, what it is thinking, the tools it runs (expand a card to see details such as edits and output), and its plan as a checklist while it works. Under each finished request you see how many files it changed and, if the agent reports it, tokens, cost, and how full its memory is.
 
@@ -67,7 +67,7 @@ Studio keeps undo for the newest 50 requests of a chat; older ones lose their Un
 
 ## Changes, Files, and Preview
 
-The panel next to the chat shows the sandbox at a glance. Use the panel button at the top right of a chat to show or hide it; on small screens it opens over the chat.
+The panel next to the chat shows the sandbox at a glance. Use the panel button at the top right of a chat to show or hide it. Drag its left edge to resize it on a desktop; on small screens it fills the screen.
 
 - **Changes:** the files one request created, changed, or deleted, with the lines added and removed. Pick the request at the top, or choose **Changed N files** under a message. Expand a file to see its changes. The changes compare the files before and after that request, so they stay accurate after later edits. Very long changes are cut, and non-text files are only listed. Once a request can no longer be undone, its list of files remains but the line-by-line details are gone.
 - **Files:** a read-only view of `/workspace`. Open folders, view text files, and see PNG, JPEG, GIF, and WebP images. Files over 1 MiB, other file types, and files the agent can't read are listed but not shown. Files changed by the request selected in Changes are marked. Folders show at most 1,000 items. To change a file, ask your teammate, so undo stays accurate.
@@ -75,7 +75,7 @@ The panel next to the chat shows the sandbox at a glance. Use the panel button a
 
 ## Open in the terminal and back
 
-Choose **Open in terminal** at the top of a chat to continue the same conversation in the agent's own terminal app. Studio opens the sandbox page on that terminal, and the agent keeps the conversation so far.
+Choose **Open in terminal** at the top of a chat to continue the same conversation in the agent's own terminal app. Studio opens the sandbox workspace on that terminal, and the agent keeps the conversation so far.
 
 While the chat is in the terminal, it is read-only and shows **Back to chat**. Choose it to end the terminal app and continue in the chat; what happened in the terminal shows up in the chat, marked "Continued in the terminal". Exiting the terminal app yourself doesn't bring the chat back. Open in terminal is available when the teammate isn't working.
 

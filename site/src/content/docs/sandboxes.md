@@ -18,11 +18,13 @@ You can create a blank sandbox or choose a ready template from the Builds page. 
 
 ## Work in a terminal
 
-Open a sandbox from the sidebar to see its terminal. Terminals run inside the sandbox at `/workspace`. You can open additional terminal tabs, run a shell yourself, or start the selected teammate's agent session. Docker runs inside the sandbox and uses its persistent Docker disk.
+Open a sandbox from the sidebar to see its dashboard: its status, ports, recent connections, checkpoints, chats, and terminals. Choose **Workspace** in its header to work in it. Terminals run inside the sandbox at `/workspace`. Use **+** in the tab strip to open an additional terminal, run a shell yourself, or start the selected teammate's agent session with **Start session**. The sandbox's chats open in the same strip. Docker runs inside the sandbox and uses its persistent Docker disk.
 
 ![A terminal open at /workspace in a running sandbox](../../assets/screenshots/sandbox-terminal.jpg)
 
 ## Stop, suspend, and resume
+
+Start and stop are on the dashboard. The options menu (**⋯**, on both pages) has these actions:
 
 | Action | What it does |
 | --- | --- |
@@ -30,14 +32,18 @@ Open a sandbox from the sidebar to see its terminal. Terminals run inside the sa
 | **Suspend** | Pauses a running VM with its memory and processes. **Resume** continues it, including terminal sessions. Suspended memory does not survive a host reboot. |
 | **Delete** | Permanently removes the sandbox and its disks. Export the sandbox first if you need a portable backup. |
 
+## Side panels
+
+In the workspace, **Browser**, **Connections**, and **Files** open a panel beside the terminal or chat. **Connections** lists where the sandbox connects. **Files** shows the sandbox's files, the changes of its chats, and its running apps. Drag the panel's left edge to resize it on a desktop; on a phone it fills the screen. Close it with its close button or Escape.
+
 Rebasing changes the template and carries over `/workspace` and the home directory; Docker data and terminal sessions are not carried over. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
 
 ## Open a preview
 
-If a web server is listening on a sandbox port, open **Previews** in the sandbox toolbar and choose the port. Studio opens a host-scoped `.localhost` link through the agent channel. The link is meant for the browser on the machine running Studio.
+If a web server is listening on a sandbox port, open **Previews** in the workspace toolbar and choose the port. The dashboard lists the ports too, each with **Open**. Studio opens a host-scoped `.localhost` link through the agent channel. The link is meant for the browser on the machine running Studio.
 
 Studio removes its own authentication cookies before forwarding preview requests and filters Studio cookies from preview responses. The preview app's own cookies are retained. Preview links do not expose the sandbox to your LAN.
 
 ## Export a workspace
 
-Use **Export** to save a `.studio-sandbox` file that can be imported in another environment or Studio install. It contains the template specification, resource settings, `/workspace`, and the home directory (`/home/agent`), which holds your agent's sessions and anything you saved there. Read the home directory before you share the file. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).
+Use **Export** in the options menu to save a `.studio-sandbox` file that can be imported in another environment or Studio install. It contains the template specification, resource settings, `/workspace`, and the home directory (`/home/agent`), which holds your agent's sessions and anything you saved there. Read the home directory before you share the file. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).
