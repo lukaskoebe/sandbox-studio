@@ -14,8 +14,8 @@ const modes: { value: ThemeMode; label: string; icon: Icon }[] = [
 ]
 
 /**
- * Picks system, light or dark for this browser; lib/theme.ts stores the choice. Meant for the
- * sidebar's footer (docs/design/ui-style.md); nothing mounts it yet.
+ * Picks system, light or dark for this browser; lib/theme.ts stores the choice. It sits in the
+ * sidebar's footer (docs/design/ui-style.md).
  */
 export function ThemeToggle({ className }: { className?: string }) {
   const mode = useThemeMode()

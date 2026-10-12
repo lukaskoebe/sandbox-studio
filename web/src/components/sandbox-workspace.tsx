@@ -219,12 +219,35 @@ export function SandboxWorkspace({
     onPanel("files")
   }
 
-  const toggles: { id: WorkspacePanelId; label: string; icon: ReactNode }[] = [
+  // Each panel's icon takes its area's hue (docs/design/ui-style.md).
+  const toggles: {
+    id: WorkspacePanelId
+    label: string
+    icon: ReactNode
+    className: string
+  }[] = [
     ...(sb.teammateId
-      ? [{ id: "browser" as const, label: "Browser", icon: <BrowserIcon /> }]
+      ? [
+          {
+            id: "browser" as const,
+            label: "Browser",
+            icon: <BrowserIcon />,
+            className: "[&_svg]:text-(--acc-browser)",
+          },
+        ]
       : []),
-    { id: "connections", label: "Connections", icon: <PlugsConnectedIcon /> },
-    { id: "files", label: "Files", icon: <GitDiffIcon /> },
+    {
+      id: "connections",
+      label: "Connections",
+      icon: <PlugsConnectedIcon />,
+      className: "[&_svg]:text-(--acc-network)",
+    },
+    {
+      id: "files",
+      label: "Files",
+      icon: <GitDiffIcon />,
+      className: "[&_svg]:text-(--acc-git)",
+    },
   ]
 
   let main: ReactNode
@@ -367,6 +390,7 @@ export function SandboxWorkspace({
                   key={t.id}
                   variant={on ? "secondary" : "ghost"}
                   size="sm"
+                  className={t.className}
                   aria-label={t.label}
                   aria-pressed={on}
                   title={`${on ? "Close" : "Open"} the ${t.label.toLowerCase()} panel`}

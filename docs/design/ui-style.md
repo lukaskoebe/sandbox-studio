@@ -19,9 +19,9 @@ clean but interchangeable. The chosen direction adds three things shadcn does no
 ## Accents and status
 
 One hue per area: network sky, git violet, browser orange, memory teal, chat and agent green.
-They mark nav icons, approval cards (the rule on the left edge and the icon tile), kind chips,
-section icon tiles of that area, and the lineage view. Never body text, buttons or card
-backgrounds.
+They mark nav icons, the icons of the workspace's panel buttons, approval cards (the rule on the
+left edge and the icon tile), kind chips, section icon tiles of that area, and the lineage view.
+Never body text, buttons or card backgrounds.
 
 The accents are about 20 to 25 % less chroma than in the mockups; hue and lightness are
 unchanged. Tints are softer too: icon tiles use 11 % of the hue (was 14 %). Icons on their
@@ -119,8 +119,7 @@ Shared pieces for the rollout. Use them instead of local styling.
 - **`WaitingCount`** (`components/waiting-count.tsx`). The number of approvals waiting for you,
   on a chip in the waiting color. It shows nothing at zero.
 - **`ThemeToggle`** (`components/theme-toggle.tsx`). System, light and dark, stored by
-  `lib/theme.ts`. It goes in the sidebar footer once the navigation lands (N3); nothing mounts
-  it yet.
+  `lib/theme.ts`. It sits in the sidebar footer.
 - **Table rows and headers** (`components/ui/table.tsx`). Workbench heights by default; pages
   do not set their own.
 
