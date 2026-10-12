@@ -42,8 +42,16 @@ function ChatsPage() {
         viewportClassName="flex flex-col gap-4 p-4"
       >
         <p className="max-w-3xl text-sm text-muted-foreground">
-          Talk to a teammate about the work in one of its sandboxes. It works in
-          the sandbox and asks you before doing anything risky.
+          Talk to a teammate about the work in one of its sandboxes; it asks you
+          before anything risky.{" "}
+          <a
+            href="https://lukaskoebe.github.io/sandbox-studio/chat/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-4"
+          >
+            Learn more
+          </a>
         </p>
         {chats.isPending ? (
           <Spinner />

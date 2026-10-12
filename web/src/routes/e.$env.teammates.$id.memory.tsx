@@ -8,7 +8,7 @@ export const Route = createFileRoute("/e/$env/teammates/$id/memory")({
 })
 
 const explanation =
-  "What this teammate remembers about you and its work. Only this teammate sees its own memory; shared memory is on the Memory page. Edits you make here are user-tier: they outrank anything inferred."
+  "What this teammate remembers: only this teammate sees its own memory, and your edits here outrank anything inferred."
 
 function TeammateMemory() {
   const { env, id } = Route.useParams()
@@ -21,7 +21,15 @@ function TeammateMemory() {
   return (
     <div className="max-w-5xl space-y-4">
       <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-        {explanation}
+        {explanation}{" "}
+        <a
+          href="https://lukaskoebe.github.io/sandbox-studio/memory/"
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-4"
+        >
+          Learn more
+        </a>
       </p>
       {current && (
         <p className="text-xs text-muted-foreground">

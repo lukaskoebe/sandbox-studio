@@ -10,7 +10,7 @@ export const Route = createFileRoute("/e/$env/memory")({
 })
 
 const explanation =
-  "What teammates remember about you and your work, shared with every teammate. A teammate's own memory is on its page. Edits you make here are user-tier: they outrank anything inferred."
+  "What teammates remember about you and your work: shared memory is visible to all of them, and your edits here outrank anything inferred."
 
 /** Shared memory of the environment; each teammate's private memory is on its own page. */
 function MemoryPage() {
@@ -27,7 +27,15 @@ function MemoryPage() {
       </PageHeader>
       <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          {explanation}
+          {explanation}{" "}
+          <a
+            href="https://lukaskoebe.github.io/sandbox-studio/memory/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-4"
+          >
+            Learn more
+          </a>
         </p>
         {current && (
           <p className="text-xs text-muted-foreground">

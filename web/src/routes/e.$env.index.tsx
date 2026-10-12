@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardAction,
+  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -12,7 +13,6 @@ import {
 import {
   Empty,
   EmptyContent,
-  EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
@@ -57,7 +57,19 @@ function Overview() {
           New sandbox
         </Button>
       </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
+        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
+          A sandbox is a Linux VM with Docker and a persistent workspace, where
+          teammates and you work on a project.{" "}
+          <a
+            href="https://lukaskoebe.github.io/sandbox-studio/sandboxes/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-4"
+          >
+            Learn more
+          </a>
+        </p>
         {sandboxes.isPending ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Skeleton className="h-24" />
@@ -70,25 +82,24 @@ function Overview() {
                 key={sb.id}
                 to="/e/$env/sandboxes/$id"
                 params={{ env, id: sb.id }}
+                className="h-full"
               >
-                <Card className="transition-colors hover:bg-muted/50">
+                <Card className="h-full transition-colors hover:bg-muted/50">
                   <CardHeader>
                     <CardTitle>{sb.name}</CardTitle>
                     <CardDescription>
                       {sb.cpus} CPUs · {sb.memoryMiB / 1024} GiB memory ·{" "}
                       {sb.workspaceMiB / 1024} GiB workspace
-                      {sb.teammateId && (
-                        <SandboxOwner
-                          env={env}
-                          teammateId={sb.teammateId}
-                          className="mt-1.5 flex"
-                        />
-                      )}
                     </CardDescription>
                     <CardAction>
                       <StatusBadge sandbox={sb} />
                     </CardAction>
                   </CardHeader>
+                  {sb.teammateId && (
+                    <CardContent className="mt-auto">
+                      <SandboxOwner env={env} teammateId={sb.teammateId} />
+                    </CardContent>
+                  )}
                 </Card>
               </Link>
             ))}
@@ -100,10 +111,6 @@ function Overview() {
                 <CubeIcon />
               </EmptyMedia>
               <EmptyTitle>No sandboxes yet</EmptyTitle>
-              <EmptyDescription>
-                A sandbox is a Linux VM with Docker and a persistent workspace,
-                where agents and you work on a project.
-              </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <Button onClick={() => setCreating(true)}>

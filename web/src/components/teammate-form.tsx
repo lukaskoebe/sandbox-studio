@@ -219,9 +219,11 @@ export function TeammateForm({
           placeholder={
             provider?.kind === "openai_compatible"
               ? provider.model
-              : needsModel
-                ? "claude-sonnet-5-5"
-                : "The subscription's default"
+              : provider?.kind === "openai_api"
+                ? "gpt-sol-6.1"
+                : needsModel
+                  ? "claude-sonnet-5-5"
+                  : "The subscription's default"
           }
           value={model}
           onChange={(e) => setModel(e.target.value)}

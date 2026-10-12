@@ -269,10 +269,16 @@ function RuleForm({
       <DialogHeader>
         <DialogTitle>{rule ? "Edit rule" : "Add rule"}</DialogTitle>
         <DialogDescription>
-          Allow, proxy, or deny connections to a host, or use a Caddyfile to
-          handle its HTTP requests. Proxy headers and Caddy reverse proxies can
-          use environment secrets on bound HTTPS hosts. An environment rule
-          covers every sandbox.
+          Allow or deny a host, proxy its requests to set headers, or handle
+          them with a Caddyfile. An environment rule covers every sandbox.{" "}
+          <a
+            href="https://lukaskoebe.github.io/sandbox-studio/network/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-4"
+          >
+            Learn more
+          </a>
         </DialogDescription>
       </DialogHeader>
       <Field>

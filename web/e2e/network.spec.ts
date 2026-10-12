@@ -35,7 +35,7 @@ test("a held connection asks; Allow adds a rule and clears the card in every tab
     )
     .toMatchObject({ done: true, status: 200, body: `hello from ${host}\n` })
 
-  await page.goto(`/e/${env}/network`)
+  await page.goto(`/e/${env}/network/rules`)
   await expect(
     page.getByRole("cell", { name: host, exact: true })
   ).toBeVisible()

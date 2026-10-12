@@ -26,7 +26,7 @@ to an environment.
 | `/e/$env` | Home: the environment's sandboxes, create, import |
 | `/e/$env/sandboxes/$id` | one sandbox: agent view (chat or terminal, chosen on first open), terminals, previews, browser panel, checkpoints, connections, fork, rebase, export, suspend |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)) |
-| `/e/$env/network` | rules and pending network requests |
+| `/e/$env/network/rules`, `/requests`, `/activity` | network rules (filters in the URL, grouped by registrable domain), requests waiting for a decision, decided requests; `/e/$env/network` opens requests when any wait, else rules |
 | `/e/$env/secrets` | secrets |
 | `/e/$env/memory` | shared memory: pages, facts, conflicts, search, sessions |
 | `/e/$env/teammates` | teammates |
