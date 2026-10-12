@@ -16,3 +16,9 @@ Script execution, cookie access, storage access, and page state inspection are n
 Use **Live** to watch the browser. **Take over** pauses agent control so you can use the page yourself; hand control back when you are done. The Browser page also keeps an action history.
 
 Browser network requests use the environment's network rules. When an agent drives the browser, requests use the driving sandbox's policy. See [Network rules](../network/) and [Secrets](../secrets/).
+
+## Throwaway sessions
+
+An agent can open a throwaway session for a task that should not leave cookies or logins behind. A throwaway session starts with an empty profile. It ends when the agent closes it, after 10 minutes without use, when the sandbox that opened it is deleted, or when the teammate's browser stops. Its cookies, storage and downloads are discarded with it. A teammate can have two at a time, across its sandboxes.
+
+Approvals work as they do for the teammate's own browser. Approval cards name the session. In the live view, a session switcher lists **Profile** and the open throwaway sessions, so you can watch one or take it over.
