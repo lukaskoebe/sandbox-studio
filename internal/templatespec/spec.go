@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -463,12 +464,7 @@ func validateResources(value resources.Resources) error {
 func supportedTool(name string) bool {
 	// This is Studio's initial supported spec set, not a statement about the
 	// broader set of tools that mise can install.
-	switch name {
-	case "node", "python", "go":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(toolNames, name)
 }
 
 // validateYAMLTree records unsupported YAML features in p. It stops at the

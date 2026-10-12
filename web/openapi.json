@@ -4744,6 +4744,54 @@
         ],
         "type": "object"
       },
+      "Vocabulary": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sizeUnits": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "topLevelKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "topLevelKeys",
+          "resourceKeys",
+          "tools",
+          "sizeUnits"
+        ],
+        "type": "object"
+      },
       "Why": {
         "additionalProperties": false,
         "properties": {
@@ -11194,6 +11242,37 @@
         "summary": "Turn the daily update check on or off; turning it on checks right away",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/template-spec/vocabulary": {
+      "get": {
+        "description": "The keys, tool names, and size units that the template spec parser accepts, for editor suggestions.",
+        "operationId": "getTemplateSpecVocabulary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vocabulary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "builds"
         ]
       }
     }

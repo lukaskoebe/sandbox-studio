@@ -317,3 +317,22 @@ func TestBuildValidateReportsProblemsWithoutCreatingJobs(t *testing.T) {
 		t.Fatalf("validation created jobs: %+v (%v)", jobs, err)
 	}
 }
+
+func TestTemplateSpecVocabularyIsServed(t *testing.T) {
+	h, _ := newTestServer(t)
+	rec := do(h, http.MethodGet, testOrigin+"/api/template-spec/vocabulary", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("vocabulary: got %d (%s)", rec.Code, rec.Body)
+	}
+	got, err := json.Marshal(decode[templatespec.Vocabulary](t, rec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := json.Marshal(templatespec.EditorVocabulary())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("vocabulary = %s, want %s", got, want)
+	}
+}

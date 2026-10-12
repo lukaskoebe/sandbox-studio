@@ -200,6 +200,13 @@ func (s *Server) registerBuilds(api huma.API) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "getTemplateSpecVocabulary", Method: http.MethodGet, Path: "/api/template-spec/vocabulary", Tags: []string{"builds"},
+		Description: "The keys, tool names, and size units that the template spec parser accepts, for editor suggestions.",
+	}, func(_ context.Context, _ *struct{}) (*struct{ Body templatespec.Vocabulary }, error) {
+		return &struct{ Body templatespec.Vocabulary }{templatespec.EditorVocabulary()}, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "getBuildJob", Method: http.MethodGet, Path: "/api/environments/{env}/builds/{id}", Tags: []string{"builds"},
 	}, func(ctx context.Context, in *buildJobPath) (*struct{ Body BuildJobView }, error) {
 		if err := s.checkBuildEnvironment(ctx, in.Env); err != nil {
