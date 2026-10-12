@@ -94,6 +94,10 @@ type Probes struct {
 	DiskFree func(dir string) (uint64, error)
 	// PortFree checks that a TCP address can be listened on.
 	PortFree func(addr string) error
+
+	// SSHAgent reports how many keys the host's SSH agent holds, or why Studio can't reach
+	// it and how to fix that.
+	SSHAgent func(ctx context.Context) (keys int, fix string, err error)
 }
 
 // Options are what the checks look at.
@@ -105,6 +109,9 @@ type Options struct {
 	// this Studio process and are not probed.
 	Ports []string
 	Owned map[string]bool
+	// AgentForges is the number of SSH forges that sign with the host's SSH agent; with
+	// none, the agent isn't checked.
+	AgentForges int
 }
 
 // LowDisk is the free-space threshold below which the disk check warns.
@@ -121,6 +128,9 @@ func Run(ctx context.Context, p Probes, o Options) Report {
 	checks = append(checks, checkData(p, o.DataDir)...)
 	for _, addr := range o.Ports {
 		checks = append(checks, checkPort(p, addr, o.Owned[addr]))
+	}
+	if o.AgentForges > 0 && p.SSHAgent != nil {
+		checks = append(checks, checkSSHAgent(ctx, p, o.AgentForges))
 	}
 	r := Report{Status: OK, Checks: checks, CheckedAt: time.Now().UTC()}
 	for _, c := range checks {
@@ -313,6 +323,24 @@ func checkPort(p Probes, addr string, owned bool) Check {
 			"Another program, or another Studio, is listening on it. Stop it; `studio login-url` reaches a Studio that is already running.")
 	}
 	return c.with(OK, addr+" is free.", "")
+}
+
+// checkSSHAgent warns when SSH forges sign with an agent Studio can't reach, typically
+// after an autostart without SSH_AUTH_SOCK. Studio still runs; only those forges fail.
+func checkSSHAgent(ctx context.Context, p Probes, forges int) Check {
+	c := Check{ID: "ssh-agent", Name: "SSH agent"}
+	keys, fix, err := p.SSHAgent(ctx)
+	if err != nil {
+		return c.with(Warn, fmt.Sprintf("%s (needed by %d SSH %s).", strings.TrimSuffix(err.Error(), "."), forges, plural(forges, "forge", "forges")), fix)
+	}
+	return c.with(OK, fmt.Sprintf("The SSH agent holds %d %s.", keys, plural(keys, "key", "keys")), "")
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func (c Check) with(s Status, msg, fix string) Check {

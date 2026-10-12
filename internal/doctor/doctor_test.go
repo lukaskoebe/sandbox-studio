@@ -184,6 +184,33 @@ func TestDataAndPorts(t *testing.T) {
 	}
 }
 
+func TestSSHAgent(t *testing.T) {
+	p := healthy()
+	p.SSHAgent = func(context.Context) (int, string, error) {
+		return 0, "Start the agent.", errors.New("SSH agent not available: SSH_AUTH_SOCK is not set in Studio's environment")
+	}
+	o := opts
+	o.AgentForges = 2
+	r := Run(context.Background(), p, o)
+	if c := find(t, r, "ssh-agent"); c.Status != Warn || !strings.Contains(c.Message, "needed by 2 SSH forges") || c.Fix == "" {
+		t.Fatalf("agent: %+v", c)
+	}
+	// A forge that can't reach its agent fails only that forge, not the host.
+	if r.Status != Warn {
+		t.Fatalf("status %s", r.Status)
+	}
+	p.SSHAgent = func(context.Context) (int, string, error) { return 2, "", nil }
+	if c := find(t, Run(context.Background(), p, o), "ssh-agent"); c.Status != OK || c.Message != "The SSH agent holds 2 keys." {
+		t.Fatalf("agent with keys: %+v", c)
+	}
+	o.AgentForges = 0
+	for _, c := range Run(context.Background(), p, o).Checks {
+		if c.ID == "ssh-agent" {
+			t.Fatal("the agent is checked without agent forges")
+		}
+	}
+}
+
 func TestHostProbesRun(t *testing.T) {
 	// The real probes must not panic; their results depend on the host.
 	p := HostProbes()

@@ -41,6 +41,7 @@ type fakeSSH struct {
 	commands   []string
 	env        []string // name=value of env requests
 	refused    []string // other channel and session requests
+	attempts   int      // public keys clients offered
 	noProtocol bool     // refuse GIT_PROTOCOL too
 }
 
@@ -65,6 +66,7 @@ func newFakeSSH(t *testing.T) *fakeSSH {
 		PublicKeyCallback: func(c ssh.ConnMetadata, k ssh.PublicKey) (*ssh.Permissions, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
+			f.attempts++
 			for _, a := range f.authorized {
 				if string(a.Marshal()) == string(k.Marshal()) {
 					f.users = append(f.users, c.User())
@@ -249,7 +251,7 @@ func newSSHHarness(t *testing.T) *sshHarness {
 	}
 	fs.authorize(pub)
 	f, err := h.st.CreateForge(h.ctx, store.Forge{ID: store.NewID(), EnvironmentID: h.env.ID, Name: "box", Kind: KindSSH,
-		BaseURL: "ssh://git@git.example.com:2222", Username: "git", PublicKey: pub, HostKey: fs.hostKey()},
+		BaseURL: "ssh://git@git.example.com:2222", Username: "git", Auth: store.ForgeAuthKey, PublicKey: pub, HostKey: fs.hostKey()},
 		store.Secret{ID: store.NewID(), Name: "FORGE_BOX_SSH_KEY", Sealed: []byte("sealed"), Placeholder: "box-placeholder"})
 	if err != nil {
 		t.Fatal(err)

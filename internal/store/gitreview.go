@@ -15,31 +15,47 @@ import (
 
 // Forge is a git host an environment's sandboxes push to through the virtual git remote.
 // Its credential (a token, or for kind ssh a private key) is a studio-only secret:
-// sandboxes never see it.
+// sandboxes never see it. An ssh forge with auth agent has no secret: Studio signs with
+// the host's SSH agent.
 type Forge struct {
-	ID                 string    `json:"id"`
-	EnvironmentID      string    `json:"environmentId"`
-	Name               string    `json:"name" doc:"The URL segment: https://git.studio.internal/<name>/<path>.git"`
-	Kind               string    `json:"kind" enum:"forgejo,github,https,ssh"`
-	BaseURL            string    `json:"baseUrl" doc:"https://host[/path], or ssh://user@host[:port] for kind ssh"`
-	Username           string    `json:"username,omitempty" doc:"The basic-auth user (https) or SSH user (ssh)"`
-	SecretID           string    `json:"secretId" doc:"The studio-only vault secret holding the token or SSH key"`
-	PublicKey          string    `json:"publicKey,omitempty" doc:"The public half of the SSH key Studio generated (ssh), to add to the host"`
-	HostKey            string    `json:"hostKey,omitempty" doc:"The pinned SSH host key in authorized_keys format (ssh)"`
-	HostKeyFingerprint string    `json:"hostKeyFingerprint,omitempty" doc:"SHA256 fingerprint of the pinned host key"`
-	HostKeyMismatch    string    `json:"hostKeyMismatch,omitempty" doc:"Fingerprint of a different host key the host presented since it was pinned; re-pin to clear"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	ID                 string     `json:"id"`
+	EnvironmentID      string     `json:"environmentId"`
+	Name               string     `json:"name" doc:"The URL segment: https://git.studio.internal/<name>/<path>.git"`
+	Kind               string     `json:"kind" enum:"forgejo,github,https,ssh"`
+	BaseURL            string     `json:"baseUrl" doc:"https://host[/path], or ssh://user@host[:port] for kind ssh"`
+	Username           string     `json:"username,omitempty" doc:"The basic-auth user (https) or SSH user (ssh)"`
+	Auth               string     `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: sign with the host's SSH agent, or with a key Studio generated"`
+	SecretID           string     `json:"secretId,omitempty" doc:"The studio-only vault secret holding the token or SSH key; none for auth agent"`
+	PublicKey          string     `json:"publicKey,omitempty" doc:"The public half of the SSH key Studio generated (auth key), to add to the host"`
+	HostKey            string     `json:"hostKey,omitempty" doc:"The pinned SSH host key in authorized_keys format (ssh)"`
+	HostKeyFingerprint string     `json:"hostKeyFingerprint,omitempty" doc:"SHA256 fingerprint of the pinned host key"`
+	HostKeyMismatch    string     `json:"hostKeyMismatch,omitempty" doc:"Fingerprint of a different host key the host presented since it was pinned; re-pin to clear"`
+	AgentSlowAt        *time.Time `json:"agentSlowAt,omitempty" doc:"When a signature by the SSH agent last waited for the user to confirm it"`
+	AgentHintDismissed bool       `json:"agentHintDismissed,omitempty" doc:"The user dismissed the suggestion to use a Studio key instead"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
-const forgeCols = "id, environment_id, name, kind, base_url, username, secret_id, public_key, host_key, host_key_offered, created_at, updated_at"
+// Authentication of ssh forges.
+const (
+	ForgeAuthAgent = "agent"
+	ForgeAuthKey   = "key"
+)
+
+const forgeCols = `id, environment_id, name, kind, base_url, username, auth, IFNULL(secret_id, ''), public_key, host_key,
+	host_key_offered, agent_slow_at, agent_hint_dismissed, created_at, updated_at`
 
 func scanForge(row interface{ Scan(...any) error }) (Forge, error) {
 	var f Forge
 	var created, updated int64
-	err := row.Scan(&f.ID, &f.EnvironmentID, &f.Name, &f.Kind, &f.BaseURL, &f.Username, &f.SecretID, &f.PublicKey, &f.HostKey,
-		&f.HostKeyMismatch, &created, &updated)
+	var slow sql.NullInt64
+	err := row.Scan(&f.ID, &f.EnvironmentID, &f.Name, &f.Kind, &f.BaseURL, &f.Username, &f.Auth, &f.SecretID, &f.PublicKey, &f.HostKey,
+		&f.HostKeyMismatch, &slow, &f.AgentHintDismissed, &created, &updated)
 	f.CreatedAt, f.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
+	if slow.Valid {
+		t := time.Unix(slow.Int64, 0)
+		f.AgentSlowAt = &t
+	}
 	f.HostKeyFingerprint = fingerprint(f.HostKey)
 	return f, err
 }
@@ -53,7 +69,8 @@ func fingerprint(hostKey string) string {
 }
 
 // CreateForge inserts f and its token secret, which the caller sealed, in one transaction.
-// The secret is stored studio-only.
+// The secret is stored studio-only. An ssh forge names its auth; with auth agent there is
+// no secret and sec is ignored.
 func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -61,17 +78,16 @@ func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, er
 	}
 	defer tx.Rollback()
 	t := now()
-	_, err = tx.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+", studio_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-		sec.ID, f.EnvironmentID, sec.Name, sec.Sealed, strings.Join(sec.Hosts, ","), sec.Placeholder, sec.Note, t, t)
-	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
-		return f, fmt.Errorf("a secret named %q: %w", sec.Name, ErrExists)
+	f.SecretID = ""
+	if f.Auth != ForgeAuthAgent {
+		if err := insertForgeSecret(ctx, tx, f.EnvironmentID, sec, t); err != nil {
+			return f, err
+		}
+		f.SecretID = sec.ID
 	}
-	if err != nil {
-		return f, err
-	}
-	f.SecretID = sec.ID
-	_, err = tx.ExecContext(ctx, "INSERT INTO forges ("+forgeCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)",
-		f.ID, f.EnvironmentID, f.Name, f.Kind, f.BaseURL, f.Username, f.SecretID, f.PublicKey, f.HostKey, t, t)
+	_, err = tx.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, username, auth, secret_id, public_key, host_key, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		f.ID, f.EnvironmentID, f.Name, f.Kind, f.BaseURL, f.Username, f.Auth, nullable(f.SecretID), f.PublicKey, f.HostKey, t, t)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return f, fmt.Errorf("a forge named %q: %w", f.Name, ErrExists)
 	}
@@ -80,7 +96,118 @@ func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, er
 	}
 	f.CreatedAt, f.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
 	f.HostKeyFingerprint, f.HostKeyMismatch = fingerprint(f.HostKey), ""
+	f.AgentSlowAt, f.AgentHintDismissed = nil, false
 	return f, tx.Commit()
+}
+
+func insertForgeSecret(ctx context.Context, tx *sql.Tx, envID string, sec Secret, t int64) error {
+	_, err := tx.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+", studio_only) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+		sec.ID, envID, sec.Name, sec.Sealed, strings.Join(sec.Hosts, ","), sec.Placeholder, sec.Note, t, t)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+		return fmt.Errorf("a secret named %q: %w", sec.Name, ErrExists)
+	}
+	return err
+}
+
+// SetForgeKey switches an ssh forge from the SSH agent to a key Studio generated: sec holds
+// the private key, which the caller sealed, and pub its public half. A forge that already
+// has a key is ErrExists.
+func (s *Store) SetForgeKey(ctx context.Context, envID, id, pub string, sec Secret) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	old, err := forgeSecret(ctx, tx, envID, id, "ssh")
+	if err != nil {
+		return err
+	}
+	if old != "" {
+		return fmt.Errorf("the forge has a key: %w", ErrExists)
+	}
+	t := now()
+	if err := insertForgeSecret(ctx, tx, envID, sec, t); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE forges SET auth = 'key', secret_id = ?, public_key = ?, updated_at = ? WHERE environment_id = ? AND id = ?",
+		sec.ID, pub, t, envID, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// SetForgeAgent switches an ssh forge to the host's SSH agent and deletes its key.
+func (s *Store) SetForgeAgent(ctx context.Context, envID, id string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	old, err := forgeSecret(ctx, tx, envID, id, "ssh")
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE forges SET auth = 'agent', secret_id = NULL, public_key = '', updated_at = ? WHERE environment_id = ? AND id = ?",
+		now(), envID, id); err != nil {
+		return err
+	}
+	if old != "" {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, old); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// forgeSecret returns the secret ID of a forge, "" if it has none. With kind set, a forge of
+// another kind is ErrNotFound.
+func forgeSecret(ctx context.Context, tx *sql.Tx, envID, id, kind string) (string, error) {
+	var secretID sql.NullString
+	var k string
+	err := tx.QueryRowContext(ctx, "SELECT secret_id, kind FROM forges WHERE environment_id = ? AND id = ?", envID, id).Scan(&secretID, &k)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && kind != "" && k != kind {
+		return "", ErrNotFound
+	}
+	return secretID.String, err
+}
+
+// SetForgeAgentSlow records that the SSH agent took long to sign for a forge.
+func (s *Store) SetForgeAgentSlow(ctx context.Context, envID, id string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE forges SET agent_slow_at = ? WHERE environment_id = ? AND id = ?", now(), envID, id)
+	return err
+}
+
+// DismissForgeAgentHint hides the suggestion to use a Studio key for a forge.
+func (s *Store) DismissForgeAgentHint(ctx context.Context, envID, id string) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE forges SET agent_hint_dismissed = 1 WHERE environment_id = ? AND id = ?", envID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// CountAgentForges counts the agent forges in the catalog at path, opened read-only and not
+// migrated, for `studio doctor` next to a running Studio. A catalog from before the agent
+// existed is an error.
+func CountAgentForges(ctx context.Context, path string) (int, error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro&_pragma=busy_timeout(5000)")
+	if err != nil {
+		return 0, err
+	}
+	defer db.Close()
+	var n int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM forges WHERE auth = 'agent'").Scan(&n)
+	return n, err
+}
+
+// AgentForges counts the forges of all environments that sign with the host's SSH agent.
+func (s *Store) AgentForges(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM forges WHERE auth = 'agent'").Scan(&n)
+	return n, err
 }
 
 // PinForgeHostKey replaces the pinned host key of a forge and clears a recorded mismatch.
@@ -138,26 +265,24 @@ func (s *Store) ForgeByName(ctx context.Context, envID, name string) (Forge, err
 	return f, err
 }
 
-// DeleteForge removes a forge and its token or key. Pushes keep their copy of its name.
+// DeleteForge removes a forge and its token or key, if any. Pushes keep their copy of its name.
 func (s *Store) DeleteForge(ctx context.Context, envID, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var secretID string
-	err = tx.QueryRowContext(ctx, "SELECT secret_id FROM forges WHERE environment_id = ? AND id = ?", envID, id).Scan(&secretID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
+	secretID, err := forgeSecret(ctx, tx, envID, id, "")
 	if err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, "DELETE FROM forges WHERE environment_id = ? AND id = ?", envID, id); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, secretID); err != nil {
-		return err
+	if secretID != "" {
+		if _, err := tx.ExecContext(ctx, "DELETE FROM secrets WHERE environment_id = ? AND id = ?", envID, secretID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }

@@ -67,6 +67,57 @@
         ],
         "type": "object"
       },
+      "AgentKey": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "description": "SHA256 fingerprint",
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "fingerprint"
+        ],
+        "type": "object"
+      },
+      "AgentStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "fix": {
+            "description": "How to make it available",
+            "type": "string"
+          },
+          "keys": {
+            "description": "The keys the agent holds; Studio offers hosts the first six",
+            "items": {
+              "$ref": "#/components/schemas/AgentKey"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "message": {
+            "description": "Why the agent can't be used",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "keys"
+        ],
+        "type": "object"
+      },
       "ApprovalView": {
         "additionalProperties": false,
         "properties": {
@@ -2004,6 +2055,23 @@
       "Forge": {
         "additionalProperties": false,
         "properties": {
+          "agentHintDismissed": {
+            "description": "The user dismissed the suggestion to use a Studio key instead",
+            "type": "boolean"
+          },
+          "agentSlowAt": {
+            "description": "When a signature by the SSH agent last waited for the user to confirm it",
+            "format": "date-time",
+            "type": "string"
+          },
+          "auth": {
+            "description": "Kind ssh: sign with the host's SSH agent, or with a key Studio generated",
+            "enum": [
+              "agent",
+              "key"
+            ],
+            "type": "string"
+          },
           "baseUrl": {
             "description": "https://host[/path], or ssh://user@host[:port] for kind ssh",
             "type": "string"
@@ -2044,11 +2112,11 @@
             "type": "string"
           },
           "publicKey": {
-            "description": "The public half of the SSH key Studio generated (ssh), to add to the host",
+            "description": "The public half of the SSH key Studio generated (auth key), to add to the host",
             "type": "string"
           },
           "secretId": {
-            "description": "The studio-only vault secret holding the token or SSH key",
+            "description": "The studio-only vault secret holding the token or SSH key; none for auth agent",
             "type": "string"
           },
           "updatedAt": {
@@ -2066,9 +2134,24 @@
           "name",
           "kind",
           "baseUrl",
-          "secretId",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ForgeAuth": {
+        "additionalProperties": false,
+        "properties": {
+          "auth": {
+            "enum": [
+              "agent",
+              "key"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "auth"
         ],
         "type": "object"
       },
@@ -2089,6 +2172,14 @@
       "ForgeInput": {
         "additionalProperties": false,
         "properties": {
+          "auth": {
+            "description": "Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge",
+            "enum": [
+              "agent",
+              "key"
+            ],
+            "type": "string"
+          },
           "baseUrl": {
             "description": "The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222",
             "maxLength": 2048,
@@ -2820,6 +2911,20 @@
         ],
         "type": "object"
       },
+      "ParseForgeURLRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
       "PermissionBody": {
         "additionalProperties": false,
         "properties": {
@@ -3362,6 +3467,47 @@
         },
         "required": [
           "templateId"
+        ],
+        "type": "object"
+      },
+      "RepoURL": {
+        "additionalProperties": false,
+        "properties": {
+          "auth": {
+            "description": "Kind ssh: the host's SSH agent",
+            "enum": [
+              "agent",
+              "key"
+            ],
+            "type": "string"
+          },
+          "baseUrl": {
+            "description": "The forge's base URL, or SSH address for kind ssh",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "forgejo",
+              "github",
+              "https",
+              "ssh"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "A short name for the forge, not yet taken in the environment",
+            "type": "string"
+          },
+          "path": {
+            "description": "The repository's path on the forge, without .git",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "baseUrl",
+          "name",
+          "path"
         ],
         "type": "object"
       },
@@ -6081,6 +6227,59 @@
         ]
       }
     },
+    "/api/environments/{env}/forges/parse-url": {
+      "post": {
+        "description": "Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment.",
+        "operationId": "parseForgeURL",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParseForgeURLRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoURL"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/environments/{env}/forges/scan": {
       "post": {
         "description": "Connects to an SSH forge and returns its host key, for the user to compare with the fingerprint the forge publishes before pinning it.",
@@ -6138,6 +6337,115 @@
       "delete": {
         "description": "Removes the forge, its token and the staged pushes to it. Pending pushes can no longer be approved.",
         "operationId": "deleteForge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/forges/{id}/auth": {
+      "put": {
+        "description": "Switches an SSH forge between the host's SSH agent and a key Studio generates. Switching to a key returns its public key; switching to the agent deletes the key.",
+        "operationId": "setForgeAuth",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgeAuth"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forge"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/forges/{id}/dismiss-agent-hint": {
+      "post": {
+        "description": "Hides the suggestion to use a Studio key after the SSH agent asked for confirmation.",
+        "operationId": "dismissForgeAgentHint",
         "parameters": [
           {
             "description": "Environment ID",
@@ -11173,6 +11481,38 @@
         "summary": "Run the host checks",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/system/ssh-agent": {
+      "get": {
+        "description": "Whether Studio reaches the SSH agent it signs with for SSH forges, and the keys the agent holds.",
+        "operationId": "getSSHAgent",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Check the host's SSH agent",
+        "tags": [
+          "git"
         ]
       }
     },

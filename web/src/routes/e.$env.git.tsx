@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -9,6 +9,7 @@ import {
   PlusIcon,
   TrashIcon,
   WarningIcon,
+  XIcon,
 } from "@phosphor-icons/react"
 import {
   AlertDialog,
@@ -69,7 +70,13 @@ import {
 } from "@/components/git-review"
 import { PageHeader } from "@/components/page-header"
 import { ApprovalStatusBadge } from "@/components/status-badge"
-import { $api, errorMessage, fetchClient, type Forge } from "@/lib/api/client"
+import {
+  $api,
+  errorMessage,
+  fetchClient,
+  type AgentStatus,
+  type Forge,
+} from "@/lib/api/client"
 import { gitSummary } from "@/lib/approval-kinds"
 import { copyText } from "@/lib/clipboard"
 import { formatAge } from "@/lib/utils"
@@ -80,15 +87,19 @@ export const Route = createFileRoute("/e/$env/git")({
 
 const remoteHost = "git.studio.internal"
 
-const explanation = `Sandboxes clone, fetch and push through https://${remoteHost}/<forge>/<path>.git; their git config sends the forge's own URLs there too, so git clone https://github.com/owner/repo just works. Studio adds the forge's token or SSH key on the host, so sandboxes never see it. Pushes wait here for your review; approving one pushes it to the forge, and on GitHub and Forgejo, for a branch other than the default one, offers to open a pull request.`
-
 type Kind = Forge["kind"]
+type Auth = "agent" | "key"
 
 const kindLabels: Record<Kind, string> = {
   forgejo: "Forgejo",
   github: "GitHub",
   https: "Other HTTPS",
   ssh: "Other SSH",
+}
+
+const authLabels: Record<Auth, string> = {
+  agent: "My SSH agent",
+  key: "A Studio key",
 }
 
 const hasAPI = (kind: Kind) => kind === "forgejo" || kind === "github"
@@ -105,6 +116,10 @@ function GitPage() {
   })
   const pushes = (approvals.data ?? []).filter(isGitApproval)
   const list = forges.data ?? []
+  const usesAgent = list.some((f) => f.auth === "agent")
+  const agent = $api.useQuery("get", "/api/system/ssh-agent", undefined, {
+    enabled: usesAgent,
+  })
 
   return (
     <>
@@ -117,7 +132,16 @@ function GitPage() {
       </PageHeader>
       <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          {explanation}
+          Sandboxes reach your forges through Studio, which keeps their
+          credentials and holds their pushes for your review.{" "}
+          <a
+            href="https://lukaskoebe.github.io/sandbox-studio/git-review/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            Learn more
+          </a>
         </p>
 
         <section className="space-y-2">
@@ -139,7 +163,12 @@ function GitPage() {
                 </TableHeader>
                 <TableBody>
                   {list.map((f) => (
-                    <ForgeRow key={f.id} env={env} forge={f} />
+                    <ForgeRow
+                      key={f.id}
+                      env={env}
+                      forge={f}
+                      agent={agent.data}
+                    />
                   ))}
                 </TableBody>
               </Table>
@@ -214,11 +243,45 @@ function GitPage() {
   )
 }
 
-function ForgeRow({ env, forge }: { env: string; forge: Forge }) {
+function ForgeRow({
+  env,
+  forge,
+  agent,
+}: {
+  env: string
+  forge: Forge
+  agent?: AgentStatus
+}) {
   const remote = `https://${remoteHost}/${forge.name}/<path>.git`
+  const invalidate = useInvalidateForges()
   const [testing, setTesting] = useState(false)
   const [replacing, setReplacing] = useState(false)
   const [pinning, setPinning] = useState(false)
+  const [keyAdded, setKeyAdded] = useState<Forge>()
+  const switchAuth = $api.useMutation(
+    "put",
+    "/api/environments/{env}/forges/{id}/auth",
+    {
+      onSuccess: (res) => {
+        invalidate()
+        if (res.auth === "key") setKeyAdded(res)
+      },
+      onError: (err) =>
+        toast.error("Could not change how Studio signs", {
+          description: errorMessage(err),
+        }),
+    }
+  )
+  const dismissHint = $api.useMutation(
+    "post",
+    "/api/environments/{env}/forges/{id}/dismiss-agent-hint",
+    { onSuccess: invalidate }
+  )
+  const switchTo = (auth: Auth) =>
+    switchAuth.mutate({
+      params: { path: { env, id: forge.id } },
+      body: { auth },
+    })
   return (
     <TableRow>
       <TableCell className="align-top font-mono">{forge.name}</TableCell>
@@ -246,20 +309,87 @@ function ForgeRow({ env, forge }: { env: string; forge: Forge }) {
                 instead. Check with the host&apos;s admin, then re-pin.
               </div>
             )}
-            <div className="flex items-center gap-1">
-              <span className="block max-w-80 truncate font-mono">
-                {forge.publicKey}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                title="Copy public key"
-                aria-label="Copy public key"
-                onClick={() => copy(forge.publicKey ?? "")}
-              >
-                <CopyIcon />
-              </Button>
-            </div>
+            {forge.auth === "agent" ? (
+              <>
+                <div className="flex flex-wrap items-center gap-x-2">
+                  Signs with your SSH agent.
+                  <Button
+                    variant="link"
+                    size="xs"
+                    disabled={switchAuth.isPending}
+                    onClick={() => switchTo("key")}
+                  >
+                    Use a Studio key
+                  </Button>
+                </div>
+                {agent && !agent.available && (
+                  <div className="flex items-start gap-1 text-amber-600 dark:text-amber-400">
+                    <WarningIcon className="mt-0.5 size-3 shrink-0" />
+                    <span>
+                      {agent.message} {agent.fix}
+                    </span>
+                  </div>
+                )}
+                {forge.agentSlowAt && !forge.agentHintDismissed && (
+                  <div className="flex items-start gap-2 rounded-md bg-muted p-2 text-foreground">
+                    <span className="min-w-0 flex-1">
+                      Your SSH agent asked for confirmation. Set up a dedicated
+                      key for Studio so fetches and pushes don&apos;t wait for
+                      it.
+                    </span>
+                    <Button
+                      size="xs"
+                      disabled={switchAuth.isPending}
+                      onClick={() => switchTo("key")}
+                    >
+                      Set up a Studio key
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      title="Dismiss"
+                      aria-label="Dismiss"
+                      disabled={dismissHint.isPending}
+                      onClick={() =>
+                        dismissHint.mutate({
+                          params: { path: { env, id: forge.id } },
+                        })
+                      }
+                    >
+                      <XIcon />
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1">
+                  <span className="block max-w-80 truncate font-mono">
+                    {forge.publicKey}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    title="Copy public key"
+                    aria-label="Copy public key"
+                    onClick={() => copy(forge.publicKey ?? "")}
+                  >
+                    <CopyIcon />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2">
+                  Signs with a Studio key.
+                  <Button
+                    variant="link"
+                    size="xs"
+                    disabled={switchAuth.isPending}
+                    onClick={() => switchTo("agent")}
+                  >
+                    Use my SSH agent
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </TableCell>
@@ -332,6 +462,21 @@ function ForgeRow({ env, forge }: { env: string; forge: Forge }) {
                 env={env}
                 forge={forge}
                 onDone={() => setPinning(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          open={keyAdded !== undefined}
+          onOpenChange={(open) => {
+            if (!open) setKeyAdded(undefined)
+          }}
+        >
+          <DialogContent>
+            {keyAdded && (
+              <PublicKeyNotice
+                forge={keyAdded}
+                onDone={() => setKeyAdded(undefined)}
               />
             )}
           </DialogContent>
@@ -673,8 +818,7 @@ function DeleteForge({ env, forge }: { env: string; forge: Forge }) {
         <AlertDialogHeader>
           <AlertDialogTitle>Remove {forge.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Studio forgets its token or key and the pushes staged for it.
-            Sandboxes can no longer reach it, and pending pushes can no longer
+            Studio forgets its token or key. Pending pushes to it can no longer
             be approved.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -715,6 +859,43 @@ function ForgeDialog({
   )
 }
 
+function PublicKeyNotice({
+  forge,
+  onDone,
+}: {
+  forge: Forge
+  onDone: () => void
+}) {
+  return (
+    <div className="grid gap-4">
+      <DialogHeader>
+        <DialogTitle>Add Studio&apos;s key to the host</DialogTitle>
+        <DialogDescription>
+          Add this public key to {forge.baseUrl} with write access. A deploy key
+          for one repository is enough.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="flex items-start gap-1">
+        <code className="min-w-0 flex-1 rounded-md bg-muted p-2 text-xs break-all">
+          {forge.publicKey}
+        </code>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Copy public key"
+          aria-label="Copy public key"
+          onClick={() => copy(forge.publicKey ?? "")}
+        >
+          <CopyIcon />
+        </Button>
+      </div>
+      <DialogFooter>
+        <Button onClick={onDone}>Done</Button>
+      </DialogFooter>
+    </div>
+  )
+}
+
 const defaultBaseURLs: Record<Kind, string> = {
   forgejo: "https://codeberg.org",
   github: "https://github.com",
@@ -731,9 +912,12 @@ const namePlaceholders: Record<Kind, string> = {
 
 function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
   const invalidate = useInvalidateForges()
+  const [repoURL, setRepoURL] = useState("")
+  const [repoPath, setRepoPath] = useState("")
   const [kind, setKind] = useState<Kind>("github")
   const [name, setName] = useState("")
   const [baseUrl, setBaseUrl] = useState(defaultBaseURLs.github)
+  const [auth, setAuth] = useState<Auth>("agent")
   const [username, setUsername] = useState("")
   const [token, setToken] = useState("")
   const [scanned, setScanned] = useState<Scanned>()
@@ -741,6 +925,32 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
   const [created, setCreated] = useState<Forge>()
   const [error, setError] = useState<string>()
   const [saving, setSaving] = useState(false)
+  const parse = $api.useMutation(
+    "post",
+    "/api/environments/{env}/forges/parse-url"
+  )
+  const { mutate: parseURL, data: parsed } = parse
+  // A pasted repository URL fills in the form, after a short pause in typing.
+  useEffect(() => {
+    const url = repoURL.trim()
+    if (url === "") return
+    const timer = setTimeout(
+      () => parseURL({ params: { path: { env } }, body: { url } }),
+      300
+    )
+    return () => clearTimeout(timer)
+  }, [repoURL, env, parseURL])
+  useEffect(() => {
+    if (!parsed) return
+    setKind(parsed.kind)
+    setBaseUrl(parsed.baseUrl)
+    setName(parsed.name)
+    setRepoPath(parsed.path)
+    setAuth(parsed.auth === "key" ? "key" : "agent")
+    setScanned(undefined)
+    setConfirmed(false)
+    setError(undefined)
+  }, [parsed])
   const ssh = kind === "ssh"
   const canSave =
     name.trim() !== "" &&
@@ -768,7 +978,7 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
         ...(kind === "https" && username.trim()
           ? { username: username.trim() }
           : {}),
-        ...(ssh ? { hostKey: scanned?.key } : { token }),
+        ...(ssh ? { hostKey: scanned?.key, auth } : { token }),
       },
     })
     setSaving(false)
@@ -777,40 +987,11 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
       return
     }
     invalidate()
-    if (ssh) setCreated(res.data)
+    if (ssh && res.data.auth === "key") setCreated(res.data)
     else onDone()
   }
 
-  if (created) {
-    return (
-      <div className="grid gap-4">
-        <DialogHeader>
-          <DialogTitle>Add Studio&apos;s key to the host</DialogTitle>
-          <DialogDescription>
-            Add this public key to {created.baseUrl} with write access. A deploy
-            key for one repository is enough.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex items-start gap-1">
-          <code className="min-w-0 flex-1 rounded-md bg-muted p-2 text-xs break-all">
-            {created.publicKey}
-          </code>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            title="Copy public key"
-            aria-label="Copy public key"
-            onClick={() => copy(created.publicKey ?? "")}
-          >
-            <CopyIcon />
-          </Button>
-        </div>
-        <DialogFooter>
-          <Button onClick={onDone}>Done</Button>
-        </DialogFooter>
-      </div>
-    )
-  }
+  if (created) return <PublicKeyNotice forge={created} onDone={onDone} />
 
   return (
     <form onSubmit={submit} className="grid gap-4">
@@ -820,6 +1001,23 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           A git host Studio fetches from and pushes to for the sandboxes.
         </DialogDescription>
       </DialogHeader>
+      <Field>
+        <FieldLabel htmlFor="forge-repo-url">Repository URL</FieldLabel>
+        <Input
+          id="forge-repo-url"
+          value={repoURL}
+          placeholder="git@github.com:owner/repo.git"
+          autoComplete="off"
+          onChange={(e) => setRepoURL(e.target.value)}
+        />
+        <FieldDescription>
+          Paste a repository&apos;s clone URL. Studio fills in the rest, which
+          you can change.
+        </FieldDescription>
+        {repoURL.trim() !== "" && parse.error && (
+          <FieldError>{errorMessage(parse.error)}</FieldError>
+        )}
+      </Field>
       <Field>
         <FieldLabel>Kind</FieldLabel>
         <Select
@@ -843,12 +1041,11 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           {kind === "github" && "github.com or GitHub Enterprise Server."}
           {kind === "https" &&
             "Any host serving git over HTTPS with a token, such as GitLab or Bitbucket. No pull requests."}
-          {ssh &&
-            "Any host serving git over SSH. Studio makes a key for it. No pull requests."}
+          {ssh && "Any host serving git over SSH. No pull requests."}
         </FieldDescription>
       </Field>
       <Field>
-        <FieldLabel htmlFor="forge-name">Name</FieldLabel>
+        <FieldLabel htmlFor="forge-name">Short name</FieldLabel>
         <Input
           id="forge-name"
           value={name}
@@ -857,8 +1054,8 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           onChange={(e) => setName(e.target.value.toLowerCase())}
         />
         <FieldDescription>
-          Part of the remote URL: https://{remoteHost}/{name.trim() || "<name>"}
-          /&lt;path&gt;.git
+          Used in sandbox remote URLs. Sandboxes use https://{remoteHost}/
+          {name.trim() || "<name>"}/{repoPath || "owner/repo"}.git
         </FieldDescription>
       </Field>
       <Field>
@@ -899,6 +1096,32 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           </FieldDescription>
         </Field>
       )}
+      {ssh && (
+        <Field>
+          <FieldLabel>Authentication</FieldLabel>
+          <Select
+            value={auth}
+            onValueChange={(v) => v && setAuth(v)}
+            items={authLabels}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(authLabels) as Auth[]).map((a) => (
+                <SelectItem key={a} value={a}>
+                  {authLabels[a]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <FieldDescription>
+            {auth === "agent"
+              ? "Studio signs with the keys in your SSH agent, as ssh does. A hardware key may ask you to confirm."
+              : "Studio makes a key for this forge. You add its public key to the host."}
+          </FieldDescription>
+        </Field>
+      )}
       {ssh ? (
         <HostKeyCheck
           env={env}
@@ -934,8 +1157,8 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
                 >
                   fine-grained token
                 </a>{" "}
-                for only the repositories sandboxes may use, with Contents and
-                Pull requests read and write, and Metadata read.
+                for the repositories sandboxes may use, with Contents and Pull
+                requests read and write.
               </>
             ) : kind === "forgejo" ? (
               "Needs read and write access to the repositories, and to issues for pull requests."
