@@ -64,6 +64,22 @@ func (s *Server) registerCheckpoints(api huma.API) {
 		return nil, apiError(s.Sandboxes.DeleteCheckpoint(ctx, in.Env, in.ID, in.Checkpoint))
 	})
 
+	type renameCheckpointIn struct {
+		Env        string `path:"env" doc:"Environment ID"`
+		ID         string `path:"id" doc:"Sandbox ID"`
+		Checkpoint string `path:"checkpoint" doc:"Checkpoint ID"`
+		Body       struct {
+			Name string `json:"name" minLength:"1" maxLength:"80" doc:"Human-readable checkpoint name"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "renameCheckpoint", Method: http.MethodPut,
+		Path: "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}", Tags: []string{"checkpoints"},
+	}, func(ctx context.Context, in *renameCheckpointIn) (*struct{ Body store.Checkpoint }, error) {
+		checkpoint, err := s.Sandboxes.RenameCheckpoint(ctx, in.Env, in.ID, in.Checkpoint, in.Body.Name)
+		return &struct{ Body store.Checkpoint }{checkpoint}, apiError(err)
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "restoreCheckpoint", Method: http.MethodPost,
 		Path: "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}/restore", Tags: []string{"checkpoints"},
