@@ -20,6 +20,10 @@ type Event struct {
 	EnvironmentID string `json:"environmentId,omitempty"`
 	// ID names the changed object, e.g. a new approval, so clients can notify about it.
 	ID string `json:"id,omitempty"`
+	// TeammateID and SandboxID narrow a secrets event to the sandboxes of one teammate or
+	// to one sandbox; without them it covers the environment.
+	TeammateID string `json:"teammateId,omitempty"`
+	SandboxID  string `json:"sandboxId,omitempty"`
 }
 
 // Bus is an in-memory publish/subscribe hub. The zero value is ready to use.

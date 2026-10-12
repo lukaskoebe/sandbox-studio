@@ -39,7 +39,9 @@ func (plainSealer) Unseal(b, _ []byte) ([]byte, error) { return b, nil }
 
 type fakeSecrets []secrets.Binding
 
-func (f fakeSecrets) Bindings(context.Context, string) ([]secrets.Binding, error) { return f, nil }
+func (f fakeSecrets) Bindings(context.Context, store.Sandbox) ([]secrets.Binding, error) {
+	return f, nil
+}
 
 const (
 	apiPlaceholder    = "studio-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -52,6 +54,10 @@ const (
 	headerValue       = "header-secret-value"
 	plainPlaceholder  = "studio-dddddddddddddddddddddddddddddddd"
 	headerPlaceholder = "studio-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	// Secrets of the environment the sandbox doesn't see: API_KEY of another scope, which
+	// the sandbox's own API_KEY overrides, and a secret of another sandbox.
+	foreignPlaceholder   = "studio-gggggggggggggggggggggggggggggggg"
+	elsewherePlaceholder = "studio-hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh"
 )
 
 var testBindings = fakeSecrets{
@@ -61,6 +67,9 @@ var testBindings = fakeSecrets{
 	{Name: "OTHER_KEY", Placeholder: otherPlaceholder, Hosts: []string{"other.example"}, Value: []byte("other-secret-value")},
 	{Name: "HEADER_KEY", Placeholder: headerPlaceholder, Hosts: []string{"*.proxied.example", "proxied.example"}, Value: []byte(headerValue)},
 	{Name: "PLAIN_KEY", Placeholder: plainPlaceholder, Hosts: []string{"plain.example"}, Value: []byte("plain-secret-value")},
+	// The vault leaves the hosts of foreign secrets empty; these prove they are ignored.
+	{Name: "API_KEY", Placeholder: foreignPlaceholder, Hosts: []string{"example.com"}, Foreign: true},
+	{Name: "ELSEWHERE_KEY", Placeholder: elsewherePlaceholder, Hosts: []string{"example.com"}, Foreign: true},
 }
 
 type seen struct {
@@ -341,6 +350,9 @@ func TestInterceptRefusesMisplacedSecrets(t *testing.T) {
 		{"unbound in a header", "https://other.example/", apiPlaceholder, 403, "API_KEY"},
 		{"plaintext", "http://plain.example:8080/", plainPlaceholder, 403, "only sends the secret PLAIN_KEY over HTTPS"},
 		{"rule header with an unbound secret", "https://badref.example/", "", 403, "secret API_KEY, which is not bound to badref.example"},
+		{"overridden placeholder", "https://example.com/?k=" + foreignPlaceholder, "", 403, "secret API_KEY that this sandbox doesn't see in Sandbox Studio. Use $API_KEY instead, which this sandbox sees."},
+		{"another sandbox's placeholder", "https://example.com/", "Bearer " + elsewherePlaceholder, 403, "secret ELSEWHERE_KEY that this sandbox doesn't see in Sandbox Studio."},
+		{"another sandbox's placeholder under a caddy rule", "https://caddy.example/", elsewherePlaceholder, 403, "secret ELSEWHERE_KEY that this sandbox doesn't see"},
 	} {
 		before := h.requests()
 		resp, body := get(t, c, tc.url, "X-Key", tc.header)
@@ -350,6 +362,11 @@ func TestInterceptRefusesMisplacedSecrets(t *testing.T) {
 		if h.requests() != before {
 			t.Errorf("%s: the request reached the upstream", tc.name)
 		}
+	}
+
+	// The sandbox sees no ELSEWHERE_KEY, so the refusal has nothing to point to.
+	if _, body := get(t, c, "https://example.com/", "X-Key", elsewherePlaceholder); strings.Contains(body, "instead") {
+		t.Errorf("refusal points to a secret the sandbox lacks: %q", body)
 	}
 
 	// Without a placeholder, plain HTTP to a host with secrets passes.
@@ -620,6 +637,17 @@ func TestBoundTo(t *testing.T) {
 	bound, unbound := boundTo(testBindings, "api.proxied.example")
 	if len(bound) != 1 || bound[0].Name != "HEADER_KEY" || len(unbound) != len(testBindings)-1 {
 		t.Fatalf("bound %v", bound)
+	}
+	// Foreign secrets are never bound, whatever their hosts.
+	bound, _ = boundTo(testBindings, "example.com")
+	if len(bound) != 2 || bound[0].Placeholder != apiPlaceholder || bound[1].Name != "PATH_KEY" {
+		t.Fatalf("bound to example.com %v", bound)
+	}
+	if b, ok := named(testBindings, "API_KEY"); !ok || b.Placeholder != apiPlaceholder {
+		t.Fatalf("named API_KEY = %+v", b)
+	}
+	if _, ok := named(testBindings, "ELSEWHERE_KEY"); ok {
+		t.Fatal("named found a foreign secret")
 	}
 	if hostOnly("[2001:db8::1]:443") != "2001:db8::1" || hostOnly("Example.COM.:8443") != "example.com" {
 		t.Fatal("hostOnly")

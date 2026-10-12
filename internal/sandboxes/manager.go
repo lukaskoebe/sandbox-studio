@@ -50,7 +50,7 @@ type Manager struct {
 		CertPEM(ctx context.Context, envID string) ([]byte, error)
 	}
 	Secrets interface {
-		Env(ctx context.Context, envID string) (map[string]string, error)
+		Env(ctx context.Context, sb store.Sandbox) (map[string]string, error)
 	}
 	Paths paths.Paths
 	Log   *slog.Logger

@@ -39,7 +39,7 @@ func (m *memKeys) Set(key []byte) error {
 // boundValue returns the value the gateway would substitute for the environment's first secret.
 func boundValue(t *testing.T, s *Server, envID string) string {
 	t.Helper()
-	b, err := s.Vault.Bindings(context.Background(), envID)
+	b, err := s.Vault.Bindings(context.Background(), store.Sandbox{EnvironmentID: envID})
 	if err != nil || len(b) == 0 {
 		t.Fatalf("bindings: %+v %v", b, err)
 	}
@@ -174,4 +174,106 @@ func TestSecretValidation(t *testing.T) {
 	if rec := do(h, "POST", testOrigin+"/api/environments/nope/secrets", `{"name":"KEY","value":"v","hosts":["a.com"]}`); rec.Code != http.StatusNotFound {
 		t.Errorf("create in unknown environment: got %d, want 404", rec.Code)
 	}
+}
+
+func TestScopedSecrets(t *testing.T) {
+	h, s := newTestServer(t)
+	ctx := t.Context()
+	env := newEnvironment(t, s, "work")
+	other := newEnvironment(t, s, "other")
+	base := testOrigin + "/api/environments/" + env.ID + "/secrets"
+	prov, _ := s.Store.CreateProvider(ctx, store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "claude", Kind: "claude_subscription"}, nil)
+	ada, err := s.Store.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: "Ada", Harness: "claude", ProviderID: prov.ID, GitName: "Ada", GitEmail: "ada@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adaBox, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "ada-box", CPUs: 1, TeammateID: ada.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose := newSandbox(t, s, env, "loose")
+	elsewhere := newSandbox(t, s, other, "elsewhere")
+	ch, unsubscribe := s.Bus.Subscribe()
+	defer unsubscribe()
+
+	create := func(scope string) store.Secret {
+		t.Helper()
+		rec := do(h, "POST", base, `{"name":"GH_TOKEN","value":"v","hosts":["api.github.com"]`+scope+`}`)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create %s: %d %s", scope, rec.Code, rec.Body)
+		}
+		return decode[store.Secret](t, rec)
+	}
+	envSecret := create("")
+	expectEvent(t, ch, events.Event{Topic: events.TopicSecrets, EnvironmentID: env.ID})
+	teammateSecret := create(`,"teammateId":"` + ada.ID + `"`)
+	expectEvent(t, ch, events.Event{Topic: events.TopicSecrets, EnvironmentID: env.ID, TeammateID: ada.ID})
+	sandboxSecret := create(`,"sandboxId":"` + adaBox.ID + `"`)
+	expectEvent(t, ch, events.Event{Topic: events.TopicSecrets, EnvironmentID: env.ID, SandboxID: adaBox.ID})
+	if envSecret.TeammateID != "" || envSecret.SandboxID != "" || teammateSecret.TeammateID != ada.ID || sandboxSecret.SandboxID != adaBox.ID {
+		t.Fatalf("scopes: %+v %+v %+v", envSecret, teammateSecret, sandboxSecret)
+	}
+
+	for _, tc := range []struct {
+		body string
+		code int
+	}{
+		{`,"teammateId":"` + ada.ID + `"`, http.StatusConflict},
+		{`,"teammateId":"` + ada.ID + `","sandboxId":"` + loose.ID + `"`, http.StatusUnprocessableEntity},
+		{`,"sandboxId":"` + elsewhere.ID + `"`, http.StatusUnprocessableEntity},
+		{`,"teammateId":"nobody"`, http.StatusUnprocessableEntity},
+	} {
+		if rec := do(h, "POST", base, `{"name":"GH_TOKEN","value":"x","hosts":["a.com"]`+tc.body+`}`); rec.Code != tc.code {
+			t.Errorf("%s: %d %s", tc.body, rec.Code, rec.Body)
+		}
+	}
+
+	list := decode[[]store.Secret](t, do(h, "GET", base, ""))
+	if len(list) != 3 {
+		t.Fatalf("list: %+v", list)
+	}
+	var raw []map[string]any
+	json.Unmarshal(do(h, "GET", base, "").Body.Bytes(), &raw)
+	var teammates, sandboxes int
+	for _, r := range raw {
+		if r["teammateId"] == ada.ID {
+			teammates++
+		}
+		if r["sandboxId"] == adaBox.ID {
+			sandboxes++
+		}
+	}
+	if teammates != 1 || sandboxes != 1 {
+		t.Fatalf("list hides the scopes: %v", raw)
+	}
+
+	// The scope is fixed: an update naming one is refused, and nothing changes.
+	if rec := do(h, "PUT", base+"/"+teammateSecret.ID, `{"hosts":["api.github.com"],"sandboxId":"`+loose.ID+`"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("update with a scope: %d %s", rec.Code, rec.Body)
+	}
+	// Editing keeps the scope; only the affected sandboxes hear of it.
+	if rec := do(h, "PUT", base+"/"+teammateSecret.ID, `{"hosts":["api.github.com"],"note":"n"}`); rec.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body)
+	}
+	if got, _ := s.Store.SecretByID(ctx, env.ID, teammateSecret.ID); got.TeammateID != ada.ID || got.SandboxID != "" || got.Note != "n" {
+		t.Fatalf("update changed the scope or dropped the note: %+v", got)
+	}
+	expectEvent(t, ch, events.Event{Topic: events.TopicSecrets, EnvironmentID: env.ID, TeammateID: ada.ID})
+
+	// Each sandbox resolves GH_TOKEN to its most specific scope.
+	sees := func(sb store.Sandbox, want store.Secret) {
+		t.Helper()
+		if e, err := s.Vault.Env(ctx, sb); err != nil || e["GH_TOKEN"] != want.Placeholder {
+			t.Errorf("%s sees %v (%v), want %s", sb.Name, e, err, want.Placeholder)
+		}
+	}
+	sees(adaBox, sandboxSecret)
+	sees(loose, envSecret)
+
+	if rec := do(h, "DELETE", base+"/"+sandboxSecret.ID, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+	expectEvent(t, ch, events.Event{Topic: events.TopicSecrets, EnvironmentID: env.ID, SandboxID: adaBox.ID})
+	sees(adaBox, teammateSecret)
+	sees(loose, envSecret)
 }

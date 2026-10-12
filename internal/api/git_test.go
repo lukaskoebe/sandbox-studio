@@ -57,7 +57,7 @@ func TestForges(t *testing.T) {
 	if v, err := s.Vault.Value(context.Background(), env.ID, f.SecretID); err != nil || v != token {
 		t.Fatalf("token = %q, %v", v, err)
 	}
-	if b, err := s.Vault.Bindings(context.Background(), env.ID); err != nil || len(b) != 0 {
+	if b, err := s.Vault.Bindings(context.Background(), store.Sandbox{EnvironmentID: env.ID}); err != nil || len(b) != 0 {
 		t.Fatalf("the forge token is bound for sandboxes: %+v, %v", b, err)
 	}
 	if rec := do(h, "PUT", base+"/"+f.ID+"/token", `{"token":"new-forge-token-456"}`); rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "new-forge-token") {
@@ -192,7 +192,7 @@ func TestSSHForges(t *testing.T) {
 			return nil
 		})
 	}
-	if b, err := s.Vault.Bindings(ctx, env.ID); err != nil || len(b) != 0 {
+	if b, err := s.Vault.Bindings(ctx, store.Sandbox{EnvironmentID: env.ID}); err != nil || len(b) != 0 {
 		t.Fatalf("the key is bound for sandboxes: %+v, %v", b, err)
 	}
 	if rec := do(h, "DELETE", testOrigin+"/api/environments/"+env.ID+"/secrets/"+f.SecretID, ""); rec.Code != http.StatusConflict {

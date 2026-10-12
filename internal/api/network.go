@@ -193,12 +193,15 @@ func (s *Server) caddyConfigFrom(ctx context.Context, env, action string, in Rul
 		return store.RuleConfig{}, apiError(err)
 	}
 	for _, name := range slices.Sorted(maps.Keys(compiled.Secrets)) {
-		i := slices.IndexFunc(secrets, func(s store.Secret) bool { return s.Name == name })
-		if i < 0 {
+		named := slices.DeleteFunc(slices.Clone(secrets), func(s store.Secret) bool { return s.Name != name })
+		if len(named) == 0 {
 			return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("the Caddyfile refers to {secret.%s}, but this environment has no secret %s", name, name))
 		}
 		for _, host := range compiled.Secrets[name] {
-			if !slices.ContainsFunc(secrets[i].Hosts, func(p string) bool { return policy.Covers(p, host) }) {
+			// Secrets of the same name in other scopes are checked per sandbox when sent.
+			if !slices.ContainsFunc(named, func(s store.Secret) bool {
+				return slices.ContainsFunc(s.Hosts, func(p string) bool { return policy.Covers(p, host) })
+			}) {
 				return store.RuleConfig{}, huma.Error422UnprocessableEntity(fmt.Sprintf("the Caddyfile sends {secret.%s} to %s, but the secret is not bound to %s", name, host, host))
 			}
 		}

@@ -98,8 +98,9 @@ func (s *Service) finishedOutcome(key string) (*credOutcome, bool) {
 	return nil, false
 }
 
-// credential finds a vault secret the page may receive.
-func (s *Service) credential(ctx context.Context, envID, name, pageURL string) (store.Secret, error) {
+// credential finds a vault secret the page may receive, among those the agent sandbox
+// sandboxID of teammateID sees.
+func (s *Service) credential(ctx context.Context, envID, teammateID, sandboxID, name, pageURL string) (store.Secret, error) {
 	u, err := url.Parse(pageURL)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" {
 		return store.Secret{}, refuse("credentials are filled into https pages only")
@@ -108,12 +109,9 @@ func (s *Service) credential(ctx context.Context, envID, name, pageURL string) (
 	if err != nil {
 		return store.Secret{}, err
 	}
-	for _, sec := range list {
+	for _, sec := range store.VisibleSecrets(list, sandboxID, teammateID) {
 		if sec.Name != name {
 			continue
-		}
-		if sec.StudioOnly {
-			break
 		}
 		for _, h := range sec.Hosts {
 			if policy.Covers(h, u.Hostname()) {
@@ -143,7 +141,7 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		return nil, err
 	}
 	origin := Origin(pageURL)
-	if _, err := c.s.credential(ctx, c.st.env, in.Name, pageURL); err != nil {
+	if _, err := c.s.credential(ctx, c.st.env, c.st.teammate, c.sb.ID, in.Name, pageURL); err != nil {
 		return nil, err
 	}
 	patterns, err := c.s.Store.BrowserPatterns(ctx, c.st.env, c.st.teammate)
@@ -250,7 +248,7 @@ func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPa
 	if Origin(cur.URL) != p.Origin {
 		return fail(refuse("the page moved to %s since the request; ask again", Origin(cur.URL)))
 	}
-	sec, err := s.credential(ctx, envID, p.Credential, cur.URL)
+	sec, err := s.credential(ctx, envID, p.TeammateID, p.SandboxID, p.Credential, cur.URL)
 	if err != nil {
 		return fail(err)
 	}

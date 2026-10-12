@@ -108,7 +108,7 @@ func TestProviderValidation(t *testing.T) {
 	env := newEnvironment(t, s, "work")
 	other := newEnvironment(t, s, "other")
 	base := testOrigin + "/api/environments/" + env.ID + "/providers"
-	if _, err := s.Vault.Create(context.Background(), env.ID, "PROVIDER_TAKEN_KEY", "v", []string{"a.com"}, ""); err != nil {
+	if _, err := s.Vault.Create(context.Background(), store.Secret{EnvironmentID: env.ID, Name: "PROVIDER_TAKEN_KEY", Hosts: []string{"a.com"}}, "v"); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {

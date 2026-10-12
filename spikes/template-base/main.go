@@ -410,7 +410,7 @@ func (c probeCA) CertPEM(context.Context, string) ([]byte, error) {
 
 type probeSecrets struct{ env map[string]string }
 
-func (s probeSecrets) Env(context.Context, string) (map[string]string, error) {
+func (s probeSecrets) Env(context.Context, store.Sandbox) (map[string]string, error) {
 	copy := make(map[string]string, len(s.env))
 	for name, value := range s.env {
 		copy[name] = value
