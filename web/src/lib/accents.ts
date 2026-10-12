@@ -1,16 +1,12 @@
 /**
  * The areas that get a hue: network, git, browser, memory and chat. One hue per area, used
- * sparingly for the rule of an approval card, its kind chip and section tiles
- * (docs/design/ui-style.md). Status colors are never an area. The hues are the --acc-* tokens
- * in styles.css.
+ * sparingly for a card's rule, an icon tile and a kind chip (docs/design/ui-style.md). Status
+ * colors are never an area. The hues are the --acc-* tokens in styles.css.
  */
 export type Area = "network" | "git" | "browser" | "memory" | "chat"
 
-/**
- * Tailwind classes per area. They are written out in full so Tailwind generates them.
- * `rule` is a card's left edge; `tile` is an icon's square, a faint tint with the hue on top.
- */
-export const areaClasses: Record<Area, { rule: string; tile: string }> = {
+// Written out in full so Tailwind generates them.
+const classes: Record<Area, { rule: string; tile: string }> = {
   network: {
     rule: "border-l-(--acc-network)",
     tile: "bg-(--acc-network)/11 text-(--acc-network)",
@@ -31,4 +27,14 @@ export const areaClasses: Record<Area, { rule: string; tile: string }> = {
     rule: "border-l-(--acc-chat)",
     tile: "bg-(--acc-chat)/11 text-(--acc-chat)",
   },
+}
+
+/** The left edge of a card of this area; a neutral edge without one. */
+export function ruleClass(area?: Area): string {
+  return area ? classes[area].rule : "border-l-border"
+}
+
+/** The icon tile of this area: a faint tint with the hue on top; neutral without an area. */
+export function tileClass(area?: Area): string {
+  return area ? classes[area].tile : "bg-foreground/[0.07] text-foreground/70"
 }
