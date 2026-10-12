@@ -3,6 +3,7 @@ package agentcall
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -13,7 +14,7 @@ func TestBrowserTools(t *testing.T) {
 	want := []string{agentproto.MethodBrowserOpen, agentproto.MethodBrowserSnapshot, agentproto.MethodBrowserClick,
 		agentproto.MethodBrowserFill, agentproto.MethodBrowserType, agentproto.MethodBrowserPress, agentproto.MethodBrowserSelect,
 		agentproto.MethodBrowserScroll, agentproto.MethodBrowserGetText, agentproto.MethodBrowserScreenshot,
-		agentproto.MethodBrowserWait, agentproto.MethodBrowserBack, agentproto.MethodBrowserFillCredential}
+		agentproto.MethodBrowserWait, agentproto.MethodBrowserBack, agentproto.MethodBrowserFillCredential, agentproto.MethodBrowserClose}
 	names := map[string]bool{}
 	for _, tl := range Tools {
 		if names[tl.Name] {
@@ -35,6 +36,34 @@ func TestBrowserTools(t *testing.T) {
 	}
 	if !strings.Contains(mcpInstructions, "browser_fill_credential") {
 		t.Error("instructions do not mention the browser")
+	}
+}
+
+// Every browser tool but browser_open and browser_close takes an optional session. browser_open
+// takes ephemeral, and browser_close needs its session.
+func TestBrowserSessionArguments(t *testing.T) {
+	for _, tl := range Tools {
+		if !strings.HasPrefix(tl.Name, "browser_") {
+			continue
+		}
+		props, _ := tl.InputSchema["properties"].(map[string]any)
+		required, _ := tl.InputSchema["required"].([]string)
+		_, hasSession := props["session"]
+		_, hasEphemeral := props["ephemeral"]
+		switch tl.Name {
+		case agentproto.MethodBrowserOpen:
+			if !hasSession || !hasEphemeral {
+				t.Errorf("%s takes no session or ephemeral", tl.Name)
+			}
+		case agentproto.MethodBrowserClose:
+			if !hasSession || !slices.Contains(required, "session") {
+				t.Errorf("%s does not need a session", tl.Name)
+			}
+		default:
+			if !hasSession || slices.Contains(required, "session") {
+				t.Errorf("%s takes no optional session", tl.Name)
+			}
+		}
 	}
 }
 
