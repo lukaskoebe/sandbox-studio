@@ -9,13 +9,13 @@ For a forge added on an environment's **Git** page, Studio can act as the virtua
 
 ## Add a forge
 
-Studio supports GitHub, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, and SSH Git hosts. Add each forge to the environment where its sandboxes will use it. Forge hosts must be public; private and LAN hosts are refused.
+Studio supports GitHub, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, and SSH Git hosts. Add each forge to the environment where its sandboxes will use it. Forge hosts must be public; private and LAN hosts are refused. Paste a repository URL, such as `git@github.com:owner/repo.git`, and Studio fills in the rest of the form.
 
 - For GitHub or Forgejo/Gitea/Codeberg, add a token with access limited to the repositories the agent needs.
 - For another HTTPS host, provide its username and token.
-- For SSH, compare the scanned host-key fingerprint with the fingerprint published by the host, then confirm it. Studio creates a dedicated key and shows its public key for you to add to the host.
+- For SSH, Studio signs with the keys in your SSH agent, the same ones `ssh` uses. Compare the scanned host-key fingerprint with the fingerprint published by the host, then confirm it. To keep a key for Studio alone, choose a Studio key instead: Studio creates it and shows its public key for you to add to the host.
 
-Forge tokens and SSH private keys stay in Studio's host-side vault. They are not sent to a sandbox. The Git page can test a forge connection and replace an expiring token.
+Forge tokens and Studio's SSH keys stay in Studio's host-side vault. Your SSH agent is only used on the host. Neither reaches a sandbox. The Git page can test a forge connection and replace an expiring token.
 
 The forge row shows its Studio remote URL, in the form `https://git.studio.internal/<forge>/<path>.git`. Copy that URL when cloning from a plain terminal. When an agent session starts, Studio also writes managed Git URL rules so common URLs for configured forges can route through Studio.
 
