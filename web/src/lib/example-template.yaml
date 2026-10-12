@@ -1,0 +1,13 @@
+# Web app: Node.js and Python with the PostgreSQL client.
+resources:
+  cpus: 2
+  memory: 4GiB
+  workspace: 20GiB
+  docker: 20GiB
+tools:
+  node: "22"
+  python: "3.13"
+apt:
+  - postgresql-client
+setup: |
+  corepack enable

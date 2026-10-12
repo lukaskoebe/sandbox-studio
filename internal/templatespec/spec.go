@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,35 +57,43 @@ type ToolPin struct {
 }
 
 // ParseYAML parses one bounded YAML mapping, rejects unsupported YAML features,
-// and resolves resource defaults before returning the spec.
+// and resolves resource defaults before returning the spec. Its errors are
+// *Error values listing every problem found, with source positions.
 func ParseYAML(data []byte) (Spec, error) {
 	if len(data) == 0 || len(data) > maxInputBytes {
-		return Spec{}, invalid("input must be between 1 byte and 64 KiB")
+		return Spec{}, inputError(invalid("input must be between 1 byte and 64 KiB"))
 	}
 	if !utf8.Valid(data) {
-		return Spec{}, invalid("input must be valid UTF-8")
+		return Spec{}, inputError(invalid("input must be valid UTF-8"))
 	}
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	var document yaml.Node
-	if err := decoder.Decode(&document); err != nil {
-		return Spec{}, invalid("parse YAML: %v", err)
+	if err := decoder.Decode(&document); err == io.EOF {
+		return Spec{}, inputError(invalid("document must contain one mapping"))
+	} else if err != nil {
+		return Spec{}, syntaxError("parse YAML: ", err)
 	}
 	var trailing yaml.Node
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
-			return Spec{}, invalid("exactly one YAML document is allowed")
+			var p problems
+			p.add(&trailing, "exactly one YAML document is allowed")
+			return Spec{}, p.err()
 		}
-		return Spec{}, invalid("parse trailing YAML: %v", err)
+		return Spec{}, syntaxError("parse trailing YAML: ", err)
 	}
-	if err := validateYAMLTree(&document); err != nil {
-		return Spec{}, err
+	var p problems
+	if validateYAMLTree(&document, &p); len(p.list) > 0 {
+		return Spec{}, p.err()
 	}
 	if document.Kind != yaml.DocumentNode || len(document.Content) != 1 {
-		return Spec{}, invalid("document must contain one mapping")
+		p.add(&document, "document must contain one mapping")
+		return Spec{}, p.err()
 	}
 	root := document.Content[0]
 	if root.Kind != yaml.MappingNode || root.Tag != "!!map" {
-		return Spec{}, invalid("document root must be a mapping")
+		p.add(root, "document root must be a mapping")
+		return Spec{}, p.err()
 	}
 
 	defaults := resources.Defaults()
@@ -93,30 +102,34 @@ func ParseYAML(data []byte) (Spec, error) {
 		Tools:     make([]ToolPin, 0),
 		Apt:       make([]string, 0),
 	}
-	entries := mappingEntries(root)
-	var err error
-	for key, value := range entries {
-		switch key {
+	// Walk the mapping in source order so problems come out in a stable order.
+	for i := 0; i < len(root.Content); i += 2 {
+		key, value := root.Content[i], root.Content[i+1]
+		switch key.Value {
 		case "resources":
-			spec.Resources, err = parseResources(value, defaults)
+			spec.Resources = parseResources(key, value, defaults, &p)
 		case "tools":
-			spec.Tools, err = parseTools(value)
+			spec.Tools = parseTools(key, value, &p)
 		case "apt":
-			spec.Apt, err = parseApt(value)
+			spec.Apt = parseApt(key, value, &p)
 		case "setup":
-			spec.Setup, err = parseSetup(value)
+			setup, err := parseSetup(value)
+			if err != nil {
+				p.addErr(at(key, value), err)
+			}
+			spec.Setup = setup
 		default:
-			err = invalid("unknown top-level key %q", key)
+			p.add(key, "unknown top-level key %q", key.Value)
 		}
-		if err != nil {
-			return Spec{}, err
-		}
+	}
+	if err := p.err(); err != nil {
+		return Spec{}, err
 	}
 	if err := validateResources(spec.Resources); err != nil {
-		return Spec{}, err
+		return Spec{}, inputError(err)
 	}
 	if err := validateSpecFields(spec); err != nil {
-		return Spec{}, err
+		return Spec{}, inputError(err)
 	}
 	return spec, nil
 }
@@ -219,15 +232,25 @@ type canonicalResources struct {
 	DockerMiB    int64 `json:"dockerMiB"`
 }
 
-func parseResources(node *yaml.Node, defaults resources.Resources) (resources.Resources, error) {
-	entries, err := requireMapping(node, "resources")
-	if err != nil {
-		return resources.Resources{}, err
+// resourceKeys maps the field names in resources.Validate errors to spec keys.
+var resourceKeys = map[string]string{
+	"cpus": "cpus", "memoryMiB": "memory", "maxMemoryMiB": "max_memory",
+	"workspaceMiB": "workspace", "dockerMiB": "docker",
+}
+
+func parseResources(key, node *yaml.Node, defaults resources.Resources, p *problems) resources.Resources {
+	if node.Kind != yaml.MappingNode || node.Tag != "!!map" {
+		p.add(at(key, node), "resources must be a mapping")
+		return defaults
 	}
 	resolved := defaults
 	maxMemorySet := false
-	for key, value := range entries {
-		switch key {
+	values := make(map[string]*yaml.Node, len(node.Content)/2)
+	before := len(p.list)
+	for i := 0; i < len(node.Content); i += 2 {
+		name, value := node.Content[i], node.Content[i+1]
+		var err error
+		switch name.Value {
 		case "cpus":
 			resolved.CPUs, err = parseCPU(value)
 		case "memory":
@@ -240,19 +263,31 @@ func parseResources(node *yaml.Node, defaults resources.Resources) (resources.Re
 		case "docker":
 			resolved.DockerMiB, err = parseSize(value)
 		default:
-			err = invalid("unknown resources key %q", key)
+			p.add(name, "unknown resources key %q", name.Value)
+			continue
 		}
 		if err != nil {
-			return resources.Resources{}, err
+			p.addErr(at(name, value), err)
 		}
+		values[name.Value] = at(name, value)
+	}
+	if len(p.list) > before {
+		return defaults
 	}
 	if !maxMemorySet {
 		resolved.MaxMemoryMiB = resolved.MemoryMiB
 	}
-	if err := validateResources(resolved); err != nil {
-		return resources.Resources{}, err
+	if err := resolved.Validate(); err != nil {
+		// Report a range problem at the value it names, or at "resources" when
+		// that value is a default.
+		where := key
+		detail := strings.TrimPrefix(err.Error(), resources.ErrInvalid.Error()+": ")
+		if field, _, ok := strings.Cut(detail, " "); ok && values[resourceKeys[field]] != nil {
+			where = values[resourceKeys[field]]
+		}
+		p.addErr(where, validateResources(resolved))
 	}
-	return resolved, nil
+	return resolved
 }
 
 func parseCPU(node *yaml.Node) (int64, error) {
@@ -294,27 +329,31 @@ func parseSize(node *yaml.Node) (int64, error) {
 	return count * multiplier, nil
 }
 
-func parseTools(node *yaml.Node) ([]ToolPin, error) {
-	entries, err := requireMapping(node, "tools")
-	if err != nil {
-		return nil, err
+func parseTools(key, node *yaml.Node, p *problems) []ToolPin {
+	if node.Kind != yaml.MappingNode || node.Tag != "!!map" {
+		p.add(at(key, node), "tools must be a mapping")
+		return nil
 	}
-	if len(entries) > maxToolPins {
-		return nil, invalid("at most %d tools are supported", maxToolPins)
+	if len(node.Content)/2 > maxToolPins {
+		p.add(key, "at most %d tools are supported", maxToolPins)
+		return nil
 	}
-	tools := make([]ToolPin, 0, len(entries))
-	for name, value := range entries {
-		if !supportedTool(name) {
-			return nil, invalid("unsupported tool %q", name)
+	tools := make([]ToolPin, 0, len(node.Content)/2)
+	for i := 0; i < len(node.Content); i += 2 {
+		name, value := node.Content[i], node.Content[i+1]
+		if !supportedTool(name.Value) {
+			p.add(name, "unsupported tool %q", name.Value)
+			continue
 		}
 		version, err := parseToolVersion(value)
 		if err != nil {
-			return nil, err
+			p.addErr(at(name, value), err)
+			continue
 		}
-		tools = append(tools, ToolPin{Name: name, Version: version})
+		tools = append(tools, ToolPin{Name: name.Value, Version: version})
 	}
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
-	return tools, nil
+	return tools
 }
 
 func parseToolVersion(node *yaml.Node) (string, error) {
@@ -325,27 +364,31 @@ func parseToolVersion(node *yaml.Node) (string, error) {
 	return node.Value, nil
 }
 
-func parseApt(node *yaml.Node) ([]string, error) {
+func parseApt(key, node *yaml.Node, p *problems) []string {
 	if node.Kind != yaml.SequenceNode || node.Tag != "!!seq" {
-		return nil, invalid("apt must be a sequence of package-name strings")
+		p.add(at(key, node), "apt must be a sequence of package-name strings")
+		return nil
 	}
 	if len(node.Content) > maxAptPackages {
-		return nil, invalid("apt contains more than %d packages", maxAptPackages)
+		p.add(key, "apt contains more than %d packages", maxAptPackages)
+		return nil
 	}
 	packages := make([]string, 0, len(node.Content))
 	seen := make(map[string]struct{}, len(node.Content))
 	for _, item := range node.Content {
 		name, err := parsePackageName(item)
 		if err != nil {
-			return nil, err
+			p.addErr(item, err)
+			continue
 		}
 		if _, duplicate := seen[name]; duplicate {
-			return nil, invalid("duplicate apt package %q", name)
+			p.add(item, "duplicate apt package %q", name)
+			continue
 		}
 		seen[name] = struct{}{}
 		packages = append(packages, name)
 	}
-	return packages, nil
+	return packages
 }
 
 func parsePackageName(node *yaml.Node) (string, error) {
@@ -421,30 +464,12 @@ func validateResources(value resources.Resources) error {
 func supportedTool(name string) bool {
 	// This is Studio's initial supported spec set, not a statement about the
 	// broader set of tools that mise can install.
-	switch name {
-	case "node", "python", "go":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(toolNames, name)
 }
 
-func requireMapping(node *yaml.Node, description string) (map[string]*yaml.Node, error) {
-	if node.Kind != yaml.MappingNode || node.Tag != "!!map" {
-		return nil, invalid("%s must be a mapping", description)
-	}
-	return mappingEntries(node), nil
-}
-
-func mappingEntries(node *yaml.Node) map[string]*yaml.Node {
-	entries := make(map[string]*yaml.Node, len(node.Content)/2)
-	for i := 0; i < len(node.Content); i += 2 {
-		entries[node.Content[i].Value] = node.Content[i+1]
-	}
-	return entries
-}
-
-func validateYAMLTree(root *yaml.Node) error {
+// validateYAMLTree records unsupported YAML features in p. It stops at the
+// first size limit it hits, so the walk stays bounded.
+func validateYAMLTree(root *yaml.Node, p *problems) {
 	type pendingNode struct {
 		node  *yaml.Node
 		depth int
@@ -455,40 +480,39 @@ func validateYAMLTree(root *yaml.Node) error {
 		last := len(stack) - 1
 		current := stack[last]
 		stack = stack[:last]
+		node := current.node
 		nodes++
 		if nodes > maxYAMLNodes {
-			return invalid("YAML document exceeds %d nodes", maxYAMLNodes)
+			p.add(node, "YAML document exceeds %d nodes", maxYAMLNodes)
+			return
 		}
 		if current.depth > maxYAMLDepth {
-			return invalid("YAML document exceeds depth %d", maxYAMLDepth)
+			p.add(node, "YAML document exceeds depth %d", maxYAMLDepth)
+			return
 		}
-		node := current.node
-		if node.Anchor != "" || node.Kind == yaml.AliasNode {
-			return invalid("YAML anchors and aliases are not supported")
-		}
-		if node.Kind != yaml.DocumentNode && (!knownYAMLTag(node.Tag) || node.Tag == "!!merge") {
-			return invalid("YAML tag %q is not supported", node.Tag)
-		}
-		switch node.Kind {
-		case yaml.DocumentNode, yaml.MappingNode, yaml.SequenceNode, yaml.ScalarNode:
-		default:
-			return invalid("YAML node kind %d is not supported", node.Kind)
+		switch {
+		case node.Anchor != "" || node.Kind == yaml.AliasNode:
+			p.add(node, "YAML anchors and aliases are not supported")
+		case node.Kind != yaml.DocumentNode && (!knownYAMLTag(node.Tag) || node.Tag == "!!merge"):
+			p.add(node, "YAML tag %q is not supported", node.Tag)
+		case node.Kind != yaml.DocumentNode && node.Kind != yaml.MappingNode && node.Kind != yaml.SequenceNode && node.Kind != yaml.ScalarNode:
+			p.add(node, "YAML node kind %d is not supported", node.Kind)
 		}
 		if node.Kind == yaml.MappingNode {
 			if len(node.Content)%2 != 0 {
-				return invalid("malformed YAML mapping")
+				p.add(node, "malformed YAML mapping")
+				continue
 			}
 			seen := make(map[string]struct{}, len(node.Content)/2)
 			for i := 0; i < len(node.Content); i += 2 {
 				key := node.Content[i]
-				if key.Kind != yaml.ScalarNode || key.Tag != "!!str" {
-					return invalid("YAML mapping keys must be strings")
-				}
-				if key.Value == "<<" {
-					return invalid("YAML merge keys are not supported")
-				}
-				if _, duplicate := seen[key.Value]; duplicate {
-					return invalid("duplicate YAML key %q", key.Value)
+				switch _, duplicate := seen[key.Value]; {
+				case key.Value == "<<":
+					p.add(key, "YAML merge keys are not supported")
+				case key.Kind != yaml.ScalarNode || key.Tag != "!!str":
+					p.add(key, "YAML mapping keys must be strings")
+				case duplicate:
+					p.add(key, "duplicate YAML key %q", key.Value)
 				}
 				seen[key.Value] = struct{}{}
 			}
@@ -497,7 +521,6 @@ func validateYAMLTree(root *yaml.Node) error {
 			stack = append(stack, pendingNode{node: node.Content[i], depth: current.depth + 1})
 		}
 	}
-	return nil
 }
 
 func knownYAMLTag(tag string) bool {

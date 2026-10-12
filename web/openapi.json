@@ -548,6 +548,50 @@
         ],
         "type": "object"
       },
+      "BuildSourceProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "line": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "column",
+          "message"
+        ],
+        "type": "object"
+      },
+      "BuildSourceValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/BuildSourceProblem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "problems"
+        ],
+        "type": "object"
+      },
       "Chat": {
         "additionalProperties": false,
         "properties": {
@@ -4602,6 +4646,21 @@
         ],
         "type": "object"
       },
+      "ValidateInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "description": "Template specification in YAML",
+            "maxLength": 65536,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "type": "object"
+      },
       "View": {
         "additionalProperties": false,
         "properties": {
@@ -4682,6 +4741,54 @@
           "workspaceMiB",
           "dockerMiB",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "Vocabulary": {
+        "additionalProperties": false,
+        "properties": {
+          "resourceKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sizeUnits": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "topLevelKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "topLevelKeys",
+          "resourceKeys",
+          "tools",
+          "sizeUnits"
         ],
         "type": "object"
       },
@@ -5112,6 +5219,58 @@
               }
             },
             "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "builds"
+        ]
+      }
+    },
+    "/api/environments/{env}/builds/validate": {
+      "post": {
+        "operationId": "validateBuildSource",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildSourceValidation"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {
@@ -11083,6 +11242,37 @@
         "summary": "Turn the daily update check on or off; turning it on checks right away",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/template-spec/vocabulary": {
+      "get": {
+        "description": "The keys, tool names, and size units that the template spec parser accepts, for editor suggestions.",
+        "operationId": "getTemplateSpecVocabulary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vocabulary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "builds"
         ]
       }
     }

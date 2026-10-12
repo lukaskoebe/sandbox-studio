@@ -14,21 +14,34 @@ worker. The routes are scoped to an existing environment:
 |---|---|---|
 | `GET` | `/api/environments/{env}/builds?limit=50` | Recent job summaries |
 | `POST` | `/api/environments/{env}/builds` | Accept a build; HTTP 202 |
+| `POST` | `/api/environments/{env}/builds/validate` | Check a source without creating a job; HTTP 200 |
 | `GET` | `/api/environments/{env}/builds/{id}` | Job and submitted YAML source |
 | `POST` | `/api/environments/{env}/builds/{id}/cancel` | Request cancellation and return job state |
 | `GET` | `/api/environments/{env}/builds/{id}/log` | Bounded log snapshot and truncation flag |
+| `GET` | `/api/template-spec/vocabulary` | Keys, tool names, and size units the parser accepts |
 
-Example source:
+Validation runs the same strict parser and size limit as submission, but it creates no
+job and needs no build backend. Unlike submission, it returns HTTP `200` for invalid specs
+too, with `ok: false` and a `problems` list of at most 50 entries. Each problem has a
+1-based `line` and `column`, where columns count characters. A `column` of `0` means only
+the line is known; `line` and `column` of `0` mean the problem concerns the whole source.
+The vocabulary route is static. The editor uses it for suggestions, and a Go test checks
+that each suggested name parses.
+
+Example source, the Web app template that new builds start from. The file
+`web/src/lib/example-template.yaml` is the single source: the web client imports it, and a
+Go test parses it.
 
 ```yaml
+# Web app: Node.js and Python with the PostgreSQL client.
 resources:
-  cpus: 1
-  memory: "512MiB"
-  max_memory: "1024MiB"
-  workspace: "1024MiB"
-  docker: "1024MiB"
+  cpus: 2
+  memory: 4GiB
+  workspace: 20GiB
+  docker: 20GiB
 tools:
   node: "22"
+  python: "3.13"
 apt:
   - postgresql-client
 setup: |
@@ -39,7 +52,6 @@ setup: |
 counts are plain decimal integers. Memory and disk sizes are strings in `MiB`, `GiB`, or
 `G`; Studio validates the resolved values against shared limits before persisting the
 job. If omitted, resources use Studio defaults, and `max_memory` defaults to `memory`.
-The example uses `MiB` strings to make resource units explicit.
 
 The supported top-level keys are `resources`, `tools`, `apt`, and `setup`. Specs must be
 one YAML mapping, at most 64 KiB, with valid UTF-8. Unknown or duplicate keys, aliases,
@@ -58,15 +70,27 @@ Invalid specs return HTTP `422`; a missing environment or job returns `404`; a c
 state or non-equivalent active request returns `409`. The list limit defaults to 50 and is
 capped at 100.
 
+## Edit the spec in the editor
+
+The Builds dialog edits the spec in a CodeMirror YAML editor that uses the Caddyfile
+editor's theme. It highlights the YAML and suggests top-level and resource keys, tool
+names, size units (`MiB` and `GiB`), and apt package names from a short built-in list.
+About 400 ms after typing pauses, it sends the draft to the validate route and marks each
+problem at its line and column. Checks create no job and run no commands.
+
+**Insert example** replaces the draft with the Web app example; an empty draft offers the
+same action. Undo brings back the text from before the insert.
+
 ## Import and export YAML source
 
 In the Builds dialog, **Import YAML** reads one `.yaml` or `.yml` file into the draft; it
 does not submit or run a build. Files must be at most 65,536 bytes, contain strict UTF-8,
 and not be empty or contain NUL. A rejected or unreadable file leaves the existing draft
-unchanged. Import does not validate YAML: review the draft and select **Build template**
-explicitly to submit it for server validation.
+unchanged. Import does not submit a build: the editor checks the loaded draft, and
+**Build template** submits it explicitly.
 
-An unedited import retains its UTF-8 BOM, comments, and original line endings. **Download
+An unedited import keeps its UTF-8 BOM, comments, and line endings byte for byte. Editing
+keeps CRLF line endings; a file with mixed line endings becomes all CRLF once edited. **Download
 YAML** saves the current draft in the dialog, or the source submitted for that job in a job
 sheet, as `spec.yaml`. It does not export a normalized spec, logs, or template artifacts;
 the source can still contain literal secrets or other values entered by the user. To
