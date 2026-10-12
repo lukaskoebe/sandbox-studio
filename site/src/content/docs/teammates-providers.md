@@ -25,6 +25,10 @@ Claude Pro/Max and ChatGPT subscription sign-in are not available. Use an API ke
 
 Add or rotate provider keys on the Providers page. The key remains in Studio's host-side vault; the guest receives a placeholder, which Studio substitutes only for the provider's bound API host. Provider keys are managed with the provider and cannot be edited from the general Secrets page.
 
+## Default teammate
+
+If an environment has no teammates when you add a provider, Studio adds a teammate named Iris on that provider. Iris is a generalist engineer that uses Claude Code with an Anthropic key, Codex with an OpenAI key, or OpenCode with a custom endpoint. Its Git identity is `Iris (agent) <iris@agents.invalid>`. Iris is an ordinary teammate: you can edit or delete it. Studio adds Iris again only when the environment has no teammates and you add another provider.
+
 ## Start a teammate session
 
 1. Add a provider and enter its API key.
