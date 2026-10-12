@@ -1,7 +1,7 @@
 # UI style (design)
 
-Status: direction A, "Workbench", chosen on 2026-10-13 (PLAN.md D3), with the accents toned
-down. The app theme in `web/src/styles.css` is direction A. This page covers its tokens, the
+Status: Chosen: A Workbench (2026-10-13), accents toned down (PLAN.md D3). The app theme in
+`web/src/styles.css` is direction A. This page covers its tokens, the
 shared primitives and the rules for rolling it out page by page behind the e2e suite (N4).
 Direction B stays in the dev-only mockups (`/mockups`, see
 [frontend.md](../frontend.md#development)) for comparison. Its tokens live in
