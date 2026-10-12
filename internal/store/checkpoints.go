@@ -135,6 +135,36 @@ func (s *Store) SetCheckpointState(ctx context.Context, envID, sandboxID, checkp
 	return tx.Commit()
 }
 
+// RenameCheckpoint changes the name of a ready checkpoint. Names stay unique per sandbox.
+func (s *Store) RenameCheckpoint(ctx context.Context, envID, sandboxID, checkpointID, name string) (Checkpoint, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Checkpoint{}, err
+	}
+	defer tx.Rollback()
+	cp, err := scanCheckpoint(tx.QueryRowContext(ctx, "SELECT "+checkpointCols+" FROM checkpoints WHERE environment_id = ? AND sandbox_id = ? AND id = ?", envID, sandboxID, checkpointID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Checkpoint{}, ErrNotFound
+	}
+	if err != nil {
+		return Checkpoint{}, err
+	}
+	if cp.State != CheckpointStateReady {
+		return Checkpoint{}, ErrConflict
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE checkpoints SET name = ? WHERE environment_id = ? AND sandbox_id = ? AND id = ?", name, envID, sandboxID, checkpointID); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			return Checkpoint{}, fmt.Errorf("a checkpoint named %q: %w", name, ErrExists)
+		}
+		return Checkpoint{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Checkpoint{}, err
+	}
+	cp.Name = name
+	return cp, nil
+}
+
 func validCheckpointState(state string) bool {
 	switch state {
 	case CheckpointStateCreating, CheckpointStateReady, CheckpointStateDeleting:
@@ -291,12 +321,27 @@ func (s *Store) CommitRestore(ctx context.Context, op RestoreOperation) error {
 	if generation != op.FromGeneration {
 		return ErrConflict
 	}
+	// The switch and its history event commit together, so a restore is recorded once.
+	name, templateID, err := sandboxIdentity(ctx, tx, op.EnvironmentID, op.SandboxID)
+	if err != nil {
+		return err
+	}
 	res, err := tx.ExecContext(ctx, "UPDATE sandboxes SET generation = ? WHERE environment_id = ? AND id = ? AND generation = ?", op.ToGeneration, op.EnvironmentID, op.SandboxID, op.FromGeneration)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n != 1 {
 		return ErrConflict
+	}
+	checkpoint, err := checkpointName(ctx, tx, op.EnvironmentID, op.SandboxID, op.CheckpointID)
+	if err != nil {
+		return err
+	}
+	if err := insertSandboxEvent(ctx, tx, SandboxEvent{
+		EnvironmentID: op.EnvironmentID, SandboxID: op.SandboxID, Kind: EventRestore, Generation: op.ToGeneration,
+		Name: name, TemplateID: templateID, CheckpointID: op.CheckpointID, CheckpointName: checkpoint,
+	}); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

@@ -121,6 +121,11 @@ func (s *Store) CommitRebase(ctx context.Context, op RebaseOperation) error {
 	if generation != op.FromGeneration {
 		return ErrConflict
 	}
+	// The switch and its history event commit together, so a rebase is recorded once.
+	name, fromTemplate, err := sandboxIdentity(ctx, tx, op.EnvironmentID, op.SandboxID)
+	if err != nil {
+		return err
+	}
 	res, err := tx.ExecContext(ctx, `UPDATE sandboxes SET generation = ?, template_id = ?, cpus = ?, memory_mib = ?, max_memory_mib = ?, workspace_mib = ?, docker_mib = ?
 		WHERE environment_id = ? AND id = ? AND generation = ?`,
 		op.ToGeneration, op.TemplateID, op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB,
@@ -130,6 +135,12 @@ func (s *Store) CommitRebase(ctx context.Context, op RebaseOperation) error {
 	}
 	if n, _ := res.RowsAffected(); n != 1 {
 		return ErrConflict
+	}
+	if err := insertSandboxEvent(ctx, tx, SandboxEvent{
+		EnvironmentID: op.EnvironmentID, SandboxID: op.SandboxID, Kind: EventRebase, Generation: op.ToGeneration,
+		Name: name, TemplateID: op.TemplateID, FromTemplateID: fromTemplate,
+	}); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
