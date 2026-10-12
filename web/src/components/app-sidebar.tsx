@@ -29,6 +29,7 @@ import {
   SidebarMenuSkeleton,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -292,9 +293,12 @@ export function AppSidebar({ env }: { env: string }) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <p className="px-2 text-[0.625rem] text-muted-foreground group-data-[collapsible=icon]:hidden">
-          Sandbox Studio {health.data?.version}
-        </p>
+        <div className="flex items-center justify-between gap-2 px-2 group-data-[collapsible=icon]:hidden">
+          <p className="text-[0.625rem] text-muted-foreground">
+            Sandbox Studio {health.data?.version}
+          </p>
+          <ThemeToggle />
+        </div>
       </SidebarFooter>
       <SidebarRail />
       <CreateSandboxDialog
