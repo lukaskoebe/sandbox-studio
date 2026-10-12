@@ -16,7 +16,7 @@ function SettingsLayout() {
         aria-label="Settings"
         className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-48 md:flex-col md:overflow-visible md:border-r-0 md:border-b-0 md:p-3"
       >
-        <p className="hidden px-2 pb-2 text-sm font-medium md:block">
+        <p className="hidden px-2 pb-1 text-[0.625rem] font-medium tracking-wider text-muted-foreground uppercase md:block">
           Settings
         </p>
         <SettingsLink to="/e/$env/settings/general" env={env}>
@@ -60,7 +60,7 @@ function SettingsLink({
     <Link
       to={to}
       params={{ env }}
-      className="flex h-8 shrink-0 items-center rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+      className="flex h-7 shrink-0 items-center rounded-md px-2 text-[0.8125rem] text-muted-foreground hover:bg-muted hover:text-foreground"
       activeProps={{ className: "bg-muted font-medium text-foreground" }}
     >
       {children}
