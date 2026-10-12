@@ -30,14 +30,19 @@ const (
 	maxClientMessage = 16 << 10
 )
 
-// Relay bridges the UI's live-view socket and the teammate's browser until either ends.
-func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *websocket.Conn) error {
+// Relay bridges the UI's live-view socket and a session of the teammate's browser ("" for
+// the persistent profile) until either ends.
+func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, client *websocket.Conn) error {
 	st := s.state(envID, teammateID)
 	// Watching must not wait for an agent command or approval. Remember this run so a
 	// concurrent Stop cannot be undone by adopting the VM from a stale status response.
 	s.mu.Lock()
 	previousVM, previousSession := st.vm, st.session
+	pg := st.pageFor(session)
 	s.mu.Unlock()
+	if pg == nil {
+		return ErrNoSession
+	}
 	sb, status, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
 	if err != nil {
 		return err
@@ -46,12 +51,16 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 		return ErrNotLive
 	}
 	s.mu.Lock()
-	if !s.streamCurrentLocked(st, envID, previousVM, previousSession) {
+	if !s.streamCurrentLocked(st, pg, envID, previousVM, previousSession) {
 		s.mu.Unlock()
 		return ErrNotLive
 	}
 	if st.vm != "" && st.vm != sb.ID {
 		st.reset()
+	}
+	if st.pageFor(session) != pg {
+		s.mu.Unlock()
+		return ErrNoSession
 	}
 	st.vm = sb.ID
 	if st.session == "" {
@@ -59,9 +68,10 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 	}
 	streamSession := st.session
 	s.mu.Unlock()
-	guest, err := s.dialStream(ctx, sb.ID)
+	port := agentproto.BrowserStreamPort + pg.slot
+	guest, err := s.dialStream(ctx, sb.ID, port)
 	if err != nil {
-		if guest, err = s.startStream(ctx, st, envID, sb.ID, streamSession); err != nil {
+		if guest, err = s.startStream(ctx, st, pg, envID, sb.ID, streamSession); err != nil {
 			return err
 		}
 	}
@@ -85,7 +95,7 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 			if typ != websocket.MessageText {
 				continue
 			}
-			if !s.syncStreamURL(st, envID, sb.ID, streamSession, data) {
+			if !s.syncStreamURL(st, pg, envID, sb.ID, streamSession, data) {
 				return
 			}
 			if client.Write(ctx, websocket.MessageText, data) != nil {
@@ -95,7 +105,7 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 				// Someone watching keeps the browser from idling out.
 				last = now
 				s.mu.Lock()
-				if s.streamCurrentLocked(st, envID, sb.ID, streamSession) {
+				if s.streamCurrentLocked(st, pg, envID, sb.ID, streamSession) {
 					st.lastUsed = now
 				}
 				s.mu.Unlock()
@@ -114,13 +124,13 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 				continue
 			}
 			s.mu.Lock()
-			if !s.streamCurrentLocked(st, envID, sb.ID, streamSession) {
+			if !s.streamCurrentLocked(st, pg, envID, sb.ID, streamSession) {
 				s.mu.Unlock()
 				return
 			}
-			driving := st.takeover
+			driving := pg.takeover
 			if driving {
-				st.lastUsed = s.now()
+				st.lastUsed, pg.used = s.now(), s.now()
 			}
 			s.mu.Unlock()
 			if msg := FilterInput(data, driving); msg != nil {
@@ -136,7 +146,7 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID string, client *w
 
 // Only bootstrapping the daemon needs the command slot. An existing stream is readable
 // even while an agent command is waiting for approval.
-func (s *Service) startStream(ctx context.Context, st *state, envID, vmID, sessionID string) (*websocket.Conn, error) {
+func (s *Service) startStream(ctx context.Context, st *state, pg *page, envID, vmID, sessionID string) (*websocket.Conn, error) {
 	select {
 	case st.run <- struct{}{}:
 	case <-ctx.Done():
@@ -147,7 +157,7 @@ func (s *Service) startStream(ctx context.Context, st *state, envID, vmID, sessi
 		return nil, err
 	}
 	s.mu.Lock()
-	current := s.streamCurrentLocked(st, envID, vmID, sessionID)
+	current := s.streamCurrentLocked(st, pg, envID, vmID, sessionID)
 	s.mu.Unlock()
 	if !current {
 		return nil, ErrNotLive
@@ -157,13 +167,14 @@ func (s *Service) startStream(ctx context.Context, st *state, envID, vmID, sessi
 		return nil, ErrNotLive
 	}
 	// A queued Start may already have brought up the daemon.
-	if guest, err := s.dialStream(ctx, vmID); err == nil {
+	port := agentproto.BrowserStreamPort + pg.slot
+	if guest, err := s.dialStream(ctx, vmID, port); err == nil {
 		return guest, nil
 	}
-	if _, _, err := s.exec(ctx, st, agentBrowserGetURL); err != nil {
+	if _, _, err := s.exec(ctx, st, pg, agentBrowserGetURL); err != nil {
 		return nil, err
 	}
-	return s.dialStream(ctx, vmID)
+	return s.dialStream(ctx, vmID, port)
 }
 
 func streamPageURL(data []byte) (string, bool) {
@@ -198,28 +209,29 @@ func streamPageURL(data []byte) (string, bool) {
 	return activeURL, activeCount == 1
 }
 
-func (s *Service) streamCurrentLocked(st *state, envID, vmID, sessionID string) bool {
-	return st != nil && s.states[st.teammate] == st && st.env == envID && st.vm == vmID && st.session == sessionID
+func (s *Service) streamCurrentLocked(st *state, pg *page, envID, vmID, sessionID string) bool {
+	return st != nil && s.states[st.teammate] == st && st.env == envID && st.vm == vmID && st.session == sessionID &&
+		st.pageFor(pg.id) == pg
 }
 
-func (s *Service) syncStreamURL(st *state, envID, vmID, sessionID string, data []byte) bool {
+func (s *Service) syncStreamURL(st *state, pg *page, envID, vmID, sessionID string, data []byte) bool {
 	url, ok := streamPageURL(data)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.streamCurrentLocked(st, envID, vmID, sessionID) {
+	if !s.streamCurrentLocked(st, pg, envID, vmID, sessionID) {
 		return false
 	}
 	if ok {
-		st.observedURL(url)
+		pg.observedURL(url)
 		st.lastUsed = s.now()
 	}
 	return true
 }
 
-// dialStream opens the screencast WebSocket in the VM through its channel. It sends no
-// Origin header, which agent-browser's origin check accepts.
-func (s *Service) dialStream(ctx context.Context, vm string) (*websocket.Conn, error) {
-	conn, err := s.Runner.DialTCP(ctx, vm, agentproto.BrowserStreamPort)
+// dialStream opens a session's screencast WebSocket in the VM through its channel. It
+// sends no Origin header, which agent-browser's origin check accepts.
+func (s *Service) dialStream(ctx context.Context, vm string, port int) (*websocket.Conn, error) {
+	conn, err := s.Runner.DialTCP(ctx, vm, port)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +247,7 @@ func (s *Service) dialStream(ctx context.Context, vm string) (*websocket.Conn, e
 	hc := &http.Client{Transport: &http.Transport{DialContext: dial, DisableKeepAlives: true}}
 	dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	ws, _, err := websocket.Dial(dctx, "ws://127.0.0.1:"+strconv.Itoa(agentproto.BrowserStreamPort)+"/", &websocket.DialOptions{HTTPClient: hc})
+	ws, _, err := websocket.Dial(dctx, "ws://127.0.0.1:"+strconv.Itoa(port)+"/", &websocket.DialOptions{HTTPClient: hc})
 	if err != nil {
 		conn.Close()
 		return nil, err

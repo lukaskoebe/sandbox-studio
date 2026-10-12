@@ -79,6 +79,7 @@ func (s *Server) registerTemplates(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "createTemplateSandbox", Method: http.MethodPost, Path: "/api/environments/{env}/templates/{id}/sandboxes", Tags: []string{"templates", "sandboxes"},
 		DefaultStatus: http.StatusCreated,
+		Description:   "Creates a sandbox from a template like createSandbox: it returns at once in state creating, and a failed create stays as a failed sandbox until it is deleted.",
 	}, func(ctx context.Context, in *createTemplateSandboxIn) (*sandboxOut, error) {
 		if err := s.checkTeammate(ctx, in.Env, in.Body.TeammateID); err != nil {
 			return nil, err

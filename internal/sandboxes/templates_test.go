@@ -129,12 +129,16 @@ func TestCreateFromTemplateUsesPinnedResourcesAndHostOnlyImageCredentials(t *tes
 		}
 		t.Error("registry Resolve ran before the sandbox pinned its template")
 	}
+	f.runtime.guestBoots = true
 	rt := &templateRecordingRuntime{SandboxRuntime: f.runtime}
 	f.manager.Runtime, f.manager.Templates = rt, resolver
 
 	view, err := f.manager.CreateFromTemplate(f.ctx, f.env.ID, template.ID, "from-template")
 	if err != nil {
 		t.Fatalf("CreateFromTemplate: %v", err)
+	}
+	if err := f.manager.Wait(f.ctx, view.ID); err != nil {
+		t.Fatalf("template create: %v", err)
 	}
 	if view.TemplateID != template.ID || view.ID == f.sandbox.ID || resolver.calls != 1 {
 		t.Fatalf("created view=%+v resolver calls=%d", view, resolver.calls)
@@ -250,28 +254,27 @@ func TestCreateFromTemplateRetainsPinWhenOwnedCleanupFails(t *testing.T) {
 	f.manager.Runtime = rt
 	f.manager.Templates = &templateResolverFake{reference: ref}
 
-	_, err := f.manager.CreateFromTemplate(f.ctx, f.env.ID, template.ID, "cleanup-needed")
-	if err == nil || strings.Contains(err.Error(), ref.Image) || strings.Contains(err.Error(), ref.Password) {
+	view, err := f.manager.CreateFromTemplate(f.ctx, f.env.ID, template.ID, "cleanup-needed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = f.manager.Wait(f.ctx, view.ID)
+	if err == nil || strings.Contains(err.Error(), ref.Image) || strings.Contains(err.Error(), ref.Password) ||
+		!strings.Contains(err.Error(), "cleanup could not verify VM identity") {
 		t.Fatalf("boot error was not safely reported: %v", err)
 	}
-	rows, listErr := f.store.Sandboxes(f.ctx, f.env.ID)
-	if listErr != nil {
-		t.Fatal(listErr)
+	retained, err := f.manager.Get(f.ctx, f.env.ID, view.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	var retained store.Sandbox
-	for _, row := range rows {
-		if row.Name == "cleanup-needed" {
-			retained = row
-		}
-	}
-	if retained.ID == "" || retained.TemplateID != template.ID {
-		t.Fatalf("failed cleanup did not retain the public template pin: %+v", retained)
+	if retained.Status != StatusFailed || retained.TemplateID != template.ID {
+		t.Fatalf("failed cleanup did not retain the failed sandbox with its template pin: %+v", retained)
 	}
 	if len(rt.removeOwnedCalls) != 1 {
 		t.Fatalf("RemoveOwned calls = %d, want one", len(rt.removeOwnedCalls))
 	}
 	owned := rt.removeOwnedCalls[0]
-	if owned.Name != VMName(retained) || owned.Labels["studio.sandbox-id"] != retained.ID ||
+	if owned.Name != VMName(retained.Sandbox) || owned.Labels["studio.sandbox-id"] != retained.ID ||
 		owned.Labels["studio.environment-id"] != f.env.ID || owned.Labels["studio.sandbox-name"] != retained.Name ||
 		owned.Labels["studio.template-id"] != template.ID {
 		t.Fatalf("cleanup ownership = %+v", owned)
@@ -285,8 +288,23 @@ func TestCreateFromTemplateDropsPinOnlyAfterOwnedCleanupConfirmsAbsence(t *testi
 	f.manager.Runtime = rt
 	f.manager.Templates = &templateResolverFake{reference: templateReference(f.env.ID, template.ID)}
 
-	if _, err := f.manager.CreateFromTemplate(f.ctx, f.env.ID, template.ID, "cleanup-complete"); err == nil {
+	view, err := f.manager.CreateFromTemplate(f.ctx, f.env.ID, template.ID, "cleanup-complete")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.manager.Wait(f.ctx, view.ID); err == nil {
 		t.Fatal("CreateFromTemplate succeeded despite a boot failure")
+	}
+	if len(rt.removeOwnedCalls) != 1 {
+		t.Fatalf("RemoveOwned calls = %d, want one", len(rt.removeOwnedCalls))
+	}
+	// The failed sandbox keeps its template pin until it is deleted, and deleting it drops the
+	// pin once the VM is gone.
+	if _, err := f.store.Sandbox(f.ctx, f.env.ID, view.ID); err != nil {
+		t.Fatalf("failed sandbox was dropped before it was deleted: %v", err)
+	}
+	if err := f.manager.Delete(f.ctx, f.env.ID, view.ID); err != nil {
+		t.Fatalf("Delete of the failed sandbox: %v", err)
 	}
 	rows, err := f.store.Sandboxes(f.ctx, f.env.ID)
 	if err != nil {
@@ -294,10 +312,7 @@ func TestCreateFromTemplateDropsPinOnlyAfterOwnedCleanupConfirmsAbsence(t *testi
 	}
 	for _, row := range rows {
 		if row.Name == "cleanup-complete" {
-			t.Fatalf("catalog row remained after verified VM removal: %+v", row)
+			t.Fatalf("catalog row remained after the deleted sandbox's VM was removed: %+v", row)
 		}
-	}
-	if len(rt.removeOwnedCalls) != 1 {
-		t.Fatalf("RemoveOwned calls = %d, want one", len(rt.removeOwnedCalls))
 	}
 }

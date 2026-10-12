@@ -71,6 +71,7 @@ func TestCreateValidatesResourcesBeforeStoreEgressOrRuntime(t *testing.T) {
 
 func TestCreatePersistsAndPassesMaxMemory(t *testing.T) {
 	f := newCheckpointFixture(t)
+	f.runtime.guestBoots = true
 	rt := &resourceRecordingRuntime{SandboxRuntime: f.runtime}
 	f.manager.Runtime = rt
 
@@ -79,6 +80,9 @@ func TestCreatePersistsAndPassesMaxMemory(t *testing.T) {
 		WorkspaceMiB: 1024, DockerMiB: 1024,
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.manager.Wait(f.ctx, explicit.ID); err != nil {
 		t.Fatal(err)
 	}
 	if explicit.MaxMemoryMiB != 2048 || len(rt.specs) != 1 || rt.specs[0].MaxMemoryMiB != 2048 {
@@ -94,6 +98,9 @@ func TestCreatePersistsAndPassesMaxMemory(t *testing.T) {
 		WorkspaceMiB: 1024, DockerMiB: 1024,
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.manager.Wait(f.ctx, defaulted.ID); err != nil {
 		t.Fatal(err)
 	}
 	if defaulted.MaxMemoryMiB != 1536 || len(rt.specs) != 2 || rt.specs[1].MaxMemoryMiB != 1536 {

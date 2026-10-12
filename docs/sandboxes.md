@@ -50,7 +50,36 @@ See [network](network.md) for what happens at the gateway.
   before it kills every process. Stop resumes a suspended VM first.
 
 Runtime statuses: `absent`, `created`, `starting`, `running`, `draining`, `suspended`,
-`stopped`, `crashed`.
+`stopped`, `crashed`. The API adds `creating` and `failed` for a create or fork (below).
+
+## Creation progress
+
+A create, a create from a template and a fork return at once with the sandbox in state
+`creating`. Its VM is pulled, started and booted in the background (`Manager.bootSandbox`,
+`Manager.Fork`). The sandbox view's `progress` names the step it is on:
+
+| Step | Meaning |
+|---|---|
+| `pull` | the image; the view carries layers and bytes while the pull reports them |
+| `vm` | the VM starts |
+| `copy` | the workspace copy (fork only) |
+| `boot` | `studio-agent boot` runs |
+| `services` | the supervisor starts containerd, Docker and the agent |
+| `agent` | the agent answers requests |
+| `configure` | the guest acknowledges its CA and secret placeholders |
+
+Every change publishes the `sandboxes` topic on `/api/events`, so open views refetch.
+
+- A create or fork that fails keeps its record in state `failed`, with the step and the
+  error. Its VM is removed. A failed sandbox can't be started; deleting it is the way out.
+  The error of a create from a template never carries the private image or credential.
+- A sandbox whose create or fork runs is busy: lifecycle actions, and forks and rebases of it,
+  are refused until the operation ends.
+- While a create or fork runs, Studio saves its progress under `sandbox.progress.<id>` in
+  the settings. On start, `Reconcile` fails each create or fork that was still running, with
+  the error "Studio stopped before this step finished", and removes its VM. So no sandbox
+  stays `creating` after a restart.
+- Rebase is not part of this: it still runs in the request.
 
 ## Resources
 

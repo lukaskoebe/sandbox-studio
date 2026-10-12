@@ -26,6 +26,10 @@
           "sandboxName": {
             "type": "string"
           },
+          "session": {
+            "description": "The ephemeral browser session the action runs in; empty for the persistent profile",
+            "type": "string"
+          },
           "teammateId": {
             "type": "string"
           },
@@ -272,6 +276,10 @@
           "environmentId": {
             "type": "string"
           },
+          "ephemeral": {
+            "description": "The action ran in an ephemeral browser session, whose ID is the session ID",
+            "type": "boolean"
+          },
           "id": {
             "format": "int64",
             "type": "integer"
@@ -411,6 +419,37 @@
         ],
         "type": "object"
       },
+      "BrowserSession": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "opened": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sandbox": {
+            "description": "Name of the agent sandbox that opened it",
+            "type": "string"
+          },
+          "takeover": {
+            "description": "The user drives this session; agent calls to it are paused",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "The page the broker last saw",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sandbox",
+          "takeover",
+          "opened"
+        ],
+        "type": "object"
+      },
       "BrowserStatus": {
         "additionalProperties": false,
         "properties": {
@@ -422,8 +461,18 @@
             "description": "The current run's session in the action log",
             "type": "string"
           },
+          "sessions": {
+            "description": "Ephemeral sessions, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/BrowserSession"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "takeover": {
-            "description": "The user drives; agent calls are paused",
+            "description": "The user drives the persistent profile; agent calls to it are paused",
             "type": "boolean"
           },
           "teammateId": {
@@ -451,7 +500,8 @@
         "required": [
           "teammateId",
           "vm",
-          "takeover"
+          "takeover",
+          "sessions"
         ],
         "type": "object"
       },
@@ -1356,6 +1406,10 @@
             "type": "string"
           },
           "sandboxName": {
+            "type": "string"
+          },
+          "session": {
+            "description": "The ephemeral browser session the field is in; empty for the persistent profile",
             "type": "string"
           },
           "teammateId": {
@@ -2757,6 +2811,11 @@
       "NavigateBrowserInBody": {
         "additionalProperties": false,
         "properties": {
+          "session": {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "maxLength": 32,
+            "type": "string"
+          },
           "url": {
             "description": "Absolute http or https URL to open while the user has taken over",
             "maxLength": 4000,
@@ -3109,6 +3168,72 @@
         ],
         "type": "object"
       },
+      "Progress": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "description": "Why the step failed",
+            "type": "string"
+          },
+          "operation": {
+            "enum": [
+              "create",
+              "fork"
+            ],
+            "type": "string"
+          },
+          "pull": {
+            "$ref": "#/components/schemas/PullProgress",
+            "description": "The image pull, once it reports sizes"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "step": {
+            "description": "The step that runs, or the one that failed",
+            "enum": [
+              "pull",
+              "vm",
+              "copy",
+              "boot",
+              "services",
+              "agent",
+              "configure"
+            ],
+            "type": "string"
+          },
+          "steps": {
+            "description": "The operation's steps, in order",
+            "items": {
+              "enum": [
+                "pull",
+                "vm",
+                "copy",
+                "boot",
+                "services",
+                "agent",
+                "configure"
+              ],
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "operation",
+          "state",
+          "steps",
+          "step"
+        ],
+        "type": "object"
+      },
       "PromptFile": {
         "additionalProperties": false,
         "properties": {
@@ -3299,6 +3424,34 @@
           "kind",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "PullProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "layers": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "layersDone": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalBytes": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "layers",
+          "layersDone",
+          "bytes",
+          "totalBytes"
         ],
         "type": "object"
       },
@@ -4071,8 +4224,13 @@
         "additionalProperties": false,
         "properties": {
           "on": {
-            "description": "true: the user drives and agent calls pause; false: hand back to the agents",
+            "description": "true: the user drives and agent calls to the session pause; false: hand back to the agents",
             "type": "boolean"
+          },
+          "session": {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "maxLength": 32,
+            "type": "string"
           }
         },
         "required": [
@@ -4865,7 +5023,12 @@
           "name": {
             "type": "string"
           },
+          "progress": {
+            "$ref": "#/components/schemas/Progress",
+            "description": "The create or fork that runs or failed"
+          },
           "status": {
+            "description": "The VM's runtime status; creating or failed while a create or fork runs or after it failed",
             "enum": [
               "absent",
               "created",
@@ -4874,7 +5037,9 @@
               "draining",
               "suspended",
               "stopped",
-              "crashed"
+              "crashed",
+              "creating",
+              "failed"
             ],
             "type": "string"
           },
@@ -8044,7 +8209,7 @@
         ]
       },
       "post": {
-        "description": "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder.",
+        "description": "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. A provider added to an environment without teammates also creates the default teammate.",
         "operationId": "createProvider",
         "parameters": [
           {
@@ -8615,6 +8780,7 @@
         ]
       },
       "post": {
+        "description": "Returns at once with the sandbox in state creating. Its VM is created and booted in the background: the view's progress names the step, and a failed create stays as a failed sandbox until it is deleted. The sandboxes topic of /api/events announces each change.",
         "operationId": "createSandbox",
         "parameters": [
           {
@@ -9358,7 +9524,7 @@
     },
     "/api/environments/{env}/sandboxes/{id}/fork": {
       "post": {
-        "description": "Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
+        "description": "Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
         "operationId": "forkSandbox",
         "parameters": [
           {
@@ -11205,6 +11371,7 @@
     },
     "/api/environments/{env}/templates/{id}/sandboxes": {
       "post": {
+        "description": "Creates a sandbox from a template like createSandbox: it returns at once in state creating, and a failed create stays as a failed sandbox until it is deleted.",
         "operationId": "createTemplateSandbox",
         "parameters": [
           {

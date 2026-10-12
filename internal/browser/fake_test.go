@@ -106,6 +106,8 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 	case "fill", "type":
 		f.values[strings.TrimPrefix(args[1], "@")] = args[2]
 		return map[string]any{"filled": args[1]}, nil
+	case "close":
+		return map[string]any{}, nil
 	case "click", "press", "select", "scroll", "back", "wait":
 		return map[string]any{}, nil
 	}

@@ -264,7 +264,7 @@ func TestPausedGate(t *testing.T) {
 	f := newFixture(t)
 	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
 	adaVM, _ := f.st.BrowserSandbox(f.ctx, f.env, f.ada.ID)
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 	// While the user drives, the teammate's rules decide the browser's connections.
@@ -292,7 +292,7 @@ func TestPausedGate(t *testing.T) {
 		done <- err
 	}()
 	time.Sleep(50 * time.Millisecond)
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, false); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := <-done; err != nil {
@@ -328,12 +328,12 @@ func TestStartRetainsBlankURLAndUserNavigation(t *testing.T) {
 	if refsBefore == 0 {
 		t.Fatal("snapshot did not populate refs before navigation")
 	}
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 
 	targetURL := "https://docs.example.org/getting-started"
-	status, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, targetURL)
+	status, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", targetURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,13 +383,13 @@ func TestNavigateRequiresTakeoverLiveBrowserAndValidURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := len(f.fb.allCommands())
-	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "https://example.org"); !errors.Is(err, ErrNoTakeover) {
+	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", "https://example.org"); !errors.Is(err, ErrNoTakeover) {
 		t.Errorf("without takeover: %v", err)
 	}
 	if len(f.fb.allCommands()) != before {
 		t.Error("navigation without takeover ran a browser command")
 	}
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 	f.vms.mu.Lock()
@@ -398,15 +398,15 @@ func TestNavigateRequiresTakeoverLiveBrowserAndValidURL(t *testing.T) {
 	}
 	f.vms.stopped[f.ada.ID] = true
 	f.vms.mu.Unlock()
-	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "https://example.org"); !errors.Is(err, ErrNotLive) {
+	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", "https://example.org"); !errors.Is(err, ErrNotLive) {
 		t.Errorf("stopped browser: %v", err)
 	}
-	if _, err := f.svc.Navigate(f.ctx, f.env+"-wrong", f.ada.ID, "https://example.org"); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.svc.Navigate(f.ctx, f.env+"-wrong", f.ada.ID, "", "https://example.org"); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("wrong environment: %v", err)
 	}
 	badURLs := []string{"", "javascript:alert(1)", "http:///path", "https://user:pass@example.org", "https://example.org\n/path", strings.Repeat("a", 4001)}
 	for _, raw := range badURLs {
-		if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, raw); !errors.Is(err, ErrBadURL) {
+		if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", raw); !errors.Is(err, ErrBadURL) {
 			t.Errorf("URL %q: %v", raw, err)
 		}
 	}
@@ -417,7 +417,7 @@ func TestNavigateWaitIsCancelableAndRechecksTakeover(t *testing.T) {
 	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 	st := f.svc.state(f.env, f.ada.ID)
@@ -425,7 +425,7 @@ func TestNavigateWaitIsCancelableAndRechecksTakeover(t *testing.T) {
 	before := len(f.fb.allCommands())
 	canceled, cancel := context.WithCancel(f.ctx)
 	cancel()
-	if _, err := f.svc.Navigate(canceled, f.env, f.ada.ID, "https://example.org"); !errors.Is(err, context.Canceled) {
+	if _, err := f.svc.Navigate(canceled, f.env, f.ada.ID, "", "https://example.org"); !errors.Is(err, context.Canceled) {
 		t.Errorf("waiting for run slot: %v", err)
 	}
 	if len(f.fb.allCommands()) != before {
@@ -444,7 +444,7 @@ func TestNavigateWaitIsCancelableAndRechecksTakeover(t *testing.T) {
 	f.vms.mu.Unlock()
 	done := make(chan error, 1)
 	go func() {
-		_, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "https://example.org")
+		_, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", "https://example.org")
 		done <- err
 	}()
 	<-entered // the pre-lock VM check has passed; navigation now waits on st.run
@@ -467,7 +467,7 @@ func TestHandbackWaitsForUserNavigation(t *testing.T) {
 	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 	targetURL := "https://example.org/next"
@@ -479,7 +479,7 @@ func TestHandbackWaitsForUserNavigation(t *testing.T) {
 	before := len(f.fb.allCommands())
 	navigateDone := make(chan error, 1)
 	go func() {
-		_, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, targetURL)
+		_, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", targetURL)
 		navigateDone <- err
 	}()
 	<-f.fb.blockStarted
@@ -489,7 +489,7 @@ func TestHandbackWaitsForUserNavigation(t *testing.T) {
 		agentDone <- err
 	}()
 	handbackDone := make(chan error, 1)
-	go func() { handbackDone <- f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, false) }()
+	go func() { handbackDone <- f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", false) }()
 	select {
 	case err := <-handbackDone:
 		t.Fatalf("handback returned while navigation was running: %v", err)
@@ -515,7 +515,7 @@ func TestNavigateFailureScrubsStoredCredentialsAndRefreshesURL(t *testing.T) {
 	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 	secret := "stored-secret-value"
@@ -526,7 +526,7 @@ func TestNavigateFailureScrubsStoredCredentialsAndRefreshesURL(t *testing.T) {
 	oldURL := st.url
 	f.svc.mu.Unlock()
 	f.fb.failArgs = "open " + targetURL
-	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, targetURL); err == nil || strings.Contains(err.Error(), secret) {
+	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", targetURL); err == nil || strings.Contains(err.Error(), secret) {
 		t.Errorf("navigation error exposed a stored credential: %v", err)
 	}
 	status, err := f.svc.Status(f.ctx, f.env, f.ada.ID)
@@ -821,7 +821,7 @@ func TestIdleStop(t *testing.T) {
 	f.svc.Now = func() time.Time { return now }
 	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
 	f.mustCall(f.sbBob, agentproto.MethodBrowserSnapshot, `{}`)
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.bob.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.bob.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Hour)

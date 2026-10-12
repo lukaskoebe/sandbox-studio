@@ -158,6 +158,8 @@ type BrowserAction struct {
 	Detail        string    `json:"detail,omitempty"`
 	Screenshot    string    `json:"screenshot,omitempty" doc:"File name of the screenshot taken after the action"`
 	At            time.Time `json:"at"`
+	// Ephemeral is not stored: the broker sets it from the session ID.
+	Ephemeral bool `json:"ephemeral,omitempty" doc:"The action ran in an ephemeral browser session, whose ID is the session ID"`
 }
 
 const browserActionCols = "id, environment_id, teammate_id, session_id, sandbox_id, actor, action, target, url, outcome, detail, screenshot, at"

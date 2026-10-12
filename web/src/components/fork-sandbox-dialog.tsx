@@ -39,8 +39,8 @@ export function ForkSandboxDialog({
     "post",
     "/api/environments/{env}/sandboxes/{id}/fork",
     {
-      onSuccess: async (forked) => {
-        await queryClient.invalidateQueries({
+      onSuccess: (forked) => {
+        queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/sandboxes"],
         })
         setOpen(false)
@@ -55,7 +55,7 @@ export function ForkSandboxDialog({
   const available = sandbox.status === "running" || sandbox.status === "stopped"
 
   function handleOpenChange(nextOpen: boolean) {
-    // A copy in progress stays on screen until it succeeds or fails.
+    // The request stays on screen until it succeeds or fails.
     if (!nextOpen && pending) return
     if (nextOpen) fork.reset()
     setOpen(nextOpen)
@@ -173,20 +173,10 @@ function ForkForm({
         )}
       </Field>
 
-      {pending ? (
-        <p
-          role="status"
-          className="flex items-center gap-2 text-muted-foreground"
-        >
-          <Spinner />
-          Copying workspace… This can take several minutes.
+      {failure && (
+        <p role="alert" className="text-destructive">
+          Could not fork the sandbox: {failure}
         </p>
-      ) : (
-        failure && (
-          <p role="alert" className="text-destructive">
-            Could not fork the sandbox: {failure}
-          </p>
-        )
       )}
 
       <DialogFooter>

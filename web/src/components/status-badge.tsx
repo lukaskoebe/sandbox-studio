@@ -7,10 +7,13 @@ import {
 import type { Approval, Connection, Rule, Sandbox } from "@/lib/api/client"
 import { cn } from "@/lib/utils"
 
-type Phase = "ready" | "booting" | "suspended" | "stopped" | "failed"
+type Phase =
+  "creating" | "ready" | "booting" | "suspended" | "stopped" | "failed"
 
 export function phase(sb: Sandbox): Phase {
   switch (sb.status) {
+    case "creating":
+      return "creating"
     case "running":
       return sb.agent ? "ready" : "booting"
     case "starting":
@@ -18,8 +21,10 @@ export function phase(sb: Sandbox): Phase {
       return "booting"
     case "suspended":
       return "suspended"
+    // A failed create or fork stays failed until it is deleted.
     case "crashed":
     case "absent":
+    case "failed":
       return "failed"
     default:
       return "stopped"
@@ -27,6 +32,7 @@ export function phase(sb: Sandbox): Phase {
 }
 
 const labels: Record<Phase, string> = {
+  creating: "Creating",
   ready: "Running",
   booting: "Booting",
   suspended: "Suspended",
@@ -35,6 +41,7 @@ const labels: Record<Phase, string> = {
 }
 
 const dots: Record<Phase, string> = {
+  creating: "bg-amber-500 animate-pulse",
   ready: "bg-emerald-500",
   booting: "bg-amber-500 animate-pulse",
   suspended: "bg-sky-500",

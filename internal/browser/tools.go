@@ -15,12 +15,15 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// call is one agent tool call: the teammate's browser state and the calling sandbox, which
-// the channel named.
+// call is one agent tool call: the teammate's browser state, the session it drives and the
+// calling sandbox, which the channel named.
 type call struct {
 	s  *Service
 	st *state
+	pg *page // nil until browser_open starts a new ephemeral session
 	sb store.Sandbox
+	// fresh is set on a new ephemeral session until its first command ran.
+	fresh bool
 }
 
 // userError is a refusal the agent should read as is.
@@ -44,6 +47,7 @@ var tools = map[string]tool{
 	agentproto.MethodBrowserWait:           (*call).wait,
 	agentproto.MethodBrowserBack:           (*call).back,
 	agentproto.MethodBrowserFillCredential: (*call).fillCredential,
+	agentproto.MethodBrowserClose:          (*call).closeSession,
 }
 
 // HandleCall answers one browser call of sandboxID's guest. The caller is the sandbox the
@@ -63,23 +67,46 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 	if sb.TeammateID == "" {
 		return nil, ErrNoTeammate
 	}
+	addr, params, err := takeSession(method, params)
+	if err != nil {
+		return nil, err
+	}
 	st := s.state(sb.EnvironmentID, sb.TeammateID)
-	release, err := s.acquire(ctx, st)
+	var pg *page
+	if !addr.ephemeral {
+		if pg, err = s.agentPage(st, addr.session, sb); err != nil {
+			return nil, err
+		}
+	}
+	release, err := s.acquire(ctx, st, pg)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
+	if pg != nil {
+		// The session may have ended while the call waited.
+		if pg, err = s.agentPage(st, addr.session, sb); err != nil {
+			return nil, err
+		}
+	}
 	s.mu.Lock()
 	st.driver, st.lastUsed = sb, s.now()
+	if pg != nil {
+		pg.used = st.lastUsed
+	}
 	s.mu.Unlock()
 	if err := s.boot(ctx, st); err != nil {
 		s.log().Warn("browser VM unavailable", "teammate", sb.TeammateID, "err", err)
 		return nil, errors.New("the browser could not be started; the user can look at the Browser page in Studio")
 	}
-	res, err := t(&call{s: s, st: st, sb: sb}, ctx, params)
+	c := &call{s: s, st: st, pg: pg, sb: sb}
+	res, err := t(c, ctx, params)
 	if err != nil {
+		var secrets []string
 		s.mu.Lock()
-		secrets := st.secrets
+		if c.pg != nil {
+			secrets = c.pg.secrets
+		}
 		s.mu.Unlock()
 		var ue userError
 		if errors.As(err, &ue) || errors.Is(err, ErrPaused) || errors.Is(err, context.DeadlineExceeded) {
@@ -90,6 +117,9 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 	}
 	s.mu.Lock()
 	st.lastUsed = s.now()
+	if c.pg != nil {
+		c.pg.used = st.lastUsed
+	}
 	s.mu.Unlock()
 	return res, nil
 }
@@ -98,12 +128,14 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 // approval may have been awaited).
 func (c *call) run(ctx context.Context, args []string, shot bool) (json.RawMessage, []byte, error) {
 	c.s.mu.Lock()
-	paused := c.st.takeover
+	paused := c.pg.takeover
 	c.s.mu.Unlock()
 	if paused {
 		return nil, nil, ErrPaused
 	}
-	return c.s.exec(ctx, c.st, agentproto.BrowserCommand{Args: args, Screenshot: shot})
+	data, shotData, err := c.s.exec(ctx, c.st, c.pg, agentproto.BrowserCommand{Args: args, Screenshot: shot, Fresh: c.fresh})
+	c.fresh = false
+	return data, shotData, err
 }
 
 // currentURL asks the page where it is; links and scripts move it between commands.
@@ -117,8 +149,8 @@ func (c *call) currentURL(ctx context.Context) (string, error) {
 	}
 	json.Unmarshal(data, &v)
 	c.s.mu.Lock()
-	if v.URL != c.st.url {
-		c.st.navigated(v.URL)
+	if v.URL != c.pg.url {
+		c.pg.navigated(v.URL)
 	}
 	c.s.mu.Unlock()
 	return v.URL, nil
@@ -133,7 +165,7 @@ func (c *call) element(ref string) (string, refInfo, error) {
 		return "", refInfo{}, refuse("ref must look like e12, from browser_snapshot")
 	}
 	c.s.mu.Lock()
-	info, ok := c.st.refs[m[1]]
+	info, ok := c.pg.refs[m[1]]
 	c.s.mu.Unlock()
 	if !ok {
 		return "", refInfo{}, refuse("unknown ref %s: take a browser_snapshot of the current page first", m[1])
@@ -152,24 +184,24 @@ func (c *call) authorize(ctx context.Context, r Request, url, text string) error
 	case Allow:
 		return nil
 	case Deny:
-		c.s.record(ctx, c.st, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(r.Role, r.Label), url: url, outcome: "denied", detail: reason})
+		c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(r.Role, r.Label), url: url, outcome: "denied", detail: reason})
 		return refuse("%s", reason)
 	}
-	if c.s.takeGrant(c.st, r) {
+	if c.s.takeGrant(c.st, c.pg.id, r) {
 		return nil
 	}
 	teammate, _ := c.s.Store.Teammate(ctx, c.st.env, c.st.teammate)
 	p := ActionPayload{TeammateID: c.st.teammate, TeammateName: teammate.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
-		Action: r.Action, Origin: r.Origin, URL: url, Role: r.Role, Label: r.Label, Text: clip(text, 500)}
+		Session: c.pg.id, Action: r.Action, Origin: r.Origin, URL: url, Role: r.Role, Label: r.Label, Text: clip(text, 500)}
 	raw, _ := json.Marshal(p)
-	subject := fmt.Sprintf("%s: %s %s on %s", teammate.Name, r.Action, target(r.Role, r.Label), r.Origin)
+	subject := fmt.Sprintf("%s: %s %s on %s%s", teammate.Name, r.Action, target(r.Role, r.Label), r.Origin, sessionNote(c.pg.id))
 	a, created, err := c.s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindAction, Subject: clip(subject, 500), Payload: raw})
 	if err != nil {
 		return err
 	}
 	if created {
 		c.s.notify(c.st.env)
-		c.s.record(ctx, c.st, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(r.Role, r.Label), url: url, outcome: "pending", detail: "asked the user"})
+		c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(r.Role, r.Label), url: url, outcome: "pending", detail: "asked the user"})
 	}
 	status, err := c.s.awaitApproval(ctx, c.st.env, a.ID)
 	if err != nil {
@@ -177,7 +209,7 @@ func (c *call) authorize(ctx context.Context, r Request, url, text string) error
 	}
 	switch status {
 	case store.StatusApproved:
-		c.s.takeGrant(c.st, r) // the approval is used now
+		c.s.takeGrant(c.st, c.pg.id, r) // the approval is used now
 		return nil
 	case store.StatusPending:
 		return refuse("waiting for the user to approve %s on %s in Studio; call again in a minute to retry", r.Action, r.Origin)
@@ -206,7 +238,7 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 		return nil, err
 	}
 	c.s.mu.Lock()
-	visible := c.st.visible
+	visible := c.pg.visible
 	c.s.mu.Unlock()
 	_, shot, err := c.run(ctx, args, true)
 	if visible {
@@ -215,11 +247,11 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 	e := entry{actor: "agent", sandbox: c.sb.ID, action: action, target: target(info.Role, info.Name), url: url, outcome: "ok", detail: detail, shot: shot}
 	if err != nil {
 		e.outcome, e.detail = "failed", err.Error()
-		c.s.record(ctx, c.st, e)
+		c.s.record(ctx, c.st, c.pg, e)
 		return nil, userError{err}
 	}
 	after, _ := c.currentURL(ctx)
-	c.s.record(ctx, c.st, e)
+	c.s.record(ctx, c.st, c.pg, e)
 	return fmt.Sprintf("done; the page is at %s. Take a browser_snapshot to see it.", after), nil
 }
 
@@ -257,15 +289,41 @@ func (c *call) open(ctx context.Context, params json.RawMessage) (any, error) {
 	if origin == "" || len(in.URL) > 4000 {
 		return nil, refuse("url must be an absolute http or https URL")
 	}
-	if err := c.authorize(ctx, Request{Action: "open", Origin: origin}, in.URL, ""); err != nil {
-		return nil, err
+	if c.pg == nil {
+		// A new ephemeral session: its first command starts it with an empty profile. If
+		// the open fails, the session ends again.
+		pg, err := c.s.reserveEphemeral(c.st, c.sb)
+		if err != nil {
+			return nil, err
+		}
+		c.pg, c.fresh = pg, true
+		opened := false
+		defer func() {
+			if !opened {
+				c.s.closeEphemeral(context.WithoutCancel(ctx), c.st, pg, "ended because its first page did not open")
+			}
+		}()
+		res, err := c.openPage(ctx, in.URL, origin)
+		if err != nil {
+			return nil, err
+		}
+		opened = true
+		return map[string]string{"session": pg.id, "result": res,
+			"note": "Pass this session to the other browser tools to use it; without it they drive your persistent profile. browser_close it when you are done; nothing it stores is kept."}, nil
 	}
-	data, shot, err := c.run(ctx, []string{"open", in.URL}, true)
-	e := entry{actor: "agent", sandbox: c.sb.ID, action: "open", url: in.URL, outcome: "ok", shot: shot}
+	return c.openPage(ctx, in.URL, origin)
+}
+
+func (c *call) openPage(ctx context.Context, url, origin string) (string, error) {
+	if err := c.authorize(ctx, Request{Action: "open", Origin: origin}, url, ""); err != nil {
+		return "", err
+	}
+	data, shot, err := c.run(ctx, []string{"open", url}, true)
+	e := entry{actor: "agent", sandbox: c.sb.ID, action: "open", url: url, outcome: "ok", shot: shot}
 	if err != nil {
 		e.outcome, e.detail = "failed", err.Error()
-		c.s.record(ctx, c.st, e)
-		return nil, userError{err}
+		c.s.record(ctx, c.st, c.pg, e)
+		return "", userError{err}
 	}
 	var v struct {
 		URL   string `json:"url"`
@@ -273,12 +331,20 @@ func (c *call) open(ctx context.Context, params json.RawMessage) (any, error) {
 	}
 	json.Unmarshal(data, &v)
 	c.s.mu.Lock()
-	c.st.navigated(v.URL)
-	secrets := c.st.secrets
+	c.pg.navigated(v.URL)
+	secrets := c.pg.secrets
 	c.s.mu.Unlock()
 	e.detail = v.Title
-	c.s.record(ctx, c.st, e)
+	c.s.record(ctx, c.st, c.pg, e)
 	return Scrub(fmt.Sprintf("opened %s (%s). Take a browser_snapshot to see the page.", v.URL, v.Title), secrets), nil
+}
+
+// sessionNote marks approval subjects of an ephemeral session.
+func sessionNote(id string) string {
+	if id == "" {
+		return ""
+	}
+	return " (ephemeral session " + id + ")"
 }
 
 // snapshotData is agent-browser's snapshot response.
@@ -310,15 +376,15 @@ func (c *call) snapshot(ctx context.Context, params json.RawMessage) (any, error
 	if err := json.Unmarshal(data, &snap); err != nil {
 		return nil, errors.New("the snapshot was not understood")
 	}
-	text, refs, err := c.s.redactSnapshot(ctx, c.st, snap)
+	text, refs, err := c.s.redactSnapshot(ctx, c.st, c.pg, snap)
 	if err != nil {
 		return nil, err
 	}
 	c.s.mu.Lock()
-	if snap.Origin != c.st.url {
-		c.st.navigated(snap.Origin)
+	if snap.Origin != c.pg.url {
+		c.pg.navigated(snap.Origin)
 	}
-	c.st.refs = refs
+	c.pg.refs = refs
 	c.s.mu.Unlock()
 	if text == "" {
 		text = "(no elements)"
@@ -328,7 +394,7 @@ func (c *call) snapshot(ctx context.Context, params json.RawMessage) (any, error
 
 // redactSnapshot reads the attributes of the snapshot's valued fields and blanks the
 // sensitive ones; it returns the text the agent may see and the refs it knows.
-func (s *Service) redactSnapshot(ctx context.Context, st *state, snap snapshotData) (string, map[string]refInfo, error) {
+func (s *Service) redactSnapshot(ctx context.Context, st *state, pg *page, snap snapshotData) (string, map[string]refInfo, error) {
 	patterns, err := s.Store.BrowserPatterns(ctx, st.env, st.teammate)
 	if err != nil {
 		return "", nil, err
@@ -344,7 +410,7 @@ func (s *Service) redactSnapshot(ctx context.Context, st *state, snap snapshotDa
 		for _, l := range probes {
 			cmds = append(cmds, []string{"get", "attr", "@" + l.Ref, "type"}, []string{"get", "attr", "@" + l.Ref, "autocomplete"})
 		}
-		items, err := s.batch(ctx, st, cmds)
+		items, err := s.batch(ctx, st, pg, cmds)
 		for i, l := range probes {
 			f := Field{Ref: l.Ref, Role: l.Role, Name: l.Name}
 			if err == nil && items[2*i].Success && items[2*i+1].Success {
@@ -355,8 +421,8 @@ func (s *Service) redactSnapshot(ctx context.Context, st *state, snap snapshotDa
 		}
 	}
 	s.mu.Lock()
-	secrets := st.secrets
-	for ref := range st.credRefs {
+	secrets := pg.secrets
+	for ref := range pg.credRefs {
 		if f, ok := fields[ref]; ok {
 			f.Credential = true
 			fields[ref] = f
@@ -468,7 +534,7 @@ func (c *call) scroll(ctx context.Context, params json.RawMessage) (any, error) 
 	if err != nil {
 		return nil, userError{err}
 	}
-	c.s.record(ctx, c.st, entry{actor: "agent", sandbox: c.sb.ID, action: "scroll", url: url, outcome: "ok", detail: in.Direction, shot: shot})
+	c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: "scroll", url: url, outcome: "ok", detail: in.Direction, shot: shot})
 	return "scrolled " + in.Direction, nil
 }
 
@@ -497,7 +563,7 @@ func (c *call) getText(ctx context.Context, params json.RawMessage) (any, error)
 	}
 	json.Unmarshal(data, &v) // verify (live): the key of get text's response
 	c.s.mu.Lock()
-	secrets := c.st.secrets
+	secrets := c.pg.secrets
 	c.s.mu.Unlock()
 	return clip(Scrub(v.Text, secrets), maxAgentText), nil
 }
@@ -516,7 +582,7 @@ func (c *call) screenshot(ctx context.Context, params json.RawMessage) (any, err
 		return nil, err
 	}
 	c.s.mu.Lock()
-	visible := c.st.visible
+	visible := c.pg.visible
 	c.s.mu.Unlock()
 	if visible {
 		return nil, refuse("a credential Studio filled may be visible on this page, so screenshots are off until the page changes; use browser_snapshot")
@@ -582,6 +648,6 @@ func (c *call) back(ctx context.Context, params json.RawMessage) (any, error) {
 		return nil, userError{err}
 	}
 	after, _ := c.currentURL(ctx)
-	c.s.record(ctx, c.st, entry{actor: "agent", sandbox: c.sb.ID, action: "back", url: after, outcome: "ok", shot: shot})
+	c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: "back", url: after, outcome: "ok", shot: shot})
 	return "went back to " + after, nil
 }

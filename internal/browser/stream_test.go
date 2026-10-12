@@ -57,7 +57,7 @@ func TestRelay(t *testing.T) {
 		if err != nil {
 			return
 		}
-		f.svc.Relay(r.Context(), f.env, f.ada.ID, c)
+		f.svc.Relay(r.Context(), f.env, f.ada.ID, "", c)
 	}))
 	defer ui.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -89,7 +89,7 @@ func TestRelay(t *testing.T) {
 	if m := <-got; !strings.Contains(m, `"ack"`) {
 		t.Errorf("input passed while the agent drives: %s", m)
 	}
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, true); err != nil {
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
 	c.Write(ctx, websocket.MessageText, []byte(click))
@@ -134,11 +134,11 @@ func TestActiveTabsURLAndStaleStream(t *testing.T) {
 	vmID, sessionID := st.vm, st.session
 	st.visible = true
 	f.svc.mu.Unlock()
-	f.svc.syncStreamURL(st, f.env, vmID, sessionID, valid)
+	f.svc.syncStreamURL(st, &st.page, f.env, vmID, sessionID, valid)
 	if status, err := f.svc.Status(f.ctx, f.env, f.ada.ID); err != nil || status.URL != "about:blank" {
 		t.Fatalf("active tab URL not applied: %+v, %v", status, err)
 	}
-	f.svc.syncStreamURL(st, f.env, vmID, sessionID, urlEvent)
+	f.svc.syncStreamURL(st, &st.page, f.env, vmID, sessionID, urlEvent)
 	f.svc.mu.Lock()
 	if !st.visible || len(st.refs) != 0 {
 		t.Error("a URL observation must invalidate refs without unmasking a visible credential")
@@ -147,8 +147,8 @@ func TestActiveTabsURLAndStaleStream(t *testing.T) {
 	st.vm = vmID
 	st.session = "replacement-session"
 	f.svc.mu.Unlock()
-	f.svc.syncStreamURL(st, f.env, vmID, sessionID, valid)
-	f.svc.syncStreamURL(st, f.env, vmID, sessionID, urlEvent)
+	f.svc.syncStreamURL(st, &st.page, f.env, vmID, sessionID, valid)
+	f.svc.syncStreamURL(st, &st.page, f.env, vmID, sessionID, urlEvent)
 	f.svc.mu.Lock()
 	got := st.url
 	f.svc.mu.Unlock()

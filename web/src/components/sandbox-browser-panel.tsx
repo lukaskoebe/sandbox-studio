@@ -9,7 +9,7 @@ import {
   WarningIcon,
   XIcon,
 } from "@phosphor-icons/react"
-import { BrowserLive } from "@/components/browser-live"
+import { BrowserLive, BrowserSessionSelect } from "@/components/browser-live"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -51,6 +51,12 @@ export function SandboxBrowserPanel({
   const statusMissing = status.isError && errorStatus(status.error) === 404
   const st = statusMissing ? undefined : status.data
   const running = st?.vm === "running"
+  // The session the live view and controls act on: "" is the persistent profile, and a picked
+  // ephemeral session that has closed falls back to it.
+  const [picked, setPicked] = useState("")
+  const sessions = st?.sessions ?? []
+  const session = sessions.find((s) => s.id === picked)
+  const sessionID = session?.id ?? ""
   const [streamURL, setStreamURL] = useState<string>()
   const [statusURLReady, setStatusURLReady] = useState(true)
   const stoppedStatusAt = useRef<number | undefined>(undefined)
@@ -70,7 +76,13 @@ export function SandboxBrowserPanel({
     }
   }, [running, status.dataUpdatedAt])
 
-  const pageURL = streamURL ?? (statusURLReady ? st?.url : undefined)
+  // A new session starts without the previous one's page.
+  useEffect(() => {
+    setStreamURL(undefined)
+  }, [sessionID])
+
+  const sessionPageURL = session ? session.url : st?.url
+  const pageURL = streamURL ?? (statusURLReady ? sessionPageURL : undefined)
   const addressPageURL = pageURL === "about:blank" ? "" : (pageURL ?? "")
   const [addressDraft, setAddressDraft] = useState("")
   const [addressDirty, setAddressDirty] = useState(false)
@@ -109,7 +121,10 @@ export function SandboxBrowserPanel({
           ["get", browserStatusPath, statusParams],
           browserStatus
         )
-        const actualURL = browserStatus.url ?? requestedURL.current
+        const shown = sessionID
+          ? browserStatus.sessions?.find((s) => s.id === sessionID)?.url
+          : browserStatus.url
+        const actualURL = shown ?? requestedURL.current
         setStreamURL(actualURL)
         setAddressDraft(actualURL === "about:blank" ? "" : actualURL)
         setAddressDirty(false)
@@ -120,14 +135,15 @@ export function SandboxBrowserPanel({
     }
   )
 
-  const driving = !!st?.takeover
+  const driving = session ? session.takeover : !!st?.takeover
   const navigationBlocked =
     navigate.isPending || takeover.isPending || control.isPending
   const routeEnv = encodeURIComponent(env)
   const routeTeammate = encodeURIComponent(teammate)
   const liveURL =
     `${window.location.origin}/api/environments/${routeEnv}` +
-    `/teammates/${routeTeammate}/browser/live`
+    `/teammates/${routeTeammate}/browser/live` +
+    (sessionID ? `?session=${encodeURIComponent(sessionID)}` : "")
   const fullBrowserURL = `/e/${routeEnv}/browser?teammate=${routeTeammate}`
   const openAddress = (event: FormEvent) => {
     event.preventDefault()
@@ -140,7 +156,15 @@ export function SandboxBrowserPanel({
       return
     }
     requestedURL.current = normalized.value
-    navigate.mutate({ params: { path }, body: { url: normalized.value } })
+    navigate.mutate({
+      params: { path },
+      body: { url: normalized.value, session: sessionID },
+    })
+  }
+  const pickSession = (id: string) => {
+    setPicked(id)
+    setAddressDirty(false)
+    setAddressError("")
   }
 
   const transitioning = st?.vm === "starting" || st?.vm === "draining"
@@ -203,6 +227,13 @@ export function SandboxBrowserPanel({
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b px-2 py-1.5">
           {running ? (
             <>
+              {sessions.length > 0 && (
+                <BrowserSessionSelect
+                  sessions={sessions}
+                  value={sessionID}
+                  onValueChange={pickSession}
+                />
+              )}
               <Button
                 size="sm"
                 variant={driving ? "default" : "outline"}
@@ -211,7 +242,7 @@ export function SandboxBrowserPanel({
                 onClick={() =>
                   takeover.mutate({
                     params: { path },
-                    body: { on: !driving },
+                    body: { on: !driving, session: sessionID },
                   })
                 }
               >
@@ -360,6 +391,7 @@ export function SandboxBrowserPanel({
               )}
             </form>
             <BrowserLive
+              key={sessionID}
               url={liveURL}
               driving={driving}
               inputEnabled={!navigationBlocked}

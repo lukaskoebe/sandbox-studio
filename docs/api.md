@@ -26,9 +26,10 @@ from other local users and from web pages:
 
 - `Guard` rejects a Host that isn't a loopback name (DNS rebinding) and unsafe methods whose
   Origin is another site (e.g. a form on a preview page).
-- At start Studio logs a one-time login link. The ticket is in the URL fragment, removed
-  before the app loads data, and exchanged once within ten minutes for a host-bound,
-  signed `studio_session` cookie (HttpOnly, SameSite=Strict, 30 days).
+- At start Studio logs a one-time login link, and on a color terminal also prints it in a
+  framed box (not when `NO_COLOR` is set or stderr is not a terminal). The ticket is in the
+  URL fragment, removed before the app loads data, and exchanged once within ten minutes for
+  a host-bound, signed `studio_session` cookie (HttpOnly, SameSite=Strict, 30 days).
 - `studio login-url` asks the running server for a fresh link, authenticating with a control
   token derived from the install key; only the short-lived ticket reaches the browser.
 - Previews: opening one issues a one-minute ticket that sets a separate host-scoped
