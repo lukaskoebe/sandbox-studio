@@ -47,7 +47,7 @@ export function Tile({
       className={cn(
         "inline-flex size-5 shrink-0 items-center justify-center rounded-[4px]",
         tone
-          ? "bg-(--tone)/14 text-(--tone)"
+          ? "bg-(--tone)/11 text-(--tone)"
           : "bg-foreground/[0.07] text-foreground/70",
         className
       )}

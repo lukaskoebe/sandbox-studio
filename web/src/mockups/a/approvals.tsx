@@ -83,7 +83,7 @@ function Card({
       data-tone={tone}
       className="overflow-hidden rounded-(--radius) border border-l-[3px] border-l-(--tone) bg-popover text-xs shadow-[0_8px_24px_-12px_oklch(0_0_0/0.25)]"
     >
-      <header className="flex h-8 items-center gap-2 border-b bg-(--tone)/[0.06] px-2.5">
+      <header className="flex h-8 items-center gap-2 border-b bg-(--tone)/[0.05] px-2.5">
         <Tile tone={tone} className="size-[1.125rem]" />
         <span className="font-mono text-[0.625rem] font-semibold tracking-wider text-(--tone) uppercase">
           {kind ?? toneLabels[tone]}
@@ -161,7 +161,7 @@ function NetworkCard() {
                 "truncate px-2 py-1 text-left",
                 i > 0 && "border-l",
                 pattern === i
-                  ? "bg-(--tone)/12 text-foreground"
+                  ? "bg-(--tone)/10 text-foreground"
                   : "text-muted-foreground hover:bg-muted"
               )}
               title={p}
