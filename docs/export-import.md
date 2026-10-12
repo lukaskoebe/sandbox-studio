@@ -30,7 +30,9 @@ The manifest:
 ```
 
 - `format` is `2`. Format 1 files, from before the home was exported, have no home chunks and
-  import with a home seeded from the image skeleton.
+  import with a home seeded from the image skeleton. A format 2 file of a sandbox without a
+  home disk (one made from a legacy template) has no home chunks either, only the zero
+  length, and imports the same way.
 - `templateSpecYAML` is the canonical template spec, or `null` for a base-image sandbox.
 - `workspaceBytes` is `0` because the archive is streamed. Import reads to end of file. A
   non-zero value is enforced as the exact archive length.
@@ -73,7 +75,9 @@ The states are `uploading`, `building`, `creating`, `importing`, `ready` (with
    plus the 4 GiB home, and staged under `<data>/imports`. Nothing is extracted on the host.
 3. The template spec goes through the normal template build, so a cached template is reused.
 4. Studio creates the sandbox in transfer mode, streams the home archive into `home-import`
-   and the workspace archive into `workspace-import` in the guest, and boots it.
+   (when the file has one) and the workspace archive into `workspace-import` in the guest,
+   and boots it. The new sandbox gets a home disk only if its template has one; the import's
+   template is always built from the current exporter, so it does.
 5. A name already in use gets a suffix: `name-2`, `name-3`, and so on.
 
 The staged file is deleted on success and failure. A failure removes the half-made

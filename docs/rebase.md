@@ -1,7 +1,7 @@
 # Rebase and fork
 
-Both move `/workspace` and `/home/agent` (the agent's home, [sandboxes](sandboxes.md#storage-and-mounts))
-from one VM to another. Neither uses msb restore or msb fork.
+Both move `/workspace` from one VM to another, and `/home/agent` too when the sandbox has a
+home disk ([sandboxes](sandboxes.md#storage-and-mounts)). Neither uses msb restore or msb fork.
 Restore drops Studio's DNS and proxy egress
 ([#1736](https://github.com/superradcompany/microsandbox/issues/1736)).
 Both need a running or stopped sandbox; a suspended one is refused until it is resumed.
@@ -20,9 +20,13 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
   over the copy. Before that it removes the mise login block that templates built before
   `/opt/mise` appended to `~/.profile`, since it would point the home back at toolchains
   that are gone.
-- A source without a home disk (a sandbox created before it) gives its root `/home/agent`.
-  The toolchains that those templates kept there are left out: the target template has
-  them in `/opt/mise`.
+- A source without a home disk (a sandbox of a legacy template, exporter version 1) gives
+  its root `/home/agent` to a target that has a home disk. The toolchains that those
+  templates kept there are left out: the target template has them in `/opt/mise`.
+- Which copies happen follows the target template. A target with a home disk gets the home.
+  A legacy target has none, so only the workspace is copied, as before. A sandbox with a
+  home disk can't move to a legacy template: rebase is refused with a conflict, before
+  anything changes, since its home would have nowhere to go.
 - All run as root through msb exec. The host joins them with an `io.Pipe`. Nothing is
   staged on the host.
 - The workspace stream is limited to the target's workspace size, and the home stream to
@@ -52,15 +56,17 @@ removed and the source stays stopped, after it the source is removed. Lifecycle 
 that sandbox are refused until this succeeds.
 
 Docker images, containers and volumes are lost. Tmux sessions end. Checkpoints stay with
-their generation. The home comes along, so harness sessions and logins survive, and a chat
-resumes its agent session in the new generation ([chat mode](design/chat-mode.md)).
+their generation. With a home disk on the new generation, harness sessions and logins
+survive, and a chat resumes its agent session in the new generation
+([chat mode](design/chat-mode.md)).
 
 ## Fork
 
 `POST /api/environments/{env}/sandboxes/{id}/fork` with `{"name": "..."}`.
 
 The fork gets a new ID and egress identity, with the same template and resources. Its
-workspace and home are copied from the source. A running source keeps running, so the copy
+workspace is copied from the source, and its home too if the source has a home disk. A fork
+of a sandbox without one has none, as before. A running source keeps running, so the copy
 may be inconsistent. A stopped source is started in transfer mode for the copy and then
 stopped again. The fork is booted. A failed fork is removed. The source keeps its chats;
 the fork starts without any.

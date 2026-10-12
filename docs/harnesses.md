@@ -117,8 +117,9 @@ Harness history and sessions:
 - survive rebase, fork and export, which copy the home with the workspace. A chat resumes
   its session after a rebase. A fork keeps the copy, but its chats stay with the source.
 
-A sandbox created before the home disk keeps `/home/agent` on the root disk until a rebase
-or fork copies it onto one.
+A sandbox made from a template built before the home skeleton (exporter version 1) keeps
+`/home/agent` on the root disk, with that template's toolchains. Rebuild the template to get
+a home disk.
 
 tmux sessions end when the sandbox stops.
 

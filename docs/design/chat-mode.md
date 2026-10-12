@@ -462,8 +462,8 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
 - **A session the agent can't resume.** `live.open` resumes the ACP session with
   `session/resume` (or `session/load`). When the agent answers with an error, the chat
   becomes `orphaned`: read-only, with "Start a new chat". The agent's session files live in
-  the home, and rebase copies it, so chats resume after a rebase. A fork copies the home too,
-  but its chats stay with the source.
+  the home, and rebase copies it onto a home disk, so chats resume after a rebase onto a
+  current template. A fork copies the home too, but its chats stay with the source.
 - **Subagent child sessions.** They show inside their parent's tool card only.
 - **TUI-only history edits.** `/clear`, `/compact` or a rewind in the TUI change what
   `session/load` replays. The replay wins, and undo is unavailable for turns before the

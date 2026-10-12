@@ -13,7 +13,7 @@
 | 2026-10-09 | Open source under Apache 2.0 at `github.com/lukaskoebe/sandbox-studio`; images at `ghcr.io/lukaskoebe/` |
 | 2026-10-09 | Test hardware: an Apple Silicon Mac, no Windows machine. Windows gets CI builds and unit tests; VM-level tests need a cloud VM with nested virtualization or testers |
 | 2026-10-09 | `/workspace` and `/var/lib/docker` are owned disks (S5) |
-| 2026-10-12 | `/home/agent` is a third owned disk, seeded once from the image skeleton; fork, rebase and export copy it with `/workspace` |
+| 2026-10-12 | `/home/agent` is a third owned disk, seeded once from the image skeleton; fork, rebase and export copy it with `/workspace`. Sandboxes of templates built before the skeleton (exporter version 1) keep their root home and get no home disk |
 | 2026-10-09 | Hold unknown connections up to 60 s (S6) |
 | 2026-10-09 | Containers trust the CA through a `runc` shim, not a helper command (S4 follow-up) |
 | 2026-10-09 | No init system in guests: agentd stays PID 1 so msb can freeze guests; `studio-agent boot` supervises containerd, dockerd and the agent |

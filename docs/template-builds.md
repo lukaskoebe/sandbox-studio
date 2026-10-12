@@ -129,9 +129,9 @@ builds set the base to the digest-pinned image they publish (`version.BaseImage`
 
 The cache key includes the canonical spec, inspected base digest, platform, and exporter
 version. Exporter version 2 moved the toolchains to `/opt/mise` and added the home skeleton.
-Templates built with version 1 are refused for new sandboxes, forks and rebases; build the
-spec again, on a base image that has `/opt/mise` and the skeleton, to get a version 2
-template. On a cache hit, the worker still prepares and inspects the base, then verifies
+Templates built with version 1 still back sandboxes, but those sandboxes have no home disk.
+Rebuild the template to get a persistent home directory: build the spec again, on a base
+image that has `/opt/mise` and the skeleton. On a cache hit, the worker still prepares and inspects the base, then verifies
 the environment-scoped ready template and registry artifacts. It skips builder creation
 and does not run apt, mise, or setup again. For a miss, Studio composes deterministic base-only metadata from that inspection and
 serves it through an authenticated, environment-scoped temporary registry lease. The builder
@@ -183,7 +183,8 @@ instance API does not accept resource overrides.
 
 Creation pins the ready template to the new sandbox in the catalog. The template supplies
 the root image for a fresh sandbox instance, while the workspace, Docker and home disks are
-new and empty, except that the home is seeded from the template's skeleton. Creation assigns the normal new sandbox and proxy identity, creates its agent
+new and empty, except that the home is seeded from the template's skeleton. A version 1
+template has no skeleton and gives no home disk. Creation assigns the normal new sandbox and proxy identity, creates its agent
 socket, and follows the ordinary guest boot/configuration path, including the environment
 CA and placeholder push. It does not restore another sandbox's root, workspace, or Docker
 data.

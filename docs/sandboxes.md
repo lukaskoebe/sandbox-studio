@@ -33,8 +33,12 @@ The home disk is seeded once, on the sandbox's first boot, from the skeleton the
 at `/usr/share/sandbox-studio/home-skel` (the base image's home, or the template's home as
 its last build step left it). Nothing seeds it again, so files you delete stay deleted. Its
 size is fixed and not a setting. Browser VMs and template build VMs have no home disk.
-Sandboxes created before it keep `/home/agent` on the root layer; a fork or rebase copies
-that home onto the new sandbox's home disk.
+
+A sandbox made from a template built before the home skeleton (exporter version 1) has no
+home disk: its home stays on the root layer next to the toolchains that template keeps
+there, and its forks stay that way. Rebuild the template to get a persistent home directory.
+Rebasing such a sandbox onto a current template gives it a home disk and copies its home
+over. Rebasing a sandbox that has a home disk onto a template without one is refused.
 
 ## Network
 
@@ -98,8 +102,8 @@ A full (memory) snapshot plus stop would need restore, so it waits on #1736 too.
 
 ## Fork, rebase, export and import
 
-- [Fork and rebase](rebase.md): the workspace and the home are copied as gzip tars over msb
-  exec between two VMs. Docker data is not copied.
+- [Fork and rebase](rebase.md): the workspace is copied as a gzip tar over msb exec between
+  two VMs, and the home too where there is a home disk. Docker data is not copied.
 - [Export and import](export-import.md): a `.studio-sandbox` file (manifest, home tar and
   workspace tar), recreated through a template build and the same copies.
 
