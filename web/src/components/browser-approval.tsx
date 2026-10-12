@@ -68,6 +68,11 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
           {act.url}
         </p>
       )}
+      {act?.session && (
+        <p className="text-xs text-muted-foreground">
+          Ephemeral session {act.session}
+        </p>
+      )}
       <label className="flex items-center gap-2 text-xs">
         <Checkbox checked={remember} onCheckedChange={setRemember} />
         {`Always for ${act?.action ?? "this action"} on this origin`}
@@ -129,6 +134,11 @@ export function BrowserCredentialDecision({
       {cred?.url && (
         <p className="truncate text-xs" title={cred.url}>
           {cred.url}
+        </p>
+      )}
+      {cred?.session && (
+        <p className="text-xs text-muted-foreground">
+          Ephemeral session {cred.session}
         </p>
       )}
       <div className="flex items-center gap-1.5">
