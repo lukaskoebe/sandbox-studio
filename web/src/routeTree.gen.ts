@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MockupsRouteImport } from './routes/mockups'
 import { Route as EEnvRouteImport } from './routes/e.$env'
+import { Route as MockupsIndexRouteImport } from './routes/mockups.index'
 import { Route as EEnvIndexRouteImport } from './routes/e.$env.index'
 import { Route as EEnvBrowserRouteImport } from './routes/e.$env.browser'
 import { Route as EEnvBuildsRouteImport } from './routes/e.$env.builds'
@@ -21,6 +23,7 @@ import { Route as EEnvProvidersRouteImport } from './routes/e.$env.providers'
 import { Route as EEnvSecretsRouteImport } from './routes/e.$env.secrets'
 import { Route as EEnvSettingsRouteImport } from './routes/e.$env.settings'
 import { Route as EEnvTeammatesRouteImport } from './routes/e.$env.teammates'
+import { Route as MockupsDirectionScreenRouteImport } from './routes/mockups.$direction.$screen'
 import { Route as EEnvChatsIndexRouteImport } from './routes/e.$env.chats.index'
 import { Route as EEnvChatsChatRouteImport } from './routes/e.$env.chats.$chat'
 import { Route as EEnvChatsNewRouteImport } from './routes/e.$env.chats.new'
@@ -31,10 +34,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MockupsRoute = MockupsRouteImport.update({
+  id: '/mockups',
+  path: '/mockups',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EEnvRoute = EEnvRouteImport.update({
   id: '/e/$env',
   path: '/e/$env',
   getParentRoute: () => rootRouteImport,
+} as any)
+const MockupsIndexRoute = MockupsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => MockupsRoute,
 } as any)
 const EEnvIndexRoute = EEnvIndexRouteImport.update({
   id: '/',
@@ -86,6 +99,11 @@ const EEnvTeammatesRoute = EEnvTeammatesRouteImport.update({
   path: '/teammates',
   getParentRoute: () => EEnvRoute,
 } as any)
+const MockupsDirectionScreenRoute = MockupsDirectionScreenRouteImport.update({
+  id: '/$direction/$screen',
+  path: '/$direction/$screen',
+  getParentRoute: () => MockupsRoute,
+} as any)
 const EEnvChatsIndexRoute = EEnvChatsIndexRouteImport.update({
   id: '/chats/',
   path: '/chats/',
@@ -109,7 +127,9 @@ const EEnvSandboxesIdRoute = EEnvSandboxesIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/mockups': typeof MockupsRouteWithChildren
   '/e/$env': typeof EEnvRouteWithChildren
+  '/mockups/': typeof MockupsIndexRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/git': typeof EEnvGitRoute
@@ -119,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRoute
   '/e/$env/teammates': typeof EEnvTeammatesRoute
+  '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
@@ -127,6 +148,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/mockups': typeof MockupsIndexRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/git': typeof EEnvGitRoute
@@ -136,6 +158,7 @@ export interface FileRoutesByTo {
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRoute
   '/e/$env/teammates': typeof EEnvTeammatesRoute
+  '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
   '/e/$env': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
@@ -145,7 +168,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/mockups': typeof MockupsRouteWithChildren
   '/e/$env': typeof EEnvRouteWithChildren
+  '/mockups/': typeof MockupsIndexRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
   '/e/$env/git': typeof EEnvGitRoute
@@ -155,6 +180,7 @@ export interface FileRoutesById {
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRoute
   '/e/$env/teammates': typeof EEnvTeammatesRoute
+  '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
@@ -165,7 +191,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/mockups'
     | '/e/$env'
+    | '/mockups/'
     | '/e/$env/browser'
     | '/e/$env/builds'
     | '/e/$env/git'
@@ -175,6 +203,7 @@ export interface FileRouteTypes {
     | '/e/$env/secrets'
     | '/e/$env/settings'
     | '/e/$env/teammates'
+    | '/mockups/$direction/$screen'
     | '/e/$env/'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
@@ -183,6 +212,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/mockups'
     | '/e/$env/browser'
     | '/e/$env/builds'
     | '/e/$env/git'
@@ -192,6 +222,7 @@ export interface FileRouteTypes {
     | '/e/$env/secrets'
     | '/e/$env/settings'
     | '/e/$env/teammates'
+    | '/mockups/$direction/$screen'
     | '/e/$env'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
@@ -200,7 +231,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/mockups'
     | '/e/$env'
+    | '/mockups/'
     | '/e/$env/browser'
     | '/e/$env/builds'
     | '/e/$env/git'
@@ -210,6 +243,7 @@ export interface FileRouteTypes {
     | '/e/$env/secrets'
     | '/e/$env/settings'
     | '/e/$env/teammates'
+    | '/mockups/$direction/$screen'
     | '/e/$env/'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
@@ -219,6 +253,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MockupsRoute: typeof MockupsRouteWithChildren
   EEnvRoute: typeof EEnvRouteWithChildren
 }
 
@@ -231,12 +266,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mockups': {
+      id: '/mockups'
+      path: '/mockups'
+      fullPath: '/mockups'
+      preLoaderRoute: typeof MockupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/e/$env': {
       id: '/e/$env'
       path: '/e/$env'
       fullPath: '/e/$env'
       preLoaderRoute: typeof EEnvRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/mockups/': {
+      id: '/mockups/'
+      path: '/'
+      fullPath: '/mockups/'
+      preLoaderRoute: typeof MockupsIndexRouteImport
+      parentRoute: typeof MockupsRoute
     }
     '/e/$env/': {
       id: '/e/$env/'
@@ -308,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvTeammatesRouteImport
       parentRoute: typeof EEnvRoute
     }
+    '/mockups/$direction/$screen': {
+      id: '/mockups/$direction/$screen'
+      path: '/$direction/$screen'
+      fullPath: '/mockups/$direction/$screen'
+      preLoaderRoute: typeof MockupsDirectionScreenRouteImport
+      parentRoute: typeof MockupsRoute
+    }
     '/e/$env/chats/': {
       id: '/e/$env/chats/'
       path: '/chats'
@@ -338,6 +394,19 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface MockupsRouteChildren {
+  MockupsIndexRoute: typeof MockupsIndexRoute
+  MockupsDirectionScreenRoute: typeof MockupsDirectionScreenRoute
+}
+
+const MockupsRouteChildren: MockupsRouteChildren = {
+  MockupsIndexRoute: MockupsIndexRoute,
+  MockupsDirectionScreenRoute: MockupsDirectionScreenRoute,
+}
+
+const MockupsRouteWithChildren =
+  MockupsRoute._addFileChildren(MockupsRouteChildren)
 
 interface EEnvRouteChildren {
   EEnvBrowserRoute: typeof EEnvBrowserRoute
@@ -377,6 +446,7 @@ const EEnvRouteWithChildren = EEnvRoute._addFileChildren(EEnvRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MockupsRoute: MockupsRouteWithChildren,
   EEnvRoute: EEnvRouteWithChildren,
 }
 export const routeTree = rootRouteImport
