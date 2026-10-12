@@ -25,23 +25,25 @@ type transferFake struct {
 	specs      map[string]runtime.Spec
 	labels     map[string]map[string]string
 	booted     map[string]bool
+	sockets    map[string]string
+	guestBoots bool // a booted VM's agent connects and answers, see answerGuest
 }
 
 func newTransferFake(f *checkpointFixture) *transferFake {
 	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, specs: map[string]runtime.Spec{},
-		labels: map[string]map[string]string{}, booted: map[string]bool{}}
+		labels: map[string]map[string]string{}, booted: map[string]bool{}, sockets: map[string]string{}}
 	f.manager.Runtime = tf
 	f.manager.Templates = perTemplateResolver{}
 	return tf
 }
 
-func (f *transferFake) CreateForTransfer(_ context.Context, name string, spec runtime.Spec, _ string, labels map[string]string) error {
+func (f *transferFake) CreateForTransfer(_ context.Context, name string, spec runtime.Spec, socket string, labels map[string]string) error {
 	f.record("create-transfer:" + name)
 	if err := f.failure("create-transfer:" + name); err != nil {
 		return err
 	}
 	f.mu.Lock()
-	f.specs[name], f.labels[name] = spec, cloneStringMap(labels)
+	f.specs[name], f.labels[name], f.sockets[name] = spec, cloneStringMap(labels), socket
 	f.mu.Unlock()
 	f.setStatus(name, runtime.StatusRunning)
 	return nil
@@ -63,7 +65,11 @@ func (f *transferFake) Boot(_ context.Context, name string) error {
 	}
 	f.mu.Lock()
 	f.booted[name] = true
+	socket := f.sockets[name]
 	f.mu.Unlock()
+	if f.guestBoots {
+		return answerGuest(socket)
+	}
 	return nil
 }
 
@@ -352,13 +358,21 @@ func TestForkCopiesWorkspaceIntoNewSandbox(t *testing.T) {
 		t.Run(fmt.Sprint("running=", running), func(t *testing.T) {
 			f := newCheckpointFixture(t)
 			tf := newTransferFake(f)
+			tf.guestBoots = true
 			source := VMName(f.sandbox)
 			if running {
 				tf.setStatus(source, runtime.StatusRunning)
 			}
 			tf.setWorkspace(source, "files")
 
-			view, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
+			answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := f.manager.waitOperation(f.ctx, answered.ID); err != nil {
+				t.Fatal(err)
+			}
+			view, err := f.manager.Get(f.ctx, f.env.ID, answered.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -393,11 +407,23 @@ func TestForkFailureRemovesFork(t *testing.T) {
 	tf.setWorkspace(source, "files")
 	tf.fail("export:"+source, errors.New("injected"))
 
-	if _, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy"); err == nil {
+	answered, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.manager.waitOperation(f.ctx, answered.ID); err == nil {
 		t.Fatal("Fork succeeded")
 	}
+	// A failed fork keeps its record, in state failed, until it is deleted.
+	failed, err := f.manager.Get(f.ctx, f.env.ID, answered.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Status != StatusFailed || failed.Progress == nil || failed.Progress.Step != StepCopy {
+		t.Fatalf("failed fork = %+v; want it failed while copying", failed)
+	}
 	all, err := f.store.AllSandboxes(f.ctx)
-	if err != nil || len(all) != 1 {
+	if err != nil || len(all) != 2 {
 		t.Fatalf("sandboxes = %+v, %v", all, err)
 	}
 	if status, _ := tf.Status(f.ctx, source); status != runtime.StatusStopped {

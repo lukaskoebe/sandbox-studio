@@ -271,6 +271,7 @@ func run(addr, image string, log *slog.Logger) error {
 		Paths:     p,
 		Log:       log,
 		Forget:    gitRemote.ForgetSandbox,
+		Bus:       bus,
 	}
 	hub.OnConnect = mgr.Configure
 	hub.OnCall = routeCalls(brw, agentMem.HandleCall)

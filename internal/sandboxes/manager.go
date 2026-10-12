@@ -14,6 +14,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -59,6 +60,11 @@ type Manager struct {
 	// Forget removes host-side state kept for a sandbox elsewhere (git staging repos) once
 	// it is deleted; nil keeps none.
 	Forget func(envID, id string) error
+	// Bus, if set, gets an events.TopicSandboxes notice whenever a create or fork moves on.
+	Bus *events.Bus
+
+	opsMu sync.Mutex
+	ops   map[string]*operation // sandbox ID → its create or fork; see progress.go
 
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
@@ -99,9 +105,10 @@ type Egress interface {
 // View is a sandbox as shown to clients: catalog record plus live state.
 type View struct {
 	store.Sandbox
-	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,suspended,stopped,crashed"`
+	Status                     runtime.Status `json:"status" enum:"absent,created,starting,running,draining,suspended,stopped,crashed,creating,failed" doc:"The VM's runtime status; creating or failed while a create or fork runs or after it failed"`
 	CheckpointRestoreSupported bool           `json:"checkpointRestoreSupported"`
 	Agent                      *AgentInfo     `json:"agent,omitempty"`
+	Progress                   *Progress      `json:"progress,omitempty" doc:"The create or fork that runs or failed"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -131,6 +138,7 @@ func vmNameAtGeneration(sb store.Sandbox, generation int) string {
 
 // Reconcile re-attaches agent listeners for every sandbox after Studio starts.
 // Detached VMs keep running across Studio restarts; their agents reconnect on their own.
+// A create or fork that ran when Studio stopped has failed (see recoverProgress).
 func (m *Manager) Reconcile(ctx context.Context) error {
 	m.recoverImports(ctx)
 	all, err := m.Store.AllSandboxes(ctx)
@@ -153,10 +161,11 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	for _, op := range rebases {
 		pendingRebases[op.SandboxID] = op
 	}
+	failedCreates := m.recoverProgress(ctx, all)
 	seen := make(map[string]bool, len(all))
 	for _, sb := range all {
 		seen[sb.ID] = true
-		if sb.BuildJobID != "" {
+		if sb.BuildJobID != "" || failedCreates[sb.ID] {
 			continue
 		}
 		if op, ok := pending[sb.ID]; ok {
@@ -199,7 +208,8 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// Create records and boots a new sandbox.
+// Create records a new sandbox and returns it in state creating. Its VM is created and
+// booted in the background; see progress.go.
 func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (View, error) {
 	resolved := resolveResources(req)
 	if err := resolved.Validate(); err != nil {
@@ -212,13 +222,13 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err != nil {
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, nil, false)
+	return m.bootSandbox(ctx, rec, resolved, nil)
 }
 
-// CreateFromTemplateFor starts a fresh sandbox, owned by teammateID if it is set, from one
-// ready, same-environment template. The catalog row pins the template before registry
-// metadata is resolved or the VM is allocated. The runtime receives credentials only in
-// its host-side image options.
+// CreateFromTemplateFor creates a fresh sandbox, owned by teammateID if it is set, from one
+// ready, same-environment template, like Create. The catalog row pins the template before
+// registry metadata is resolved or the VM is allocated. The runtime receives credentials
+// only in its host-side image options.
 func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, name, teammateID string) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
@@ -238,7 +248,7 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 		}
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, image, true)
+	return m.bootSandbox(ctx, rec, resolved, image)
 }
 
 // templateResources checks that a template can back a sandbox on this host and returns
@@ -291,50 +301,100 @@ func (m *Manager) templateImage(ctx context.Context, envID, templateID string) (
 	return &runtime.ImageSource{Reference: ref.Image, Username: ref.Username, Password: ref.Password}, nil
 }
 
-func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, retainOnUncertainBoot bool) (View, error) {
+// bootSandbox attaches a new record's network and agent socket, then creates and boots its
+// VM in the background and returns the sandbox in state creating. Until the background
+// create starts, a failure removes the record. After that, a failure removes the VM and
+// leaves the record failed, with the step, until it is deleted.
+func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource) (View, error) {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
-		if retainOnUncertainBoot {
-			if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, true); cleanupErr != nil {
-				return View{}, cleanupErr
-			}
-		} else {
-			m.Store.DeleteSandbox(ctx, rec.EnvironmentID, rec.ID)
-		}
-		return View{}, err
+		return View{}, m.discardRecord(ctx, rec, err)
 	}
 	sock := m.Paths.AgentSocket(rec.ID)
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
-		m.Egress.Detach(rec.ID)
-		if retainOnUncertainBoot {
-			if cleanupErr := m.removeUnstartedTemplateRecord(ctx, rec, false); cleanupErr != nil {
-				return View{}, cleanupErr
-			}
-		} else {
-			m.Store.DeleteSandbox(ctx, rec.EnvironmentID, rec.ID)
-		}
-		return View{}, err
+		return View{}, m.discardRecord(ctx, rec, err)
+	}
+	unlock, err := m.tryMutation(rec.ID)
+	if err != nil {
+		return View{}, m.discardRecord(ctx, rec, err)
+	}
+	if err := m.begin(ctx, rec, OperationCreate, createSteps); err != nil {
+		unlock()
+		return View{}, m.discardRecord(ctx, rec, err)
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(resolved.CPUs), MemoryMiB: uint32(resolved.MemoryMiB), MaxMemoryMiB: uint32(resolved.MaxMemoryMiB),
 		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
-		Image: image, Egress: egress,
+		Image: image, Egress: egress, Progress: m.runtimeProgress(rec.ID),
 	}
 	labels := sandboxLabels(rec)
-	if err := m.Runtime.Create(ctx, VMName(rec), spec, sock, labels); err != nil {
-		if retainOnUncertainBoot {
-			m.cleanupFailedTemplateBoot(ctx, rec, labels)
-			// SDK errors can include private registry details. The catalog row remains
-			// available if exact VM absence could not be established.
-			return View{}, errors.New("sandbox creation from template failed")
+	m.background(rec, createTimeout, unlock, func(ctx context.Context) error {
+		err := m.Runtime.Create(ctx, VMName(rec), spec, sock, labels)
+		if err != nil && image != nil {
+			// SDK errors can include private registry details.
+			err = errors.New("sandbox creation from template failed")
 		}
-		m.Hub.Close(rec.ID)
-		m.Egress.Detach(rec.ID)
-		m.Runtime.Remove(context.WithoutCancel(ctx), VMName(rec))
-		m.Store.DeleteSandbox(context.WithoutCancel(ctx), rec.EnvironmentID, rec.ID)
-		return View{}, err
+		if err == nil {
+			err = m.awaitGuest(ctx, rec)
+		}
+		if err != nil {
+			return m.removeFailedVM(ctx, rec, err, image != nil)
+		}
+		return nil
+	})
+	return m.acceptedView(ctx, rec), nil
+}
+
+// discardRecord removes the record of a create or fork that never got a VM, and returns
+// cause, joined with any failure to remove the record.
+func (m *Manager) discardRecord(ctx context.Context, rec store.Sandbox, cause error) error {
+	m.Hub.Close(rec.ID)
+	m.Egress.Detach(rec.ID)
+	if err := m.Store.DeleteSandbox(context.WithoutCancel(ctx), rec.EnvironmentID, rec.ID); err != nil {
+		return errors.Join(cause, fmt.Errorf("remove unstarted sandbox record: %w", err))
 	}
-	return m.view(ctx, rec)
+	return cause
+}
+
+// acceptedView is the view of a create or fork the API has accepted. A status that can't
+// be read now doesn't undo the acceptance; the sandbox's progress shows in the view either way.
+func (m *Manager) acceptedView(ctx context.Context, rec store.Sandbox) View {
+	v, err := m.view(ctx, rec)
+	if err != nil {
+		return m.withAgent(View{Sandbox: rec, Status: StatusCreating})
+	}
+	return v
+}
+
+// removeFailedVM cleans up after a failed create or fork: the VM, its network and agent
+// socket go, and the record stays for its failed state. A template's VM, which carries the
+// template's private image, is removed only if its labels still match (RemoveOwned).
+func (m *Manager) removeFailedVM(ctx context.Context, rec store.Sandbox, cause error, fromTemplate bool) error {
+	cleanupCtx, cancel := cleanupContext(ctx)
+	defer cancel()
+	m.Hub.Close(rec.ID)
+	m.Egress.Detach(rec.ID)
+	var err error
+	if fromTemplate {
+		err = m.removeOwnedVM(cleanupCtx, rec)
+	} else {
+		err = m.Runtime.Remove(cleanupCtx, VMName(rec))
+	}
+	if err != nil {
+		return errors.Join(cause, fmt.Errorf("removing the VM failed: %w", err))
+	}
+	return cause
+}
+
+// removeOwnedVM removes a sandbox's VM with RemoveOwned, which checks the labels Studio
+// gave it. A runtime without RemoveOwned removes it by name.
+func (m *Manager) removeOwnedVM(ctx context.Context, rec store.Sandbox) error {
+	if remover, ok := m.Runtime.(interface {
+		RemoveOwned(context.Context, runtime.OwnedVM) error
+	}); ok {
+		return remover.RemoveOwned(ctx, ownedVM(rec))
+	}
+	return m.Runtime.Remove(ctx, VMName(rec))
 }
 
 func sandboxLabels(rec store.Sandbox) map[string]string {
@@ -358,23 +418,6 @@ func (m *Manager) removeUnstartedTemplateRecord(ctx context.Context, rec store.S
 		return fmt.Errorf("remove unstarted sandbox record: %w", err)
 	}
 	return nil
-}
-
-func (m *Manager) cleanupFailedTemplateBoot(ctx context.Context, rec store.Sandbox, labels map[string]string) {
-	remover, ok := m.Runtime.(interface {
-		RemoveOwned(context.Context, runtime.OwnedVM) error
-	})
-	if !ok {
-		return
-	}
-	owned := runtime.OwnedVM{Name: VMName(rec), Labels: labels}
-	if err := remover.RemoveOwned(context.WithoutCancel(ctx), owned); err != nil {
-		return
-	}
-	// RemoveOwned verifies absence. Only then is it safe to drop the template pin.
-	m.Hub.Close(rec.ID)
-	m.Egress.Detach(rec.ID)
-	_ = m.Store.DeleteSandbox(context.WithoutCancel(ctx), rec.EnvironmentID, rec.ID)
 }
 
 func templatePlatformCompatible(platform, arch string) bool {
@@ -449,6 +492,9 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	rec, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
+	}
+	if m.failedCreation(id) {
+		return View{}, lifecycleError("the sandbox could not be created; delete it")
 	}
 	if status, err := m.Runtime.Status(ctx, VMName(rec)); err != nil {
 		return View{}, err
@@ -530,7 +576,9 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 	if err := m.Store.DeleteSandbox(ctx, envID, id); err != nil {
 		return err
 	}
+	m.forgetProgress(ctx, id)
 	m.forget(envID, id)
+	m.publish(envID, id)
 	return nil
 }
 
@@ -629,7 +677,7 @@ func (m *Manager) withAgent(v View) View {
 	if hello, ok := m.Hub.Connected(v.ID); ok && v.Status.IsRunning() {
 		v.Agent = &AgentInfo{Version: hello.Version, Arch: hello.Arch}
 	}
-	return v
+	return m.withProgress(v)
 }
 
 func resolveResources(req CreateRequest) resources.Resources {

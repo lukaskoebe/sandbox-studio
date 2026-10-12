@@ -12,6 +12,8 @@ const (
 	TopicBuilds    = "builds"
 	TopicTeammates = "teammates"
 	TopicChats     = "chats" // a chat was created, deleted, renamed or changed state
+	// TopicSandboxes: a sandbox's create or fork moved on, or a sandbox was deleted.
+	TopicSandboxes = "sandboxes"
 )
 
 // Event is one change notification.
