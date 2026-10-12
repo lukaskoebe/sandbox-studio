@@ -58,7 +58,10 @@ msb exec instead (see [spikes](spikes.md#layer-transfer-and-capture-foundations)
 - Terminals: xterm.js ↔ WebSocket (`internal/api/terminal.go`) ↔ Studio ↔ `pty` stream ↔
   tmux. Sessions are named and survive UI reloads and Studio restarts.
 - Previews: `http://<port>-<sandbox-id>.localhost:<studio-port>/` is proxied to that guest
-  loopback port over a `tcp` stream (`internal/preview`). Each preview is its own origin.
+  loopback port over a `tcp` stream (`internal/preview`). The guest dials `127.0.0.1`,
+  then `::1` (Vite and others bind only `::1` for "localhost"), and closes its side when
+  the server does, so the host never reuses a dropped keep-alive connection. Each preview
+  is its own origin.
   Opening one goes through a short-lived ticket (see [API](api.md#auth)). The UI lists the
   listening ports from the `ports` stream.
 - Files: chats have a read-only browser of `/workspace` that never follows symlinks and
