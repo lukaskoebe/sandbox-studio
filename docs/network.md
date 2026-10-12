@@ -60,6 +60,20 @@ Matching (`policy/match.go`):
 - Within a scope: the most specific host pattern wins (`*.example.com` also matches
   `example.com`), then rules that name ports, then `deny` over `allow`.
 
+## The Network page
+
+The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route:
+
+- **Rules** lists the environment's rules. Its search and scope and action filters are URL
+  search params (`q`, `scope`, `action`), so a filtered view can be shared. Rules are grouped
+  by registrable domain: the last two labels, or three under a short list of two-label
+  suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
+- **Requests** lists the pending network approvals; Allow, Deny and Ignore work as on the
+  approval card.
+- **Activity** lists decided network approvals, newest first, up to 50.
+
+`/e/$env/network` opens Requests when any wait for a decision, and Rules otherwise.
+
 ## Hold and ask
 
 With no matching rule, the gateway holds the connection (the TLS ClientHello stays

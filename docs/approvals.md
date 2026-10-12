@@ -36,9 +36,9 @@ There is no allow-once for network requests: an answer is a rule (or a dismissal
   changed; clients refetch. Slow subscribers are disconnected.
 - The approval stack (`web/src/components/approval-stack.tsx`) shows on every page, for
   every environment, with the environment's name on cards from other environments. Pages
-  that list a kind themselves (network requests on the network page, a chat's own
-  permission requests) leave those out of the stack. The pending count goes into the page
-  title.
+  that list a kind themselves (network requests on the network page's Requests tab, a chat's
+  own permission requests) leave those out of the stack. The pending count goes into the
+  page title.
 - New approvals raise a browser notification (Notification API) once the user allows it.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
