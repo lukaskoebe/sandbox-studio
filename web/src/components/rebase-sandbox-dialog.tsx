@@ -204,8 +204,8 @@ function RebaseForm({
           </div>
         ) : choices.length === 0 ? (
           <p className="text-muted-foreground">
-            No other ready template in this environment. Build one on the Builds
-            page first.
+            No other ready template in this environment. Build one in Settings →
+            Templates first.
           </p>
         ) : (
           <Select

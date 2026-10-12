@@ -111,7 +111,7 @@ function TeammateOverview() {
             </pre>
           ) : (
             <p className="text-xs text-muted-foreground">
-              No soul yet. Add one in Settings.
+              No soul yet. Add one on the Settings tab.
             </p>
           )}
         </CardContent>

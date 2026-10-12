@@ -77,7 +77,7 @@ function SecretsPage() {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  // Provider keys are changed and deleted on the Providers page.
+  // Provider keys are changed and deleted in Settings → Providers.
   const managed = new Map(
     (providers.data ?? []).flatMap((p) =>
       p.secretId ? [[p.secretId, p.name] as const] : []
