@@ -5,11 +5,11 @@ import { RouterProvider } from "@tanstack/react-router"
 import { AuthGate } from "./components/auth-gate"
 import { bootstrapAuth } from "./lib/auth"
 import { createRouter } from "./router"
-import { followSystemTheme } from "./lib/theme"
+import { initTheme } from "./lib/theme"
 import { mockupsActive } from "./mockups/active"
 import "./styles.css"
 
-followSystemTheme()
+initTheme()
 
 // Consume and scrub a launch token before constructing anything that can mount
 // route loaders. The promise also exchanges it before checking the cookie.

@@ -234,7 +234,7 @@ export function CalmWorkspace() {
                 className="rounded-lg text-[0.8125rem]"
               >
                 {s.kind === "chat" ? (
-                  <ChatsCircleIcon className="text-(--acc-agent)" />
+                  <ChatsCircleIcon className="text-(--acc-chat)" />
                 ) : (
                   <TerminalWindowIcon />
                 )}
@@ -519,7 +519,7 @@ export function CalmDashboard() {
                     {s.kind === "chat" ? (
                       <ChatsCircleIcon
                         weight="duotone"
-                        className="size-5 text-(--acc-agent)"
+                        className="size-5 text-(--acc-chat)"
                       />
                     ) : (
                       <TerminalWindowIcon className="size-5 text-muted-foreground" />

@@ -233,7 +233,7 @@ export function WorkbenchWorkspace() {
                 className={cn(
                   "flex h-6 items-center gap-1.5 rounded-[4px] px-1.5 text-xs",
                   on
-                    ? "bg-(--tone)/12 font-medium text-foreground ring-1 ring-(--tone)/35 ring-inset"
+                    ? "bg-(--tone)/10 font-medium text-foreground ring-1 ring-(--tone)/28 ring-inset"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
@@ -617,7 +617,7 @@ export function WorkbenchDashboard() {
                   className="flex h-(--wb-row) items-center gap-2 border-b px-3 last:border-b-0"
                 >
                   {s.kind === "chat" ? (
-                    <ChatsCircleIcon className="size-3.5 text-(--acc-agent)" />
+                    <ChatsCircleIcon className="size-3.5 text-(--acc-chat)" />
                   ) : (
                     <TerminalWindowIcon className="size-3.5 text-muted-foreground" />
                   )}

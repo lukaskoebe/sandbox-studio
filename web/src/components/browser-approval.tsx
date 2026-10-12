@@ -64,7 +64,10 @@ export function BrowserActionDecision({ approval }: { approval: Approval }) {
         </p>
       )}
       {act?.url && (
-        <p className="truncate text-xs text-muted-foreground" title={act.url}>
+        <p
+          className="truncate font-mono text-xs text-muted-foreground"
+          title={act.url}
+        >
           {act.url}
         </p>
       )}
@@ -132,7 +135,7 @@ export function BrowserCredentialDecision({
         {`Studio fills the secret into ${cred?.label ? `“${cred.label}”` : "the field"}; ${cred?.teammateName ?? "the agent"} sees only its name.`}
       </p>
       {cred?.url && (
-        <p className="truncate text-xs" title={cred.url}>
+        <p className="truncate font-mono text-xs" title={cred.url}>
           {cred.url}
         </p>
       )}

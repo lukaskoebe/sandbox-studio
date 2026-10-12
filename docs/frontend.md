@@ -15,6 +15,10 @@ binary embeds (`//go:embed`) and serves at `/`.
   OpenAPI document (`src/lib/api`, see [API](api.md)). `src/hooks/use-events.ts` subscribes
   to `/api/events` and invalidates the affected queries.
 - Terminals: xterm.js. Editors: CodeMirror (YAML specs, Caddyfiles). Toasts: sonner.
+- Theme: the design tokens are in `src/styles.css` (the Workbench theme, see
+  [design/ui-style.md](design/ui-style.md)). `src/lib/theme.ts` applies the system, light or
+  dark choice, stored in the browser as `studio.theme`. Shared pieces such as `SectionHeader`,
+  `Ident`, `KindChip` and `StatusDot` are in `src/components`.
 
 ## Routes
 
@@ -74,8 +78,9 @@ Links from before the dashboard and workspace split that carry workspace paramet
 
 - `pnpm dev` serves on port 3000 and proxies `/api` (with WebSockets) to Studio on 7878,
   presenting Studio's origin; `pnpm dev:lan` listens on all interfaces.
-- `/mockups` shows the two N4 visual directions with static fake data and no login. Dev
-  builds only: elsewhere it renders not found. See [design/ui-style.md](design/ui-style.md).
+- `/mockups` shows the two N4 visual directions with static fake data and no login: A is the
+  app's theme now, B is kept for comparison. Dev builds only: elsewhere it renders not found.
+  See [design/ui-style.md](design/ui-style.md).
 - Checks: `pnpm typecheck`, `pnpm lint` (ESLint), `pnpm check` (Prettier on
   `ts`/`tsx`/`js`/`jsx`), `pnpm build`, `pnpm e2e` (see below).
 - After API changes run `make api` from the repository root.
