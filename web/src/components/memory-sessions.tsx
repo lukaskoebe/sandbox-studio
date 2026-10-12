@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { ChatCircleDotsIcon } from "@phosphor-icons/react"
+import { Ident } from "@/components/ident"
+import { SectionHeader } from "@/components/section-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -94,61 +97,74 @@ export function MemorySessionsTab({
     { params: { path: { env }, query: { teammate } } }
   )
   const list = sessions.data ?? []
-  if (sessions.isPending) return <Spinner className="mx-auto block" />
-  if (sessions.error)
-    return <p className="text-destructive">{errorMessage(sessions.error)}</p>
-  if (list.length === 0)
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>No sessions yet</EmptyTitle>
-          <EmptyDescription>
-            Agent sessions show up here once their hooks call Studio, with
-            everything memory injected and wrote and why.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    )
   return (
     <div className="space-y-3">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Teammate</TableHead>
-            <TableHead>Sandbox</TableHead>
-            <TableHead>Session</TableHead>
-            <TableHead>Repository</TableHead>
-            <TableHead className="text-right">Injected</TableHead>
-            <TableHead className="text-right">Writes</TableHead>
-            <TableHead>Last activity</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {list.map((s: SessionView) => (
-            <TableRow
-              key={s.id}
-              className={cn(
-                "cursor-pointer",
-                selected === s.id && "bg-muted/50"
-              )}
-              onClick={() => setSelected(selected === s.id ? undefined : s.id)}
-            >
-              <TableCell>{names.get(s.teammateId) ?? s.teammateId}</TableCell>
-              <TableCell>{s.sandboxName}</TableCell>
-              <TableCell className="font-mono text-[0.625rem]">
-                {s.harness} · {s.sessionRef.slice(0, 12)}
-              </TableCell>
-              <TableCell className="font-mono text-[0.625rem]">
-                {s.gitRemote}
-              </TableCell>
-              <TableCell className="text-right">{s.injections}</TableCell>
-              <TableCell className="text-right">{s.writes}</TableCell>
-              <TableCell>{formatAge(s.lastEventAt)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {selected && <SessionLog env={env} id={selected} />}
+      <SectionHeader
+        title="Sessions"
+        icon={ChatCircleDotsIcon}
+        area="memory"
+        count={sessions.data ? list.length : undefined}
+      />
+      {sessions.isPending ? (
+        <Spinner className="mx-auto block" />
+      ) : sessions.error ? (
+        <p className="text-destructive">{errorMessage(sessions.error)}</p>
+      ) : list.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No sessions yet</EmptyTitle>
+            <EmptyDescription>
+              Agent sessions show up here once their hooks call Studio, with
+              everything memory injected and wrote and why.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Teammate</TableHead>
+                <TableHead>Sandbox</TableHead>
+                <TableHead>Session</TableHead>
+                <TableHead>Repository</TableHead>
+                <TableHead className="text-right">Injected</TableHead>
+                <TableHead className="text-right">Writes</TableHead>
+                <TableHead>Last activity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.map((s: SessionView) => (
+                <TableRow
+                  key={s.id}
+                  className={cn(
+                    "cursor-pointer",
+                    selected === s.id && "bg-muted/50"
+                  )}
+                  onClick={() =>
+                    setSelected(selected === s.id ? undefined : s.id)
+                  }
+                >
+                  <TableCell>
+                    {names.get(s.teammateId) ?? s.teammateId}
+                  </TableCell>
+                  <TableCell>{s.sandboxName}</TableCell>
+                  <TableCell className="text-[0.625rem]">
+                    {s.harness} · <Ident>{s.sessionRef.slice(0, 12)}</Ident>
+                  </TableCell>
+                  <TableCell className="text-[0.625rem]">
+                    {s.gitRemote && <Ident>{s.gitRemote}</Ident>}
+                  </TableCell>
+                  <TableCell className="text-right">{s.injections}</TableCell>
+                  <TableCell className="text-right">{s.writes}</TableCell>
+                  <TableCell>{formatAge(s.lastEventAt)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {selected && <SessionLog env={env} id={selected} />}
+        </>
+      )}
     </div>
   )
 }
