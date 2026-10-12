@@ -125,7 +125,7 @@ function NewChatPage() {
                 before anything risky.
               </p>
               {!isReady(sandbox) && (
-                <p className="max-w-md text-xs text-amber-700 dark:text-amber-400">
+                <p className="max-w-md text-xs">
                   {sandbox.name} isn't running.{" "}
                   <Link
                     to="/e/$env/sandboxes/$id"
