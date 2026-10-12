@@ -15,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -55,10 +56,11 @@ type interception struct {
 	problem string // the last refused request, for the connection log
 }
 
-// boundTo splits an environment's secrets by whether they may be sent to host.
+// boundTo splits the secrets of a sandbox's environment by whether they may be sent to
+// host. Foreign secrets never may.
 func boundTo(all []secrets.Binding, host string) (bound, unbound []secrets.Binding) {
 	for _, b := range all {
-		if covers(b, host) {
+		if !b.Foreign && covers(b, host) {
 			bound = append(bound, b)
 		} else {
 			unbound = append(unbound, b)
@@ -252,6 +254,13 @@ func (ic *interception) substitute(s, where string, escape func(string) string) 
 		return s, nil
 	}
 	for _, b := range ic.unbound {
+		if strings.Contains(s, b.Placeholder) && b.Foreign {
+			err := fmt.Errorf("%s holds the placeholder of a secret %s that this sandbox doesn't see in Sandbox Studio.", where, b.Name)
+			if _, ok := named(slices.Concat(ic.bound, ic.unbound), b.Name); ok {
+				err = fmt.Errorf("%w Use $%s instead, which this sandbox sees.", err, b.Name)
+			}
+			return "", err
+		}
 		if strings.Contains(s, b.Placeholder) && ic.caddy {
 			return "", fmt.Errorf("%s holds the placeholder of the secret %s. Requests to %s go through a Sandbox Studio Caddy rule, which sets credentials itself and doesn't swap placeholders.",
 				where, b.Name, ic.host)
@@ -324,9 +333,10 @@ func (ic *interception) expand(header, tmpl string) (string, error) {
 	return v, err
 }
 
+// named finds the secret called name that the sandbox sees.
 func named(list []secrets.Binding, name string) (secrets.Binding, bool) {
 	for _, b := range list {
-		if b.Name == name {
+		if b.Name == name && !b.Foreign {
 			return b, true
 		}
 	}

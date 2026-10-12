@@ -22,6 +22,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
+import { TemplateSpecEditor } from "@/components/template-spec-editor"
 import { errorMessage, fetchClient, type BuildJob } from "@/lib/api/client"
 import {
   decodeTemplateSource,
@@ -31,16 +32,6 @@ import {
   TemplateSourceError,
   templateSourceByteLength,
 } from "@/lib/template-source"
-
-export const exampleTemplateSource = `resources:
-  cpus: 1
-  memory: 512MiB
-  max_memory: 1024MiB
-  workspace: 1024MiB
-  docker: 1024MiB
-setup: |
-  printf 'Template ready\\n'
-`
 
 export function BuildDialog({
   env,
@@ -56,6 +47,8 @@ export function BuildDialog({
   onSubmitted: (job: BuildJob) => void
 }) {
   const [draft, setDraft] = useState(source)
+  // Bumped when an import replaces the draft, so the editor is rebuilt from the file's exact bytes.
+  const [editorKey, setEditorKey] = useState(0)
   const [serverError, setServerError] = useState<string | null>(null)
   const [sourceActionError, setSourceActionError] = useState<string | null>(
     null
@@ -127,6 +120,7 @@ export function BuildDialog({
 
       setDraft(importedSource)
       draftRevisionRef.current += 1
+      setEditorKey((key) => key + 1)
       setServerError(null)
       setSourceActionError(null)
     } catch (error) {
@@ -226,7 +220,7 @@ export function BuildDialog({
           </DialogHeader>
           <Field data-invalid={Boolean(visibleError) || undefined}>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <FieldLabel htmlFor="build-source">Template spec</FieldLabel>
+              <FieldLabel>Template spec</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 <input
                   ref={fileInputRef}
@@ -263,22 +257,18 @@ export function BuildDialog({
                 </Button>
               </div>
             </div>
-            <textarea
-              id="build-source"
-              autoFocus
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={maxTemplateSourceBytes}
-              disabled={busy}
+            <TemplateSpecEditor
+              key={editorKey}
+              env={env}
               value={draft}
-              aria-invalid={Boolean(visibleError)}
-              aria-describedby="build-source-help"
-              onChange={(event) => handleDraftChange(event.target.value)}
-              className="min-h-64 w-full resize-y rounded-md border border-input bg-input/20 p-3 font-mono text-xs/relaxed transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:bg-input/30"
+              invalid={Boolean(visibleError)}
+              disabled={busy}
+              describedBy="build-source-help"
+              onChange={handleDraftChange}
             />
             <FieldDescription id="build-source-help">
-              {sourceBytes.toLocaleString()} of 65,536 UTF-8 bytes. Tool version
-              values, if present, must be quoted strings.
+              {sourceBytes.toLocaleString()} of 65,536 UTF-8 bytes. Problems are
+              marked as you type. Tool version values must be quoted strings.
             </FieldDescription>
             <FieldError>{visibleError}</FieldError>
           </Field>

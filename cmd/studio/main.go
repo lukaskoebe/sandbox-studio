@@ -153,7 +153,7 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := p.Ensure(); err != nil {
 		return err
 	}
-	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false))
+	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0))
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
 		return err
 	}
@@ -316,7 +316,11 @@ func run(addr, image string, log *slog.Logger) error {
 	checker := &updates.Checker{Settings: st, Current: version.Version, Log: log}
 	go checker.Run(ctx)
 	system := api.System{Updates: checker, Doctor: func(ctx context.Context) doctor.Report {
-		return doctorCheck(ctx, p.Data, image, addr, true)
+		agentForges, err := st.AgentForges(ctx)
+		if err != nil {
+			log.Warn("doctor: count SSH agent forges", "err", err)
+		}
+		return doctorCheck(ctx, p.Data, image, addr, true, agentForges)
 	}}
 	if system.Autostart, err = autostart.Default(); err != nil {
 		log.Warn("autostart is unavailable", "err", err)

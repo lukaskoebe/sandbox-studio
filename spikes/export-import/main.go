@@ -470,7 +470,7 @@ func (e *deadEgress) Detach(id string) { os.Unsetenv("SS_EXPORT_PROBE_" + string
 
 type noSecrets struct{}
 
-func (noSecrets) Env(context.Context, string) (map[string]string, error) { return nil, nil }
+func (noSecrets) Env(context.Context, store.Sandbox) (map[string]string, error) { return nil, nil }
 
 // fakeSealer keeps its key in memory, so the OS keychain is never used.
 type fakeSealer struct{ aead cipher.AEAD }

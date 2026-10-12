@@ -1,6 +1,6 @@
 # Sandbox Studio — Plan
 
-Status: draft for review · 2026-10-12
+Status: in progress · 2026-10-12
 
 The v2 plan is implemented (v0.1.0 and v0.1.1). How it works now is in the
 [developer documentation](docs/README.md). This plan covers the next round, driven by user
@@ -12,16 +12,16 @@ Items are grouped into milestones in the order they should land. Each item names
 changes, where, and when it counts as done. Sections marked **Concept** are designs to agree
 on before anything is built.
 
-## Decisions needed from you
+## Decisions
 
-| # | Question | Proposed default |
+| # | Question | Decision (2026-10-12) |
 |---|---|---|
-| D1 | New dev dependencies: `@playwright/test` (e2e), `@codemirror/lang-yaml` (spec editor). Both are maintained by the projects we already use. | Approve both |
-| D2 | Resizable panels: adopt shadcn's `Resizable` (adds `react-resizable-panels`) or grow our hand-rolled splitter into a shared component | Shared component, no new dependency |
-| D3 | Visual direction for the redesign (N4): pick one of the two directions after seeing mockups | Decide on mockups |
-| D4 | Default teammate name and persona | "Robin", a generalist engineer |
-| D5 | Network security levels (Concept C1): agree on the levels before building them | Review the concept |
-| D6 | Host ssh-agent use reverses the git-remotes design decision "never use the host's SSH agent". Confirm the trade-off in N6 | Agent by default, Studio key as the alternative |
+| D1 | New dev dependencies `@playwright/test` (e2e) and `@codemirror/lang-yaml` (spec editor) | Approved |
+| D2 | Resizable panels: shadcn `Resizable` or our own splitter | Our own splitter as a shared component, no new dependency |
+| D3 | Visual direction for the redesign (N4) | Open: chosen from the mockups |
+| D4 | Default teammate | "Iris", generalist engineer: curious, careful and direct; short soul |
+| D5 | Network security levels (Concept C1) | Open: concept to review, not built yet |
+| D6 | Host ssh-agent by default (reverses "never use the host agent") | Approved. When signing waits on a host confirmation (hardware key, password manager), show a dismissible hint to set up a dedicated Studio key |
 
 ## N1 — Safety net: end-to-end tests
 
@@ -178,7 +178,7 @@ getting louder.
   - Home shows a checklist card until setup is complete or dismissed.
 - **Default teammate.** When an environment's first provider is added, Studio creates a
   teammate:
-  - name and persona per D4
+  - "Iris", generalist engineer (D4)
   - harness picked by provider kind: Claude subscription/API → Claude Code, ChatGPT
     subscription/OpenAI API → Codex, custom endpoint → OpenCode
   - the provider's default model

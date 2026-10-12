@@ -42,6 +42,8 @@ The sidebar holds the environment switcher and the navigation. The approval stac
 
 - `pnpm dev` serves on port 3000 and proxies `/api` (with WebSockets) to Studio on 7878,
   presenting Studio's origin; `pnpm dev:lan` listens on all interfaces.
+- `/mockups` shows the two N4 visual directions with static fake data and no login. Dev
+  builds only: elsewhere it renders not found. See [design/ui-style.md](design/ui-style.md).
 - Checks: `pnpm typecheck`, `pnpm lint` (ESLint), `pnpm check` (Prettier on
   `ts`/`tsx`/`js`/`jsx`), `pnpm build`, `pnpm e2e` (see below).
 - After API changes run `make api` from the repository root.

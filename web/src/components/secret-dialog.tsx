@@ -24,8 +24,21 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
-import { errorMessage, fetchClient, type Secret } from "@/lib/api/client"
+import {
+  $api,
+  errorMessage,
+  fetchClient,
+  type Sandbox,
+  type Secret,
+} from "@/lib/api/client"
 
 /** Host patterns are separated by commas, spaces or newlines. */
 const separators = /[\s,]+/
@@ -38,15 +51,26 @@ function unique(list: string[]): string[] {
   return [...new Set(list)]
 }
 
+/** What a scope means for the sandboxes that see the secret. */
+function scopeHelp(scope: string) {
+  if (scope === "environment")
+    return "Every sandbox sees it, unless a narrower secret has the same name."
+  if (scope.startsWith("teammate:"))
+    return "Every sandbox the teammate owns sees it, unless a narrower secret has the same name."
+  return "Only this sandbox sees it."
+}
+
 export function SecretDialog({
   env,
   secret,
+  sandboxes,
   open,
   onOpenChange,
 }: {
   env: string
   /** The secret to edit; absent for a new one. */
   secret?: Secret
+  sandboxes: Sandbox[]
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -58,6 +82,7 @@ export function SecretDialog({
           key={secret?.id ?? "new"}
           env={env}
           secret={secret}
+          sandboxes={sandboxes}
           onDone={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -68,15 +93,33 @@ export function SecretDialog({
 function SecretForm({
   env,
   secret,
+  sandboxes,
   onDone,
 }: {
   env: string
   secret?: Secret
+  sandboxes: Sandbox[]
   onDone: () => void
 }) {
   const queryClient = useQueryClient()
   const hostInput = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(secret?.name ?? "")
+  // "environment", a sandbox ID, or "teammate:" and a teammate ID, as in the rule dialog.
+  const [scope, setScope] = useState(
+    secret?.sandboxId ??
+      (secret?.teammateId ? `teammate:${secret.teammateId}` : "environment")
+  )
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
+    params: { path: { env } },
+  })
+  const teammateList = teammates.data ?? []
+  const scopeLabels: Record<string, string> = {
+    environment: "Environment",
+    ...Object.fromEntries(sandboxes.map((sb) => [sb.id, sb.name])),
+    ...Object.fromEntries(
+      teammateList.map((p) => [`teammate:${p.id}`, `Teammate ${p.name}`])
+    ),
+  }
   const [value, setValue] = useState("")
   const [showValue, setShowValue] = useState(false)
   const [hosts, setHosts] = useState<string[]>(secret?.hosts ?? [])
@@ -145,6 +188,13 @@ function SecretForm({
               name,
               value,
               hosts: allHosts,
+              sandboxId:
+                scope === "environment" || scope.startsWith("teammate:")
+                  ? undefined
+                  : scope,
+              teammateId: scope.startsWith("teammate:")
+                ? scope.slice("teammate:".length)
+                : undefined,
               note: note.trim() || undefined,
             },
           })
@@ -283,6 +333,38 @@ function SecretForm({
         </div>
         <FieldDescription>
           e.g. api.openai.com or *.example.com
+        </FieldDescription>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="secret-scope">Scope</FieldLabel>
+        {secret ? (
+          <Input id="secret-scope" value={scopeLabels[scope] ?? ""} readOnly />
+        ) : (
+          <Select
+            value={scope}
+            onValueChange={(v) => setScope(v ?? "environment")}
+            items={scopeLabels}
+          >
+            <SelectTrigger id="secret-scope" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="environment">Environment</SelectItem>
+              {sandboxes.map((sb) => (
+                <SelectItem key={sb.id} value={sb.id}>
+                  {sb.name}
+                </SelectItem>
+              ))}
+              {teammateList.map((p) => (
+                <SelectItem key={p.id} value={`teammate:${p.id}`}>
+                  Teammate {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <FieldDescription>
+          {secret ? "The scope can't change." : scopeHelp(scope)}
         </FieldDescription>
       </Field>
       <Field>

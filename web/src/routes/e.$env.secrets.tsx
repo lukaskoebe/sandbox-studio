@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table"
 import { PageHeader } from "@/components/page-header"
 import { SecretDialog } from "@/components/secret-dialog"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { $api, errorMessage, type Secret } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
 import { formatAge } from "@/lib/utils"
@@ -48,8 +49,10 @@ export const Route = createFileRoute("/e/$env/secrets")({
   component: SecretsPage,
 })
 
-const explanation =
-  "Sandboxes see each secret as an environment variable holding a placeholder. Studio swaps in the real value only in the headers and URLs of HTTPS requests to the secret's hosts, and masks it in their responses, so the value never enters a sandbox. Forge tokens and SSH keys are not available to sandboxes at all; Studio uses them itself and they are managed on the Git page."
+const intro =
+  "Sandboxes see each secret as an environment variable holding a placeholder, and Studio swaps in the real value only in requests to the secret's hosts."
+
+const docsUrl = "https://lukaskoebe.github.io/sandbox-studio/secrets/"
 
 function SecretsPage() {
   const { env } = Route.useParams()
@@ -58,7 +61,19 @@ function SecretsPage() {
   const secrets = $api.useQuery("get", "/api/environments/{env}/secrets", {
     params: { path: { env } },
   })
-  const list = secrets.data ?? []
+  const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
+    params: { path: { env } },
+  })
+  const sandboxes = $api.useQuery("get", "/api/environments/{env}/sandboxes", {
+    params: { path: { env } },
+  })
+  const teammateNames = new Map(
+    (teammates.data ?? []).map((p) => [p.id, p.name])
+  )
+  const sandboxNames = new Map(
+    (sandboxes.data ?? []).map((sb) => [sb.id, sb.name])
+  )
+  const list = sortByScope(secrets.data ?? [], teammateNames, sandboxNames)
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
@@ -80,7 +95,15 @@ function SecretsPage() {
       </PageHeader>
       <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          {explanation}
+          {intro}{" "}
+          <a
+            href={docsUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-4"
+          >
+            Learn more
+          </a>
         </p>
         {secrets.isPending ? (
           <Spinner className="mx-auto block" />
@@ -90,6 +113,7 @@ function SecretsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Scope</TableHead>
                   <TableHead>Hosts</TableHead>
                   <TableHead>Placeholder</TableHead>
                   <TableHead>Note</TableHead>
@@ -116,6 +140,13 @@ function SecretsPage() {
                             : "Forge token"}
                         </Badge>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <ScopeCell
+                        secret={s}
+                        teammates={teammateNames}
+                        sandboxes={sandboxNames}
+                      />
                     </TableCell>
                     <TableCell>
                       <div className="flex max-w-xs flex-wrap gap-1">
@@ -176,7 +207,10 @@ function SecretsPage() {
           <Empty>
             <EmptyHeader>
               <EmptyTitle>No secrets yet</EmptyTitle>
-              <EmptyDescription>{explanation}</EmptyDescription>
+              <EmptyDescription>
+                Add one to let a sandbox use a credential without ever seeing
+                its value.
+              </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <Button onClick={() => setDialog({})}>
@@ -190,6 +224,7 @@ function SecretsPage() {
       <SecretDialog
         env={env}
         secret={dialog?.secret}
+        sandboxes={sandboxes.data ?? []}
         open={dialog !== null}
         onOpenChange={(open) => {
           if (!open) setDialog(null)
@@ -197,6 +232,57 @@ function SecretsPage() {
       />
     </>
   )
+}
+
+/** Environment secrets first, then each teammate's, then each sandbox's; by name within a scope. */
+function sortByScope(
+  list: Secret[],
+  teammates: Map<string, string>,
+  sandboxes: Map<string, string>
+) {
+  const rank = (s: Secret) => (s.sandboxId ? 2 : s.teammateId ? 1 : 0)
+  const owner = (s: Secret) =>
+    (s.teammateId
+      ? teammates.get(s.teammateId)
+      : sandboxes.get(s.sandboxId ?? "")) ?? ""
+  return [...list].sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      owner(a).localeCompare(owner(b)) ||
+      a.name.localeCompare(b.name)
+  )
+}
+
+/** Where a secret applies: the environment, one teammate's sandboxes or one sandbox. */
+function ScopeCell({
+  secret,
+  teammates,
+  sandboxes,
+}: {
+  secret: Secret
+  teammates: Map<string, string>
+  sandboxes: Map<string, string>
+}) {
+  if (secret.teammateId) {
+    const name = teammates.get(secret.teammateId) ?? "…"
+    return (
+      <span
+        className="inline-flex min-w-0 items-center gap-1.5"
+        title="Every sandbox of this teammate"
+      >
+        <TeammateAvatar name={name} className="size-5 text-[0.5625rem]" />
+        <span className="truncate">{name}</span>
+      </span>
+    )
+  }
+  if (secret.sandboxId) {
+    return (
+      <span className="block truncate" title="Only this sandbox">
+        {sandboxes.get(secret.sandboxId) ?? "…"}
+      </span>
+    )
+  }
+  return <span className="text-muted-foreground">Environment</span>
 }
 
 async function copy(text: string) {

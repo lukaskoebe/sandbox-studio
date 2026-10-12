@@ -19,11 +19,12 @@ host. Code: `internal/gitreview`, the API in `internal/api/git.go`, the UI in
 ## Forges
 
 A forge is a kind, a base URL, a username, one studio-only credential and, for SSH, a pinned
-host key. The kind chooses the transport (HTTPS or SSH) and whether there is an API for
-pull requests.
+host key. An SSH forge can sign with your SSH agent instead of a credential. The kind chooses
+the transport (HTTPS or SSH) and whether there is an API for pull requests.
 
-- Per environment: name (`^[a-z0-9][a-z0-9-]{0,31}$`, part of the remote URL), kind and
-  base URL. An HTTPS base URL follows the same rules as a provider's: `https://`, a public
+- Per environment: short name (`^[a-z0-9][a-z0-9-]{0,31}$`, used in the remote URL), kind and
+  base URL. Pasting a repository URL such as `git@github.com:owner/repo.git` into the Add
+  forge dialog fills these in. An HTTPS base URL follows the same rules as a provider's: `https://`, a public
   host, no credentials, query or fragment.
 - Kinds:
   - `forgejo` (Forgejo, Gitea, Codeberg): git over HTTPS as `sandbox-studio:<token>`, API
@@ -42,8 +43,9 @@ pull requests.
 - Private, loopback, link-local and CGNAT hosts are refused, for HTTPS and SSH alike, and
   every upstream connection goes through `gateway.DialPublic`, so DNS can't rebind past the
   check. A LAN forge would let a sandbox drive requests into your network through Studio.
-- The token is stored as a secret `FORGE_<NAME>_TOKEN` (for `ssh`, the key as
-  `FORGE_<NAME>_SSH_KEY`) marked studio-only: it has no host binding, so the gateway never
+- The token is stored as a secret `FORGE_<NAME>_TOKEN` (for `ssh` with a Studio key, the key
+  as `FORGE_<NAME>_SSH_KEY`; an SSH forge that signs with the agent has no secret) marked
+  studio-only: it has no host binding, so the gateway never
   substitutes it into sandbox traffic, network rules can't name it, and the secrets API
   refuses to edit or delete it (409; the secrets page shows it as "Forge token" or "Forge
   SSH key"). It is created and deleted with its forge.
@@ -79,12 +81,23 @@ The config holds only these internal URLs, never a token or key.
 
 - The base URL is `ssh://<user>@<host>[:<port>]`; the dialog also takes `git@host` and
   `git@host:` and normalizes them (user `git` if left out, port 22 omitted).
-- **Key:** Studio generates an ed25519 key when the forge is created and seals it in the
-  vault as `FORGE_<NAME>_SSH_KEY`; it is never written to a file and never reaches a
-  sandbox. The public key (`ssh-ed25519 … sandbox-studio/<env>/<forge>`) is shown on the
-  Git page with a copy button: add it to the host with write access (a deploy key for one
-  repository is enough). No import, no regeneration: delete and re-add the forge. Studio
-  never uses your `~/.ssh` keys or an agent.
+- A pasted `git@host:owner/repo.git` or `ssh://` URL in the Add forge dialog fills in the
+  rest of the form.
+- **Agent (the default):** Studio signs with the keys in your SSH agent, the one `ssh` uses:
+  `SSH_AUTH_SOCK` on Linux and macOS, the OpenSSH agent's pipe `\\.\pipe\openssh-ssh-agent`
+  on Windows. Studio reads the environment it was started with, so start it from a shell where
+  `ssh-add -l` lists your key, or set `SSH_AUTH_SOCK` for autostart. Studio offers the first
+  six keys. Only Studio's own fetches and approved pushes use the agent; the socket is never
+  forwarded into a sandbox, and sandboxes still go through review. A hardware key or a
+  password manager may ask you to confirm each signature. When a signature takes more than two
+  seconds, the forge row suggests a dedicated Studio key, which you can dismiss. If the agent
+  can't be reached, the forge says "SSH agent not available", and `studio doctor` warns.
+- **Studio key:** choose "A Studio key" in the dialog, or switch the forge to it. Studio
+  generates an ed25519 key and seals it in the vault as `FORGE_<NAME>_SSH_KEY`; it is never
+  written to a file and never reaches a sandbox. The public key (`ssh-ed25519 …
+  sandbox-studio/<env>/<forge>`) is shown on the Git page with a copy button: add it to the
+  host with write access (a deploy key for one repository is enough). Switching back to the
+  agent deletes the key. Studio never reads your `~/.ssh` keys.
 - **Host key:** the Add forge dialog scans the host (`POST …/forges/scan`: handshake only,
   no authentication) and shows the `SHA256:` fingerprint; you confirm it is the one the
   host publishes. Every connection pins exactly that key, with the host-key algorithms

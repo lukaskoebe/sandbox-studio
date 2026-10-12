@@ -36,7 +36,7 @@ Included: name, template spec, resources and the contents of `/workspace`.
 
 Not included: secrets, egress identity, approvals, checkpoints and Docker data. The
 imported sandbox gets a fresh identity and runs with the target environment's secrets
-and policy.
+and policy. Secrets scoped to the original sandbox or its teammate stay behind.
 
 ## Export
 

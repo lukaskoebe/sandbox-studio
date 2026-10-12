@@ -45,6 +45,22 @@ type BuildJobLog struct {
 	Truncated bool   `json:"truncated"`
 }
 
+// BuildSourceProblem is one reason a template spec is invalid. Line and column
+// are 1-based; column counts characters. Column is 0 when only the line is
+// known, and both are 0 for problems with the whole source.
+type BuildSourceProblem struct {
+	Line    int    `json:"line"`
+	Column  int    `json:"column"`
+	Message string `json:"message"`
+}
+
+// BuildSourceValidation is the result of checking a template spec without
+// submitting it.
+type BuildSourceValidation struct {
+	OK       bool                 `json:"ok"`
+	Problems []BuildSourceProblem `json:"problems"`
+}
+
 func publicBuildJobSummary(job store.BuildJob) BuildJobSummary {
 	return BuildJobSummary{
 		ID: job.ID, EnvironmentID: job.EnvironmentID,
@@ -150,6 +166,44 @@ func (s *Server) registerBuilds(api huma.API) {
 			return nil, huma.Error500InternalServerError("build operation failed")
 		}
 		return &struct{ Body BuildJobView }{publicBuildJob(job)}, nil
+	})
+
+	// Validation runs only the spec parser: it creates no job and does not
+	// need the build backend. Source limits match submission.
+	type validateIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Source string `json:"source" minLength:"1" maxLength:"65536" doc:"Template specification in YAML"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "validateBuildSource", Method: http.MethodPost, Path: "/api/environments/{env}/builds/validate", Tags: []string{"builds"},
+	}, func(ctx context.Context, in *validateIn) (*struct{ Body BuildSourceValidation }, error) {
+		if err := s.checkBuildEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		if len(in.Body.Source) > maxBuildSourceBytes {
+			return nil, huma.Error422UnprocessableEntity("source must be at most 65536 bytes")
+		}
+		out := BuildSourceValidation{OK: true, Problems: []BuildSourceProblem{}}
+		if _, err := templatespec.ParseYAML([]byte(in.Body.Source)); err != nil {
+			problems := templatespec.Problems(err)
+			if problems == nil {
+				return nil, huma.Error500InternalServerError("build operation failed")
+			}
+			out.OK = false
+			for _, problem := range problems {
+				out.Problems = append(out.Problems, BuildSourceProblem(problem))
+			}
+		}
+		return &struct{ Body BuildSourceValidation }{out}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getTemplateSpecVocabulary", Method: http.MethodGet, Path: "/api/template-spec/vocabulary", Tags: []string{"builds"},
+		Description: "The keys, tool names, and size units that the template spec parser accepts, for editor suggestions.",
+	}, func(_ context.Context, _ *struct{}) (*struct{ Body templatespec.Vocabulary }, error) {
+		return &struct{ Body templatespec.Vocabulary }{templatespec.EditorVocabulary()}, nil
 	})
 
 	huma.Register(api, huma.Operation{

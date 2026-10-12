@@ -50,8 +50,10 @@ type Gateway struct {
 	CA interface {
 		Leaf(ctx context.Context, envID, host string) (*tls.Certificate, error)
 	}
+	// Secrets are the secrets a sandbox sees, in the scope of the sandbox deciding its
+	// connections.
 	Secrets interface {
-		Bindings(ctx context.Context, envID string) ([]secrets.Binding, error)
+		Bindings(ctx context.Context, sb store.Sandbox) ([]secrets.Binding, error)
 	}
 	// Caddy runs the caddy rules. Its Dial must refuse what Dial refuses.
 	Caddy *caddyrule.Engine
@@ -205,7 +207,7 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 
-	all, err := g.bindings(sb.EnvironmentID)
+	all, err := g.bindings(decider)
 	if err != nil {
 		problem = err.Error()
 		g.Log.Error("secrets", "sandbox", sb.ID, "err", err)
@@ -291,11 +293,11 @@ func closeWrite(c net.Conn) {
 	}
 }
 
-func (g *Gateway) bindings(envID string) ([]secrets.Binding, error) {
+func (g *Gateway) bindings(sb store.Sandbox) ([]secrets.Binding, error) {
 	if g.Secrets == nil {
 		return nil, nil
 	}
-	return g.Secrets.Bindings(context.Background(), envID)
+	return g.Secrets.Bindings(context.Background(), sb)
 }
 
 // refuse tells an HTTP or TLS client why its request failed. Other protocols only see the

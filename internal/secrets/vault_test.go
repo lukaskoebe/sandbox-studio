@@ -129,7 +129,7 @@ func TestKeyMismatchOnReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := v.Create(ctx, env, "API_KEY", "sk-live", []string{"api.example.com"}, ""); err != nil {
+	if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "API_KEY", Hosts: []string{"api.example.com"}}, "sk-live"); err != nil {
 		t.Fatal(err)
 	}
 	st.Close()
@@ -146,7 +146,7 @@ func TestKeyMismatchOnReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen with the same key: %v", err)
 	}
-	if b, err := v.Bindings(ctx, env); err != nil || len(b) != 1 || string(b[0].Value) != "sk-live" {
+	if b, err := v.Bindings(ctx, store.Sandbox{EnvironmentID: env}); err != nil || len(b) != 1 || string(b[0].Value) != "sk-live" {
 		t.Fatalf("reopened bindings: %+v %v", b, err)
 	}
 }
@@ -204,14 +204,14 @@ func TestFirstStartFallsBackToFile(t *testing.T) {
 	// A later start keeps using the file, even once the keychain is reachable again.
 	keychain.err = nil
 	env := newEnv(t, st, "work")
-	if _, err := v.Create(ctx, env, "API_KEY", "sk-1", []string{"a.com"}, ""); err != nil {
+	if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "API_KEY", Hosts: []string{"a.com"}}, "sk-1"); err != nil {
 		t.Fatal(err)
 	}
 	v, err = New(ctx, st, keychain, fallback, quiet)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b, err := v.Bindings(ctx, env); err != nil || len(b) != 1 || string(b[0].Value) != "sk-1" {
+	if b, err := v.Bindings(ctx, store.Sandbox{EnvironmentID: env}); err != nil || len(b) != 1 || string(b[0].Value) != "sk-1" {
 		t.Fatalf("bindings after restart: %+v %v", b, err)
 	}
 	if keychain.key != nil {
@@ -226,7 +226,7 @@ func TestNameValidation(t *testing.T) {
 	v := newVault(t, st)
 
 	for _, name := range []string{"API_KEY", "_TOKEN", "A1_B2", "MY_STUDIO_TOKEN", "PATHOLOGY", strings.Repeat("A", 64)} {
-		if _, err := v.Create(ctx, env, name, "v", []string{"a.com"}, ""); err != nil {
+		if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: name, Hosts: []string{"a.com"}}, "v"); err != nil {
 			t.Errorf("%s rejected: %v", name, err)
 		}
 	}
@@ -235,7 +235,7 @@ func TestNameValidation(t *testing.T) {
 		"PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "PWD", "TMPDIR", "HOSTNAME",
 		"LD_PRELOAD", "DYLD_INSERT_LIBRARIES", "STUDIO_TOKEN",
 	} {
-		if _, err := v.Create(ctx, env, name, "v", []string{"a.com"}, ""); !errors.Is(err, ErrInvalid) {
+		if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: name, Hosts: []string{"a.com"}}, "v"); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%q: got %v, want ErrInvalid", name, err)
 		}
 	}
@@ -257,12 +257,12 @@ func TestHostValidation(t *testing.T) {
 		"space in name":   {"bad host"},
 		"empty host":      {""},
 	} {
-		if _, err := v.Create(ctx, env, "KEY", "v", hosts, ""); !errors.Is(err, ErrInvalid) {
+		if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "KEY", Hosts: hosts}, "v"); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: got %v, want ErrInvalid", name, err)
 		}
 	}
 
-	sec, err := v.Create(ctx, env, "KEY", "v", []string{"API.Example.com.", "*.example.org", "api.example.com", "10.0.0.1"}, "")
+	sec, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "KEY", Hosts: []string{"API.Example.com.", "*.example.org", "api.example.com", "10.0.0.1"}}, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestValueValidationAndTrailingNewline(t *testing.T) {
 		"too large":    strings.Repeat("x", 16<<10+1),
 		"CRLF only":    "\r\n",
 	} {
-		if _, err := v.Create(ctx, env, "KEY", value, []string{"a.com"}, ""); !errors.Is(err, ErrInvalid) {
+		if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "KEY", Hosts: []string{"a.com"}}, value); !errors.Is(err, ErrInvalid) {
 			t.Errorf("%s: got %v, want ErrInvalid", name, err)
 		}
 	}
@@ -302,12 +302,12 @@ func TestValueValidationAndTrailingNewline(t *testing.T) {
 	}
 	want := map[string]string{}
 	for _, tc := range cases {
-		if _, err := v.Create(ctx, env, tc.name, tc.input, []string{"a.com"}, ""); err != nil {
+		if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: tc.name, Hosts: []string{"a.com"}}, tc.input); err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
 		want[tc.name] = tc.want
 	}
-	bindings, err := v.Bindings(ctx, env)
+	bindings, err := v.Bindings(ctx, store.Sandbox{EnvironmentID: env})
 	if err != nil || len(bindings) != len(cases) {
 		t.Fatalf("bindings: %d %v", len(bindings), err)
 	}
@@ -324,11 +324,11 @@ func TestBindingsAndCacheInvalidation(t *testing.T) {
 	env := newEnv(t, st, "work")
 	v := newVault(t, st)
 
-	first, err := v.Create(ctx, env, "API_KEY", "sk-one", []string{"api.example.com"}, "")
+	first, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "API_KEY", Hosts: []string{"api.example.com"}}, "sk-one")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := v.Bindings(ctx, env)
+	b, err := v.Bindings(ctx, store.Sandbox{EnvironmentID: env})
 	if err != nil || len(b) != 1 || b[0].Name != "API_KEY" || string(b[0].Value) != "sk-one" ||
 		b[0].Placeholder != first.Placeholder || !slices.Equal(b[0].Hosts, []string{"api.example.com"}) {
 		t.Fatalf("bindings: %+v %v", b, err)
@@ -338,13 +338,13 @@ func TestBindingsAndCacheInvalidation(t *testing.T) {
 	}
 
 	// Creating a secret drops the cache.
-	if _, err := v.Create(ctx, env, "OTHER", "x", []string{"b.com"}, ""); err != nil {
+	if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "OTHER", Hosts: []string{"b.com"}}, "x"); err != nil {
 		t.Fatal(err)
 	}
 	if _, cached := v.bindings[env]; cached {
 		t.Fatal("create did not invalidate the cache")
 	}
-	if b, _ := v.Bindings(ctx, env); len(b) != 2 {
+	if b, _ := v.Bindings(ctx, store.Sandbox{EnvironmentID: env}); len(b) != 2 {
 		t.Fatalf("after create: %+v", b)
 	}
 
@@ -355,7 +355,7 @@ func TestBindingsAndCacheInvalidation(t *testing.T) {
 	if _, cached := v.bindings[env]; cached {
 		t.Fatal("update did not invalidate the cache")
 	}
-	b, _ = v.Bindings(ctx, env)
+	b, _ = v.Bindings(ctx, store.Sandbox{EnvironmentID: env})
 	if string(b[0].Value) != "sk-two" || !slices.Equal(b[0].Hosts, []string{"api.example.net"}) {
 		t.Fatalf("after update with value: %+v", b[0])
 	}
@@ -364,7 +364,7 @@ func TestBindingsAndCacheInvalidation(t *testing.T) {
 	if _, err := v.Update(ctx, env, first.ID, nil, []string{"api.example.org"}, "moved"); err != nil {
 		t.Fatal(err)
 	}
-	b, _ = v.Bindings(ctx, env)
+	b, _ = v.Bindings(ctx, store.Sandbox{EnvironmentID: env})
 	if string(b[0].Value) != "sk-two" || !slices.Equal(b[0].Hosts, []string{"api.example.org"}) {
 		t.Fatalf("after update without value: %+v", b[0])
 	}
@@ -372,7 +372,7 @@ func TestBindingsAndCacheInvalidation(t *testing.T) {
 	if err := v.Delete(ctx, env, first.ID); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := v.Bindings(ctx, env); len(b) != 1 || b[0].Name != "OTHER" {
+	if b, _ := v.Bindings(ctx, store.Sandbox{EnvironmentID: env}); len(b) != 1 || b[0].Name != "OTHER" {
 		t.Fatalf("after delete: %+v", b)
 	}
 	if err := v.Delete(ctx, env, first.ID); !errors.Is(err, store.ErrNotFound) {
@@ -390,7 +390,7 @@ func TestPlaceholdersAreUniqueAndStable(t *testing.T) {
 	seen := map[string]bool{}
 	var first store.Secret
 	for i := range 50 {
-		sec, err := v.Create(ctx, env, fmt.Sprintf("KEY_%d", i), "v", []string{"a.com"}, "")
+		sec, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: fmt.Sprintf("KEY_%d", i), Hosts: []string{"a.com"}}, "v")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -409,12 +409,116 @@ func TestPlaceholdersAreUniqueAndStable(t *testing.T) {
 		t.Fatalf("placeholder changed by update: %q -> %q (%v)", first.Placeholder, updated.Placeholder, err)
 	}
 
-	env2, err := v.Env(ctx, env)
+	env2, err := v.Env(ctx, store.Sandbox{EnvironmentID: env})
 	if err != nil || len(env2) != 50 || env2["KEY_0"] != first.Placeholder {
 		t.Fatalf("env: %d entries, %v", len(env2), err)
 	}
 	list, err := v.List(ctx, env)
 	if err != nil || len(list) != 50 {
 		t.Fatalf("list: %d %v", len(list), err)
+	}
+}
+
+func TestScopedBindingsAndEnv(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	env := newEnv(t, st, "work")
+	v := newVault(t, st)
+	// A teammate needs a provider; its key is an environment secret like any other.
+	key, err := v.Prepare(env, "PROVIDER_A_KEY", "sk-provider", []string{"api.anthropic.com"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateProvider(ctx, store.Provider{ID: "p", EnvironmentID: env, Name: "a", Kind: "anthropic_api"}, &key); err != nil {
+		t.Fatal(err)
+	}
+	v.Changed(env)
+	if _, err := st.CreateTeammate(ctx, store.Teammate{ID: "ada", EnvironmentID: env, Name: "Ada", Harness: "claude", ProviderID: "p", GitName: "Ada", GitEmail: "ada@agents.invalid"}); err != nil {
+		t.Fatal(err)
+	}
+	adaBox, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env, Name: "ada-box", TeammateID: "ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada2, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env, Name: "ada-2", TeammateID: "ada"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loose, err := st.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env, Name: "loose"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	envToken, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "GH_TOKEN", Hosts: []string{"api.github.com"}}, "env-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adaToken, err := v.Create(ctx, store.Secret{EnvironmentID: env, TeammateID: "ada", Name: "GH_TOKEN", Hosts: []string{"api.github.com"}}, "ada-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.Bindings(ctx, adaBox); err != nil { // fills the cache
+		t.Fatal(err)
+	}
+	boxToken, err := v.Create(ctx, store.Secret{EnvironmentID: env, SandboxID: adaBox.ID, Name: "GH_TOKEN", Hosts: []string{"api.github.com"}}, "box-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, cached := v.bindings[env]; cached {
+		t.Fatal("creating a sandbox secret did not invalidate the cache")
+	}
+
+	// Each sandbox gets the placeholder of the most specific GH_TOKEN, and the gateway
+	// substitutes only that one; the others are foreign.
+	for _, tc := range []struct {
+		sb    store.Sandbox
+		own   store.Secret
+		value string
+	}{
+		{adaBox, boxToken, "box-token"},
+		{ada2, adaToken, "ada-token"},
+		{loose, envToken, "env-token"},
+	} {
+		e, err := v.Env(ctx, tc.sb)
+		if err != nil || len(e) != 2 || e["GH_TOKEN"] != tc.own.Placeholder || e["PROVIDER_A_KEY"] != key.Placeholder {
+			t.Fatalf("%s env: %v %v", tc.sb.Name, e, err)
+		}
+		b, err := v.Bindings(ctx, tc.sb)
+		if err != nil || len(b) != 4 {
+			t.Fatalf("%s bindings: %+v %v", tc.sb.Name, b, err)
+		}
+		for _, x := range b {
+			switch {
+			case x.Placeholder == tc.own.Placeholder:
+				if x.Foreign || string(x.Value) != tc.value || !slices.Equal(x.Hosts, []string{"api.github.com"}) {
+					t.Errorf("%s: own binding %+v", tc.sb.Name, x)
+				}
+			case x.Name == "GH_TOKEN":
+				if !x.Foreign || x.Value != nil || x.Hosts != nil {
+					t.Errorf("%s: another scope's binding is usable: %+v", tc.sb.Name, x)
+				}
+			case x.Placeholder != key.Placeholder || x.Foreign || string(x.Value) != "sk-provider":
+				t.Errorf("%s: provider binding %+v", tc.sb.Name, x)
+			}
+		}
+	}
+
+	// Updating and deleting invalidate the cache too.
+	value := "box-token-2"
+	if _, err := v.Update(ctx, env, boxToken.ID, &value, []string{"api.github.com"}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := v.Bindings(ctx, adaBox); !slices.ContainsFunc(b, func(x Binding) bool { return string(x.Value) == "box-token-2" }) {
+		t.Fatalf("after update: %+v", b)
+	}
+	if err := v.Delete(ctx, env, boxToken.ID); err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := v.Env(ctx, adaBox); e["GH_TOKEN"] != adaToken.Placeholder {
+		t.Fatalf("after deleting the sandbox's own secret: %v", e)
+	}
+	b, _ := v.Bindings(ctx, adaBox)
+	if i := slices.IndexFunc(b, func(x Binding) bool { return x.Placeholder == adaToken.Placeholder }); i < 0 || string(b[i].Value) != "ada-token" || b[i].Foreign {
+		t.Fatalf("after delete: %+v", b)
 	}
 }

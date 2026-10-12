@@ -190,3 +190,116 @@ func TestMigrateTeammates(t *testing.T) {
 	}
 	one("SELECT COUNT(*) FROM memory_timeline", int64(0))
 }
+
+// Forges from before SSH agent auth keep their secrets; their ssh forges sign with a key,
+// and the studio-only check still guards every secret a forge holds.
+func TestMigrateForgeAgent(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 20); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`,
+		`INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at, studio_only) VALUES ('s1', 'env', 'GH', x'00', '', 'ph1', 1, 1, 1), ('s2', 'env', 'BOX', x'00', '', 'ph2', 1, 1, 1)`,
+		`INSERT INTO forges (id, environment_id, name, kind, base_url, username, secret_id, public_key, host_key, created_at, updated_at)
+		 VALUES ('f1', 'env', 'github', 'github', 'https://github.com', '', 's1', '', '', 1, 1),
+		        ('f2', 'env', 'box', 'ssh', 'ssh://git@box.example.net', 'git', 's2', 'ssh-ed25519 AAAA studio', 'ssh-ed25519 BBBB', 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	var auth, secret, key string
+	if err := db.QueryRowContext(ctx, "SELECT auth, secret_id, public_key || ' ' || host_key FROM forges WHERE id = 'f2'").Scan(&auth, &secret, &key); err != nil {
+		t.Fatal(err)
+	}
+	if auth != "key" || secret != "s2" || key != "ssh-ed25519 AAAA studio ssh-ed25519 BBBB" {
+		t.Fatalf("ssh forge after migrating: %q %q %q", auth, secret, key)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT auth, secret_id FROM forges WHERE id = 'f1'").Scan(&auth, &secret); err != nil {
+		t.Fatal(err)
+	}
+	if auth != "" || secret != "s1" {
+		t.Fatalf("token forge after migrating: %q %q", auth, secret)
+	}
+
+	// A plain secret can't be a forge's key, an agent forge has no secret, and token kinds
+	// have no auth.
+	if _, err := db.ExecContext(ctx, `INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at) VALUES ('plain', 'env', 'PLAIN', x'00', '', 'ph3', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO forges (id, environment_id, name, kind, base_url, auth, secret_id, created_at, updated_at) VALUES ('x1', 'env', 'x1', 'ssh', 'ssh://git@x1.example.net', 'key', 'plain', 1, 1)`,
+		`INSERT INTO forges (id, environment_id, name, kind, base_url, auth, secret_id, created_at, updated_at) VALUES ('x2', 'env', 'x2', 'ssh', 'ssh://git@x2.example.net', 'agent', 's1', 1, 1)`,
+		`INSERT INTO forges (id, environment_id, name, kind, base_url, auth, created_at, updated_at) VALUES ('x3', 'env', 'x3', 'github', 'https://github.com', 'agent', 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err == nil {
+			t.Errorf("accepted %s", q)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, auth, created_at, updated_at) VALUES ('x4', 'env', 'x4', 'ssh', 'ssh://git@x4.example.net', 'agent', 1, 1)`); err != nil {
+		t.Fatalf("agent forge without a secret: %v", err)
+	}
+}
+
+// Secrets created before scopes keep their values, placeholders and owners when the table
+// is rebuilt, and the providers' and forges' triggers still find them.
+func TestMigrateSecretScopes(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 20); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`,
+		`INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, note, created_at, updated_at) VALUES ('key', 'env', 'PROVIDER_A_KEY', x'01', 'api.anthropic.com', 'studio-key', 'n', 1, 2)`,
+		`INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at, studio_only) VALUES ('tok', 'env', 'FORGE_GH_TOKEN', x'02', 'github.com', 'studio-tok', 1, 1, 1)`,
+		`INSERT INTO providers (id, environment_id, name, kind, secret_id, created_at, updated_at) VALUES ('prov', 'env', 'A', 'anthropic_api', 'key', 1, 1)`,
+		`INSERT INTO forges (id, environment_id, name, kind, base_url, secret_id, created_at, updated_at) VALUES ('fg', 'env', 'gh', 'github', 'https://github.com', 'tok', 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	list, err := s.Secrets(ctx, "env")
+	if err != nil || len(list) != 2 {
+		t.Fatalf("secrets: %+v %v", list, err)
+	}
+	if k := list[1]; k.ID != "key" || string(k.Sealed) != "\x01" || k.Placeholder != "studio-key" || k.Note != "n" || k.UpdatedAt.Unix() != 2 || k.TeammateID != "" || k.SandboxID != "" {
+		t.Fatalf("provider key: %+v", k)
+	}
+	if f := list[0]; f.ID != "tok" || !f.StudioOnly {
+		t.Fatalf("forge token: %+v", f)
+	}
+	if p, err := s.SecretProvider(ctx, "env", "key"); err != nil || p != "A" {
+		t.Fatalf("provider of the key: %q %v", p, err)
+	}
+	// The triggers naming secrets still work.
+	if _, err := db.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, secret_id, created_at, updated_at) VALUES ('fg2', 'env', 'gh2', 'github', 'https://github.com', 'key', 1, 1)`); err == nil {
+		t.Fatal("a forge took a secret that isn't studio-only")
+	}
+	var leftover int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'secrets_old'").Scan(&leftover); err != nil || leftover != 0 {
+		t.Fatalf("secrets_old left behind: %d %v", leftover, err)
+	}
+}
