@@ -135,7 +135,7 @@ function ForkForm({
       <section className="rounded-md border p-3" aria-label="What is copied">
         <dl className="grid grid-cols-[7rem_minmax(0,1fr)] gap-x-4 gap-y-2">
           <dt className="text-muted-foreground">Copied</dt>
-          <dd>/workspace</dd>
+          <dd>/workspace and /home/agent</dd>
           <dt className="text-muted-foreground">Not copied</dt>
           <dd>Docker images, containers and volumes</dd>
           <dt className="text-muted-foreground">Identity</dt>
@@ -179,7 +179,7 @@ function ForkForm({
           className="flex items-center gap-2 text-muted-foreground"
         >
           <Spinner />
-          Copying workspace… This can take several minutes.
+          Copying workspace and home… This can take several minutes.
         </p>
       ) : (
         failure && (
