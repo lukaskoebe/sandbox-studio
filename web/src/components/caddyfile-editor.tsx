@@ -1,20 +1,12 @@
 import { useLayoutEffect, useRef } from "react"
 import {
   autocompletion,
-  closeCompletion,
-  completionKeymap,
   type Completion,
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete"
+import { history } from "@codemirror/commands"
 import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  indentWithTab,
-} from "@codemirror/commands"
-import {
-  HighlightStyle,
   StreamLanguage,
   bracketMatching,
   indentOnInput,
@@ -28,7 +20,7 @@ import {
   setDiagnosticsEffect,
   type Diagnostic,
 } from "@codemirror/lint"
-import { Annotation, EditorState, Prec, Transaction } from "@codemirror/state"
+import { EditorState, Prec, Transaction } from "@codemirror/state"
 import {
   EditorView,
   highlightActiveLine,
@@ -36,7 +28,6 @@ import {
   keymap,
   lineNumbers,
 } from "@codemirror/view"
-import { tags } from "@lezer/highlight"
 import { KeyIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,6 +38,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  codeEditorKeyBindings,
+  codeEditorTheme,
+  codeHighlightStyle,
+  editorChangeListener,
+  syncEditorValue,
+} from "@/lib/code-editor"
 
 type SecretName = { name: string }
 type CaddyfileState = { depth: number; quote: string | null }
@@ -162,78 +160,6 @@ const caddyfileLanguage = StreamLanguage.define<CaddyfileState>({
   languageData: { commentTokens: { line: "#" } },
 })
 
-const caddyfileHighlight = HighlightStyle.define([
-  { tag: tags.comment, color: "var(--muted-foreground)" },
-  { tag: tags.keyword, color: "var(--code-keyword)", fontWeight: "600" },
-  { tag: tags.meta, color: "var(--code-meta)", fontWeight: "600" },
-  { tag: tags.string, color: "var(--code-string)" },
-  {
-    tag: tags.special(tags.variableName),
-    color: "var(--code-variable)",
-    fontWeight: "500",
-  },
-  { tag: tags.operator, color: "var(--code-operator)" },
-  { tag: tags.punctuation, color: "var(--muted-foreground)" },
-])
-
-const editorTheme = EditorView.theme({
-  "&": {
-    borderRadius: "inherit",
-    backgroundColor: "var(--background)",
-    color: "var(--foreground)",
-    fontSize: "0.75rem",
-  },
-  "&.cm-focused": {
-    outline: "2px solid color-mix(in oklch, var(--ring) 35%, transparent)",
-    outlineOffset: "-2px",
-  },
-  // No ScrollArea: CodeMirror measures and scrolls its own scroller.
-  ".cm-scroller": {
-    borderRadius: "inherit",
-    maxHeight: "24rem",
-    overflow: "auto",
-    fontFamily:
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    lineHeight: "1.55",
-  },
-  ".cm-content": { minHeight: "9rem", padding: "0.65rem 0.75rem" },
-  ".cm-gutters": {
-    backgroundColor: "var(--background)",
-    color: "var(--muted-foreground)",
-    borderRight: "1px solid var(--border)",
-  },
-  ".cm-activeLine": {
-    backgroundColor: "color-mix(in oklch, var(--accent) 65%, transparent)",
-  },
-  ".cm-activeLineGutter": {
-    color: "var(--foreground)",
-    backgroundColor: "color-mix(in oklch, var(--accent) 65%, transparent)",
-  },
-  ".cm-lintRange-error": {
-    backgroundImage:
-      "linear-gradient(to bottom, transparent calc(100% - 1px), var(--destructive) 0)",
-  },
-  ".cm-gutterElement.cm-lintPoint-error": {
-    borderLeft: "2px solid var(--destructive)",
-  },
-  ".cm-tooltip": {
-    backgroundColor: "var(--popover)",
-    color: "var(--popover-foreground)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius-md)",
-  },
-  ".cm-tooltip-autocomplete ul": {
-    fontFamily:
-      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-  },
-  ".cm-tooltip-autocomplete ul li[aria-selected]": {
-    backgroundColor: "var(--accent)",
-    color: "var(--accent-foreground)",
-  },
-})
-
-const externalValueSync = Annotation.define<boolean>()
-
 function secretCompletion(secretsRef: {
   current: readonly SecretName[]
 }): (context: CompletionContext) => CompletionResult | null {
@@ -278,21 +204,6 @@ function secretCompletion(secretsRef: {
     }
   }
 }
-
-const keyBindings = [
-  ...completionKeymap.map((binding) =>
-    binding.key === "Escape"
-      ? {
-          ...binding,
-          run: closeCompletion,
-          stopPropagation: true,
-        }
-      : binding
-  ),
-  ...historyKeymap,
-  indentWithTab,
-  ...defaultKeymap,
-]
 
 function diagnosticsFor(
   error: string | undefined,
@@ -350,8 +261,8 @@ export function CaddyfileEditor({
         doc: initialValueRef.current,
         extensions: [
           caddyfileLanguage,
-          syntaxHighlighting(caddyfileHighlight),
-          editorTheme,
+          syntaxHighlighting(codeHighlightStyle),
+          codeEditorTheme,
           lineNumbers(),
           EditorView.lineWrapping,
           highlightActiveLineGutter(),
@@ -376,16 +287,8 @@ export function CaddyfileEditor({
             spellcheck: "false",
             tabindex: "0",
           }),
-          EditorView.updateListener.of((update) => {
-            if (!update.docChanged) return
-
-            const isExternalSync = update.transactions.some((transaction) =>
-              transaction.annotation(externalValueSync)
-            )
-            if (!isExternalSync)
-              onChangeRef.current(update.state.doc.toString())
-          }),
-          Prec.highest(keymap.of(keyBindings)),
+          editorChangeListener(onChangeRef),
+          Prec.highest(keymap.of(codeEditorKeyBindings)),
         ],
       }),
       parent: host,
@@ -400,40 +303,7 @@ export function CaddyfileEditor({
 
   useLayoutEffect(() => {
     const view = editorRef.current
-    if (!view || view.state.doc.toString() === value) return
-
-    const previous = view.state.doc.toString()
-    let from = 0
-    while (
-      from < previous.length &&
-      from < value.length &&
-      previous.charCodeAt(from) === value.charCodeAt(from)
-    ) {
-      from += 1
-    }
-
-    let previousEnd = previous.length
-    let valueEnd = value.length
-    while (
-      previousEnd > from &&
-      valueEnd > from &&
-      previous.charCodeAt(previousEnd - 1) === value.charCodeAt(valueEnd - 1)
-    ) {
-      previousEnd -= 1
-      valueEnd -= 1
-    }
-
-    view.dispatch({
-      changes: {
-        from,
-        to: previousEnd,
-        insert: value.slice(from, valueEnd),
-      },
-      annotations: [
-        externalValueSync.of(true),
-        Transaction.addToHistory.of(false),
-      ],
-    })
+    if (view) syncEditorValue(view, value)
   }, [value])
 
   useLayoutEffect(() => {
