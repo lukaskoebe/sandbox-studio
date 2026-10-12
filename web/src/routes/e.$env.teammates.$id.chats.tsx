@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { PlusIcon } from "@phosphor-icons/react"
+import { ChatCircleIcon, PlusIcon } from "@phosphor-icons/react"
 import { ChatTable } from "@/components/chat/chat-table"
+import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -28,19 +29,24 @@ function TeammateChats() {
 
   return (
     <div className="max-w-5xl space-y-4">
-      <div className="flex items-center gap-2">
-        <p className="text-sm text-muted-foreground">
-          Chats with {name} about the work in its sandboxes.
-        </p>
-        <Button
-          size="sm"
-          className="ml-auto"
-          render={<Link to="/e/$env/chats/new" params={{ env }} />}
-        >
-          <PlusIcon />
-          New chat
-        </Button>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Chats with {name} about the work in its sandboxes.
+      </p>
+      <SectionHeader
+        title="Chats"
+        icon={ChatCircleIcon}
+        area="chat"
+        count={chats.data && list.length}
+        actions={
+          <Button
+            size="sm"
+            render={<Link to="/e/$env/chats/new" params={{ env }} />}
+          >
+            <PlusIcon />
+            New chat
+          </Button>
+        }
+      />
       {chats.isPending ? (
         <Spinner />
       ) : chats.isError ? (
