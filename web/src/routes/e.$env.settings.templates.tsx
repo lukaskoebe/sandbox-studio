@@ -5,7 +5,9 @@ import { BuildDialog } from "@/components/build-dialog"
 import { BuildJobSheet } from "@/components/build-job-sheet"
 import { BuildCleanupStatus, BuildStatusBadge } from "@/components/build-status"
 import { CreateTemplateSandboxDialog } from "@/components/create-template-sandbox-dialog"
+import { Ident } from "@/components/ident"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
+import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -115,58 +117,65 @@ function BuildsWorkspace({ env }: { env: string }) {
               </div>
             )}
             {builds.data?.length ? (
-              <div className="overflow-hidden rounded-lg ring-1 ring-foreground/10">
-                <Table className="min-w-[38rem]">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Build</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Cleanup</TableHead>
-                      <TableHead>
-                        <span className="sr-only">Actions</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {builds.data.map((job) => {
-                      const createdAt = new Date(job.createdAt)
-                      return (
-                        <TableRow key={job.id}>
-                          <TableCell className="font-mono">
-                            Build {shortId(job.id)}
-                          </TableCell>
-                          <TableCell>
-                            <BuildStatusBadge status={job.status} />
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            <time
-                              dateTime={job.createdAt}
-                              title={createdAt.toLocaleString()}
-                            >
-                              {formatAge(job.createdAt)}
-                            </time>
-                          </TableCell>
-                          <TableCell>
-                            <BuildCleanupStatus job={job} />
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex justify-end">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                aria-label={`Open build ${shortId(job.id)}`}
-                                onClick={() => setSelectedId(job.id)}
+              <div className="grid gap-2">
+                <SectionHeader
+                  title="Builds"
+                  icon={HammerIcon}
+                  count={builds.data.length}
+                />
+                <div className="overflow-hidden rounded-lg ring-1 ring-foreground/10">
+                  <Table className="min-w-[38rem]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Build</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Cleanup</TableHead>
+                        <TableHead>
+                          <span className="sr-only">Actions</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {builds.data.map((job) => {
+                        const createdAt = new Date(job.createdAt)
+                        return (
+                          <TableRow key={job.id}>
+                            <TableCell>
+                              Build <Ident>{shortId(job.id)}</Ident>
+                            </TableCell>
+                            <TableCell>
+                              <BuildStatusBadge status={job.status} />
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              <time
+                                dateTime={job.createdAt}
+                                title={createdAt.toLocaleString()}
                               >
-                                Open
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                                {formatAge(job.createdAt)}
+                              </time>
+                            </TableCell>
+                            <TableCell>
+                              <BuildCleanupStatus job={job} />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex justify-end">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  aria-label={`Open build ${shortId(job.id)}`}
+                                  onClick={() => setSelectedId(job.id)}
+                                >
+                                  Open
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             ) : (
               <Empty>

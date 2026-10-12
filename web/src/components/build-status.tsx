@@ -11,12 +11,17 @@ const statusLabels: Record<BuildJobStatus, string> = {
   cancelled: "Cancelled",
 }
 
+// Build states are not the sandbox statuses, so they get no status color: a build in progress
+// is outlined, a settled one filled, and only a failed build is marked in red.
 const statusTones: Record<BuildJobStatus, string> = {
-  queued: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  preparing: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  setting_up: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  exporting: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  ready: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  queued: "bg-background text-foreground ring-1 ring-foreground/10 ring-inset",
+  preparing:
+    "bg-background text-foreground ring-1 ring-foreground/10 ring-inset",
+  setting_up:
+    "bg-background text-foreground ring-1 ring-foreground/10 ring-inset",
+  exporting:
+    "bg-background text-foreground ring-1 ring-foreground/10 ring-inset",
+  ready: "bg-muted text-foreground",
   failed: "bg-destructive/10 text-destructive",
   cancelled: "bg-muted text-muted-foreground",
 }
@@ -41,9 +46,7 @@ export function BuildCleanupStatus({
 }) {
   if (job.cleanupPending) {
     return (
-      <span className="text-amber-700 dark:text-amber-400">
-        {isBuildActive(job.status) ? "After build" : "In progress"}
-      </span>
+      <span>{isBuildActive(job.status) ? "After build" : "In progress"}</span>
     )
   }
   if (job.cleanupError) {
