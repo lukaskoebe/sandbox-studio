@@ -91,6 +91,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerBrowser(api)
 	s.registerChats(api)
 	s.registerUISettings(api)
+	s.registerSetup(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/chats/{chat}/stream", s.streamChat)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)

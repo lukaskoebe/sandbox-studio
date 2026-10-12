@@ -4394,6 +4394,107 @@
         ],
         "type": "object"
       },
+      "Setup": {
+        "additionalProperties": false,
+        "properties": {
+          "completedAt": {
+            "description": "When every step was done or skipped",
+            "format": "date-time",
+            "type": "string"
+          },
+          "dismissed": {
+            "description": "The user dismissed the setup, so Home stops showing it",
+            "type": "boolean"
+          },
+          "steps": {
+            "$ref": "#/components/schemas/SetupSteps"
+          }
+        },
+        "required": [
+          "steps",
+          "dismissed"
+        ],
+        "type": "object"
+      },
+      "SetupSteps": {
+        "additionalProperties": false,
+        "properties": {
+          "doctor": {
+            "description": "Host check",
+            "enum": [
+              "done",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "git": {
+            "description": "Git forge",
+            "enum": [
+              "done",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "network": {
+            "description": "How approvals work",
+            "enum": [
+              "done",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "description": "AI provider",
+            "enum": [
+              "done",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "sandbox": {
+            "description": "First sandbox",
+            "enum": [
+              "done",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "teammate": {
+            "description": "Teammate",
+            "enum": [
+              "done",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "workMode": {
+            "description": "Work mode: chat or terminal",
+            "enum": [
+              "done",
+              "skipped"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SetupUpdateBody": {
+        "additionalProperties": false,
+        "properties": {
+          "dismissed": {
+            "type": "boolean"
+          },
+          "steps": {
+            "$ref": "#/components/schemas/SetupSteps",
+            "description": "The outcome of each step; omitted steps are still to do"
+          }
+        },
+        "required": [
+          "steps",
+          "dismissed"
+        ],
+        "type": "object"
+      },
       "SharePayload": {
         "additionalProperties": false,
         "properties": {
@@ -12033,6 +12134,104 @@
         },
         "tags": [
           "settings"
+        ]
+      }
+    },
+    "/api/setup": {
+      "get": {
+        "description": "A step reads done when its condition holds: the host check passes, a work mode is chosen, and the environment has a provider, a teammate, a forge or a sandbox.",
+        "operationId": "getSetup",
+        "parameters": [
+          {
+            "description": "The environment whose provider, teammate, forge and sandbox steps are checked",
+            "explode": false,
+            "in": "query",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "The environment whose provider, teammate, forge and sandbox steps are checked",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The guided setup's progress",
+        "tags": [
+          "setup"
+        ]
+      },
+      "put": {
+        "description": "Replaces the stored steps. The setup is completed, and stays so, once every step is done or skipped.",
+        "operationId": "setSetup",
+        "parameters": [
+          {
+            "description": "The environment whose conditions the answer reports",
+            "explode": false,
+            "in": "query",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "The environment whose conditions the answer reports",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupUpdateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Setup"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record the guided setup's steps and whether it is dismissed",
+        "tags": [
+          "setup"
         ]
       }
     },
