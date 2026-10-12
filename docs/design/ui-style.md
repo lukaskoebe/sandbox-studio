@@ -102,7 +102,8 @@ Shared pieces for the rollout. Use them instead of local styling.
   tile, title, count and actions. Pass `area` only where the section belongs to one area. It
   renders an h2; the page title stays the h1.
 - **`Ident`** (`components/ident.tsx`). Any identifier in mono: host, port, sandbox or
-  template ID, path, command, URL. `copy` adds a copy button for values people paste elsewhere.
+  template ID, path, command, URL. `copy` adds a copy button for values people paste elsewhere;
+  `value` sets what it copies when the shown text is short, such as a commit SHA.
 - **`KindChip`** (`components/kind-chip.tsx`). An approval kind's name with its icon on the
   area's tile. Approval cards pass `approvalKind(a).area`; unknown kinds have none.
 - **`StatusDot`** (`components/status-dot.tsx`). One of the four statuses, always with its
@@ -147,4 +148,17 @@ teammates shown as people. Kept in the mockups only.
 - **Faint waiting dot in light.** Amber on white reaches only 2.0:1 for the dot. Reaching 3:1
   turns it brown, so the word carries the state for now.
 - **Rollout.** Pages keep their old layout until they move over, one at a time, behind the e2e
-  suite (N4), after the navigation and sandbox restructuring (N3).
+  suite (N4). The list below says which have moved.
+
+## Rollout status
+
+Pages on Workbench, one line each. Pages not listed keep their old layout.
+
+- **Network:** rules (grouped by domain, filters in the URL), requests and activity tabs.
+- **Secrets.**
+- **Memory:** pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.
+- **Teammates:** list, overview, chats, browser and settings tabs; the teammate form.
+- **Chat:** the chat page header and the new chat notice.
+- **Git:** settings (forges, pushes and forge dialogs) and the git review sheet.
+- **Settings:** general, providers, templates and runtime; the build log and template spec
+  sheets; template resources.

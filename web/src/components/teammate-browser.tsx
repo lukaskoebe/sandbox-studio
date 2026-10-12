@@ -11,6 +11,8 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react"
 import { BrowserLive, BrowserSessionSelect } from "@/components/browser-live"
+import { Ident } from "@/components/ident"
+import { StatusDot, type Status } from "@/components/status-dot"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,6 +49,14 @@ type BrowserPattern = components["schemas"]["BrowserPattern"]
 type BrowserStatus = components["schemas"]["BrowserStatus"]
 
 const browserStatusPath = "/api/environments/{env}/teammates/{teammate}/browser"
+
+// The VM states that are one of the four statuses; the others show their own word.
+const vmStatus: Partial<Record<BrowserStatus["vm"], Status>> = {
+  running: "running",
+  suspended: "stopped",
+  stopped: "stopped",
+  crashed: "failed",
+}
 
 export function TeammateBrowser({
   env,
@@ -191,7 +201,7 @@ export function TeammateBrowser({
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="rules">Rules</TabsTrigger>
         </TabsList>
-        <Badge variant="outline">{st?.vm ?? "…"}</Badge>
+        <VMStatus vm={st?.vm} />
         {running && sessions.length > 0 && (
           <BrowserSessionSelect
             sessions={sessions}
@@ -302,7 +312,7 @@ export function TeammateBrowser({
                   placeholder="https://example.com"
                   value={addressDraft}
                   readOnly={!driving || navigationBlocked}
-                  className="h-8 min-w-0 flex-1"
+                  className="h-8 min-w-0 flex-1 font-mono"
                   onChange={(event) => {
                     setAddressDraft(event.target.value)
                     setAddressDirty(true)
@@ -366,6 +376,13 @@ export function TeammateBrowser({
       </TabsContent>
     </Tabs>
   )
+}
+
+/** The browser VM's state: a status dot where it is one of the four, else the state's word. */
+function VMStatus({ vm }: { vm?: BrowserStatus["vm"] }) {
+  const status = vm && vmStatus[vm]
+  if (status) return <StatusDot status={status} />
+  return <span className="text-xs text-muted-foreground">{vm ?? "…"}</span>
 }
 
 function shotURL(env: string, teammate: string, a: BrowserAction) {
@@ -500,7 +517,7 @@ function History({
           <img
             src={shotURL(env, teammate, shown)}
             alt={`The page after ${shown.action}`}
-            className="max-w-4xl rounded-md border"
+            className="max-w-[min(100%,56rem)] rounded-md border"
           />
         ) : (
           <p className="text-sm text-muted-foreground">No screenshot yet.</p>
@@ -549,7 +566,7 @@ function History({
                   </Badge>
                 </TableCell>
                 <TableCell className="max-w-64 truncate text-xs text-muted-foreground">
-                  {a.url}
+                  {a.url && <Ident>{a.url}</Ident>}
                 </TableCell>
               </TableRow>
             ))}
@@ -631,8 +648,12 @@ function Patterns({ env, teammate }: { env: string; teammate: string }) {
           {(patterns.data ?? []).map((p) => (
             <TableRow key={p.id}>
               <TableCell>{verdicts[p.verdict]}</TableCell>
-              <TableCell className="font-mono text-xs">{p.action}</TableCell>
-              <TableCell className="font-mono text-xs">{p.origin}</TableCell>
+              <TableCell>
+                <Ident>{p.action}</Ident>
+              </TableCell>
+              <TableCell>
+                <Ident>{p.origin}</Ident>
+              </TableCell>
               <TableCell className="text-xs">
                 {[p.role, p.label && `“${p.label}”`]
                   .filter(Boolean)

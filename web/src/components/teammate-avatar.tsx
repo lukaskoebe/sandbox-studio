@@ -42,9 +42,10 @@ export function TeammateAvatar({
   )
 }
 
+// Working is the running status and waiting the waiting one; idle has no status, so it is grey.
 const presenceDots: Record<Presence, string> = {
-  working: "bg-sky-500 animate-pulse",
-  waiting: "bg-amber-500",
+  working: "bg-(--st-running) animate-pulse",
+  waiting: "bg-(--st-waiting)",
   idle: "bg-muted-foreground/40",
 }
 

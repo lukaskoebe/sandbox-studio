@@ -2,7 +2,12 @@ import { Fragment, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react"
+import {
+  PencilSimpleIcon,
+  PlusIcon,
+  ShieldCheckIcon,
+  TrashIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -38,8 +43,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { RuleActionBadge } from "@/components/status-badge"
+import { Ident } from "@/components/ident"
 import { RuleDialog } from "@/components/rule-dialog"
+import { SectionHeader } from "@/components/section-header"
 import { $api, errorMessage, type Rule } from "@/lib/api/client"
 import {
   filterRules,
@@ -80,7 +86,8 @@ function RulesTab() {
   const teammateNames = new Map(
     (teammates.data ?? []).map((p) => [p.id, p.name])
   )
-  const groups = groupRules(filterRules(rules.data ?? [], filter))
+  const shown = filterRules(rules.data ?? [], filter)
+  const groups = groupRules(shown)
 
   // Filters live in the URL, so a filtered view can be bookmarked or shared.
   const setFilter = (patch: RuleFilter) =>
@@ -95,13 +102,25 @@ function RulesTab() {
 
   return (
     <div className="space-y-3">
+      <SectionHeader
+        title="Rules"
+        icon={ShieldCheckIcon}
+        area="network"
+        count={rules.data ? shown.length : undefined}
+        actions={
+          <Button size="sm" onClick={() => setDialog({})}>
+            <PlusIcon />
+            Add rule
+          </Button>
+        }
+      />
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"
           aria-label="Search hosts"
           placeholder="Search hosts"
           autoComplete="off"
-          className="sm:w-56"
+          className="h-6 sm:w-56"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
@@ -135,10 +154,6 @@ function RulesTab() {
             setFilter({ action: ruleActions.find((a) => a === v) })
           }
         />
-        <Button size="sm" className="sm:ml-auto" onClick={() => setDialog({})}>
-          <PlusIcon />
-          Add rule
-        </Button>
       </div>
 
       {rules.isPending ? (
@@ -180,18 +195,26 @@ function RulesTab() {
               {groups.map((group) => (
                 <Fragment key={group.domain}>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={7} className="font-medium">
-                      {group.domain}{" "}
-                      <span className="font-normal text-muted-foreground">
-                        {group.rules.length}
+                    <TableCell colSpan={7}>
+                      <span className="inline-flex items-center gap-2">
+                        <Ident className="font-medium">{group.domain}</Ident>
+                        <span className="font-mono text-muted-foreground">
+                          {group.rules.length}
+                        </span>
                       </span>
                     </TableCell>
                   </TableRow>
                   {group.rules.map((r) => (
                     <TableRow key={r.id}>
-                      <TableCell className="font-mono">{r.host}</TableCell>
                       <TableCell>
-                        {r.ports?.length ? r.ports.join(", ") : "any"}
+                        <Ident>{r.host}</Ident>
+                      </TableCell>
+                      <TableCell>
+                        {r.ports?.length ? (
+                          <Ident>{r.ports.join(", ")}</Ident>
+                        ) : (
+                          <span className="text-muted-foreground">any</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <RuleAction rule={r} />
@@ -281,7 +304,7 @@ function FilterSelect({
   )
 }
 
-/** A rule's proxy headers or Caddyfile summary; secret values stay hidden. */
+/** A rule's action, then its proxy headers or Caddyfile summary; secret values stay hidden. */
 function RuleAction({ rule }: { rule: Rule }) {
   const names =
     rule.action === "proxy"
@@ -294,25 +317,21 @@ function RuleAction({ rule }: { rule: Rule }) {
     .find((line) => line && !line.startsWith("#"))
   const caddyLineCount = caddyfile ? caddyfile.split(/\r?\n/).length : 0
   return (
-    <div className="flex items-center gap-2">
-      <RuleActionBadge action={rule.action} />
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset">
+        {rule.action}
+      </span>
       {names && (
-        <span
-          className="max-w-40 truncate font-mono text-xs text-muted-foreground"
-          title={names}
-        >
-          {names}
+        <span className="block max-w-40 truncate" title={names}>
+          <Ident>{names}</Ident>
         </span>
       )}
       {rule.action === "caddy" && (
         <>
-          <span
-            className="max-w-48 truncate font-mono text-xs text-muted-foreground"
-            title={caddySummary}
-          >
-            {caddySummary ?? "Empty Caddyfile"}
+          <span className="block max-w-48 truncate" title={caddySummary}>
+            {caddySummary ? <Ident>{caddySummary}</Ident> : "Empty Caddyfile"}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="shrink-0 text-muted-foreground">
             {caddyLineCount} {caddyLineCount === 1 ? "line" : "lines"}
           </span>
         </>

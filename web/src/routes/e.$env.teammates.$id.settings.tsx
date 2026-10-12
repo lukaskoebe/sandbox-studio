@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { TeammateForm } from "@/components/teammate-form"
@@ -43,13 +44,11 @@ function TeammateSettings() {
         onSaved={() => toast.success("Teammate saved")}
       />
       <section className="space-y-3 border-t pt-6">
-        <div>
-          <h2 className="text-sm font-medium">Delete {teammate.name}</h2>
-          <p className="text-xs text-muted-foreground">
-            Its sandboxes must be deleted first. Network rules scoped to it go
-            with it.
-          </p>
-        </div>
+        <SectionHeader title={`Delete ${teammate.name}`} icon={TrashIcon} />
+        <p className="text-xs text-muted-foreground">
+          Its sandboxes must be deleted first. Network rules scoped to it go
+          with it.
+        </p>
         <DeleteTeammate env={env} teammate={teammate} />
       </section>
     </div>

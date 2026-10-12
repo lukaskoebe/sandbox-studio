@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { HourglassIcon } from "@phosphor-icons/react"
 import { ApprovalDecision } from "@/components/approval-decision"
+import { Ident } from "@/components/ident"
+import { SectionHeader } from "@/components/section-header"
 import { Spinner } from "@/components/ui/spinner"
 import { $api } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
@@ -18,29 +21,37 @@ function RequestsTab() {
   const list = (requests.data ?? []).filter((a) => a.kind === "network")
 
   if (requests.isPending) return <Spinner className="mx-auto block" />
-  if (!list.length)
-    return (
-      <p className="text-xs text-muted-foreground">
-        Nothing is waiting for a decision.
-      </p>
-    )
   return (
-    <ul className="divide-y rounded-lg ring-1 ring-foreground/10">
-      {list.map((a) => (
-        <li key={a.id} className="grid gap-2 p-3">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <span className="font-mono">{a.subject}</span>
-            <span className="text-muted-foreground">
-              {a.network?.sandboxName}
-            </span>
-            <span className="ml-auto text-muted-foreground">
-              {a.attempts} {a.attempts === 1 ? "attempt" : "attempts"} ·{" "}
-              {formatAge(a.createdAt)}
-            </span>
-          </div>
-          <ApprovalDecision approval={a} />
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-2">
+      <SectionHeader
+        title="Waiting for you"
+        icon={HourglassIcon}
+        area="network"
+        count={list.length}
+      />
+      {!list.length ? (
+        <p className="text-xs text-muted-foreground">
+          Nothing is waiting for a decision.
+        </p>
+      ) : (
+        <ul className="divide-y rounded-lg ring-1 ring-foreground/10">
+          {list.map((a) => (
+            <li key={a.id} className="grid gap-2 p-3">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <Ident>{a.subject}</Ident>
+                <span className="text-muted-foreground">
+                  {a.network?.sandboxName}
+                </span>
+                <span className="ml-auto text-muted-foreground">
+                  {a.attempts} {a.attempts === 1 ? "attempt" : "attempts"} ·{" "}
+                  {formatAge(a.createdAt)}
+                </span>
+              </div>
+              <ApprovalDecision approval={a} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

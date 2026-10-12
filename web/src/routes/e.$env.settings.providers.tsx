@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Ident } from "@/components/ident"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { ProviderDialog } from "@/components/provider-dialog"
 import { $api, errorMessage, type Provider } from "@/lib/api/client"
@@ -93,8 +94,15 @@ function ProvidersPage() {
                     <TableCell>
                       <div>{kindLabels[p.kind]}</div>
                       {p.baseUrl && (
-                        <div className="max-w-56 truncate font-mono text-muted-foreground">
-                          {p.baseUrl} · {p.model}
+                        // Cells are nowrap by default; identifiers here wrap instead.
+                        <div className="max-w-56 whitespace-normal text-muted-foreground">
+                          <Ident>{p.baseUrl}</Ident>
+                          {p.model && (
+                            <>
+                              {" · "}
+                              <Ident>{p.model}</Ident>
+                            </>
+                          )}
                         </div>
                       )}
                     </TableCell>
@@ -102,10 +110,14 @@ function ProvidersPage() {
                       {p.state === "login_required" ? (
                         <Badge variant="outline">Login required</Badge>
                       ) : (
-                        <div className="font-mono">
-                          <div>{p.envVar}</div>
+                        <div className="whitespace-normal">
+                          {p.envVar && <Ident>{p.envVar}</Ident>}
                           <div className="text-muted-foreground">
-                            as {p.secretName}
+                            {p.secretName && (
+                              <>
+                                as <Ident>{p.secretName}</Ident>
+                              </>
+                            )}
                           </div>
                         </div>
                       )}

@@ -1,6 +1,10 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { PlusIcon } from "@phosphor-icons/react"
+import {
+  FileTextIcon,
+  PlusIcon,
+  TerminalWindowIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -22,6 +26,8 @@ import {
   BuildStatusBadge,
   isBuildActive,
 } from "@/components/build-status"
+import { Ident } from "@/components/ident"
+import { SectionHeader } from "@/components/section-header"
 import {
   $api,
   errorMessage,
@@ -67,9 +73,11 @@ export function BuildJobSheet({
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="gap-0 data-[side=right]:sm:max-w-2xl">
+      <SheetContent className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
         <SheetHeader className="border-b pr-12">
-          <SheetTitle>Build {shortId(id)}</SheetTitle>
+          <SheetTitle>
+            Build <Ident>{shortId(id)}</Ident>
+          </SheetTitle>
           <SheetDescription>
             Build job details, output, and the submitted template spec.
           </SheetDescription>
@@ -193,7 +201,7 @@ function BuildJobContents({
           </p>
         )}
         {job.cleanupPending && !isBuildActive(job.status) && (
-          <p className="rounded-md bg-amber-500/10 p-3 text-amber-800 dark:text-amber-300">
+          <p className="rounded-md bg-muted p-3">
             Studio is still cleaning up build resources. This can continue after
             the job status changes.
           </p>
@@ -247,15 +255,16 @@ function BuildJobContents({
         </section>
       )}
 
-      <section className="space-y-2" aria-labelledby="build-log-heading">
-        <div className="flex items-center gap-2">
-          <h3 id="build-log-heading" className="font-medium">
-            Build log
-          </h3>
-          {log.isFetching && (
-            <span className="text-muted-foreground">Updating…</span>
-          )}
-        </div>
+      <section className="grid gap-2" aria-label="Build log">
+        <SectionHeader
+          title="Build log"
+          icon={TerminalWindowIcon}
+          actions={
+            log.isFetching ? (
+              <span className="text-muted-foreground">Updating…</span>
+            ) : undefined
+          }
+        />
         {log.isPending ? (
           <Spinner className="mx-auto block" />
         ) : log.isError ? (
@@ -272,7 +281,7 @@ function BuildJobContents({
         ) : (
           <>
             {log.data.truncated && (
-              <p className="text-amber-700 dark:text-amber-400">
+              <p className="text-muted-foreground">
                 Some output was omitted because this log reached its size limit
                 or output arrived too quickly.
               </p>
@@ -289,36 +298,37 @@ function BuildJobContents({
         )}
       </section>
 
-      <section className="space-y-2" aria-labelledby="build-source-heading">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 id="build-source-heading" className="font-medium">
-            Template spec
-          </h3>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onUseSpec(job.source)}
-            >
-              Use spec
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!isTemplateSourceDownloadable(job.source)}
-              onClick={() => {
-                setDownloadError(null)
-                try {
-                  downloadTemplateSource(job.source)
-                } catch {
-                  setDownloadError("Could not download the template spec.")
-                }
-              }}
-            >
-              Download YAML
-            </Button>
-          </div>
-        </div>
+      <section className="grid gap-2" aria-label="Template spec">
+        <SectionHeader
+          title="Template spec"
+          icon={FileTextIcon}
+          actions={
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onUseSpec(job.source)}
+              >
+                Use spec
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!isTemplateSourceDownloadable(job.source)}
+                onClick={() => {
+                  setDownloadError(null)
+                  try {
+                    downloadTemplateSource(job.source)
+                  } catch {
+                    setDownloadError("Could not download the template spec.")
+                  }
+                }}
+              >
+                Download YAML
+              </Button>
+            </>
+          }
+        />
         {downloadError && (
           <p role="alert" className="text-destructive">
             {downloadError}
