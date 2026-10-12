@@ -310,3 +310,13 @@ func TestCanonicalOutputHasFixedFieldOrderAndVersion(t *testing.T) {
 		t.Fatalf("nil and empty lists produced different canonical JSON: %s / %s", canonical, empty)
 	}
 }
+
+func TestStackNamesToolPinsOrBase(t *testing.T) {
+	if got := Stack(Spec{}); got != "base" {
+		t.Fatalf("Stack(no tools) = %q, want base", got)
+	}
+	spec := Spec{Tools: []ToolPin{{Name: "node", Version: "22"}, {Name: "python", Version: "3.13"}}}
+	if got := Stack(spec); got != "node-22+python-3.13" {
+		t.Fatalf("Stack() = %q, want node-22+python-3.13", got)
+	}
+}

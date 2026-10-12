@@ -113,6 +113,7 @@ type View struct {
 	CheckpointRestoreSupported bool           `json:"checkpointRestoreSupported"`
 	Agent                      *AgentInfo     `json:"agent,omitempty"`
 	Progress                   *Progress      `json:"progress,omitempty" doc:"The create or fork that runs or failed"`
+	TemplateName               string         `json:"templateName,omitempty" doc:"The display name of the template the sandbox runs, such as node-22+python-3.13@2"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -488,13 +489,17 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 	if err != nil {
 		return nil, err
 	}
+	names, err := m.Store.TemplateNames(ctx, envID)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]View, 0, len(recs))
 	for _, rec := range recs {
 		st, ok := statuses[VMName(rec)]
 		if !ok {
 			st = runtime.StatusAbsent
 		}
-		out = append(out, m.withAgent(View{Sandbox: rec, Status: st}))
+		out = append(out, m.withAgent(View{Sandbox: rec, Status: st, TemplateName: names[rec.TemplateID]}))
 	}
 	return out, nil
 }
@@ -702,7 +707,15 @@ func (m *Manager) view(ctx context.Context, rec store.Sandbox) (View, error) {
 	if err != nil {
 		return View{}, err
 	}
-	return m.withAgent(View{Sandbox: rec, Status: st}), nil
+	name := ""
+	if rec.TemplateID != "" {
+		names, err := m.Store.TemplateNames(ctx, rec.EnvironmentID)
+		if err != nil {
+			return View{}, err
+		}
+		name = names[rec.TemplateID]
+	}
+	return m.withAgent(View{Sandbox: rec, Status: st, TemplateName: name}), nil
 }
 
 func (m *Manager) withAgent(v View) View {

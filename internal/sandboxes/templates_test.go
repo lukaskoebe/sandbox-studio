@@ -140,7 +140,7 @@ func TestCreateFromTemplateUsesPinnedResourcesAndHostOnlyImageCredentials(t *tes
 	if err := f.manager.Wait(f.ctx, view.ID); err != nil {
 		t.Fatalf("template create: %v", err)
 	}
-	if view.TemplateID != template.ID || view.ID == f.sandbox.ID || resolver.calls != 1 {
+	if view.TemplateID != template.ID || view.TemplateName != "base@1" || view.ID == f.sandbox.ID || resolver.calls != 1 {
 		t.Fatalf("created view=%+v resolver calls=%d", view, resolver.calls)
 	}
 	if got := (resources.Resources{CPUs: int64(view.CPUs), MemoryMiB: int64(view.MemoryMiB), MaxMemoryMiB: int64(view.MaxMemoryMiB), WorkspaceMiB: int64(view.WorkspaceMiB), DockerMiB: int64(view.DockerMiB)}); got != wantResources {

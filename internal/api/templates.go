@@ -18,6 +18,7 @@ import (
 // template. Registry and build metadata stay on the host.
 type TemplateView struct {
 	ID            string              `json:"id"`
+	Name          string              `json:"name" doc:"The display name: the template's stack and version, such as node-22+python-3.13@2"`
 	EnvironmentID string              `json:"environmentId"`
 	Platform      string              `json:"platform"`
 	Resources     resources.Resources `json:"resources"`
@@ -40,12 +41,16 @@ func (s *Server) registerTemplates(api huma.API) {
 		if err != nil {
 			return nil, templateAPIError(err)
 		}
+		names, err := s.Store.TemplateNames(ctx, in.Env)
+		if err != nil {
+			return nil, templateAPIError(err)
+		}
 		out := make([]TemplateView, 0, len(templates))
 		for _, template := range templates {
 			if template.State != store.TemplateStateReady {
 				continue
 			}
-			view, err := templateView(template)
+			view, err := templateView(template, names[template.ID])
 			if err != nil {
 				return nil, templateAPIError(err)
 			}
@@ -64,7 +69,11 @@ func (s *Server) registerTemplates(api huma.API) {
 		if template.State != store.TemplateStateReady {
 			return nil, templateAPIError(store.ErrConflict)
 		}
-		view, err := templateView(template)
+		names, err := s.Store.TemplateNames(ctx, in.Env)
+		if err != nil {
+			return nil, templateAPIError(err)
+		}
+		view, err := templateView(template, names[template.ID])
 		return &struct{ Body TemplateView }{view}, templateAPIError(err)
 	})
 
@@ -108,13 +117,13 @@ func templateAPIError(err error) error {
 	}
 }
 
-func templateView(template store.Template) (TemplateView, error) {
+func templateView(template store.Template, name string) (TemplateView, error) {
 	spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
 	if err != nil {
 		return TemplateView{}, errors.New("template metadata is invalid")
 	}
 	return TemplateView{
-		ID: template.ID, EnvironmentID: template.EnvironmentID,
+		ID: template.ID, Name: name, EnvironmentID: template.EnvironmentID,
 		Platform: template.Platform, Resources: spec.Resources, CreatedAt: template.CreatedAt,
 	}, nil
 }

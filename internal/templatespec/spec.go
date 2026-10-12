@@ -56,6 +56,19 @@ type ToolPin struct {
 	Version string `json:"version"`
 }
 
+// Stack names a spec by its tool pins, such as node-22+python-3.13. A spec without
+// tools is base. Parsed and canonical specs keep their tools sorted by name.
+func Stack(spec Spec) string {
+	if len(spec.Tools) == 0 {
+		return "base"
+	}
+	pins := make([]string, len(spec.Tools))
+	for i, tool := range spec.Tools {
+		pins[i] = tool.Name + "-" + tool.Version
+	}
+	return strings.Join(pins, "+")
+}
+
 // ParseYAML parses one bounded YAML mapping, rejects unsupported YAML features,
 // and resolves resource defaults before returning the spec. Its errors are
 // *Error values listing every problem found, with source positions.

@@ -9,6 +9,8 @@ import (
 	"mime"
 	"strings"
 	"time"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
 
 // Template lifecycle states.
@@ -256,6 +258,38 @@ func (s *Store) Templates(ctx context.Context, envID string) ([]Template, error)
 		return nil, err
 	}
 	return out, nil
+}
+
+// TemplateNames gives the templates of an environment their display names, which
+// templates don't store. A name is the template's stack (templatespec.Stack) and its
+// version: the 1-based position among the environment's templates with that stack, in
+// creation order. Deleting an older template renumbers the ones after it. A template
+// whose spec doesn't parse has no name and counts for no version.
+func (s *Store) TemplateNames(ctx context.Context, envID string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, spec FROM templates WHERE environment_id = ? ORDER BY created_at, id", envID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	names := map[string]string{}
+	versions := map[string]int{}
+	for rows.Next() {
+		var id, spec string
+		if err := rows.Scan(&id, &spec); err != nil {
+			return nil, err
+		}
+		parsed, err := templatespec.ParseCanonicalJSON([]byte(spec))
+		if err != nil {
+			continue
+		}
+		stack := templatespec.Stack(parsed)
+		versions[stack]++
+		names[id] = fmt.Sprintf("%s@%d", stack, versions[stack])
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return names, nil
 }
 
 func validateTemplateArtifacts(artifacts []TemplateArtifact) error {
