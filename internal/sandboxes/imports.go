@@ -267,6 +267,7 @@ func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, man
 	if err := m.importInto(ctx, rt, imp, rec, blob, homeBlob); err != nil {
 		return m.removeFailedFork(ctx, rec, err)
 	}
+	m.recordEvent(ctx, eventFor(rec, store.EventCreate))
 	return nil
 }
 
