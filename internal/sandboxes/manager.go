@@ -366,6 +366,7 @@ func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved r
 		if err != nil {
 			return m.removeFailedVM(ctx, rec, err, image != nil)
 		}
+		m.recordEvent(ctx, eventFor(rec, store.EventCreate))
 		return nil
 	})
 	return m.acceptedView(ctx, rec), nil
@@ -599,8 +600,14 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 	}
 	m.Hub.Close(rec.ID)
 	m.Egress.Detach(rec.ID)
+	failed := m.failedCreation(id)
 	if err := m.Store.DeleteSandbox(ctx, envID, id); err != nil {
 		return err
+	}
+	if !failed {
+		tombstone := eventFor(rec, store.EventDelete)
+		tombstone.OtherSandboxID = rec.ForkedFromID
+		m.recordEvent(ctx, tombstone)
 	}
 	m.forgetProgress(ctx, id)
 	m.forget(envID, id)

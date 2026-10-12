@@ -56,7 +56,8 @@ removed and the source stays stopped, after it the source is removed. Lifecycle 
 that sandbox are refused until this succeeds.
 
 Docker images, containers and volumes are lost. Tmux sessions end. Checkpoints stay with
-their generation. With a home disk on the new generation, harness sessions and logins
+their generation. The catalog's switch to the new generation records a `rebase` event in the
+sandbox's history, see [lineage](sandboxes.md#lineage). With a home disk on the new generation, harness sessions and logins
 survive, and a chat resumes its agent session in the new generation
 ([chat mode](design/chat-mode.md)).
 
@@ -72,6 +73,7 @@ stopped again. The fork is booted. The request returns before the copy and boot 
 the fork is in state `creating` until it runs, and `failed` if a step fails. A failed fork
 keeps its record until it is deleted; see [creation progress](sandboxes.md#creation-progress).
 The source keeps its chats; the fork starts without any.
+On success the fork and its source each record a `fork` event in their history, see [lineage](sandboxes.md#lineage).
 
 ## Limits
 

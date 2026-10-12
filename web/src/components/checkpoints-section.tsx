@@ -346,7 +346,8 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
   )
 }
 
-function suggestedName(existingNames: string[] = []) {
+/** A checkpoint name no existing one has, from the time it is saved. */
+export function suggestedName(existingNames: string[] = []) {
   const base = `Checkpoint ${new Date()
     .toISOString()
     .slice(0, 19)

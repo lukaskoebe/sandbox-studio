@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
+import { LineageTree } from "@/components/lineage-tree"
 import { PageHeader } from "@/components/page-header"
 import { SandboxOwner } from "@/components/teammate-avatar"
 import { StatusBadge } from "@/components/status-badge"
@@ -119,6 +120,20 @@ function Overview() {
               </Button>
             </EmptyContent>
           </Empty>
+        )}
+        {/* lineage */}
+        {!!sandboxes.data?.length && (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Family</CardTitle>
+              <CardDescription>
+                Where each sandbox came from, grouped by template.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <LineageTree environmentId={env} compact />
+            </CardContent>
+          </Card>
         )}
       </ScrollArea>
       <CreateSandboxDialog

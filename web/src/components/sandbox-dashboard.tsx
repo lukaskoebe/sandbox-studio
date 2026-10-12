@@ -10,6 +10,7 @@ import {
 import { CheckpointsSection } from "@/components/checkpoints-section"
 import { RecentConnections } from "@/components/connections-panel"
 import { StartButton, StopButton } from "@/components/sandbox-lifecycle"
+import { LineageTimeline } from "@/components/lineage-timeline"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import { SandboxProgress } from "@/components/sandbox-progress"
@@ -69,7 +70,9 @@ export function SandboxDashboard() {
             <RecentConnections env={env} id={sb.id} />
           </Section>
         </div>
-        {/* lineage */}
+        <Section title="History">
+          <LineageTimeline environmentId={env} sandboxId={sb.id} />
+        </Section>
         {!building && (
           <div className="rounded-lg border p-4">
             <CheckpointsSection env={env} sandbox={sb} />

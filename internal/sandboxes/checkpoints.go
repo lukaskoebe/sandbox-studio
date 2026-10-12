@@ -84,6 +84,9 @@ func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) 
 		}
 	}
 	checkpoint.State = store.CheckpointStateReady
+	event := store.SandboxEvent{EnvironmentID: envID, SandboxID: id, Kind: store.EventCheckpoint, Generation: checkpoint.Generation,
+		Name: sb.Name, CheckpointID: checkpoint.ID, CheckpointName: checkpoint.Name}
+	m.recordEvent(ctx, event)
 	return checkpoint, nil
 }
 

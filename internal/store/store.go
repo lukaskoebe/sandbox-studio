@@ -226,21 +226,31 @@ type Sandbox struct {
 	// Kind is empty for ordinary sandboxes and SandboxKindBrowser for a teammate's browser
 	// VM, which Studio drives and never shows as a sandbox.
 	Kind string `json:"-"`
+	// ForkedFromID is the sandbox this one was forked from, at ForkedFromGeneration, at
+	// ForkedAt; empty for sandboxes that weren't forked. There is no foreign key: the source
+	// may be deleted, and its delete event keeps its name.
+	ForkedFromID         string    `json:"-"`
+	ForkedFromGeneration int       `json:"-"`
+	ForkedAt             time.Time `json:"-"`
 }
 
 // SandboxKindBrowser marks a teammate's browser VM (internal/browser).
 const SandboxKindBrowser = "browser"
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0)"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
 const firstDNSPort = 17100
 
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
-	var created int64
-	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind)
+	var created, forkedAt int64
+	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind,
+		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt)
 	sb.CreatedAt = time.Unix(created, 0)
+	if forkedAt != 0 {
+		sb.ForkedAt = time.Unix(forkedAt, 0)
+	}
 	return sb, err
 }
 
@@ -295,17 +305,29 @@ func insertSandbox(ctx context.Context, tx *sql.Tx, sb Sandbox) (Sandbox, error)
 		}
 	}
 	sb.ID, sb.Generation, sb.CreatedAt = NewID(), 1, time.Unix(now(), 0)
+	if sb.ForkedFromID != "" {
+		// A fork is made when its record is: the two times are the same.
+		sb.ForkedAt = sb.CreatedAt
+	}
 	port, err := freeDNSPort(ctx, tx)
 	if err != nil {
 		return sb, err
 	}
 	sb.DNSPort = port
-	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, teammate_id, kind) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)",
-		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort, sb.TeammateID, sb.Kind)
+	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, teammate_id, kind, forked_from_sandbox_id, forked_from_generation, forked_at) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, 0))",
+		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort, sb.TeammateID, sb.Kind,
+		sb.ForkedFromID, sb.ForkedFromGeneration, forkedAtUnix(sb.ForkedAt))
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}
 	return sb, err
+}
+
+func forkedAtUnix(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
 }
 
 // Sandboxes lists the sandboxes of an environment.

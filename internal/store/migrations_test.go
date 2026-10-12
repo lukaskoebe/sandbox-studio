@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -301,5 +302,68 @@ func TestMigrateSecretScopes(t *testing.T) {
 	var leftover int
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_schema WHERE name = 'secrets_old'").Scan(&leftover); err != nil || leftover != 0 {
 		t.Fatalf("secrets_old left behind: %d %v", leftover, err)
+	}
+}
+
+// Sandboxes and checkpoints from before lineage get a create event each, and a checkpoint
+// event for each ready checkpoint. Build and browser VMs get none.
+func TestMigrateSandboxLineage(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 22); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	tpl := createReadyTemplate(t, ctx, s, "env", "1")
+	for _, q := range []string{
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, template_id) VALUES ('a', 'env', 'api', 1, 512, 1024, 0, 10, '` + tpl.ID + `')`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, generation) VALUES ('b', 'env', 'web', 1, 512, 1024, 0, 20, 2)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, kind) VALUES ('br', 'env', 'browser-x', 1, 512, 1024, 0, 15, 'browser')`,
+		`INSERT INTO checkpoints (id, environment_id, sandbox_id, name, state, generation, created_at) VALUES ('cp1', 'env', 'a', 'snap', 'ready', 1, 30), ('cp2', 'env', 'a', 'pending', 'creating', 1, 31)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := db.QueryContext(ctx, "SELECT sandbox_id, kind, generation, name, template_id, checkpoint_name FROM sandbox_events ORDER BY id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for rows.Next() {
+		var id, kind, name, template, checkpoint string
+		var generation int
+		if err := rows.Scan(&id, &kind, &generation, &name, &template, &checkpoint); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, fmt.Sprint(id, kind, generation, name, template, checkpoint))
+	}
+	rows.Close()
+	want := []string{
+		fmt.Sprint("a", "create", 1, "api", tpl.ID, ""),
+		fmt.Sprint("b", "create", 1, "web", "", ""),
+		fmt.Sprint("a", "checkpoint", 1, "api", "", "snap"),
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("backfilled events = %v, want %v", got, want)
+	}
+	events, err := s.SandboxEvents(ctx, "env", "a")
+	if err != nil || len(events) != 2 || events[0].Kind != EventCreate || events[1].CheckpointID != "cp1" {
+		t.Fatalf("events of a = %+v, %v", events, err)
+	}
+	if sb, err := s.Sandbox(ctx, "env", "a"); err != nil || sb.ForkedFromID != "" || !sb.ForkedAt.IsZero() {
+		t.Fatalf("sandbox after migrating = %+v, %v", sb, err)
 	}
 }

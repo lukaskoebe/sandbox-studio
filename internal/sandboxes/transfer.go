@@ -178,6 +178,7 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 		EnvironmentID: envID, TemplateID: sb.TemplateID, TeammateID: sb.TeammateID, Name: name,
 		CPUs: sb.CPUs, MemoryMiB: sb.MemoryMiB, MaxMemoryMiB: sb.MaxMemoryMiB,
 		WorkspaceMiB: sb.WorkspaceMiB, DockerMiB: sb.DockerMiB,
+		ForkedFromID: sb.ID, ForkedFromGeneration: sb.Generation,
 	})
 	if err != nil {
 		return View{}, err
@@ -196,6 +197,7 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 		if err := m.forkInto(ctx, rt, sb, rec, image, sourceRunning, home); err != nil {
 			return m.removeFailedVM(ctx, rec, err, false)
 		}
+		m.recordFork(ctx, sb, rec)
 		return nil
 	})
 	return m.acceptedView(ctx, rec), nil
