@@ -44,7 +44,7 @@ test("a secret reaches the guest only as its placeholder", async ({
   await expect
     .poll(async () => (await api.guest(id)).env[name])
     .toBe(placeholder)
-  await page.goto(`/e/${env}/sandboxes/${id}`)
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
   const term = terminal(page)
   await term.run(`printenv ${name}`)
   await expect(term.line(placeholder)).toHaveCount(1)

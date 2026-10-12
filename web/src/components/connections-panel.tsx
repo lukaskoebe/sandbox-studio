@@ -1,7 +1,5 @@
-import { useState } from "react"
 import { Link } from "@tanstack/react-router"
-import { ArrowsLeftRightIcon, PlugsConnectedIcon } from "@phosphor-icons/react"
-import { Button } from "@/components/ui/button"
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react"
 import {
   Empty,
   EmptyDescription,
@@ -9,14 +7,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -40,44 +30,87 @@ import {
 } from "@/lib/api/client"
 import { cn, formatBytes, hostPort } from "@/lib/utils"
 
-/** The sandbox's recent connections, from a sheet in its header. */
-export function ConnectionsSheet({
+/** The body of a sandbox's Connections panel: where it connects, newest first. */
+export function ConnectionsPanel({
   env,
   sandbox,
 }: {
   env: string
   sandbox: Sandbox
 }) {
-  const [open, setOpen] = useState(false)
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger render={<Button variant="ghost" size="sm" />}>
-        <PlugsConnectedIcon />
-        Connections
-      </SheetTrigger>
-      <SheetContent className="data-[side=right]:sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>Connections</SheetTitle>
-          <SheetDescription>
-            Where {sandbox.name} connects, newest first. Rules and requests are
-            on the{" "}
-            <Link
-              to="/e/$env/network"
-              params={{ env }}
-              className="underline underline-offset-4 hover:text-foreground"
-            >
-              Network page
-            </Link>
-            .
-          </SheetDescription>
-        </SheetHeader>
-        <ConnectionLog env={env} id={sandbox.id} />
-      </SheetContent>
-    </Sheet>
+    <>
+      <p className="px-4 pt-3 pb-2 text-xs text-muted-foreground">
+        Where {sandbox.name} connects, newest first. Rules and requests are on
+        the{" "}
+        <Link
+          to="/e/$env/network"
+          params={{ env }}
+          className="underline underline-offset-4 hover:text-foreground"
+        >
+          Network page
+        </Link>
+        .
+      </p>
+      <ConnectionLog env={env} id={sandbox.id} />
+    </>
   )
 }
 
-/** Mounted only while the sheet is open, so the log refreshes only then. */
+/**
+ * The newest connections of a sandbox, for its dashboard. The full log is in the
+ * Connections panel.
+ */
+export function RecentConnections({
+  env,
+  id,
+  limit = 5,
+}: {
+  env: string
+  id: string
+  limit?: number
+}) {
+  const conns = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/connections",
+    { params: { path: { env, id } } },
+    { refetchInterval: 5000 }
+  )
+  if (conns.isPending) return <Spinner />
+  if (conns.isError) {
+    return (
+      <p className="text-xs text-destructive">{errorMessage(conns.error)}</p>
+    )
+  }
+  const list = conns.data ?? []
+  if (list.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Connections from this sandbox show up here as it makes them.
+      </p>
+    )
+  }
+  return (
+    <ul className="divide-y">
+      {list.slice(0, limit).map((c) => (
+        <li key={c.id} className="flex items-center gap-2 py-2 text-xs">
+          <span className="min-w-0 flex-1 truncate font-mono">
+            {hostPort(c.host, c.port)}
+          </span>
+          <VerdictBadge conn={c} />
+          <time
+            dateTime={c.started}
+            className="shrink-0 text-muted-foreground tabular-nums"
+          >
+            {new Date(c.started).toLocaleTimeString()}
+          </time>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Mounted only while the panel is open, so the log refreshes only then. */
 function ConnectionLog({ env, id }: { env: string; id: string }) {
   const conns = $api.useQuery(
     "get",
@@ -89,7 +122,7 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
   if (conns.isPending) return <Spinner className="m-auto" />
   if (conns.isError) {
     return (
-      <p className="px-6 text-xs text-destructive">
+      <p className="px-4 text-xs text-destructive">
         {errorMessage(conns.error)}
       </p>
     )
@@ -97,7 +130,7 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
   const list = conns.data ?? []
   if (list.length === 0) {
     return (
-      <Empty className="mx-6 mb-6">
+      <Empty className="mx-4 mb-4">
         <EmptyHeader>
           <EmptyTitle>No connections yet</EmptyTitle>
           <EmptyDescription>
@@ -109,14 +142,14 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
   }
 
   return (
-    <ScrollArea className="min-h-0 flex-1" viewportClassName="px-6 pb-6">
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="px-4 pb-4">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Time</TableHead>
             <TableHead>Destination</TableHead>
             <TableHead>Verdict</TableHead>
-            <TableHead>Source</TableHead>
+            <TableHead className="hidden sm:table-cell">Source</TableHead>
             <TableHead className="text-right">Traffic</TableHead>
           </TableRow>
         </TableHeader>
@@ -126,7 +159,7 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
               <TableCell className="text-muted-foreground tabular-nums">
                 {new Date(c.started).toLocaleTimeString()}
               </TableCell>
-              <TableCell className="font-mono">
+              <TableCell className="font-mono break-all">
                 {hostPort(c.host, c.port)}
               </TableCell>
               <TableCell>
@@ -135,7 +168,7 @@ function ConnectionLog({ env, id }: { env: string; id: string }) {
                   {c.intercepted && <InterceptedMarker conn={c} />}
                 </div>
               </TableCell>
-              <TableCell className="text-muted-foreground">
+              <TableCell className="hidden text-muted-foreground sm:table-cell">
                 {c.source}
               </TableCell>
               <TableCell className="text-right text-muted-foreground tabular-nums">

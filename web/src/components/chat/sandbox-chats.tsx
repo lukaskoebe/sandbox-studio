@@ -16,9 +16,18 @@ import { formatAge } from "@/lib/utils"
 
 /**
  * The chats of a sandbox next to its agent sessions, so chat and terminal are each one
- * click away: a new chat, or one of the sandbox's chats.
+ * click away: a new chat, or one of the sandbox's chats, opened in the workspace.
  */
-export function SandboxChats({ env, id }: { env: string; id: string }) {
+export function SandboxChats({
+  env,
+  id,
+  onOpen,
+}: {
+  env: string
+  id: string
+  /** Opens a chat in the workspace. */
+  onOpen: (chat: string) => void
+}) {
   const chats = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/chats",
@@ -54,15 +63,7 @@ export function SandboxChats({ env, id }: { env: string; id: string }) {
             <DropdownMenuGroup>
               <DropdownMenuLabel>Chats in this sandbox</DropdownMenuLabel>
               {list.slice(0, 10).map((c) => (
-                <DropdownMenuItem
-                  key={c.id}
-                  render={
-                    <Link
-                      to="/e/$env/chats/$chat"
-                      params={{ env, chat: c.id }}
-                    />
-                  }
-                >
+                <DropdownMenuItem key={c.id} onClick={() => onOpen(c.id)}>
                   <span className="min-w-0 flex-1 truncate">
                     {chatTitle(c)}
                   </span>

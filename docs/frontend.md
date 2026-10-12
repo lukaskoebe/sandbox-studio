@@ -24,7 +24,8 @@ to an environment.
 | Route | Page |
 |---|---|
 | `/e/$env` | Home: the environment's sandboxes, create, import |
-| `/e/$env/sandboxes/$id` | one sandbox: agent view (chat or terminal, chosen on first open), terminals, previews, browser panel, checkpoints, connections, fork, rebase, export, suspend |
+| `/e/$env/sandboxes/$id` | one sandbox's dashboard: status, owner, resources, ports, recent connections, checkpoints, chats and terminal sessions (each opens in the workspace), and the lineage slot (`{/* lineage */}`) |
+| `/e/$env/sandboxes/$id/work` | its workspace: terminal tabs and chats in one strip, the picked one in full, and one side panel. `?terminal=` and `?chat=` pick a tab; `?panel=` names the open panel (browser, connections or files) |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)) |
 | `/e/$env/network/rules`, `/requests`, `/activity` | network rules (filters in the URL, grouped by registrable domain), requests waiting for a decision, decided requests; `/e/$env/network` opens requests when any wait, else rules |
 | `/e/$env/secrets` | secrets |
@@ -53,6 +54,21 @@ memory share, or a tool permission in one of its chats), working while one of it
 running, and idle otherwise. The Settings pages for an environment name it in their header.
 The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
 on every page.
+
+Both sandbox pages share a header: the page switch (Dashboard, Workspace) and the options
+menu (fork, rebase, export, suspend or resume, stop, delete). The dashboard's start and stop
+buttons and the workspace's tabs are the everyday path; the menu holds the rest.
+
+Side panels (`components/side-panel.tsx`) hold what you watch next to the terminal or chat:
+the teammate browser, connections, and files with changes. The chat page uses the same panel
+for its workspace. One panel is open at a time, and on the workspace the URL names it. A
+panel is resizable from its left edge on wide screens (1024px and up) and covers the screen
+below that. Its width is remembered per page in local storage (`studio.panel.sandbox`,
+`studio.panel.chat`). Sheets remain only for detail opened from outside its context: the
+git push review, memory conflicts and the build log of an approval card.
+
+Links from before the dashboard and workspace split that carry workspace parameters
+(`?terminal=`, `?session=`, `?chat=`) redirect the dashboard to `/work`.
 
 ## Development
 

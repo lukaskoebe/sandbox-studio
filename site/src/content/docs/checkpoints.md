@@ -7,11 +7,11 @@ A checkpoint is a snapshot of a sandbox's disks: its root filesystem, `/workspac
 
 You can save a checkpoint while a sandbox is running or stopped. If it is running, the snapshot is crash-consistent: files being written may be incomplete. For application-level consistency, stop the application and sandbox before saving.
 
-![The Checkpoints panel, with save and delete controls](../../assets/screenshots/checkpoints.jpg)
+![Checkpoints, with save and delete controls](../../assets/screenshots/checkpoints.jpg)
 
 ## Save and delete
 
-Open **Checkpoints** from the sandbox toolbar, enter a name, and select **Save**. Studio records checkpoints in order; a later checkpoint can depend on an earlier one. Delete newer checkpoints before their parents.
+The **Checkpoints** section of the sandbox's dashboard lists them. Enter a name and select **Save**. Studio records checkpoints in order; a later checkpoint can depend on an earlier one. Delete newer checkpoints before their parents.
 
 Deleting a checkpoint removes only that snapshot. It does not change the sandbox.
 

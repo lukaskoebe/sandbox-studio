@@ -109,18 +109,20 @@ function reduce(s: State, a: Action): State {
 /**
  * A chat kept current from its stream: getChat for the log, then the SSE stream from the
  * log's rev. Every event carries its rev; after a disconnect the stream reopens from the
- * last one, so nothing is missed and nothing is applied twice out of order.
+ * last one, so nothing is missed and nothing is applied twice out of order. Without a chat
+ * id there is nothing to follow, so the log stays empty.
  */
-export function useChat(env: string, chatId: string) {
+export function useChat(env: string, chatId: string | undefined) {
   const [state, dispatch] = useReducer(reduce, initial)
 
   useEffect(() => {
+    dispatch({ type: "reset" })
+    if (!chatId) return
     // An object, so the async callbacks see the cleanup's write.
     const done = { closed: false }
     let source: EventSource | undefined
     let retry: ReturnType<typeof setTimeout> | undefined
     let rev = 0
-    dispatch({ type: "reset" })
 
     const connect = () => {
       if (done.closed) return

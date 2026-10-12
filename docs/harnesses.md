@@ -36,7 +36,7 @@ Then Studio:
      option goes back to the default, so a harness that exits later ends its session.
 
 `GET .../sessions` lists the tagged tmux sessions. `DELETE .../sessions/{name}` ends one.
-Sessions are terminals too, so the sandbox page opens them as terminal tabs.
+Sessions are terminals too, so the sandbox workspace opens them as terminal tabs.
 
 **No file and no environment variable contains a real key.** The adapters get the
 placeholder and never see the secret. Config files name only the variable (`{env:VAR}`,

@@ -1,55 +1,31 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  BroadcastIcon,
-  FolderIcon,
-  GitDiffIcon,
-  XIcon,
-} from "@phosphor-icons/react"
+import { BroadcastIcon, FolderIcon, GitDiffIcon } from "@phosphor-icons/react"
 import { ChangesPanel } from "@/components/chat/changes-panel"
 import { FilesPanel } from "@/components/chat/files-panel"
 import { PreviewPanel } from "@/components/chat/preview-panel"
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+import { SidePanel, useWideScreen } from "@/components/side-panel"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { changeCount, type Chat, type ChatTurn } from "@/lib/chats"
 
 export type PanelTab = "changes" | "files" | "preview"
 
-const wideQuery = "(min-width: 1024px)"
 const storeKey = "studio.chatPanel"
-
-function useWide() {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mql = window.matchMedia(wideQuery)
-      mql.addEventListener("change", onChange)
-      return () => mql.removeEventListener("change", onChange)
-    },
-    () => window.matchMedia(wideQuery).matches
-  )
-}
 
 /**
  * Whether the workspace panel is open, which tab it shows and whose changes. Wide screens
  * remember whether it was open; narrow ones open it on demand as a sheet.
  */
 export function useWorkspacePanel() {
-  const wide = useWide()
+  const wide = useWideScreen()
   const [state, setState] = useState<{
     open: boolean
     tab: PanelTab
     turnId?: string
   }>(() => ({
     open:
-      window.matchMedia(wideQuery).matches &&
+      window.matchMedia("(min-width: 1024px)").matches &&
       localStorage.getItem(storeKey) !== "closed",
     tab: "changes",
   }))
@@ -74,8 +50,8 @@ export function useWorkspacePanel() {
 export type WorkspacePanelState = ReturnType<typeof useWorkspacePanel>
 
 /**
- * The chat's side panel: Changes, Files and Preview of the chat's sandbox. A column next to
- * the chat on wide screens, a sheet on narrow ones.
+ * The chat's side panel: Changes, Files and Preview of the chat's sandbox. Opened from the
+ * chat header; the side panel sizes itself and goes full screen on narrow screens.
  */
 export function WorkspacePanel({
   env,
@@ -90,63 +66,50 @@ export function WorkspacePanel({
   label: (t: ChatTurn) => string
   panel: WorkspacePanelState
 }) {
-  const body = (
-    <PanelTabs
-      env={env}
-      chat={chat}
-      turns={turns}
-      label={label}
-      panel={panel}
-    />
-  )
-  if (!panel.wide) {
-    return (
-      <Sheet open={panel.open} onOpenChange={panel.setOpen}>
-        <SheetContent className="w-full data-[side=right]:sm:max-w-lg">
-          <SheetHeader className="pb-0">
-            <SheetTitle>Workspace</SheetTitle>
-            <SheetDescription>
-              What your teammate changed, the sandbox's files, and its running
-              app.
-            </SheetDescription>
-          </SheetHeader>
-          {body}
-        </SheetContent>
-      </Sheet>
-    )
-  }
   if (!panel.open) return null
   return (
-    <aside
-      aria-label="Workspace"
-      className="relative flex min-h-0 w-96 shrink-0 flex-col border-l xl:w-[30rem] 2xl:w-[38rem]"
+    <SidePanel
+      label="Workspace"
+      title="Workspace"
+      storageKey="studio.panel.chat"
+      onClose={() => panel.setOpen(false)}
     >
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        title="Close the panel"
-        className="absolute top-2.5 right-2"
-        onClick={() => panel.setOpen(false)}
-      >
-        <XIcon />
-      </Button>
-      {body}
-    </aside>
+      <WorkspaceTabs
+        env={env}
+        sandboxId={chat.sandboxId}
+        chat={chat}
+        turns={turns}
+        label={label}
+        panel={panel}
+      />
+    </SidePanel>
   )
 }
 
-function PanelTabs({
+/** The tab state a workspace needs; the chat's panel state has it, so does the sandbox's. */
+export type WorkspaceTabsState = Pick<
+  WorkspacePanelState,
+  "tab" | "setTab" | "turnId" | "setTurn"
+>
+
+/**
+ * Changes, Files and Preview of a sandbox. Changes belong to a chat, so it is empty without
+ * one; Files and Preview show the sandbox as it is.
+ */
+export function WorkspaceTabs({
   env,
+  sandboxId,
   chat,
-  turns,
+  turns = [],
   label,
   panel,
 }: {
   env: string
-  chat: Chat
-  turns: ChatTurn[]
+  sandboxId: string
+  chat?: Chat
+  turns?: ChatTurn[]
   label: (t: ChatTurn) => string
-  panel: WorkspacePanelState
+  panel: WorkspaceTabsState
 }) {
   const queryClient = useQueryClient()
   const [where, setWhere] = useState<{ dir: string; file?: string }>({
@@ -183,7 +146,7 @@ function PanelTabs({
       onValueChange={(v: PanelTab) => panel.setTab(v)}
       className="min-h-0 flex-1 gap-0"
     >
-      <div className="flex h-12 shrink-0 items-center px-3 pr-10">
+      <div className="flex h-10 shrink-0 items-center px-3">
         <TabsList>
           <TabsTrigger value="changes">
             <GitDiffIcon />
@@ -201,21 +164,27 @@ function PanelTabs({
       </div>
       <TabsContent value="changes" className="flex min-h-0 flex-col">
         <ScrollArea className="min-h-0 flex-1" viewportClassName="px-3 pb-3">
-          <ChangesPanel
-            env={env}
-            chatId={chat.id}
-            turns={changedTurns}
-            turnId={turn?.id}
-            onTurnChange={panel.setTurn}
-            label={label}
-          />
+          {chat ? (
+            <ChangesPanel
+              env={env}
+              chatId={chat.id}
+              turns={changedTurns}
+              turnId={turn?.id}
+              onTurnChange={panel.setTurn}
+              label={label}
+            />
+          ) : (
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+              Changes show up here for a chat, once its teammate edits files.
+            </p>
+          )}
         </ScrollArea>
       </TabsContent>
       <TabsContent value="files" className="flex min-h-0 flex-col">
         <ScrollArea className="min-h-0 flex-1" viewportClassName="px-3 pb-3">
           <FilesPanel
             env={env}
-            sandboxId={chat.sandboxId}
+            sandboxId={sandboxId}
             dir={where.dir}
             file={where.file}
             onOpen={(dir, file) => setWhere({ dir, file })}
@@ -224,11 +193,7 @@ function PanelTabs({
         </ScrollArea>
       </TabsContent>
       <TabsContent value="preview" className="flex min-h-0 flex-col px-3 pb-3">
-        <PreviewPanel
-          env={env}
-          sandboxId={chat.sandboxId}
-          reloadKey={reloadKey}
-        />
+        <PreviewPanel env={env} sandboxId={sandboxId} reloadKey={reloadKey} />
       </TabsContent>
     </Tabs>
   )

@@ -39,6 +39,8 @@ import { Route as EEnvSettingsRuntimeRouteImport } from './routes/e.$env.setting
 import { Route as EEnvSettingsTemplatesRouteImport } from './routes/e.$env.settings.templates'
 import { Route as EEnvTeammatesIndexRouteImport } from './routes/e.$env.teammates.index'
 import { Route as EEnvTeammatesIdRouteImport } from './routes/e.$env.teammates.$id'
+import { Route as EEnvSandboxesIdIndexRouteImport } from './routes/e.$env.sandboxes.$id.index'
+import { Route as EEnvSandboxesIdWorkRouteImport } from './routes/e.$env.sandboxes.$id.work'
 import { Route as EEnvTeammatesIdIndexRouteImport } from './routes/e.$env.teammates.$id.index'
 import { Route as EEnvTeammatesIdBrowserRouteImport } from './routes/e.$env.teammates.$id.browser'
 import { Route as EEnvTeammatesIdChatsRouteImport } from './routes/e.$env.teammates.$id.chats'
@@ -195,6 +197,16 @@ const EEnvTeammatesIdRoute = EEnvTeammatesIdRouteImport.update({
   path: '/teammates/$id',
   getParentRoute: () => EEnvRoute,
 } as any)
+const EEnvSandboxesIdIndexRoute = EEnvSandboxesIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EEnvSandboxesIdRoute,
+} as any)
+const EEnvSandboxesIdWorkRoute = EEnvSandboxesIdWorkRouteImport.update({
+  id: '/work',
+  path: '/work',
+  getParentRoute: () => EEnvSandboxesIdRoute,
+} as any)
 const EEnvTeammatesIdIndexRoute = EEnvTeammatesIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -241,7 +253,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
-  '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRoute
+  '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRouteWithChildren
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
@@ -252,10 +264,12 @@ export interface FileRoutesByFullPath {
   '/e/$env/network/': typeof EEnvNetworkIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
+  '/e/$env/sandboxes/$id/work': typeof EEnvSandboxesIdWorkRoute
   '/e/$env/teammates/$id/browser': typeof EEnvTeammatesIdBrowserRoute
   '/e/$env/teammates/$id/chats': typeof EEnvTeammatesIdChatsRoute
   '/e/$env/teammates/$id/memory': typeof EEnvTeammatesIdMemoryRoute
   '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
+  '/e/$env/sandboxes/$id/': typeof EEnvSandboxesIdIndexRoute
   '/e/$env/teammates/$id/': typeof EEnvTeammatesIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -274,7 +288,6 @@ export interface FileRoutesByTo {
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
-  '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRoute
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
@@ -284,10 +297,12 @@ export interface FileRoutesByTo {
   '/e/$env/network': typeof EEnvNetworkIndexRoute
   '/e/$env/settings': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates': typeof EEnvTeammatesIndexRoute
+  '/e/$env/sandboxes/$id/work': typeof EEnvSandboxesIdWorkRoute
   '/e/$env/teammates/$id/browser': typeof EEnvTeammatesIdBrowserRoute
   '/e/$env/teammates/$id/chats': typeof EEnvTeammatesIdChatsRoute
   '/e/$env/teammates/$id/memory': typeof EEnvTeammatesIdMemoryRoute
   '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
+  '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdIndexRoute
   '/e/$env/teammates/$id': typeof EEnvTeammatesIdIndexRoute
 }
 export interface FileRoutesById {
@@ -311,7 +326,7 @@ export interface FileRoutesById {
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
-  '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRoute
+  '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRouteWithChildren
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
@@ -322,10 +337,12 @@ export interface FileRoutesById {
   '/e/$env/network/': typeof EEnvNetworkIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
+  '/e/$env/sandboxes/$id/work': typeof EEnvSandboxesIdWorkRoute
   '/e/$env/teammates/$id/browser': typeof EEnvTeammatesIdBrowserRoute
   '/e/$env/teammates/$id/chats': typeof EEnvTeammatesIdChatsRoute
   '/e/$env/teammates/$id/memory': typeof EEnvTeammatesIdMemoryRoute
   '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
+  '/e/$env/sandboxes/$id/': typeof EEnvSandboxesIdIndexRoute
   '/e/$env/teammates/$id/': typeof EEnvTeammatesIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -361,10 +378,12 @@ export interface FileRouteTypes {
     | '/e/$env/network/'
     | '/e/$env/settings/'
     | '/e/$env/teammates/'
+    | '/e/$env/sandboxes/$id/work'
     | '/e/$env/teammates/$id/browser'
     | '/e/$env/teammates/$id/chats'
     | '/e/$env/teammates/$id/memory'
     | '/e/$env/teammates/$id/settings'
+    | '/e/$env/sandboxes/$id/'
     | '/e/$env/teammates/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -383,7 +402,6 @@ export interface FileRouteTypes {
     | '/e/$env/network/activity'
     | '/e/$env/network/requests'
     | '/e/$env/network/rules'
-    | '/e/$env/sandboxes/$id'
     | '/e/$env/settings/general'
     | '/e/$env/settings/git'
     | '/e/$env/settings/providers'
@@ -393,10 +411,12 @@ export interface FileRouteTypes {
     | '/e/$env/network'
     | '/e/$env/settings'
     | '/e/$env/teammates'
+    | '/e/$env/sandboxes/$id/work'
     | '/e/$env/teammates/$id/browser'
     | '/e/$env/teammates/$id/chats'
     | '/e/$env/teammates/$id/memory'
     | '/e/$env/teammates/$id/settings'
+    | '/e/$env/sandboxes/$id'
     | '/e/$env/teammates/$id'
   id:
     | '__root__'
@@ -430,10 +450,12 @@ export interface FileRouteTypes {
     | '/e/$env/network/'
     | '/e/$env/settings/'
     | '/e/$env/teammates/'
+    | '/e/$env/sandboxes/$id/work'
     | '/e/$env/teammates/$id/browser'
     | '/e/$env/teammates/$id/chats'
     | '/e/$env/teammates/$id/memory'
     | '/e/$env/teammates/$id/settings'
+    | '/e/$env/sandboxes/$id/'
     | '/e/$env/teammates/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -655,6 +677,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvTeammatesIdRouteImport
       parentRoute: typeof EEnvRoute
     }
+    '/e/$env/sandboxes/$id/': {
+      id: '/e/$env/sandboxes/$id/'
+      path: '/'
+      fullPath: '/e/$env/sandboxes/$id/'
+      preLoaderRoute: typeof EEnvSandboxesIdIndexRouteImport
+      parentRoute: typeof EEnvSandboxesIdRoute
+    }
+    '/e/$env/sandboxes/$id/work': {
+      id: '/e/$env/sandboxes/$id/work'
+      path: '/work'
+      fullPath: '/e/$env/sandboxes/$id/work'
+      preLoaderRoute: typeof EEnvSandboxesIdWorkRouteImport
+      parentRoute: typeof EEnvSandboxesIdRoute
+    }
     '/e/$env/teammates/$id/': {
       id: '/e/$env/teammates/$id/'
       path: '/'
@@ -746,6 +782,20 @@ const EEnvSettingsRouteWithChildren = EEnvSettingsRoute._addFileChildren(
   EEnvSettingsRouteChildren,
 )
 
+interface EEnvSandboxesIdRouteChildren {
+  EEnvSandboxesIdWorkRoute: typeof EEnvSandboxesIdWorkRoute
+  EEnvSandboxesIdIndexRoute: typeof EEnvSandboxesIdIndexRoute
+}
+
+const EEnvSandboxesIdRouteChildren: EEnvSandboxesIdRouteChildren = {
+  EEnvSandboxesIdWorkRoute: EEnvSandboxesIdWorkRoute,
+  EEnvSandboxesIdIndexRoute: EEnvSandboxesIdIndexRoute,
+}
+
+const EEnvSandboxesIdRouteWithChildren = EEnvSandboxesIdRoute._addFileChildren(
+  EEnvSandboxesIdRouteChildren,
+)
+
 interface EEnvTeammatesIdRouteChildren {
   EEnvTeammatesIdBrowserRoute: typeof EEnvTeammatesIdBrowserRoute
   EEnvTeammatesIdChatsRoute: typeof EEnvTeammatesIdChatsRoute
@@ -778,7 +828,7 @@ interface EEnvRouteChildren {
   EEnvIndexRoute: typeof EEnvIndexRoute
   EEnvChatsChatRoute: typeof EEnvChatsChatRoute
   EEnvChatsNewRoute: typeof EEnvChatsNewRoute
-  EEnvSandboxesIdRoute: typeof EEnvSandboxesIdRoute
+  EEnvSandboxesIdRoute: typeof EEnvSandboxesIdRouteWithChildren
   EEnvTeammatesIdRoute: typeof EEnvTeammatesIdRouteWithChildren
   EEnvChatsIndexRoute: typeof EEnvChatsIndexRoute
   EEnvTeammatesIndexRoute: typeof EEnvTeammatesIndexRoute
@@ -796,7 +846,7 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvIndexRoute: EEnvIndexRoute,
   EEnvChatsChatRoute: EEnvChatsChatRoute,
   EEnvChatsNewRoute: EEnvChatsNewRoute,
-  EEnvSandboxesIdRoute: EEnvSandboxesIdRoute,
+  EEnvSandboxesIdRoute: EEnvSandboxesIdRouteWithChildren,
   EEnvTeammatesIdRoute: EEnvTeammatesIdRouteWithChildren,
   EEnvChatsIndexRoute: EEnvChatsIndexRoute,
   EEnvTeammatesIndexRoute: EEnvTeammatesIndexRoute,

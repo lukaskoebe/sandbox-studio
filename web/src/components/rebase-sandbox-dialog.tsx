@@ -1,10 +1,6 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  ArrowClockwiseIcon,
-  ArrowsClockwiseIcon,
-  WarningIcon,
-} from "@phosphor-icons/react"
+import { ArrowClockwiseIcon, WarningIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -14,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import {
@@ -38,11 +33,14 @@ import { formatAge } from "@/lib/utils"
 export function RebaseSandboxDialog({
   env,
   sandbox,
+  open,
+  onOpenChange,
 }: {
   env: string
   sandbox: Sandbox
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
   const queryClient = useQueryClient()
   const rebase = $api.useMutation(
     "post",
@@ -57,40 +55,22 @@ export function RebaseSandboxDialog({
             queryKey: ["get", "/api/environments/{env}/sandboxes/{id}"],
           }),
         ])
-        setOpen(false)
+        onOpenChange(false)
         toast.success("Sandbox rebased")
       },
     }
   )
   const pending = rebase.isPending
-  const available = sandbox.status === "running" || sandbox.status === "stopped"
 
   function handleOpenChange(nextOpen: boolean) {
     // A rebase in progress stays on screen until it succeeds or fails.
     if (!nextOpen && pending) return
     if (nextOpen) rebase.reset()
-    setOpen(nextOpen)
+    onOpenChange(nextOpen)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!available || pending}
-            title={
-              available
-                ? "Move this sandbox onto another template"
-                : "Only a running or stopped sandbox can be rebased"
-            }
-          />
-        }
-      >
-        <ArrowsClockwiseIcon />
-        Rebase
-      </DialogTrigger>
       <DialogContent showCloseButton={!pending}>
         <RebaseForm
           env={env}
