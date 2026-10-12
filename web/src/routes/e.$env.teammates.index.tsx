@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Ident } from "@/components/ident"
 import { PageHeader } from "@/components/page-header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
@@ -113,8 +114,10 @@ function TeammatesPage() {
                     <TableCell>
                       {providerById.get(p.providerId)?.name}
                     </TableCell>
-                    <TableCell className="font-mono">
-                      {p.model || (
+                    <TableCell>
+                      {p.model ? (
+                        <Ident>{p.model}</Ident>
+                      ) : (
                         <span className="text-muted-foreground">default</span>
                       )}
                     </TableCell>
@@ -126,8 +129,11 @@ function TeammatesPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       <span className="block max-w-56 truncate">
-                        {p.gitName} &lt;{p.gitEmail}&gt;
+                        {p.gitName}
                       </span>
+                      <Ident className="block max-w-56 truncate">
+                        {p.gitEmail}
+                      </Ident>
                     </TableCell>
                   </TableRow>
                 ))}
