@@ -26,6 +26,10 @@
           "sandboxName": {
             "type": "string"
           },
+          "session": {
+            "description": "The ephemeral browser session the action runs in; empty for the persistent profile",
+            "type": "string"
+          },
           "teammateId": {
             "type": "string"
           },
@@ -221,6 +225,10 @@
           "environmentId": {
             "type": "string"
           },
+          "ephemeral": {
+            "description": "The action ran in an ephemeral browser session, whose ID is the session ID",
+            "type": "boolean"
+          },
           "id": {
             "format": "int64",
             "type": "integer"
@@ -360,6 +368,37 @@
         ],
         "type": "object"
       },
+      "BrowserSession": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "opened": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sandbox": {
+            "description": "Name of the agent sandbox that opened it",
+            "type": "string"
+          },
+          "takeover": {
+            "description": "The user drives this session; agent calls to it are paused",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "The page the broker last saw",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sandbox",
+          "takeover",
+          "opened"
+        ],
+        "type": "object"
+      },
       "BrowserStatus": {
         "additionalProperties": false,
         "properties": {
@@ -371,8 +410,18 @@
             "description": "The current run's session in the action log",
             "type": "string"
           },
+          "sessions": {
+            "description": "Ephemeral sessions, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/BrowserSession"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "takeover": {
-            "description": "The user drives; agent calls are paused",
+            "description": "The user drives the persistent profile; agent calls to it are paused",
             "type": "boolean"
           },
           "teammateId": {
@@ -400,7 +449,8 @@
         "required": [
           "teammateId",
           "vm",
-          "takeover"
+          "takeover",
+          "sessions"
         ],
         "type": "object"
       },
@@ -1253,6 +1303,10 @@
             "type": "string"
           },
           "sandboxName": {
+            "type": "string"
+          },
+          "session": {
+            "description": "The ephemeral browser session the field is in; empty for the persistent profile",
             "type": "string"
           },
           "teammateId": {
@@ -2614,6 +2668,11 @@
       "NavigateBrowserInBody": {
         "additionalProperties": false,
         "properties": {
+          "session": {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "maxLength": 32,
+            "type": "string"
+          },
           "url": {
             "description": "Absolute http or https URL to open while the user has taken over",
             "maxLength": 4000,
@@ -3865,8 +3924,13 @@
         "additionalProperties": false,
         "properties": {
           "on": {
-            "description": "true: the user drives and agent calls pause; false: hand back to the agents",
+            "description": "true: the user drives and agent calls to the session pause; false: hand back to the agents",
             "type": "boolean"
+          },
+          "session": {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "maxLength": 32,
+            "type": "string"
           }
         },
         "required": [

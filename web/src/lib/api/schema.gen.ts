@@ -1520,6 +1520,8 @@ export interface components {
             role?: string;
             sandboxId: string;
             sandboxName: string;
+            /** @description The ephemeral browser session the action runs in; empty for the persistent profile */
+            session?: string;
             teammateId: string;
             teammateName: string;
             /** @description What the agent wants to type or select */
@@ -1582,6 +1584,8 @@ export interface components {
             at: string;
             detail?: string;
             environmentId: string;
+            /** @description The action ran in an ephemeral browser session, whose ID is the session ID */
+            ephemeral?: boolean;
             /** Format: int64 */
             id: number;
             /** @enum {string} */
@@ -1624,12 +1628,25 @@ export interface components {
             /** @enum {string} */
             verdict: "allow" | "deny" | "sensitive";
         };
+        BrowserSession: {
+            id: string;
+            /** Format: date-time */
+            opened: string;
+            /** @description Name of the agent sandbox that opened it */
+            sandbox: string;
+            /** @description The user drives this session; agent calls to it are paused */
+            takeover: boolean;
+            /** @description The page the broker last saw */
+            url?: string;
+        };
         BrowserStatus: {
             /** @description Name of the agent sandbox that drove the browser last */
             driver?: string;
             /** @description The current run's session in the action log */
             sessionId?: string;
-            /** @description The user drives; agent calls are paused */
+            /** @description Ephemeral sessions, oldest first */
+            sessions: components["schemas"]["BrowserSession"][] | null;
+            /** @description The user drives the persistent profile; agent calls to it are paused */
             takeover: boolean;
             teammateId: string;
             /** @description The page the broker last saw */
@@ -1909,6 +1926,8 @@ export interface components {
             role?: string;
             sandboxId: string;
             sandboxName: string;
+            /** @description The ephemeral browser session the field is in; empty for the persistent profile */
+            session?: string;
             teammateId: string;
             teammateName: string;
             url: string;
@@ -2394,6 +2413,8 @@ export interface components {
             text: string;
         };
         NavigateBrowserInBody: {
+            /** @description An ephemeral session's ID; empty for the persistent profile */
+            session?: string;
             /** @description Absolute http or https URL to open while the user has taken over */
             url: string;
         };
@@ -2767,8 +2788,10 @@ export interface components {
             source: string;
         };
         TakeoverInBody: {
-            /** @description true: the user drives and agent calls pause; false: hand back to the agents */
+            /** @description true: the user drives and agent calls to the session pause; false: hand back to the agents */
             on: boolean;
+            /** @description An ephemeral session's ID; empty for the persistent profile */
+            session?: string;
         };
         Teammate: {
             /** Format: date-time */
