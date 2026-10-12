@@ -13,7 +13,7 @@ const toggleVariants = cva(
         // Pressed outline toggles get a clear primary tint; the aria-pressed fill replaces
         // the muted one from the base classes during class merging.
         outline:
-          "border border-input bg-transparent hover:bg-muted aria-pressed:bg-primary/10 data-[pressed]:border-primary/60 data-[pressed]:text-primary dark:aria-pressed:bg-primary/20 dark:data-[pressed]:text-primary-foreground",
+          "border border-input bg-transparent hover:bg-muted aria-pressed:bg-primary/10 data-[pressed]:border-primary/60 data-[pressed]:text-primary dark:aria-pressed:bg-primary/20 dark:data-[pressed]:text-primary",
       },
       size: {
         default:
