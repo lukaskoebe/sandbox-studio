@@ -1,0 +1,210 @@
+# Architecture
+
+Sandbox Studio runs coding agents as persistent teammates inside microVM sandboxes. Every
+outward action (network access, git pushes, browser actions, credential use) goes through
+the host, which applies rules or asks the user in the web UI.
+
+This page is the overview. Component details are linked from the [index](README.md).
+
+## Goals and non-goals
+
+Goals:
+
+- Linux, macOS (Apple Silicon) and Windows 11 hosts.
+- One Go binary that serves the API and the embedded React UI.
+- [microsandbox](https://docs.microsandbox.dev) as the VM runtime, with Docker working inside
+  sandboxes.
+- Network approvals, secret injection, Caddy rules and persistent workspaces (carried over
+  from v1).
+- Teammates: named agents with their own identity, memory and settings, each running
+  OpenCode, Claude Code or Codex.
+- Built-in memory with local embeddings, private and shared scopes, consolidation and
+  conflict handling.
+- An agent-controlled browser whose actions are approved in the UI, with live view and
+  takeover.
+- One place where every pending approval pops up.
+
+Non-goals:
+
+- Cloud or multi-user hosting.
+- Messaging-channel integrations (Slack and the like).
+- A third-party plugin runtime.
+- Migrating v1 data. v2 is a fresh install.
+- Intel Macs (microsandbox doesn't support them).
+
+## Principles
+
+1. **One way to do each thing.** Each feature has one opinionated path. Alternatives wait
+   until someone needs them.
+2. **The host decides; the guest is untrusted.** Agents have root in their sandbox. All
+   policy lives on the host: the gateway, approvals, the secrets vault, the browser broker.
+3. **Secrets never enter a sandbox.** Guests see placeholders; the gateway substitutes real
+   values on the way out, only for hosts the secret is bound to.
+4. **Ask, don't fail.** A blocked action becomes an approval request that can succeed once
+   approved: a new host, a git push, a browser click.
+5. **Automatic over voluntary.** Memory recall and capture run from harness hooks at fixed
+   moments. Agents are not relied on to call memory tools.
+6. **Declarative where it matters.** Templates are built from a small YAML spec and cached.
+
+## Concepts
+
+- **Environment.** The top-level isolation boundary, e.g. "work" or "private". It owns its
+  providers, secrets, rules, teammates, sandboxes, memory, approvals and forges. Nothing is
+  shared between environments, and each has its own TLS CA. The UI shows one environment at
+  a time (`/e/$env/...`), with a switcher in the sidebar. A fresh install gets one
+  environment called "Default".
+- **Teammate.** A named agent identity: name, role, soul (markdown), harness, provider,
+  model and git identity, plus a private memory scope. A teammate owns sandboxes and one
+  browser VM. See [teammates](teammates.md).
+- **Provider.** An environment's LLM access: Anthropic API key, OpenAI API key, an
+  OpenAI-compatible endpoint, or a Claude or ChatGPT subscription (not usable yet). The kind
+  decides which harnesses can use it and which utility model memory jobs use.
+- **Sandbox.** A microVM with a root filesystem, a `/workspace` disk and a `/var/lib/docker`
+  disk. It persists across stop and start. See [sandboxes](sandboxes.md).
+- **Template.** The image built from a spec (resources, mise tools, apt packages, a setup
+  script) on the base image, cached by spec, base digest, platform and exporter version.
+  See [template builds](template-builds.md).
+- **Session.** One harness TUI in a named tmux session in a sandbox. A **chat** is the same
+  harness driven over ACP and shown in the web UI. See [harnesses](harnesses.md).
+- **Gateway.** The host-side SOCKS5 proxy that every TCP connection from every sandbox goes
+  through. See [network](network.md).
+- **Rule.** A network policy entry (`allow`, `proxy`, `caddy`, `deny`) scoped to a sandbox,
+  a teammate or the environment.
+- **Secret.** A named credential in the environment's vault, bound to the hosts allowed to
+  receive it.
+- **Approval.** A typed request waiting for the user. See [approvals](approvals.md).
+- **Memory.** Facts, pages and sources in two scopes: `teammate:<id>` and `shared`. See
+  [memory](memory.md).
+
+## Overview
+
+```
+React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
+┌────────────────────────── studio (one Go binary) ──────────────────────────────┐
+│ API · auth · approvals · secrets vault · teammates · templates + registry      │
+│ gateway: SOCKS5 in → sandbox from credentials → name (SOCKS domain, DNS map,   │
+│          SNI/Host) → rules → splice | intercept (env CA): headers, secrets,    │
+│          Caddy | hold and ask | refuse                                         │
+│ per-sandbox DNS resolvers · connection log                                     │
+│ memory: SQLite FTS5 + int8 vectors · llama.cpp embeddings (yzma) · dream job   │
+│ sandbox manager (microsandbox Go SDK) · browser broker · git review · chats    │
+└──────┬──────────────────────────────────────────┬──────────────────────────────┘
+       │ TCP egress (SOCKS5, user = sandbox ID)    │ one vsock host socket per sandbox
+ ┌─────┴───────────────┐  ┌─────────────┐   ┌──────┴────────────────────────────┐
+ │ sandbox (teammate A)│  │ sandbox (B) │   │ studio-agent in every guest:      │
+ │ harness TUI in tmux │  │ …           │   │ terminals, ports, hooks, MCP,     │
+ │ dockerd, /workspace │  │             │   │ ACP, files, CA and placeholders   │
+ └─────────────────────┘  └─────────────┘   └───────────────────────────────────┘
+                     ┌─────────────────────────────┐
+                     │ browser VM per teammate:    │ ← driven only by the broker;
+                     │ Chromium + agent-browser    │   agents never get CDP
+                     └─────────────────────────────┘
+```
+
+## Process model
+
+- Studio is a normal user process, optionally started at login (`studio autostart`). There
+  is no system service.
+- The SDK installs `msb` and `libkrunfw` into `~/.microsandbox` on first start
+  (`runtime.Ensure`). Its home must stay short: Unix socket paths are limited to 108 bytes.
+- Listeners, all on loopback: the UI and API on `-addr` (default `127.0.0.1:7878`, must be
+  loopback), the gateway on the next port, the template registry on the one after. Keep
+  `-addr` stable for a data directory: VM configs store the gateway address and template
+  references store the registry address.
+- Sandboxes run detached. They keep running when Studio stops; on start Studio reconciles
+  its catalog with microsandbox, and guest agents reconnect.
+- Startup (`cmd/studio/main.go`): data dir, doctor (warnings only), install the guest agent
+  binaries, open the catalog and vault, make sure an environment exists, start the
+  template registry, the runtime, the gateway and its resolvers, the agent channel hub,
+  reconcile sandboxes, recover chats and build jobs, then serve the API and UI.
+- Subcommands: `studio` (serve), `openapi`, `login-url`, `doctor`, `version`,
+  `autostart enable|disable|status`. The guest binary is `studio-agent` (see
+  [guest agent](guest-agent.md)).
+
+## Data locations
+
+One data directory (`internal/paths`):
+
+| OS | Default |
+|---|---|
+| Linux | `$XDG_DATA_HOME/sandbox-studio`, else `~/.local/share/sandbox-studio` |
+| macOS | `~/Library/Application Support/Sandbox Studio` |
+| Windows | `%LOCALAPPDATA%\Sandbox Studio` |
+
+`SANDBOX_STUDIO_HOME` overrides it. Contents:
+
+| Path | What |
+|---|---|
+| `studio.db` | SQLite catalog: everything per environment, including memory, encrypted secrets and CA keys |
+| `vault.key` | master key file, only when no OS keychain is available |
+| `guest/bin/` | the `studio-agent` binary, mounted read-only into every sandbox |
+| `run/<id>.sock` | per-sandbox agent channel sockets |
+| `templates/` | template registry artifacts |
+| `imports/` | sandbox import uploads |
+| `git-staging/` | git review staging repos |
+| `memory/` | llama.cpp libraries and the embedding model, downloaded on first use |
+| `browser/` | browser broker state |
+| `caddy/` | embedded Caddy storage |
+
+VMs, images and snapshots live in microsandbox's own home (`~/.microsandbox`).
+
+## Repository layout
+
+```
+cmd/studio/           host binary
+cmd/studio-agent/     guest agent (linux/amd64 and arm64, CGO off)
+internal/
+  runtime/            microsandbox SDK wrapper (the only importer of the SDK)
+  sandboxes/          sandbox lifecycle, checkpoints, fork, rebase, import/export
+  resources/          resource limits
+  templatespec/ templatebuild/ templateimage/ templateexport/ templateregistry/
+  ocilayer/ upperlayer/ guestcapture/   template layer capture and validation
+  gateway/ dnsproxy/ policy/ caddyrule/ ca/ secrets/   network and credentials
+  agentchan/ agentproto/ agentbin/      host side and wire format of the agent channel
+  guest/ agentcall/ agenthook/          guest agent internals
+  harness/ teammates/ acp/ chat/        harness adapters, teammates, ACP chats
+  memory/ agentmem/                     memory store and its use in sessions
+  browser/ gitreview/ integrations/     browser broker, git review
+  preview/ webauth/ api/ events/ webui/ HTTP surface
+  store/                                SQLite catalog and migrations
+  doctor/ autostart/ updates/ diskspace/ paths/ version/
+web/                  Vite + React + TanStack Router + shadcn (Base UI)
+images/base/          base image (Dockerfile + rootfs)
+images/browser/       browser VM image
+site/                 user documentation (Astro Starlight)
+spikes/               spike and qualification programs, not production code
+docs/                 developer documentation
+```
+
+## Security model
+
+| Threat | Mitigation |
+|---|---|
+| Agent sends data to unapproved hosts | Only DNS (to its own resolver) and TCP to public addresses leave the guest, and TCP goes through the gateway. Unknown names are held for approval. UDP and ICMP are blocked, so QUIC falls back to TCP. |
+| Agent steals credentials | Secrets live only on the host. Guests see placeholders, substituted only for bound hosts. |
+| Agent bypasses browser policy | The browser runs in its own VM, driven only by the broker. No CDP for agents; password values are redacted; credentials are filled by Studio. |
+| Agent pushes to or acts on external services | Pushes go to a staging repo and wait for review. Browser actions and PRs are approvals. |
+| Guest reaches host or private services | The fence allows public destinations only; the gateway dials public addresses only. Host services are virtual hosts the gateway serves, or the per-sandbox agent channel. |
+| Local web attacker, DNS rebinding | Loopback listeners, host-bound session cookies, a Host check and a same-origin check on unsafe methods. See [API](api.md). |
+
+## Testing and CI
+
+- Go unit tests per package, all with fakes: no VMs, no real LLM APIs, no keychain.
+- `internal/sandboxes/integration_test.go` (`-tags integration`) boots the real base image.
+  It needs a microsandbox-capable host and runs by hand, not in CI.
+- `internal/harness/opencode-plugin.test.mjs` tests the OpenCode plugin with `node --test`.
+- Live qualifications are programs under `spikes/`; results are in [spikes](spikes.md).
+- CI (`.github/workflows/ci.yml`): on Linux, macOS and Windows, `go vet`, `go test`,
+  `go build`; on Linux also gofmt, the OpenAPI schema check, the guest agent build,
+  `install.sh` tests and shellcheck. The web job checks the generated API types, then runs
+  typecheck, ESLint, Prettier and the build. `docs.yml` builds the site.
+- Releases: see [release](release.md).
+
+## Conventions
+
+- Single-line commit messages.
+- `gofmt` for Go; ESLint and Prettier (`ts`/`tsx`/`js`/`jsx`) in `web/`.
+- `make api` regenerates `web/openapi.json` and `web/src/lib/api/schema.gen.ts`; commit
+  both.
+- `make test` and `make lint` run the local checks.
+- User-facing features get a page in `site/`; implementation notes go in `docs/`.
