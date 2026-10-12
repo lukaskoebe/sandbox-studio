@@ -348,7 +348,9 @@ func run(addr, image string, log *slog.Logger) error {
 	// Sandboxes are detached VMs: they keep running when Studio stops, and their agents
 	// reconnect when it comes back.
 	log.Info("sandbox studio listening", "url", "http://"+addr, "version", version.Version, "data", p.Data, "image", image)
-	log.Info("open Studio with this one-time login link", "url", loginURL(addr, auth.IssueLogin()))
+	link := loginURL(addr, auth.IssueLogin())
+	log.Info("open Studio with this one-time login link", "url", link)
+	printLoginBanner(link)
 	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
