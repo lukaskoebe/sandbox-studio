@@ -77,7 +77,7 @@ func TestRulesCRUD(t *testing.T) {
 		t.Fatalf("created: %+v", created)
 	}
 
-	if _, err := s.Vault.Create(context.Background(), env.ID, "KEY", "value-of-key", []string{"api.example.org"}, ""); err != nil {
+	if _, err := s.Vault.Create(context.Background(), store.Secret{EnvironmentID: env.ID, Name: "KEY", Hosts: []string{"api.example.org"}}, "value-of-key"); err != nil {
 		t.Fatal(err)
 	}
 	rec = do(h, "POST", rules, `{"host":"api.example.org","action":"proxy","config":{"headers":{"x-api-key":"Bearer {secret.KEY}","x-static":"1"}}}`)

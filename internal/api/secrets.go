@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -22,7 +23,7 @@ type secretPath struct {
 func (s *Server) registerSecrets(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "listSecrets", Method: http.MethodGet, Path: "/api/environments/{env}/secrets", Tags: []string{"secrets"},
-		Description: "The secrets of an environment. Sandboxes see each name as an environment variable holding its placeholder.",
+		Description: "The secrets of an environment, of every scope. A sandbox sees the name of each secret of its environment, its teammate and its own as an environment variable holding the placeholder; of secrets sharing a name the most specific wins.",
 	}, func(ctx context.Context, in *envPath) (*struct{ Body []store.Secret }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
@@ -34,24 +35,31 @@ func (s *Server) registerSecrets(api huma.API) {
 	type createSecretIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		Body struct {
-			Name  string   `json:"name" maxLength:"64" doc:"Environment variable name sandboxes see, e.g. OPENAI_API_KEY"`
-			Value string   `json:"value" writeOnly:"true" doc:"The secret value. It is sealed on arrival and never returned."`
-			Hosts []string `json:"hosts" minItems:"1" doc:"Host patterns the value may be sent to, e.g. api.openai.com or *.example.com"`
-			Note  string   `json:"note,omitempty" maxLength:"500"`
+			Name       string   `json:"name" maxLength:"64" doc:"Environment variable name sandboxes see, e.g. OPENAI_API_KEY. Unique per scope."`
+			Value      string   `json:"value" writeOnly:"true" doc:"The secret value. It is sealed on arrival and never returned."`
+			Hosts      []string `json:"hosts" minItems:"1" doc:"Host patterns the value may be sent to, e.g. api.openai.com or *.example.com"`
+			SandboxID  string   `json:"sandboxId,omitempty" doc:"Limits the secret to one sandbox of this environment"`
+			TeammateID string   `json:"teammateId,omitempty" doc:"Limits the secret to the sandboxes one teammate of this environment owns; excludes sandboxId"`
+			Note       string   `json:"note,omitempty" maxLength:"500"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "createSecret", Method: http.MethodPost, Path: "/api/environments/{env}/secrets", Tags: []string{"secrets"},
 		DefaultStatus: http.StatusCreated,
+		Description:   "The scope is fixed at creation.",
 	}, func(ctx context.Context, in *createSecretIn) (*struct{ Body store.Secret }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
 		}
-		sec, err := s.Vault.Create(ctx, in.Env, in.Body.Name, in.Body.Value, in.Body.Hosts, in.Body.Note)
+		if err := s.checkScope(ctx, in.Env, in.Body.TeammateID, in.Body.SandboxID); err != nil {
+			return nil, err
+		}
+		sec, err := s.Vault.Create(ctx, store.Secret{EnvironmentID: in.Env, TeammateID: in.Body.TeammateID, SandboxID: in.Body.SandboxID,
+			Name: in.Body.Name, Hosts: in.Body.Hosts, Note: in.Body.Note}, in.Body.Value)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		s.publishSecrets(in.Env)
+		s.publishSecret(sec)
 		return &struct{ Body store.Secret }{sec}, nil
 	})
 
@@ -66,7 +74,7 @@ func (s *Server) registerSecrets(api huma.API) {
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "updateSecret", Method: http.MethodPut, Path: "/api/environments/{env}/secrets/{id}", Tags: []string{"secrets"},
-		Description: "The name is fixed at creation. Omitting value keeps the stored value.",
+		Description: "The name and scope are fixed at creation. Omitting value keeps the stored value.",
 	}, func(ctx context.Context, in *updateSecretIn) (*struct{ Body store.Secret }, error) {
 		if err := s.checkUnmanaged(ctx, in.Env, in.ID); err != nil {
 			return nil, err
@@ -75,7 +83,7 @@ func (s *Server) registerSecrets(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		s.publishSecrets(in.Env)
+		s.publishSecret(sec)
 		return &struct{ Body store.Secret }{sec}, nil
 	})
 
@@ -86,17 +94,44 @@ func (s *Server) registerSecrets(api huma.API) {
 		if err := s.checkUnmanaged(ctx, in.Env, in.ID); err != nil {
 			return nil, err
 		}
+		sec, err := s.Store.SecretByID(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
 		if err := s.Vault.Delete(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}
-		s.publishSecrets(in.Env)
+		s.publishSecret(sec)
 		return nil, nil
 	})
 }
 
-// publishSecrets tells open tabs that the environment's secrets changed.
+// publishSecrets tells open tabs, and the sandboxes, that the environment's secrets changed.
 func (s *Server) publishSecrets(envID string) {
 	s.Bus.Publish(events.Event{Topic: events.TopicSecrets, EnvironmentID: envID})
+}
+
+// publishSecret announces a change of sec, for the sandboxes of its scope only.
+func (s *Server) publishSecret(sec store.Secret) {
+	s.Bus.Publish(events.Event{Topic: events.TopicSecrets, EnvironmentID: sec.EnvironmentID, TeammateID: sec.TeammateID, SandboxID: sec.SandboxID})
+}
+
+// checkScope answers 422 unless the teammate or sandbox a secret is scoped to belongs to
+// environment env; at most one of them may be set.
+func (s *Server) checkScope(ctx context.Context, env, teammateID, sandboxID string) error {
+	if teammateID != "" && sandboxID != "" {
+		return huma.Error422UnprocessableEntity("the scope is a sandbox or a teammate, not both")
+	}
+	if sandboxID != "" {
+		_, err := s.publicSandbox(ctx, env, sandboxID)
+		if errors.Is(err, store.ErrNotFound) {
+			return huma.Error422UnprocessableEntity(fmt.Sprintf("sandbox %s is not in this environment", sandboxID))
+		}
+		if err != nil {
+			return apiError(err)
+		}
+	}
+	return s.checkTeammate(ctx, env, teammateID)
 }
 
 // checkUnmanaged answers 409 if a provider owns the secret: its key is changed and removed
@@ -119,7 +154,8 @@ func (s *Server) checkUnmanaged(ctx context.Context, envID, secretID string) err
 	return nil
 }
 
-// ruleSecrets are the secrets rules may refer to: all but the studio-only ones.
+// ruleSecrets are the secrets rules may refer to: all but the studio-only ones, of every
+// scope. Which one a reference means is decided per sandbox, when a request is sent.
 func (s *Server) ruleSecrets(ctx context.Context, envID string) ([]store.Secret, error) {
 	list, err := s.Store.Secrets(ctx, envID)
 	return slices.DeleteFunc(list, func(sec store.Secret) bool { return sec.StudioOnly }), err

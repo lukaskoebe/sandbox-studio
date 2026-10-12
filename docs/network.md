@@ -81,7 +81,9 @@ On intercepted connections (`intercept.go`):
 
 - placeholders are swapped for values in request headers (including Basic credentials),
   path and query, never in bodies (an upstream may store a body and hand it back);
-- a placeholder of a secret not bound to this host refuses the request;
+- a placeholder of a secret not bound to this host refuses the request, and so does one of a
+  secret the sandbox doesn't see (another sandbox's or teammate's, or one a more specific
+  secret of the same name overrides);
 - the rule's headers are set;
 - the Host header must match the approved host (no domain fronting);
 - responses mask the values of the host's secrets (same length, so `Content-Length` holds,
@@ -110,8 +112,16 @@ rule.
 - Each secret has hosts it is bound to: at least one, never a bare `*`.
 - Sandboxes see the secret's name as an env var holding a placeholder,
   `studio-` plus 32 base32 characters (160 bits), generated once.
+- Like a rule, a secret is scoped to the environment, to one teammate (every sandbox it
+  owns) or to one sandbox. The scope is fixed at creation, and a name is unique per scope
+  (migration `022_secret_scopes.sql`). A sandbox sees its environment's secrets, its
+  teammate's and its own; of secrets sharing a name the most specific wins (sandbox over
+  teammate over environment). `Vault.Env` and `Vault.Bindings` resolve this per sandbox, the
+  gateway refuses the placeholder of any other secret, and a write reconfigures only the
+  sandboxes its scope covers. The browser's `fill_credential` uses the same visibility for
+  the sandbox driving it.
 - Provider API keys and forge tokens are secrets too, managed by their owner (the secrets
-  API answers 409 for them).
+  API answers 409 for them). They always belong to the environment.
 
 ## Per-environment CA
 

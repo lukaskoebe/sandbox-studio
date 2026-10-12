@@ -1250,9 +1250,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The secrets of an environment. Sandboxes see each name as an environment variable holding its placeholder. */
+        /** @description The secrets of an environment, of every scope. A sandbox sees the name of each secret of its environment, its teammate and its own as an environment variable holding the placeholder; of secrets sharing a name the most specific wins. */
         get: operations["listSecrets"];
         put?: never;
+        /** @description The scope is fixed at creation. */
         post: operations["createSecret"];
         delete?: never;
         options?: never;
@@ -1268,7 +1269,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description The name is fixed at creation. Omitting value keeps the stored value. */
+        /** @description The name and scope are fixed at creation. Omitting value keeps the stored value. */
         put: operations["updateSecret"];
         post?: never;
         delete: operations["deleteSecret"];
@@ -2019,9 +2020,13 @@ export interface components {
         CreateSecretInBody: {
             /** @description Host patterns the value may be sent to, e.g. api.openai.com or *.example.com */
             hosts: string[] | null;
-            /** @description Environment variable name sandboxes see, e.g. OPENAI_API_KEY */
+            /** @description Environment variable name sandboxes see, e.g. OPENAI_API_KEY. Unique per scope. */
             name: string;
             note?: string;
+            /** @description Limits the secret to one sandbox of this environment */
+            sandboxId?: string;
+            /** @description Limits the secret to the sandboxes one teammate of this environment owns; excludes sandboxId */
+            teammateId?: string;
             /** @description The secret value. It is sealed on arrival and never returned. */
             value: string;
         };
@@ -2863,7 +2868,11 @@ export interface components {
             name: string;
             note: string;
             placeholder: string;
+            /** @description Set for a secret only this sandbox sees */
+            sandboxId?: string;
             studioOnly: boolean;
+            /** @description Set for a secret every sandbox of this teammate sees */
+            teammateId?: string;
             /** Format: date-time */
             updatedAt: string;
         };

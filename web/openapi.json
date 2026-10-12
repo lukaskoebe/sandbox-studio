@@ -1286,12 +1286,20 @@
             ]
           },
           "name": {
-            "description": "Environment variable name sandboxes see, e.g. OPENAI_API_KEY",
+            "description": "Environment variable name sandboxes see, e.g. OPENAI_API_KEY. Unique per scope.",
             "maxLength": 64,
             "type": "string"
           },
           "note": {
             "maxLength": 500,
+            "type": "string"
+          },
+          "sandboxId": {
+            "description": "Limits the secret to one sandbox of this environment",
+            "type": "string"
+          },
+          "teammateId": {
+            "description": "Limits the secret to the sandboxes one teammate of this environment owns; excludes sandboxId",
             "type": "string"
           },
           "value": {
@@ -3810,8 +3818,16 @@
           "placeholder": {
             "type": "string"
           },
+          "sandboxId": {
+            "description": "Set for a secret only this sandbox sees",
+            "type": "string"
+          },
           "studioOnly": {
             "type": "boolean"
+          },
+          "teammateId": {
+            "description": "Set for a secret every sandbox of this teammate sees",
+            "type": "string"
           },
           "updatedAt": {
             "format": "date-time",
@@ -10089,7 +10105,7 @@
     },
     "/api/environments/{env}/secrets": {
       "get": {
-        "description": "The secrets of an environment. Sandboxes see each name as an environment variable holding its placeholder.",
+        "description": "The secrets of an environment, of every scope. A sandbox sees the name of each secret of its environment, its teammate and its own as an environment variable holding the placeholder; of secrets sharing a name the most specific wins.",
         "operationId": "listSecrets",
         "parameters": [
           {
@@ -10136,6 +10152,7 @@
         ]
       },
       "post": {
+        "description": "The scope is fixed at creation.",
         "operationId": "createSecret",
         "parameters": [
           {
@@ -10231,7 +10248,7 @@
         ]
       },
       "put": {
-        "description": "The name is fixed at creation. Omitting value keeps the stored value.",
+        "description": "The name and scope are fixed at creation. Omitting value keeps the stored value.",
         "operationId": "updateSecret",
         "parameters": [
           {

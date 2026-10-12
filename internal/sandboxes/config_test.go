@@ -6,6 +6,7 @@ import (
 	"errors"
 	"maps"
 	"net"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/hashicorp/yamux"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -182,7 +184,7 @@ func newConfigTestSecrets(env map[string]string, err error) *configTestSecrets {
 	return &configTestSecrets{env: maps.Clone(env), err: err}
 }
 
-func (s *configTestSecrets) Env(context.Context, string) (map[string]string, error) {
+func (s *configTestSecrets) Env(context.Context, store.Sandbox) (map[string]string, error) {
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -324,5 +326,33 @@ func assertQuiet[T any](t *testing.T, ctx context.Context, ch <-chan T, phase st
 	case <-timer.C:
 	case <-ctx.Done():
 		t.Fatalf("test context ended waiting for %s: %v", phase, ctx.Err())
+	}
+}
+
+func TestSecretEventsReconfigureOnlyTheirScope(t *testing.T) {
+	alice := store.Sandbox{ID: "a", EnvironmentID: "work", TeammateID: "alice"}
+	bob := store.Sandbox{ID: "b", EnvironmentID: "work", TeammateID: "bob"}
+	unowned := store.Sandbox{ID: "u", EnvironmentID: "work"}
+	elsewhere := store.Sandbox{ID: "x", EnvironmentID: "home", TeammateID: "alice"}
+	all := []store.Sandbox{alice, bob, unowned, elsewhere}
+	for _, tc := range []struct {
+		name string
+		e    events.Event
+		want []string
+	}{
+		{"everything", events.Event{}, []string{"a", "b", "u", "x"}},
+		{"environment", events.Event{EnvironmentID: "work"}, []string{"a", "b", "u"}},
+		{"teammate", events.Event{EnvironmentID: "work", TeammateID: "alice"}, []string{"a"}},
+		{"sandbox", events.Event{EnvironmentID: "work", SandboxID: "u"}, []string{"u"}},
+	} {
+		var got []string
+		for _, sb := range all {
+			if affected(tc.e, sb) {
+				got = append(got, sb.ID)
+			}
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("%s: reconfigures %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }

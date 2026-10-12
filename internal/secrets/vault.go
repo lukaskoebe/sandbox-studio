@@ -46,7 +46,13 @@ type Vault struct {
 	// mu serializes writes with cache fills, so a fill cannot outlive the write that
 	// invalidates it.
 	mu       sync.Mutex
-	bindings map[string][]Binding
+	bindings map[string][]unsealed // per environment, every scope
+}
+
+// unsealed is a secret with its decrypted value.
+type unsealed struct {
+	sec   store.Secret
+	value []byte
 }
 
 // Binding is a decrypted secret as the gateway uses it: the placeholder to look for and the
@@ -56,6 +62,10 @@ type Binding struct {
 	Placeholder string
 	Hosts       []string
 	Value       []byte
+	// Foreign marks a secret of the environment that the sandbox does not see: one scoped
+	// to another sandbox or teammate, or one a more specific secret of the same name
+	// overrides. Only Name and Placeholder are set, so the gateway can refuse it.
+	Foreign bool
 }
 
 // Open returns the vault of the Studio data directory dataDir. The master key lives in the
@@ -91,7 +101,7 @@ func New(ctx context.Context, st *store.Store, primary, fallback KeyStore, log *
 	if err != nil {
 		return nil, err
 	}
-	v := &Vault{st: st, aead: aead, bindings: map[string][]Binding{}}
+	v := &Vault{st: st, aead: aead, bindings: map[string][]unsealed{}}
 	if err := st.SetSetting(ctx, settingBackend, []byte(ks.Name())); err != nil {
 		return nil, err
 	}
@@ -206,30 +216,31 @@ func (v *Vault) Unseal(sealed, aad []byte) ([]byte, error) {
 	return plain, nil
 }
 
-// Create seals value and stores a secret named name in environment envID. Its placeholder is
-// generated here and never changes.
-func (v *Vault) Create(ctx context.Context, envID, name, value string, hosts []string, note string) (store.Secret, error) {
-	if err := checkName(name); err != nil {
+// Create seals value and stores sec, a secret of sec.EnvironmentID covering the whole
+// environment, the sandboxes of sec.TeammateID or the sandbox sec.SandboxID. Its
+// placeholder is generated here; it and the scope never change.
+func (v *Vault) Create(ctx context.Context, sec store.Secret, value string) (store.Secret, error) {
+	if err := checkName(sec.Name); err != nil {
 		return store.Secret{}, err
 	}
 	value, err := normalizeValue(value)
 	if err != nil {
 		return store.Secret{}, err
 	}
-	hosts, err = normalizeHosts(hosts)
+	hosts, err := normalizeHosts(sec.Hosts)
 	if err != nil {
 		return store.Secret{}, err
 	}
 	// The ID is the AAD of the sealed value, so it is chosen before the row is inserted.
 	id := store.NewID()
-	sec := store.Secret{
-		ID: id, EnvironmentID: envID, Name: name, Sealed: v.Seal([]byte(value), []byte(id)),
-		Hosts: hosts, Placeholder: newPlaceholder(), Note: note,
+	sec = store.Secret{
+		ID: id, EnvironmentID: sec.EnvironmentID, TeammateID: sec.TeammateID, SandboxID: sec.SandboxID,
+		Name: sec.Name, Sealed: v.Seal([]byte(value), []byte(id)), Hosts: hosts, Placeholder: newPlaceholder(), Note: sec.Note,
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	out, err := v.st.CreateSecret(ctx, sec)
-	delete(v.bindings, envID)
+	delete(v.bindings, sec.EnvironmentID)
 	return out, err
 }
 
@@ -264,25 +275,54 @@ func (v *Vault) Delete(ctx context.Context, envID, id string) error {
 	return err
 }
 
-// List returns the secrets of an environment. The values are sealed and never leave the vault.
+// List returns the secrets of an environment, of every scope. The values are sealed and
+// never leave the vault.
 func (v *Vault) List(ctx context.Context, envID string) ([]store.Secret, error) {
 	return v.st.Secrets(ctx, envID)
 }
 
-// Bindings returns the decrypted secrets of an environment. The gateway calls it for every
-// intercepted request, so the result is cached until the next write to the environment. The
-// caller must not modify it.
-func (v *Vault) Bindings(ctx context.Context, envID string) ([]Binding, error) {
+// Bindings returns the decrypted secrets sandbox sb sees: its environment's, those of the
+// teammate owning it and its own, the most specific one of each name. The other secrets
+// of the environment come back as Foreign. The gateway calls it for every intercepted
+// connection, so the environment's secrets are cached until its next write. The caller
+// must not modify the result.
+func (v *Vault) Bindings(ctx context.Context, sb store.Sandbox) ([]Binding, error) {
+	all, err := v.unsealed(ctx, sb.EnvironmentID)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]store.Secret, len(all))
+	for i, u := range all {
+		list[i] = u.sec
+	}
+	visible := map[string]bool{}
+	for _, sec := range store.VisibleSecrets(list, sb.ID, sb.TeammateID) {
+		visible[sec.ID] = true
+	}
+	out := make([]Binding, 0, len(all))
+	for _, u := range all {
+		if visible[u.sec.ID] {
+			out = append(out, Binding{Name: u.sec.Name, Placeholder: u.sec.Placeholder, Hosts: u.sec.Hosts, Value: u.value})
+		} else {
+			out = append(out, Binding{Name: u.sec.Name, Placeholder: u.sec.Placeholder, Foreign: true})
+		}
+	}
+	return out, nil
+}
+
+// unsealed returns the decrypted secrets of an environment, studio-only ones excluded,
+// from the cache if it holds them.
+func (v *Vault) unsealed(ctx context.Context, envID string) ([]unsealed, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if b, ok := v.bindings[envID]; ok {
-		return b, nil
+	if all, ok := v.bindings[envID]; ok {
+		return all, nil
 	}
 	list, err := v.st.Secrets(ctx, envID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Binding, 0, len(list))
+	out := make([]unsealed, 0, len(list))
 	for _, s := range list {
 		if s.StudioOnly {
 			continue
@@ -291,24 +331,24 @@ func (v *Vault) Bindings(ctx context.Context, envID string) ([]Binding, error) {
 		if err != nil {
 			return nil, fmt.Errorf("secret %s: %w", s.Name, err)
 		}
-		out = append(out, Binding{Name: s.Name, Placeholder: s.Placeholder, Hosts: s.Hosts, Value: value})
+		s.Sealed = nil
+		out = append(out, unsealed{sec: s, value: value})
 	}
 	v.bindings[envID] = out
 	return out, nil
 }
 
-// Env maps each secret's name to its placeholder. These are the environment variables a
-// sandbox sees.
-func (v *Vault) Env(ctx context.Context, envID string) (map[string]string, error) {
-	list, err := v.st.Secrets(ctx, envID)
+// Env maps the name of each secret sandbox sb sees to its placeholder. These are the
+// environment variables the sandbox gets.
+func (v *Vault) Env(ctx context.Context, sb store.Sandbox) (map[string]string, error) {
+	list, err := v.st.Secrets(ctx, sb.EnvironmentID)
 	if err != nil {
 		return nil, err
 	}
-	env := make(map[string]string, len(list))
-	for _, s := range list {
-		if !s.StudioOnly {
-			env[s.Name] = s.Placeholder
-		}
+	visible := store.VisibleSecrets(list, sb.ID, sb.TeammateID)
+	env := make(map[string]string, len(visible))
+	for _, s := range visible {
+		env[s.Name] = s.Placeholder
 	}
 	return env, nil
 }

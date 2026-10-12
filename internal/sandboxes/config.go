@@ -11,8 +11,8 @@ import (
 
 const configureTimeout = 30 * time.Second
 
-// Configure sends a sandbox's guest agent its environment's configuration: the CA the
-// gateway intercepts TLS with, and the secrets' placeholders. It runs whenever the agent
+// Configure sends a sandbox's guest agent its configuration: the CA the gateway intercepts
+// TLS with, and the placeholders of the secrets the sandbox sees. It runs whenever the agent
 // connects (see agentchan.Hub.OnConnect).
 func (m *Manager) Configure(sandboxID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), configureTimeout)
@@ -59,22 +59,22 @@ func (m *Manager) configure(ctx context.Context, envID, sandboxID string) error 
 	if err != nil {
 		return err
 	}
-	cfg, err := m.config(ctx, sb.EnvironmentID)
+	cfg, err := m.config(ctx, sb)
 	if err == nil {
 		err = m.Hub.Configure(ctx, sandboxID, cfg)
 	}
 	return err
 }
 
-// FollowEnvironments reconfigures an environment's connected sandboxes whenever its secrets
-// change, until ctx ends.
+// FollowEnvironments reconfigures the connected sandboxes a secret change affects, until
+// ctx ends.
 func (m *Manager) FollowEnvironments(ctx context.Context, bus *events.Bus) {
 	for ctx.Err() == nil {
 		ch, unsubscribe := bus.Subscribe()
 		m.follow(ctx, ch)
 		unsubscribe()
 		// The bus dropped us for falling behind, so changes may have been missed.
-		m.configureAll(ctx, "")
+		m.configureAll(ctx, events.Event{})
 	}
 }
 
@@ -88,21 +88,23 @@ func (m *Manager) follow(ctx context.Context, ch <-chan events.Event) {
 				return
 			}
 			if e.Topic == events.TopicSecrets && e.EnvironmentID != "" {
-				m.configureAll(ctx, e.EnvironmentID)
+				m.configureAll(ctx, e)
 			}
 		}
 	}
 }
 
-// configureAll configures the connected sandboxes of envID, or of every environment.
-func (m *Manager) configureAll(ctx context.Context, envID string) {
+// configureAll configures the connected sandboxes a secrets event covers: those of its
+// environment, narrowed to one teammate's or one sandbox, or every sandbox for the zero
+// event.
+func (m *Manager) configureAll(ctx context.Context, e events.Event) {
 	all, err := m.Store.AllSandboxes(ctx)
 	if err != nil {
 		m.Log.Warn("configuring sandboxes", "err", err)
 		return
 	}
 	for _, sb := range all {
-		if envID != "" && sb.EnvironmentID != envID {
+		if !affected(e, sb) {
 			continue
 		}
 		if _, ok := m.Hub.Connected(sb.ID); ok {
@@ -111,12 +113,19 @@ func (m *Manager) configureAll(ctx context.Context, envID string) {
 	}
 }
 
-func (m *Manager) config(ctx context.Context, envID string) (agentproto.Config, error) {
-	ca, err := m.CA.CertPEM(ctx, envID)
+// affected tells whether a secrets event covers sb.
+func affected(e events.Event, sb store.Sandbox) bool {
+	return (e.EnvironmentID == "" || sb.EnvironmentID == e.EnvironmentID) &&
+		(e.TeammateID == "" || sb.TeammateID == e.TeammateID) &&
+		(e.SandboxID == "" || sb.ID == e.SandboxID)
+}
+
+func (m *Manager) config(ctx context.Context, sb store.Sandbox) (agentproto.Config, error) {
+	ca, err := m.CA.CertPEM(ctx, sb.EnvironmentID)
 	if err != nil {
 		return agentproto.Config{}, err
 	}
-	env, err := m.Secrets.Env(ctx, envID)
+	env, err := m.Secrets.Env(ctx, sb)
 	if err != nil {
 		return agentproto.Config{}, err
 	}
