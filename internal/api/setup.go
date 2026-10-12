@@ -114,7 +114,10 @@ func (s *Server) storedSetup(ctx context.Context) (Setup, error) {
 	if err != nil {
 		return out, err
 	}
-	return out, json.Unmarshal(raw, &out)
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return out, err
+	}
+	return out, nil
 }
 
 // saveSetup records the setup's progress.
