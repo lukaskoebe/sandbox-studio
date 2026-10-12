@@ -29,3 +29,12 @@ export function formatAge(iso: string, now = Date.now()): string {
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
 }
+
+/** How long a sandbox's VM has been up since it started: "Up 14 min", "Up 2 h", "Up 3 d". */
+export function formatUptime(iso: string, now = Date.now()): string {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000))
+  if (minutes < 60) return `Up ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `Up ${hours} h`
+  return `Up ${Math.floor(hours / 24)} d`
+}

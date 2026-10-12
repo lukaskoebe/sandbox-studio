@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import {
   ArrowSquareOutIcon,
@@ -21,7 +21,7 @@ import { $api, isReady, type Sandbox } from "@/lib/api/client"
 import { chatStateLabels, chatTitle } from "@/lib/chats"
 import { harnessLabels } from "@/lib/teammates"
 import { onStudioMachine, openPreviewTab } from "@/lib/previews"
-import { formatAge } from "@/lib/utils"
+import { formatAge, formatUptime } from "@/lib/utils"
 
 /**
  * A sandbox at a glance: its state and what it runs on, then its ports, connections,
@@ -114,6 +114,12 @@ export function SandboxDashboard() {
 /** The status, owner, template, resources and age of a sandbox, with its start and stop. */
 function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const p = phase(sb)
+  // Uptime is relative to now, so the clock is read again every minute.
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
   const note =
     p === "stopped"
       ? "Your workspace, home directory and Docker images are kept."
@@ -171,6 +177,9 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           {sb.cpus} CPUs, {formatMiB(sb.memoryMiB)} memory,{" "}
           {formatMiB(sb.workspaceMiB)} workspace
         </Fact>
+        {p === "ready" && sb.startedAt && (
+          <Fact label="Status">{formatUptime(sb.startedAt, now)}</Fact>
+        )}
         <Fact label="Created">
           <time
             dateTime={sb.createdAt}
