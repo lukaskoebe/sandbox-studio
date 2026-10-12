@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
+import { SetupCard } from "@/components/setup-card"
 import { LineageTree } from "@/components/lineage-tree"
 import { PageHeader } from "@/components/page-header"
 import { SandboxOwner } from "@/components/teammate-avatar"
@@ -59,6 +60,7 @@ function Overview() {
         </Button>
       </PageHeader>
       <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
+        <SetupCard env={env} />
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           A sandbox is a Linux VM with Docker and a persistent workspace, where
           teammates and you work on a project.{" "}

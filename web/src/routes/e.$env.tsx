@@ -1,9 +1,15 @@
 import { useEffect } from "react"
-import { Outlet, createFileRoute, notFound } from "@tanstack/react-router"
+import {
+  Outlet,
+  createFileRoute,
+  notFound,
+  redirect,
+} from "@tanstack/react-router"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { $api } from "@/lib/api/client"
 import { rememberEnvironment } from "@/lib/environment"
+import { setupOnFirstLoad } from "@/lib/setup"
 import { useVisualViewportHeight } from "@/hooks/use-visual-viewport-height"
 
 export const Route = createFileRoute("/e/$env")({
@@ -12,6 +18,8 @@ export const Route = createFileRoute("/e/$env")({
       $api.queryOptions("get", "/api/environments")
     )
     if (!envs?.some((e) => e.id === params.env)) throw notFound()
+    if (await setupOnFirstLoad(context.queryClient, params.env))
+      throw redirect({ to: "/setup" })
   },
   component: EnvironmentLayout,
 })
