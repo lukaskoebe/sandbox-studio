@@ -60,3 +60,15 @@ func workspaceExport(dst, warn io.Writer) error {
 func workspaceImport(src io.Reader) error {
 	return guest.ImportWorkspace(guest.Workdir, bufio.NewReaderSize(src, 1<<20))
 }
+
+func homeExport(dst, warn io.Writer) error {
+	w := bufio.NewWriterSize(dst, 1<<20)
+	if err := guest.ExportHome(guest.Home, w, warn); err != nil {
+		return err
+	}
+	return w.Flush()
+}
+
+func homeImport(src io.Reader) error {
+	return guest.ImportHome(guest.Home, bufio.NewReaderSize(src, 1<<20))
+}

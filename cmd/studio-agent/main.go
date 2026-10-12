@@ -52,6 +52,17 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: workspace-import: %v\n", err)
 			os.Exit(1)
 		}
+	case "home-export":
+		// The same for the agent user's home.
+		if err := homeExport(os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: home-export: %v\n", err)
+			os.Exit(1)
+		}
+	case "home-import":
+		if err := homeImport(os.Stdin); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: home-import: %v\n", err)
+			os.Exit(1)
+		}
 	case "__capture-watchdog":
 		if len(os.Args) != 3 {
 			fmt.Fprintln(os.Stderr, "studio-agent: capture watchdog: missing freeze limit")
@@ -115,7 +126,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|oci-runtime|export-layer|workspace-export|workspace-import]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import]\n")
 		os.Exit(2)
 	}
 }

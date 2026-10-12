@@ -206,6 +206,10 @@ func Supervise(ctx context.Context, log *slog.Logger, self string, lock *os.File
 	if err := prepareDisks(); err != nil {
 		return err
 	}
+	// A home that can't be seeded still works, without some of the image's dotfiles.
+	if err := prepareHome(); err != nil {
+		log.Warn("seeding the home disk", "err", err)
+	}
 	// Nothing else runs the services while the lock is held, so a pid file left by an
 	// unclean shutdown is stale.
 	os.Remove("/var/run/docker.pid")
