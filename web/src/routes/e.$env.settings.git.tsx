@@ -630,8 +630,13 @@ function TestForm({ env, forge }: { env: string; forge: Forge }) {
           <p className="text-xs/relaxed">
             {forge.name} works.
             {res.user && ` The token belongs to ${res.user}.`}
-            {res.repo &&
-              ` ${res.repo} has ${res.branches ?? 0} ${res.branches === 1 ? "branch" : "branches"}.`}{" "}
+            {res.repo && (
+              <>
+                {" "}
+                <Ident>{res.repo}</Ident> has {res.branches ?? 0}{" "}
+                {res.branches === 1 ? "branch" : "branches"}.
+              </>
+            )}{" "}
             {res.expiresAt && expiry(res.expiresAt)}
           </p>
         ) : (
@@ -747,7 +752,7 @@ function HostKeyCheck({
         <>
           <p className="text-xs">
             <span className="text-muted-foreground">{scanned.algorithm}</span>{" "}
-            <span className="font-mono break-all">{scanned.fingerprint}</span>
+            <Ident copy>{scanned.fingerprint}</Ident>
           </p>
           <label className="flex items-center gap-2 text-xs">
             <Checkbox
@@ -823,9 +828,11 @@ function PinForm({
         <DialogTitle>Re-pin the host key of {forge.name}</DialogTitle>
         <DialogDescription>
           Pinned now:{" "}
-          <span className="font-mono">{forge.hostKeyFingerprint}</span>. Only
-          re-pin a key the host&apos;s admin confirms: a changed key can mean
-          someone is intercepting the connection.
+          {forge.hostKeyFingerprint && (
+            <Ident>{forge.hostKeyFingerprint}</Ident>
+          )}
+          . Only re-pin a key the host&apos;s admin confirms: a changed key can
+          mean someone is intercepting the connection.
         </DialogDescription>
       </DialogHeader>
       <HostKeyCheck
@@ -940,8 +947,8 @@ function PublicKeyNotice({
       <DialogHeader>
         <DialogTitle>Add Studio&apos;s key to the host</DialogTitle>
         <DialogDescription>
-          Add this public key to {forge.baseUrl} with write access. A deploy key
-          for one repository is enough.
+          Add this public key to <Ident>{forge.baseUrl}</Ident> with write
+          access. A deploy key for one repository is enough.
         </DialogDescription>
       </DialogHeader>
       <div className="flex items-start gap-1">
@@ -1123,8 +1130,10 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           onChange={(e) => setName(e.target.value.toLowerCase())}
         />
         <FieldDescription>
-          Used in sandbox remote URLs. Sandboxes use https://{remoteHost}/
-          {name.trim() || "<name>"}/{repoPath || "owner/repo"}.git
+          Used in sandbox remote URLs. Sandboxes use{" "}
+          <Ident>
+            {`https://${remoteHost}/${name.trim() || "<name>"}/${repoPath || "owner/repo"}.git`}
+          </Ident>
         </FieldDescription>
       </Field>
       <Field>
