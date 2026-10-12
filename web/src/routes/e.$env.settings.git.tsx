@@ -3,7 +3,9 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  CloudIcon,
   CopyIcon,
+  GitBranchIcon,
   KeyIcon,
   PlugsConnectedIcon,
   PlusIcon,
@@ -63,21 +65,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Ident } from "@/components/ident"
+import { KindChip } from "@/components/kind-chip"
 import {
   GitOutcome,
   GitReviewSheet,
   isGitApproval,
 } from "@/components/git-review"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
-import { ApprovalStatusBadge } from "@/components/status-badge"
+import { SectionHeader } from "@/components/section-header"
+import { StatusDot } from "@/components/status-dot"
 import {
   $api,
   errorMessage,
   fetchClient,
   type AgentStatus,
+  type Approval,
   type Forge,
 } from "@/lib/api/client"
-import { gitSummary } from "@/lib/approval-kinds"
+import { approvalKind, gitSummary } from "@/lib/approval-kinds"
 import { copyText } from "@/lib/clipboard"
 import { formatAge } from "@/lib/utils"
 
@@ -146,7 +152,12 @@ function GitPage() {
         </p>
 
         <section className="space-y-2">
-          <h2 className="text-xs font-medium">Forges</h2>
+          <SectionHeader
+            title="Forges"
+            icon={CloudIcon}
+            area="git"
+            count={forges.data?.length}
+          />
           {forges.isPending ? (
             <Spinner className="mx-auto block" />
           ) : list.length ? (
@@ -195,39 +206,40 @@ function GitPage() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xs font-medium">Pushes</h2>
+          <SectionHeader
+            title="Pushes"
+            icon={GitBranchIcon}
+            area="git"
+            count={approvals.data && pushes.length}
+          />
           {approvals.isPending ? (
             <Spinner className="mx-auto block" />
           ) : pushes.length ? (
-            <ul className="divide-y rounded-lg ring-1 ring-foreground/10">
-              {pushes.slice(0, 100).map((a) => (
-                <li
-                  key={a.id}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 p-3 text-xs"
-                >
-                  <span className="min-w-0 truncate">{gitSummary(a)}</span>
-                  <span className="text-muted-foreground">
-                    {a.git?.review?.sandbox}
-                  </span>
-                  <ApprovalStatusBadge status={a.status} />
-                  {a.git && a.status !== "pending" && (
-                    <span className="max-w-md min-w-0">
-                      <GitOutcome git={a.git} />
-                    </span>
-                  )}
-                  <span className="ml-auto text-muted-foreground">
-                    {formatAge(a.createdAt)}
-                  </span>
-                  <Button
-                    size="xs"
-                    variant={a.status === "pending" ? "default" : "ghost"}
-                    onClick={() => setReviewing(a.id)}
-                  >
-                    {a.status === "pending" ? "Review" : "Show"}
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <div className="rounded-lg ring-1 ring-foreground/10">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Push</TableHead>
+                    <TableHead>Sandbox</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Outcome</TableHead>
+                    <TableHead>Requested</TableHead>
+                    <TableHead>
+                      <span className="sr-only">Actions</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pushes.slice(0, 100).map((a) => (
+                    <PushRow
+                      key={a.id}
+                      approval={a}
+                      onReview={() => setReviewing(a.id)}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           ) : (
             <p className="text-xs text-muted-foreground">No pushes yet.</p>
           )}
@@ -241,6 +253,59 @@ function GitPage() {
         }}
       />
     </>
+  )
+}
+
+/** A push or pull request: what it asks, where it stands and the button that reviews it. */
+function PushRow({
+  approval,
+  onReview,
+}: {
+  approval: Approval
+  onReview: () => void
+}) {
+  const kind = approvalKind(approval)
+  const pending = approval.status === "pending"
+  return (
+    <TableRow>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <KindChip area={kind.area} icon={kind.icon}>
+            {kind.title}
+          </KindChip>
+          <span className="max-w-96 truncate">{gitSummary(approval)}</span>
+        </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {approval.git?.review?.sandbox}
+      </TableCell>
+      <TableCell>
+        {pending ? (
+          <StatusDot status="waiting" />
+        ) : (
+          <span className="capitalize">{approval.status}</span>
+        )}
+      </TableCell>
+      <TableCell>
+        {approval.git && !pending && (
+          <div className="max-w-72 whitespace-normal">
+            <GitOutcome git={approval.git} />
+          </div>
+        )}
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {formatAge(approval.createdAt)}
+      </TableCell>
+      <TableCell>
+        <Button
+          size="xs"
+          variant={pending ? "default" : "ghost"}
+          onClick={onReview}
+        >
+          {pending ? "Review" : "Show"}
+        </Button>
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -285,9 +350,11 @@ function ForgeRow({
     })
   return (
     <TableRow>
-      <TableCell className="align-top font-mono">{forge.name}</TableCell>
       <TableCell className="align-top">
-        <span className="font-mono">{forge.baseUrl}</span>
+        <Ident>{forge.name}</Ident>
+      </TableCell>
+      <TableCell className="align-top">
+        <Ident>{forge.baseUrl}</Ident>
         <span className="ml-1.5 text-muted-foreground">
           {kindLabels[forge.kind]}
         </span>
@@ -300,14 +367,15 @@ function ForgeRow({
           <div className="mt-1 space-y-1 text-muted-foreground">
             <div>
               Host key{" "}
-              <span className="font-mono">{forge.hostKeyFingerprint}</span>
+              {forge.hostKeyFingerprint && (
+                <Ident copy>{forge.hostKeyFingerprint}</Ident>
+              )}
             </div>
             {forge.hostKeyMismatch && (
               <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                 <WarningIcon className="size-3 shrink-0" />
-                The host offered{" "}
-                <span className="font-mono">{forge.hostKeyMismatch}</span>{" "}
-                instead. Check with the host&apos;s admin, then re-pin.
+                The host offered <Ident>{forge.hostKeyMismatch}</Ident> instead.
+                Check with the host&apos;s admin, then re-pin.
               </div>
             )}
             {forge.auth === "agent" ? (
