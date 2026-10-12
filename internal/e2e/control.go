@@ -10,22 +10,22 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 )
 
 // ControlPrefix is where the control API is served, on Studio's own loopback listener.
-const ControlPrefix = "/__e2e/"
+const ControlPrefix = "/api/e2e/"
 
-// Control serves the control API under ControlPrefix and passes everything else to next.
-// It needs no login: it exists only in the e2e build, which only listens on loopback.
+// Control returns the control API, which Studio mounts under ControlPrefix on its API mux:
+// it gets the same login and Host and Origin checks as the rest of the API. It exists only
+// in the e2e build.
 //
-//	GET  /__e2e/sandboxes/{id}          the guest's recorded State
-//	POST /__e2e/sandboxes/{id}/connect  {"host": "example.com", "port": 80}: an HTTP request
+//	GET  /api/e2e/sandboxes/{id}          the guest's recorded State
+//	POST /api/e2e/sandboxes/{id}/connect  {"host": "example.com", "port": 80}: an HTTP request
 //	                                    through the gateway, in the background
-//	PUT  /__e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
-func (r *Runtime) Control(next http.Handler) http.Handler {
+//	PUT  /api/e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
+func (r *Runtime) Control() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /__e2e/sandboxes/{id}", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("GET /api/e2e/sandboxes/{id}", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))
 		if !ok {
 			http.NotFound(w, req)
@@ -33,7 +33,7 @@ func (r *Runtime) Control(next http.Handler) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, g.State())
 	})
-	mux.HandleFunc("POST /__e2e/sandboxes/{id}/connect", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("POST /api/e2e/sandboxes/{id}/connect", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))
 		if !ok {
 			http.NotFound(w, req)
@@ -53,7 +53,7 @@ func (r *Runtime) Control(next http.Handler) http.Handler {
 		g.Connect(body.Host, body.Port)
 		writeJSON(w, http.StatusAccepted, struct{}{})
 	})
-	mux.HandleFunc("PUT /__e2e/sandboxes/{id}/ports", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/ports", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))
 		if !ok {
 			http.NotFound(w, req)
@@ -69,13 +69,7 @@ func (r *Runtime) Control(next http.Handler) http.Handler {
 		g.SetPorts(body.Ports)
 		writeJSON(w, http.StatusOK, g.State())
 	})
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if strings.HasPrefix(req.URL.Path, ControlPrefix) {
-			mux.ServeHTTP(w, req)
-			return
-		}
-		next.ServeHTTP(w, req)
-	})
+	return mux
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

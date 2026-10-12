@@ -41,4 +41,5 @@ func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return e2e.Egress{Gat
 
 func upstreamDial() gatewayDial { return e2e.Dial }
 
-func withControl(h http.Handler) http.Handler { return fakeRuntime.Control(h) }
+// registerControl serves the control API behind the API's login, like the rest of the API.
+func registerControl(mux *http.ServeMux) { mux.Handle(e2e.ControlPrefix, fakeRuntime.Control()) }

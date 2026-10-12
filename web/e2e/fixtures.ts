@@ -7,7 +7,7 @@ import {
 } from "@playwright/test"
 import { startStudio, studioPort, type Studio } from "./studio"
 
-/** What the fake guest of a sandbox recorded (internal/e2e, GET /__e2e/sandboxes/{id}). */
+/** What the fake guest of a sandbox recorded (internal/e2e, GET /api/e2e/sandboxes/{id}). */
 export type GuestState = {
   connected: boolean
   configs: number
@@ -52,14 +52,14 @@ export class Api {
   }
 
   guest(id: string) {
-    return this.json<GuestState>("GET", `/__e2e/sandboxes/${id}`).then(
+    return this.json<GuestState>("GET", `/api/e2e/sandboxes/${id}`).then(
       (s) => s!
     )
   }
 
   /** Makes the fake guest request http://host:port/ through the gateway. */
   connect(id: string, host: string, port = 80) {
-    return this.json("POST", `/__e2e/sandboxes/${id}/connect`, { host, port })
+    return this.json("POST", `/api/e2e/sandboxes/${id}/connect`, { host, port })
   }
 
   /** Dismisses every pending approval, so tests don't see each other's. */

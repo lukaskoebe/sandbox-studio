@@ -34,4 +34,5 @@ func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return gw }
 // upstreamDial is the gateway's dialer; nil is its default, public addresses only.
 func upstreamDial() gatewayDial { return nil }
 
-func withControl(h http.Handler) http.Handler { return h }
+// registerControl adds the e2e control API to the API mux; production has none.
+func registerControl(*http.ServeMux) {}

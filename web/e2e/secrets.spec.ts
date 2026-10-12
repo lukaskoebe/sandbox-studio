@@ -55,7 +55,7 @@ test("a secret reaches the guest only as its placeholder", async ({
   for (const path of [
     `/api/environments/${env}/secrets`,
     `/api/environments/${env}/sandboxes/${id}`,
-    `/__e2e/sandboxes/${id}`,
+    `/api/e2e/sandboxes/${id}`,
   ])
     bodies.push(await (await api.request.get(path)).text())
   for (const body of bodies) expect(body).not.toContain(value)

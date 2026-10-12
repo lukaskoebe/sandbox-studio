@@ -61,11 +61,12 @@ The `e2e` build replaces the VM runtime and the guest agent with the fakes in
 - Sandboxes boot in milliseconds. The fake guest dials the sandbox's agent socket and speaks
   the real channel protocol: hello, config (recorded, so tests can read the placeholders),
   terminals that echo input, sessions, listening ports and TCP for previews.
-- `POST /__e2e/sandboxes/{id}/connect` makes the fake guest request a host through the real
+- `POST /api/e2e/sandboxes/{id}/connect` makes the fake guest request a host through the real
   gateway, so network approvals appear. Every upstream host answers "hello from <host>".
-- `/__e2e/` exists only in the e2e build. The gateway, approvals, rules, secrets, git review
-  and the catalog are the real ones. The per-sandbox DNS resolvers are not started, because
-  they listen on fixed ports; the fake guest names hosts in SOCKS5 instead.
+- `/api/e2e/` exists only in the e2e build, behind the same login as the API. The gateway,
+  approvals, rules, secrets, git review and the catalog are the real ones. The per-sandbox
+  DNS resolvers are not started, because they listen on fixed ports; the fake guest names
+  hosts in SOCKS5 instead.
 
 Tests locate elements by role and label, and use `data-testid` only where a control has no
 accessible name (approval cards). Scenarios that need more fakes (git review, chats and the
