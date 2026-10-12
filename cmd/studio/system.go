@@ -19,9 +19,7 @@ import (
 
 // doctorCheck runs the host checks. Studio's own listeners count as healthy when owned.
 func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool) doctor.Report {
-	p := doctor.HostProbes()
-	p.MSBPath = runtime.MSBPath
-	p.ImageCached = runtime.ImageCached
+	p := hostProbes()
 	ports := []string{addr}
 	if gatewayAddr, registryAddr, err := serviceAddrs(addr); err == nil {
 		ports = append(ports, gatewayAddr, registryAddr)

@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
@@ -155,7 +154,7 @@ func run(addr, image string, log *slog.Logger) error {
 		return err
 	}
 	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false))
-	if err := agentbin.Install(p.Guest(), goruntime.GOARCH); err != nil {
+	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
 		return err
 	}
 	st, err := store.Open(ctx, p.DB())
@@ -201,7 +200,7 @@ func run(addr, image string, log *slog.Logger) error {
 		}
 	}()
 	log.Info("checking the microsandbox runtime")
-	if err := runtime.Ensure(ctx); err != nil {
+	if err := ensureRuntime(ctx); err != nil {
 		return fmt.Errorf("microsandbox runtime: %w", err)
 	}
 
@@ -225,7 +224,7 @@ func run(addr, image string, log *slog.Logger) error {
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
-		Virtual: integs.Routes(),
+		Virtual: integs.Routes(), Dial: upstreamDial(),
 	}
 	gl, err := net.Listen("tcp", gatewayAddr)
 	if err != nil {
@@ -259,13 +258,13 @@ func run(addr, image string, log *slog.Logger) error {
 	integs = append(integs, agentMem) // settles memory.share and memory.conflict approvals; it serves no hosts
 
 	hub := agentchan.NewHub(log)
-	rt := runtime.New(runtime.Options{Image: image, GuestDir: p.Guest()})
+	rt := newRuntime(runtime.Options{Image: image, GuestDir: p.Guest()}, log)
 	mgr := &sandboxes.Manager{
 		Store:     st,
 		Runtime:   rt,
 		Templates: registry,
 		Hub:       hub,
-		Egress:    gw,
+		Egress:    sandboxEgress(gw),
 		CA:        authority,
 		Secrets:   vault,
 		Paths:     p,
@@ -327,7 +326,7 @@ func run(addr, image string, log *slog.Logger) error {
 	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
 		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats}).Register(mux)
 	mux.Handle("/", webui.Handler())
-	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
+	handler := withControl(api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux))))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up
 	// the shutdown.
@@ -354,6 +353,15 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 	return nil
 }
+
+// studioRuntime is what Studio needs from the VM runtime: sandbox lifecycles and template
+// builds. newRuntime returns microsandbox's, or the e2e build's fake (runtime_e2e.go).
+type studioRuntime interface {
+	sandboxes.SandboxRuntime
+	templatebuild.Runner
+}
+
+type gatewayDial = func(ctx context.Context, network, addr string) (net.Conn, error)
 
 // ensureEnvironment creates the first environment on a fresh install.
 func ensureEnvironment(ctx context.Context, st *store.Store) error {
