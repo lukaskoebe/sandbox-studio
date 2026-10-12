@@ -45,7 +45,7 @@ func (s *Server) registerCheckpoints(api huma.API) {
 		OperationID: "createCheckpoint", Method: http.MethodPost,
 		Path: "/api/environments/{env}/sandboxes/{id}/checkpoints", Tags: []string{"checkpoints"},
 		Summary:       "Create a disk checkpoint",
-		Description:   "Stop the sandbox first; checkpoint capture requires a stopped sandbox.",
+		Description:   "Captures the disks of a running or stopped sandbox. A running sandbox is frozen while its filesystems are flushed; one created with systemd as its init must be stopped first.",
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *createCheckpointIn) (*struct{ Body store.Checkpoint }, error) {
 		ctx, cancel := checkpointMutationContext(ctx)
