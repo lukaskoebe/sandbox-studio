@@ -1,7 +1,12 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { MoonStarsIcon } from "@phosphor-icons/react"
+import {
+  CheckCircleIcon,
+  ClockCounterClockwiseIcon,
+  MoonStarsIcon,
+  ScalesIcon,
+} from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
@@ -15,6 +20,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
+import { Ident } from "@/components/ident"
+import { KindChip } from "@/components/kind-chip"
+import { SectionHeader } from "@/components/section-header"
+import { StatusDot } from "@/components/status-dot"
 import {
   invalidateMemory,
   textareaClass,
@@ -68,6 +77,9 @@ export function ConflictSheet({
     <Sheet open={conflictId !== undefined} onOpenChange={onOpenChange}>
       <SheetContent className="data-[side=right]:sm:max-w-3xl">
         <SheetHeader>
+          <KindChip area="memory" icon={ScalesIcon}>
+            Memory conflict
+          </KindChip>
           <SheetTitle>Conflicting facts</SheetTitle>
           <SheetDescription>
             {c ? (verdictText[c.verdict] ?? c.verdict) : "Two facts disagree."}
@@ -106,11 +118,15 @@ function ConflictBody({
 }) {
   return (
     <>
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <Badge variant="outline">{c.verdict.replaceAll("_", " ")}</Badge>
-        <Badge variant={c.status === "open" ? "destructive" : "secondary"}>
-          {c.status === "open" ? "open" : `resolved: ${c.resolution}`}
-        </Badge>
+        {c.status === "open" ? (
+          <StatusDot status="waiting" />
+        ) : (
+          <span className="text-muted-foreground">
+            resolved: {c.resolution}
+          </span>
+        )}
         <span className="text-muted-foreground">{formatAge(c.createdAt)}</span>
       </div>
       {c.reason && (
@@ -125,9 +141,13 @@ function ConflictBody({
         <FactSide name="B" fact={c.factB} sources={c.sourcesB ?? []} />
       </div>
       {(c.timeline ?? []).length > 0 && (
-        <div className="space-y-1">
-          <h3 className="font-medium">Timeline</h3>
-          <ol className="space-y-1">
+        <div className="grid gap-2">
+          <SectionHeader
+            area="memory"
+            title="Timeline"
+            icon={ClockCounterClockwiseIcon}
+          />
+          <ol className="grid gap-1">
             {(c.timeline ?? []).map((e) => (
               <li key={e.id} className="flex gap-2">
                 <span className="w-20 shrink-0 text-muted-foreground">
@@ -156,12 +176,12 @@ function FactSide({
   sources: Source[]
 }) {
   return (
-    <div className="space-y-1.5 rounded-md bg-muted/50 p-2">
+    <div className="grid content-start gap-1.5 border-t pt-2">
       <div className="flex items-center gap-1.5">
         <span className="font-medium">{name}</span>
-        <span className="font-mono text-[0.625rem] text-muted-foreground">
+        <Ident className="text-[0.625rem] text-muted-foreground">
           {fact.scope}
-        </span>
+        </Ident>
       </div>
       <p className="whitespace-pre-wrap">{fact.text}</p>
       <div className="flex flex-wrap gap-1">
@@ -180,7 +200,12 @@ function FactSide({
           {sources.map((s) => (
             <li key={s.id} className="text-muted-foreground">
               <span className="text-foreground">{s.kind}</span>
-              {s.authorTeammate && ` · teammate:${s.authorTeammate}`}
+              {s.authorTeammate && (
+                <>
+                  {" · teammate:"}
+                  <Ident>{s.authorTeammate}</Ident>
+                </>
+              )}
               {` · ${formatAge(s.createdAt)}`}
               {s.evidence && (
                 <span className="block italic">“{s.evidence}”</span>
@@ -233,8 +258,8 @@ function ResolveForm({
     })
 
   return (
-    <div className="space-y-3 border-t border-foreground/10 pt-3">
-      <h3 className="font-medium">Resolve</h3>
+    <div className="grid gap-3 border-t pt-3">
+      <SectionHeader area="memory" title="Resolve" icon={CheckCircleIcon} />
       <Field>
         <FieldLabel htmlFor="conflict-note">Note</FieldLabel>
         <Input
@@ -444,14 +469,13 @@ export function MemoryConflictDecision({
   )
 }
 
-const statusVariant: Record<
-  DreamRun["status"],
-  "secondary" | "outline" | "destructive"
-> = {
-  running: "outline",
-  done: "secondary",
-  stopped: "outline",
-  failed: "destructive",
+/** A run's status: the three that are sandbox statuses too get their dot; a finished run is only its word. */
+function RunStatus({ status }: { status: DreamRun["status"] }) {
+  return status === "done" ? (
+    <span className="text-muted-foreground">Done</span>
+  ) : (
+    <StatusDot status={status} />
+  )
 }
 
 function runSummary(r: DreamRun) {
@@ -516,10 +540,13 @@ export function DreamPanel({ env, scope }: { env: string; scope: string }) {
         </span>
       </div>
       {list.length > 0 && (
-        <ul className="space-y-1">
+        <ul className="divide-y rounded-md border">
           {list.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-1.5">
-              <Badge variant={statusVariant[r.status]}>{r.status}</Badge>
+            <li
+              key={r.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2"
+            >
+              <RunStatus status={r.status} />
               <span className="text-muted-foreground">
                 {r.trigger} · {formatAge(r.startedAt)}
                 {r.resumes > 0 && ` · resumed ${r.resumes}×`}
