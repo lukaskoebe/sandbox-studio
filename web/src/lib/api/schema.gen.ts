@@ -85,6 +85,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/builds/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateBuildSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/builds/{id}": {
         parameters: {
             query?: never;
@@ -1685,6 +1701,17 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        BuildSourceProblem: {
+            /** Format: int64 */
+            column: number;
+            /** Format: int64 */
+            line: number;
+            message: string;
+        };
+        BuildSourceValidation: {
+            ok: boolean;
+            problems: components["schemas"]["BuildSourceProblem"][] | null;
+        };
         Chat: {
             acpSessionId?: string;
             /** Format: date-time */
@@ -3007,6 +3034,10 @@ export interface components {
             /** @description The provider's name */
             provider?: string;
         };
+        ValidateInBody: {
+            /** @description Template specification in YAML */
+            source: string;
+        };
         View: {
             agent?: components["schemas"]["AgentInfo"];
             checkpointRestoreSupported: boolean;
@@ -3298,6 +3329,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BuildJobView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    validateBuildSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ValidateInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildSourceValidation"];
                 };
             };
             /** @description Error */

@@ -256,3 +256,64 @@ func TestBuildRuntimeOutputIsNotReturnedAsAPIError(t *testing.T) {
 		t.Fatalf("build error response leaked backend details: %s", rec.Body)
 	}
 }
+
+type rejectingBuildService struct{ t *testing.T }
+
+func (b rejectingBuildService) Submit(context.Context, string, string) (store.BuildJob, bool, error) {
+	b.t.Error("validation submitted a build")
+	return store.BuildJob{}, false, errors.New("unexpected submit")
+}
+
+func (b rejectingBuildService) Cancel(context.Context, string, string) (store.BuildJob, error) {
+	b.t.Error("validation cancelled a build")
+	return store.BuildJob{}, errors.New("unexpected cancel")
+}
+
+func TestBuildValidateReportsProblemsWithoutCreatingJobs(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "validate")
+	url := buildPath(env.ID) + "/validate"
+
+	// No build backend is needed to validate.
+	valid := submitBuild(t, h, url, "tools:\n  node: \"22\"\n")
+	if valid.Code != http.StatusOK {
+		t.Fatalf("valid source: got %d (%s)", valid.Code, valid.Body)
+	}
+	if !strings.Contains(valid.Body.String(), `"problems":[]`) {
+		t.Fatalf("valid source must return an empty problems list: %s", valid.Body)
+	}
+	if got := decode[BuildSourceValidation](t, valid); !got.OK {
+		t.Fatalf("valid source: %+v", got)
+	}
+
+	s.Builds = rejectingBuildService{t: t}
+	invalid := submitBuild(t, h, url, "tools:\n  node: 22\nextra: true\n")
+	if invalid.Code != http.StatusOK {
+		t.Fatalf("invalid source: got %d (%s)", invalid.Code, invalid.Body)
+	}
+	got := decode[BuildSourceValidation](t, invalid)
+	want := []BuildSourceProblem{
+		{Line: 2, Column: 9, Message: "tool versions must be quoted numeric dotted strings of at most 64 bytes"},
+		{Line: 3, Column: 1, Message: `unknown top-level key "extra"`},
+	}
+	if got.OK || len(got.Problems) != len(want) || got.Problems[0] != want[0] || got.Problems[1] != want[1] {
+		t.Fatalf("invalid source: %+v, want problems %+v", got, want)
+	}
+
+	if rec := submitBuild(t, h, url, "setup: a\x00b\n"); rec.Code != http.StatusOK || decode[BuildSourceValidation](t, rec).OK {
+		t.Errorf("NUL source: got %d (%s), want ok=false", rec.Code, rec.Body)
+	}
+	if rec := submitBuild(t, h, url, "setup: "+strings.Repeat("é", 32<<10)); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("source over 64 KiB of UTF-8: got %d, want 422 (%s)", rec.Code, rec.Body)
+	}
+	if rec := do(h, http.MethodPost, url, `{"source":""}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("empty source: got %d, want 422 (%s)", rec.Code, rec.Body)
+	}
+	if rec := submitBuild(t, h, buildPath("missing-environment")+"/validate", "{}"); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown environment: got %d, want 404 (%s)", rec.Code, rec.Body)
+	}
+	jobs, err := s.Store.BuildJobs(context.Background(), env.ID, 10)
+	if err != nil || len(jobs) != 0 {
+		t.Fatalf("validation created jobs: %+v (%v)", jobs, err)
+	}
+}

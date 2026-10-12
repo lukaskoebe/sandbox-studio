@@ -548,6 +548,50 @@
         ],
         "type": "object"
       },
+      "BuildSourceProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "line": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "column",
+          "message"
+        ],
+        "type": "object"
+      },
+      "BuildSourceValidation": {
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/BuildSourceProblem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "problems"
+        ],
+        "type": "object"
+      },
       "Chat": {
         "additionalProperties": false,
         "properties": {
@@ -4602,6 +4646,21 @@
         ],
         "type": "object"
       },
+      "ValidateInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "description": "Template specification in YAML",
+            "maxLength": 65536,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "type": "object"
+      },
       "View": {
         "additionalProperties": false,
         "properties": {
@@ -5112,6 +5171,58 @@
               }
             },
             "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "builds"
+        ]
+      }
+    },
+    "/api/environments/{env}/builds/validate": {
+      "post": {
+        "operationId": "validateBuildSource",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildSourceValidation"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {
