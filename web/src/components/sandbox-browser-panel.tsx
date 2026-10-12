@@ -144,7 +144,7 @@ export function SandboxBrowserPanel({
     `${window.location.origin}/api/environments/${routeEnv}` +
     `/teammates/${routeTeammate}/browser/live` +
     (sessionID ? `?session=${encodeURIComponent(sessionID)}` : "")
-  const fullBrowserURL = `/e/${routeEnv}/browser?teammate=${routeTeammate}`
+  const fullBrowserURL = `/e/${routeEnv}/teammates/${routeTeammate}/browser`
   const openAddress = (event: FormEvent) => {
     event.preventDefault()
     setAddressError("")

@@ -31,7 +31,7 @@ export type ApprovalKind = {
     | "/e/$env/network"
     | "/e/$env/settings/git"
     | "/e/$env/memory"
-    | "/e/$env/browser"
+    | "/e/$env/teammates/$id/browser"
     | "/e/$env/chats"
 }
 
@@ -109,7 +109,7 @@ const kinds: Record<string, ApprovalKind> = {
       return `${act.action}${target} on ${act.origin}`
     },
     icon: CursorClickIcon,
-    page: "/e/$env/browser",
+    page: "/e/$env/teammates/$id/browser",
   },
   "browser.credential": {
     title: "Browser credential",
@@ -120,7 +120,7 @@ const kinds: Record<string, ApprovalKind> = {
         : "Fill a credential"
     },
     icon: KeyIcon,
-    page: "/e/$env/browser",
+    page: "/e/$env/teammates/$id/browser",
   },
   "chat.permission": {
     title: "Agent permission",
@@ -143,6 +143,11 @@ export function approvalKind(a: Approval): ApprovalKind {
 }
 
 /** The sandbox or teammate that asked, when the payload names one. */
+/** The teammate whose browser asked, for the browser kinds that link to it. */
+export function approvalTeammateId(a: Approval): string | undefined {
+  return a.browserAction?.teammateId ?? a.browserCredential?.teammateId
+}
+
 export function approvalSource(a: Approval): string | undefined {
   return (
     a.network?.sandboxName ??

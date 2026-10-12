@@ -25,7 +25,11 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { $api, type Approval } from "@/lib/api/client"
-import { approvalKind, approvalSource } from "@/lib/approval-kinds"
+import {
+  approvalKind,
+  approvalSource,
+  approvalTeammateId,
+} from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
 
 /** Cards shown at sm and wider; below that only the newest one is. */
@@ -145,7 +149,10 @@ function MoreLink({
   return (
     <Link
       to={approvalKind(approval).page}
-      params={{ env: approval.environmentId }}
+      params={{
+        env: approval.environmentId,
+        id: approvalTeammateId(approval) ?? "",
+      }}
       className={cn(
         "px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline",
         className

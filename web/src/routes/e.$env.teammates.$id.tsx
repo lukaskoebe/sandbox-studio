@@ -27,6 +27,11 @@ const tabs = [
   { value: "overview", label: "Overview", to: "/e/$env/teammates/$id" },
   { value: "chats", label: "Chats", to: "/e/$env/teammates/$id/chats" },
   {
+    value: "browser",
+    label: "Browser",
+    to: "/e/$env/teammates/$id/browser",
+  },
+  {
     value: "settings",
     label: "Settings",
     to: "/e/$env/teammates/$id/settings",
