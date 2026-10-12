@@ -7,9 +7,9 @@ import {
   PowerIcon,
   StopIcon,
   WarningIcon,
-  XIcon,
 } from "@phosphor-icons/react"
 import { BrowserLive, BrowserSessionSelect } from "@/components/browser-live"
+import { SidePanel } from "@/components/side-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,20 +28,16 @@ type BrowserStatus = components["schemas"]["BrowserStatus"]
 
 const browserStatusPath = "/api/environments/{env}/teammates/{teammate}/browser"
 
+/** The teammate's browser beside a sandbox's workspace: its live view, address and takeover. */
 export function SandboxBrowserPanel({
   env,
   teammate,
-  width,
   onClose,
-  autoFocusClose,
 }: {
   env: string
   teammate: string
-  width: number
   onClose: () => void
-  autoFocusClose: boolean
 }) {
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const path = { env, teammate }
   const statusParams = { params: { path } }
   const queryClient = useQueryClient()
@@ -91,9 +87,6 @@ export function SandboxBrowserPanel({
   useEffect(() => {
     if (!addressDirty) setAddressDraft(addressPageURL)
   }, [addressDirty, addressPageURL])
-  useEffect(() => {
-    if (autoFocusClose) closeButtonRef.current?.focus()
-  }, [autoFocusClose])
 
   const refresh = () => {
     queryClient.invalidateQueries({
@@ -182,47 +175,35 @@ export function SandboxBrowserPanel({
               : "The browser is not running. It can start when an agent uses a browser tool."
 
   return (
-    <aside
-      id="sandbox-browser-panel"
-      aria-label="Teammate browser"
-      className="absolute inset-0 z-20 flex min-h-0 min-w-0 flex-col bg-background lg:relative lg:inset-auto lg:z-auto lg:max-w-[70%]"
-      style={{ flex: `0 0 ${width}%` }}
-    >
-      <div className="flex h-10 shrink-0 items-center gap-1.5 border-b px-2">
-        <h2 className="truncate text-xs font-medium">Browser</h2>
-        {st && <Badge variant="outline">{st.vm}</Badge>}
-        {driving && (
-          <span className="hidden truncate text-[0.625rem] text-muted-foreground sm:inline">
-            You are driving
-          </span>
-        )}
+    <SidePanel
+      label="Teammate browser"
+      title="Browser"
+      meta={
+        <>
+          {st && <Badge variant="outline">{st.vm}</Badge>}
+          {driving && (
+            <span className="hidden truncate text-[0.625rem] text-muted-foreground sm:inline">
+              You are driving
+            </span>
+          )}
+        </>
+      }
+      actions={
         <a
           href={fullBrowserURL}
           target="_blank"
           rel="noreferrer"
           aria-label="Open this teammate's browser page"
-          className="ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           title="Open this teammate's browser page"
         >
           <ArrowSquareOutIcon className="size-3.5" />
           <span className="hidden xl:inline">Full page</span>
         </a>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          ref={closeButtonRef}
-          aria-label="Close browser panel"
-          title={
-            driving
-              ? "Close browser panel; this does not hand back control"
-              : "Close browser panel"
-          }
-          onClick={onClose}
-        >
-          <XIcon />
-        </Button>
-      </div>
-
+      }
+      storageKey="studio.panel.sandbox"
+      onClose={onClose}
+    >
       {st && (
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b px-2 py-1.5">
           {running ? (
@@ -420,6 +401,6 @@ export function SandboxBrowserPanel({
           </Empty>
         ) : null}
       </div>
-    </aside>
+    </SidePanel>
   )
 }

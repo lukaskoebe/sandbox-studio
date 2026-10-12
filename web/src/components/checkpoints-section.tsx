@@ -26,45 +26,30 @@ import {
 } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
 
-/** Disk checkpoints for one sandbox, available even while it is stopped. */
-export function CheckpointsSheet({
+/** Disk checkpoints of one sandbox, on its dashboard; they work while it is stopped. */
+export function CheckpointsSection({
   env,
   sandbox,
 }: {
   env: string
   sandbox: Sandbox
 }) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger render={<Button variant="ghost" size="sm" />}>
-        <FloppyDiskIcon />
-        Checkpoints
-      </SheetTrigger>
-      <SheetContent className="data-[side=right]:sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>Checkpoints</SheetTitle>
-          <SheetDescription>
-            Checkpoints save disks, not running processes. Stop applications
-            before stopping the sandbox for consistent data.
-          </SheetDescription>
-        </SheetHeader>
-        {open && <CheckpointPanel env={env} sandbox={sandbox} />}
-      </SheetContent>
-    </Sheet>
+    <section aria-labelledby="checkpoints-heading" className="grid gap-3">
+      <div>
+        <h2 id="checkpoints-heading" className="text-sm font-medium">
+          Checkpoints
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Checkpoints save disks, not running processes. Stop applications
+          before stopping the sandbox for consistent data.
+        </p>
+      </div>
+      <CheckpointPanel env={env} sandbox={sandbox} />
+    </section>
   )
 }
 
@@ -158,7 +143,7 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
   }
 
   return (
-    <ScrollArea className="min-h-0 flex-1" viewportClassName="px-6 pb-6">
+    <div>
       <form className="grid gap-2 border-b pb-4" onSubmit={createCheckpoint}>
         <Label htmlFor="checkpoint-name">Checkpoint name</Label>
         <div className="flex items-center gap-2">
@@ -357,7 +342,7 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
           })}
         </ul>
       )}
-    </ScrollArea>
+    </div>
   )
 }
 

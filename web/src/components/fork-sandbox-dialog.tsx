@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { GitForkIcon, WarningIcon } from "@phosphor-icons/react"
+import { WarningIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Field,
@@ -24,15 +23,18 @@ import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
 
 const namePattern = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/
 
-/** Copies a sandbox into a new one with the same template, then opens the copy. */
+/** Copies a sandbox into a new one with the same template, then opens the copy. Opened from the options menu. */
 export function ForkSandboxDialog({
   env,
   sandbox,
+  open,
+  onOpenChange,
 }: {
   env: string
   sandbox: Sandbox
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const fork = $api.useMutation(
@@ -43,7 +45,7 @@ export function ForkSandboxDialog({
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/sandboxes"],
         })
-        setOpen(false)
+        onOpenChange(false)
         navigate({
           to: "/e/$env/sandboxes/$id",
           params: { env, id: forked.id },
@@ -52,34 +54,16 @@ export function ForkSandboxDialog({
     }
   )
   const pending = fork.isPending
-  const available = sandbox.status === "running" || sandbox.status === "stopped"
 
   function handleOpenChange(nextOpen: boolean) {
     // The request stays on screen until it succeeds or fails.
     if (!nextOpen && pending) return
     if (nextOpen) fork.reset()
-    setOpen(nextOpen)
+    onOpenChange(nextOpen)
   }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!available || pending}
-            title={
-              available
-                ? "Copy this sandbox into a new one"
-                : "Only a running or stopped sandbox can be forked"
-            }
-          />
-        }
-      >
-        <GitForkIcon />
-        Fork
-      </DialogTrigger>
       <DialogContent showCloseButton={!pending}>
         <ForkForm
           sandbox={sandbox}
