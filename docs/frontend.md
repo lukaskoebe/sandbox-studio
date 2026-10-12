@@ -23,20 +23,36 @@ to an environment.
 
 | Route | Page |
 |---|---|
-| `/e/$env` | sandboxes: create, import |
+| `/e/$env` | Home: the environment's sandboxes, create, import |
 | `/e/$env/sandboxes/$id` | one sandbox: agent view (chat or terminal, chosen on first open), terminals, previews, browser panel, checkpoints, connections, fork, rebase, export, suspend |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)) |
-| `/e/$env/builds` | template builds and templates |
 | `/e/$env/network/rules`, `/requests`, `/activity` | network rules (filters in the URL, grouped by registrable domain), requests waiting for a decision, decided requests; `/e/$env/network` opens requests when any wait, else rules |
 | `/e/$env/secrets` | secrets |
-| `/e/$env/git` | forges and git review |
-| `/e/$env/teammates`, `/e/$env/providers` | teammates and providers |
-| `/e/$env/memory` | memory pages, facts, conflicts, search, sessions |
-| `/e/$env/browser` | teammates' browsers: live view, takeover, history |
-| `/e/$env/settings` | agents, runtime (doctor), start at login, updates |
+| `/e/$env/memory` | shared memory: pages, facts, conflicts, search, sessions |
+| `/e/$env/teammates` | teammates |
+| `/e/$env/teammates/$id` | one teammate's overview: agent, identity, soul, sandboxes, scoped secrets |
+| `/e/$env/teammates/$id/chats` | the teammate's chats |
+| `/e/$env/teammates/$id/memory` | the teammate's private memory, with the tabs of shared memory |
+| `/e/$env/teammates/$id/browser` | the teammate's browser: live view, history, rules |
+| `/e/$env/teammates/$id/settings` | edit the teammate, or delete it |
+| `/e/$env/settings` | redirects to `general` |
+| `/e/$env/settings/general` | work mode, start at login, updates (the whole installation) |
+| `/e/$env/settings/providers` | AI providers of the environment |
+| `/e/$env/settings/git` | forges and git push review of the environment |
+| `/e/$env/settings/templates` | template builds and templates of the environment |
+| `/e/$env/settings/runtime` | host checks (doctor) |
 
-The sidebar holds the environment switcher and the navigation. The approval stack
-([approvals](approvals.md#realtime-and-ui)) is rendered by the root route on every page.
+The old addresses `/e/$env/git`, `/builds`, `/providers` and `/browser` redirect to the
+settings pages and teammate browsers above. `/browser?teammate=<id>` opens that teammate's
+browser.
+
+The sidebar holds the environment switcher, the navigation (Home, Chats, Network, Secrets,
+Memory, Settings), the teammates and the sandboxes. A teammate's dot shows its presence:
+waiting for you while one of its approvals is pending (a browser action or credential, a
+memory share, or a tool permission in one of its chats), working while one of its chats is
+running, and idle otherwise. The Settings pages for an environment name it in their header.
+The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
+on every page.
 
 ## Development
 

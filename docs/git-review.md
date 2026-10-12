@@ -7,7 +7,7 @@ that Studio serves in the gateway:
 https://git.studio.internal/<forge>/<path>.git
 ```
 
-`<forge>` is the name of a forge added on an environment's Git page. `<path>` has 1 to 8
+`<forge>` is the name of a forge added under **Settings → Git**. `<path>` has 1 to 8
 segments (each `^[A-Za-z0-9_][A-Za-z0-9._-]{0,99}$`, no `..`), so gitolite's `repo`,
 GitHub's `owner/repo` and GitLab's `group/sub/repo` all work; on forges with an API
 (Forgejo, GitHub) it must be exactly `owner/repo`. The store keeps everything before the
@@ -95,7 +95,7 @@ The config holds only these internal URLs, never a token or key.
 - **Studio key:** choose "A Studio key" in the dialog, or switch the forge to it. Studio
   generates an ed25519 key and seals it in the vault as `FORGE_<NAME>_SSH_KEY`; it is never
   written to a file and never reaches a sandbox. The public key (`ssh-ed25519 …
-  sandbox-studio/<env>/<forge>`) is shown on the Git page with a copy button: add it to the
+  sandbox-studio/<env>/<forge>`) is shown under **Settings → Git** with a copy button: add it to the
   host with write access (a deploy key for one repository is enough). Switching back to the
   agent deletes the key. Studio never reads your `~/.ssh` keys.
 - **Host key:** the Add forge dialog scans the host (`POST …/forges/scan`: handshake only,

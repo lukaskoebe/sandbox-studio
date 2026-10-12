@@ -50,7 +50,7 @@ Studio listens on loopback, so other computers on your network cannot open its U
 
 ## Prepare your first agent
 
-1. In the Providers page, add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
+1. In **Settings → Providers**, add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
 2. In Teammates, create a teammate and choose its harness, provider, model, role, and optional working instructions (“soul”).
 3. Create a sandbox and select that teammate. Ownership is fixed when the sandbox is created.
 4. Open the sandbox and select **Start session**. The agent opens in a terminal tab.

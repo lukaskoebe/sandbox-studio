@@ -14,7 +14,7 @@ A sandbox is a Linux microVM with Docker, a persistent `/workspace`, and its own
 
 ![The New sandbox dialog, with a name and optional teammate](../../assets/screenshots/new-sandbox.jpg)
 
-You can create a blank sandbox or choose a ready template from the Builds page. A template sets up the root filesystem; a newly created sandbox still gets its own empty workspace and Docker disk. Its home directory (`/home/agent`, 4 GiB) starts from the template's home, so your agent's sessions and logins are kept on that disk.
+You can create a blank sandbox or choose a ready template from **Settings → Templates**. A template sets up the root filesystem; a newly created sandbox still gets its own empty workspace and Docker disk. Its home directory (`/home/agent`, 4 GiB) starts from the template's home, so your agent's sessions and logins are kept on that disk.
 
 ## Work in a terminal
 

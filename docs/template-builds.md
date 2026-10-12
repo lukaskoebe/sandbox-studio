@@ -1,6 +1,6 @@
 # Template builds
 
-This guide describes the build API, worker, and Builds page. The page passed TypeScript,
+This guide describes the build API, worker, and the Templates page (Settings → Templates). The page passed TypeScript,
 lint, production-build, and desktop/mobile browser checks with simulated jobs. A completed
 job publishes an environment-scoped, content-addressed template for later sandbox creation.
 
@@ -200,7 +200,7 @@ age-based lock expiry or automatic takeover of a possibly live worker.
 
 ## Create a sandbox from a ready template
 
-The Builds page offers **Create sandbox** for a ready build that has a template. The
+The Templates page offers **Create sandbox** for a ready build that has a template. The
 dialog loads that same-environment ready template, displays its resource sizes, and sends
 only a sandbox name. Resource limits are fixed by the template's canonical spec; the
 instance API does not accept resource overrides.

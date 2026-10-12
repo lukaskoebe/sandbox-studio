@@ -108,8 +108,8 @@ new one while Studio is running. Data lives in the user data directory
 **Doctor.** `studio doctor` checks the microsandbox runtime and `msb doctor`, hardware
 virtualization, the base image, the data directory, free disk space (it warns below 5 GB) and
 the loopback ports Studio listens on. Every finding comes with a fix. The same checks run at
-startup, where problems are logged as warnings and Studio starts anyway, and on the
-**Settings** page under **Runtime**.
+startup, where problems are logged as warnings and Studio starts anyway, and on
+**Settings → Runtime**.
 
 **Settings** also has two options, both off by default:
 

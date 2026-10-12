@@ -92,10 +92,11 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET sessions?teammate=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
 | `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider, and `sharedJudge`: whose utility model consolidates shared memory |
 
-The Memory page in the environment sidebar has a scope switcher, the extraction budget line,
-and tabs for pages, facts (with "promote to shared" on teammate facts), conflicts (with
-"Dream now", recent runs and a sheet that shows both facts side by side with sources, tiers
-and timeline, and resolves), search and sessions. `memory.conflict` approvals show in the
+The Memory page in the environment sidebar shows shared memory: the extraction budget line
+and tabs for pages, facts, conflicts (with "Dream now", recent runs and a sheet that shows
+both facts side by side with sources, tiers and timeline, and resolves), search and sessions.
+A teammate's private memory has the same tabs on its teammate page, where its facts can be
+proposed for shared memory ("promote to shared"). `memory.conflict` approvals show in the
 approval stack with the same sheet.
 
 ## In agent sessions

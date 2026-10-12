@@ -1,250 +1,69 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
-import {
-  ArrowClockwiseIcon,
-  CheckCircleIcon,
-  WarningIcon,
-  XCircleIcon,
-} from "@phosphor-icons/react"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Spinner } from "@/components/ui/spinner"
-import { AgentViewToggle } from "@/components/agent-view"
-import { PageHeader } from "@/components/page-header"
-import { $api, errorMessage, type HostCheck } from "@/lib/api/client"
-import { formatAge } from "@/lib/utils"
+import { Link, Outlet, createFileRoute } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/e/$env/settings")({
-  component: SettingsPage,
+  component: SettingsLayout,
 })
 
-// Settings apply to the whole installation, not to one environment.
-function SettingsPage() {
+/**
+ * Settings sections, each a page of its own. A side list on wide screens; on phones a row of
+ * links that scrolls sideways.
+ */
+function SettingsLayout() {
+  const { env } = Route.useParams()
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Settings</h1>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          These settings apply to this Studio installation and every
-          environment.
+    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <nav
+        aria-label="Settings"
+        className="flex shrink-0 gap-1 overflow-x-auto border-b p-2 md:w-48 md:flex-col md:overflow-visible md:border-r-0 md:border-b-0 md:p-3"
+      >
+        <p className="hidden px-2 pb-2 text-sm font-medium md:block">
+          Settings
         </p>
-        <AgentsCard />
-        <RuntimeCard />
-        <AutostartCard />
-        <UpdatesCard />
-      </ScrollArea>
-    </>
+        <SettingsLink to="/e/$env/settings/general" env={env}>
+          General
+        </SettingsLink>
+        <SettingsLink to="/e/$env/settings/providers" env={env}>
+          Providers
+        </SettingsLink>
+        <SettingsLink to="/e/$env/settings/git" env={env}>
+          Git
+        </SettingsLink>
+        <SettingsLink to="/e/$env/settings/templates" env={env}>
+          Templates
+        </SettingsLink>
+        <SettingsLink to="/e/$env/settings/runtime" env={env}>
+          Runtime
+        </SettingsLink>
+      </nav>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <Outlet />
+      </div>
+    </div>
   )
 }
 
-function CheckIcon({ status }: { status: HostCheck["status"] }) {
-  if (status === "ok")
-    return <CheckCircleIcon className="size-4 shrink-0 text-emerald-600" />
-  if (status === "warn")
-    return <WarningIcon className="size-4 shrink-0 text-amber-600" />
-  return <XCircleIcon className="size-4 shrink-0 text-destructive" />
-}
-
-function AgentsCard() {
+function SettingsLink({
+  to,
+  env,
+  children,
+}: {
+  to:
+    | "/e/$env/settings/general"
+    | "/e/$env/settings/providers"
+    | "/e/$env/settings/git"
+    | "/e/$env/settings/templates"
+    | "/e/$env/settings/runtime"
+  env: string
+  children: string
+}) {
   return (
-    <Card className="max-w-3xl">
-      <CardHeader>
-        <CardTitle>Agents</CardTitle>
-        <CardDescription>
-          How you work with your teammates' agents by default: chatting, or in
-          the agent's own terminal app. The other way stays one click away on
-          each sandbox.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <AgentViewToggle />
-      </CardContent>
-    </Card>
-  )
-}
-
-function RuntimeCard() {
-  const doctor = $api.useQuery("get", "/api/system/doctor", undefined, {
-    staleTime: 60_000,
-  })
-  const report = doctor.data
-  return (
-    <Card className="max-w-3xl">
-      <CardHeader>
-        <CardTitle>Runtime</CardTitle>
-        <CardDescription>
-          Host checks for microsandbox, virtualization, the base image, disk
-          space and ports. The same checks run at startup and as{" "}
-          <code>studio doctor</code>.
-        </CardDescription>
-        <CardAction>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={doctor.isFetching}
-            onClick={() => doctor.refetch()}
-          >
-            {doctor.isFetching ? <Spinner /> : <ArrowClockwiseIcon />}
-            Check again
-          </Button>
-        </CardAction>
-      </CardHeader>
-      <CardContent className="space-y-3 text-xs">
-        {doctor.error && (
-          <p className="text-destructive">{errorMessage(doctor.error)}</p>
-        )}
-        {doctor.isPending && <Spinner className="mx-auto block" />}
-        {report && (
-          <ul className="space-y-2">
-            {report.checks?.map((c) => (
-              <li key={c.id} className="flex gap-2">
-                <CheckIcon status={c.status} />
-                <div className="min-w-0 space-y-0.5">
-                  <p>
-                    <span className="font-medium">{c.name}</span>{" "}
-                    <span className="text-muted-foreground">{c.message}</span>
-                  </p>
-                  {c.fix && <p className="text-muted-foreground">{c.fix}</p>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function AutostartCard() {
-  const queryClient = useQueryClient()
-  const status = $api.useQuery("get", "/api/system/autostart")
-  const set = $api.useMutation("put", "/api/system/autostart", {
-    onSuccess: (data) =>
-      queryClient.setQueryData(["get", "/api/system/autostart"], data),
-    onError: (err) =>
-      toast.error("Could not change autostart", {
-        description: errorMessage(err),
-      }),
-  })
-  const st = status.data
-  return (
-    <Card className="max-w-3xl">
-      <CardHeader>
-        <CardTitle>Start at login</CardTitle>
-        <CardDescription>
-          Starts Studio when you log in, using a user-level systemd unit,
-          LaunchAgent or Run registry entry. It takes effect at your next login.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 text-xs">
-        {st && !st.supported ? (
-          <p className="text-muted-foreground">
-            Not supported on this platform.
-          </p>
-        ) : (
-          <label className="flex items-center gap-2">
-            <Checkbox
-              checked={!!st?.enabled}
-              disabled={!st || set.isPending}
-              onCheckedChange={(enabled) => set.mutate({ body: { enabled } })}
-            />
-            Start Sandbox Studio at login
-          </label>
-        )}
-        {st?.enabled && st.path && (
-          <p className="text-muted-foreground">
-            Entry: <code>{st.path}</code>
-          </p>
-        )}
-        {st?.stale && (
-          <p className="flex items-center gap-2 text-amber-700 dark:text-amber-500">
-            The entry starts a different Studio binary.
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => set.mutate({ body: { enabled: true } })}
-            >
-              Update it
-            </Button>
-          </p>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-function UpdatesCard() {
-  const queryClient = useQueryClient()
-  const state = $api.useQuery("get", "/api/system/updates")
-  const set = $api.useMutation("put", "/api/system/updates", {
-    onSuccess: (data) =>
-      queryClient.setQueryData(["get", "/api/system/updates"], data),
-    onError: (err) =>
-      toast.error("Could not change the update check", {
-        description: errorMessage(err),
-      }),
-  })
-  const st = state.data
-  return (
-    <Card className="max-w-3xl">
-      <CardHeader>
-        <CardTitle>Updates</CardTitle>
-        <CardDescription>
-          Checks GitHub for a newer release at most once a day. Studio never
-          downloads or installs anything by itself.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 text-xs">
-        <label className="flex items-center gap-2">
-          <Checkbox
-            checked={!!st?.enabled}
-            disabled={!st || set.isPending}
-            onCheckedChange={(enabled) => set.mutate({ body: { enabled } })}
-          />
-          Check for updates
-        </label>
-        {st && (
-          <p className="text-muted-foreground">
-            Running {st.current}
-            {st.enabled && st.checkedAt && (
-              <> · checked {formatAge(st.checkedAt)}</>
-            )}
-          </p>
-        )}
-        {st?.enabled && st.error && (
-          <p className="text-destructive">Last check failed: {st.error}</p>
-        )}
-        {st?.available && (
-          <p className="flex items-center gap-2">
-            <Badge>Update available</Badge>
-            {st.url ? (
-              <a
-                href={st.url}
-                target="_blank"
-                rel="noreferrer"
-                className="underline underline-offset-4"
-              >
-                {st.latest}
-              </a>
-            ) : (
-              st.latest
-            )}
-          </p>
-        )}
-      </CardContent>
-    </Card>
+    <Link
+      to={to}
+      params={{ env }}
+      className="flex h-8 shrink-0 items-center rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+      activeProps={{ className: "bg-muted font-medium text-foreground" }}
+    >
+      {children}
+    </Link>
   )
 }

@@ -4,19 +4,14 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   BrainIcon,
-  BrowserIcon,
   CaretUpDownIcon,
   ChatsCircleIcon,
   CheckIcon,
   CubeIcon,
   GearIcon,
-  GitBranchIcon,
   GlobeIcon,
-  HammerIcon,
   KeyIcon,
-  PlugIcon,
   PlusIcon,
-  RobotIcon,
   SquaresFourIcon,
 } from "@phosphor-icons/react"
 import {
@@ -55,12 +50,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
-import { TeammateAvatar } from "@/components/teammate-avatar"
+import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
+import { TeammateDialog } from "@/components/teammate-dialog"
 import { StatusDot } from "@/components/status-badge"
+import { usePresence } from "@/hooks/use-teammate-presence"
 import { $api, errorMessage } from "@/lib/api/client"
 
+/**
+ * The environment's navigation: Home, Chats, Network, Secrets, Memory and Settings, then the
+ * teammates (each with its presence) and the sandboxes.
+ */
 export function AppSidebar({ env }: { env: string }) {
   const [creating, setCreating] = useState(false)
+  const [addingTeammate, setAddingTeammate] = useState(false)
   const sandboxes = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes",
@@ -74,7 +76,12 @@ export function AppSidebar({ env }: { env: string }) {
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
+  const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
+    params: { path: { env } },
+  })
+  const presence = usePresence(env)
   const owners = new Map(teammates.data?.map((p) => [p.id, p.name]))
+  const canAddTeammate = (providers.data?.length ?? 0) > 0
   const matchRoute = useMatchRoute()
 
   return (
@@ -87,7 +94,7 @@ export function AppSidebar({ env }: { env: string }) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                tooltip="Overview"
+                tooltip="Home"
                 isActive={!!matchRoute({ to: "/e/$env", params: { env } })}
                 render={
                   <Link
@@ -98,7 +105,7 @@ export function AppSidebar({ env }: { env: string }) {
                 }
               >
                 <SquaresFourIcon />
-                <span>Overview</span>
+                <span>Home</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
@@ -119,21 +126,13 @@ export function AppSidebar({ env }: { env: string }) {
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
-                tooltip="Builds"
-                isActive={
-                  !!matchRoute({ to: "/e/$env/builds", params: { env } })
-                }
-                render={<Link to="/e/$env/builds" params={{ env }} />}
-              >
-                <HammerIcon />
-                <span>Builds</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
                 tooltip="Network"
                 isActive={
-                  !!matchRoute({ to: "/e/$env/network", params: { env } })
+                  !!matchRoute({
+                    to: "/e/$env/network",
+                    params: { env },
+                    fuzzy: true,
+                  })
                 }
                 render={<Link to="/e/$env/network" params={{ env }} />}
               >
@@ -155,40 +154,6 @@ export function AppSidebar({ env }: { env: string }) {
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
-                tooltip="Git"
-                isActive={!!matchRoute({ to: "/e/$env/git", params: { env } })}
-                render={<Link to="/e/$env/git" params={{ env }} />}
-              >
-                <GitBranchIcon />
-                <span>Git</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Teammates"
-                isActive={
-                  !!matchRoute({ to: "/e/$env/teammates", params: { env } })
-                }
-                render={<Link to="/e/$env/teammates" params={{ env }} />}
-              >
-                <RobotIcon />
-                <span>Teammates</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                tooltip="Providers"
-                isActive={
-                  !!matchRoute({ to: "/e/$env/providers", params: { env } })
-                }
-                render={<Link to="/e/$env/providers" params={{ env }} />}
-              >
-                <PlugIcon />
-                <span>Providers</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
                 tooltip="Memory"
                 isActive={
                   !!matchRoute({ to: "/e/$env/memory", params: { env } })
@@ -201,17 +166,80 @@ export function AppSidebar({ env }: { env: string }) {
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton
-                tooltip="Browser"
+                tooltip="Settings"
                 isActive={
-                  !!matchRoute({ to: "/e/$env/browser", params: { env } })
+                  !!matchRoute({
+                    to: "/e/$env/settings",
+                    params: { env },
+                    fuzzy: true,
+                  })
                 }
-                render={<Link to="/e/$env/browser" params={{ env }} />}
+                render={<Link to="/e/$env/settings" params={{ env }} />}
               >
-                <BrowserIcon />
-                <span>Browser</span>
+                <GearIcon />
+                <span>Settings</span>
+                {updates.data?.available && (
+                  <span className="ml-auto text-[0.625rem] text-primary">
+                    Update available
+                  </span>
+                )}
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel
+            render={<Link to="/e/$env/teammates" params={{ env }} />}
+          >
+            Teammates
+          </SidebarGroupLabel>
+          <SidebarGroupAction
+            title={canAddTeammate ? "New teammate" : "Add a provider first"}
+            disabled={!canAddTeammate}
+            onClick={() => setAddingTeammate(true)}
+          >
+            <PlusIcon />
+          </SidebarGroupAction>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {teammates.isPending &&
+                Array.from({ length: 2 }, (_, i) => (
+                  <SidebarMenuItem key={i}>
+                    <SidebarMenuSkeleton showIcon />
+                  </SidebarMenuItem>
+                ))}
+              {teammates.data?.map((p) => (
+                <SidebarMenuItem key={p.id}>
+                  <SidebarMenuButton
+                    tooltip={p.name}
+                    isActive={
+                      !!matchRoute({
+                        to: "/e/$env/teammates/$id",
+                        params: { env, id: p.id },
+                        fuzzy: true,
+                      })
+                    }
+                    render={
+                      <Link
+                        to="/e/$env/teammates/$id"
+                        params={{ env, id: p.id }}
+                      />
+                    }
+                  >
+                    <TeammateAvatar
+                      name={p.name}
+                      className="size-4 text-[0.5rem]"
+                    />
+                    <span className="truncate">{p.name}</span>
+                    <PresenceDot
+                      presence={presence(p.id)}
+                      className="ml-auto"
+                    />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Sandboxes</SidebarGroupLabel>
@@ -264,25 +292,6 @@ export function AppSidebar({ env }: { env: string }) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Settings"
-              isActive={
-                !!matchRoute({ to: "/e/$env/settings", params: { env } })
-              }
-              render={<Link to="/e/$env/settings" params={{ env }} />}
-            >
-              <GearIcon />
-              <span>Settings</span>
-              {updates.data?.available && (
-                <span className="ml-auto text-[0.625rem] text-primary">
-                  Update available
-                </span>
-              )}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <p className="px-2 text-[0.625rem] text-muted-foreground group-data-[collapsible=icon]:hidden">
           Sandbox Studio {health.data?.version}
         </p>
@@ -292,6 +301,12 @@ export function AppSidebar({ env }: { env: string }) {
         env={env}
         open={creating}
         onOpenChange={setCreating}
+      />
+      <TeammateDialog
+        env={env}
+        providers={providers.data ?? []}
+        open={addingTeammate}
+        onOpenChange={setAddingTeammate}
       />
     </Sidebar>
   )
