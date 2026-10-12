@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { GlobeIcon } from "@phosphor-icons/react"
+import { SectionHeader } from "@/components/section-header"
 import { TeammateBrowser } from "@/components/teammate-browser"
 
 export const Route = createFileRoute("/e/$env/teammates/$id/browser")({
@@ -12,6 +14,7 @@ function TeammateBrowserTab() {
   const { env, id } = Route.useParams()
   return (
     <div className="flex max-w-5xl flex-col gap-4">
+      <SectionHeader title="Browser" icon={GlobeIcon} area="browser" />
       <p className="max-w-3xl text-sm text-muted-foreground">{explanation}</p>
       <TeammateBrowser env={env} teammate={id} />
     </div>
