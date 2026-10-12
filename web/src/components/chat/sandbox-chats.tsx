@@ -44,7 +44,7 @@ export function SandboxChats({
           <Link
             to="/e/$env/chats/new"
             params={{ env }}
-            search={{ sandbox: id }}
+            search={{ sandbox: id, origin: "workspace" }}
           />
         }
       >

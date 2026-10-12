@@ -35,7 +35,13 @@ function TeammateChats() {
         <Button
           size="sm"
           className="ml-auto"
-          render={<Link to="/e/$env/chats/new" params={{ env }} />}
+          render={
+            <Link
+              to="/e/$env/chats/new"
+              params={{ env }}
+              search={{ teammate: id }}
+            />
+          }
         >
           <PlusIcon />
           New chat
