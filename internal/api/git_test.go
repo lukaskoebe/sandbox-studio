@@ -130,6 +130,8 @@ func TestSSHForges(t *testing.T) {
 	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
 		t.Setenv(name, tmp)
 	}
+	// No SSH agent: the test must never reach the developer's.
+	t.Setenv("SSH_AUTH_SOCK", "")
 	h, s := newTestServer(t)
 	hostKey, dial := testSSHHost(t)
 	staging := t.TempDir()
@@ -158,7 +160,7 @@ func TestSSHForges(t *testing.T) {
 			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
 		}
 	}
-	rec = do(h, "POST", base, `{"name":"olite","kind":"ssh","baseUrl":"gitolite@git.example.org","hostKey":`+string(hk)+`}`)
+	rec = do(h, "POST", base, `{"name":"olite","kind":"ssh","auth":"key","baseUrl":"gitolite@git.example.org","hostKey":`+string(hk)+`}`)
 	f := decode[store.Forge](t, rec)
 	if rec.Code != http.StatusCreated || f.HostKeyFingerprint != scan.Fingerprint || f.Username != "gitolite" ||
 		!strings.HasPrefix(f.PublicKey, "ssh-ed25519 ") || !strings.HasSuffix(f.PublicKey, " sandbox-studio/"+env.ID+"/olite") {
@@ -202,6 +204,40 @@ func TestSSHForges(t *testing.T) {
 		t.Fatalf("token for an ssh forge: %d %s", rec.Code, rec.Body)
 	}
 
+	// Without auth, an ssh forge signs with the host's SSH agent and holds no key. Switching
+	// to a key generates one; switching back to the agent deletes it.
+	rec = do(h, "POST", base, `{"name":"agent","kind":"ssh","baseUrl":"git@git.example.org","hostKey":`+string(hk)+`}`)
+	af := decode[store.Forge](t, rec)
+	if rec.Code != http.StatusCreated || af.Auth != store.ForgeAuthAgent || af.SecretID != "" || af.PublicKey != "" {
+		t.Fatalf("agent forge: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(h, "PUT", base+"/"+af.ID+"/auth", `{"auth":"key"}`)
+	if got := decode[store.Forge](t, rec); rec.Code != http.StatusOK || got.Auth != store.ForgeAuthKey || got.SecretID == "" || !strings.HasPrefix(got.PublicKey, "ssh-ed25519 ") {
+		t.Fatalf("switch to a key: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(h, "PUT", base+"/"+af.ID+"/auth", `{"auth":"agent"}`)
+	if got := decode[store.Forge](t, rec); rec.Code != http.StatusOK || got.Auth != store.ForgeAuthAgent || got.SecretID != "" || got.PublicKey != "" {
+		t.Fatalf("switch back to the agent: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/"+af.ID+"/dismiss-agent-hint", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("dismiss the hint: %d %s", rec.Code, rec.Body)
+	}
+	if got, err := s.Store.Forge(ctx, env.ID, af.ID); err != nil || !got.AgentHintDismissed {
+		t.Fatalf("hint not dismissed: %+v, %v", got, err)
+	}
+	if rec := do(h, "POST", base+"/"+f.ID+"/dismiss-agent-hint", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("dismiss a key forge's hint: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", base+"/"+f.ID+"/auth", `{"auth":"agent"}`); rec.Code != http.StatusOK {
+		t.Fatalf("switch a key forge to the agent: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", base+"/"+f.ID+"/auth", `{"auth":"key"}`); rec.Code != http.StatusOK {
+		t.Fatalf("switch it back to a key: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "DELETE", base+"/"+af.ID, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete the agent forge: %d %s", rec.Code, rec.Body)
+	}
+
 	// The sandbox's git config sends ssh URLs of the host to the virtual remote.
 	rw, err := s.gitRewrites(ctx, env.ID)
 	if err != nil || len(rw) != 1 || rw[0].URL != "https://git.studio.internal/olite/" || strings.Join(rw[0].InsteadOf, " ") != "ssh://gitolite@git.example.org/ gitolite@git.example.org:" {
@@ -228,6 +264,26 @@ func TestSSHForges(t *testing.T) {
 	}
 	if rec := do(h, "PUT", base+"/"+lab.ID+"/host-key", `{"hostKey":`+string(ok)+`}`); rec.Code != http.StatusConflict {
 		t.Fatalf("host key for an https forge: %d %s", rec.Code, rec.Body)
+	}
+
+	// A pasted repository URL describes the forge, with a name the environment doesn't have.
+	rec = do(h, "POST", base+"/parse-url", `{"url":"git@github.com:owner/repo.git"}`)
+	if got := decode[gitreview.RepoURL](t, rec); rec.Code != http.StatusOK || got.Kind != gitreview.KindSSH || got.Name != "github" ||
+		got.Path != "owner/repo" || got.BaseURL != "ssh://git@github.com" || got.Auth != store.ForgeAuthAgent {
+		t.Fatalf("parse an ssh URL: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(h, "POST", base+"/parse-url", `{"url":"https://github.com/owner/repo"}`)
+	if got := decode[gitreview.RepoURL](t, rec); rec.Code != http.StatusOK || got.Kind != gitreview.KindGitHub || got.Path != "owner/repo" {
+		t.Fatalf("parse an https URL: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/parse-url", `{"url":"http://github.com/owner/repo"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("parse an http URL: %d %s", rec.Code, rec.Body)
+	}
+
+	// Without an SSH agent, the status says why and how to fix it.
+	st := decode[gitreview.AgentStatus](t, do(h, "GET", testOrigin+"/api/system/ssh-agent", ""))
+	if st.Available || !strings.Contains(st.Message, "SSH_AUTH_SOCK") || st.Fix == "" {
+		t.Fatalf("agent status: %+v", st)
 	}
 }
 

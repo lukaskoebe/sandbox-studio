@@ -51,6 +51,22 @@ func (s *Server) gitRewrites(ctx context.Context, envID string) ([]harness.GitRe
 	return out, nil
 }
 
+func forgeSecretPrefix(name string) string {
+	return "FORGE_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+}
+
+// forgeKey generates an SSH key for a forge and prepares its studio-only secret. It returns
+// the public key, for the user to add to the host.
+func (s *Server) forgeKey(env, name, host string) (string, store.Secret, error) {
+	// The key exists only in memory until the vault seals it.
+	key, pub, err := gitreview.GenerateKey("sandbox-studio/" + env + "/" + name)
+	if err != nil {
+		return "", store.Secret{}, err
+	}
+	sec, err := s.Vault.Prepare(env, forgeSecretPrefix(name)+"_SSH_KEY", key, []string{host}, "SSH key of forge "+name)
+	return pub, sec, apiError(err)
+}
+
 // ForgeInput describes a forge to add.
 type ForgeInput struct {
 	Name     string `json:"name" pattern:"^[a-z0-9][a-z0-9-]{0,31}$" doc:"Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git"`
@@ -59,6 +75,12 @@ type ForgeInput struct {
 	Username string `json:"username,omitempty" maxLength:"64" doc:"Kind https: the user git authenticates as with the token; git if empty"`
 	Token    string `json:"token,omitempty" maxLength:"4096" doc:"Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
 	HostKey  string `json:"hostKey,omitempty" maxLength:"16384" doc:"Kind ssh: the host key to pin, as scanned and confirmed by the user"`
+	Auth     string `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge"`
+}
+
+// ForgeAuth switches how an ssh forge authenticates.
+type ForgeAuth struct {
+	Auth string `json:"auth" enum:"agent,key"`
 }
 
 // ForgeScanInput is an SSH forge to scan for its host key.
@@ -125,28 +147,28 @@ func (s *Server) registerForges(api huma.API) {
 			return nil, apiError(err)
 		}
 		f := store.Forge{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind, BaseURL: u.Base, Username: u.User}
-		prefix := "FORGE_" + strings.ToUpper(strings.ReplaceAll(b.Name, "-", "_"))
-		secretName, value, note := prefix+"_TOKEN", b.Token, "Token of forge "+b.Name
+		secretName, value, note := forgeSecretPrefix(b.Name)+"_TOKEN", b.Token, "Token of forge "+b.Name
+		var sec store.Secret
 		if b.Kind == gitreview.KindSSH {
 			if b.Token != "" {
-				return nil, huma.Error422UnprocessableEntity("ssh forges use a key Studio generates, not a token")
+				return nil, huma.Error422UnprocessableEntity("ssh forges sign with the SSH agent or a key Studio generates, not a token")
 			}
 			hk, err := gitreview.CheckHostKey(b.HostKey)
 			if err != nil {
 				return nil, apiError(err)
 			}
-			// The key exists only in memory until the vault seals it.
-			key, pub, err := gitreview.GenerateKey("sandbox-studio/" + in.Env + "/" + b.Name)
-			if err != nil {
-				return nil, err
+			f.HostKey, f.Auth = hk.Key, b.Auth
+			if f.Auth == "" {
+				f.Auth = store.ForgeAuthAgent
 			}
-			f.HostKey, f.PublicKey = hk.Key, pub
-			secretName, value, note = prefix+"_SSH_KEY", key, "SSH key of forge "+b.Name
-		} else if b.Token == "" || b.HostKey != "" {
-			return nil, huma.Error422UnprocessableEntity("forges of kind " + b.Kind + " need a token and no host key")
-		}
-		sec, err := s.Vault.Prepare(in.Env, secretName, value, []string{u.Host}, note)
-		if err != nil {
+			if f.Auth == store.ForgeAuthKey {
+				if f.PublicKey, sec, err = s.forgeKey(in.Env, b.Name, u.Host); err != nil {
+					return nil, err
+				}
+			}
+		} else if b.Token == "" || b.HostKey != "" || b.Auth != "" {
+			return nil, huma.Error422UnprocessableEntity("forges of kind " + b.Kind + " need a token, and no host key or auth")
+		} else if sec, err = s.Vault.Prepare(in.Env, secretName, value, []string{u.Host}, note); err != nil {
 			return nil, apiError(err)
 		}
 		f, err = s.Store.CreateForge(ctx, f, sec)
@@ -284,5 +306,87 @@ func (s *Server) registerForges(api huma.API) {
 		}
 		f, err = s.Store.Forge(ctx, in.Env, in.ID)
 		return &struct{ Body store.Forge }{f}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "parseForgeURL", Method: http.MethodPost, Path: "/api/environments/{env}/forges/parse-url", Tags: []string{"git"},
+		Description: "Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment.",
+	}, func(ctx context.Context, in *struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			URL string `json:"url" minLength:"1" maxLength:"2048"`
+		}
+	}) (*struct{ Body gitreview.RepoURL }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		forges, err := s.Store.Forges(ctx, in.Env)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		r, err := gitreview.ParseRepoURL(in.Body.URL)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		r.Name = gitreview.FreeName(r.Name, forges)
+		return &struct{ Body gitreview.RepoURL }{r}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "setForgeAuth", Method: http.MethodPut, Path: "/api/environments/{env}/forges/{id}/auth", Tags: []string{"git"},
+		Description: "Switches an SSH forge between the host's SSH agent and a key Studio generates. Switching to a key returns its public key; switching to the agent deletes the key.",
+	}, func(ctx context.Context, in *struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Forge ID"`
+		Body ForgeAuth
+	}) (*struct{ Body store.Forge }, error) {
+		f, err := s.Store.Forge(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if f.Kind != gitreview.KindSSH {
+			return nil, huma.Error409Conflict("only ssh forges can use the SSH agent")
+		}
+		if f.Auth != in.Body.Auth {
+			if in.Body.Auth == store.ForgeAuthKey {
+				u, err := gitreview.ParseSSHURL(f.BaseURL)
+				if err != nil {
+					return nil, apiError(err)
+				}
+				pub, sec, err := s.forgeKey(in.Env, f.Name, u.Host)
+				if err != nil {
+					return nil, err
+				}
+				err = s.Store.SetForgeKey(ctx, in.Env, f.ID, pub, sec)
+			} else {
+				err = s.Store.SetForgeAgent(ctx, in.Env, f.ID)
+			}
+			if err != nil {
+				return nil, apiError(err)
+			}
+			s.Vault.Changed(in.Env)
+			s.publishSecrets(in.Env)
+		}
+		f, err = s.Store.Forge(ctx, in.Env, in.ID)
+		return &struct{ Body store.Forge }{f}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "dismissForgeAgentHint", Method: http.MethodPost, Path: "/api/environments/{env}/forges/{id}/dismiss-agent-hint", Tags: []string{"git"},
+		DefaultStatus: http.StatusNoContent,
+		Description:   "Hides the suggestion to use a Studio key after the SSH agent asked for confirmation.",
+	}, func(ctx context.Context, in *forgePath) (*struct{}, error) {
+		return nil, apiError(s.Store.DismissForgeAgentHint(ctx, in.Env, in.ID))
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getSSHAgent", Method: http.MethodGet, Path: "/api/system/ssh-agent", Tags: []string{"git"},
+		Summary:     "Check the host's SSH agent",
+		Description: "Whether Studio reaches the SSH agent it signs with for SSH forges, and the keys the agent holds.",
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body gitreview.AgentStatus }, error) {
+		if s.Git == nil {
+			return nil, huma.Error503ServiceUnavailable("the git remote is not running")
+		}
+		return &struct{ Body gitreview.AgentStatus }{s.Git.AgentStatus(ctx)}, nil
 	})
 }
