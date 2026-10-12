@@ -1,7 +1,7 @@
 # Design: GitHub, HTTPS and SSH git remotes
 
 Status: built (stages 1 to 3, 2026-10-11); the acceptance checks in §5 need the user.
-Extends [git review](../git-review.md) and PLAN.md §6.9. Deviations: the migration is
+Extends [git review](../git-review.md). Deviations: the migration is
 `019_git_remotes.sql` (018 went to teammates) and also adds `public_key` and
 `host_key_offered`; re-pinning is `PUT …/forges/{id}/host-key`. The v0 spike passed: v0
 rounds bridge cleanly, so `ssh` forges don't require v2.
@@ -301,7 +301,8 @@ in global Settings.
 ### Docs
 
 `docs/git-review.md` (kinds, remote mapping, SSH, host keys, GitHub token permissions),
-PLAN.md §6.9 status, the secrets page help text.
+the git review status in the v2 plan (now in `docs/git-review.md`), the secrets page help
+text.
 
 ### Acceptance checks that need the user
 
