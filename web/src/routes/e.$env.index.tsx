@@ -51,7 +51,7 @@ export const Route = createFileRoute("/e/$env/")({ component: Overview })
 
 /** The sandbox table's columns from the large breakpoint: name, owner, template, status, ports, waiting. */
 const tableColumns =
-  "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_6.5rem_8.5rem_minmax(0,1fr)_3.5rem]"
+  "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_8.5rem_minmax(0,1fr)_3.5rem]"
 
 /** Each cell's column and row from the large breakpoint, placed explicitly so a row stays on one line. */
 const cellAt = {
@@ -313,7 +313,9 @@ function SandboxTable({
                   </span>
                 )}
                 <span className={cn("max-lg:hidden", cellAt.template)}>
-                  <Ident>{shortTemplate(sb.templateId)}</Ident>
+                  <Ident>
+                    {sb.templateName ?? shortTemplate(sb.templateId)}
+                  </Ident>
                 </span>
                 <StatusDot
                   {...phaseDot(phase(sb))}

@@ -158,7 +158,7 @@ primitives above and keeps the e2e selectors it had.
 - **Done: Home.** Stat strip, sandbox table (stacks below the large breakpoint), family tree,
   approvals summary and teammates, with a `{/* setup */}` slot at the top of the main column.
   Not shown: an activity feed (no data source yet), and egress or host load (no endpoint).
-  The template column shows the template's ID until the API names templates.
+  The template column shows the template's name (stack@version), or its ID for a template without one.
 - **Done: sandbox dashboard and workspace.** Header with the name and ID in mono, sections
   with headers and area tiles (connections and chats only), ports and connections as lists,
   and a status line on the workspace. CPU, memory and uptime are not shown until the API
