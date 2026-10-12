@@ -1,8 +1,11 @@
 package browser
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"slices"
+	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
@@ -64,7 +67,7 @@ func (s *Service) decideAction(ctx context.Context, a store.Approval, d integrat
 		}
 	}
 	if status == store.StatusApproved {
-		s.addGrant(a.EnvironmentID, p.TeammateID, r)
+		s.addGrant(a.EnvironmentID, p.TeammateID, p.Session, r)
 	}
 	return nil
 }
@@ -83,14 +86,27 @@ func (s *Service) decideCredentialKind(ctx context.Context, a store.Approval, d 
 	return s.decideCredential(ctx, a, status == store.StatusApproved)
 }
 
-// BrowserStatus is the state of a teammate's browser, for the Browser page.
+// BrowserStatus is the state of a teammate's browser, for the Browser page. Takeover and
+// URL are the persistent profile's; Sessions lists the ephemeral sessions.
 type BrowserStatus struct {
-	TeammateID string `json:"teammateId"`
-	VM         string `json:"vm" enum:"absent,created,starting,running,draining,suspended,stopped,crashed" doc:"State of the browser VM"`
-	Takeover   bool   `json:"takeover" doc:"The user drives; agent calls are paused"`
-	SessionID  string `json:"sessionId,omitempty" doc:"The current run's session in the action log"`
-	URL        string `json:"url,omitempty" doc:"The page the broker last saw"`
-	Driver     string `json:"driver,omitempty" doc:"Name of the agent sandbox that drove the browser last"`
+	TeammateID string           `json:"teammateId"`
+	VM         string           `json:"vm" enum:"absent,created,starting,running,draining,suspended,stopped,crashed" doc:"State of the browser VM"`
+	Takeover   bool             `json:"takeover" doc:"The user drives the persistent profile; agent calls to it are paused"`
+	SessionID  string           `json:"sessionId,omitempty" doc:"The current run's session in the action log"`
+	URL        string           `json:"url,omitempty" doc:"The page the broker last saw"`
+	Driver     string           `json:"driver,omitempty" doc:"Name of the agent sandbox that drove the browser last"`
+	Sessions   []BrowserSession `json:"sessions" doc:"Ephemeral sessions, oldest first"`
+}
+
+// statusLocked describes st's browser in a VM state.
+func (st *state) statusLocked(vm string) BrowserStatus {
+	out := BrowserStatus{TeammateID: st.teammate, VM: vm, Takeover: st.takeover, SessionID: st.session, URL: st.url,
+		Driver: st.driver.Name, Sessions: []BrowserSession{}}
+	for _, pg := range st.eph {
+		out.Sessions = append(out.Sessions, BrowserSession{ID: pg.id, Sandbox: pg.owner.Name, URL: pg.url, Takeover: pg.takeover, Opened: pg.opened})
+	}
+	slices.SortFunc(out.Sessions, func(a, b BrowserSession) int { return cmp.Or(a.Opened.Compare(b.Opened), strings.Compare(a.ID, b.ID)) })
+	return out
 }
 
 // Status reports a teammate's browser.
@@ -102,10 +118,10 @@ func (s *Service) Status(ctx context.Context, envID, teammateID string) (Browser
 	if err != nil {
 		return BrowserStatus{}, err
 	}
-	out := BrowserStatus{TeammateID: teammateID, VM: string(vm)}
+	out := BrowserStatus{TeammateID: teammateID, VM: string(vm), Sessions: []BrowserSession{}}
 	s.mu.Lock()
 	if st := s.states[teammateID]; st != nil && st.env == envID {
-		out.Takeover, out.SessionID, out.URL, out.Driver = st.takeover, st.session, st.url, st.driver.Name
+		out = st.statusLocked(string(vm))
 	}
 	s.mu.Unlock()
 	return out, nil
@@ -127,7 +143,7 @@ func (s *Service) Start(ctx context.Context, envID, teammateID string) error {
 		return err
 	}
 	// Any command launches agent-browser's daemon, and with it Chromium and the live view.
-	data, _, err := s.exec(ctx, st, agentBrowserGetURL)
+	data, _, err := s.exec(ctx, st, &st.page, agentBrowserGetURL)
 	if err != nil {
 		return err
 	}
@@ -149,7 +165,7 @@ func (s *Service) Stop(ctx context.Context, envID, teammateID string) error {
 		return ctx.Err()
 	}
 	defer func() { <-st.run }()
-	s.endTakeover(st)
+	s.endTakeovers(st)
 	if err := s.VMs.StopBrowser(ctx, envID, teammateID); err != nil {
 		return err
 	}
@@ -170,7 +186,7 @@ func (s *Service) Remove(ctx context.Context, envID, teammateID string) error {
 		return ctx.Err()
 	}
 	defer func() { <-st.run }()
-	s.endTakeover(st)
+	s.endTakeovers(st)
 	if err := s.VMs.RemoveBrowser(ctx, envID, teammateID); err != nil {
 		return err
 	}
@@ -196,32 +212,43 @@ func (s *Service) ForgetTeammate(ctx context.Context, envID, teammateID string) 
 	return nil
 }
 
-// SetTakeover hands the browser to the user (on) or back to the agents. While the user
-// drives, the live view forwards input, agent calls wait and then are refused, and the
-// teammate's rules decide the browser's connections.
-func (s *Service) SetTakeover(ctx context.Context, envID, teammateID string, on bool) error {
+// SetTakeover hands a session of the browser ("" for the persistent profile) to the user
+// (on) or back to the agents. While the user drives, the live view of that session
+// forwards input, agent calls to it wait and then are refused, and the teammate's rules
+// decide the browser's connections.
+func (s *Service) SetTakeover(ctx context.Context, envID, teammateID, session string, on bool) error {
 	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return err
 	}
 	st := s.state(envID, teammateID)
+	s.mu.Lock()
+	pg := st.pageFor(session)
+	s.mu.Unlock()
+	if pg == nil {
+		return ErrNoSession
+	}
 	if on {
 		if _, vm, err := s.VMs.BrowserStatus(ctx, envID, teammateID); err != nil || vm != runtime.StatusRunning {
 			return ErrNotLive
 		}
 		s.mu.Lock()
-		was := st.takeover
-		if !was {
-			st.takeover, st.resumed = true, make(chan struct{})
+		if st.pageFor(session) != pg {
+			s.mu.Unlock()
+			return ErrNoSession
 		}
-		st.lastUsed = s.now()
+		was := pg.takeover
+		if !was {
+			pg.takeover, pg.resumed = true, make(chan struct{})
+		}
+		st.lastUsed, pg.used = s.now(), s.now()
 		s.mu.Unlock()
 		if !was {
-			s.record(ctx, st, entry{actor: "user", action: "takeover", outcome: "ok", detail: "the user took over; agents paused"})
+			s.record(ctx, st, pg, entry{actor: "user", action: "takeover", outcome: "ok", detail: "the user took over; agents paused"})
 		}
 		return nil
 	}
 	s.mu.Lock()
-	takingOver := st.takeover
+	takingOver := pg.takeover
 	s.mu.Unlock()
 	if !takingOver {
 		return nil
@@ -234,7 +261,7 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID string, on 
 		return ctx.Err()
 	}
 	defer func() { <-st.run }()
-	if !s.endTakeover(st) {
+	if !s.endTakeover(pg) {
 		return nil
 	}
 	// The page as the user left it.
@@ -242,26 +269,39 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID string, on 
 	s.mu.Lock()
 	vm := st.vm
 	s.mu.Unlock()
-	if res, err := s.Runner.Browser(ctx, vm, agentproto.BrowserCommand{Args: []string{"get", "url"}, Screenshot: true, TimeoutMS: 10000}); err == nil {
+	if res, err := s.Runner.Browser(ctx, vm, agentproto.BrowserCommand{Args: []string{"get", "url"}, Ephemeral: pg.slot, Screenshot: true, TimeoutMS: 10000}); err == nil {
 		shot = res.Screenshot
 	}
-	s.record(ctx, st, entry{actor: "user", action: "handback", outcome: "ok", detail: "the user handed back to the agents", shot: shot})
+	s.record(ctx, st, pg, entry{actor: "user", action: "handback", outcome: "ok", detail: "the user handed back to the agents", shot: shot})
 	return nil
 }
 
-// endTakeover ends the user's turn; it reports whether there was one.
-func (s *Service) endTakeover(st *state) bool {
+// endTakeover ends the user's turn in a session; it reports whether there was one.
+func (s *Service) endTakeover(pg *page) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !st.takeover {
+	if !pg.takeover {
 		return false
 	}
-	st.takeover = false
-	close(st.resumed)
+	pg.takeover = false
+	close(pg.resumed)
 	// What the user did is unknown to the broker: refs are stale and a credential the
 	// user typed may show.
-	st.refs = nil
+	pg.refs = nil
 	return true
+}
+
+// endTakeovers ends the user's turn in every session, before the VM stops.
+func (s *Service) endTakeovers(st *state) {
+	s.mu.Lock()
+	pages := []*page{&st.page}
+	for _, pg := range st.eph {
+		pages = append(pages, pg)
+	}
+	s.mu.Unlock()
+	for _, pg := range pages {
+		s.endTakeover(pg)
+	}
 }
 
 // Patterns lists a teammate's browser patterns.

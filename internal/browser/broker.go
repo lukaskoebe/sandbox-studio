@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,7 @@ var (
 	ErrNotLive    = errors.New("the browser is not running")
 	ErrNoTakeover = errors.New("take over the browser before navigating")
 	ErrBadURL     = errors.New("url must be an absolute http or https URL with a host, no userinfo, and at most 4000 characters")
+	ErrNoSession  = errors.New("there is no such browser session")
 )
 
 // Runner reaches a browser VM's guest agent (agentchan.Hub).
@@ -62,6 +64,7 @@ const (
 	defaultHold        = 30 * time.Second // an approval is awaited within the call this long
 	defaultPauseWait   = 20 * time.Second // an agent call waits this long for the user to hand back
 	defaultIdleStop    = 10 * time.Minute
+	defaultEphemeral   = 10 * time.Minute // an unused ephemeral session ends after this
 	defaultKeep        = 500       // actions kept per teammate
 	defaultShotBudget  = 200 << 20 // bytes of screenshots kept in all
 	commandTimeout     = 25 * time.Second
@@ -85,11 +88,12 @@ type Service struct {
 	Now    func() time.Time
 
 	// Bounds; zero means the default.
-	Hold       time.Duration
-	PauseWait  time.Duration
-	IdleStop   time.Duration
-	Keep       int
-	ShotBudget int64
+	Hold          time.Duration
+	PauseWait     time.Duration
+	IdleStop      time.Duration
+	EphemeralIdle time.Duration
+	Keep          int
+	ShotBudget    int64
 
 	mu       sync.Mutex
 	states   map[string]*state // by teammate ID
@@ -97,17 +101,31 @@ type Service struct {
 }
 
 // state is what the broker keeps about one teammate's browser. Fields below run are
-// guarded by Service.mu.
+// guarded by Service.mu. The embedded page is the persistent profile.
 type state struct {
 	env, teammate string
-	run           chan struct{} // one command at a time
+	run           chan struct{} // one command at a time, in any of the VM's sessions
 
 	vm       string // the browser sandbox's ID, once known
 	session  string // groups the action log of one run of the VM
 	driver   store.Sandbox
+	lastUsed time.Time
+	grants   []grant
+	page
+	eph map[string]*page // ephemeral sessions by ID
+}
+
+// page is one agent-browser session in the browser VM: the persistent profile, or an
+// ephemeral session with a throwaway profile on the VM's tmpfs. Its fields are guarded
+// by Service.mu.
+type page struct {
+	id       string        // "" for the profile, else the ephemeral session's ID
+	slot     int           // the guest's ephemeral slot, 0 for the profile
+	owner    store.Sandbox // the agent sandbox that opened an ephemeral session
+	opened   time.Time
+	used     time.Time
 	takeover bool
 	resumed  chan struct{} // closed when the user hands back
-	lastUsed time.Time
 	refs     map[string]refInfo
 	url      string
 	secrets  []string        // credential values filled in this run, for Scrub
@@ -115,7 +133,6 @@ type state struct {
 	// visible is set when a credential went into a field that shows it: agent screenshots
 	// and history screenshots stop until the page changes.
 	visible bool
-	grants  []grant
 }
 
 type refInfo struct {
@@ -123,11 +140,12 @@ type refInfo struct {
 	Sensitive  bool
 }
 
-// grant is a one-time approval of an action, used by a retry after the call that asked
-// returned before the user answered.
+// grant is a one-time approval of an action in one session, used by a retry after the
+// call that asked returned before the user answered.
 type grant struct {
-	req   Request
-	until time.Time
+	session string
+	req     Request
+	until   time.Time
 }
 
 func (s *Service) now() time.Time {
@@ -171,8 +189,9 @@ func (s *Service) stateLocked(envID, teammateID string) *state {
 }
 
 // Driver is gateway.Gateway.Driver: whose rules decide the browser VM's connections.
-// While the user drives, or before any agent did, the browser VM's own row decides, which
-// means the teammate's rules; otherwise the agent sandbox that drove it last.
+// While the user drives any of its sessions, or before any agent did, the browser VM's own
+// row decides, which means the teammate's rules; otherwise the agent sandbox that drove it
+// last.
 func (s *Service) Driver(ctx context.Context, sb store.Sandbox) store.Sandbox {
 	if sb.Kind != store.SandboxKindBrowser {
 		return sb
@@ -180,7 +199,7 @@ func (s *Service) Driver(ctx context.Context, sb store.Sandbox) store.Sandbox {
 	s.mu.Lock()
 	st := s.states[sb.TeammateID]
 	var driver store.Sandbox
-	if st != nil && !st.takeover {
+	if st != nil && !st.anyTakeover() {
 		driver = st.driver
 	}
 	s.mu.Unlock()
@@ -195,13 +214,38 @@ func (s *Service) Driver(ctx context.Context, sb store.Sandbox) store.Sandbox {
 	return cur
 }
 
-// acquire waits for the teammate's browser to be free and not driven by the user.
-func (s *Service) acquire(ctx context.Context, st *state) (func(), error) {
+// pageFor finds a session: "" is the profile, else an ephemeral session or nil.
+func (st *state) pageFor(id string) *page {
+	if id == "" {
+		return &st.page
+	}
+	return st.eph[id]
+}
+
+// anyTakeover reports whether the user drives any of the browser's sessions.
+func (st *state) anyTakeover() bool {
+	if st.takeover {
+		return true
+	}
+	for _, pg := range st.eph {
+		if pg.takeover {
+			return true
+		}
+	}
+	return false
+}
+
+// acquire waits for the teammate's browser to be free and for pg not to be driven by the
+// user. A nil pg is a session that does not exist yet.
+func (s *Service) acquire(ctx context.Context, st *state, pg *page) (func(), error) {
 	deadline := time.NewTimer(or(s.PauseWait, defaultPauseWait))
 	defer deadline.Stop()
+	if pg == nil {
+		pg = &page{}
+	}
 	for {
 		s.mu.Lock()
-		paused, resumed := st.takeover, st.resumed
+		paused, resumed := pg.takeover, pg.resumed
 		s.mu.Unlock()
 		if paused {
 			select {
@@ -219,7 +263,7 @@ func (s *Service) acquire(ctx context.Context, st *state) (func(), error) {
 			return nil, ctx.Err()
 		}
 		s.mu.Lock()
-		paused = st.takeover
+		paused = pg.takeover
 		s.mu.Unlock()
 		if !paused {
 			return func() { <-st.run }, nil
@@ -243,10 +287,11 @@ type batchItem struct {
 	Error   string          `json:"error"`
 }
 
-// exec runs one agent-browser command in the teammate's browser VM. Errors are scrubbed.
-func (s *Service) exec(ctx context.Context, st *state, cmd agentproto.BrowserCommand) (json.RawMessage, []byte, error) {
+// exec runs one agent-browser command in a session of the teammate's browser VM. Errors
+// are scrubbed.
+func (s *Service) exec(ctx context.Context, st *state, pg *page, cmd agentproto.BrowserCommand) (json.RawMessage, []byte, error) {
 	s.mu.Lock()
-	vm, secrets := st.vm, st.secrets
+	vm, secrets := st.vm, pg.secrets
 	s.mu.Unlock()
 	if vm == "" {
 		return nil, nil, ErrNotLive
@@ -254,8 +299,16 @@ func (s *Service) exec(ctx context.Context, st *state, cmd agentproto.BrowserCom
 	if cmd.TimeoutMS == 0 {
 		cmd.TimeoutMS = int(commandTimeout / time.Millisecond)
 	}
+	cmd.Ephemeral = pg.slot
 	res, err := s.Runner.Browser(ctx, vm, cmd)
 	if err != nil {
+		if pg.slot > 0 && strings.Contains(err.Error(), agentproto.ErrBrowserEphemeralGone) {
+			// The VM restarted under the session: its profile is gone, and so is the session.
+			s.mu.Lock()
+			s.dropLocked(st, pg)
+			s.mu.Unlock()
+			return nil, nil, refuse("ephemeral session %s ended with its browser; open a new one with browser_open", pg.id)
+		}
 		return nil, nil, errors.New(Scrub(err.Error(), secrets))
 	}
 	if len(cmd.Args) > 0 && cmd.Args[0] == "batch" {
@@ -276,12 +329,12 @@ func (s *Service) exec(ctx context.Context, st *state, cmd agentproto.BrowserCom
 }
 
 // batch runs commands in one agent-browser call and returns their results in order.
-func (s *Service) batch(ctx context.Context, st *state, cmds [][]string) ([]batchItem, error) {
+func (s *Service) batch(ctx context.Context, st *state, pg *page, cmds [][]string) ([]batchItem, error) {
 	in, err := json.Marshal(cmds)
 	if err != nil {
 		return nil, err
 	}
-	out, _, err := s.exec(ctx, st, agentproto.BrowserCommand{Args: []string{"batch"}, Stdin: string(in)})
+	out, _, err := s.exec(ctx, st, pg, agentproto.BrowserCommand{Args: []string{"batch"}, Stdin: string(in)})
 	if err != nil {
 		return nil, err
 	}
@@ -308,26 +361,34 @@ func (s *Service) boot(ctx context.Context, st *state) error {
 	return nil
 }
 
-// reset forgets a browser run: the page, its refs and the credentials filled into it.
+// reset forgets a browser run: the pages, their refs and the credentials filled into them.
+// Ephemeral sessions end with the VM run. The caller holds s.mu.
 func (st *state) reset() {
-	st.session, st.url, st.refs, st.credRefs, st.secrets, st.visible, st.grants = "", "", nil, nil, nil, false, nil
+	for _, pg := range st.eph {
+		if pg.takeover {
+			pg.takeover = false
+			close(pg.resumed)
+		}
+	}
+	st.session, st.grants, st.eph = "", nil, nil
+	st.url, st.refs, st.credRefs, st.secrets, st.visible = "", nil, nil, nil, false
 }
 
 // navigated forgets what belonged to the previous page.
-func (st *state) navigated(url string) {
-	st.url, st.refs, st.credRefs, st.visible = url, nil, nil, false
+func (pg *page) navigated(url string) {
+	pg.url, pg.refs, pg.credRefs, pg.visible = url, nil, nil, false
 }
 
 // A URL observation can be a same-document change with credential fields still visible.
 // Invalidate element refs, but keep the screenshot restriction until a confirmed open.
-func (st *state) observedURL(url string) {
-	if url != st.url {
-		st.url, st.refs, st.credRefs = url, nil, nil
+func (pg *page) observedURL(url string) {
+	if url != pg.url {
+		pg.url, pg.refs, pg.credRefs = url, nil, nil
 	}
 }
 
-// takeGrant consumes a one-time grant that covers r.
-func (s *Service) takeGrant(st *state, r Request) bool {
+// takeGrant consumes a one-time grant that covers r in session.
+func (s *Service) takeGrant(st *state, session string, r Request) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
@@ -335,7 +396,7 @@ func (s *Service) takeGrant(st *state, r Request) bool {
 		if now.After(g.until) {
 			continue
 		}
-		if g.req.Action == r.Action && g.req.Origin == r.Origin && g.req.Role == r.Role && g.req.Label == r.Label {
+		if g.session == session && g.req.Action == r.Action && g.req.Origin == r.Origin && g.req.Role == r.Role && g.req.Label == r.Label {
 			st.grants = append(st.grants[:i], st.grants[i+1:]...)
 			return true
 		}
@@ -343,7 +404,7 @@ func (s *Service) takeGrant(st *state, r Request) bool {
 	return false
 }
 
-func (s *Service) addGrant(envID, teammateID string, r Request) {
+func (s *Service) addGrant(envID, teammateID, session string, r Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.stateLocked(envID, teammateID)
@@ -354,7 +415,7 @@ func (s *Service) addGrant(envID, teammateID string, r Request) {
 			live = append(live, g)
 		}
 	}
-	st.grants = append(live, grant{req: r, until: now.Add(grantTTL)})
+	st.grants = append(live, grant{session: session, req: r, until: now.Add(grantTTL)})
 }
 
 // awaitApproval polls an approval until it is decided or hold passes; it returns its
@@ -400,8 +461,8 @@ func (s *Service) Run(ctx context.Context) {
 		s.mu.Unlock()
 	}
 	s.sweepScreenshots(ctx)
-	idle := or(s.IdleStop, defaultIdleStop)
-	t := time.NewTicker(min(idle/2, time.Minute))
+	idle, ephIdle := or(s.IdleStop, defaultIdleStop), or(s.EphemeralIdle, defaultEphemeral)
+	t := time.NewTicker(min(idle/2, ephIdle/2, time.Minute))
 	defer t.Stop()
 	for {
 		select {
@@ -409,6 +470,7 @@ func (s *Service) Run(ctx context.Context) {
 			return
 		case <-t.C:
 			s.stopIdle(ctx, idle)
+			s.endIdleEphemeral(ctx, ephIdle)
 		}
 	}
 }
@@ -418,7 +480,7 @@ func (s *Service) stopIdle(ctx context.Context, idle time.Duration) {
 	s.mu.Lock()
 	var due []*state
 	for _, st := range s.states {
-		if st.vm != "" && !st.takeover && s.now().Sub(st.lastUsed) > idle {
+		if st.vm != "" && !st.anyTakeover() && s.now().Sub(st.lastUsed) > idle {
 			due = append(due, st)
 		}
 	}
@@ -430,7 +492,7 @@ func (s *Service) stopIdle(ctx context.Context, idle time.Duration) {
 			continue // a command is running
 		}
 		s.mu.Lock()
-		still := !st.takeover && s.now().Sub(st.lastUsed) > idle
+		still := !st.anyTakeover() && s.now().Sub(st.lastUsed) > idle
 		s.mu.Unlock()
 		if still {
 			_, status, err := s.VMs.BrowserStatus(ctx, st.env, st.teammate)
