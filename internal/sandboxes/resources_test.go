@@ -82,7 +82,7 @@ func TestCreatePersistsAndPassesMaxMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.manager.waitOperation(f.ctx, explicit.ID); err != nil {
+	if err := f.manager.Wait(f.ctx, explicit.ID); err != nil {
 		t.Fatal(err)
 	}
 	if explicit.MaxMemoryMiB != 2048 || len(rt.specs) != 1 || rt.specs[0].MaxMemoryMiB != 2048 {
@@ -100,7 +100,7 @@ func TestCreatePersistsAndPassesMaxMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.manager.waitOperation(f.ctx, defaulted.ID); err != nil {
+	if err := f.manager.Wait(f.ctx, defaulted.ID); err != nil {
 		t.Fatal(err)
 	}
 	if defaulted.MaxMemoryMiB != 1536 || len(rt.specs) != 2 || rt.specs[1].MaxMemoryMiB != 1536 {

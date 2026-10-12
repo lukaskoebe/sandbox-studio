@@ -129,7 +129,7 @@ func TestCreateAnswersAtOnceAndReportsItsSteps(t *testing.T) {
 	}
 
 	close(rt.release)
-	if err := f.manager.waitOperation(f.ctx, view.ID); err != nil {
+	if err := f.manager.Wait(f.ctx, view.ID); err != nil {
 		t.Fatalf("create failed: %v", err)
 	}
 	done, err := f.manager.Get(f.ctx, f.env.ID, view.ID)
@@ -157,8 +157,8 @@ func TestFailedCreateKeepsItsRecordUntilDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	close(rt.release)
-	if err := f.manager.waitOperation(f.ctx, view.ID); err == nil || !strings.Contains(err.Error(), "registry unreachable") {
-		t.Fatalf("waitOperation = %v; want the pull's error", err)
+	if err := f.manager.Wait(f.ctx, view.ID); err == nil || !strings.Contains(err.Error(), "registry unreachable") {
+		t.Fatalf("Wait = %v; want the pull's error", err)
 	}
 
 	failed, err := f.manager.Get(f.ctx, f.env.ID, view.ID)

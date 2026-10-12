@@ -137,7 +137,7 @@ func TestCreateFromTemplateUsesPinnedResourcesAndHostOnlyImageCredentials(t *tes
 	if err != nil {
 		t.Fatalf("CreateFromTemplate: %v", err)
 	}
-	if err := f.manager.waitOperation(f.ctx, view.ID); err != nil {
+	if err := f.manager.Wait(f.ctx, view.ID); err != nil {
 		t.Fatalf("template create: %v", err)
 	}
 	if view.TemplateID != template.ID || view.ID == f.sandbox.ID || resolver.calls != 1 {
@@ -258,7 +258,7 @@ func TestCreateFromTemplateRetainsPinWhenOwnedCleanupFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = f.manager.waitOperation(f.ctx, view.ID)
+	err = f.manager.Wait(f.ctx, view.ID)
 	if err == nil || strings.Contains(err.Error(), ref.Image) || strings.Contains(err.Error(), ref.Password) ||
 		!strings.Contains(err.Error(), "cleanup could not verify VM identity") {
 		t.Fatalf("boot error was not safely reported: %v", err)
@@ -292,7 +292,7 @@ func TestCreateFromTemplateDropsPinOnlyAfterOwnedCleanupConfirmsAbsence(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.manager.waitOperation(f.ctx, view.ID); err == nil {
+	if err := f.manager.Wait(f.ctx, view.ID); err == nil {
 		t.Fatal("CreateFromTemplate succeeded despite a boot failure")
 	}
 	if len(rt.removeOwnedCalls) != 1 {

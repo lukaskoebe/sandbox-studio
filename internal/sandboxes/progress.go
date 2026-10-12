@@ -223,9 +223,9 @@ func (m *Manager) settle(rec store.Sandbox, err error) *operation {
 	return op
 }
 
-// waitOperation waits until the create or fork of sandbox id ends, and returns its error.
+// Wait waits until the create or fork of sandbox id ends, and returns its error.
 // It returns nil at once if none runs.
-func (m *Manager) waitOperation(ctx context.Context, id string) error {
+func (m *Manager) Wait(ctx context.Context, id string) error {
 	m.opsMu.Lock()
 	op := m.ops[id]
 	m.opsMu.Unlock()

@@ -369,7 +369,7 @@ func TestForkCopiesWorkspaceIntoNewSandbox(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := f.manager.waitOperation(f.ctx, answered.ID); err != nil {
+			if err := f.manager.Wait(f.ctx, answered.ID); err != nil {
 				t.Fatal(err)
 			}
 			view, err := f.manager.Get(f.ctx, f.env.ID, answered.ID)
@@ -411,7 +411,7 @@ func TestForkFailureRemovesFork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := f.manager.waitOperation(f.ctx, answered.ID); err == nil {
+	if err := f.manager.Wait(f.ctx, answered.ID); err == nil {
 		t.Fatal("Fork succeeded")
 	}
 	// A failed fork keeps its record, in state failed, until it is deleted.
