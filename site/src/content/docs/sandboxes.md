@@ -10,7 +10,7 @@ A sandbox is a Linux microVM with Docker, a persistent `/workspace`, and its own
 1. Choose **New sandbox** from the overview.
 2. Enter a name using lowercase letters, digits, and dashes.
 3. Optionally choose a teammate. This choice cannot be changed later.
-4. Select **Create**. The sandbox starts and appears in the sidebar.
+4. Select **Create**. Studio opens the sandbox while it boots. The page lists the creation steps and shows the progress of the image download. If a step fails, the page shows the error and a **Delete** button.
 
 ![The New sandbox dialog, with a name and optional teammate](../../assets/screenshots/new-sandbox.jpg)
 

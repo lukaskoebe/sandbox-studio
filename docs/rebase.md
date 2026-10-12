@@ -52,7 +52,9 @@ their generation.
 The fork gets a new ID and egress identity, with the same template and resources. Its
 workspace is copied from the source. A running source keeps running, so the copy may be
 inconsistent. A stopped source is started in transfer mode for the copy and then stopped
-again. The fork is booted. A failed fork is removed.
+again. The fork is booted. The request returns before the copy and boot finish: the fork is
+in state `creating` until it runs, and `failed` if a step fails. A failed fork keeps its
+record until it is deleted; see [creation progress](sandboxes.md#creation-progress).
 
 ## Limits
 

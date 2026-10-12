@@ -46,6 +46,7 @@ func (s *Server) registerTransfers(api huma.API) {
 		Path: "/api/environments/{env}/sandboxes/{id}/fork", Tags: []string{"sandboxes"},
 		Summary: "Copy a sandbox into a new one",
 		Description: "Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. " +
+			"It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. " +
 			"Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.",
 		DefaultStatus: http.StatusCreated,
 	}, func(ctx context.Context, in *forkIn) (*sandboxOut, error) {

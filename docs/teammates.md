@@ -33,6 +33,26 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
 - A teammate that owns sandboxes can't be deleted (409). Deleting a teammate deletes the
   network rules scoped to it.
 
+## Default teammate
+
+Adding a provider to an environment that has no teammates creates the default teammate on
+that provider (`teammates.DefaultTeammate*`, created by the API's `createProvider`):
+
+- name `Iris`, role `Generalist engineer`, and the soul "Curious, careful and direct. Says what
+  it knows and what it doesn't, explains decisions briefly, prefers small verified steps, and
+  asks before anything risky or hard to undo.";
+- harness by provider kind: `claude_subscription` and `anthropic_api` → claude,
+  `chatgpt_subscription` and `openai_api` → codex, `openai_compatible` → opencode;
+- model: `claude-sonnet-4-5` for `anthropic_api`, `gpt-5.1-codex` for `openai_api`, the
+  endpoint's model for `openai_compatible`, and none for subscriptions (the subscription's
+  default);
+- git identity `Iris (agent) <iris@agents.invalid>`.
+
+Afterwards the default is an ordinary teammate that the user can edit or delete. A provider
+added while the environment has a teammate creates nothing, and one added after the last
+teammate was deleted creates Iris again. If the default can't be created, the provider is kept, the
+failure is logged, and the teammate can be added by hand.
+
 ## Ownership and rules
 
 - A sandbox can be created with a `teammateId` (base or template). Ownership never changes;

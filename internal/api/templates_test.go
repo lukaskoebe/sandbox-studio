@@ -128,11 +128,14 @@ type apiTemplateRuntime struct {
 	labels map[string]string
 }
 
+// Create fails the way an SDK error can, naming the private image and its credential.
 func (r *apiTemplateRuntime) Create(_ context.Context, _ string, spec runtime.Spec, _ string, labels map[string]string) error {
 	r.image = spec.Image
 	r.labels = labels
-	return nil
+	return fmt.Errorf("pull %s with %s: denied", spec.Image.Reference, spec.Image.Password)
 }
+
+func (*apiTemplateRuntime) Remove(context.Context, string) error { return nil }
 
 func (*apiTemplateRuntime) Status(context.Context, string) (runtime.Status, error) {
 	return runtime.StatusRunning, nil
@@ -187,13 +190,27 @@ func TestCreateTemplateSandboxReturnsNormalSandboxWithoutRegistryMetadata(t *tes
 	if err := json.Unmarshal(response.Body.Bytes(), &view); err != nil || response.Code != http.StatusCreated {
 		t.Fatalf("create template sandbox: status=%d body=%s err=%v", response.Code, response.Body, err)
 	}
-	if view.TemplateID != template.ID || view.Name != "fresh-copy" || view.ID == "" || rt.image == nil || rt.image.Reference != image || rt.labels["studio.template-id"] != template.ID {
-		t.Fatalf("created template sandbox = %+v runtime image=%+v labels=%+v", view, rt.image, rt.labels)
+	if view.TemplateID != template.ID || view.Name != "fresh-copy" || view.ID == "" {
+		t.Fatalf("created template sandbox = %+v", view)
 	}
 	for _, private := range []string{secret, image, "template-setup-must-not-be-public", "BaseRef", "cacheKey", "artifacts"} {
 		if strings.Contains(response.Body.String(), private) {
 			t.Errorf("create response exposed private template metadata %q: %s", private, response.Body)
 		}
+	}
+
+	// The VM is created in the background, and this runtime's create fails. Its error, and so
+	// the failed sandbox, keep the private image and credential out.
+	if err := s.Sandboxes.Wait(context.Background(), view.ID); err == nil || strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), image) {
+		t.Fatalf("background create error = %v; want a failure without the private image or credential", err)
+	}
+	if rt.image == nil || rt.image.Reference != image || rt.labels["studio.template-id"] != template.ID {
+		t.Fatalf("runtime image=%+v labels=%+v", rt.image, rt.labels)
+	}
+	failed, err := s.Sandboxes.Get(context.Background(), env.ID, view.ID)
+	if err != nil || failed.Status != sandboxes.StatusFailed || failed.Progress == nil ||
+		strings.Contains(failed.Progress.Error, secret) || strings.Contains(failed.Progress.Error, image) {
+		t.Fatalf("failed sandbox = %+v, %v; want it failed without private details", failed, err)
 	}
 }
 

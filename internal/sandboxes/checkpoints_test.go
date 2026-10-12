@@ -500,7 +500,8 @@ func newCheckpointFixture(t *testing.T) *checkpointFixture {
 	}
 	rt := newFakeSandboxRuntime()
 	rt.setStatus(VMName(sb), runtime.StatusStopped)
-	m := &Manager{Store: st, Runtime: rt, Hub: hub, Egress: fakeEgress{}, Paths: p, Log: log}
+	m := &Manager{Store: st, Runtime: rt, Hub: hub, Egress: fakeEgress{}, Paths: p, Log: log,
+		CA: configTestCA{cert: []byte("test CA PEM")}, Secrets: newConfigTestSecrets(nil, nil)}
 	t.Cleanup(func() {
 		all, _ := st.AllSandboxes(context.Background())
 		for _, rec := range all {
@@ -540,6 +541,7 @@ type fakeSandboxRuntime struct {
 	restoredEgress     runtime.Egress
 	onCreateCheckpoint func()
 	onRemove           func(string)
+	guestBoots         bool // a created VM's agent connects to its socket and answers, see answerGuest
 }
 
 func newFakeSandboxRuntime() *fakeSandboxRuntime {
@@ -551,10 +553,16 @@ func newFakeSandboxRuntime() *fakeSandboxRuntime {
 	}
 }
 
-func (f *fakeSandboxRuntime) Create(_ context.Context, name string, _ runtime.Spec, _ string, _ map[string]string) error {
+func (f *fakeSandboxRuntime) Create(_ context.Context, name string, _ runtime.Spec, socket string, _ map[string]string) error {
 	f.record("create:" + name)
 	f.setStatus(name, runtime.StatusRunning)
-	return f.failure("create:" + name)
+	if err := f.failure("create:" + name); err != nil {
+		return err
+	}
+	if f.guestBoots {
+		return answerGuest(socket)
+	}
+	return nil
 }
 
 func (f *fakeSandboxRuntime) Start(_ context.Context, name string) error {

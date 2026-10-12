@@ -63,6 +63,8 @@ type Spec struct {
 	// image. Image wins over it.
 	BaseImage string `json:"-"`
 	Egress    Egress
+	// Progress, if set, receives the creation's phases as they start. It must not block.
+	Progress func(Progress) `json:"-"`
 }
 
 // ImageSource contains host-side credentials and a private immutable image
@@ -183,13 +185,37 @@ func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocke
 		msb.WithDetached(),
 	}
 	options = append(options, imageOptions...)
-	sb, err := msb.CreateSandbox(ctx, name, options...)
-	if err != nil {
-		return fmt.Errorf("create sandbox: %w", err)
+	report := func(p Progress) {
+		if spec.Progress != nil {
+			spec.Progress(p)
+		}
+	}
+	report(Progress{Phase: PhasePull})
+	events, results := msb.CreateSandboxWithProgress(ctx, name, options...)
+	var counter pullCounter
+	for e := range events {
+		if p, ok := counter.observe(e); ok {
+			report(p)
+		}
+	}
+	result, ok := <-results
+	if !ok {
+		return errors.New("create sandbox: microsandbox returned no result")
+	}
+	sb := result.Sandbox
+	if result.Err != nil {
+		if sb != nil {
+			_ = sb.Detach(ctx)
+		}
+		return fmt.Errorf("create sandbox: %w", result.Err)
+	}
+	if sb == nil {
+		return errors.New("create sandbox: microsandbox returned no sandbox")
 	}
 	if !bootGuest {
 		return sb.Detach(ctx)
 	}
+	report(Progress{Phase: PhaseBoot})
 	return errors.Join(boot(ctx, sb), sb.Detach(ctx))
 }
 

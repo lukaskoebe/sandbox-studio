@@ -97,7 +97,8 @@ func ownedVM(rec store.Sandbox) runtime.OwnedVM {
 // ID, egress identity and gateway credentials, and the source's template and resources.
 // A running source is copied live, so files written during the copy may be inconsistent.
 // A stopped source is started without services for the copy and stopped again. Docker
-// state is not copied. A failed fork is removed.
+// state is not copied. The fork is returned in state creating; the copy runs in the
+// background, holding the source, and a failed fork keeps its record in state failed.
 func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
@@ -109,7 +110,12 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 	if err != nil {
 		return View{}, err
 	}
-	defer unlock()
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			unlock()
+		}
+	}()
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -151,13 +157,21 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 	}
 	unlockFork, err := m.tryMutation(rec.ID)
 	if err != nil {
-		return View{}, err
+		return View{}, m.discardRecord(ctx, rec, err)
 	}
-	defer unlockFork()
-	if err := m.forkInto(ctx, rt, sb, rec, image, status == runtime.StatusRunning); err != nil {
-		return View{}, m.removeFailedFork(ctx, rec, err)
+	if err := m.begin(ctx, rec, OperationFork, forkSteps); err != nil {
+		unlockFork()
+		return View{}, m.discardRecord(ctx, rec, err)
 	}
-	return m.view(ctx, rec)
+	handedOff = true
+	sourceRunning := status == runtime.StatusRunning
+	m.background(rec, transferTimeout, func() { unlockFork(); unlock() }, func(ctx context.Context) error {
+		if err := m.forkInto(ctx, rt, sb, rec, image, sourceRunning); err != nil {
+			return m.removeFailedVM(ctx, rec, err, false)
+		}
+		return nil
+	})
+	return m.acceptedView(ctx, rec), nil
 }
 
 func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec store.Sandbox, image *runtime.ImageSource, sourceRunning bool) error {
@@ -169,9 +183,12 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		return err
 	}
-	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress), sock, sandboxLabels(rec)); err != nil {
+	spec := transferSpec(rec, image, egress)
+	spec.Progress = m.runtimeProgress(rec.ID)
+	if err := rt.CreateForTransfer(ctx, VMName(rec), spec, sock, sandboxLabels(rec)); err != nil {
 		return err
 	}
+	m.advance(rec.ID, StepCopy)
 	if !sourceRunning {
 		if _, err := m.Egress.Attach(sb); err != nil {
 			return err
@@ -187,7 +204,11 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 	if err != nil {
 		return err
 	}
-	return rt.Boot(ctx, VMName(rec))
+	m.advance(rec.ID, StepBoot)
+	if err := rt.Boot(ctx, VMName(rec)); err != nil {
+		return err
+	}
+	return m.awaitGuest(ctx, rec)
 }
 
 // stopQuietly stops a VM even when ctx has ended.

@@ -107,7 +107,7 @@ func (s *Server) registerTeammates(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "createProvider", Method: http.MethodPost, Path: "/api/environments/{env}/providers", Tags: []string{"providers"},
 		DefaultStatus: http.StatusCreated,
-		Description:   "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder.",
+		Description:   "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. A provider added to an environment without teammates also creates the default teammate.",
 	}, func(ctx context.Context, in *createProviderIn) (*struct{ Body ProviderView }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
@@ -157,6 +157,9 @@ func (s *Server) registerTeammates(api huma.API) {
 		if sec != nil {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)
+		}
+		if err := s.createDefaultTeammate(ctx, in.Env, created); err != nil {
+			s.Log.Warn("default teammate", "environment", in.Env, "err", err)
 		}
 		s.publishTeammates(in.Env)
 		return &struct{ Body ProviderView }{providerView(created)}, nil
@@ -360,6 +363,27 @@ func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateIn
 		}
 	}
 	return p, nil
+}
+
+// createDefaultTeammate creates the default teammate on a provider that was just added, if
+// the environment has no teammates yet. Its fields go through the same checks as any
+// teammate's. A failure leaves the provider in place; the teammate can be added by hand.
+func (s *Server) createDefaultTeammate(ctx context.Context, envID string, p store.Provider) error {
+	existing, err := s.Store.Teammates(ctx, envID)
+	if err != nil || len(existing) > 0 {
+		return err
+	}
+	harness, model := teammates.DefaultTeammateHarness(p.Kind)
+	t, err := s.teammateFrom(ctx, envID, store.NewID(), TeammateInput{
+		Name: teammates.DefaultTeammateName, Role: teammates.DefaultTeammateRole, Soul: teammates.DefaultTeammateSoul,
+		Harness: harness, ProviderID: p.ID, Model: model,
+		GitName: teammates.DefaultTeammateGitName, GitEmail: teammates.DefaultTeammateGitEmail,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = s.Store.CreateTeammate(ctx, t)
+	return err
 }
 
 // checkTeammate answers 422 unless teammateID is empty or a teammate of the environment.

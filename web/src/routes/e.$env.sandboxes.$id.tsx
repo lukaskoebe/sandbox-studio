@@ -55,6 +55,7 @@ import { StatusBadge, phase } from "@/components/status-badge"
 import { SuspendResumeButton } from "@/components/suspend-resume-button"
 import { Terminal } from "@/components/terminal"
 import { SandboxBrowserPanel } from "@/components/sandbox-browser-panel"
+import { SandboxProgress } from "@/components/sandbox-progress"
 import {
   $api,
   errorMessage,
@@ -100,8 +101,12 @@ function SandboxPage() {
     "/api/environments/{env}/sandboxes/{id}",
     { params: { path: { env, id } } },
     {
-      refetchInterval: (q) =>
-        q.state.data && isReady(q.state.data) ? 5000 : 1000,
+      refetchInterval: (q) => {
+        const data = q.state.data
+        if (data && isReady(data)) return 5000
+        // A failed create or fork changes only by its delete, which the sandboxes topic announces.
+        return data?.status === "failed" ? false : 1000
+      },
     }
   )
 
@@ -123,6 +128,8 @@ function SandboxPage() {
   }
 
   const sb = sandbox.data
+  // A create or fork that runs or failed: no guest yet, so guest-only controls stay hidden.
+  const building = sb.status === "creating" || sb.status === "failed"
   const browserKey = `${sb.id}:${sb.teammateId ?? ""}`
   const browserOpen = !!sb.teammateId && browserOpenFor === browserKey
   const closeBrowser = () => {
@@ -149,7 +156,7 @@ function SandboxPage() {
           teammateId={sb.teammateId}
           className="hidden min-w-0 shrink-0 items-center text-xs text-muted-foreground sm:inline-flex"
         />
-        {sb.teammateId && (
+        {sb.teammateId && !building && (
           <Button
             ref={browserToggleRef}
             className="shrink-0"
@@ -178,7 +185,7 @@ function SandboxPage() {
         className="flex h-9 min-w-0 shrink-0 items-center overflow-x-auto border-b px-3"
       >
         <div className="flex w-max shrink-0 items-center gap-1">
-          {sb.teammateId && view !== "terminal" && (
+          {!building && sb.teammateId && view !== "terminal" && (
             <div className="shrink-0">
               <SandboxChats env={env} id={sb.id} />
             </div>
@@ -196,7 +203,7 @@ function SandboxPage() {
             </div>
           )}
           {/* Chat or terminal comes first by preference; the other is one click away. */}
-          {sb.teammateId && view === "terminal" && (
+          {!building && sb.teammateId && view === "terminal" && (
             <div className="shrink-0">
               <SandboxChats env={env} id={sb.id} />
             </div>
@@ -204,26 +211,36 @@ function SandboxPage() {
           <div className="shrink-0">
             <ConnectionsSheet env={env} sandbox={sb} />
           </div>
-          <div className="shrink-0">
-            <CheckpointsSheet env={env} sandbox={sb} />
-          </div>
-          <div className="shrink-0">
-            <ExportSandboxButton env={env} sandbox={sb} />
-          </div>
+          {!building && (
+            <div className="shrink-0">
+              <CheckpointsSheet env={env} sandbox={sb} />
+            </div>
+          )}
+          {!building && (
+            <div className="shrink-0">
+              <ExportSandboxButton env={env} sandbox={sb} />
+            </div>
+          )}
           {isReady(sb) && (
             <div className="shrink-0">
               <Previews env={env} sandbox={sb} />
             </div>
           )}
-          <div className="shrink-0">
-            <ForkSandboxDialog env={env} sandbox={sb} />
-          </div>
-          <div className="shrink-0">
-            <RebaseSandboxDialog env={env} sandbox={sb} />
-          </div>
-          <div className="shrink-0">
-            <Lifecycle env={env} sandbox={sb} />
-          </div>
+          {!building && (
+            <div className="shrink-0">
+              <ForkSandboxDialog env={env} sandbox={sb} />
+            </div>
+          )}
+          {!building && (
+            <div className="shrink-0">
+              <RebaseSandboxDialog env={env} sandbox={sb} />
+            </div>
+          )}
+          {!building && (
+            <div className="shrink-0">
+              <Lifecycle env={env} sandbox={sb} />
+            </div>
+          )}
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -310,6 +327,15 @@ function Body({
   sandbox: Sandbox
   focus: Focus | null
 }) {
+  // A create or fork has no guest until it succeeds; a failed one is cleared by deleting it.
+  if (sb.status === "creating") return <SandboxProgress sandbox={sb} />
+  if (sb.status === "failed")
+    return (
+      <SandboxProgress
+        sandbox={sb}
+        action={<DeleteSandbox env={env} sandbox={sb} labelled />}
+      />
+    )
   switch (phase(sb)) {
     case "ready":
     case "suspended":
@@ -407,7 +433,6 @@ function StartButton({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
 }
 
 function Lifecycle({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
-  const navigate = useNavigate()
   const invalidate = useInvalidateSandboxes()
   const path = { params: { path: { env, id: sb.id } } }
   const stop = $api.useMutation(
@@ -417,20 +442,6 @@ function Lifecycle({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
       onSettled: invalidate,
       onError: (err) =>
         toast.error("Could not stop the sandbox", {
-          description: errorMessage(err),
-        }),
-    }
-  )
-  const remove = $api.useMutation(
-    "delete",
-    "/api/environments/{env}/sandboxes/{id}",
-    {
-      onSuccess: () => {
-        invalidate()
-        navigate({ to: "/e/$env", params: { env } })
-      },
-      onError: (err) =>
-        toast.error("Could not delete the sandbox", {
           description: errorMessage(err),
         }),
     }
@@ -451,36 +462,75 @@ function Lifecycle({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           Stop
         </Button>
       )}
-      <AlertDialog>
-        <AlertDialogTrigger
-          render={
-            <Button variant="ghost" size="icon-sm" title="Delete sandbox" />
-          }
-        >
-          <TrashIcon />
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {sb.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The VM, its workspace, Docker images, and checkpoints are deleted.
-              This can't be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate(path)}
-            >
-              {remove.isPending && <Spinner />}
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteSandbox env={env} sandbox={sb} />
     </>
+  )
+}
+
+/** Deletes the sandbox after a confirmation, then returns to the sandbox list. */
+function DeleteSandbox({
+  env,
+  sandbox: sb,
+  labelled = false,
+}: {
+  env: string
+  sandbox: Sandbox
+  /** A text button for the failed panel; the action bar shows an icon. */
+  labelled?: boolean
+}) {
+  const navigate = useNavigate()
+  const invalidate = useInvalidateSandboxes()
+  const path = { params: { path: { env, id: sb.id } } }
+  const remove = $api.useMutation(
+    "delete",
+    "/api/environments/{env}/sandboxes/{id}",
+    {
+      onSuccess: () => {
+        invalidate()
+        navigate({ to: "/e/$env", params: { env } })
+      },
+      onError: (err) =>
+        toast.error("Could not delete the sandbox", {
+          description: errorMessage(err),
+        }),
+    }
+  )
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger
+        render={
+          labelled ? (
+            <Button variant="destructive" />
+          ) : (
+            <Button variant="ghost" size="icon-sm" title="Delete sandbox" />
+          )
+        }
+      >
+        <TrashIcon />
+        {labelled && "Delete"}
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {sb.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            The VM, its workspace, Docker images, and checkpoints are deleted.
+            This can't be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={remove.isPending}
+            onClick={() => remove.mutate(path)}
+          >
+            {remove.isPending && <Spinner />}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
