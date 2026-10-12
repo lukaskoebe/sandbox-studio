@@ -10,9 +10,10 @@ import (
 )
 
 // Rebase moves a sandbox onto another ready template in its environment. It copies the
-// workspace into a new VM generation built from the template, with fresh Docker and
-// workspace disks and the template's resources. Docker state and tmux sessions end. The
-// sandbox keeps its identity and egress, and its checkpoints stay with their generations.
+// workspace and home into a new VM generation built from the template, with fresh Docker,
+// workspace and home disks and the template's resources. Docker state and tmux sessions
+// end. The sandbox keeps its identity and egress, and its checkpoints stay with their
+// generations.
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
 // catalog switches, any failure removes the new VM and returns the source to its state.
 func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
@@ -121,7 +122,7 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 	if err := rt.CreateForTransfer(ctx, VMName(target), transferSpec(target, image, egress), sock, sandboxLabels(target)); err != nil {
 		return err
 	}
-	if err := copyWorkspace(ctx, rt, ownedVM(sb), ownedVM(target), int64(target.WorkspaceMiB)<<20); err != nil {
+	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB); err != nil {
 		return err
 	}
 	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {

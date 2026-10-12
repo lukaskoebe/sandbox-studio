@@ -138,6 +138,8 @@ func transferError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, sandboxes.ErrWorkspaceTooLarge):
 		return huma.NewError(http.StatusRequestEntityTooLarge, "the workspace archive exceeds the exported workspace size")
+	case errors.Is(err, sandboxes.ErrHomeTooLarge):
+		return huma.NewError(http.StatusRequestEntityTooLarge, "the home archive exceeds the home disk")
 	case errors.Is(err, sandboxes.ErrInsufficientDisk):
 		return huma.NewError(http.StatusInsufficientStorage, err.Error())
 	case errors.Is(err, sandboxes.ErrTransferUnsupported), errors.Is(err, sandboxes.ErrBuildsUnavailable):

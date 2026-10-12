@@ -37,6 +37,10 @@ const (
 	DefaultDockerMiB    = resources.DefaultDockerMiB
 )
 
+// HomeMiB is the size of the home disk every new sandbox gets at /home/agent. It is fixed
+// and separate from the workspace's.
+const HomeMiB = 4096
+
 // Manager coordinates the catalog, the runtime, the agent hub and the network gateway.
 type Manager struct {
 	Store     *store.Store
@@ -317,7 +321,7 @@ func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved r
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(resolved.CPUs), MemoryMiB: uint32(resolved.MemoryMiB), MaxMemoryMiB: uint32(resolved.MaxMemoryMiB),
-		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
+		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: HomeMiB,
 		Image: image, Egress: egress,
 	}
 	labels := sandboxLabels(rec)

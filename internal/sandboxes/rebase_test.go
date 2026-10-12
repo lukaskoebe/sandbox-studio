@@ -16,19 +16,21 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 )
 
-// transferFake adds transfer mode and workspace copies to fakeSandboxRuntime. A workspace
-// is a byte string per VM name.
+// transferFake adds transfer mode and tree copies to fakeSandboxRuntime. A workspace and
+// a home are a byte string per VM name. Workspace copies record export:<vm> and
+// import:<vm>, home copies export-home:<vm> and import-home:<vm>.
 type transferFake struct {
 	*fakeSandboxRuntime
 	mu         sync.Mutex
 	workspaces map[string][]byte
+	homes      map[string][]byte
 	specs      map[string]runtime.Spec
 	labels     map[string]map[string]string
 	booted     map[string]bool
 }
 
 func newTransferFake(f *checkpointFixture) *transferFake {
-	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, specs: map[string]runtime.Spec{},
+	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, homes: map[string][]byte{}, specs: map[string]runtime.Spec{},
 		labels: map[string]map[string]string{}, booted: map[string]bool{}}
 	f.manager.Runtime = tf
 	f.manager.Templates = perTemplateResolver{}
@@ -67,23 +69,32 @@ func (f *transferFake) Boot(_ context.Context, name string) error {
 	return nil
 }
 
-func (f *transferFake) ExportWorkspace(ctx context.Context, owned runtime.OwnedVM, w io.Writer) error {
-	f.record("export:" + owned.Name)
+func (f *transferFake) trees(tree runtime.Tree) (map[string][]byte, string) {
+	if tree == runtime.TreeHome {
+		return f.homes, "-home"
+	}
+	return f.workspaces, ""
+}
+
+func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, w io.Writer) error {
+	trees, suffix := f.trees(tree)
+	f.record("export" + suffix + ":" + owned.Name)
 	if err := f.running(ctx, owned.Name); err != nil {
 		return err
 	}
-	if err := f.failure("export:" + owned.Name); err != nil {
+	if err := f.failure("export" + suffix + ":" + owned.Name); err != nil {
 		return err
 	}
 	f.mu.Lock()
-	data := f.workspaces[owned.Name]
+	data := trees[owned.Name]
 	f.mu.Unlock()
 	_, err := w.Write(data)
 	return err
 }
 
-func (f *transferFake) ImportWorkspace(ctx context.Context, owned runtime.OwnedVM, r io.Reader) error {
-	f.record("import:" + owned.Name)
+func (f *transferFake) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader) error {
+	trees, suffix := f.trees(tree)
+	f.record("import" + suffix + ":" + owned.Name)
 	if err := f.running(ctx, owned.Name); err != nil {
 		return err
 	}
@@ -91,11 +102,11 @@ func (f *transferFake) ImportWorkspace(ctx context.Context, owned runtime.OwnedV
 	if err != nil {
 		return err
 	}
-	if err := f.failure("import:" + owned.Name); err != nil {
+	if err := f.failure("import" + suffix + ":" + owned.Name); err != nil {
 		return err
 	}
 	f.mu.Lock()
-	f.workspaces[owned.Name] = data
+	trees[owned.Name] = data
 	f.mu.Unlock()
 	return nil
 }
@@ -123,6 +134,18 @@ func (f *transferFake) setWorkspace(name, data string) {
 	f.mu.Unlock()
 }
 
+func (f *transferFake) home(name string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return string(f.homes[name])
+}
+
+func (f *transferFake) setHome(name, data string) {
+	f.mu.Lock()
+	f.homes[name] = []byte(data)
+	f.mu.Unlock()
+}
+
 type perTemplateResolver struct{}
 
 func (perTemplateResolver) Resolve(_ context.Context, envID, templateID string) (templateregistry.Reference, error) {
@@ -143,6 +166,7 @@ func TestRebaseRunningSandboxCopiesWorkspaceAndBootsTarget(t *testing.T) {
 	source := VMName(f.sandbox)
 	tf.setStatus(source, runtime.StatusRunning)
 	tf.setWorkspace(source, "files")
+	tf.setHome(source, "opencode sessions")
 	checkpoint := f.createReadyCheckpoint(t, "before")
 
 	view, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
@@ -156,14 +180,14 @@ func TestRebaseRunningSandboxCopiesWorkspaceAndBootsTarget(t *testing.T) {
 	if view.CPUs != 2 || view.MemoryMiB != 1024 || view.MaxMemoryMiB != 2048 || view.WorkspaceMiB != 4096 || view.DockerMiB != 2048 {
 		t.Fatalf("view resources = %+v", view.Sandbox)
 	}
-	if tf.workspace(target) != "files" || !tf.booted[target] {
-		t.Fatalf("target workspace %q, booted %v", tf.workspace(target), tf.booted[target])
+	if tf.workspace(target) != "files" || tf.home(target) != "opencode sessions" || !tf.booted[target] {
+		t.Fatalf("target workspace %q, home %q, booted %v", tf.workspace(target), tf.home(target), tf.booted[target])
 	}
 	if tf.hasVM(source) {
 		t.Fatal("source VM remains")
 	}
 	spec := tf.specs[target]
-	if spec.CPUs != 2 || spec.WorkspaceMiB != 4096 || spec.Image == nil || spec.Egress != (fakeEgress{}).egress(f.sandbox.ID) {
+	if spec.CPUs != 2 || spec.WorkspaceMiB != 4096 || spec.HomeMiB != HomeMiB || spec.Image == nil || spec.Egress != (fakeEgress{}).egress(f.sandbox.ID) {
 		t.Fatalf("target spec = %+v", spec)
 	}
 	if tf.labels[target]["studio.template-id"] != template.ID || tf.labels[target]["studio.sandbox-id"] != f.sandbox.ID {
@@ -347,7 +371,7 @@ func TestRebaseAndForkAreSerialized(t *testing.T) {
 	}
 }
 
-func TestForkCopiesWorkspaceIntoNewSandbox(t *testing.T) {
+func TestForkCopiesWorkspaceAndHomeIntoNewSandbox(t *testing.T) {
 	for _, running := range []bool{true, false} {
 		t.Run(fmt.Sprint("running=", running), func(t *testing.T) {
 			f := newCheckpointFixture(t)
@@ -357,6 +381,7 @@ func TestForkCopiesWorkspaceIntoNewSandbox(t *testing.T) {
 				tf.setStatus(source, runtime.StatusRunning)
 			}
 			tf.setWorkspace(source, "files")
+			tf.setHome(source, "dotfiles")
 
 			view, err := f.manager.Fork(f.ctx, f.env.ID, f.sandbox.ID, "copy")
 			if err != nil {
@@ -366,8 +391,11 @@ func TestForkCopiesWorkspaceIntoNewSandbox(t *testing.T) {
 			if view.ID == f.sandbox.ID || view.Name != "copy" || view.Generation != 1 || view.CPUs != f.sandbox.CPUs || view.WorkspaceMiB != f.sandbox.WorkspaceMiB {
 				t.Fatalf("view = %+v", view)
 			}
-			if tf.workspace(fork) != "files" || !tf.booted[fork] || view.Status != runtime.StatusRunning {
-				t.Fatalf("fork workspace %q, booted %v, status %s", tf.workspace(fork), tf.booted[fork], view.Status)
+			if tf.workspace(fork) != "files" || tf.home(fork) != "dotfiles" || !tf.booted[fork] || view.Status != runtime.StatusRunning {
+				t.Fatalf("fork workspace %q, home %q, booted %v, status %s", tf.workspace(fork), tf.home(fork), tf.booted[fork], view.Status)
+			}
+			if tf.specs[fork].HomeMiB != HomeMiB {
+				t.Fatalf("fork spec = %+v", tf.specs[fork])
 			}
 			if tf.specs[fork].Egress != (fakeEgress{}).egress(view.ID) {
 				t.Fatalf("fork egress = %+v", tf.specs[fork].Egress)
@@ -410,20 +438,47 @@ func TestForkFailureRemovesFork(t *testing.T) {
 	}
 }
 
-func TestCopyWorkspaceStopsAtLimit(t *testing.T) {
+func TestCopyTreeStopsAtLimit(t *testing.T) {
 	f := newCheckpointFixture(t)
 	tf := newTransferFake(f)
 	src, dst := runtime.OwnedVM{Name: "src"}, runtime.OwnedVM{Name: "dst"}
 	tf.setStatus("src", runtime.StatusRunning)
 	tf.setStatus("dst", runtime.StatusRunning)
 	tf.setWorkspace("src", "0123456789")
-	if err := copyWorkspace(f.ctx, tf, src, dst, 9); !errors.Is(err, ErrWorkspaceTooLarge) {
+	tf.setHome("src", "0123456789")
+	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeWorkspace, &limitWriter{left: 9, err: ErrWorkspaceTooLarge}); !errors.Is(err, ErrWorkspaceTooLarge) {
 		t.Fatalf("err = %v, want ErrWorkspaceTooLarge", err)
 	}
-	if tf.workspace("dst") != "" {
+	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeHome, &limitWriter{left: 9, err: ErrHomeTooLarge}); !errors.Is(err, ErrHomeTooLarge) {
+		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
+	}
+	if tf.workspace("dst") != "" || tf.home("dst") != "" {
 		t.Fatal("import succeeded past the limit")
 	}
-	if err := copyWorkspace(f.ctx, tf, src, dst, 10); err != nil || tf.workspace("dst") != "0123456789" {
+	if err := copyTree(f.ctx, tf, src, dst, runtime.TreeWorkspace, &limitWriter{left: 10, err: ErrWorkspaceTooLarge}); err != nil || tf.workspace("dst") != "0123456789" {
 		t.Fatalf("err = %v, workspace %q", err, tf.workspace("dst"))
+	}
+}
+
+func TestRebaseHomeFailureRollsBack(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	source := VMName(f.sandbox)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.fail("export-home:"+source, ErrHomeTooLarge)
+
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID); !errors.Is(err, ErrHomeTooLarge) {
+		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
+	}
+	current, err := f.store.Sandbox(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil || current.Generation != f.sandbox.Generation {
+		t.Fatalf("sandbox = %+v, %v", current, err)
+	}
+	if tf.hasVM(vmNameAtGeneration(f.sandbox, f.sandbox.Generation+1)) {
+		t.Fatal("target VM remains")
+	}
+	if status, _ := tf.Status(f.ctx, source); status != runtime.StatusRunning {
+		t.Fatalf("source is %s, want running again", status)
 	}
 }

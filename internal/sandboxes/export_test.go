@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -44,6 +45,7 @@ func TestExportWritesHeaderAndWorkspace(t *testing.T) {
 				tf.setStatus(source, runtime.StatusRunning)
 			}
 			tf.setWorkspace(source, "workspace-archive")
+			tf.setHome(source, "home-archive")
 
 			file, _ := exportToBuffer(t, f, f.sandbox.ID)
 			r := bytes.NewReader(file)
@@ -51,12 +53,16 @@ func TestExportWritesHeaderAndWorkspace(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			var home bytes.Buffer
+			if _, err := readChunks(&home, r, manifest.HomeLimit()); err != nil || home.String() != "home-archive" {
+				t.Fatalf("home archive = %q, %v", home.String(), err)
+			}
 			rest, _ := io.ReadAll(r)
 			if string(rest) != "workspace-archive" {
 				t.Fatalf("archive = %q", rest)
 			}
 			want := resources.Resources{CPUs: 1, MemoryMiB: 512, MaxMemoryMiB: 512, WorkspaceMiB: 1024, DockerMiB: 1024}
-			if manifest.Name != f.sandbox.Name || manifest.Resources != want || manifest.TemplateSpecYAML != nil || manifest.WorkspaceBytes != 0 {
+			if manifest.Format != 2 || manifest.Name != f.sandbox.Name || manifest.Resources != want || manifest.TemplateSpecYAML != nil || manifest.WorkspaceBytes != 0 {
 				t.Fatalf("manifest = %+v", manifest)
 			}
 			wantStatus := runtime.StatusStopped
@@ -163,13 +169,26 @@ func newImportFixture(t *testing.T) (*checkpointFixture, *transferFake, *fakeBui
 	return f, tf, builds
 }
 
+// exportFile is an export file with archive as its workspace and, from format 2, "home"
+// as its home archive.
 func exportFile(t *testing.T, m ExportManifest, archive string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	if err := WriteExportHeader(&buf, m); err != nil {
 		t.Fatal(err)
 	}
+	if m.Format >= 2 {
+		buf.Write(homeChunks("home"))
+	}
 	buf.WriteString(archive)
+	return buf.Bytes()
+}
+
+func homeChunks(home string) []byte {
+	var buf bytes.Buffer
+	c := chunkWriter{w: &buf}
+	c.Write([]byte(home))
+	c.end()
 	return buf.Bytes()
 }
 
@@ -232,8 +251,8 @@ func TestImportWithoutTemplateRecreatesSandbox(t *testing.T) {
 		t.Fatalf("sandbox = %+v", sb)
 	}
 	vm := VMName(sb)
-	if tf.workspace(vm) != "workspace-archive" || !tf.booted[vm] || tf.specs[vm].Image != nil {
-		t.Fatalf("workspace %q, booted %v, image %+v", tf.workspace(vm), tf.booted[vm], tf.specs[vm].Image)
+	if tf.workspace(vm) != "workspace-archive" || tf.home(vm) != "home" || !tf.booted[vm] || tf.specs[vm].Image != nil || tf.specs[vm].HomeMiB != HomeMiB {
+		t.Fatalf("workspace %q, home %q, booted %v, spec %+v", tf.workspace(vm), tf.home(vm), tf.booted[vm], tf.specs[vm])
 	}
 	if len(builds.submitted) != 0 || len(stagedFiles(t, f)) != 0 {
 		t.Fatalf("builds %d, staged files %v", len(builds.submitted), stagedFiles(t, f))
@@ -281,7 +300,8 @@ func TestImportRejectsMalformedFiles(t *testing.T) {
 	header := func(body string) []byte {
 		out := []byte(ExportMagic)
 		out = binary.BigEndian.AppendUint32(out, uint32(len(body)))
-		return append(append(out, body...), "archive"...)
+		out = append(append(out, body...), homeChunks("home")...)
+		return append(out, "archive"...)
 	}
 	manifestJSON := func(edit func(map[string]any)) string {
 		var fields map[string]any
@@ -293,6 +313,7 @@ func TestImportRejectsMalformedFiles(t *testing.T) {
 	}
 	oversize := []byte(ExportMagic)
 	oversize = binary.BigEndian.AppendUint32(oversize, maxManifestBytes+1)
+	headerEnd := exportHeaderPrefix + int(binary.BigEndian.Uint32(valid[len(ExportMagic):]))
 	badSpec := "resources:\n  cpus: 0\n"
 	for name, file := range map[string][]byte{
 		"empty":           nil,
@@ -303,7 +324,7 @@ func TestImportRejectsMalformedFiles(t *testing.T) {
 		"not json":        header("{nope"),
 		"trailing data":   header(manifestJSON(func(map[string]any) {}) + " {}"),
 		"unknown field":   header(manifestJSON(func(m map[string]any) { m["secrets"] = map[string]string{"A": "b"} })),
-		"wrong format":    header(manifestJSON(func(m map[string]any) { m["format"] = 2 })),
+		"wrong format":    header(manifestJSON(func(m map[string]any) { m["format"] = 3 })),
 		"missing format":  header(manifestJSON(func(m map[string]any) { delete(m, "format") })),
 		"bad name":        header(manifestJSON(func(m map[string]any) { m["name"] = "../etc" })),
 		"bad resources":   header(manifestJSON(func(m map[string]any) { m["resources"].(map[string]any)["cpus"] = 0 })),
@@ -312,6 +333,8 @@ func TestImportRejectsMalformedFiles(t *testing.T) {
 		"negative bytes":  header(manifestJSON(func(m map[string]any) { m["workspaceBytes"] = -1 })),
 		"length mismatch": header(manifestJSON(func(m map[string]any) { m["workspaceBytes"] = 3 })),
 		"missing archive": valid[:len(valid)-len("archive")],
+		"missing home":    append(slices.Clip(valid[:headerEnd]), 0, 0, 0, 0, 'a'),
+		"oversize chunk":  append(binary.BigEndian.AppendUint32(slices.Clip(valid[:headerEnd]), maxChunkBytes+1), 'a'),
 	} {
 		t.Run(name, func(t *testing.T) {
 			f, _, _ := newImportFixture(t)
@@ -342,6 +365,43 @@ func TestStoreArchiveStopsAtLimit(t *testing.T) {
 	}
 }
 
+func TestImportFormat1HasNoHome(t *testing.T) {
+	f, tf, _ := newImportFixture(t)
+	m := plainManifest("old")
+	m.Format = 1
+	file := exportFile(t, m, "workspace-archive")
+	imp, err := f.manager.Import(f.ctx, f.env.ID, bytes.NewReader(file), int64(len(file)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := waitImport(t, f, imp.ID)
+	if done.State != store.ImportReady {
+		t.Fatalf("import = %+v", done)
+	}
+	sb, err := f.store.Sandbox(f.ctx, f.env.ID, done.SandboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := VMName(sb)
+	// The home disk is seeded from the image when the sandbox boots.
+	if tf.workspace(vm) != "workspace-archive" || tf.countCall("import-home:"+vm) != 0 || tf.specs[vm].HomeMiB != HomeMiB || !tf.booted[vm] {
+		t.Fatalf("workspace %q, calls %v, spec %+v", tf.workspace(vm), tf.calls, tf.specs[vm])
+	}
+}
+
+func TestReadChunksStopsAtLimit(t *testing.T) {
+	var file bytes.Buffer
+	c := chunkWriter{w: &file}
+	c.Write(bytes.Repeat([]byte("x"), maxChunkBytes+10)) // two chunks
+	c.end()
+	if _, err := readChunks(io.Discard, bytes.NewReader(file.Bytes()), maxChunkBytes); !errors.Is(err, ErrHomeTooLarge) {
+		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
+	}
+	if n, err := readChunks(io.Discard, bytes.NewReader(file.Bytes()), maxChunkBytes+10); err != nil || n != maxChunkBytes+10 {
+		t.Fatalf("n = %d, err = %v", n, err)
+	}
+}
+
 func TestImportRejectsFullDisk(t *testing.T) {
 	f, _, _ := newImportFixture(t)
 	f.manager.diskFree = func(string) (uint64, error) { return 1 << 30, nil }
@@ -356,7 +416,7 @@ func TestImportRejectsFullDisk(t *testing.T) {
 }
 
 func TestImportFailureRemovesHalfMadeSandbox(t *testing.T) {
-	for _, step := range []string{"import", "boot"} {
+	for _, step := range []string{"import-home", "import", "boot"} {
 		t.Run(step, func(t *testing.T) {
 			f, tf, _ := newImportFixture(t)
 			// The new sandbox's VM name is unknown up front, so fail every VM at this step.
@@ -392,11 +452,11 @@ type failAllTransfer struct {
 	step string
 }
 
-func (f *failAllTransfer) ImportWorkspace(ctx context.Context, owned runtime.OwnedVM, r io.Reader) error {
-	if f.step == "import" {
+func (f *failAllTransfer) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader) error {
+	if f.step == "import" && tree == runtime.TreeWorkspace || f.step == "import-home" && tree == runtime.TreeHome {
 		return errors.New("injected failure at /secret/host/path")
 	}
-	return f.transferFake.ImportWorkspace(ctx, owned, r)
+	return f.transferFake.ImportTree(ctx, owned, tree, r)
 }
 
 func (f *failAllTransfer) Boot(ctx context.Context, name string) error {

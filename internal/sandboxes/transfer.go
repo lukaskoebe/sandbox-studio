@@ -19,16 +19,18 @@ var (
 	ErrLifecycleState = errors.New("sandbox must be running or stopped")
 	// ErrWorkspaceTooLarge means the copied workspace does not fit the target's disk.
 	ErrWorkspaceTooLarge = errors.New("workspace does not fit the target disk")
+	// ErrHomeTooLarge means the copied home directory does not fit the target's home disk.
+	ErrHomeTooLarge = fmt.Errorf("home directory /home/agent does not fit the %d GiB home disk; delete caches in it and try again", HomeMiB>>10)
 )
 
-// transferRuntime is the runtime surface for moving a workspace into a new VM. A VM in
-// transfer mode runs no agent or services until Boot.
+// transferRuntime is the runtime surface for moving a workspace and home into a new VM.
+// A VM in transfer mode runs no agent or services until Boot.
 type transferRuntime interface {
 	CreateForTransfer(context.Context, string, runtime.Spec, string, map[string]string) error
 	StartForTransfer(context.Context, string) error
 	Boot(context.Context, string) error
-	ExportWorkspace(context.Context, runtime.OwnedVM, io.Writer) error
-	ImportWorkspace(context.Context, runtime.OwnedVM, io.Reader) error
+	ExportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Writer) error
+	ImportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Reader) error
 }
 
 var _ transferRuntime = (*runtime.Runtime)(nil)
@@ -41,40 +43,52 @@ func (m *Manager) transfer() (transferRuntime, error) {
 	return rt, nil
 }
 
-// copyWorkspace streams the workspace of src into the empty workspace of dst. Both VMs
-// must run. The archive passes through the host in memory and is never stored there.
-// It fails once the archive exceeds limit bytes, or when either side fails.
-func copyWorkspace(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, limit int64) error {
+// copyTrees copies the workspace and then the home of src into dst, which has a home
+// disk. A source without one (created before the home disk) gives its root disk's home.
+func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB int) error {
+	if err := copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}); err != nil {
+		return err
+	}
+	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: HomeMiB << 20, err: ErrHomeTooLarge})
+}
+
+// copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The
+// archive passes through the host in memory and is never stored there. It fails once the
+// archive exceeds limit, or when either side fails.
+func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, tree runtime.Tree, limit *limitWriter) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	pr, pw := io.Pipe()
+	limit.w = pw
 	exported := make(chan error, 1)
 	go func() {
-		err := rt.ExportWorkspace(ctx, src, &limitWriter{w: pw, left: limit})
+		err := rt.ExportTree(ctx, src, tree, limit)
 		if err != nil {
-			err = fmt.Errorf("export workspace: %w", err)
+			err = fmt.Errorf("export %s: %w", tree, err)
 			cancel()
 		}
 		pw.CloseWithError(err) // nil gives the import a clean EOF
 		exported <- err
 	}()
-	err := rt.ImportWorkspace(ctx, dst, pr)
+	err := rt.ImportTree(ctx, dst, tree, pr)
 	if err != nil {
-		err = fmt.Errorf("import workspace: %w", err)
+		err = fmt.Errorf("import %s: %w", tree, err)
 		cancel()
 	}
-	pr.CloseWithError(errors.New("workspace import ended"))
+	pr.CloseWithError(fmt.Errorf("%s import ended", tree))
 	return errors.Join(<-exported, err)
 }
 
+// limitWriter fails with err once more than left bytes are written.
 type limitWriter struct {
 	w    io.Writer
 	left int64
+	err  error
 }
 
 func (l *limitWriter) Write(p []byte) (int, error) {
 	if int64(len(p)) > l.left {
-		return 0, ErrWorkspaceTooLarge
+		return 0, l.err
 	}
 	l.left -= int64(len(p))
 	return l.w.Write(p)
@@ -84,7 +98,7 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 func transferSpec(rec store.Sandbox, image *runtime.ImageSource, egress runtime.Egress) runtime.Spec {
 	return runtime.Spec{
 		CPUs: uint8(rec.CPUs), MemoryMiB: uint32(rec.MemoryMiB), MaxMemoryMiB: uint32(rec.MaxMemoryMiB),
-		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
+		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: HomeMiB,
 		Image: image, Egress: egress,
 	}
 }
@@ -93,8 +107,8 @@ func ownedVM(rec store.Sandbox) runtime.OwnedVM {
 	return runtime.OwnedVM{Name: VMName(rec), Labels: sandboxLabels(rec)}
 }
 
-// Fork creates a new sandbox with a copy of the source's workspace. The fork has its own
-// ID, egress identity and gateway credentials, and the source's template and resources.
+// Fork creates a new sandbox with a copy of the source's workspace and home. The fork has its
+// own ID, egress identity and gateway credentials, and the source's template and resources.
 // A running source is copied live, so files written during the copy may be inconsistent.
 // A stopped source is started without services for the copy and stopped again. Docker
 // state is not copied. A failed fork is removed.
@@ -180,7 +194,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 			return errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 		}
 	}
-	err = copyWorkspace(ctx, rt, ownedVM(sb), ownedVM(rec), int64(rec.WorkspaceMiB)<<20)
+	err = copyTrees(ctx, rt, ownedVM(sb), ownedVM(rec), rec.WorkspaceMiB)
 	if !sourceRunning {
 		err = errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 	}
