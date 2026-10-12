@@ -21,11 +21,20 @@ A sandbox is a microsandbox microVM that persists across stop and start. Code:
 |---|---|
 | `/` | the template's layered root; persists across stop and start |
 | `/workspace` | owned disk, included in checkpoints |
+| `/home/agent` | owned disk, 4 GiB, included in checkpoints; the agent user's home |
 | `/var/lib/docker` | owned disk, so Docker's overlay isn't nested on the root overlay |
 | `/opt/studio` | read-only bind of `<data>/guest`; the agent is `/opt/studio/bin/studio-agent`, so updating Studio updates every guest |
+| `/opt/mise` | template toolchains and mise config, on the root layer; they are not in the home |
 
 Owned (not named) volumes, because disk snapshots capture owned volumes and skip named ones
 (spike S5).
+
+The home disk is seeded once, on the sandbox's first boot, from the skeleton the image keeps
+at `/usr/share/sandbox-studio/home-skel` (the base image's home, or the template's home as
+its last build step left it). Nothing seeds it again, so files you delete stay deleted. Its
+size is fixed and not a setting. Browser VMs and template build VMs have no home disk.
+Sandboxes created before it keep `/home/agent` on the root layer; a fork or rebase copies
+that home onto the new sandbox's home disk.
 
 ## Network
 
@@ -43,9 +52,10 @@ See [network](network.md) for what happens at the gateway.
 
 - No init system. microsandbox's agentd stays PID 1, which lets msb freeze the guest for live
   checkpoints. With an init handoff (systemd) msb 0.7.7 refuses that.
-- After each boot Studio runs `studio-agent boot` as root. It prepares the disks and starts
-  a supervisor for containerd, dockerd and the agent, restarting them with backoff. It is a
-  no-op if systemd is PID 1 (older sandboxes) or a supervisor already runs.
+- After each boot Studio runs `studio-agent boot` as root. It prepares the disks, seeds the
+  home disk if it is new, and starts a supervisor for containerd, dockerd and the agent,
+  restarting them with backoff. It is a no-op if systemd is PID 1 (older sandboxes) or a
+  supervisor already runs.
 - Before a stop Studio runs `studio-agent shutdown`, because msb gives the guest two seconds
   before it kills every process. Stop resumes a suspended VM first.
 
@@ -54,14 +64,14 @@ Runtime statuses: `absent`, `created`, `starting`, `running`, `draining`, `suspe
 
 ## Resources
 
-Defaults: 2 CPUs, 4 GiB memory, 20 GiB workspace, 20 GiB Docker disk. `max_memory` defaults
-to the initial memory and is passed as the VM's memory ceiling. A template's spec fixes the
-resources of sandboxes created from it. There is no live resize.
+Defaults: 2 CPUs, 4 GiB memory, 20 GiB workspace, 20 GiB Docker disk. The 4 GiB home disk is
+fixed. `max_memory` defaults to the initial memory and is passed as the VM's memory ceiling.
+A template's spec fixes the resources of sandboxes created from it. There is no live resize.
 
 ## Checkpoints
 
-- A checkpoint is a disk snapshot in the group `sbx-<id>`: root, workspace and Docker disks,
-  of a running or a stopped sandbox.
+- A checkpoint is a disk snapshot in the group `sbx-<id>`: root, workspace, Docker and home
+  disks, of a running or a stopped sandbox.
 - A running guest is frozen while msb flushes its filesystems, so the capture is
   crash-consistent at the filesystem level, not at the application level.
 - Sandboxes created with systemd as init must be stopped first
@@ -88,17 +98,18 @@ A full (memory) snapshot plus stop would need restore, so it waits on #1736 too.
 
 ## Fork, rebase, export and import
 
-- [Fork and rebase](rebase.md): the workspace is copied as a gzip tar over msb exec between
-  two VMs. Docker data is not copied.
-- [Export and import](export-import.md): a `.studio-sandbox` file (manifest plus workspace
-  tar), recreated through a template build and the same workspace copy.
+- [Fork and rebase](rebase.md): the workspace and the home are copied as gzip tars over msb
+  exec between two VMs. Docker data is not copied.
+- [Export and import](export-import.md): a `.studio-sandbox` file (manifest, home tar and
+  workspace tar), recreated through a template build and the same copies.
 
 ## Base image
 
 `images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, mise,
 Node, build tools and Python, plus pinned OpenCode, Claude Code, Codex and their ACP
 adapters (versions in the Dockerfile and [harnesses](harnesses.md#versions)). User `agent`
-(uid 1000, sudo, docker). No init system. Releases publish it to
-`ghcr.io/lukaskoebe/sandbox-studio-base` and pin it by digest (`version.BaseImage`); dev
-builds use `sandbox-studio-base:dev` from `make image`. Templates build on top of it:
-[template builds](template-builds.md).
+(uid 1000, sudo, docker). It creates `/opt/mise` for template toolchains and keeps the
+agent's home as the skeleton that home disks are seeded from. No init system. Releases
+publish it to `ghcr.io/lukaskoebe/sandbox-studio-base` and pin it by digest
+(`version.BaseImage`); dev builds use `sandbox-studio-base:dev` from `make image`. Templates
+build on top of it: [template builds](template-builds.md).

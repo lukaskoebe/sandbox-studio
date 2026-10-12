@@ -109,11 +109,16 @@ Every hook runs `/opt/studio/bin/studio-agent hook <event> --harness <h>` (docs/
 
 ## Persistence
 
-`/home/agent` is on the sandbox's root disk. Harness history and sessions:
+`/home/agent` is the sandbox's home disk ([sandboxes](sandboxes.md#storage-and-mounts)).
+Harness history and sessions:
 
 - survive stop/start and suspend,
 - are captured by checkpoints,
-- are lost on rebase and fork, which copy only `/workspace` onto a fresh root disk.
+- survive rebase, fork and export, which copy the home with the workspace. A chat resumes
+  its session after a rebase. A fork keeps the copy, but its chats stay with the source.
+
+A sandbox created before the home disk keeps `/home/agent` on the root disk until a rebase
+or fork copies it onto one.
 
 tmux sessions end when the sandbox stops.
 

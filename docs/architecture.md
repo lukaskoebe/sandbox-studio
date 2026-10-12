@@ -59,8 +59,8 @@ Non-goals:
 - **Provider.** An environment's LLM access: Anthropic API key, OpenAI API key, an
   OpenAI-compatible endpoint, or a Claude or ChatGPT subscription (not usable yet). The kind
   decides which harnesses can use it and which utility model memory jobs use.
-- **Sandbox.** A microVM with a root filesystem, a `/workspace` disk and a `/var/lib/docker`
-  disk. It persists across stop and start. See [sandboxes](sandboxes.md).
+- **Sandbox.** A microVM with a root filesystem, a `/workspace` disk, a `/home/agent` disk and
+  a `/var/lib/docker` disk. It persists across stop and start. See [sandboxes](sandboxes.md).
 - **Template.** The image built from a spec (resources, mise tools, apt packages, a setup
   script) on the base image, cached by spec, base digest, platform and exporter version.
   See [template builds](template-builds.md).

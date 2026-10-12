@@ -47,7 +47,7 @@ msb exec instead (see [spikes](spikes.md#layer-transfer-and-capture-foundations)
 | `hook <event> --harness <name>` | the harness | reads the hook JSON on stdin, calls Studio, prints the harness's response |
 | `mcp` | the harness | stdio MCP server with the memory and browser tools |
 | `oci-runtime` | Docker, as `runc` | CA trust for containers (below) |
-| `export-layer`, `workspace-export`, `workspace-import` | Studio via msb exec | template builds, fork, rebase, import |
+| `export-layer`, `workspace-export`, `workspace-import`, `home-export`, `home-import` | Studio via msb exec | template builds, fork, rebase, export, import |
 | `version` | | |
 
 `hook` and `mcp` reach the agent through `/run/studio-agent/call.sock`, which becomes a

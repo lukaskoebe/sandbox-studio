@@ -136,7 +136,7 @@ Open sandbox previews through the **Previews** menu. Each preview gets its own h
 session, and Studio removes its authentication cookies before forwarding requests to the
 sandbox. Preview links use `.localhost`, so they open on the machine running Studio.
 
-Use **Checkpoints** to save a sandbox's root, workspace and Docker disks, while it runs or
+Use **Checkpoints** to save a sandbox's root, workspace, home and Docker disks, while it runs or
 while it is stopped. Checkpoints can depend on earlier ones; delete newer checkpoints before
 their parents. Restore is currently disabled: microsandbox 0.7.7 restores a snapshot with its
 default network, which would bypass Studio's gateway

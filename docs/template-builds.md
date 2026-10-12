@@ -128,7 +128,10 @@ builds set the base to the digest-pinned image they publish (`version.BaseImage`
 [release](release.md)); a template build on a release base has not been run live.
 
 The cache key includes the canonical spec, inspected base digest, platform, and exporter
-version. On a cache hit, the worker still prepares and inspects the base, then verifies
+version. Exporter version 2 moved the toolchains to `/opt/mise` and added the home skeleton.
+Templates built with version 1 are refused for new sandboxes, forks and rebases; build the
+spec again, on a base image that has `/opt/mise` and the skeleton, to get a version 2
+template. On a cache hit, the worker still prepares and inspects the base, then verifies
 the environment-scoped ready template and registry artifacts. It skips builder creation
 and does not run apt, mise, or setup again. For a miss, Studio composes deterministic base-only metadata from that inspection and
 serves it through an authenticated, environment-scoped temporary registry lease. The builder
@@ -145,8 +148,12 @@ run any build command until the guest acknowledges CA and placeholder installati
 commands run in order:
 
 1. apt update/install as `root` (apt cache is cleaned afterward).
-2. mise installs as `agent`, using the pinned tools in `/home/agent`.
+2. mise installs as `agent`, using the pinned tools in `/opt/mise`. The base image creates
+   that directory. Toolchains stay out of `/home/agent`, which a sandbox's home disk replaces.
 3. The user `setup` command as `agent`, with `/home/agent` as its working directory.
+4. As `root`, the home is copied to `/usr/share/sandbox-studio/home-skel`, owned by `agent`.
+   A new sandbox's home disk is seeded from that copy on its first boot. Setup's files in
+   the home therefore reach new sandboxes, and nothing else from the build does.
 
 After the commands succeed, the worker runs `studio-agent export-layer` as root over msb
 exec and streams its stdout into the untrusted-input validator, which normalizes and
@@ -175,8 +182,8 @@ only a sandbox name. Resource limits are fixed by the template's canonical spec;
 instance API does not accept resource overrides.
 
 Creation pins the ready template to the new sandbox in the catalog. The template supplies
-the root image for a fresh sandbox instance, while the workspace and Docker disks are new
-and empty. Creation assigns the normal new sandbox and proxy identity, creates its agent
+the root image for a fresh sandbox instance, while the workspace, Docker and home disks are
+new and empty, except that the home is seeded from the template's skeleton. Creation assigns the normal new sandbox and proxy identity, creates its agent
 socket, and follows the ordinary guest boot/configuration path, including the environment
 CA and placeholder push. It does not restore another sandbox's root, workspace, or Docker
 data.

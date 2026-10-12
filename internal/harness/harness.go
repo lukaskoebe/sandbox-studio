@@ -6,11 +6,10 @@
 // reaches the guest only as its placeholder in an environment variable, which the gateway
 // swaps for the real key on the way to the provider's host.
 //
-// Every file lives in the agent user's home (/home/agent), which is on the sandbox's root
-// disk: it survives stop and start and is captured by checkpoints, but a rebase or fork
-// starts from a fresh root disk and keeps only /workspace. So the harnesses' sessions and
-// history (StateDirs) survive stop/start but not a rebase; the config is rewritten on every
-// session start anyway.
+// Every file lives in the agent user's home (/home/agent), which is the sandbox's home disk:
+// it survives stop and start and is captured by checkpoints, and a rebase, fork or export
+// copies it with the workspace. So the harnesses' sessions and history (StateDirs) survive
+// those too; the config is rewritten on every session start anyway.
 package harness
 
 import (
