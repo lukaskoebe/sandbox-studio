@@ -88,6 +88,7 @@ func (m *Manager) Resume(ctx context.Context, envID, id string) (View, error) {
 	if err := m.Runtime.Resume(ctx, VMName(rec)); err != nil {
 		return View{}, err
 	}
+	rec = m.markStarted(ctx, rec)
 	wait, cancel := context.WithTimeout(ctx, resumeAgentWait)
 	if err := m.Hub.WaitConnected(wait, rec.ID); err != nil {
 		m.Log.Warn("agent did not reconnect after resume yet", "sandbox", rec.ID, "err", err)

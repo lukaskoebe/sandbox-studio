@@ -237,6 +237,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 	if err := rt.Boot(ctx, VMName(rec)); err != nil {
 		return err
 	}
+	m.markStarted(ctx, rec)
 	return m.awaitGuest(ctx, rec)
 }
 

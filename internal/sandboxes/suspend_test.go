@@ -116,7 +116,7 @@ func TestSuspendResumeRunningSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view.Status != runtime.StatusRunning || view.Agent == nil {
+	if view.Status != runtime.StatusRunning || view.Agent == nil || view.StartedAt == nil {
 		t.Fatalf("resumed view = %+v", view)
 	}
 	if f.runtime.countCall("resume:"+vm) != 1 || f.runtime.countCall("start:"+vm) != 0 {

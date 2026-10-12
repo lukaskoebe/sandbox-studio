@@ -232,24 +232,31 @@ type Sandbox struct {
 	ForkedFromID         string    `json:"-"`
 	ForkedFromGeneration int       `json:"-"`
 	ForkedAt             time.Time `json:"-"`
+	// StartedAt is when the VM last started, nil before its first start after the column
+	// was added. It stays after a stop: show it only while the sandbox runs.
+	StartedAt *time.Time `json:"startedAt,omitempty"`
 }
 
 // SandboxKindBrowser marks a teammate's browser VM (internal/browser).
 const SandboxKindBrowser = "browser"
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0)"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0)"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
 const firstDNSPort = 17100
 
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
-	var created, forkedAt int64
+	var created, forkedAt, startedAt int64
 	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind,
-		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt)
+		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt)
 	sb.CreatedAt = time.Unix(created, 0)
 	if forkedAt != 0 {
 		sb.ForkedAt = time.Unix(forkedAt, 0)
+	}
+	if startedAt != 0 {
+		started := time.Unix(startedAt, 0)
+		sb.StartedAt = &started
 	}
 	return sb, err
 }
@@ -408,6 +415,22 @@ func (s *Store) Sandbox(ctx context.Context, envID, id string) (Sandbox, error) 
 		return sb, ErrNotFound
 	}
 	return sb, err
+}
+
+// MarkSandboxStarted records when a sandbox's VM last started.
+func (s *Store) MarkSandboxStarted(ctx context.Context, envID, id string, at time.Time) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET started_at = ? WHERE environment_id = ? AND id = ?", at.Unix(), envID, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // DeleteSandbox removes a sandbox record.

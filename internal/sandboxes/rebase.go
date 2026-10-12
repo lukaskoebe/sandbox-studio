@@ -96,6 +96,9 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 		// The switch may have taken effect. Recovery finishes it; the target is never removed.
 		return View{}, errors.Join(err, readErr)
 	}
+	if wasRunning {
+		target = m.markStarted(ctx, target)
+	}
 	cleanupCtx, cancel := cleanupContext(ctx)
 	err = m.Runtime.Remove(cleanupCtx, VMName(sb))
 	if err == nil {
@@ -182,6 +185,7 @@ func (m *Manager) rollbackRebase(ctx context.Context, sb store.Sandbox, op store
 	if err := m.Runtime.Start(cleanupCtx, VMName(current)); err != nil {
 		return errors.Join(cause, fmt.Errorf("source restart failed: %w", err))
 	}
+	m.markStarted(cleanupCtx, current)
 	return cause
 }
 
