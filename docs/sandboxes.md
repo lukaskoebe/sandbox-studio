@@ -111,6 +111,8 @@ A template's spec fixes the resources of sandboxes created from it. There is no 
   (`ErrLiveCheckpointUnsupported`).
 - Deleting a checkpoint moves the group head to a surviving member first; Studio never
   forces removal. A checkpoint with dependent newer ones answers with a conflict.
+- A checkpoint can be renamed (`PUT .../checkpoints/{checkpoint}` with `{"name"}`). Its
+  name is a catalog label; the disks are not touched.
 
 **Restore is disabled.** With microsandbox 0.7.7 a restored VM gets msb's default network
 (no resolver, no gateway proxy); restore options can't set either
@@ -120,6 +122,37 @@ view. The restore path is implemented and tested with fakes: it needs a stopped 
 restores a stopped replacement VM as a new generation, adopts it in the catalog, then
 removes the old VM; a durable record lets startup finish or discard an interrupted restore.
 As a guard, Studio refuses a candidate whose stored network config differs from Create's.
+
+## Lineage
+
+Each sandbox keeps its history in `sandbox_events` (`store.SandboxEvent`): one row per
+successful step, in order. The kinds are `create` (also an import), `fork`, `rebase`,
+`restore`, `checkpoint` and `delete`. A failed operation writes nothing. Code:
+`internal/sandboxes/lineage.go` and `internal/store/lineage.go`.
+
+- A fork refers to its source by ID, generation and time (`forked_from_*` on the sandbox,
+  with no foreign key). The fork records a `fork` event on each side: the child's history
+  starts with it, and the source's shows the child it branched off to. Both are recorded once
+  the copy has booted.
+- A rebase or restore records its event in the same transaction as the generation switch
+  (`CommitRebase`, `CommitRestore`), so it is recorded once, even when cleanup or recovery
+  runs later.
+- A delete records a tombstone: the event keeps the sandbox's name, template and fork
+  source. A deleted sandbox's history stays, and its forks stay under it in the family tree.
+  A sandbox whose create failed leaves no tombstone.
+- Deleting a checkpoint records nothing. A checkpoint's history is its `checkpoint` event.
+- Migration 023 backfills a `create` event for each existing sandbox (its template is known
+  only at generation 1) and a `checkpoint` event for each ready checkpoint. Forks made
+  before it have no source reference.
+
+The API: `GET /api/environments/{env}/sandboxes/{id}/lineage` gives the events, the parent,
+the children (live or tombstoned), the checkpoints with `restoreAllowed` (the runtime's
+restore gate, see above, and the checkpoint being ready), and `checkpointRestoreSupported`.
+`GET /api/environments/{env}/lineage` gives the family tree: sandboxes grouped by template,
+each fork under its source. A node's `status` is `running`, `waiting` (still starting, or a
+create or fork that runs), `failed`, `deleted`, or another runtime status.
+
+The web sandbox page draws the history as a timeline, and Home shows the family tree.
 
 ## Suspend and resume
 
