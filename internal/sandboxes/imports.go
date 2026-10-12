@@ -152,8 +152,14 @@ func (m *Manager) Import(ctx context.Context, envID string, body io.Reader, size
 		return store.SandboxImport{}, cause
 	}
 	if homeBlob != "" {
-		if err := storeHomeArchive(homeBlob, body, manifest.HomeLimit()); err != nil {
+		hasHome, err := storeHomeArchive(homeBlob, body, manifest.HomeLimit())
+		if err != nil {
 			return fail(err)
+		}
+		if !hasHome {
+			// The sandbox had no home disk, so its home section is empty.
+			_ = os.Remove(homeBlob)
+			homeBlob = ""
 		}
 	}
 	if err := storeArchive(blob, body, limit, manifest.WorkspaceBytes); err != nil {
@@ -200,28 +206,27 @@ func storeArchive(blob string, body io.Reader, limit, expected int64) error {
 }
 
 // storeHomeArchive copies the chunked home archive at the start of body to a new file,
-// failing once it exceeds limit bytes.
-func storeHomeArchive(blob string, body io.Reader, limit int64) error {
+// failing once it exceeds limit bytes. It reports false when there are no chunks at all,
+// which is an export of a sandbox without a home disk.
+func storeHomeArchive(blob string, body io.Reader, limit int64) (bool, error) {
 	f, err := os.OpenFile(blob, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return errors.New("import storage is unavailable")
+		return false, errors.New("import storage is unavailable")
 	}
 	n, err := readChunks(f, body, limit)
 	if closeErr := f.Close(); err == nil && closeErr != nil {
-		return errors.New("import storage is unavailable")
+		return false, errors.New("import storage is unavailable")
 	}
-	switch {
-	case err != nil:
-		return err
-	case n == 0:
-		return invalidExport("home archive is missing")
+	if err != nil {
+		return false, err
 	}
-	return nil
+	return n > 0, nil
 }
 
 // finishImport resolves the template, creates the sandbox in transfer mode, streams the
-// archives into its home and workspace and boots it. Without a home archive (format 1)
-// the home is seeded from the image on boot. A half-made sandbox is removed on failure.
+// archives into its home and workspace and boots it. Without a home archive (format 1, or
+// a sandbox that had no home disk) the home is seeded from the image on boot, if the
+// template has a home disk. A half-made sandbox is removed on failure.
 func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, manifest ExportManifest, blob, homeBlob string) error {
 	envID := imp.EnvironmentID
 	rt, err := m.transfer()
@@ -266,9 +271,17 @@ func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, man
 }
 
 func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.SandboxImport, rec store.Sandbox, blob, homeBlob string) error {
+	// The new sandbox gets a home disk if its template has one; the export's home, if it has
+	// one, can only go onto that disk.
+	home, err := m.homeMiBFor(ctx, rec.EnvironmentID, rec.TemplateID)
+	if err != nil {
+		return err
+	}
+	if homeBlob != "" && home == 0 {
+		return importError("the template was built before the home directory existed, so it cannot keep the exported home; rebuild the template")
+	}
 	var image *runtime.ImageSource
 	if rec.TemplateID != "" {
-		var err error
 		if image, err = m.templateImage(ctx, rec.EnvironmentID, rec.TemplateID); err != nil {
 			return err
 		}
@@ -281,7 +294,7 @@ func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		return err
 	}
-	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress), sock, sandboxLabels(rec)); err != nil {
+	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress, home), sock, sandboxLabels(rec)); err != nil {
 		return err
 	}
 	if err := m.Store.AdvanceSandboxImport(ctx, rec.EnvironmentID, imp.ID, store.ImportCreating, store.ImportImporting, ""); err != nil {

@@ -21,6 +21,9 @@ var (
 	ErrWorkspaceTooLarge = errors.New("workspace does not fit the target disk")
 	// ErrHomeTooLarge means the copied home directory does not fit the target's home disk.
 	ErrHomeTooLarge = fmt.Errorf("home directory /home/agent does not fit the %d GiB home disk; delete caches in it and try again", HomeMiB>>10)
+	// ErrTemplateWithoutHome means a sandbox with a home disk can't move to a template built
+	// before the home directory existed: that template has no home disk to copy into.
+	ErrTemplateWithoutHome = errors.New("this template was built before the home directory existed, so it cannot keep this sandbox's home; rebuild the template")
 )
 
 // transferRuntime is the runtime surface for moving a workspace and home into a new VM.
@@ -43,11 +46,15 @@ func (m *Manager) transfer() (transferRuntime, error) {
 	return rt, nil
 }
 
-// copyTrees copies the workspace and then the home of src into dst, which has a home
-// disk. A source without one (created before the home disk) gives its root disk's home.
-func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB int) error {
+// copyTrees copies the workspace of src into dst, and then its home when dst has a home
+// disk (copyHome). A source without a home disk gives its root disk's home, which is what
+// a sandbox from a legacy template keeps there.
+func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB int, copyHome bool) error {
 	if err := copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}); err != nil {
 		return err
+	}
+	if !copyHome {
+		return nil
 	}
 	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: HomeMiB << 20, err: ErrHomeTooLarge})
 }
@@ -95,10 +102,10 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 }
 
 // transferSpec is the VM spec of rec, with the same network and egress as bootSandbox.
-func transferSpec(rec store.Sandbox, image *runtime.ImageSource, egress runtime.Egress) runtime.Spec {
+func transferSpec(rec store.Sandbox, image *runtime.ImageSource, egress runtime.Egress, homeMiB uint32) runtime.Spec {
 	return runtime.Spec{
 		CPUs: uint8(rec.CPUs), MemoryMiB: uint32(rec.MemoryMiB), MaxMemoryMiB: uint32(rec.MaxMemoryMiB),
-		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: HomeMiB,
+		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: homeMiB,
 		Image: image, Egress: egress,
 	}
 }
@@ -107,8 +114,9 @@ func ownedVM(rec store.Sandbox) runtime.OwnedVM {
 	return runtime.OwnedVM{Name: VMName(rec), Labels: sandboxLabels(rec)}
 }
 
-// Fork creates a new sandbox with a copy of the source's workspace and home. The fork has its
-// own ID, egress identity and gateway credentials, and the source's template and resources.
+// Fork creates a new sandbox with a copy of the source's workspace and, if the source has a
+// home disk, of its home. The fork has its own ID, egress identity and gateway credentials,
+// and the source's template and resources.
 // A running source is copied live, so files written during the copy may be inconsistent.
 // A stopped source is started without services for the copy and stopped again. Docker
 // state is not copied. A failed fork is removed.
@@ -155,6 +163,11 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 			return View{}, err
 		}
 	}
+	// The fork pins the source's template, so it gets the source's home disk, if any.
+	home, err := m.homeMiBFor(ctx, envID, sb.TemplateID)
+	if err != nil {
+		return View{}, err
+	}
 	rec, err := m.Store.CreateSandbox(ctx, store.Sandbox{
 		EnvironmentID: envID, TemplateID: sb.TemplateID, TeammateID: sb.TeammateID, Name: name,
 		CPUs: sb.CPUs, MemoryMiB: sb.MemoryMiB, MaxMemoryMiB: sb.MaxMemoryMiB,
@@ -168,13 +181,13 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 		return View{}, err
 	}
 	defer unlockFork()
-	if err := m.forkInto(ctx, rt, sb, rec, image, status == runtime.StatusRunning); err != nil {
+	if err := m.forkInto(ctx, rt, sb, rec, image, status == runtime.StatusRunning, home); err != nil {
 		return View{}, m.removeFailedFork(ctx, rec, err)
 	}
 	return m.view(ctx, rec)
 }
 
-func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec store.Sandbox, image *runtime.ImageSource, sourceRunning bool) error {
+func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec store.Sandbox, image *runtime.ImageSource, sourceRunning bool, homeMiB uint32) error {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
 		return err
@@ -183,7 +196,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		return err
 	}
-	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress), sock, sandboxLabels(rec)); err != nil {
+	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress, homeMiB), sock, sandboxLabels(rec)); err != nil {
 		return err
 	}
 	if !sourceRunning {
@@ -194,7 +207,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 			return errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 		}
 	}
-	err = copyTrees(ctx, rt, ownedVM(sb), ownedVM(rec), rec.WorkspaceMiB)
+	err = copyTrees(ctx, rt, ownedVM(sb), ownedVM(rec), rec.WorkspaceMiB, homeMiB > 0)
 	if !sourceRunning {
 		err = errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 	}

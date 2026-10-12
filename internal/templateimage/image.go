@@ -23,7 +23,22 @@ const (
 	// ExporterVersion is part of every template's cache key. Version 2: toolchains moved
 	// from /home/agent to /opt/mise, and the template keeps a home skeleton for new sandboxes.
 	ExporterVersion = "2"
+	// LegacyExporterVersion is the version before 2. Its templates still back sandboxes,
+	// but keep their toolchains in /home/agent and have no home skeleton.
+	LegacyExporterVersion = "1"
 )
+
+// SupportedExporterVersion reports whether a ready template built with exporter version v
+// can back sandboxes.
+func SupportedExporterVersion(v string) bool {
+	return v == ExporterVersion || v == LegacyExporterVersion
+}
+
+// HasHomeSkeleton reports whether templates built with exporter version v keep the home
+// skeleton that gives a sandbox its home disk.
+func HasHomeSkeleton(v string) bool {
+	return v == ExporterVersion
+}
 
 const (
 	mediaLayerTar       = "application/vnd.oci.image.layer.v1.tar"

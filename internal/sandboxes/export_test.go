@@ -333,7 +333,6 @@ func TestImportRejectsMalformedFiles(t *testing.T) {
 		"negative bytes":  header(manifestJSON(func(m map[string]any) { m["workspaceBytes"] = -1 })),
 		"length mismatch": header(manifestJSON(func(m map[string]any) { m["workspaceBytes"] = 3 })),
 		"missing archive": valid[:len(valid)-len("archive")],
-		"missing home":    append(slices.Clip(valid[:headerEnd]), 0, 0, 0, 0, 'a'),
 		"oversize chunk":  append(binary.BigEndian.AppendUint32(slices.Clip(valid[:headerEnd]), maxChunkBytes+1), 'a'),
 	} {
 		t.Run(name, func(t *testing.T) {

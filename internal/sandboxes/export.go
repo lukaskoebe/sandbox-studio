@@ -18,9 +18,9 @@ import (
 
 // A .studio-sandbox file is the magic line, a big-endian uint32 manifest length and the
 // manifest JSON. From format 2 the home archive follows as chunks (a big-endian uint32
-// length and that many bytes, ended by a zero length). Then comes the workspace archive,
-// to EOF. Both archives are exactly what workspace-export and home-export wrote. See
-// docs/export-import.md.
+// length and that many bytes, ended by a zero length; no chunks at all means the sandbox
+// had no home disk). Then comes the workspace archive, to EOF. Both archives are exactly
+// what workspace-export and home-export wrote. See docs/export-import.md.
 const (
 	ExportMagic        = "sandbox-studio-export v1\n"
 	ExportFormat       = 2
@@ -34,7 +34,8 @@ const (
 var ErrInvalidExport = errors.New("invalid sandbox export")
 
 // ExportManifest describes the sandbox in an export file. It carries no secrets, egress
-// identity, approvals, checkpoints or Docker state. Format 1 files have no home archive.
+// identity, approvals, checkpoints or Docker state. Format 1 files have no home archive, and
+// a format 2 file of a sandbox without a home disk has an empty one.
 type ExportManifest struct {
 	Format           int                 `json:"format"`
 	ExportedAt       time.Time           `json:"exportedAt"`
@@ -246,6 +247,12 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 		}
 		manifest.TemplateSpecYAML = &source
 	}
+	// A sandbox without a home disk exports an empty home section. Its home lives on the
+	// template's root layer, which an export does not carry.
+	homeMiB, err := m.homeMiBFor(ctx, envID, sb.TemplateID)
+	if err != nil {
+		return err
+	}
 	if status == runtime.StatusStopped {
 		if _, err := m.Egress.Attach(sb); err != nil {
 			return err
@@ -267,8 +274,10 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 		return err
 	}
 	home := chunkWriter{w: w}
-	if err := rt.ExportTree(ctx, ownedVM(sb), runtime.TreeHome, &limitWriter{w: home, left: manifest.HomeLimit(), err: ErrHomeTooLarge}); err != nil {
-		return err
+	if homeMiB > 0 {
+		if err := rt.ExportTree(ctx, ownedVM(sb), runtime.TreeHome, &limitWriter{w: home, left: manifest.HomeLimit(), err: ErrHomeTooLarge}); err != nil {
+			return err
+		}
 	}
 	if err := home.end(); err != nil {
 		return err

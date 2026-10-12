@@ -216,7 +216,7 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err != nil {
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, nil, false)
+	return m.bootSandbox(ctx, rec, resolved, nil, false, HomeMiB)
 }
 
 // CreateFromTemplateFor starts a fresh sandbox, owned by teammateID if it is set, from one
@@ -231,6 +231,10 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 	if err != nil {
 		return View{}, err
 	}
+	home, err := m.homeMiBFor(ctx, envID, templateID)
+	if err != nil {
+		return View{}, err
+	}
 	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, templateID, teammateID)
 	if err != nil {
 		return View{}, err
@@ -242,7 +246,7 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 		}
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, image, true)
+	return m.bootSandbox(ctx, rec, resolved, image, true, home)
 }
 
 // templateResources checks that a template can back a sandbox on this host and returns
@@ -263,7 +267,7 @@ func (m *Manager) templateResources(ctx context.Context, envID, templateID strin
 	if err := resolved.Validate(); err != nil {
 		return resources.Resources{}, errors.New("template resources are invalid")
 	}
-	if template.ExporterVersion != templateimage.ExporterVersion {
+	if !templateimage.SupportedExporterVersion(template.ExporterVersion) {
 		return resources.Resources{}, errors.New("template exporter version is unsupported")
 	}
 	cacheKey, err := templateimage.CacheKey([]byte(template.Spec), template.BaseDigest, template.Platform, template.ExporterVersion)
@@ -277,6 +281,24 @@ func (m *Manager) templateResources(ctx context.Context, envID, templateID strin
 		return resources.Resources{}, errors.New("template registry is unavailable")
 	}
 	return resolved, nil
+}
+
+// homeMiBFor is the home disk a sandbox made from templateID gets, or 0 for none. A sandbox
+// without a template is made from the base image, which has the home skeleton. A sandbox of
+// a legacy template keeps its home on the root layer, next to the toolchains it needs: a
+// home disk would hide them.
+func (m *Manager) homeMiBFor(ctx context.Context, envID, templateID string) (uint32, error) {
+	if templateID == "" {
+		return HomeMiB, nil
+	}
+	template, err := m.Store.Template(ctx, envID, templateID)
+	if err != nil {
+		return 0, err
+	}
+	if !templateimage.HasHomeSkeleton(template.ExporterVersion) {
+		return 0, nil
+	}
+	return HomeMiB, nil
 }
 
 // templateImage resolves the registry image of a template. A catalog record must pin the
@@ -295,7 +317,7 @@ func (m *Manager) templateImage(ctx context.Context, envID, templateID string) (
 	return &runtime.ImageSource{Reference: ref.Image, Username: ref.Username, Password: ref.Password}, nil
 }
 
-func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, retainOnUncertainBoot bool) (View, error) {
+func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, retainOnUncertainBoot bool, homeMiB uint32) (View, error) {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
 		if retainOnUncertainBoot {
@@ -321,7 +343,7 @@ func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved r
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(resolved.CPUs), MemoryMiB: uint32(resolved.MemoryMiB), MaxMemoryMiB: uint32(resolved.MaxMemoryMiB),
-		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: HomeMiB,
+		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: homeMiB,
 		Image: image, Egress: egress,
 	}
 	labels := sandboxLabels(rec)
