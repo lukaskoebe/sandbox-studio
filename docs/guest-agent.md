@@ -13,8 +13,8 @@ so updating Studio updates every guest.
   header line naming its kind (`internal/agentproto`).
 - The host side is `internal/agentchan`. The identity of a guest is the socket its
   connection came in on, so requests never name a sandbox, teammate or environment.
-- On connect the host sends the environment's config (CA and secret placeholders), and
-  sends it again when it changes.
+- On connect the host sends the sandbox's config (CA and the placeholders of the secrets it
+  sees), and sends it again when one of them changes.
 - Concurrent requests per guest are bounded; lines and frames are capped at 1 MiB.
 
 Stream kinds:

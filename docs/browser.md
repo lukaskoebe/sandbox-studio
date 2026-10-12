@@ -151,7 +151,8 @@ Parsing that is not confirmed against a live Chromium is marked `// verify (live
 
 `fill_credential(ref, name)`:
 
-1. Checks that `name` is a vault secret of the environment that the teammate may use.
+1. Checks that `name` is a vault secret the driving sandbox sees (its environment's, its
+   teammate's or its own) and that the page's host is bound to it.
 2. Raises a `browser.credential` approval showing the teammate, field, origin and credential
    name.
 3. On Fill, Studio unseals the value and runs `fill @ref <value>` directly in the VM.

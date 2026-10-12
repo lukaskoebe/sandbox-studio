@@ -70,8 +70,8 @@ Non-goals:
   through. See [network](network.md).
 - **Rule.** A network policy entry (`allow`, `proxy`, `caddy`, `deny`) scoped to a sandbox,
   a teammate or the environment.
-- **Secret.** A named credential in the environment's vault, bound to the hosts allowed to
-  receive it.
+- **Secret.** A named credential in the vault, scoped to the environment, one teammate or one
+  sandbox, and bound to the hosts allowed to receive it.
 - **Approval.** A typed request waiting for the user. See [approvals](approvals.md).
 - **Memory.** Facts, pages and sources in two scopes: `teammate:<id>` and `shared`. See
   [memory](memory.md).
