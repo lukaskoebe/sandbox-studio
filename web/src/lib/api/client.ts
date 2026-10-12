@@ -38,6 +38,7 @@ export type BuildJobStatus = BuildJobSummary["status"]
 export type Provider = components["schemas"]["ProviderView"]
 export type ProviderKind = Provider["kind"]
 export type Teammate = components["schemas"]["Teammate"]
+export type Setup = components["schemas"]["Setup"]
 export type Harness = Teammate["harness"]
 
 /** The message of an API problem response, or of any thrown error. */
