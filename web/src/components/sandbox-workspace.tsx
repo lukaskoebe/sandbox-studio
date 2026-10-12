@@ -282,92 +282,98 @@ export function SandboxWorkspace({
 
   return (
     <>
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b bg-muted/40 px-1">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-          {tabs.map((t) => {
-            const on = current !== null && keyOf(t) === keyOf(current)
-            const label = t.kind === "terminal" ? t.name : chatLabel(t.id)
-            return (
-              <div
-                key={keyOf(t)}
-                className={cn(
-                  "group flex h-7 shrink-0 items-center rounded-md text-xs",
-                  on
-                    ? "bg-background shadow-xs"
-                    : "text-muted-foreground hover:bg-muted"
-                )}
-              >
-                <button
-                  type="button"
-                  aria-pressed={on}
+      <div
+        role="group"
+        aria-label="Workspace tabs and tools"
+        className="flex h-9 min-w-0 shrink-0 items-center overflow-x-auto border-b bg-muted/40 px-1"
+      >
+        <div className="flex w-max shrink-0 items-center gap-1">
+          <div className="flex items-center gap-0.5">
+            {tabs.map((t) => {
+              const on = current !== null && keyOf(t) === keyOf(current)
+              const label = t.kind === "terminal" ? t.name : chatLabel(t.id)
+              return (
+                <div
+                  key={keyOf(t)}
                   className={cn(
-                    "flex h-full max-w-48 items-center gap-1.5 pr-1 pl-2.5",
-                    t.kind === "terminal" && "font-mono"
+                    "group flex h-7 shrink-0 items-center rounded-md text-xs",
+                    on
+                      ? "bg-background shadow-xs"
+                      : "text-muted-foreground hover:bg-muted"
                   )}
-                  onClick={() => setPicked(t)}
                 >
-                  {t.kind === "chat" && (
-                    <ChatCircleDotsIcon className="size-3.5 shrink-0" />
-                  )}
-                  <span className="truncate">{label}</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Close ${label}`}
-                  title={
-                    t.kind === "terminal"
-                      ? `Close ${label} (ends its processes)`
-                      : `Close ${label} (the chat stays)`
-                  }
-                  className="mr-1 rounded p-0.5 opacity-50 group-hover:opacity-100 hover:bg-muted-foreground/20"
-                  onClick={() => closeTab(t)}
+                  <button
+                    type="button"
+                    aria-pressed={on}
+                    className={cn(
+                      "flex h-full max-w-48 items-center gap-1.5 pr-1 pl-2.5",
+                      t.kind === "terminal" && "font-mono"
+                    )}
+                    onClick={() => setPicked(t)}
+                  >
+                    {t.kind === "chat" && (
+                      <ChatCircleDotsIcon className="size-3.5 shrink-0" />
+                    )}
+                    <span className="truncate">{label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Close ${label}`}
+                    title={
+                      t.kind === "terminal"
+                        ? `Close ${label} (ends its processes)`
+                        : `Close ${label} (the chat stays)`
+                    }
+                    className="mr-1 rounded p-0.5 opacity-50 group-hover:opacity-100 hover:bg-muted-foreground/20"
+                    onClick={() => closeTab(t)}
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                </div>
+              )
+            })}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              title="New terminal"
+              aria-label="New terminal"
+              onClick={newTerminal}
+            >
+              <PlusIcon />
+            </Button>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {!building && sb.teammateId && (
+              <SandboxChats env={env} id={sb.id} onOpen={openChat} />
+            )}
+            {sb.teammateId && isReady(sb) && (
+              <AgentSessions
+                env={env}
+                id={sb.id}
+                teammateId={sb.teammateId}
+                onAttach={openTerminal}
+              />
+            )}
+            {isReady(sb) && <Previews env={env} sandbox={sb} />}
+            <span className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+            {toggles.map((t) => {
+              const on = search.panel === t.id
+              return (
+                <Button
+                  key={t.id}
+                  variant={on ? "secondary" : "ghost"}
+                  size="sm"
+                  aria-label={t.label}
+                  aria-pressed={on}
+                  title={`${on ? "Close" : "Open"} the ${t.label.toLowerCase()} panel`}
+                  onClick={() => onPanel(on ? undefined : t.id)}
                 >
-                  <XIcon className="size-3" />
-                </button>
-              </div>
-            )
-          })}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            title="New terminal"
-            aria-label="New terminal"
-            onClick={newTerminal}
-          >
-            <PlusIcon />
-          </Button>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {!building && sb.teammateId && (
-            <SandboxChats env={env} id={sb.id} onOpen={openChat} />
-          )}
-          {sb.teammateId && isReady(sb) && (
-            <AgentSessions
-              env={env}
-              id={sb.id}
-              teammateId={sb.teammateId}
-              onAttach={openTerminal}
-            />
-          )}
-          {isReady(sb) && <Previews env={env} sandbox={sb} />}
-          <span className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-          {toggles.map((t) => {
-            const on = search.panel === t.id
-            return (
-              <Button
-                key={t.id}
-                variant={on ? "secondary" : "ghost"}
-                size="sm"
-                aria-label={t.label}
-                aria-pressed={on}
-                title={`${on ? "Close" : "Open"} the ${t.label.toLowerCase()} panel`}
-                onClick={() => onPanel(on ? undefined : t.id)}
-              >
-                {t.icon}
-                <span className="hidden xl:inline">{t.label}</span>
-              </Button>
-            )
-          })}
+                  {t.icon}
+                  <span className="hidden xl:inline">{t.label}</span>
+                </Button>
+              )
+            })}
+          </div>
         </div>
       </div>
       <div className="relative flex min-h-0 flex-1">
