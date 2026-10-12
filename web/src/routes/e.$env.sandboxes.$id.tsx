@@ -359,7 +359,7 @@ function Body({
           <EmptyHeader>
             <EmptyTitle>Stopped</EmptyTitle>
             <EmptyDescription>
-              Your workspace and Docker images are kept.
+              Your workspace, home directory and Docker images are kept.
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
