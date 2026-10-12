@@ -12,7 +12,7 @@ The first time you open Studio, it asks **How do you want to work with agents?**
 - **Chat** (recommended): write to your teammates, see what they do, and approve risky steps with a click.
 - **Terminal**: run each agent's own command-line app in the sandbox, as a developer would.
 
-Closing the dialog without choosing picks Chat. You can change it any time under **Settings → Agents**. The choice only decides what a sandbox page offers first: with Chat, **New chat** comes before the agent sessions; with Terminal, the agent sessions come first. Both stay available either way.
+Closing the dialog without choosing picks Chat. You can change it any time under **Settings → General**. The choice only decides what a sandbox page offers first: with Chat, **New chat** comes before the agent sessions; with Terminal, the agent sessions come first. Both stay available either way.
 
 ## What chats need
 

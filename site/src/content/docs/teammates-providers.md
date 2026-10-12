@@ -7,6 +7,8 @@ A teammate is an agent identity in one environment. It has a name, role, optiona
 
 ![The Teammates page listing agent names, harnesses, providers, models, and Git identities](../../assets/screenshots/teammates.jpg)
 
+Each teammate has a page of its own, reached from **Teammates** in the sidebar: its overview, chats, private memory, browser, and settings, where you edit it or delete it.
+
 ## Choose a provider
 
 Studio supports API-key providers:
@@ -21,9 +23,9 @@ An OpenAI-compatible endpoint needs a public HTTPS base URL and a model. If you 
 
 Claude Pro/Max and ChatGPT subscription sign-in are not available. Use an API key from a supported provider instead.
 
-![The Providers page showing configured API-key providers](../../assets/screenshots/providers.jpg)
+![The Providers settings page showing configured API-key providers](../../assets/screenshots/providers.jpg)
 
-Add or rotate provider keys on the Providers page. The key remains in Studio's host-side vault; the guest receives a placeholder, which Studio substitutes only for the provider's bound API host. Provider keys are managed with the provider and cannot be edited from the general Secrets page.
+Add or rotate provider keys under **Settings → Providers**. The key remains in Studio's host-side vault; the guest receives a placeholder, which Studio substitutes only for the provider's bound API host. Provider keys are managed with the provider and cannot be edited from the general Secrets page.
 
 ## Default teammate
 

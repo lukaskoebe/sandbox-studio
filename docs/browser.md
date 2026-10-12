@@ -238,8 +238,8 @@ An agent can open a throwaway session next to the persistent profile:
   a session switcher: **Profile**, then each open ephemeral session. Take over, Hand back and
   the address form act on the selected session. Taking over one session pauses agent calls to
   that session only. A picked session that closes falls back to Profile.
-- **History.** The action log files each session's actions under its ID, and the Browser page
-  marks them as ephemeral. Egress is attributed to the VM and its driving sandbox, not to a
+- **History.** The action log files each session's actions under its ID, and the teammate's
+  Browser tab marks them as ephemeral. Egress is attributed to the VM and its driving sandbox, not to a
   session, so the connection history does not split by session.
 
 Two agent-browser sessions in one VM have not run live yet; see
@@ -252,7 +252,7 @@ Two agent-browser sessions in one VM have not run live yet; see
   `<data>/browser/`.
 - **Bounds.** The log keeps 500 actions per teammate and 200 MiB of screenshots overall,
   dropping the oldest first.
-- **Replay.** The Browser page groups the log by session (one session per VM start) and
+- **Replay.** The teammate's Browser tab groups the log by session (one session per VM start) and
   steps through the screenshots.
 
 ## Verified vs pending live

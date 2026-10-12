@@ -11,7 +11,7 @@ Studio can recall relevant notes when a supported agent session starts or when y
 
 ## Review memory in Studio
 
-Open **Memory** in the environment sidebar. You can inspect and edit pages and facts, search them, see conflicts, and review what the agent session recalled or proposed.
+Open **Memory** in the environment sidebar for shared memory, which every teammate sees. Each teammate also keeps private memory on its own page, under its **Memory** tab. Either one lets you inspect and edit pages and facts, search them, see conflicts, and review what the agent session recalled or proposed.
 
 - Teammate facts and pages are visible in that teammate's scope.
 - A teammate can propose a fact for shared memory. The proposal appears in the approval inbox; it becomes shared only after you approve it.

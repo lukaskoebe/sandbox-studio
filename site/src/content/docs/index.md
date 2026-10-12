@@ -23,7 +23,7 @@ Sandbox Studio runs OpenCode, Claude Code, or Codex inside a microVM on your mac
 - **Your files stay in a sandbox.** Each sandbox has its own persistent Linux workspace and terminal.
 - **You control access out.** Network rules apply to sandbox traffic, including Docker containers. Unknown hosts wait for your decision.
 - **Secrets stay on the host.** Sandboxes receive placeholders; Studio substitutes secret values only for approved, host-bound HTTPS traffic.
-- **You review configured Git pushes.** Forges added in an environment's Git page receive pushes only after you approve the staged change.
+- **You review configured Git pushes.** Forges added under **Settings → Git** receive pushes only after you approve the staged change.
 
 ![Sandbox Studio showing the overview with two running sandboxes](../../assets/screenshots/overview.jpg)
 

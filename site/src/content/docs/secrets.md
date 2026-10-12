@@ -29,4 +29,4 @@ A sandbox sees the secrets of its environment, of the teammate that owns it, and
 
 Use the edit control to replace a value, change its allowed hosts, or update its note. The name and scope stay the same; to change them, delete the secret and add it again. Deleting it removes it from the environment. If an agent needs the changed value, start a new session or retry its request after the secret update.
 
-Provider API keys and Git forge credentials are managed on their own pages. Studio-only Git credentials cannot be added to sandbox requests. See [Teammates and providers](../teammates-providers/) and [Git review](../git-review/).
+Provider API keys and Git forge credentials are managed under **Settings → Providers** and **Settings → Git**. Studio-only Git credentials cannot be added to sandbox requests. See [Teammates and providers](../teammates-providers/) and [Git review](../git-review/).

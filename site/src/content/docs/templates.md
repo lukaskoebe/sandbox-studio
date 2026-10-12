@@ -5,7 +5,7 @@ description: Build a reusable sandbox root filesystem from a small YAML specific
 
 A template describes the software in a sandbox's root filesystem. Its YAML can set CPU, memory, workspace, and Docker sizes; install Node.js, Python, or Go; install apt packages; and run a setup script.
 
-![The Builds page with the template build dialog](../../assets/screenshots/build-dialog.jpg)
+![The Templates settings page with the template build dialog](../../assets/screenshots/build-dialog.jpg)
 
 ## Example
 
@@ -34,7 +34,7 @@ Quote tool versions. The currently supported tools are `node`, `python`, and `go
 
 As you type, the editor highlights the YAML, suggests keys, tool names, and size units, and marks each problem at its line and column. These checks use the same parser as the build and create nothing.
 
-After you submit a build, Studio runs the apt installs, language tool installs, and `setup` script in a temporary builder VM. Apt runs as root; the setup script runs as the `agent` user. Treat `setup` as executable shell code. You can follow the job status and read its bounded log on the Builds page. A successful template is cached for later builds. **A ready build does not start a sandbox**; choose **Create sandbox** separately when you want to use it.
+After you submit a build, Studio runs the apt installs, language tool installs, and `setup` script in a temporary builder VM. Apt runs as root; the setup script runs as the `agent` user. Treat `setup` as executable shell code. You can follow the job status and read its bounded log on **Settings → Templates**. A successful template is cached for later builds. **A ready build does not start a sandbox**; choose **Create sandbox** separately when you want to use it.
 
 **Download YAML** saves the draft or the source submitted for a build. It does not export a built image, secrets, or sandbox disks.
 
