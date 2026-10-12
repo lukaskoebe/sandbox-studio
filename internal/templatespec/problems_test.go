@@ -153,4 +153,7 @@ func TestWebExampleTemplateParses(t *testing.T) {
 	if len(spec.Tools) != 2 || len(spec.Apt) != 1 || spec.Setup == "" {
 		t.Fatalf("example spec = %+v", spec)
 	}
+	if r := spec.Resources; r.CPUs != 2 || r.MemoryMiB != 4096 || r.WorkspaceMiB != 20480 || r.DockerMiB != 20480 {
+		t.Fatalf("example resources = %+v", r)
+	}
 }
