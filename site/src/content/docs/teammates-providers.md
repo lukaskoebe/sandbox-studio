@@ -27,7 +27,7 @@ Add or rotate provider keys on the Providers page. The key remains in Studio's h
 
 ## Default teammate
 
-If an environment has no teammates when you add a provider, Studio adds a teammate named Iris on that provider. Iris is a generalist engineer that uses Claude Code with an Anthropic key, Codex with an OpenAI key, or OpenCode with a custom endpoint. Its Git identity is `Iris (agent) <iris@agents.invalid>`. Iris is an ordinary teammate: you can edit or delete it. Studio adds Iris again only when the environment has no teammates and you add another provider.
+If an environment has no teammates when you add a provider, Studio adds a teammate named Iris on that provider. Iris is a generalist engineer that uses Claude Code with an Anthropic key, Codex with an OpenAI key, or OpenCode with a custom endpoint. The Git identity is `Iris (agent) <iris@agents.invalid>`. Iris is an ordinary teammate: you can edit or delete Iris. Studio adds Iris again only when the environment has no teammates and you add another provider.
 
 ## Start a teammate session
 

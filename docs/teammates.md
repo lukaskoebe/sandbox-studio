@@ -48,9 +48,9 @@ that provider (`teammates.DefaultTeammate*`, created by the API's `createProvide
   default);
 - git identity `Iris (agent) <iris@agents.invalid>`.
 
-It is an ordinary teammate afterwards; the user can edit or delete it. A provider added while
-the environment has a teammate creates nothing, and one added after the last teammate was
-deleted creates Iris again. If the default can't be created, the provider is kept, the
+Afterwards the default is an ordinary teammate that the user can edit or delete. A provider
+added while the environment has a teammate creates nothing, and one added after the last
+teammate was deleted creates Iris again. If the default can't be created, the provider is kept, the
 failure is logged, and the teammate can be added by hand.
 
 ## Ownership and rules
