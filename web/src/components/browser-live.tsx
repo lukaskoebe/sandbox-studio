@@ -417,12 +417,12 @@ export function BrowserLive({
     )
   }
   // Ends a press that was sent. Its release clamps to the frame, so the page is not left pressed
-  // when the pointer has been dragged out of the canvas.
+  // when the pointer has been dragged out of the canvas. Returns whether the release was sent.
   const release = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const button = heldButton.current
-    if (!e.isPrimary || button === undefined) return
+    if (!e.isPrimary || button === undefined) return false
     heldButton.current = undefined
-    mouse("mouseReleased", e, button, true)
+    return mouse("mouseReleased", e, button, true)
   }
   const lastMove = useRef(0)
   const keyboardEvent = (
@@ -793,8 +793,6 @@ export function BrowserLive({
           else e.preventDefault()
           const button = buttons[e.button]
           if (mouse("mousePressed", e, button)) heldButton.current = button
-          // The tap goes out before the hidden input takes focus, which opens the keyboard.
-          if (e.pointerType !== "mouse") focusMobileInput()
         }}
         onPointerMove={(e) => {
           if (!e.isPrimary) return
@@ -804,7 +802,11 @@ export function BrowserLive({
           const held = heldButton.current
           mouse("mouseMoved", e, held ?? "none", held !== undefined)
         }}
-        onPointerUp={release}
+        onPointerUp={(e) => {
+          // A touch tap focuses the hidden input once its release is sent: focusing earlier
+          // opens the keyboard, which shifts the layout before the release is mapped.
+          if (release(e) && e.pointerType !== "mouse") focusMobileInput()
+        }}
         onPointerCancel={release}
         onWheel={(e) =>
           mouse("mouseWheel", e, buttons[e.button], false, {
