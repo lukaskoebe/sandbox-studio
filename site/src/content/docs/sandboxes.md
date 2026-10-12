@@ -32,6 +32,17 @@ Open a sandbox from the sidebar to see its terminal. Terminals run inside the sa
 
 Rebasing changes the template and carries over `/workspace` and the home directory; Docker data and terminal sessions are not carried over. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
 
+## See a sandbox's history
+
+The sandbox page has a **History** section. It draws the sandbox's history as a line from left to right, in the order things happened.
+
+- Each generation of the sandbox is labelled with its template. A rebase shows as a change of template, and a restore shows as a jump back to a checkpoint.
+- Checkpoints are the points on the line. Select one for its menu: **Restore** when the runtime allows it, **Fork from here**, **Rename** and **Delete**.
+- Forks branch off to their child sandboxes, and a forked sandbox shows the one it came from. A deleted sandbox stays in the history, marked as deleted.
+- The end of the line is the sandbox as it is now. **Save checkpoint** there saves its current state.
+
+The Home page has a **Family** card. It lists each template with its sandboxes, and shows each fork under the sandbox it was made from. Green marks a running sandbox, amber one that is still starting or being created, and red one that failed.
+
 ## Open a preview
 
 If a web server is listening on a sandbox port, open **Previews** in the sandbox toolbar and choose the port. Studio opens a host-scoped `.localhost` link through the agent channel. The link is meant for the browser on the machine running Studio.
