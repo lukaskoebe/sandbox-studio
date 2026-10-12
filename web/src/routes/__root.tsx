@@ -5,10 +5,11 @@ import { ApprovalStack } from "@/components/approval-stack"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { useEvents } from "@/hooks/use-events"
+import { mockupsActive } from "@/mockups/active"
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   {
-    component: RootLayout,
+    component: mockupsActive ? MockupsLayout : RootLayout,
     notFoundComponent: () => (
       <main className="p-6 text-sm">
         <h1 className="font-medium">Not found</h1>
@@ -25,6 +26,15 @@ function RootLayout() {
       <ApprovalStack />
       <AgentViewOnboarding />
       <Toaster position="top-center" closeButton />
+    </TooltipProvider>
+  )
+}
+
+/** The design mockups are static: no event stream, approvals or onboarding. */
+function MockupsLayout() {
+  return (
+    <TooltipProvider>
+      <Outlet />
     </TooltipProvider>
   )
 }
