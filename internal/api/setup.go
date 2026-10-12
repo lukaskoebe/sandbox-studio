@@ -96,15 +96,7 @@ func (s *Server) registerSetup(api huma.API) {
 		}
 		stored.Steps = in.Body.Steps
 		stored.Dismissed = in.Body.Dismissed
-		if stored.Steps.resolved() && stored.CompletedAt == nil {
-			now := time.Now().UTC()
-			stored.CompletedAt = &now
-		}
-		raw, err := json.Marshal(stored)
-		if err != nil {
-			return nil, apiError(err)
-		}
-		if err := s.Store.SetSetting(ctx, settingSetup, raw); err != nil {
+		if err := s.saveSetup(ctx, stored); err != nil {
 			return nil, apiError(err)
 		}
 		out, err := s.setupState(ctx, in.Env)
@@ -125,20 +117,40 @@ func (s *Server) storedSetup(ctx context.Context) (Setup, error) {
 	return out, json.Unmarshal(raw, &out)
 }
 
-// setupState merges the recorded steps with the conditions that already hold in envID.
-func (s *Server) setupState(ctx context.Context, envID string) (Setup, error) {
-	out, err := s.storedSetup(ctx)
+// saveSetup records the setup's progress.
+func (s *Server) saveSetup(ctx context.Context, st Setup) error {
+	raw, err := json.Marshal(st)
 	if err != nil {
-		return out, err
+		return err
+	}
+	return s.Store.SetSetting(ctx, settingSetup, raw)
+}
+
+// setupState merges the recorded steps with the conditions that already hold in envID. The
+// first time every step reads done or skipped, the completion is recorded, whichever of the
+// two made it so.
+func (s *Server) setupState(ctx context.Context, envID string) (Setup, error) {
+	stored, err := s.storedSetup(ctx)
+	if err != nil {
+		return stored, err
 	}
 	holds, err := s.setupConditions(ctx, envID)
 	if err != nil {
-		return out, err
+		return stored, err
 	}
+	out := stored
 	mine, theirs := out.Steps.fields(), holds.fields()
 	for i := range mine {
 		if *theirs[i] == setupDone {
 			*mine[i] = setupDone
+		}
+	}
+	if out.CompletedAt == nil && out.Steps.resolved() {
+		now := time.Now().UTC()
+		stored.CompletedAt = &now
+		out.CompletedAt = &now
+		if err := s.saveSetup(ctx, stored); err != nil {
+			return out, err
 		}
 	}
 	return out, nil

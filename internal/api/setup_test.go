@@ -119,3 +119,33 @@ func TestSetupRecordsSteps(t *testing.T) {
 		t.Fatalf("dismissed: %+v", got)
 	}
 }
+
+func TestSetupCompletesWhenEveryStepHolds(t *testing.T) {
+	h, s := newTestServer(t)
+	ctx := context.Background()
+	env := newEnvironment(t, s, "work")
+	s.System.Doctor = func(context.Context) doctor.Report { return doctor.Report{Status: doctor.OK} }
+	const path = testOrigin + "/api/setup?env="
+
+	createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	if rec := do(h, "PUT", testOrigin+"/api/settings/ui", `{"agentView":"terminal"}`); rec.Code != http.StatusOK {
+		t.Fatalf("work mode: %d %s", rec.Code, rec.Body)
+	}
+	if _, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: env.ID, Name: "cb", Kind: "forgejo", BaseURL: "https://codeberg.org"},
+		store.Secret{ID: store.NewID(), Name: "FORGE_CB_TOKEN", Sealed: []byte("x"), Hosts: []string{"codeberg.org"}}); err != nil {
+		t.Fatal(err)
+	}
+	newSandbox(t, s, env, "first")
+
+	// The network step has no condition: until it is recorded, the setup stays open.
+	if got := decode[Setup](t, do(h, "GET", path+env.ID, "")); got.CompletedAt != nil {
+		t.Fatalf("completed before the network step: %+v", got)
+	}
+	done := decode[Setup](t, do(h, "PUT", path+env.ID, `{"steps":{"network":"done"},"dismissed":false}`))
+	if done.CompletedAt == nil || done.Steps.Sandbox != setupDone || done.Steps.Git != setupDone {
+		t.Fatalf("every step holds: %+v", done)
+	}
+	if got := decode[Setup](t, do(h, "GET", path+env.ID, "")); got.CompletedAt == nil || !got.CompletedAt.Equal(*done.CompletedAt) {
+		t.Fatalf("completion not kept: %+v", got)
+	}
+}
