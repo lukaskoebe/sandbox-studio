@@ -1,19 +1,6 @@
 import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
-import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import { PlusIcon } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,15 +23,11 @@ import {
 import { PageHeader } from "@/components/page-header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
-import {
-  $api,
-  errorMessage,
-  type Teammate,
-  type Provider,
-} from "@/lib/api/client"
+import { Readiness } from "@/components/teammate-readiness"
+import { $api } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 
-export const Route = createFileRoute("/e/$env/teammates")({
+export const Route = createFileRoute("/e/$env/teammates/")({
   component: TeammatesPage,
 })
 
@@ -53,8 +36,7 @@ const explanation =
 
 function TeammatesPage() {
   const { env } = Route.useParams()
-  // The open dialog: an empty object adds a teammate, a teammate edits it, null is closed.
-  const [dialog, setDialog] = useState<{ teammate?: Teammate } | null>(null)
+  const [adding, setAdding] = useState(false)
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
@@ -71,7 +53,7 @@ function TeammatesPage() {
       size="sm"
       disabled={!canAdd}
       title={canAdd ? undefined : "Add a provider first"}
-      onClick={() => setDialog({})}
+      onClick={() => setAdding(true)}
     >
       <PlusIcon />
       Add a teammate
@@ -101,9 +83,6 @@ function TeammatesPage() {
                   <TableHead>Model</TableHead>
                   <TableHead>Sessions</TableHead>
                   <TableHead>Git identity</TableHead>
-                  <TableHead>
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -113,7 +92,13 @@ function TeammatesPage() {
                       <div className="flex items-center gap-2">
                         <TeammateAvatar name={p.name} />
                         <div className="min-w-0">
-                          <div className="font-medium">{p.name}</div>
+                          <Link
+                            to="/e/$env/teammates/$id"
+                            params={{ env, id: p.id }}
+                            className="font-medium hover:underline"
+                          >
+                            {p.name}
+                          </Link>
                           <div className="max-w-56 truncate text-muted-foreground">
                             {p.role}
                           </div>
@@ -144,19 +129,6 @@ function TeammatesPage() {
                         {p.gitName} &lt;{p.gitEmail}&gt;
                       </span>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Edit teammate"
-                          onClick={() => setDialog({ teammate: p })}
-                        >
-                          <PencilSimpleIcon />
-                        </Button>
-                        <DeleteTeammate env={env} teammate={p} />
-                      </div>
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -186,114 +158,10 @@ function TeammatesPage() {
       </ScrollArea>
       <TeammateDialog
         env={env}
-        teammate={dialog?.teammate}
         providers={providerList}
-        open={dialog !== null}
-        onOpenChange={(open) => {
-          if (!open) setDialog(null)
-        }}
+        open={adding}
+        onOpenChange={setAdding}
       />
     </>
-  )
-}
-
-function DeleteTeammate({
-  env,
-  teammate,
-}: {
-  env: string
-  teammate: Teammate
-}) {
-  const queryClient = useQueryClient()
-  const remove = $api.useMutation(
-    "delete",
-    "/api/environments/{env}/teammates/{id}",
-    {
-      onSettled: () => {
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/teammates"],
-        })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/rules"],
-        })
-      },
-      onError: (err) =>
-        toast.error("Could not delete the teammate", {
-          description: errorMessage(err),
-        }),
-    }
-  )
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" title="Delete teammate" />
-        }
-      >
-        <TrashIcon />
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete {teammate.name}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Network rules scoped to {teammate.name} are deleted too. Sandboxes
-            it owns must be deleted first.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
-            disabled={remove.isPending}
-            onClick={() =>
-              remove.mutate({ params: { path: { env, id: teammate.id } } })
-            }
-          >
-            {remove.isPending && <Spinner />}
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
-
-/**
- * Whether the teammate's agent sessions can start: its harness is in the base image, so it
- * comes down to the provider being able to run that harness with a key.
- */
-function Readiness({
-  teammate,
-  provider,
-}: {
-  teammate: Teammate
-  provider?: Provider
-}) {
-  if (!provider) return null
-  if (provider.state === "login_required") {
-    return (
-      <Badge
-        variant="outline"
-        title={`${provider.name} needs a subscription login, which Studio can't do yet`}
-      >
-        Login required
-      </Badge>
-    )
-  }
-  if (!(provider.harnesses ?? []).includes(teammate.harness)) {
-    return (
-      <Badge variant="outline">
-        {provider.name} can't run {harnessLabels[teammate.harness]}
-      </Badge>
-    )
-  }
-  return (
-    <Badge
-      variant="secondary"
-      title={`${harnessLabels[teammate.harness]} reads the key from ${provider.envVar}`}
-    >
-      Ready
-    </Badge>
   )
 }

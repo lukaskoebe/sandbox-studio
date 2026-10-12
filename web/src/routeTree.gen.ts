@@ -22,7 +22,6 @@ import { Route as EEnvNetworkRouteImport } from './routes/e.$env.network'
 import { Route as EEnvProvidersRouteImport } from './routes/e.$env.providers'
 import { Route as EEnvSecretsRouteImport } from './routes/e.$env.secrets'
 import { Route as EEnvSettingsRouteImport } from './routes/e.$env.settings'
-import { Route as EEnvTeammatesRouteImport } from './routes/e.$env.teammates'
 import { Route as MockupsDirectionScreenRouteImport } from './routes/mockups.$direction.$screen'
 import { Route as EEnvChatsIndexRouteImport } from './routes/e.$env.chats.index'
 import { Route as EEnvChatsChatRouteImport } from './routes/e.$env.chats.$chat'
@@ -34,6 +33,10 @@ import { Route as EEnvSettingsGitRouteImport } from './routes/e.$env.settings.gi
 import { Route as EEnvSettingsProvidersRouteImport } from './routes/e.$env.settings.providers'
 import { Route as EEnvSettingsRuntimeRouteImport } from './routes/e.$env.settings.runtime'
 import { Route as EEnvSettingsTemplatesRouteImport } from './routes/e.$env.settings.templates'
+import { Route as EEnvTeammatesIndexRouteImport } from './routes/e.$env.teammates.index'
+import { Route as EEnvTeammatesIdRouteImport } from './routes/e.$env.teammates.$id'
+import { Route as EEnvTeammatesIdIndexRouteImport } from './routes/e.$env.teammates.$id.index'
+import { Route as EEnvTeammatesIdSettingsRouteImport } from './routes/e.$env.teammates.$id.settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -100,11 +103,6 @@ const EEnvSettingsRoute = EEnvSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => EEnvRoute,
 } as any)
-const EEnvTeammatesRoute = EEnvTeammatesRouteImport.update({
-  id: '/teammates',
-  path: '/teammates',
-  getParentRoute: () => EEnvRoute,
-} as any)
 const MockupsDirectionScreenRoute = MockupsDirectionScreenRouteImport.update({
   id: '/$direction/$screen',
   path: '/$direction/$screen',
@@ -160,6 +158,26 @@ const EEnvSettingsTemplatesRoute = EEnvSettingsTemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => EEnvSettingsRoute,
 } as any)
+const EEnvTeammatesIndexRoute = EEnvTeammatesIndexRouteImport.update({
+  id: '/teammates/',
+  path: '/teammates/',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvTeammatesIdRoute = EEnvTeammatesIdRouteImport.update({
+  id: '/teammates/$id',
+  path: '/teammates/$id',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvTeammatesIdIndexRoute = EEnvTeammatesIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EEnvTeammatesIdRoute,
+} as any)
+const EEnvTeammatesIdSettingsRoute = EEnvTeammatesIdSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => EEnvTeammatesIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -174,7 +192,6 @@ export interface FileRoutesByFullPath {
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
-  '/e/$env/teammates': typeof EEnvTeammatesRoute
   '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
@@ -185,8 +202,12 @@ export interface FileRoutesByFullPath {
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
   '/e/$env/settings/templates': typeof EEnvSettingsTemplatesRoute
+  '/e/$env/teammates/$id': typeof EEnvTeammatesIdRouteWithChildren
   '/e/$env/chats/': typeof EEnvChatsIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
+  '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
+  '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
+  '/e/$env/teammates/$id/': typeof EEnvTeammatesIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -198,7 +219,6 @@ export interface FileRoutesByTo {
   '/e/$env/network': typeof EEnvNetworkRoute
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
-  '/e/$env/teammates': typeof EEnvTeammatesRoute
   '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
   '/e/$env': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
@@ -211,6 +231,9 @@ export interface FileRoutesByTo {
   '/e/$env/settings/templates': typeof EEnvSettingsTemplatesRoute
   '/e/$env/chats': typeof EEnvChatsIndexRoute
   '/e/$env/settings': typeof EEnvSettingsIndexRoute
+  '/e/$env/teammates': typeof EEnvTeammatesIndexRoute
+  '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
+  '/e/$env/teammates/$id': typeof EEnvTeammatesIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -226,7 +249,6 @@ export interface FileRoutesById {
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
-  '/e/$env/teammates': typeof EEnvTeammatesRoute
   '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
@@ -237,8 +259,12 @@ export interface FileRoutesById {
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
   '/e/$env/settings/templates': typeof EEnvSettingsTemplatesRoute
+  '/e/$env/teammates/$id': typeof EEnvTeammatesIdRouteWithChildren
   '/e/$env/chats/': typeof EEnvChatsIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
+  '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
+  '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
+  '/e/$env/teammates/$id/': typeof EEnvTeammatesIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -255,7 +281,6 @@ export interface FileRouteTypes {
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env/settings'
-    | '/e/$env/teammates'
     | '/mockups/$direction/$screen'
     | '/e/$env/'
     | '/e/$env/chats/$chat'
@@ -266,8 +291,12 @@ export interface FileRouteTypes {
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
     | '/e/$env/settings/templates'
+    | '/e/$env/teammates/$id'
     | '/e/$env/chats/'
     | '/e/$env/settings/'
+    | '/e/$env/teammates/'
+    | '/e/$env/teammates/$id/settings'
+    | '/e/$env/teammates/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -279,7 +308,6 @@ export interface FileRouteTypes {
     | '/e/$env/network'
     | '/e/$env/providers'
     | '/e/$env/secrets'
-    | '/e/$env/teammates'
     | '/mockups/$direction/$screen'
     | '/e/$env'
     | '/e/$env/chats/$chat'
@@ -292,6 +320,9 @@ export interface FileRouteTypes {
     | '/e/$env/settings/templates'
     | '/e/$env/chats'
     | '/e/$env/settings'
+    | '/e/$env/teammates'
+    | '/e/$env/teammates/$id/settings'
+    | '/e/$env/teammates/$id'
   id:
     | '__root__'
     | '/'
@@ -306,7 +337,6 @@ export interface FileRouteTypes {
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/e/$env/settings'
-    | '/e/$env/teammates'
     | '/mockups/$direction/$screen'
     | '/e/$env/'
     | '/e/$env/chats/$chat'
@@ -317,8 +347,12 @@ export interface FileRouteTypes {
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
     | '/e/$env/settings/templates'
+    | '/e/$env/teammates/$id'
     | '/e/$env/chats/'
     | '/e/$env/settings/'
+    | '/e/$env/teammates/'
+    | '/e/$env/teammates/$id/settings'
+    | '/e/$env/teammates/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -420,13 +454,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvSettingsRouteImport
       parentRoute: typeof EEnvRoute
     }
-    '/e/$env/teammates': {
-      id: '/e/$env/teammates'
-      path: '/teammates'
-      fullPath: '/e/$env/teammates'
-      preLoaderRoute: typeof EEnvTeammatesRouteImport
-      parentRoute: typeof EEnvRoute
-    }
     '/mockups/$direction/$screen': {
       id: '/mockups/$direction/$screen'
       path: '/$direction/$screen'
@@ -504,6 +531,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvSettingsTemplatesRouteImport
       parentRoute: typeof EEnvSettingsRoute
     }
+    '/e/$env/teammates/': {
+      id: '/e/$env/teammates/'
+      path: '/teammates'
+      fullPath: '/e/$env/teammates/'
+      preLoaderRoute: typeof EEnvTeammatesIndexRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/teammates/$id': {
+      id: '/e/$env/teammates/$id'
+      path: '/teammates/$id'
+      fullPath: '/e/$env/teammates/$id'
+      preLoaderRoute: typeof EEnvTeammatesIdRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/teammates/$id/': {
+      id: '/e/$env/teammates/$id/'
+      path: '/'
+      fullPath: '/e/$env/teammates/$id/'
+      preLoaderRoute: typeof EEnvTeammatesIdIndexRouteImport
+      parentRoute: typeof EEnvTeammatesIdRoute
+    }
+    '/e/$env/teammates/$id/settings': {
+      id: '/e/$env/teammates/$id/settings'
+      path: '/settings'
+      fullPath: '/e/$env/teammates/$id/settings'
+      preLoaderRoute: typeof EEnvTeammatesIdSettingsRouteImport
+      parentRoute: typeof EEnvTeammatesIdRoute
+    }
   }
 }
 
@@ -542,6 +597,20 @@ const EEnvSettingsRouteWithChildren = EEnvSettingsRoute._addFileChildren(
   EEnvSettingsRouteChildren,
 )
 
+interface EEnvTeammatesIdRouteChildren {
+  EEnvTeammatesIdSettingsRoute: typeof EEnvTeammatesIdSettingsRoute
+  EEnvTeammatesIdIndexRoute: typeof EEnvTeammatesIdIndexRoute
+}
+
+const EEnvTeammatesIdRouteChildren: EEnvTeammatesIdRouteChildren = {
+  EEnvTeammatesIdSettingsRoute: EEnvTeammatesIdSettingsRoute,
+  EEnvTeammatesIdIndexRoute: EEnvTeammatesIdIndexRoute,
+}
+
+const EEnvTeammatesIdRouteWithChildren = EEnvTeammatesIdRoute._addFileChildren(
+  EEnvTeammatesIdRouteChildren,
+)
+
 interface EEnvRouteChildren {
   EEnvBrowserRoute: typeof EEnvBrowserRoute
   EEnvBuildsRoute: typeof EEnvBuildsRoute
@@ -551,12 +620,13 @@ interface EEnvRouteChildren {
   EEnvProvidersRoute: typeof EEnvProvidersRoute
   EEnvSecretsRoute: typeof EEnvSecretsRoute
   EEnvSettingsRoute: typeof EEnvSettingsRouteWithChildren
-  EEnvTeammatesRoute: typeof EEnvTeammatesRoute
   EEnvIndexRoute: typeof EEnvIndexRoute
   EEnvChatsChatRoute: typeof EEnvChatsChatRoute
   EEnvChatsNewRoute: typeof EEnvChatsNewRoute
   EEnvSandboxesIdRoute: typeof EEnvSandboxesIdRoute
+  EEnvTeammatesIdRoute: typeof EEnvTeammatesIdRouteWithChildren
   EEnvChatsIndexRoute: typeof EEnvChatsIndexRoute
+  EEnvTeammatesIndexRoute: typeof EEnvTeammatesIndexRoute
 }
 
 const EEnvRouteChildren: EEnvRouteChildren = {
@@ -568,12 +638,13 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvProvidersRoute: EEnvProvidersRoute,
   EEnvSecretsRoute: EEnvSecretsRoute,
   EEnvSettingsRoute: EEnvSettingsRouteWithChildren,
-  EEnvTeammatesRoute: EEnvTeammatesRoute,
   EEnvIndexRoute: EEnvIndexRoute,
   EEnvChatsChatRoute: EEnvChatsChatRoute,
   EEnvChatsNewRoute: EEnvChatsNewRoute,
   EEnvSandboxesIdRoute: EEnvSandboxesIdRoute,
+  EEnvTeammatesIdRoute: EEnvTeammatesIdRouteWithChildren,
   EEnvChatsIndexRoute: EEnvChatsIndexRoute,
+  EEnvTeammatesIndexRoute: EEnvTeammatesIndexRoute,
 }
 
 const EEnvRouteWithChildren = EEnvRoute._addFileChildren(EEnvRouteChildren)
