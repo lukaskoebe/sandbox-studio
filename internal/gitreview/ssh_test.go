@@ -41,6 +41,7 @@ type fakeSSH struct {
 	commands   []string
 	env        []string // name=value of env requests
 	refused    []string // other channel and session requests
+	attempts   int      // public keys clients offered
 	noProtocol bool     // refuse GIT_PROTOCOL too
 }
 
@@ -65,6 +66,7 @@ func newFakeSSH(t *testing.T) *fakeSSH {
 		PublicKeyCallback: func(c ssh.ConnMetadata, k ssh.PublicKey) (*ssh.Permissions, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
+			f.attempts++
 			for _, a := range f.authorized {
 				if string(a.Marshal()) == string(k.Marshal()) {
 					f.users = append(f.users, c.User())

@@ -28,11 +28,12 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// SSH forges: Studio holds an ed25519 key it generated, sealed in the vault, and pins the
-// forge's host key when the forge is added. Studio is the SSH client; sandboxes speak smart
-// HTTP to the virtual remote as for every forge, and Studio bridges each request to a
-// git-upload-pack or git-receive-pack run over SSH. Studio never forwards an agent, opens
-// no other channels and sets no environment variable other than GIT_PROTOCOL.
+// SSH forges: Studio signs with the host's SSH agent (agent.go) or with an ed25519 key it
+// generated, sealed in the vault, and pins the forge's host key when the forge is added.
+// Studio is the SSH client; sandboxes speak smart HTTP to the virtual remote as for every
+// forge, and Studio bridges each request to a git-upload-pack or git-receive-pack run over
+// SSH. Studio never forwards an agent, opens no other channels and sets no environment
+// variable other than GIT_PROTOCOL.
 
 // sshTimeout bounds connecting and the SSH handshake.
 const sshTimeout = 30 * time.Second
@@ -160,7 +161,8 @@ func (e *HostKeyChangedError) Error() string {
 		e.Host, e.Pinned, e.Offered)
 }
 
-// sshClient connects to f and authenticates with key, accepting only the pinned host key.
+// sshClient connects to f and authenticates with key, or with the host's SSH agent for
+// auth agent, accepting only the pinned host key.
 // A different host key is recorded on the forge, so the Git page can offer to re-pin it.
 func (s *Service) sshClient(ctx context.Context, f store.Forge, key string) (*ssh.Client, error) {
 	u, err := ParseSSHURL(f.BaseURL)
@@ -171,9 +173,19 @@ func (s *Service) sshClient(ctx context.Context, f store.Forge, key string) (*ss
 	if err != nil {
 		return nil, fmt.Errorf("forge %s has no valid pinned host key; remove and add it again", f.Name)
 	}
-	signer, err := ssh.ParsePrivateKey([]byte(key))
-	if err != nil {
-		return nil, fmt.Errorf("forge %s: Studio's key: %w", f.Name, err)
+	var auth ssh.AuthMethod
+	if f.Auth == store.ForgeAuthAgent {
+		var done func()
+		if auth, done, err = s.agentAuth(ctx, f); err != nil {
+			return nil, err
+		}
+		defer done()
+	} else {
+		signer, err := ssh.ParsePrivateKey([]byte(key))
+		if err != nil {
+			return nil, fmt.Errorf("forge %s: Studio's key: %w", f.Name, err)
+		}
+		auth = ssh.PublicKeys(signer)
 	}
 	addr := net.JoinHostPort(u.Host, strconv.Itoa(u.Port))
 	conn, err := s.dial(ctx, addr)
@@ -183,7 +195,7 @@ func (s *Service) sshClient(ctx context.Context, f store.Forge, key string) (*ss
 	var changed *HostKeyChangedError
 	c, err := handshake(ctx, conn, addr, &ssh.ClientConfig{
 		User:              u.User,
-		Auth:              []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		Auth:              []ssh.AuthMethod{auth},
 		HostKeyAlgorithms: algorithmsFor(pinned.Type()),
 		HostKeyCallback: func(_ string, _ net.Addr, k ssh.PublicKey) error {
 			if bytes.Equal(k.Marshal(), pinned.Marshal()) {
@@ -203,12 +215,20 @@ func (s *Service) sshClient(ctx context.Context, f store.Forge, key string) (*ss
 		return nil, changed
 	case err != nil && strings.Contains(err.Error(), "no common algorithm for host key"):
 		return nil, fmt.Errorf("%s no longer offers a %s host key; check with the host's admin, then re-pin it on the Git page", u.Host, pinned.Type())
-	case err != nil && strings.Contains(err.Error(), "unable to authenticate"):
+	case err != nil && refusedAuth(err) && f.Auth == store.ForgeAuthAgent:
+		return nil, fmt.Errorf("%s refused the keys in your SSH agent: add your public key to your account on the host, with write access to push", u.Host)
+	case err != nil && refusedAuth(err):
 		return nil, fmt.Errorf("%s refused Studio's key: add the public key shown on the Git page to the repository or account, with write access to push", u.Host)
 	case err != nil:
 		return nil, fmt.Errorf("SSH to %s: %w", addr, err)
 	}
 	return c, nil
+}
+
+// refusedAuth reports whether the host refused the keys offered. A server past its attempt
+// limit (OpenSSH's MaxAuthTries, six by default) disconnects instead of saying so.
+func refusedAuth(err error) bool {
+	return strings.Contains(err.Error(), "unable to authenticate") || strings.Contains(err.Error(), "too many authentication failures")
 }
 
 // sshCommand is the command line that runs service for path, quoted as git quotes it.

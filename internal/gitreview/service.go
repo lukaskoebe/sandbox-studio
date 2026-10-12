@@ -1,9 +1,9 @@
 // Package gitreview is the virtual git remote. Sandboxes clone, fetch and push through
 // https://git.studio.internal/<forge>/<path>.git, which the gateway serves in process.
 // Fetches are proxied to the forge with its token added on the host (or bridged to SSH with
-// Studio's key); pushes are staged in a bare repository on the host and go upstream only
-// once the user approves the git.push approval they raise. The credential never reaches
-// the sandbox.
+// Studio's key or the host's SSH agent); pushes are staged in a bare repository on the host
+// and go upstream only once the user approves the git.push approval they raise. The
+// credential never reaches the sandbox.
 package gitreview
 
 import (
@@ -64,9 +64,14 @@ type Service struct {
 	Dir     string       // staging repositories live here
 	Client  *http.Client // reaches forges; nil means public addresses only, no redirects
 	// Dial connects to SSH forges; nil means gateway.DialPublic, public addresses only.
-	Dial   func(ctx context.Context, network, addr string) (net.Conn, error)
+	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Agent connects to the SSH agent for ssh forges with auth agent; nil means DialAgent,
+	// the host's agent.
+	Agent  func(ctx context.Context) (net.Conn, error)
 	Log    *slog.Logger
 	Limits Limits
+
+	slowSign time.Duration // DefaultSlowSign if zero
 
 	once   sync.Once
 	client *http.Client
@@ -250,7 +255,11 @@ func (t target) upstreamURL(rest string) string {
 	return t.forge.BaseURL + "/" + t.path() + ".git" + rest
 }
 
+// token unseals f's token or SSH key. Forges that sign with the SSH agent have none.
 func (s *Service) token(ctx context.Context, f store.Forge) (string, error) {
+	if f.Auth == store.ForgeAuthAgent {
+		return "", nil
+	}
 	return s.Secrets.Value(ctx, f.EnvironmentID, f.SecretID)
 }
 
