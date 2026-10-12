@@ -38,17 +38,18 @@ func returnedURL(data json.RawMessage) string {
 	return result.URL
 }
 
-func (s *Service) currentBrowserURL(ctx context.Context, st *state) (string, error) {
-	data, _, err := s.exec(ctx, st, agentBrowserGetURL)
+func (s *Service) currentBrowserURL(ctx context.Context, st *state, pg *page) (string, error) {
+	data, _, err := s.exec(ctx, st, pg, agentBrowserGetURL)
 	if err != nil {
 		return "", err
 	}
 	return returnedURL(data), nil
 }
 
-// Navigate runs a user-requested page open in an already-running browser while takeover
-// is active. It shares the command slot with agent calls, Stop, and handback.
-func (s *Service) Navigate(ctx context.Context, envID, teammateID, rawURL string) (BrowserStatus, error) {
+// Navigate runs a user-requested page open in a session ("" for the persistent profile) of
+// an already-running browser while the user has taken that session over. It shares the
+// command slot with agent calls, Stop, and handback.
+func (s *Service) Navigate(ctx context.Context, envID, teammateID, session, rawURL string) (BrowserStatus, error) {
 	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
 		return BrowserStatus{}, err
 	}
@@ -57,8 +58,12 @@ func (s *Service) Navigate(ctx context.Context, envID, teammateID, rawURL string
 	}
 	st := s.state(envID, teammateID)
 	s.mu.Lock()
-	takingOver := st.takeover
+	pg := st.pageFor(session)
+	takingOver := pg != nil && pg.takeover
 	s.mu.Unlock()
+	if pg == nil {
+		return BrowserStatus{}, ErrNoSession
+	}
 	if !takingOver {
 		return BrowserStatus{}, ErrNoTakeover
 	}
@@ -80,31 +85,35 @@ func (s *Service) Navigate(ctx context.Context, envID, teammateID, rawURL string
 		return BrowserStatus{}, ErrNotLive
 	}
 	s.mu.Lock()
-	if !st.takeover {
-		s.mu.Unlock()
-		return BrowserStatus{}, ErrNoTakeover
-	}
 	if st.vm != "" && st.vm != sb.ID {
 		st.reset()
+	}
+	if st.pageFor(session) != pg {
+		s.mu.Unlock()
+		return BrowserStatus{}, ErrNoSession
+	}
+	if !pg.takeover {
+		s.mu.Unlock()
+		return BrowserStatus{}, ErrNoTakeover
 	}
 	st.vm = sb.ID
 	if st.session == "" {
 		st.session = store.NewID()
 	}
-	st.lastUsed = s.now()
+	st.lastUsed, pg.used = s.now(), s.now()
 	// An open may change the page before it reports a failure, so refs are invalid as soon
 	// as the command starts. Keep the old URL out of Status until it can be confirmed.
-	st.url, st.refs, st.credRefs = "", nil, nil
+	pg.url, pg.refs, pg.credRefs = "", nil, nil
 	s.mu.Unlock()
 
-	data, _, navErr := s.exec(ctx, st, agentproto.BrowserCommand{Args: []string{"open", rawURL}})
+	data, _, navErr := s.exec(ctx, st, pg, agentproto.BrowserCommand{Args: []string{"open", rawURL}})
 	if navErr != nil {
-		actualURL, _ := s.currentBrowserURL(ctx, st)
+		actualURL, _ := s.currentBrowserURL(ctx, st, pg)
 		s.mu.Lock()
 		if actualURL != "" {
-			st.observedURL(actualURL)
+			pg.observedURL(actualURL)
 		} else {
-			st.url = ""
+			pg.url = ""
 		}
 		st.lastUsed = s.now()
 		s.mu.Unlock()
@@ -112,28 +121,27 @@ func (s *Service) Navigate(ctx context.Context, envID, teammateID, rawURL string
 		if logURL == "" {
 			logURL = rawURL
 		}
-		s.record(ctx, st, entry{actor: "user", action: "open", url: logURL, outcome: "failed", detail: navErr.Error()})
+		s.record(ctx, st, pg, entry{actor: "user", action: "open", url: logURL, outcome: "failed", detail: navErr.Error()})
 		return BrowserStatus{}, navErr
 	}
 
 	actualURL := returnedURL(data)
 	if actualURL == "" {
-		actualURL, _ = s.currentBrowserURL(ctx, st)
+		actualURL, _ = s.currentBrowserURL(ctx, st, pg)
 	}
 	s.mu.Lock()
 	if actualURL != "" {
-		st.navigated(actualURL)
+		pg.navigated(actualURL)
 	} else {
-		st.url, st.refs, st.credRefs, st.visible = "", nil, nil, false
+		pg.url, pg.refs, pg.credRefs, pg.visible = "", nil, nil, false
 	}
-	st.lastUsed = s.now()
-	status := BrowserStatus{TeammateID: teammateID, VM: string(runtime.StatusRunning),
-		Takeover: st.takeover, SessionID: st.session, URL: st.url, Driver: st.driver.Name}
+	st.lastUsed, pg.used = s.now(), s.now()
+	status := st.statusLocked(string(runtime.StatusRunning))
 	s.mu.Unlock()
 	logURL := actualURL
 	if logURL == "" {
 		logURL = rawURL
 	}
-	s.record(ctx, st, entry{actor: "user", action: "open", url: logURL, outcome: "ok"})
+	s.record(ctx, st, pg, entry{actor: "user", action: "open", url: logURL, outcome: "ok"})
 	return status, nil
 }

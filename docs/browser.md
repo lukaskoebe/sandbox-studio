@@ -5,7 +5,8 @@ and Studio is the only client: agents get MCP tools, never CDP. This doc covers 
 implementation (milestone M7).
 
 Code:
-- `internal/browser`: the broker, policy, redaction, credentials, history and live view relay.
+- `internal/browser`: the broker, policy, redaction, credentials, history, live view relay and
+  ephemeral sessions (`ephemeral.go`).
 - `internal/sandboxes/browser.go`: the VM lifecycle.
 - `internal/guest/browser.go`: the guest side, which runs agent-browser.
 - `internal/agentproto/browser.go`: the wire format.
@@ -58,6 +59,8 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
   - This is a second line of defense behind the broker.
   - It refuses eval, network, cookies, storage, state, HAR and `get value` even if the
     host were confused.
+  - `close` passes only as the whole command on an ephemeral slot, where it ends the session.
+    It never reaches the persistent profile.
 - **Egress goes through the same gateway, MITM CA and rules.**
   - While an agent drives, the gateway's `Driver` hook evaluates the browser VM's
     connections with the driving sandbox's rules. Domain approvals name that sandbox.
@@ -79,11 +82,15 @@ enabled.
 `studio-agent mcp` adds these tools. Each one is forwarded over the call channel as a
 `browser_*` method:
 
-- `open(url)`, `snapshot`, `click(ref)`, `fill(ref, text)`, `type(ref, text)`, `press(key)`,
+- `open(url, ephemeral?)`, `snapshot`, `click(ref)`, `fill(ref, text)`, `type(ref, text)`, `press(key)`,
   `select(ref, value)`, `scroll(direction, px)`, `get_text(ref?)`
 - `screenshot`, which returns MCP image content
 - `wait(ms | text | url)`, `back`
 - `fill_credential(ref, name)`
+- `close(session)`, which ends an ephemeral session
+
+Every tool takes an optional `session`, the ID that `open(ephemeral: true)` returned. Without
+it a tool drives the persistent profile. See [Ephemeral sessions](#ephemeral-sessions).
 
 **Identity comes from the channel only.** The hub knows which sandbox's agent connection
 carried the call. That gives the teammate, and the teammate gives the browser. A
@@ -197,6 +204,46 @@ disconnecting clears the local input buffer.
   `POST .../browser/navigate` accepts only HTTP(S) URLs and requires a running browser
   under user takeover. Navigation is serialized with agent commands, recorded as a user
   action, and remains subject to the gateway's network rules and approvals.
+- **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
+  (device size, offset and page scale) and the letterbox of the canvas. Presses in the bars
+  and above the page are not sent. A drag that leaves the canvas still releases at its edge. On touch, the tap is sent before the hidden input takes
+  focus, so the keyboard does not move the page under the tap. Wheel deltas are pixels, with
+  lines and pages converted.
+
+## Ephemeral sessions
+
+An agent can open a throwaway session next to the persistent profile:
+
+- **Open.** `browser_open(url, ephemeral: true)` starts a second agent-browser session in the
+  teammate's browser VM and returns its ID, `eph-` and eight hex digits. The session starts
+  with an empty profile. Other tools take the ID as `session`.
+- **Own storage.** Each session is its own agent-browser session, with its own daemon,
+  Chromium, stream port and profile. Profiles and downloads live on a tmpfs that the guest
+  mounts at `/run/studio-browser`, one 640 MiB mount for both slots. They never reach
+  `/workspace` or the home directory, so a session's cookies, logins and downloads never
+  reach the persistent profile.
+- **Limit.** A teammate has at most two ephemeral sessions, across its sandboxes. A third
+  `open` is refused until one is closed.
+- **End.** A session ends on `browser_close`, after 10 minutes with no agent call and no user
+  input in it, when the sandbox that opened it is gone, and when the browser VM stops (idle
+  stop, Stop, delete, or a VM restart). A call to an ended session says so, and the agent opens
+  a new one. Studio's restart forgets the sessions; their profiles go with the VM.
+- **Ownership.** Only the sandbox that opened a session can drive it. Another sandbox of the
+  same teammate is refused.
+- **Policy and approvals.** The policy is the persistent profile's: the same deny and allow
+  patterns, the same `browser.action` and `browser.credential` approvals. An approval names
+  the session. A one-time grant holds for its session only. An "Always" rule is per origin for
+  the teammate, so it covers every session.
+- **Live view.** While an ephemeral session is open, the live view and the Browser panel show
+  a session switcher: **Profile**, then each open ephemeral session. Take over, Hand back and
+  the address form act on the selected session. Taking over one session pauses agent calls to
+  that session only. A picked session that closes falls back to Profile.
+- **History.** The action log files each session's actions under its ID, and the Browser page
+  marks them as ephemeral. Egress is attributed to the VM and its driving sandbox, not to a
+  session, so the connection history does not split by session.
+
+Two agent-browser sessions in one VM have not run live yet; see
+[Verified vs pending live](#verified-vs-pending-live).
 
 ## History
 
@@ -223,7 +270,11 @@ disconnecting clears the local input buffer.
 - idle stop;
 - live view relay and input filtering;
 - MCP tool list and image results;
-- the API (status, takeover, patterns, approval view, remember, teammate delete).
+- the API (status, takeover, patterns, approval view, remember, teammate delete);
+- ephemeral sessions: the lifecycle, the limit, idle expiry on a fake clock, close, the VM
+  stop, ownership, takeover, tool arguments, approval and history marks, and the live view
+  port of each session;
+- the guest's slots: argv, environment, stream port and session checks (`internal/guest`).
 
 **Verified live on Linux amd64 (2026-10-11):**
 
@@ -248,6 +299,18 @@ disconnecting clears the local input buffer.
 - `wait <ms>` and `scroll <dir> <px>` argument forms.
 - Egress from Chromium goes through the gateway like other sandboxes, including
   QUIC/HTTP3 fallback.
+- Two agent-browser sessions in one VM. Each ephemeral slot runs with its own `--session`,
+  `--profile` on the tmpfs and `AGENT_BROWSER_STREAM_PORT`. `--session` is the documented way
+  to run several browsers, but 0.39.0 has not run two yet. If a live run shows it cannot,
+  `browser_open(ephemeral: true)` must refuse with an explanation; that fallback is not built.
+- Ephemeral cleanup: `close`, then removing the session's socket and pid files under
+  `~/.agent-browser`, then killing processes whose environment or command line names the
+  session or its profile. The file names and the environment match are not checked against
+  0.39.0.
+- The tmpfs mount at `/run/studio-browser` in the guest, and the memory of two more Chromium
+  processes in the 2 GiB VM.
+- Live mouse mapping in a real browser, and the Playwright run that clicks known targets at
+  several viewport sizes and zoom levels (PLAN N2).
 
 ## Limitations
 
@@ -261,3 +324,8 @@ disconnecting clears the local input buffer.
   `sandbox-studio-browser:<version>` from the same registry.
 - A credential fill runs inside the approval's decide request, bounded by the command
   timeout.
+- An ephemeral session is another Chromium in the same VM, so heavy use competes with the
+  persistent profile for memory.
+- Ephemeral sessions do not end with the agent's chat or session, which PLAN N11 also
+  proposed: the broker gets no signal from the agent's MCP server. They end as described
+  above.

@@ -38,6 +38,8 @@ func (s *Server) browserError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover):
 		return huma.Error409Conflict(err.Error())
+	case errors.Is(err, browser.ErrNoSession):
+		return huma.Error404NotFound(err.Error())
 	}
 	return apiError(err)
 }
@@ -63,7 +65,8 @@ func (s *Server) registerBrowser(api huma.API) {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`
 		Body     struct {
-			URL string `json:"url" minLength:"1" maxLength:"4000" doc:"Absolute http or https URL to open while the user has taken over"`
+			URL     string `json:"url" minLength:"1" maxLength:"4000" doc:"Absolute http or https URL to open while the user has taken over"`
+			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -72,7 +75,7 @@ func (s *Server) registerBrowser(api huma.API) {
 		if err := need(); err != nil {
 			return nil, err
 		}
-		st, err := s.Browser.Navigate(ctx, in.Env, in.Teammate, in.Body.URL)
+		st, err := s.Browser.Navigate(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.URL)
 		if err != nil {
 			return nil, s.browserError(err)
 		}
@@ -120,7 +123,8 @@ func (s *Server) registerBrowser(api huma.API) {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`
 		Body     struct {
-			On bool `json:"on" doc:"true: the user drives and agent calls pause; false: hand back to the agents"`
+			On      bool   `json:"on" doc:"true: the user drives and agent calls to the session pause; false: hand back to the agents"`
+			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -129,7 +133,7 @@ func (s *Server) registerBrowser(api huma.API) {
 		if err := need(); err != nil {
 			return nil, err
 		}
-		if err := s.Browser.SetTakeover(ctx, in.Env, in.Teammate, in.Body.On); err != nil {
+		if err := s.Browser.SetTakeover(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.On); err != nil {
 			return nil, s.browserError(err)
 		}
 		st, err := s.Browser.Status(ctx, in.Env, in.Teammate)
@@ -224,8 +228,9 @@ func (s *Server) browserScreenshot(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", time.Time{}, f)
 }
 
-// browserLive relays the teammate's browser screencast and, while the user has taken over,
-// the user's input.
+// browserLive relays the screencast of a session of the teammate's browser (?session= an
+// ephemeral session's ID, else the persistent profile) and, while the user has taken that
+// session over, the user's input.
 func (s *Server) browserLive(w http.ResponseWriter, r *http.Request) {
 	if s.Browser == nil {
 		http.Error(w, "the browser broker is not running", http.StatusServiceUnavailable)
@@ -242,9 +247,9 @@ func (s *Server) browserLive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer c.CloseNow()
-	if err := s.Browser.Relay(r.Context(), env, teammate, c); err != nil {
+	if err := s.Browser.Relay(r.Context(), env, teammate, r.URL.Query().Get("session"), c); err != nil {
 		msg := "the live view could not reach the browser"
-		if errors.Is(err, browser.ErrNotLive) {
+		if errors.Is(err, browser.ErrNotLive) || errors.Is(err, browser.ErrNoSession) {
 			msg = err.Error()
 		}
 		c.Close(websocket.StatusTryAgainLater, msg)

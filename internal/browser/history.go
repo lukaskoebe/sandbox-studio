@@ -34,11 +34,15 @@ type entry struct {
 
 var shotName = regexp.MustCompile(`^[0-9a-f]{32}\.jpg$`)
 
-// record appends to the action log, then prunes it.
-func (s *Service) record(ctx context.Context, st *state, e entry) {
+// record appends to the action log, then prunes it. An ephemeral session's actions are
+// filed under its own ID.
+func (s *Service) record(ctx context.Context, st *state, pg *page, e entry) {
 	ctx = context.WithoutCancel(ctx)
 	s.mu.Lock()
-	session, secrets, visible := st.session, st.secrets, st.visible
+	session, secrets, visible := st.session, pg.secrets, pg.visible
+	if pg.id != "" {
+		session = pg.id
+	}
 	s.mu.Unlock()
 	if session == "" {
 		session = "-"
@@ -168,7 +172,11 @@ func (s *Service) Actions(ctx context.Context, envID, teammateID, sessionID stri
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	return s.Store.BrowserActions(ctx, envID, teammateID, sessionID, limit)
+	list, err := s.Store.BrowserActions(ctx, envID, teammateID, sessionID, limit)
+	for i := range list {
+		list[i].Ephemeral = IsEphemeral(list[i].SessionID)
+	}
+	return list, err
 }
 
 func clip(s string, n int) string {

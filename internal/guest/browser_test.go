@@ -2,10 +2,17 @@
 
 package guest
 
-import "testing"
+import (
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+)
 
 func TestBrowserArgvKeepsPersistentProfileAndCertificateVerification(t *testing.T) {
-	argv := browserArgv([]string{"open", "https://example.com"})
+	argv := browserArgv(browserSlotFor(0), []string{"open", "https://example.com"})
 	profile := -1
 	for i, arg := range argv {
 		if arg == "--profile" {
@@ -79,5 +86,70 @@ func TestCheckBrowserArgs(t *testing.T) {
 		if err := checkBrowserBatch(in); err == nil {
 			t.Errorf("batch %s allowed", in)
 		}
+	}
+}
+
+func TestBrowserEphemeralSlots(t *testing.T) {
+	profile := browserSlotFor(0)
+	if profile.ephemeral || profile.session != browserSession || profile.port != 9223 {
+		t.Fatalf("profile slot %+v", profile)
+	}
+	seen := map[string]bool{profile.session: true}
+	ports := map[int]bool{profile.port: true}
+	for n := 1; n <= agentproto.MaxBrowserEphemeral; n++ {
+		slot := browserSlotFor(n)
+		if !slot.ephemeral || seen[slot.session] || ports[slot.port] {
+			t.Fatalf("slot %d shares a session or port: %+v", n, slot)
+		}
+		seen[slot.session], ports[slot.port] = true, true
+		if slot.port != agentproto.BrowserStreamPort+n {
+			t.Errorf("slot %d streams on %d", n, slot.port)
+		}
+		// Ephemeral state lives on the guest's tmpfs, never on the persistent disk.
+		for _, dir := range []string{slot.profile, slot.downloads, slot.dir()} {
+			if !strings.HasPrefix(dir, browserEphemeralRoot+"/") || strings.HasPrefix(dir, Workdir) {
+				t.Errorf("slot %d keeps %s outside the tmpfs", n, dir)
+			}
+		}
+		if filepath.Dir(slot.profile) != slot.dir() || filepath.Dir(slot.downloads) != slot.dir() {
+			t.Errorf("slot %d: profile and downloads are not deleted with %s", n, slot.dir())
+		}
+		argv := strings.Join(browserArgv(slot, []string{"open", "https://example.com"}), " ")
+		want := "--session " + slot.session + " --profile " + slot.profile + " "
+		if !strings.Contains(argv, want) || !strings.Contains(argv, "--download-path "+slot.downloads) {
+			t.Errorf("slot %d argv %q", n, argv)
+		}
+		env := strings.Join(browserEnv(slot), " ")
+		if !strings.Contains(env, "AGENT_BROWSER_STREAM_PORT="+strconv.Itoa(slot.port)) {
+			t.Errorf("slot %d env %q", n, env)
+		}
+	}
+}
+
+func TestCheckBrowserSession(t *testing.T) {
+	for _, req := range []agentproto.BrowserCommand{
+		{Args: []string{"open", "https://x"}, Ephemeral: -1},
+		{Args: []string{"open", "https://x"}, Ephemeral: agentproto.MaxBrowserEphemeral + 1},
+		{Args: []string{"open", "https://x"}, Fresh: true}, // the profile is never wiped
+	} {
+		if _, _, err := checkBrowserSession(req); err == nil {
+			t.Errorf("%+v allowed", req)
+		}
+	}
+	if _, closing, _ := checkBrowserSession(agentproto.BrowserCommand{Args: []string{"close"}}); closing {
+		t.Error("the profile session can be closed")
+	}
+	if err := checkBrowserArgs([]string{"close"}, false); err == nil {
+		t.Error("close passes the command allow-list")
+	}
+	if err := checkBrowserBatch(`[["close"]]`); err == nil {
+		t.Error("close passes in a batch")
+	}
+	slot, closing, err := checkBrowserSession(agentproto.BrowserCommand{Args: []string{"close"}, Ephemeral: 2})
+	if err != nil || !closing || slot != browserSlotFor(2) {
+		t.Errorf("closing slot 2: %+v %v %v", slot, closing, err)
+	}
+	if _, closing, _ := checkBrowserSession(agentproto.BrowserCommand{Args: []string{"close", "--all"}, Ephemeral: 1}); closing {
+		t.Error("close --all is a close")
 	}
 }

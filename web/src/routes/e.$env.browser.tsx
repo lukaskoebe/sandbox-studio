@@ -11,7 +11,7 @@ import {
   StopIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
-import { BrowserLive } from "@/components/browser-live"
+import { BrowserLive, BrowserSessionSelect } from "@/components/browser-live"
 import { PageHeader } from "@/components/page-header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Badge } from "@/components/ui/badge"
@@ -135,6 +135,12 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
   })
   const st = status.data
   const running = st?.vm === "running"
+  // The session the live view and controls act on: "" is the persistent profile, and a picked
+  // ephemeral session that has closed falls back to it.
+  const [picked, setPicked] = useState("")
+  const sessions = st?.sessions ?? []
+  const session = sessions.find((s) => s.id === picked)
+  const sessionID = session?.id ?? ""
   const [streamURL, setStreamURL] = useState<string>()
   const [statusURLReady, setStatusURLReady] = useState(true)
   const stoppedStatusAt = useRef<number | undefined>(undefined)
@@ -153,7 +159,13 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
       setStatusURLReady(true)
     }
   }, [running, status.dataUpdatedAt])
-  const pageURL = streamURL ?? (statusURLReady ? st?.url : undefined)
+  // A new session starts without the previous one's page.
+  useEffect(() => {
+    setStreamURL(undefined)
+  }, [sessionID])
+
+  const sessionPageURL = session ? session.url : st?.url
+  const pageURL = streamURL ?? (statusURLReady ? sessionPageURL : undefined)
   const addressPageURL = pageURL === "about:blank" ? "" : (pageURL ?? "")
   const [addressDraft, setAddressDraft] = useState("")
   const [addressDirty, setAddressDirty] = useState(false)
@@ -199,7 +211,10 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
           ["get", browserStatusPath, statusParams],
           browserStatus
         )
-        const actualURL = browserStatus.url ?? requestedURL.current
+        const shown = sessionID
+          ? browserStatus.sessions?.find((s) => s.id === sessionID)?.url
+          : browserStatus.url
+        const actualURL = shown ?? requestedURL.current
         setStreamURL(actualURL)
         setAddressDraft(actualURL === "about:blank" ? "" : actualURL)
         setAddressDirty(false)
@@ -209,13 +224,15 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
       onError: (err) => setAddressError(errorMessage(err)),
     }
   )
-  const driving = !!st?.takeover
+  const driving = session ? session.takeover : !!st?.takeover
   const navigationBlocked =
     navigate.isPending ||
     takeover.isPending ||
     control.isPending ||
     remove.isPending
-  const liveURL = `${window.location.origin}/api/environments/${env}/teammates/${teammate}/browser/live`
+  const liveURL =
+    `${window.location.origin}/api/environments/${env}/teammates/${teammate}/browser/live` +
+    (sessionID ? `?session=${encodeURIComponent(sessionID)}` : "")
   const openAddress = (event: FormEvent) => {
     event.preventDefault()
     setAddressError("")
@@ -227,7 +244,15 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
       return
     }
     requestedURL.current = normalized.value
-    navigate.mutate({ params: { path }, body: { url: normalized.value } })
+    navigate.mutate({
+      params: { path },
+      body: { url: normalized.value, session: sessionID },
+    })
+  }
+  const pickSession = (id: string) => {
+    setPicked(id)
+    setAddressDirty(false)
+    setAddressError("")
   }
 
   return (
@@ -239,6 +264,13 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
           <TabsTrigger value="rules">Rules</TabsTrigger>
         </TabsList>
         <Badge variant="outline">{st?.vm ?? "…"}</Badge>
+        {running && sessions.length > 0 && (
+          <BrowserSessionSelect
+            sessions={sessions}
+            value={sessionID}
+            onValueChange={pickSession}
+          />
+        )}
         {st?.driver && !driving && (
           <span className="text-xs text-muted-foreground">
             last driven by {st.driver}
@@ -255,7 +287,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
                 onClick={() =>
                   takeover.mutate({
                     params: { path },
-                    body: { on: !driving },
+                    body: { on: !driving, session: sessionID },
                   })
                 }
               >
@@ -377,6 +409,7 @@ function TeammateBrowser({ env, teammate }: { env: string; teammate: string }) {
               )}
             </div>
             <BrowserLive
+              key={sessionID}
               url={liveURL}
               driving={driving}
               inputEnabled={!navigationBlocked}
@@ -566,6 +599,11 @@ function History({
                 </TableCell>
                 <TableCell className="text-xs">{a.actor}</TableCell>
                 <TableCell className="max-w-72 truncate text-xs">
+                  {a.ephemeral && (
+                    <Badge variant="outline" className="mr-1.5">
+                      Ephemeral
+                    </Badge>
+                  )}
                   <span className="font-medium">{a.action}</span> {a.target}
                   {a.detail && (
                     <span className="text-muted-foreground"> {a.detail}</span>

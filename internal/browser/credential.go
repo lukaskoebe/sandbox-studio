@@ -26,6 +26,7 @@ type ActionPayload struct {
 	TeammateName string `json:"teammateName"`
 	SandboxID    string `json:"sandboxId"`
 	SandboxName  string `json:"sandboxName"`
+	Session      string `json:"session,omitempty" doc:"The ephemeral browser session the action runs in; empty for the persistent profile"`
 	Action       string `json:"action" doc:"The browser action, such as click or fill"`
 	Origin       string `json:"origin" doc:"scheme://host[:port] of the page"`
 	URL          string `json:"url"`
@@ -40,6 +41,7 @@ type CredentialPayload struct {
 	TeammateName string `json:"teammateName"`
 	SandboxID    string `json:"sandboxId"`
 	SandboxName  string `json:"sandboxName"`
+	Session      string `json:"session,omitempty" doc:"The ephemeral browser session the field is in; empty for the persistent profile"`
 	Credential   string `json:"credential" doc:"Name of the vault secret"`
 	Ref          string `json:"ref"`
 	Origin       string `json:"origin"`
@@ -150,12 +152,12 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 	}
 	r := Request{Action: "fill_credential", Origin: origin, Role: info.Role, Label: info.Name}
 	if v, reason := Decide(r, patterns); v == Deny {
-		c.s.record(ctx, c.st, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(info.Role, info.Name), url: pageURL, outcome: "denied", detail: reason})
+		c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(info.Role, info.Name), url: pageURL, outcome: "denied", detail: reason})
 		return nil, refuse("%s", reason)
 	}
 	teammate, _ := c.s.Store.Teammate(ctx, c.st.env, c.st.teammate)
-	subject := clip(fmt.Sprintf("%s: credential %s into %s on %s", teammate.Name, in.Name, target(info.Role, info.Name), origin), 500)
-	key := c.st.teammate + "\x00" + c.sb.ID + "\x00" + subject + "\x00" + ref
+	subject := clip(fmt.Sprintf("%s: credential %s into %s on %s%s", teammate.Name, in.Name, target(info.Role, info.Name), origin, sessionNote(c.pg.id)), 500)
+	key := c.st.teammate + "\x00" + c.sb.ID + "\x00" + c.pg.id + "\x00" + subject + "\x00" + ref
 	result := map[string]string{"filled": ref, "credential": in.Name}
 	// A retry after the user approved while the agent was not waiting.
 	if o, ok := c.s.finishedOutcome(key); ok {
@@ -165,7 +167,7 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 		return result, nil
 	}
 	raw, _ := json.Marshal(CredentialPayload{TeammateID: c.st.teammate, TeammateName: teammate.Name, SandboxID: c.sb.ID, SandboxName: c.sb.Name,
-		Credential: in.Name, Ref: ref, Origin: origin, URL: pageURL, Role: info.Role, Label: info.Name})
+		Session: c.pg.id, Credential: in.Name, Ref: ref, Origin: origin, URL: pageURL, Role: info.Role, Label: info.Name})
 	a, created, err := c.s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: c.st.env, SandboxID: c.sb.ID, Kind: KindCredential, Subject: subject, Payload: raw})
 	if err != nil {
 		return nil, err
@@ -173,7 +175,7 @@ func (c *call) fillCredential(ctx context.Context, params json.RawMessage) (any,
 	o := c.s.outcome(a.ID, key)
 	if created {
 		c.s.notify(c.st.env)
-		c.s.record(ctx, c.st, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(info.Role, info.Name), url: pageURL, outcome: "pending", detail: "credential " + in.Name})
+		c.s.record(ctx, c.st, c.pg, entry{actor: "agent", sandbox: c.sb.ID, action: r.Action, target: target(info.Role, info.Name), url: pageURL, outcome: "pending", detail: "credential " + in.Name})
 	}
 	// Studio fills the field when the user approves (decideCredential); this call holds
 	// the browser meanwhile, so the decision must not wait for it.
@@ -233,11 +235,20 @@ func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPa
 		return ctx.Err()
 	}
 	defer func() { <-st.run }()
+	s.mu.Lock()
+	pg := st.pageFor(p.Session)
+	s.mu.Unlock()
+	if pg == nil {
+		// The ephemeral session ended; log it under its ID all the same.
+		pg = &page{id: p.Session}
+		s.record(ctx, st, pg, entry{actor: "agent", sandbox: p.SandboxID, action: "fill_credential", target: target(p.Role, p.Label), url: p.URL, outcome: "failed", detail: "credential " + p.Credential + ": the session ended"})
+		return refuse("ephemeral session %s ended before the credential was filled", p.Session)
+	}
 	fail := func(err error) error {
-		s.record(ctx, st, entry{actor: "agent", sandbox: p.SandboxID, action: "fill_credential", target: target(p.Role, p.Label), url: p.URL, outcome: "failed", detail: "credential " + p.Credential + ": " + err.Error()})
+		s.record(ctx, st, pg, entry{actor: "agent", sandbox: p.SandboxID, action: "fill_credential", target: target(p.Role, p.Label), url: p.URL, outcome: "failed", detail: "credential " + p.Credential + ": " + err.Error()})
 		return err
 	}
-	data, _, err := s.exec(ctx, st, agentBrowserGetURL)
+	data, _, err := s.exec(ctx, st, pg, agentBrowserGetURL)
 	if err != nil {
 		return fail(err)
 	}
@@ -258,13 +269,13 @@ func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPa
 	}
 	// Known before the command runs, so even its error messages are scrubbed.
 	s.mu.Lock()
-	st.secrets = append(st.secrets, value)
-	if st.credRefs == nil {
-		st.credRefs = map[string]bool{}
+	pg.secrets = append(pg.secrets, value)
+	if pg.credRefs == nil {
+		pg.credRefs = map[string]bool{}
 	}
-	st.credRefs[p.Ref] = true
+	pg.credRefs[p.Ref] = true
 	s.mu.Unlock()
-	items, err := s.batch(ctx, st, [][]string{{"fill", "@" + p.Ref, value}, {"get", "attr", "@" + p.Ref, "type"}})
+	items, err := s.batch(ctx, st, pg, [][]string{{"fill", "@" + p.Ref, value}, {"get", "attr", "@" + p.Ref, "type"}})
 	if err != nil {
 		return fail(err)
 	}
@@ -274,10 +285,10 @@ func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPa
 	if !items[1].Success || attrValue(items[1].Result) != "password" {
 		// The value shows in the field: no screenshots of this page.
 		s.mu.Lock()
-		st.visible = true
+		pg.visible = true
 		s.mu.Unlock()
 	}
-	s.record(ctx, st, entry{actor: "agent", sandbox: p.SandboxID, action: "fill_credential", target: target(p.Role, p.Label), url: cur.URL, outcome: "ok", detail: "credential " + p.Credential})
+	s.record(ctx, st, pg, entry{actor: "agent", sandbox: p.SandboxID, action: "fill_credential", target: target(p.Role, p.Label), url: cur.URL, outcome: "ok", detail: "credential " + p.Credential})
 	return nil
 }
 
