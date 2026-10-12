@@ -34,15 +34,22 @@ export function useSandboxPage() {
 }
 
 /**
- * The header of both sandbox pages: the name and status, the switch between the dashboard
- * and the workspace, and the options menu.
+ * The header of both sandbox pages: the name and ID in monospace, the status, the switch
+ * between the dashboard and the workspace, and the options menu.
  */
 export function SandboxHeader({ env, sandbox: sb }: SandboxPage) {
   const matchRoute = useMatchRoute()
   const onWorkspace = !!matchRoute({ to: "/e/$env/sandboxes/$id/work" })
   return (
     <PageHeader>
-      <h1 className="min-w-0 flex-1 truncate text-sm font-medium">{sb.name}</h1>
+      <div className="flex min-w-0 flex-1 items-baseline gap-2">
+        <h1 className="min-w-0 truncate font-mono text-sm font-medium">
+          {sb.name}
+        </h1>
+        <span className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground max-sm:hidden">
+          {sb.id}
+        </span>
+      </div>
       <span className="shrink-0">
         <StatusBadge sandbox={sb} />
       </span>
@@ -53,7 +60,7 @@ export function SandboxHeader({ env, sandbox: sb }: SandboxPage) {
       />
       <nav
         aria-label="Sandbox pages"
-        className="flex h-7 shrink-0 items-center rounded-md bg-muted p-0.5 text-xs"
+        className="flex h-6 shrink-0 items-center rounded-[4px] bg-muted p-0.5 text-xs"
       >
         <PageLink
           current={!onWorkspace}
@@ -99,7 +106,7 @@ function PageLink({
       aria-label={label}
       aria-current={current ? "page" : undefined}
       className={cn(
-        "flex h-6 items-center gap-1.5 rounded-sm px-2 [&_svg]:size-3.5",
+        "flex h-5 items-center gap-1.5 rounded-[3px] px-2 [&_svg]:size-3.5",
         current
           ? "bg-background font-medium shadow-xs"
           : "text-muted-foreground hover:text-foreground"

@@ -22,7 +22,9 @@ import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import { SandboxProgress } from "@/components/sandbox-progress"
 import { SidePanel } from "@/components/side-panel"
-import { phase } from "@/components/status-badge"
+import { phase, phaseDot } from "@/components/status-badge"
+import { StatusDot } from "@/components/status-dot"
+import { WaitingCount } from "@/components/waiting-count"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -42,9 +44,11 @@ import {
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
 import { Terminal } from "@/components/terminal"
+import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { useAgentView } from "@/lib/agent-view"
 import { $api, isReady, type Sandbox } from "@/lib/api/client"
 import { chatTitle, useChat, type ChatTurn } from "@/lib/chats"
+import { shortTemplate } from "@/lib/lineage"
 import { onStudioMachine, openPreviewTab } from "@/lib/previews"
 import { cn } from "@/lib/utils"
 
@@ -419,7 +423,55 @@ export function SandboxWorkspace({
           </SidePanel>
         )}
       </div>
+      <StatusBar env={env} sandbox={sb} />
     </>
+  )
+}
+
+/**
+ * The workspace's status line: the sandbox's state, its ID and template, its listening ports,
+ * and the approvals waiting on it.
+ */
+function StatusBar({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
+  const approvals = usePendingApprovals()
+  const ports = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/ports",
+    { params: { path: { env, id: sb.id } } },
+    { refetchInterval: 3000, enabled: isReady(sb) }
+  )
+  const waiting = (approvals.data ?? []).filter(
+    (a) => a.sandboxId === sb.id
+  ).length
+  const seg =
+    "flex h-full shrink-0 items-center gap-1.5 border-r px-2.5 last:border-r-0"
+  const list = ports.data ?? []
+  return (
+    <footer className="flex h-(--wb-statusbar) shrink-0 items-stretch overflow-x-auto border-t bg-sidebar font-mono text-[0.6875rem] whitespace-nowrap text-muted-foreground">
+      <span className={cn(seg, "font-sans text-foreground")}>
+        <StatusDot {...phaseDot(phase(sb))} />
+      </span>
+      <span className={cn(seg, "max-sm:hidden")}>{sb.id}</span>
+      <span className={cn(seg, "max-md:hidden")}>
+        {shortTemplate(sb.templateId)}
+      </span>
+      <span className={cn(seg, "max-md:hidden")}>
+        ports {list.length ? list.map((p) => `:${p.port}`).join(" ") : "none"}
+      </span>
+      <span className={cn(seg, "font-sans")}>
+        {waiting ? (
+          <>
+            <WaitingCount count={waiting} />
+            waiting for you
+          </>
+        ) : (
+          "Nothing waiting"
+        )}
+      </span>
+      <span className="ml-auto flex items-center gap-3 px-2.5 max-md:hidden">
+        gen {sb.generation}
+      </span>
+    </footer>
   )
 }
 
