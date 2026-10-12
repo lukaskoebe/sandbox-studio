@@ -48,25 +48,30 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * The app theme is the Workbench direction (docs/design/ui-style.md): cool graphite neutrals,
+ * a tight radius and dense rows, with identifiers in mono. Accents and status colors are the
+ * same on every page.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.147 0.004 49.25);
+  --background: oklch(0.993 0.001 255);
+  --foreground: oklch(0.21 0.008 255);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.147 0.004 49.25);
+  --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.147 0.004 49.25);
-  --primary: oklch(0.527 0.154 150.069);
-  --primary-foreground: oklch(0.982 0.018 155.826);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0.001 106.424);
-  --muted-foreground: oklch(0.553 0.013 58.071);
-  --accent: oklch(0.97 0.001 106.424);
-  --accent-foreground: oklch(0.216 0.006 56.043);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.53 0.15 150);
+  --primary-foreground: oklch(0.99 0.01 150);
+  --secondary: oklch(0.955 0.004 255);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.962 0.003 255);
+  --muted-foreground: oklch(0.52 0.014 255);
+  --accent: oklch(0.95 0.005 255);
+  --accent-foreground: var(--foreground);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.923 0.003 48.717);
-  --input: oklch(0.923 0.003 48.717);
-  --ring: oklch(0.709 0.01 56.259);
+  --border: oklch(0.912 0.005 255);
+  --input: oklch(0.89 0.006 255);
+  --ring: oklch(0.62 0.12 150);
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
@@ -77,36 +82,65 @@
   --code-string: oklch(0.55 0.13 60);
   --code-variable: oklch(0.52 0.2 260);
   --code-operator: oklch(0.55 0.18 25);
-  --radius: 0.45rem;
-  --sidebar: oklch(0.985 0.001 106.423);
-  --sidebar-foreground: oklch(0.147 0.004 49.25);
-  --sidebar-primary: oklch(0.627 0.194 149.214);
+  --radius: 0.3rem;
+  --sidebar: oklch(0.97 0.003 255);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-  --sidebar-accent: oklch(0.97 0.001 106.424);
-  --sidebar-accent-foreground: oklch(0.216 0.006 56.043);
-  --sidebar-border: oklch(0.923 0.003 48.717);
-  --sidebar-ring: oklch(0.709 0.01 56.259);
+  --sidebar-accent: oklch(0.925 0.005 255);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: oklch(0.912 0.005 255);
+  --sidebar-ring: var(--ring);
+  /* Accents: one hue per area, about 20 to 25 % less chroma than in the mockups. */
+  --acc-network: oklch(0.6 0.1 235);
+  --acc-git: oklch(0.55 0.15 295);
+  --acc-browser: oklch(0.64 0.12 48);
+  --acc-memory: oklch(0.57 0.08 185);
+  --acc-chat: oklch(0.55 0.11 150);
+  /* Status: its own fixed set, never used for an area. */
+  --st-running: oklch(0.63 0.17 150);
+  --st-waiting: oklch(0.78 0.15 86);
+  --st-failed: oklch(0.58 0.21 27);
+  --st-stopped: oklch(0.7 0.01 255);
+  /* Terminal colors for a dark terminal in both themes. */
+  --term-prompt: oklch(0.78 0.15 150);
+  --term-path: oklch(0.76 0.11 240);
+  --term-ok: oklch(0.78 0.15 150);
+  --term-warn: oklch(0.82 0.14 75);
+  --term-accent: oklch(0.76 0.12 230);
+  --term-add: oklch(0.78 0.15 150);
+  --term-del: oklch(0.72 0.17 25);
+  /* Workbench density: table rows, table headers, the sandbox status bar. */
+  --wb-row: 2.125rem;
+  --wb-header: 2.5rem;
+  --wb-statusbar: 1.625rem;
+  --wb-term-bg: oklch(0.2 0.008 255);
+  --wb-term-fg: oklch(0.9 0.006 255);
+  --wb-grid: oklch(0.21 0.008 255 / 4%);
+  --font-mono:
+    ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
 }
 
 .dark {
-  --background: oklch(0.147 0.004 49.25);
-  --foreground: oklch(0.985 0.001 106.423);
-  --card: oklch(0.216 0.006 56.043);
+  --background: oklch(0.168 0.006 255);
+  --foreground: oklch(0.94 0.004 255);
+  --card: oklch(0.198 0.007 255);
   --card-foreground: oklch(0.985 0.001 106.423);
-  --popover: oklch(0.216 0.006 56.043);
+  --popover: oklch(0.215 0.008 255);
   --popover-foreground: oklch(0.985 0.001 106.423);
-  --primary: oklch(0.448 0.119 151.328);
-  --primary-foreground: oklch(0.982 0.018 155.826);
-  --secondary: oklch(0.274 0.006 286.033);
+  --primary: oklch(0.72 0.17 150);
+  --primary-foreground: oklch(0.2 0.04 150);
+  --secondary: oklch(0.24 0.008 255);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.268 0.007 34.298);
-  --muted-foreground: oklch(0.709 0.01 56.259);
-  --accent: oklch(0.268 0.007 34.298);
+  --muted: oklch(0.225 0.008 255);
+  --muted-foreground: oklch(0.67 0.012 255);
+  --accent: oklch(0.25 0.008 255);
   --accent-foreground: oklch(0.985 0.001 106.423);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.553 0.013 58.071);
+  --border: oklch(1 0 0 / 8.5%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.6 0.13 150);
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
@@ -117,14 +151,25 @@
   --code-string: oklch(0.82 0.12 75);
   --code-variable: oklch(0.76 0.13 250);
   --code-operator: oklch(0.76 0.14 25);
-  --sidebar: oklch(0.216 0.006 56.043);
+  --sidebar: oklch(0.148 0.006 255);
   --sidebar-foreground: oklch(0.985 0.001 106.423);
   --sidebar-primary: oklch(0.723 0.219 149.579);
   --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-  --sidebar-accent: oklch(0.268 0.007 34.298);
+  --sidebar-accent: oklch(0.23 0.008 255);
   --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-border: oklch(1 0 0 / 7%);
   --sidebar-ring: oklch(0.553 0.013 58.071);
+  --acc-network: oklch(0.75 0.09 230);
+  --acc-git: oklch(0.74 0.11 295);
+  --acc-browser: oklch(0.78 0.11 55);
+  --acc-memory: oklch(0.77 0.08 185);
+  --acc-chat: oklch(0.76 0.12 150);
+  --st-running: oklch(0.74 0.17 150);
+  --st-waiting: oklch(0.84 0.14 88);
+  --st-failed: oklch(0.7 0.18 25);
+  --st-stopped: oklch(0.55 0.01 255);
+  --wb-term-bg: oklch(0.13 0.006 255);
+  --wb-grid: oklch(1 0 0 / 3%);
 }
 
 @layer base {
@@ -133,6 +178,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings:
+      "tnum" 1,
+      "cv11" 1;
   }
   html {
     @apply font-sans;
