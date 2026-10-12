@@ -11,6 +11,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react"
 import type { Approval } from "@/lib/api/client"
+import type { Area } from "@/lib/accents"
 
 /**
  * How an approval kind is described wherever an approval shows up: the stack's cards, its
@@ -23,6 +24,8 @@ export type ApprovalKind = {
   /** One line saying what is asked. */
   summary: (a: Approval) => string
   icon: Icon
+  /** The area whose hue marks the kind. Unknown kinds have none. */
+  area?: Area
   /** Whether the summary is a host or similar and reads best in monospace. */
   mono?: boolean
   /** The environment page that lists approvals of this kind. */
@@ -65,6 +68,7 @@ const kinds: Record<string, ApprovalKind> = {
     summary: (a) =>
       a.network ? `${a.network.host}:${a.network.port}` : a.subject,
     icon: GlobeIcon,
+    area: "network",
     mono: true,
     page: "/e/$env/network",
   },
@@ -72,12 +76,14 @@ const kinds: Record<string, ApprovalKind> = {
     title: "Git push",
     summary: gitSummary,
     icon: GitBranchIcon,
+    area: "git",
     page: "/e/$env/git",
   },
   "git.pr": {
     title: "Pull request",
     summary: gitSummary,
     icon: GitPullRequestIcon,
+    area: "git",
     page: "/e/$env/git",
   },
   "memory.share": {
@@ -85,6 +91,7 @@ const kinds: Record<string, ApprovalKind> = {
     summary: (a) =>
       `${a.memoryShare?.teammateName ?? "A teammate"} wants to share a fact with every teammate`,
     icon: BrainIcon,
+    area: "memory",
     page: "/e/$env/memory",
   },
   "memory.conflict": {
@@ -93,6 +100,7 @@ const kinds: Record<string, ApprovalKind> = {
       conflictVerdicts[a.memoryConflict?.verdict ?? ""] ??
       "Two memory facts disagree",
     icon: ScalesIcon,
+    area: "memory",
     page: "/e/$env/memory",
   },
   "browser.action": {
@@ -109,6 +117,7 @@ const kinds: Record<string, ApprovalKind> = {
       return `${act.action}${target} on ${act.origin}`
     },
     icon: CursorClickIcon,
+    area: "browser",
     page: "/e/$env/browser",
   },
   "browser.credential": {
@@ -120,12 +129,14 @@ const kinds: Record<string, ApprovalKind> = {
         : "Fill a credential"
     },
     icon: KeyIcon,
+    area: "browser",
     page: "/e/$env/browser",
   },
   "chat.permission": {
     title: "Agent permission",
     summary: (a) => a.chatPermission?.title ?? a.subject,
     icon: ChatCircleDotsIcon,
+    area: "chat",
     page: "/e/$env/chats",
   },
 }
