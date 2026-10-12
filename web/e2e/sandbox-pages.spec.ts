@@ -68,6 +68,67 @@ test("the options menu lists the sandbox's actions", async ({
   await page.keyboard.press("Escape")
 })
 
+test("the options menu opens fork and rebase, and links the export", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("menu-dialogs")
+  const id = await api.createSandbox(name)
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
+    "Running"
+  )
+  // The fake runtime doesn't copy disks, so a fork or rebase is only checked to open its dialog.
+  for (const action of ["Fork", "Rebase"]) {
+    await page.getByRole("button", { name: "Sandbox options" }).click()
+    await page.getByRole("menuitem", { name: action, exact: true }).click()
+    const dialog = page.getByRole("dialog", { name: `${action} ${name}` })
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
+  }
+
+  await page.getByRole("button", { name: "Sandbox options" }).click()
+  const exported = page.getByRole("menuitem", { name: "Export", exact: true })
+  await expect(exported).toHaveAttribute(
+    "href",
+    `/api/environments/${env}/sandboxes/${id}/export`
+  )
+  await expect(exported).toHaveAttribute("download", `${name}.studio-sandbox`)
+  await page.keyboard.press("Escape")
+})
+
+test("the options menu suspends, resumes and stops a sandbox", async ({
+  page,
+  api,
+  env,
+}) => {
+  const id = await api.createSandbox(sandboxName("menu-state"))
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
+    "Running"
+  )
+  const choose = async (action: string) => {
+    await page.getByRole("button", { name: "Sandbox options" }).click()
+    await page.getByRole("menuitem", { name: action, exact: true }).click()
+  }
+
+  await choose("Suspend")
+  await expect(page.getByTitle("microsandbox status: suspended")).toHaveText(
+    "Suspended"
+  )
+  await choose("Resume")
+  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
+    "Running"
+  )
+  await choose("Stop")
+  await expect(page.getByTitle("microsandbox status: stopped")).toHaveText(
+    "Stopped"
+  )
+  expect((await api.guest(id)).connected).toBe(false)
+})
+
 test("an old terminal link opens the workspace with the same parameters", async ({
   page,
   api,
