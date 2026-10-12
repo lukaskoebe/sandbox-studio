@@ -423,7 +423,7 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
                         {f.attribute && f.authorTeammate && " · "}
                         {f.authorTeammate && (
                           <>
-                            by <Ident>teammate:{f.authorTeammate}</Ident>
+                            by <Ident>{`teammate:${f.authorTeammate}`}</Ident>
                           </>
                         )}
                       </span>
