@@ -33,8 +33,8 @@ const maxCards = 3
 
 /**
  * Pending approvals, shown on every page: a held connection waits on the answer, a staged
- * git push waits for review. The network page lists its own environment's network requests
- * itself, so the stack leaves them out there.
+ * git push waits for review. The network page's Requests tab lists its environment's network
+ * requests itself, so the stack leaves them out there.
  */
 export function ApprovalStack() {
   const pending = $api.useQuery(
@@ -51,9 +51,9 @@ export function ApprovalStack() {
   const all = pending.data ?? []
   useTitleCount(all.length)
 
-  // Pages that show these requests themselves: the network page its environment's
-  // network requests, a chat its own permission requests.
-  const onNetwork = matchRoute({ to: "/e/$env/network" })
+  // Pages that show these requests themselves: the network page's Requests tab its
+  // environment's network requests, a chat its own permission requests.
+  const onNetwork = matchRoute({ to: "/e/$env/network/requests" })
   const onChat = matchRoute({ to: "/e/$env/chats/$chat" })
   const items = all.filter(
     (a) =>
