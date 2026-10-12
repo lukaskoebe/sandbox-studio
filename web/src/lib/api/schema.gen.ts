@@ -455,6 +455,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/lineage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The environment's family tree: sandboxes grouped by template, with each fork under its source. Deleted sandboxes stay as tombstones. */
+        get: operations["getLineageTree"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/memory/conflicts": {
         parameters: {
             query?: never;
@@ -945,7 +962,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        put: operations["renameCheckpoint"];
         post?: never;
         delete: operations["deleteCheckpoint"];
         options?: never;
@@ -1054,6 +1071,23 @@ export interface paths {
          * @description Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
          */
         post: operations["forkSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/lineage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The sandbox's history: its events in order, the sandbox it was forked from, the forks made from it and its checkpoints. Deleted forks and sources stay visible as tombstones. */
+        get: operations["getSandboxLineage"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2543,6 +2577,65 @@ export interface components {
             updatedAt: string;
             user?: components["schemas"]["UserBody"];
         };
+        Lineage: {
+            checkpointRestoreSupported: boolean;
+            checkpoints: components["schemas"]["LineageCheckpoint"][] | null;
+            children: components["schemas"]["LineageNode"][] | null;
+            events: components["schemas"]["SandboxEvent"][] | null;
+            /** Format: int64 */
+            generation: number;
+            /** @description The sandbox this one was forked from */
+            parent?: components["schemas"]["LineageNode"];
+            sandboxId: string;
+            /** @description The template of the current generation; empty for none */
+            templateId?: string;
+        };
+        LineageCheckpoint: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            generation: number;
+            id: string;
+            name: string;
+            restoreAllowed: boolean;
+            /** @enum {string} */
+            state: "creating" | "ready" | "deleting";
+        };
+        LineageNode: {
+            deleted: boolean;
+            /** Format: int64 */
+            forkGeneration?: number;
+            id: string;
+            name: string;
+            /** @description running, waiting (still starting, or a create or fork that runs), failed, deleted, or another runtime status */
+            status: string;
+            /** @description The template the sandbox runs; empty for none */
+            templateId?: string;
+        };
+        LineageTemplate: {
+            /**
+             * Format: date-time
+             * @description When the template was built; zero if it no longer exists
+             */
+            createdAt: string;
+            id: string;
+            sandboxes: components["schemas"]["LineageTreeNode"][] | null;
+        };
+        LineageTree: {
+            templates: components["schemas"]["LineageTemplate"][] | null;
+        };
+        LineageTreeNode: {
+            deleted: boolean;
+            /** Format: int64 */
+            forkGeneration?: number;
+            forks: components["schemas"]["LineageTreeNode"][] | null;
+            id: string;
+            name: string;
+            /** @description running, waiting (still starting, or a create or fork that runs), failed, deleted, or another runtime status */
+            status: string;
+            /** @description The template the sandbox runs; empty for none */
+            templateId?: string;
+        };
         Log: {
             chat: components["schemas"]["Chat"];
             items: components["schemas"]["Item"][] | null;
@@ -2805,6 +2898,10 @@ export interface components {
             /** @description A ready template in the same environment */
             templateId: string;
         };
+        RenameCheckpointInBody: {
+            /** @description Human-readable checkpoint name */
+            name: string;
+        };
         RepoURL: {
             /**
              * @description Kind ssh: the host's SSH agent
@@ -2879,6 +2976,31 @@ export interface components {
             sandboxId?: string;
             /** @description Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId */
             teammateId?: string;
+        };
+        SandboxEvent: {
+            checkpointId?: string;
+            checkpointName?: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            /** @description For a rebase, the template it moved from */
+            fromTemplateId?: string;
+            /**
+             * Format: int64
+             * @description The sandbox's generation after the event
+             */
+            generation: number;
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete";
+            /** @description The sandbox's name at the time */
+            name: string;
+            /** @description For a fork, the other sandbox. On a delete event, the source the sandbox was forked from */
+            otherSandboxId?: string;
+            sandboxId: string;
+            /** @description The template of the generation; empty for none */
+            templateId?: string;
         };
         SandboxImport: {
             buildJobId?: string;
@@ -4392,6 +4514,38 @@ export interface operations {
             };
         };
     };
+    getLineageTree: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LineageTree"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listMemoryConflicts: {
         parameters: {
             query?: {
@@ -5853,6 +6007,46 @@ export interface operations {
             };
         };
     };
+    renameCheckpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+                /** @description Checkpoint ID */
+                checkpoint: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameCheckpointInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Checkpoint"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     deleteCheckpoint: {
         parameters: {
             query?: never;
@@ -6090,6 +6284,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSandboxLineage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lineage"];
                 };
             };
             /** @description Error */

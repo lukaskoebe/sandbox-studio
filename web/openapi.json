@@ -2697,6 +2697,226 @@
         ],
         "type": "object"
       },
+      "Lineage": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpointRestoreSupported": {
+            "type": "boolean"
+          },
+          "checkpoints": {
+            "items": {
+              "$ref": "#/components/schemas/LineageCheckpoint"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/LineageNode"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/SandboxEvent"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "generation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "parent": {
+            "$ref": "#/components/schemas/LineageNode",
+            "description": "The sandbox this one was forked from"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "templateId": {
+            "description": "The template of the current generation; empty for none",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandboxId",
+          "generation",
+          "events",
+          "children",
+          "checkpoints",
+          "checkpointRestoreSupported"
+        ],
+        "type": "object"
+      },
+      "LineageCheckpoint": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "generation": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "restoreAllowed": {
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "creating",
+              "ready",
+              "deleting"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "generation",
+          "createdAt",
+          "restoreAllowed"
+        ],
+        "type": "object"
+      },
+      "LineageNode": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "forkGeneration": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "description": "running, waiting (still starting, or a create or fork that runs), failed, deleted, or another runtime status",
+            "type": "string"
+          },
+          "templateId": {
+            "description": "The template the sandbox runs; empty for none",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "LineageTemplate": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the template was built; zero if it no longer exists",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "sandboxes": {
+            "items": {
+              "$ref": "#/components/schemas/LineageTreeNode"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "sandboxes"
+        ],
+        "type": "object"
+      },
+      "LineageTree": {
+        "additionalProperties": false,
+        "properties": {
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/LineageTemplate"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "templates"
+        ],
+        "type": "object"
+      },
+      "LineageTreeNode": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "forkGeneration": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "forks": {
+            "items": {
+              "$ref": "#/components/schemas/LineageTreeNode"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "description": "running, waiting (still starting, or a create or fork that runs), failed, deleted, or another runtime status",
+            "type": "string"
+          },
+          "templateId": {
+            "description": "The template the sandbox runs; empty for none",
+            "type": "string"
+          }
+        },
+        "required": [
+          "forks",
+          "id",
+          "name",
+          "status",
+          "deleted"
+        ],
+        "type": "object"
+      },
       "Log": {
         "additionalProperties": false,
         "properties": {
@@ -3631,6 +3851,21 @@
         ],
         "type": "object"
       },
+      "RenameCheckpointInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "Human-readable checkpoint name",
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "RepoURL": {
         "additionalProperties": false,
         "properties": {
@@ -3852,6 +4087,73 @@
         "required": [
           "host",
           "action"
+        ],
+        "type": "object"
+      },
+      "SandboxEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpointId": {
+            "type": "string"
+          },
+          "checkpointName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "fromTemplateId": {
+            "description": "For a rebase, the template it moved from",
+            "type": "string"
+          },
+          "generation": {
+            "description": "The sandbox's generation after the event",
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "create",
+              "fork",
+              "rebase",
+              "restore",
+              "checkpoint",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The sandbox's name at the time",
+            "type": "string"
+          },
+          "otherSandboxId": {
+            "description": "For a fork, the other sandbox. On a delete event, the source the sandbox was forked from",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "templateId": {
+            "description": "The template of the generation; empty for none",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "sandboxId",
+          "kind",
+          "generation",
+          "name",
+          "createdAt"
         ],
         "type": "object"
       },
@@ -6857,6 +7159,49 @@
         ]
       }
     },
+    "/api/environments/{env}/lineage": {
+      "get": {
+        "description": "The environment's family tree: sandboxes grouped by template, with each fork under its source. Deleted sandboxes stay as tombstones.",
+        "operationId": "getLineageTree",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineageTree"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/memory/conflicts": {
       "get": {
         "description": "Open conflicts first.",
@@ -9217,6 +9562,76 @@
         "tags": [
           "checkpoints"
         ]
+      },
+      "put": {
+        "operationId": "renameCheckpoint",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Checkpoint ID",
+            "in": "path",
+            "name": "checkpoint",
+            "required": true,
+            "schema": {
+              "description": "Checkpoint ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameCheckpointInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Checkpoint"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "checkpoints"
+        ]
       }
     },
     "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}/restore": {
@@ -9581,6 +9996,59 @@
           }
         },
         "summary": "Copy a sandbox into a new one",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/lineage": {
+      "get": {
+        "description": "The sandbox's history: its events in order, the sandbox it was forked from, the forks made from it and its checkpoints. Deleted forks and sources stay visible as tombstones.",
+        "operationId": "getSandboxLineage",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Lineage"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
         "tags": [
           "sandboxes"
         ]
