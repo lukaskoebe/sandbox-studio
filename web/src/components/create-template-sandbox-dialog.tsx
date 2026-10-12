@@ -50,8 +50,8 @@ export function CreateTemplateSandboxDialog({
     "post",
     "/api/environments/{env}/templates/{id}/sandboxes",
     {
-      onSuccess: async (sandbox) => {
-        await queryClient.invalidateQueries({
+      onSuccess: (sandbox) => {
+        queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/sandboxes"],
         })
         setName("")
