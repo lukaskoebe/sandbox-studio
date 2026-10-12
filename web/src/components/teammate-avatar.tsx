@@ -1,3 +1,4 @@
+import { presenceLabels, type Presence } from "@/hooks/use-teammate-presence"
 import { cn } from "@/lib/utils"
 import { $api } from "@/lib/api/client"
 
@@ -38,6 +39,33 @@ export function TeammateAvatar({
     >
       {initials(name)}
     </span>
+  )
+}
+
+const presenceDots: Record<Presence, string> = {
+  working: "bg-sky-500 animate-pulse",
+  waiting: "bg-amber-500",
+  idle: "bg-muted-foreground/40",
+}
+
+/** A teammate's presence as a dot. The words go in the title and beside it where there is room. */
+export function PresenceDot({
+  presence,
+  className,
+}: {
+  presence: Presence
+  className?: string
+}) {
+  return (
+    <span
+      aria-hidden
+      title={presenceLabels[presence]}
+      className={cn(
+        "size-2 shrink-0 rounded-full",
+        presenceDots[presence],
+        className
+      )}
+    />
   )
 }
 

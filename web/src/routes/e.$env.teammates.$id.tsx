@@ -6,9 +6,10 @@ import {
   useMatchRoute,
 } from "@tanstack/react-router"
 import { PageHeader } from "@/components/page-header"
-import { TeammateAvatar } from "@/components/teammate-avatar"
+import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { usePresence, presenceLabels } from "@/hooks/use-teammate-presence"
 import { $api } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/teammates/$id")({
@@ -50,6 +51,8 @@ function TeammateLayout() {
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
+  const presence = usePresence(env)
+  const state = presence(id)
   const teammate = teammates.data?.find((p) => p.id === id)
   const active = tabs.find((t) => matchRoute({ to: t.to, params: { env, id } }))
   if (!teammate) return null
@@ -62,6 +65,10 @@ function TeammateLayout() {
           className="size-5 text-[0.5625rem]"
         />
         <h1 className="truncate text-sm font-medium">{teammate.name}</h1>
+        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <PresenceDot presence={state} />
+          {presenceLabels[state]}
+        </span>
       </PageHeader>
       <div className="overflow-x-auto border-b px-3 py-2">
         <Tabs value={active?.value ?? "overview"}>
