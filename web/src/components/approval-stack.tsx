@@ -16,6 +16,8 @@ import {
 } from "@/components/memory-conflict"
 import { MemoryShareDecision } from "@/components/memory-sessions"
 import { PermissionDecision } from "@/components/chat/permission-card"
+import { Ident } from "@/components/ident"
+import { KindChip } from "@/components/kind-chip"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -25,6 +27,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { $api, type Approval } from "@/lib/api/client"
+import { ruleClass } from "@/lib/accents"
 import { approvalKind, approvalSource } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
 
@@ -174,24 +177,25 @@ function ApprovalCard({
   ]
     .filter(Boolean)
     .join(" · ")
+  const summary = kind.summary(approval)
   return (
-    <Card size="sm" className="gap-2 shadow-lg" data-testid="approval-card">
+    <Card
+      size="sm"
+      className={cn("gap-2 border-l-[3px] shadow-lg", ruleClass(kind.area))}
+      data-testid="approval-card"
+    >
       <CardHeader>
-        <CardTitle className="flex items-start gap-1.5">
-          <kind.icon
-            className="mt-0.5 shrink-0 text-muted-foreground"
-            aria-label={kind.title}
-          />
-          <span
-            className={cn(
-              "min-w-0",
-              kind.mono ? "font-mono break-all" : "break-words"
-            )}
-          >
-            {kind.summary(approval)}
-          </span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <KindChip area={kind.area} icon={kind.icon}>
+            {kind.title}
+          </KindChip>
+          <CardDescription className="min-w-0 break-words">
+            {details}
+          </CardDescription>
+        </div>
+        <CardTitle className="min-w-0 break-words">
+          {kind.mono ? <Ident>{summary}</Ident> : summary}
         </CardTitle>
-        <CardDescription>{details}</CardDescription>
       </CardHeader>
       <CardContent>
         {isGitApproval(approval) ? (
