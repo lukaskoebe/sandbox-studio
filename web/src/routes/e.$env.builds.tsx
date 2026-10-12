@@ -1,7 +1,7 @@
 import { useRef, useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { ArrowClockwiseIcon, HammerIcon, PlusIcon } from "@phosphor-icons/react"
-import { BuildDialog, exampleTemplateSource } from "@/components/build-dialog"
+import { BuildDialog } from "@/components/build-dialog"
 import { BuildJobSheet } from "@/components/build-job-sheet"
 import { BuildCleanupStatus, BuildStatusBadge } from "@/components/build-status"
 import { CreateTemplateSandboxDialog } from "@/components/create-template-sandbox-dialog"
@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { $api, errorMessage } from "@/lib/api/client"
+import { exampleTemplateSource } from "@/lib/template-spec-example"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/builds")({
