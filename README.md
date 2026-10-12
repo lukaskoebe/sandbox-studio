@@ -9,7 +9,7 @@ on `127.0.0.1`.
 
 > **Status: early.** v0.1 is the first public release; expect rough edges and breaking
 > changes between 0.x releases. Windows support is a preview. See [docs/](docs/README.md) for how
-> it is built and [PLAN.md](PLAN.md) for what is still open.
+> it is built and [PLAN.md](PLAN.md) for what comes next.
 
 ## Features
 
