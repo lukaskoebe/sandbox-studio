@@ -48,7 +48,11 @@ This is the sign-in for your local Studio app. It does not sign an agent into an
 
 Studio listens on loopback, so other computers on your network cannot open its UI. The UI and the sandbox services stay on the machine running Studio.
 
+On a first start, Studio opens a guided setup at `/setup`. It checks the host, asks whether you want Chat or Terminal, adds an AI provider, accepts a default teammate, connects a git forge if you have one, explains approvals, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
+
 ## Prepare your first agent
+
+The guided setup adds the provider, creates a default teammate named Iris for it, and creates the first sandbox with Iris. To do the same by hand:
 
 1. In **Settings → Providers**, add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
 2. In Teammates, create a teammate and choose its harness, provider, model, role, and optional working instructions (“soul”).

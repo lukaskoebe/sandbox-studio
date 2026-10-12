@@ -22,6 +22,7 @@ import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
+import { SetupCard } from "@/components/setup-card"
 import { LineageTree } from "@/components/lineage-tree"
 import { PageHeader } from "@/components/page-header"
 import { SectionHeader } from "@/components/section-header"
@@ -122,7 +123,7 @@ function Overview() {
         />
         <div className="grid gap-6 p-3 md:p-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="grid min-w-0 content-start gap-6">
-            {/* setup */}
+            <SetupCard env={env} />
             {sandboxes.isPending ? (
               <Skeleton className="h-40" />
             ) : list.length ? (

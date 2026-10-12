@@ -79,7 +79,10 @@ export class Api {
 
 type StorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>
 
-/** Exchanges a fresh login link for a session cookie and skips the onboarding dialog. */
+/**
+ * Exchanges a fresh login link for a session cookie. The work mode is chosen and the guided
+ * setup dismissed, so that tests start on the app's pages rather than on /setup.
+ */
 async function logIn(studio: Studio): Promise<StorageState> {
   const ctx = await request.newContext({ baseURL: studio.url })
   const link = new URL(await studio.loginURL())
@@ -90,6 +93,14 @@ async function logIn(studio: Studio): Promise<StorageState> {
   expect(
     (
       await ctx.put("/api/settings/ui", { data: { agentView: "terminal" } })
+    ).ok()
+  ).toBe(true)
+  const envs = await (await ctx.get("/api/environments")).json()
+  expect(
+    (
+      await ctx.put(`/api/setup?env=${envs[0].id}`, {
+        data: { steps: {}, dismissed: true },
+      })
     ).ok()
   ).toBe(true)
   const state = await ctx.storageState()

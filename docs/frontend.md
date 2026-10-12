@@ -30,7 +30,8 @@ to an environment.
 
 | Route | Page |
 |---|---|
-| `/e/$env` | Home: the environment at a glance (the sandbox table with the approvals waiting on each, the family tree, the approvals and teammates), create, import |
+| `/e/$env` | Home: the environment at a glance (the sandbox table with the approvals waiting on each, the family tree, the approvals and teammates), create, import, and the setup card until the setup is complete or dismissed |
+| `/setup` | the guided setup (PLAN N5): host check, work mode, AI provider, teammate, git, network and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome; it works on the environment last opened, or the first |
 | `/e/$env/sandboxes/$id` | one sandbox's dashboard: status, owner, resources, ports, recent connections, checkpoints, chats and terminal sessions (each opens in the workspace), and its history (lineage timeline) |
 | `/e/$env/sandboxes/$id/work` | its workspace: terminal tabs and chats in one strip, the picked one in full, and one side panel. `?terminal=` and `?chat=` pick a tab; `?panel=` names the open panel (browser, connections or files) |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
@@ -49,6 +50,14 @@ to an environment.
 | `/e/$env/settings/git` | forges and git push review of the environment |
 | `/e/$env/settings/templates` | template builds and templates of the environment |
 | `/e/$env/settings/runtime` | host checks (doctor) |
+
+On the first load of a browser session, `/e/$env` redirects to `/setup` while the setup is
+neither completed nor dismissed and the environment has no sandbox yet; the check runs once
+per session (`studio.setup.routed` in session storage). The setup's progress is stored on the
+server as the `setup.v1` setting and read with `GET /api/setup?env=` ([API](api.md)). A step
+reads done when its condition already holds (the host check passes, a work mode is chosen,
+the environment has a provider, a teammate, a forge or a sandbox); the setup is complete once
+every step is done or skipped.
 
 The old addresses `/e/$env/git`, `/builds`, `/providers` and `/browser` redirect to the
 settings pages and teammate browsers above. `/browser?teammate=<id>` opens that teammate's

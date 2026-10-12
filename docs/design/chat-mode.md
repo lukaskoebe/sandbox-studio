@@ -21,8 +21,8 @@ Decisions taken before this doc:
 - **One protocol.** ACP: JSON-RPC 2.0 over stdio.
 - **Studio's UI.** It's built from shadcn's chat components (June 2026: MessageScroller,
   Message, Bubble, Attachment, Marker), not AI Elements.
-- **Where you choose the view.** Onboarding asks for Chat or Terminal, and Settings can
-  change it.
+- **Where you choose the view.** The guided setup's work mode step asks for Chat or Terminal,
+  and Settings can change it.
 - **Permissions.** A permission request becomes a Studio approval.
 - **No client capabilities.** The client advertises no `fs` or `terminal` capabilities. The
   agent works on the sandbox filesystem itself, and Studio never proxies its files or
@@ -382,7 +382,7 @@ Paths under `/api/environments/{env}`:
 | `GET /sandboxes/{id}/files?path=` | `listFiles` | `{entries[], truncated}` |
 | `GET /sandboxes/{id}/files/content?path=` | `readFile` | `{size, mimeType, data, tooLarge, binary, unreadable}`, `data` in base64 |
 | `POST /sandboxes/{id}/previews/{port}/open?embed=true` | `openPreview` | The login URL for an iframe (section 5) |
-| `GET /api/settings/ui` / `PUT /api/settings/ui` | `getUISettings` / `setUISettings` | `{agentView: chat\|terminal, asked}`. `asked` is false until the first `PUT`, which the onboarding dialog waits for |
+| `GET /api/settings/ui` / `PUT /api/settings/ui` | `getUISettings` / `setUISettings` | `{agentView: chat\|terminal, asked}`. `asked` is false until the first `PUT`, which the setup's work mode step makes |
 
 Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
 
@@ -420,10 +420,10 @@ Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
   - `composer.tsx`, `preview-panel.tsx`, `files-panel.tsx`, `changes-panel.tsx`.
 - **Sandbox page:** "New session" follows the preference. A chat-backed tmux session shows
   "Back to chat", and a chat shows "Open in terminal".
-- **Onboarding and the preference.**
-  - On first load, while `agentView` is empty, `__root.tsx` shows a dialog: "How do you
-    want to work with agents? Chat (recommended) / Terminal". The answer is saved with
-    `setUISettings`.
+- **The choice and the preference.**
+  - The guided setup's work mode step ([frontend](../frontend.md#routes)) asks "Chat
+    (recommended) or Terminal" with `WorkModePicker`. The answer is saved with
+    `setUISettings`. Until a choice is saved, the sandbox page doesn't open the chat by itself.
   - Settings shows the same choice as a `ToggleGroup` under "Agents".
   - The preference sets the default only. Both views exist for every session.
 

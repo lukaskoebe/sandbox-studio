@@ -51,17 +51,20 @@ export function TeammateForm({
   env,
   teammate,
   providers,
+  prefill,
   onSaved,
 }: {
   env: string
   /** The teammate to edit; absent for a new one. */
   teammate?: Teammate
   providers: Provider[]
+  /** What a new teammate starts with, such as the default one's name. */
+  prefill?: { name?: string; role?: string }
   onSaved: () => void
 }) {
   const queryClient = useQueryClient()
-  const [name, setName] = useState(teammate?.name ?? "")
-  const [role, setRole] = useState(teammate?.role ?? "")
+  const [name, setName] = useState(teammate?.name ?? prefill?.name ?? "")
+  const [role, setRole] = useState(teammate?.role ?? prefill?.role ?? "")
   const [providerId, setProviderId] = useState(
     teammate?.providerId ?? providers.at(0)?.id ?? ""
   )

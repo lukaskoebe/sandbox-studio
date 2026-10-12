@@ -8,8 +8,9 @@
 - `make api` writes it to `web/openapi.json` (`studio openapi`) and generates
   `web/src/lib/api/schema.gen.ts` with `openapi-typescript`. CI fails if either is stale.
 - Almost everything is under `/api/environments/{env}/...`. Global routes: environments,
-  `/api/approvals`, `/api/events`, `/api/health`, `/api/provider-kinds`, `/api/settings/ui`
-  and `/api/system/*` (doctor, autostart, updates).
+  `/api/approvals`, `/api/events`, `/api/health`, `/api/provider-kinds`, `/api/settings/ui`,
+  `/api/setup` (the guided setup, for the environment named in `?env=`) and `/api/system/*`
+  (doctor, autostart, updates).
 - Streaming endpoints are plain handlers outside huma (`api.go`, `exports.go`): SSE at
   `/api/events` for change notices (see [approvals](approvals.md#realtime-and-ui)) and at
   `…/chats/{chat}/stream` for a chat; WebSockets (`coder/websocket`) for terminal attach and

@@ -52,3 +52,33 @@ for (const width of [390, 1440]) {
     await api.dismissApprovals()
   })
 }
+
+test("the setup card on Home and the setup fit a phone", async ({
+  page,
+  api,
+  env,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  // The card shows until the setup is dismissed; the fixtures dismiss it.
+  await api.json("PUT", `/api/setup?env=${env}`, {
+    steps: {},
+    dismissed: false,
+  })
+  try {
+    await page.goto(`/e/${env}`)
+    const card = page.getByRole("region", { name: "Finish setup" })
+    await expect(card).toBeVisible()
+    expect(await overflowing(card)).toEqual([])
+
+    await page.goto("/setup")
+    await expect(
+      page.getByRole("heading", { name: "Set up Studio" })
+    ).toBeVisible()
+    expect(await overflowing(page.getByRole("main"))).toEqual([])
+  } finally {
+    await api.json("PUT", `/api/setup?env=${env}`, {
+      steps: {},
+      dismissed: true,
+    })
+  }
+})

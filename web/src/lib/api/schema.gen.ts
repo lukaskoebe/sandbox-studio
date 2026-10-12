@@ -1558,6 +1558,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The guided setup's progress
+         * @description A step reads done when its condition holds: the host check passes, a work mode is chosen, and the environment has a provider, a teammate, a forge or a sandbox.
+         */
+        get: operations["getSetup"];
+        /**
+         * Record the guided setup's steps and whether it is dismissed
+         * @description Replaces the stored steps. The setup is completed, and stays so, once every step is done or skipped.
+         */
+        put: operations["setSetup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/autostart": {
         parameters: {
             query?: never;
@@ -3083,6 +3107,58 @@ export interface components {
             teammateId: string;
             /** Format: int64 */
             writes: number;
+        };
+        Setup: {
+            /**
+             * Format: date-time
+             * @description When every step was done or skipped
+             */
+            completedAt?: string;
+            /** @description The user dismissed the setup, so Home stops showing it */
+            dismissed: boolean;
+            steps: components["schemas"]["SetupSteps"];
+        };
+        SetupSteps: {
+            /**
+             * @description Host check
+             * @enum {string}
+             */
+            doctor?: "done" | "skipped";
+            /**
+             * @description Git forge
+             * @enum {string}
+             */
+            git?: "done" | "skipped";
+            /**
+             * @description How approvals work
+             * @enum {string}
+             */
+            network?: "done" | "skipped";
+            /**
+             * @description AI provider
+             * @enum {string}
+             */
+            provider?: "done" | "skipped";
+            /**
+             * @description First sandbox
+             * @enum {string}
+             */
+            sandbox?: "done" | "skipped";
+            /**
+             * @description Teammate
+             * @enum {string}
+             */
+            teammate?: "done" | "skipped";
+            /**
+             * @description Work mode: chat or terminal
+             * @enum {string}
+             */
+            workMode?: "done" | "skipped";
+        };
+        SetupUpdateBody: {
+            dismissed: boolean;
+            /** @description The outcome of each step; omitted steps are still to do */
+            steps: components["schemas"]["SetupSteps"];
         };
         SharePayload: {
             attribute?: string;
@@ -7597,6 +7673,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UISettings"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSetup: {
+        parameters: {
+            query: {
+                /** @description The environment whose provider, teammate, forge and sandbox steps are checked */
+                env: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Setup"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setSetup: {
+        parameters: {
+            query: {
+                /** @description The environment whose conditions the answer reports */
+                env: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupUpdateBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Setup"];
                 };
             };
             /** @description Error */
