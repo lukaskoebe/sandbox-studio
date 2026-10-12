@@ -7,16 +7,34 @@ import (
 	"strings"
 )
 
-// ExportWorkspace streams the workspace archive of a running VM to w. It runs
-// `studio-agent workspace-export` as root.
-func (r *Runtime) ExportWorkspace(ctx context.Context, owned OwnedVM, w io.Writer) error {
-	return r.runAgent(ctx, owned, "workspace-export", RunCommand{Stdout: w})
+// HomePath is the agent user's home in the guest.
+const HomePath = "/home/agent"
+
+// Tree is a directory that fork, rebase and export copy between VMs.
+type Tree string
+
+// The copied trees: the workspace, and the agent user's home.
+const (
+	TreeWorkspace Tree = "workspace"
+	TreeHome      Tree = "home"
+)
+
+// ExportTree streams the archive of a tree of a running VM to w. It runs
+// `studio-agent <tree>-export` as root.
+func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, w io.Writer) error {
+	if tree != TreeWorkspace && tree != TreeHome {
+		return fmt.Errorf("unknown tree %q", tree)
+	}
+	return r.runAgent(ctx, owned, string(tree)+"-export", RunCommand{Stdout: w})
 }
 
-// ImportWorkspace extracts a workspace archive from rd into the empty workspace of a
-// running VM. It runs `studio-agent workspace-import` as root.
-func (r *Runtime) ImportWorkspace(ctx context.Context, owned OwnedVM, rd io.Reader) error {
-	return r.runAgent(ctx, owned, "workspace-import", RunCommand{Stdin: rd})
+// ImportTree extracts an archive from rd into the empty tree of a running VM. It runs
+// `studio-agent <tree>-import` as root.
+func (r *Runtime) ImportTree(ctx context.Context, owned OwnedVM, tree Tree, rd io.Reader) error {
+	if tree != TreeWorkspace && tree != TreeHome {
+		return fmt.Errorf("unknown tree %q", tree)
+	}
+	return r.runAgent(ctx, owned, string(tree)+"-import", RunCommand{Stdin: rd})
 }
 
 func (r *Runtime) runAgent(ctx context.Context, owned OwnedVM, subcommand string, command RunCommand) error {

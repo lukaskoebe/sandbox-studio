@@ -459,8 +459,11 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
 
 - **Both at once.** The chat is read-only while its TUI runs.
 - **Subscription Claude teammates.** They have no chat at all (section 1).
-- **After a rebase or fork.** The home directory isn't copied, so the agent's session is
-  gone. The chat becomes `orphaned`: read-only, with "Start a new chat".
+- **A session the agent can't resume.** `live.open` resumes the ACP session with
+  `session/resume` (or `session/load`). When the agent answers with an error, the chat
+  becomes `orphaned`: read-only, with "Start a new chat". The agent's session files live in
+  the home, and rebase copies it onto a home disk, so chats resume after a rebase onto a
+  current template. A fork copies the home too, but its chats stay with the source.
 - **Subagent child sessions.** They show inside their parent's tool card only.
 - **TUI-only history edits.** `/clear`, `/compact` or a rewind in the TUI change what
   `session/load` replays. The replay wins, and undo is unavailable for turns before the
@@ -492,7 +495,7 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
       lists, so ignored files like `node_modules` and build output are not snapshotted.
       Outside git work trees it keeps everything.
     - It skips files over 16 MiB.
-    - It stores blobs by SHA-256 in `/home/agent/.local/state/studio/snapshots/` (root disk,
+    - It stores blobs by SHA-256 in `/home/agent/.local/state/studio/snapshots/` (home disk,
       so disk checkpoints capture it), plus one manifest per turn. The manifest records
       path, mode, size, mtime and hash.
     - Unchanged files are found by size and mtime and not reread. Typically this takes well

@@ -16,7 +16,7 @@ export function ExportSandboxButton({
   const exportable =
     sandbox.status === "running" || sandbox.status === "stopped"
   const title =
-    "Download the template, resources and /workspace. Secrets, checkpoints and Docker state are not included." +
+    "Download the template, resources, /workspace and /home/agent. Secrets, checkpoints and Docker state are not included." +
     (sandbox.status === "running"
       ? " Files written during the export may be inconsistent."
       : "")

@@ -92,8 +92,12 @@ func (m *Manager) importBlob(id string) string {
 	return filepath.Join(m.Paths.Imports(), id+".workspace")
 }
 
-// Import reads an export file from body, stores its workspace archive opaquely under the
-// data directory and finishes the import in the background. size is the body length, or
+func (m *Manager) importHomeBlob(id string) string {
+	return filepath.Join(m.Paths.Imports(), id+".home")
+}
+
+// Import reads an export file from body, stores its home and workspace archives opaquely
+// under the data directory and finishes the import in the background. size is the body length, or
 // -1 when unknown. The archive is never extracted or parsed on the host; only the guest
 // reads it. The returned status is in the building state.
 func (m *Manager) Import(ctx context.Context, envID string, body io.Reader, size int64) (store.SandboxImport, error) {
@@ -111,7 +115,7 @@ func (m *Manager) Import(ctx context.Context, envID string, body io.Reader, size
 		return store.SandboxImport{}, ErrBuildsUnavailable
 	}
 	limit := manifest.WorkspaceLimit()
-	need := uint64(limit)
+	need := uint64(limit + manifest.HomeLimit())
 	if size >= 0 && uint64(size) < need {
 		need = uint64(size) // the body also holds the header, so this over-reserves slightly
 	}
@@ -132,11 +136,31 @@ func (m *Manager) Import(ctx context.Context, envID string, body io.Reader, size
 	if err != nil {
 		return store.SandboxImport{}, err
 	}
-	blob := m.importBlob(imp.ID)
-	fail := func(cause error) (store.SandboxImport, error) {
+	blob, homeBlob := m.importBlob(imp.ID), ""
+	if manifest.HomeLimit() > 0 {
+		homeBlob = m.importHomeBlob(imp.ID)
+	}
+	removeBlobs := func() {
 		_ = os.Remove(blob)
+		if homeBlob != "" {
+			_ = os.Remove(homeBlob)
+		}
+	}
+	fail := func(cause error) (store.SandboxImport, error) {
+		removeBlobs()
 		m.finishFailed(ctx, imp, cause)
 		return store.SandboxImport{}, cause
+	}
+	if homeBlob != "" {
+		hasHome, err := storeHomeArchive(homeBlob, body, manifest.HomeLimit())
+		if err != nil {
+			return fail(err)
+		}
+		if !hasHome {
+			// The sandbox had no home disk, so its home section is empty.
+			_ = os.Remove(homeBlob)
+			homeBlob = ""
+		}
 	}
 	if err := storeArchive(blob, body, limit, manifest.WorkspaceBytes); err != nil {
 		return fail(err)
@@ -149,8 +173,8 @@ func (m *Manager) Import(ctx context.Context, envID string, body io.Reader, size
 	go func() {
 		defer cancel()
 		defer m.imports.untrack(imp.ID)
-		defer os.Remove(blob)
-		if err := m.finishImport(runCtx, imp, manifest, blob); err != nil {
+		defer removeBlobs()
+		if err := m.finishImport(runCtx, imp, manifest, blob, homeBlob); err != nil {
 			m.finishFailed(runCtx, imp, err)
 		}
 	}()
@@ -181,9 +205,29 @@ func storeArchive(blob string, body io.Reader, limit, expected int64) error {
 	return nil
 }
 
+// storeHomeArchive copies the chunked home archive at the start of body to a new file,
+// failing once it exceeds limit bytes. It reports false when there are no chunks at all,
+// which is an export of a sandbox without a home disk.
+func storeHomeArchive(blob string, body io.Reader, limit int64) (bool, error) {
+	f, err := os.OpenFile(blob, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return false, errors.New("import storage is unavailable")
+	}
+	n, err := readChunks(f, body, limit)
+	if closeErr := f.Close(); err == nil && closeErr != nil {
+		return false, errors.New("import storage is unavailable")
+	}
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // finishImport resolves the template, creates the sandbox in transfer mode, streams the
-// archive into its workspace and boots it. A half-made sandbox is removed on failure.
-func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, manifest ExportManifest, blob string) error {
+// archives into its home and workspace and boots it. Without a home archive (format 1, or
+// a sandbox that had no home disk) the home is seeded from the image on boot, if the
+// template has a home disk. A half-made sandbox is removed on failure.
+func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, manifest ExportManifest, blob, homeBlob string) error {
 	envID := imp.EnvironmentID
 	rt, err := m.transfer()
 	if err != nil {
@@ -220,16 +264,24 @@ func (m *Manager) finishImport(ctx context.Context, imp store.SandboxImport, man
 		return m.removeFailedFork(ctx, rec, err)
 	}
 	defer unlock()
-	if err := m.importInto(ctx, rt, imp, rec, blob); err != nil {
+	if err := m.importInto(ctx, rt, imp, rec, blob, homeBlob); err != nil {
 		return m.removeFailedFork(ctx, rec, err)
 	}
 	return nil
 }
 
-func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.SandboxImport, rec store.Sandbox, blob string) error {
+func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.SandboxImport, rec store.Sandbox, blob, homeBlob string) error {
+	// The new sandbox gets a home disk if its template has one; the export's home, if it has
+	// one, can only go onto that disk.
+	home, err := m.homeMiBFor(ctx, rec.EnvironmentID, rec.TemplateID)
+	if err != nil {
+		return err
+	}
+	if homeBlob != "" && home == 0 {
+		return importError("the template was built before the home directory existed, so it cannot keep the exported home; rebuild the template")
+	}
 	var image *runtime.ImageSource
 	if rec.TemplateID != "" {
-		var err error
 		if image, err = m.templateImage(ctx, rec.EnvironmentID, rec.TemplateID); err != nil {
 			return err
 		}
@@ -242,26 +294,37 @@ func (m *Manager) importInto(ctx context.Context, rt transferRuntime, imp store.
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		return err
 	}
-	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress), sock, sandboxLabels(rec)); err != nil {
+	if err := rt.CreateForTransfer(ctx, VMName(rec), transferSpec(rec, image, egress, home), sock, sandboxLabels(rec)); err != nil {
 		return err
 	}
 	if err := m.Store.AdvanceSandboxImport(ctx, rec.EnvironmentID, imp.ID, store.ImportCreating, store.ImportImporting, ""); err != nil {
 		return errImportCancelled
 	}
-	f, err := os.Open(blob)
-	if err != nil {
-		return importError("uploaded workspace is unavailable")
+	if homeBlob != "" {
+		if err := importArchive(ctx, rt, rec, runtime.TreeHome, homeBlob); err != nil {
+			return err
+		}
 	}
-	err = rt.ImportWorkspace(ctx, ownedVM(rec), f)
-	f.Close()
-	if err != nil {
-		return fmt.Errorf("import workspace: %w", err)
+	if err := importArchive(ctx, rt, rec, runtime.TreeWorkspace, blob); err != nil {
+		return err
 	}
 	if err := rt.Boot(ctx, VMName(rec)); err != nil {
 		return err
 	}
 	if err := m.Store.FinishSandboxImport(ctx, rec.EnvironmentID, imp.ID, store.ImportReady, ""); err != nil {
 		return errImportCancelled
+	}
+	return nil
+}
+
+func importArchive(ctx context.Context, rt transferRuntime, rec store.Sandbox, tree runtime.Tree, blob string) error {
+	f, err := os.Open(blob)
+	if err != nil {
+		return importError(fmt.Sprintf("uploaded %s is unavailable", tree))
+	}
+	defer f.Close()
+	if err := rt.ImportTree(ctx, ownedVM(rec), tree, f); err != nil {
+		return fmt.Errorf("import %s: %w", tree, err)
 	}
 	return nil
 }
@@ -355,7 +418,7 @@ func importErrorMessage(err error) string {
 	case errors.Is(err, store.ErrNotFound):
 		return "environment or template no longer exists"
 	}
-	for _, known := range []error{ErrWorkspaceTooLarge, ErrInvalidExport, store.ErrExists, ErrTransferUnsupported, ErrBuildsUnavailable} {
+	for _, known := range []error{ErrWorkspaceTooLarge, ErrHomeTooLarge, ErrInvalidExport, store.ErrExists, ErrTransferUnsupported, ErrBuildsUnavailable} {
 		if errors.Is(err, known) {
 			return known.Error()
 		}

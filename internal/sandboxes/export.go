@@ -16,14 +16,17 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 )
 
-// A .studio-sandbox file is the magic line, a big-endian uint32 manifest length, the
-// manifest JSON and then the workspace archive exactly as workspace-export wrote it, to
-// EOF. See docs/export-import.md.
+// A .studio-sandbox file is the magic line, a big-endian uint32 manifest length and the
+// manifest JSON. From format 2 the home archive follows as chunks (a big-endian uint32
+// length and that many bytes, ended by a zero length; no chunks at all means the sandbox
+// had no home disk). Then comes the workspace archive, to EOF. Both archives are exactly
+// what workspace-export and home-export wrote. See docs/export-import.md.
 const (
 	ExportMagic        = "sandbox-studio-export v1\n"
-	ExportFormat       = 1
+	ExportFormat       = 2
 	ExportExtension    = ".studio-sandbox"
 	maxManifestBytes   = 1 << 20
+	maxChunkBytes      = 1 << 20
 	exportHeaderPrefix = len(ExportMagic) + 4
 )
 
@@ -31,7 +34,8 @@ const (
 var ErrInvalidExport = errors.New("invalid sandbox export")
 
 // ExportManifest describes the sandbox in an export file. It carries no secrets, egress
-// identity, approvals, checkpoints or Docker state.
+// identity, approvals, checkpoints or Docker state. Format 1 files have no home archive, and
+// a format 2 file of a sandbox without a home disk has an empty one.
 type ExportManifest struct {
 	Format           int                 `json:"format"`
 	ExportedAt       time.Time           `json:"exportedAt"`
@@ -104,7 +108,7 @@ func ParseExportManifest(body []byte) (ExportManifest, error) {
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return ExportManifest{}, invalidExport("manifest has trailing data")
 	}
-	if raw.Format == nil || *raw.Format != ExportFormat {
+	if raw.Format == nil || (*raw.Format != 1 && *raw.Format != ExportFormat) {
 		return ExportManifest{}, invalidExport("unsupported manifest format")
 	}
 	if raw.Resources == nil {
@@ -136,6 +140,64 @@ func ParseExportManifest(body []byte) (ExportManifest, error) {
 // WorkspaceLimit is the largest archive an import of m accepts: the workspace size, the
 // same limit as a workspace copy between VMs.
 func (m ExportManifest) WorkspaceLimit() int64 { return m.Resources.WorkspaceMiB << 20 }
+
+// HomeLimit is the largest home archive an import of m accepts: the home disk's size, or
+// 0 for a format 1 file, which has none.
+func (m ExportManifest) HomeLimit() int64 {
+	if m.Format < 2 {
+		return 0
+	}
+	return HomeMiB << 20
+}
+
+// chunkWriter frames what it is given as chunks of at most maxChunkBytes.
+type chunkWriter struct{ w io.Writer }
+
+func (c chunkWriter) Write(p []byte) (int, error) {
+	written := 0
+	for len(p) > 0 {
+		n := min(len(p), maxChunkBytes)
+		if _, err := c.w.Write(binary.BigEndian.AppendUint32(nil, uint32(n))); err != nil {
+			return written, err
+		}
+		if _, err := c.w.Write(p[:n]); err != nil {
+			return written, err
+		}
+		written, p = written+n, p[n:]
+	}
+	return written, nil
+}
+
+// end writes the zero length that ends the chunks.
+func (c chunkWriter) end() error {
+	_, err := c.w.Write([]byte{0, 0, 0, 0})
+	return err
+}
+
+// readChunks copies chunks from r to w until the end, failing once they exceed limit
+// bytes.
+func readChunks(w io.Writer, r io.Reader, limit int64) (int64, error) {
+	var total int64
+	for {
+		var length [4]byte
+		if _, err := io.ReadFull(r, length[:]); err != nil {
+			return total, fmt.Errorf("upload ended early: %w", err)
+		}
+		n := int64(binary.BigEndian.Uint32(length[:]))
+		switch {
+		case n == 0:
+			return total, nil
+		case n > maxChunkBytes:
+			return total, invalidExport("home archive chunk exceeds 1 MiB")
+		case total+n > limit:
+			return total, ErrHomeTooLarge
+		}
+		if _, err := io.CopyN(w, r, n); err != nil {
+			return total, fmt.Errorf("upload ended early: %w", err)
+		}
+		total += n
+	}
+}
 
 // Export writes a sandbox as an export file. open is called once the sandbox is ready to
 // stream, with the manifest; errors before that leave nothing written. A running sandbox
@@ -185,6 +247,12 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 		}
 		manifest.TemplateSpecYAML = &source
 	}
+	// A sandbox without a home disk exports an empty home section. Its home lives on the
+	// template's root layer, which an export does not carry.
+	homeMiB, err := m.homeMiBFor(ctx, envID, sb.TemplateID)
+	if err != nil {
+		return err
+	}
 	if status == runtime.StatusStopped {
 		if _, err := m.Egress.Attach(sb); err != nil {
 			return err
@@ -205,7 +273,16 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 	if err := WriteExportHeader(w, manifest); err != nil {
 		return err
 	}
-	return rt.ExportWorkspace(ctx, ownedVM(sb), &limitWriter{w: w, left: manifest.WorkspaceLimit()})
+	home := chunkWriter{w: w}
+	if homeMiB > 0 {
+		if err := rt.ExportTree(ctx, ownedVM(sb), runtime.TreeHome, &limitWriter{w: home, left: manifest.HomeLimit(), err: ErrHomeTooLarge}); err != nil {
+			return err
+		}
+	}
+	if err := home.end(); err != nil {
+		return err
+	}
+	return rt.ExportTree(ctx, ownedVM(sb), runtime.TreeWorkspace, &limitWriter{w: w, left: manifest.WorkspaceLimit(), err: ErrWorkspaceTooLarge})
 }
 
 // templateSourceYAML returns YAML for a template's spec. Templates keep only the

@@ -34,7 +34,7 @@ import {
 } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
-/** Moves a sandbox onto another ready template. The workspace is kept; the rest of the VM is rebuilt. */
+/** Moves a sandbox onto another ready template. The workspace and home are kept; the rest of the VM is rebuilt. */
 export function RebaseSandboxDialog({
   env,
   sandbox,
@@ -158,7 +158,8 @@ function RebaseForm({
       >
         <p className="flex gap-2 font-medium">
           <WarningIcon className="mt-0.5 size-3 shrink-0" />
-          /workspace is kept. Everything else in the VM is replaced.
+          /workspace and /home/agent are kept. Everything else in the VM is
+          replaced.
         </p>
         <ul className="ml-5 list-disc space-y-1">
           <li>Docker images, containers and volumes are lost.</li>
@@ -237,7 +238,7 @@ function RebaseForm({
           className="flex items-center gap-2 text-muted-foreground"
         >
           <Spinner />
-          Copying workspace… This can take several minutes.
+          Copying workspace and home… This can take several minutes.
         </p>
       ) : (
         failure && (

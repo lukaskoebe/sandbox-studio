@@ -292,7 +292,8 @@ func apiError(err error) error {
 		errors.Is(err, sandboxes.ErrBusy),
 		errors.Is(err, sandboxes.ErrCheckpointState),
 		errors.Is(err, sandboxes.ErrLifecycleState),
-		errors.Is(err, sandboxes.ErrWorkspaceTooLarge):
+		errors.Is(err, sandboxes.ErrWorkspaceTooLarge), errors.Is(err, sandboxes.ErrHomeTooLarge),
+		errors.Is(err, sandboxes.ErrTemplateWithoutHome):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, agentchan.ErrNotConnected):
 		return huma.Error409Conflict("the sandbox is not running or still booting")

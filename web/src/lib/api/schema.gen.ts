@@ -821,7 +821,7 @@ export interface paths {
         put?: never;
         /**
          * Upload a .studio-sandbox file
-         * @description Creates a sandbox from an export in the background; poll the returned import. The workspace archive may be at most the exported workspace size. A name already in use gets a numeric suffix.
+         * @description Creates a sandbox from an export in the background; poll the returned import. The workspace archive may be at most the exported workspace size, and the home archive at most the 4 GiB home disk. A name already in use gets a numeric suffix.
          */
         post: operations["importSandbox"];
         delete?: never;
@@ -995,7 +995,7 @@ export interface paths {
         };
         /**
          * Download a sandbox as a .studio-sandbox file
-         * @description Streams the template spec, resources and /workspace. Secrets, network identity, approvals, checkpoints and Docker state are not included. A running sandbox is exported while it runs, so files written meanwhile may be inconsistent. A stopped one is started without services and stopped again.
+         * @description Streams the template spec, resources, /workspace and /home/agent. Secrets, network identity, approvals, checkpoints and Docker state are not included. A running sandbox is exported while it runs, so files written meanwhile may be inconsistent. A stopped one is started without services and stopped again.
          */
         get: operations["exportSandbox"];
         put?: never;
@@ -1051,7 +1051,7 @@ export interface paths {
         put?: never;
         /**
          * Copy a sandbox into a new one
-         * @description Creates a sandbox with the same template and resources and a copy of /workspace, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
+         * @description Creates a sandbox with the same template and resources and a copy of /workspace and /home/agent, then starts it. It returns at once in state creating; the copy and boot run in the background, and a failed fork stays as a failed sandbox until it is deleted. Docker state is not copied. A running sandbox is copied while it runs, so files written during the copy may be inconsistent.
          */
         post: operations["forkSandbox"];
         delete?: never;
@@ -1103,7 +1103,7 @@ export interface paths {
         put?: never;
         /**
          * Move a sandbox onto another template
-         * @description Copies /workspace into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox stays on its old template in the state it was in.
+         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox stays on its old template in the state it was in.
          */
         post: operations["rebaseSandbox"];
         delete?: never;

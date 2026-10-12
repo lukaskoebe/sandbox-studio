@@ -18,7 +18,7 @@ data locations, repository layout, security model, testing and conventions.
 | [API, auth and storage](api.md) | huma/OpenAPI, streaming, login and preview auth, SQLite and migrations | `internal/api`, `internal/webauth`, `internal/store` |
 | [Frontend](frontend.md) | stack, routes, development | `web/` |
 | [Template builds](template-builds.md) | specs, build worker, registry, instances | `internal/templatebuild`, `internal/templateregistry` |
-| [Rebase and fork](rebase.md) | workspace copy between VMs | `internal/sandboxes` |
+| [Rebase and fork](rebase.md) | workspace and home copy between VMs | `internal/sandboxes` |
 | [Export and import](export-import.md) | `.studio-sandbox` files | `internal/sandboxes` |
 | [Teammates and providers](teammates.md) | provider kinds, teammates, ownership | `internal/teammates` |
 | [Harnesses and agent sessions](harnesses.md) | adapters, files, hooks, versions, chats over ACP | `internal/harness`, `internal/chat` |

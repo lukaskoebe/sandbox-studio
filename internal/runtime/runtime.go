@@ -56,6 +56,9 @@ type Spec struct {
 	MaxMemoryMiB uint32
 	WorkspaceMiB uint32
 	DockerMiB    uint32
+	// HomeMiB is the size of the owned disk mounted at /home/agent; 0 leaves the home on
+	// the root disk (browser and template build VMs).
+	HomeMiB uint32
 	// Image selects a private, environment-scoped image source for internal
 	// builder VMs. It is host-side SDK configuration and is never serialized.
 	Image *ImageSource `json:"-"`
@@ -167,17 +170,21 @@ func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocke
 	if spec.BaseImage != "" {
 		image = spec.BaseImage
 	}
+	mounts := map[string]msb.MountConfig{
+		"/workspace":      msb.Mount.Owned(msb.OwnedVolumeOptions{Kind: msb.VolumeKindDisk, SizeMiB: spec.WorkspaceMiB}),
+		"/var/lib/docker": msb.Mount.Owned(msb.OwnedVolumeOptions{Kind: msb.VolumeKindDisk, SizeMiB: spec.DockerMiB}),
+		"/opt/studio":     msb.Mount.Bind(r.opts.GuestDir, msb.MountOptions{Readonly: true}),
+	}
+	if spec.HomeMiB > 0 {
+		mounts[HomePath] = msb.Mount.Owned(msb.OwnedVolumeOptions{Kind: msb.VolumeKindDisk, SizeMiB: spec.HomeMiB})
+	}
 	options := []msb.SandboxOption{
 		msb.WithImage(image),
 		msb.WithCPUs(spec.CPUs),
 		msb.WithMemory(spec.MemoryMiB),
 		msb.WithMaxMemory(maxMemoryMiB),
 		msb.WithHostname(hostname(labels["studio.sandbox-name"])),
-		msb.WithMounts(map[string]msb.MountConfig{
-			"/workspace":      msb.Mount.Owned(msb.OwnedVolumeOptions{Kind: msb.VolumeKindDisk, SizeMiB: spec.WorkspaceMiB}),
-			"/var/lib/docker": msb.Mount.Owned(msb.OwnedVolumeOptions{Kind: msb.VolumeKindDisk, SizeMiB: spec.DockerMiB}),
-			"/opt/studio":     msb.Mount.Bind(r.opts.GuestDir, msb.MountOptions{Readonly: true}),
-		}),
+		msb.WithMounts(mounts),
 		msb.WithVsock(msb.VsockRoute{HostSocket: agentSocket, Port: agentproto.VsockPort}),
 		msb.WithNetwork(network),
 		msb.WithProxy(proxy),

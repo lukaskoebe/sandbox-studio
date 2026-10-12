@@ -19,16 +19,21 @@ var (
 	ErrLifecycleState = errors.New("sandbox must be running or stopped")
 	// ErrWorkspaceTooLarge means the copied workspace does not fit the target's disk.
 	ErrWorkspaceTooLarge = errors.New("workspace does not fit the target disk")
+	// ErrHomeTooLarge means the copied home directory does not fit the target's home disk.
+	ErrHomeTooLarge = fmt.Errorf("home directory /home/agent does not fit the %d GiB home disk; delete caches in it and try again", HomeMiB>>10)
+	// ErrTemplateWithoutHome means a sandbox with a home disk can't move to a template built
+	// before the home directory existed: that template has no home disk to copy into.
+	ErrTemplateWithoutHome = errors.New("this template was built before the home directory existed, so it cannot keep this sandbox's home; rebuild the template")
 )
 
-// transferRuntime is the runtime surface for moving a workspace into a new VM. A VM in
-// transfer mode runs no agent or services until Boot.
+// transferRuntime is the runtime surface for moving a workspace and home into a new VM.
+// A VM in transfer mode runs no agent or services until Boot.
 type transferRuntime interface {
 	CreateForTransfer(context.Context, string, runtime.Spec, string, map[string]string) error
 	StartForTransfer(context.Context, string) error
 	Boot(context.Context, string) error
-	ExportWorkspace(context.Context, runtime.OwnedVM, io.Writer) error
-	ImportWorkspace(context.Context, runtime.OwnedVM, io.Reader) error
+	ExportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Writer) error
+	ImportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Reader) error
 }
 
 var _ transferRuntime = (*runtime.Runtime)(nil)
@@ -41,50 +46,66 @@ func (m *Manager) transfer() (transferRuntime, error) {
 	return rt, nil
 }
 
-// copyWorkspace streams the workspace of src into the empty workspace of dst. Both VMs
-// must run. The archive passes through the host in memory and is never stored there.
-// It fails once the archive exceeds limit bytes, or when either side fails.
-func copyWorkspace(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, limit int64) error {
+// copyTrees copies the workspace of src into dst, and then its home when dst has a home
+// disk (copyHome). A source without a home disk gives its root disk's home, which is what
+// a sandbox from a legacy template keeps there.
+func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB int, copyHome bool) error {
+	if err := copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}); err != nil {
+		return err
+	}
+	if !copyHome {
+		return nil
+	}
+	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: HomeMiB << 20, err: ErrHomeTooLarge})
+}
+
+// copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The
+// archive passes through the host in memory and is never stored there. It fails once the
+// archive exceeds limit, or when either side fails.
+func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, tree runtime.Tree, limit *limitWriter) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	pr, pw := io.Pipe()
+	limit.w = pw
 	exported := make(chan error, 1)
 	go func() {
-		err := rt.ExportWorkspace(ctx, src, &limitWriter{w: pw, left: limit})
+		err := rt.ExportTree(ctx, src, tree, limit)
 		if err != nil {
-			err = fmt.Errorf("export workspace: %w", err)
+			err = fmt.Errorf("export %s: %w", tree, err)
 			cancel()
 		}
 		pw.CloseWithError(err) // nil gives the import a clean EOF
 		exported <- err
 	}()
-	err := rt.ImportWorkspace(ctx, dst, pr)
+	err := rt.ImportTree(ctx, dst, tree, pr)
 	if err != nil {
-		err = fmt.Errorf("import workspace: %w", err)
+		err = fmt.Errorf("import %s: %w", tree, err)
 		cancel()
 	}
-	pr.CloseWithError(errors.New("workspace import ended"))
+	pr.CloseWithError(fmt.Errorf("%s import ended", tree))
 	return errors.Join(<-exported, err)
 }
 
+// limitWriter fails with err once more than left bytes are written.
 type limitWriter struct {
 	w    io.Writer
 	left int64
+	err  error
 }
 
 func (l *limitWriter) Write(p []byte) (int, error) {
 	if int64(len(p)) > l.left {
-		return 0, ErrWorkspaceTooLarge
+		return 0, l.err
 	}
 	l.left -= int64(len(p))
 	return l.w.Write(p)
 }
 
 // transferSpec is the VM spec of rec, with the same network and egress as bootSandbox.
-func transferSpec(rec store.Sandbox, image *runtime.ImageSource, egress runtime.Egress) runtime.Spec {
+func transferSpec(rec store.Sandbox, image *runtime.ImageSource, egress runtime.Egress, homeMiB uint32) runtime.Spec {
 	return runtime.Spec{
 		CPUs: uint8(rec.CPUs), MemoryMiB: uint32(rec.MemoryMiB), MaxMemoryMiB: uint32(rec.MaxMemoryMiB),
-		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
+		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: homeMiB,
 		Image: image, Egress: egress,
 	}
 }
@@ -93,8 +114,9 @@ func ownedVM(rec store.Sandbox) runtime.OwnedVM {
 	return runtime.OwnedVM{Name: VMName(rec), Labels: sandboxLabels(rec)}
 }
 
-// Fork creates a new sandbox with a copy of the source's workspace. The fork has its own
-// ID, egress identity and gateway credentials, and the source's template and resources.
+// Fork creates a new sandbox with a copy of the source's workspace and, if the source has a
+// home disk, of its home. The fork has its own ID, egress identity and gateway credentials,
+// and the source's template and resources.
 // A running source is copied live, so files written during the copy may be inconsistent.
 // A stopped source is started without services for the copy and stopped again. Docker
 // state is not copied. The fork is returned in state creating; the copy runs in the
@@ -147,6 +169,11 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 			return View{}, err
 		}
 	}
+	// The fork pins the source's template, so it gets the source's home disk, if any.
+	home, err := m.homeMiBFor(ctx, envID, sb.TemplateID)
+	if err != nil {
+		return View{}, err
+	}
 	rec, err := m.Store.CreateSandbox(ctx, store.Sandbox{
 		EnvironmentID: envID, TemplateID: sb.TemplateID, TeammateID: sb.TeammateID, Name: name,
 		CPUs: sb.CPUs, MemoryMiB: sb.MemoryMiB, MaxMemoryMiB: sb.MaxMemoryMiB,
@@ -166,7 +193,7 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 	handedOff = true
 	sourceRunning := status == runtime.StatusRunning
 	m.background(rec, transferTimeout, func() { unlockFork(); unlock() }, func(ctx context.Context) error {
-		if err := m.forkInto(ctx, rt, sb, rec, image, sourceRunning); err != nil {
+		if err := m.forkInto(ctx, rt, sb, rec, image, sourceRunning, home); err != nil {
 			return m.removeFailedVM(ctx, rec, err, false)
 		}
 		return nil
@@ -174,7 +201,7 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 	return m.acceptedView(ctx, rec), nil
 }
 
-func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec store.Sandbox, image *runtime.ImageSource, sourceRunning bool) error {
+func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec store.Sandbox, image *runtime.ImageSource, sourceRunning bool, homeMiB uint32) error {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
 		return err
@@ -183,7 +210,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		return err
 	}
-	spec := transferSpec(rec, image, egress)
+	spec := transferSpec(rec, image, egress, homeMiB)
 	spec.Progress = m.runtimeProgress(rec.ID)
 	if err := rt.CreateForTransfer(ctx, VMName(rec), spec, sock, sandboxLabels(rec)); err != nil {
 		return err
@@ -197,7 +224,7 @@ func (m *Manager) forkInto(ctx context.Context, rt transferRuntime, sb, rec stor
 			return errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 		}
 	}
-	err = copyWorkspace(ctx, rt, ownedVM(sb), ownedVM(rec), int64(rec.WorkspaceMiB)<<20)
+	err = copyTrees(ctx, rt, ownedVM(sb), ownedVM(rec), rec.WorkspaceMiB, homeMiB > 0)
 	if !sourceRunning {
 		err = errors.Join(err, m.stopQuietly(ctx, VMName(sb)))
 	}

@@ -38,6 +38,10 @@ const (
 	DefaultDockerMiB    = resources.DefaultDockerMiB
 )
 
+// HomeMiB is the size of the home disk every new sandbox gets at /home/agent. It is fixed
+// and separate from the workspace's.
+const HomeMiB = 4096
+
 // Manager coordinates the catalog, the runtime, the agent hub and the network gateway.
 type Manager struct {
 	Store     *store.Store
@@ -222,7 +226,7 @@ func (m *Manager) Create(ctx context.Context, envID string, req CreateRequest) (
 	if err != nil {
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, nil)
+	return m.bootSandbox(ctx, rec, resolved, nil, HomeMiB)
 }
 
 // CreateFromTemplateFor creates a fresh sandbox, owned by teammateID if it is set, from one
@@ -237,6 +241,10 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 	if err != nil {
 		return View{}, err
 	}
+	home, err := m.homeMiBFor(ctx, envID, templateID)
+	if err != nil {
+		return View{}, err
+	}
 	rec, err := m.createOwnedRecord(ctx, envID, name, resolved, templateID, teammateID)
 	if err != nil {
 		return View{}, err
@@ -248,7 +256,7 @@ func (m *Manager) CreateFromTemplateFor(ctx context.Context, envID, templateID, 
 		}
 		return View{}, err
 	}
-	return m.bootSandbox(ctx, rec, resolved, image)
+	return m.bootSandbox(ctx, rec, resolved, image, home)
 }
 
 // templateResources checks that a template can back a sandbox on this host and returns
@@ -269,7 +277,7 @@ func (m *Manager) templateResources(ctx context.Context, envID, templateID strin
 	if err := resolved.Validate(); err != nil {
 		return resources.Resources{}, errors.New("template resources are invalid")
 	}
-	if template.ExporterVersion != templateimage.ExporterVersion {
+	if !templateimage.SupportedExporterVersion(template.ExporterVersion) {
 		return resources.Resources{}, errors.New("template exporter version is unsupported")
 	}
 	cacheKey, err := templateimage.CacheKey([]byte(template.Spec), template.BaseDigest, template.Platform, template.ExporterVersion)
@@ -283,6 +291,24 @@ func (m *Manager) templateResources(ctx context.Context, envID, templateID strin
 		return resources.Resources{}, errors.New("template registry is unavailable")
 	}
 	return resolved, nil
+}
+
+// homeMiBFor is the home disk a sandbox made from templateID gets, or 0 for none. A sandbox
+// without a template is made from the base image, which has the home skeleton. A sandbox of
+// a legacy template keeps its home on the root layer, next to the toolchains it needs: a
+// home disk would hide them.
+func (m *Manager) homeMiBFor(ctx context.Context, envID, templateID string) (uint32, error) {
+	if templateID == "" {
+		return HomeMiB, nil
+	}
+	template, err := m.Store.Template(ctx, envID, templateID)
+	if err != nil {
+		return 0, err
+	}
+	if !templateimage.HasHomeSkeleton(template.ExporterVersion) {
+		return 0, nil
+	}
+	return HomeMiB, nil
 }
 
 // templateImage resolves the registry image of a template. A catalog record must pin the
@@ -305,7 +331,7 @@ func (m *Manager) templateImage(ctx context.Context, envID, templateID string) (
 // VM in the background and returns the sandbox in state creating. Until the background
 // create starts, a failure removes the record. After that, a failure removes the VM and
 // leaves the record failed, with the step, until it is deleted.
-func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource) (View, error) {
+func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved resources.Resources, image *runtime.ImageSource, homeMiB uint32) (View, error) {
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
 		return View{}, m.discardRecord(ctx, rec, err)
@@ -324,7 +350,7 @@ func (m *Manager) bootSandbox(ctx context.Context, rec store.Sandbox, resolved r
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(resolved.CPUs), MemoryMiB: uint32(resolved.MemoryMiB), MaxMemoryMiB: uint32(resolved.MaxMemoryMiB),
-		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB),
+		WorkspaceMiB: uint32(rec.WorkspaceMiB), DockerMiB: uint32(rec.DockerMiB), HomeMiB: homeMiB,
 		Image: image, Egress: egress, Progress: m.runtimeProgress(rec.ID),
 	}
 	labels := sandboxLabels(rec)

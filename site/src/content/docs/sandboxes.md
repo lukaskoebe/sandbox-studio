@@ -14,7 +14,7 @@ A sandbox is a Linux microVM with Docker, a persistent `/workspace`, and its own
 
 ![The New sandbox dialog, with a name and optional teammate](../../assets/screenshots/new-sandbox.jpg)
 
-You can create a blank sandbox or choose a ready template from the Builds page. A template sets up the root filesystem; a newly created sandbox still gets its own empty workspace and Docker disk.
+You can create a blank sandbox or choose a ready template from the Builds page. A template sets up the root filesystem; a newly created sandbox still gets its own empty workspace and Docker disk. Its home directory (`/home/agent`, 4 GiB) starts from the template's home, so your agent's sessions and logins are kept on that disk.
 
 ## Work in a terminal
 
@@ -28,9 +28,9 @@ Open a sandbox from the sidebar to see its terminal. Terminals run inside the sa
 | --- | --- |
 | **Stop** | Powers off the VM. Files on its disks stay, but running processes and terminal sessions end. Use **Start** to boot it again. |
 | **Suspend** | Pauses a running VM with its memory and processes. **Resume** continues it, including terminal sessions. Suspended memory does not survive a host reboot. |
-| **Delete** | Permanently removes the sandbox and its disks. Export `/workspace` first if you need a portable backup. |
+| **Delete** | Permanently removes the sandbox and its disks. Export the sandbox first if you need a portable backup. |
 
-Rebasing changes the template and carries over `/workspace`; Docker data and terminal sessions are not carried over. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
+Rebasing changes the template and carries over `/workspace` and the home directory; Docker data and terminal sessions are not carried over. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
 
 ## Open a preview
 
@@ -40,4 +40,4 @@ Studio removes its own authentication cookies before forwarding preview requests
 
 ## Export a workspace
 
-Use **Export** to save a `.studio-sandbox` file that can be imported in another environment or Studio install. It contains the template specification, resource settings, and `/workspace` only. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).
+Use **Export** to save a `.studio-sandbox` file that can be imported in another environment or Studio install. It contains the template specification, resource settings, `/workspace`, and the home directory (`/home/agent`), which holds your agent's sessions and anything you saved there. Read the home directory before you share the file. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).

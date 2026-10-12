@@ -274,9 +274,9 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
                           </AlertDialogTitle>
                           <AlertDialogDescription>
                             This replaces the sandbox&apos;s root filesystem,
-                            workspace, and Docker state with the saved
-                            checkpoint. Any work done since this checkpoint will
-                            be lost.
+                            workspace, home directory, and Docker state with the
+                            saved checkpoint. Any work done since this
+                            checkpoint will be lost.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

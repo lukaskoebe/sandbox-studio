@@ -45,3 +45,11 @@ func workspaceExport(io.Writer, io.Writer) error {
 func workspaceImport(io.Reader) error {
 	return errors.New("studio-agent workspace-import only runs inside Linux sandboxes")
 }
+
+func homeExport(io.Writer, io.Writer) error {
+	return errors.New("studio-agent home-export only runs inside Linux sandboxes")
+}
+
+func homeImport(io.Reader) error {
+	return errors.New("studio-agent home-import only runs inside Linux sandboxes")
+}

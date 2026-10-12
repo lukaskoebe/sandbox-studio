@@ -27,7 +27,7 @@ const stateLabel: Record<SandboxImport["state"], string> = {
   uploading: "Uploading",
   building: "Building the template",
   creating: "Creating the sandbox",
-  importing: "Copying the workspace",
+  importing: "Copying the workspace and home",
   ready: "Ready",
   failed: "Failed",
 }

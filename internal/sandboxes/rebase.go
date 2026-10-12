@@ -10,9 +10,11 @@ import (
 )
 
 // Rebase moves a sandbox onto another ready template in its environment. It copies the
-// workspace into a new VM generation built from the template, with fresh Docker and
-// workspace disks and the template's resources. Docker state and tmux sessions end. The
-// sandbox keeps its identity and egress, and its checkpoints stay with their generations.
+// workspace into a new VM generation built from the template, with a fresh Docker disk and
+// the template's resources. The home comes along when the template has a home disk: a
+// sandbox with one can't move to a legacy template, which has none. Docker state and tmux
+// sessions end. The sandbox keeps its identity and egress, and its checkpoints stay with
+// their generations.
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
 // catalog switches, any failure removes the new VM and returns the source to its state.
 func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
@@ -42,6 +44,19 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if err != nil {
 		return View{}, err
 	}
+	// The home disk moves with the sandbox only onto a template that has one. A sandbox with
+	// a home disk is refused rather than losing its home.
+	targetHome, err := m.homeMiBFor(ctx, envID, templateID)
+	if err != nil {
+		return View{}, err
+	}
+	sourceHome, err := m.homeMiBFor(ctx, envID, sb.TemplateID)
+	if err != nil {
+		return View{}, err
+	}
+	if sourceHome > 0 && targetHome == 0 {
+		return View{}, ErrTemplateWithoutHome
+	}
 	status, err := m.Runtime.Status(ctx, VMName(sb))
 	if err != nil {
 		return View{}, err
@@ -67,7 +82,7 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 		return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
-	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning); err != nil {
+	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, targetHome); err != nil {
 		return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 
@@ -100,7 +115,7 @@ func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
 	return sb
 }
 
-func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning bool) error {
+func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target store.Sandbox, image *runtime.ImageSource, wasRunning bool, targetHome uint32) error {
 	if wasRunning {
 		if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {
 			return err
@@ -118,10 +133,10 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 		return err
 	}
 	sock := m.Paths.AgentSocket(sb.ID)
-	if err := rt.CreateForTransfer(ctx, VMName(target), transferSpec(target, image, egress), sock, sandboxLabels(target)); err != nil {
+	if err := rt.CreateForTransfer(ctx, VMName(target), transferSpec(target, image, egress, targetHome), sock, sandboxLabels(target)); err != nil {
 		return err
 	}
-	if err := copyWorkspace(ctx, rt, ownedVM(sb), ownedVM(target), int64(target.WorkspaceMiB)<<20); err != nil {
+	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, targetHome > 0); err != nil {
 		return err
 	}
 	if err := m.Runtime.Stop(ctx, VMName(sb)); err != nil {

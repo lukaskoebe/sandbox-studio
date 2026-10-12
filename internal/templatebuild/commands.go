@@ -19,13 +19,20 @@ const (
 	miseCacheDir     = "/tmp/studio-template-mise-cache"
 	miseDownloadsDir = "/tmp/studio-template-mise-downloads"
 	miseStateDir     = "/tmp/studio-template-mise-state"
+	// miseDir holds the template's toolchains and mise config. The base image creates it,
+	// owned by agent, and its /etc/profile.d/studio-mise.sh points login shells at it. It
+	// is on the root layer: sandboxes mount their home disk over /home/agent.
+	miseDir = "/opt/mise"
+	// homeSkelDir is the skeleton a sandbox's home disk is seeded from (guest.HomeSkel).
+	homeSkelDir = "/usr/share/sandbox-studio/home-skel"
 
 	rootPath  = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-	agentPath = "/home/agent/.local/share/mise/shims:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	agentPath = miseDir + "/shims:/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 	aptTimeout   = 15 * time.Minute
 	miseTimeout  = 30 * time.Minute
 	setupTimeout = 15 * time.Minute
+	homeTimeout  = 15 * time.Minute
 )
 
 // Stage is one bounded command in a template build.
@@ -85,6 +92,17 @@ func Commands(spec templatespec.Spec) ([]Stage, error) {
 				Timeout: setupTimeout,
 			},
 		},
+		{
+			Name: "home",
+			Command: runtime.RunCommand{
+				Path:    "/bin/bash",
+				Args:    bashArgs(homeScript, "studio-template-home", []string{homeSkelDir}),
+				User:    "root",
+				Cwd:     "/",
+				Env:     rootEnvironment(),
+				Timeout: homeTimeout,
+			},
+		},
 	}, nil
 }
 
@@ -111,13 +129,13 @@ func agentEnvironment() map[string]string {
 	env["LOGNAME"] = "agent"
 	env["SHELL"] = "/bin/bash"
 	env["PATH"] = agentPath
-	env["MISE_DATA_DIR"] = agentHome + "/.local/share/mise"
-	env["MISE_CONFIG_DIR"] = agentHome + "/.config/mise"
+	env["MISE_DATA_DIR"] = miseDir
+	env["MISE_CONFIG_DIR"] = miseDir + "/config"
 	env["MISE_CACHE_DIR"] = miseCacheDir
 	env["MISE_DOWNLOADS_DIR"] = miseDownloadsDir
 	env["MISE_STATE_DIR"] = miseStateDir
-	env["MISE_INSTALLS_DIR"] = agentHome + "/.local/share/mise/installs"
-	env["MISE_SHIMS_DIR"] = agentHome + "/.local/share/mise/shims"
+	env["MISE_INSTALLS_DIR"] = miseDir + "/installs"
+	env["MISE_SHIMS_DIR"] = miseDir + "/shims"
 	env["MISE_YES"] = "1"
 	return env
 }
@@ -180,48 +198,34 @@ apt-get clean
 rm -rf /var/lib/apt/lists/*
 `
 
-const miseBody = `mkdir -p "$MISE_CONFIG_DIR" "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_DOWNLOADS_DIR" "$MISE_STATE_DIR" "$MISE_INSTALLS_DIR" "$MISE_SHIMS_DIR"
+// miseBody installs the pins into miseDir. Login shells find them through the base
+// image's profile script, not through the home, which a sandbox's home disk replaces.
+const miseBody = `if [ ! -d "$MISE_DATA_DIR" ] || [ ! -w "$MISE_DATA_DIR" ]; then
+    echo "$MISE_DATA_DIR is missing or not writable: the base image predates it, rebuild the base image" >&2
+    exit 1
+fi
+mkdir -p "$MISE_CONFIG_DIR" "$MISE_DATA_DIR" "$MISE_CACHE_DIR" "$MISE_DOWNLOADS_DIR" "$MISE_STATE_DIR" "$MISE_INSTALLS_DIR" "$MISE_SHIMS_DIR"
 if [ "$#" -gt 0 ]; then
     /usr/local/bin/mise use --global "$@"
     /usr/local/bin/mise reshim
-fi
-profilePath="$HOME/.profile"
-if [ -f "$HOME/.bash_profile" ]; then
-    profilePath="$HOME/.bash_profile"
-elif [ -f "$HOME/.bash_login" ]; then
-    profilePath="$HOME/.bash_login"
-fi
-if ! /usr/bin/grep -Fq '# sandbox-studio managed mise login profile' "$profilePath" 2>/dev/null; then
-    cat >> "$profilePath" <<'STUDIO_MISE_PROFILE'
-`
-
-const profileScriptTail = `STUDIO_MISE_PROFILE
 fi
 `
 
 const setupBody = `exec /bin/bash --noprofile --norc -c "$1" studio-template-user-setup
 `
 
+// homeBody replaces the skeleton with the agent's home as setup left it. It runs last, so
+// the skeleton holds everything the template wrote there.
+const homeBody = `skel="$1"
+rm -rf "$skel"
+mkdir -p "$(dirname "$skel")"
+cp -a /home/agent "$skel"
+chown -Rh agent:agent "$skel"
+`
+
 var (
 	rootAptScript = fixedWrapper(rootEnvironment(), rootAptBody)
-	miseScript    = makeMiseScript()
+	miseScript    = fixedWrapper(agentEnvironment(), miseBody)
 	setupScript   = fixedWrapper(agentEnvironment(), setupBody)
+	homeScript    = fixedWrapper(rootEnvironment(), homeBody)
 )
-
-func makeMiseScript() string {
-	var script strings.Builder
-	script.WriteString(fixedWrapper(agentEnvironment(), miseBody))
-	script.WriteByte('\n')
-	script.WriteString("# sandbox-studio managed mise login profile\n")
-	script.WriteString("if [ -r ")
-	script.WriteString(shellLiteral(studioHook))
-	script.WriteString(" ]; then\n    . ")
-	script.WriteString(shellLiteral(studioHook))
-	script.WriteString("\nfi\n")
-	script.WriteString("for name in ${!MISE_@}; do unset \"$name\"; done\n")
-	script.WriteString(environmentExports(agentEnvironment()))
-	script.WriteByte('\n')
-	script.WriteString("eval \"$(/usr/local/bin/mise activate bash)\"\n")
-	script.WriteString(profileScriptTail)
-	return script.String()
-}

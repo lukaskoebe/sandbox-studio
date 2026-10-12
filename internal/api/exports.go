@@ -42,7 +42,7 @@ func (s *Server) registerExports(api huma.API, mux *http.ServeMux) {
 		OperationID: "exportSandbox", Method: http.MethodGet,
 		Path: "/api/environments/{env}/sandboxes/{id}/export", Tags: []string{"sandboxes"},
 		Summary: "Download a sandbox as a .studio-sandbox file",
-		Description: "Streams the template spec, resources and /workspace. Secrets, network identity, approvals, checkpoints and Docker state are not included. " +
+		Description: "Streams the template spec, resources, /workspace and /home/agent. Secrets, network identity, approvals, checkpoints and Docker state are not included. " +
 			"A running sandbox is exported while it runs, so files written meanwhile may be inconsistent. A stopped one is started without services and stopped again.",
 		Parameters: []*huma.Param{pathParam("env", "Environment ID"), pathParam("id", "Sandbox ID")},
 		Responses: map[string]*huma.Response{
@@ -55,7 +55,7 @@ func (s *Server) registerExports(api huma.API, mux *http.ServeMux) {
 		Path: "/api/environments/{env}/sandbox-imports", Tags: []string{"sandboxes"},
 		Summary: "Upload a .studio-sandbox file",
 		Description: "Creates a sandbox from an export in the background; poll the returned import. " +
-			"The workspace archive may be at most the exported workspace size. A name already in use gets a numeric suffix.",
+			"The workspace archive may be at most the exported workspace size, and the home archive at most the 4 GiB home disk. A name already in use gets a numeric suffix.",
 		Parameters:  []*huma.Param{pathParam("env", "Environment ID")},
 		RequestBody: &huma.RequestBody{Required: true, Content: binary},
 		Responses: map[string]*huma.Response{
@@ -138,6 +138,8 @@ func transferError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, sandboxes.ErrWorkspaceTooLarge):
 		return huma.NewError(http.StatusRequestEntityTooLarge, "the workspace archive exceeds the exported workspace size")
+	case errors.Is(err, sandboxes.ErrHomeTooLarge):
+		return huma.NewError(http.StatusRequestEntityTooLarge, "the home archive exceeds the home disk")
 	case errors.Is(err, sandboxes.ErrInsufficientDisk):
 		return huma.NewError(http.StatusInsufficientStorage, err.Error())
 	case errors.Is(err, sandboxes.ErrTransferUnsupported), errors.Is(err, sandboxes.ErrBuildsUnavailable):

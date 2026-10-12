@@ -30,6 +30,12 @@ const lostFound = "lost+found"
 // devices are skipped with a warning on warn. A file that changes while it is read is
 // copied as far as it can be, with a warning; the archive stays well-formed.
 func ExportWorkspace(root string, w io.Writer, warn io.Writer) error {
+	return exportTree(root, w, warn, nil)
+}
+
+// exportTree is ExportWorkspace, leaving out what skip, if set, reports for a relative
+// name.
+func exportTree(root string, w io.Writer, warn io.Writer, skip func(rel string) bool) error {
 	gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
 	if err != nil {
 		return err
@@ -51,6 +57,12 @@ func ExportWorkspace(root string, w io.Writer, warn io.Writer) error {
 		rel = filepath.ToSlash(rel)
 		if rel == lostFound && d.IsDir() {
 			return fs.SkipDir
+		}
+		if skip != nil && skip(rel) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
 		}
 		info, err := d.Info()
 		if errors.Is(err, fs.ErrNotExist) {
