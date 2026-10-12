@@ -17,7 +17,7 @@ const (
 func DefaultTeammateHarness(kind string) (harness, model string) {
 	switch kind {
 	case KindAnthropicAPI:
-		return HarnessClaude, "claude-sonnet-4-5"
+		return HarnessClaude, "claude-sonnet-5-5"
 	case KindOpenAIAPI:
 		return HarnessCodex, "gpt-5.1-codex"
 	case KindOpenAICompatible:

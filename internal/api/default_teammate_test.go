@@ -28,7 +28,7 @@ func TestFirstProviderCreatesTheDefaultTeammate(t *testing.T) {
 	}
 	iris := list[0]
 	if iris.Name != teammates.DefaultTeammateName || iris.Role != teammates.DefaultTeammateRole || iris.Soul != teammates.DefaultTeammateSoul ||
-		iris.Harness != "claude" || iris.ProviderID != anthropic.ID || iris.Model != "claude-sonnet-4-5" ||
+		iris.Harness != "claude" || iris.ProviderID != anthropic.ID || iris.Model != "claude-sonnet-5-5" ||
 		iris.GitName != "Iris (agent)" || iris.GitEmail != "iris@agents.invalid" {
 		t.Fatalf("default teammate = %+v", iris)
 	}

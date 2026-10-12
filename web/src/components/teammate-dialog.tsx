@@ -265,7 +265,7 @@ function TeammateForm({
             provider?.kind === "openai_compatible"
               ? provider.model
               : needsModel
-                ? "claude-sonnet-4-5"
+                ? "claude-sonnet-5-5"
                 : "The subscription's default"
           }
           value={model}
