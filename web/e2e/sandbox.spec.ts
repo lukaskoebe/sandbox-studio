@@ -20,7 +20,7 @@ test("sandbox lifecycle: create, terminal, stop, start, delete", async ({
 
   await page.getByRole("button", { name: "Stop" }).click()
   await expect(
-    page.getByText("Your workspace and Docker images are kept.")
+    page.getByText("Your workspace, home directory and Docker images are kept.")
   ).toBeVisible()
   expect((await api.guest(id)).connected).toBe(false)
 
