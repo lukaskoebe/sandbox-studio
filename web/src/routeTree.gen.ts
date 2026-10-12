@@ -36,6 +36,7 @@ import { Route as EEnvSettingsTemplatesRouteImport } from './routes/e.$env.setti
 import { Route as EEnvTeammatesIndexRouteImport } from './routes/e.$env.teammates.index'
 import { Route as EEnvTeammatesIdRouteImport } from './routes/e.$env.teammates.$id'
 import { Route as EEnvTeammatesIdIndexRouteImport } from './routes/e.$env.teammates.$id.index'
+import { Route as EEnvTeammatesIdChatsRouteImport } from './routes/e.$env.teammates.$id.chats'
 import { Route as EEnvTeammatesIdSettingsRouteImport } from './routes/e.$env.teammates.$id.settings'
 
 const IndexRoute = IndexRouteImport.update({
@@ -173,6 +174,11 @@ const EEnvTeammatesIdIndexRoute = EEnvTeammatesIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => EEnvTeammatesIdRoute,
 } as any)
+const EEnvTeammatesIdChatsRoute = EEnvTeammatesIdChatsRouteImport.update({
+  id: '/chats',
+  path: '/chats',
+  getParentRoute: () => EEnvTeammatesIdRoute,
+} as any)
 const EEnvTeammatesIdSettingsRoute = EEnvTeammatesIdSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -206,6 +212,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/chats/': typeof EEnvChatsIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
+  '/e/$env/teammates/$id/chats': typeof EEnvTeammatesIdChatsRoute
   '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
   '/e/$env/teammates/$id/': typeof EEnvTeammatesIdIndexRoute
 }
@@ -232,6 +239,7 @@ export interface FileRoutesByTo {
   '/e/$env/chats': typeof EEnvChatsIndexRoute
   '/e/$env/settings': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates': typeof EEnvTeammatesIndexRoute
+  '/e/$env/teammates/$id/chats': typeof EEnvTeammatesIdChatsRoute
   '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
   '/e/$env/teammates/$id': typeof EEnvTeammatesIdIndexRoute
 }
@@ -263,6 +271,7 @@ export interface FileRoutesById {
   '/e/$env/chats/': typeof EEnvChatsIndexRoute
   '/e/$env/settings/': typeof EEnvSettingsIndexRoute
   '/e/$env/teammates/': typeof EEnvTeammatesIndexRoute
+  '/e/$env/teammates/$id/chats': typeof EEnvTeammatesIdChatsRoute
   '/e/$env/teammates/$id/settings': typeof EEnvTeammatesIdSettingsRoute
   '/e/$env/teammates/$id/': typeof EEnvTeammatesIdIndexRoute
 }
@@ -295,6 +304,7 @@ export interface FileRouteTypes {
     | '/e/$env/chats/'
     | '/e/$env/settings/'
     | '/e/$env/teammates/'
+    | '/e/$env/teammates/$id/chats'
     | '/e/$env/teammates/$id/settings'
     | '/e/$env/teammates/$id/'
   fileRoutesByTo: FileRoutesByTo
@@ -321,6 +331,7 @@ export interface FileRouteTypes {
     | '/e/$env/chats'
     | '/e/$env/settings'
     | '/e/$env/teammates'
+    | '/e/$env/teammates/$id/chats'
     | '/e/$env/teammates/$id/settings'
     | '/e/$env/teammates/$id'
   id:
@@ -351,6 +362,7 @@ export interface FileRouteTypes {
     | '/e/$env/chats/'
     | '/e/$env/settings/'
     | '/e/$env/teammates/'
+    | '/e/$env/teammates/$id/chats'
     | '/e/$env/teammates/$id/settings'
     | '/e/$env/teammates/$id/'
   fileRoutesById: FileRoutesById
@@ -552,6 +564,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvTeammatesIdIndexRouteImport
       parentRoute: typeof EEnvTeammatesIdRoute
     }
+    '/e/$env/teammates/$id/chats': {
+      id: '/e/$env/teammates/$id/chats'
+      path: '/chats'
+      fullPath: '/e/$env/teammates/$id/chats'
+      preLoaderRoute: typeof EEnvTeammatesIdChatsRouteImport
+      parentRoute: typeof EEnvTeammatesIdRoute
+    }
     '/e/$env/teammates/$id/settings': {
       id: '/e/$env/teammates/$id/settings'
       path: '/settings'
@@ -598,11 +617,13 @@ const EEnvSettingsRouteWithChildren = EEnvSettingsRoute._addFileChildren(
 )
 
 interface EEnvTeammatesIdRouteChildren {
+  EEnvTeammatesIdChatsRoute: typeof EEnvTeammatesIdChatsRoute
   EEnvTeammatesIdSettingsRoute: typeof EEnvTeammatesIdSettingsRoute
   EEnvTeammatesIdIndexRoute: typeof EEnvTeammatesIdIndexRoute
 }
 
 const EEnvTeammatesIdRouteChildren: EEnvTeammatesIdRouteChildren = {
+  EEnvTeammatesIdChatsRoute: EEnvTeammatesIdChatsRoute,
   EEnvTeammatesIdSettingsRoute: EEnvTeammatesIdSettingsRoute,
   EEnvTeammatesIdIndexRoute: EEnvTeammatesIdIndexRoute,
 }

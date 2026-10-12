@@ -25,6 +25,7 @@ export const Route = createFileRoute("/e/$env/teammates/$id")({
 
 const tabs = [
   { value: "overview", label: "Overview", to: "/e/$env/teammates/$id" },
+  { value: "chats", label: "Chats", to: "/e/$env/teammates/$id/chats" },
   {
     value: "settings",
     label: "Settings",
