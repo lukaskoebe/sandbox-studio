@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -178,13 +179,13 @@ func (s *Server) setupConditions(ctx context.Context, envID string) (SetupSteps,
 	if len(forges) > 0 {
 		holds.Git = setupDone
 	}
-	sandboxes, err := s.Store.Sandboxes(ctx, envID)
+	recs, err := s.Store.Sandboxes(ctx, envID)
 	if err != nil {
 		return holds, err
 	}
-	for _, sb := range sandboxes {
-		// Browser VMs are sandboxes too, but the first sandbox is one a user made.
-		if sb.Kind == "" {
+	for _, sb := range recs {
+		// The sandboxes the list shows: build and browser VMs don't count as the first one.
+		if sandboxes.Public(sb) {
 			holds.Sandbox = setupDone
 		}
 	}
