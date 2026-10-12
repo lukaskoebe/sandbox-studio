@@ -1,7 +1,11 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { GitBranchIcon, GitPullRequestIcon } from "@phosphor-icons/react"
+import {
+  GitCommitIcon,
+  GitDiffIcon,
+  GitPullRequestIcon,
+} from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
@@ -13,6 +17,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
+import { Ident } from "@/components/ident"
+import { KindChip } from "@/components/kind-chip"
+import { SectionHeader } from "@/components/section-header"
+import { StatusDot } from "@/components/status-dot"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
   $api,
@@ -21,7 +29,7 @@ import {
   type Approval,
   type GitDetail,
 } from "@/lib/api/client"
-import { gitSummary } from "@/lib/approval-kinds"
+import { approvalKind, gitSummary } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
@@ -73,15 +81,13 @@ export function GitOutcome({ git }: { git: GitDetail }) {
       <span className="text-xs text-muted-foreground">{p.prResult}</span>
     ) : null
   }
-  const variant =
-    p.state === "pushed"
-      ? "secondary"
-      : p.state === "failed"
-        ? "destructive"
-        : "outline"
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-xs">
-      <Badge variant={variant}>{p.state}</Badge>
+      {p.state === "failed" ? (
+        <StatusDot status="failed" />
+      ) : (
+        <span className="capitalize">{p.state}</span>
+      )}
       {(p.result || p.note) && (
         <span className="truncate text-muted-foreground">
           {[p.result, p.note && `Note: ${p.note}`].filter(Boolean).join(" · ")}
@@ -111,17 +117,18 @@ export function GitReview({ approval }: { approval: Approval }) {
     })
   const rv = git.review
   const pr = git.pullRequest
+  const branch = pr ? `${pr.head} → ${pr.base}` : rv?.branch
 
   return (
     <div className="grid gap-4">
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt className="text-muted-foreground">Repository</dt>
-        <dd className="font-mono">
-          {git.push.forgeName}/{git.push.owner}/{git.push.repo}
+        <dd>
+          <Ident>{`${git.push.forgeName}/${git.push.owner}/${git.push.repo}`}</Ident>
         </dd>
         <dt className="text-muted-foreground">Sandbox</dt>
         <dd>
-          {rv?.sandbox ?? git.push.sandboxId}
+          {rv?.sandbox ?? <Ident>{git.push.sandboxId}</Ident>}
           {git.push.teammateName && (
             <span className="text-muted-foreground">
               {" "}
@@ -130,8 +137,8 @@ export function GitReview({ approval }: { approval: Approval }) {
           )}
         </dd>
         <dt className="text-muted-foreground">Branch</dt>
-        <dd className="font-mono">
-          {pr ? `${pr.head} → ${pr.base}` : rv?.branch}
+        <dd>
+          {branch && <Ident>{branch}</Ident>}
           {rv && !rv.old && (
             <Badge variant="outline" className="ml-1.5 font-sans">
               new branch
@@ -141,9 +148,9 @@ export function GitReview({ approval }: { approval: Approval }) {
         {rv && (
           <>
             <dt className="text-muted-foreground">Change</dt>
-            <dd className="font-mono">
-              {rv.old ? short(rv.old) : "∅"} → {short(rv.new)} · {rv.files}{" "}
-              {rv.files === 1 ? "file" : "files"}{" "}
+            <dd>
+              <Ident>{`${rv.old ? short(rv.old) : "∅"} → ${short(rv.new)}`}</Ident>{" "}
+              · {rv.files} {rv.files === 1 ? "file" : "files"}{" "}
               <span className="text-emerald-600 dark:text-emerald-400">
                 +{rv.additions}
               </span>{" "}
@@ -162,8 +169,13 @@ export function GitReview({ approval }: { approval: Approval }) {
       </dl>
 
       {pr && (
-        <section className="grid gap-1.5">
-          <h3 className="text-xs font-medium">{pr.title}</h3>
+        <section className="grid gap-2">
+          <SectionHeader
+            title="Pull request"
+            icon={GitPullRequestIcon}
+            area="git"
+          />
+          <p className="text-xs font-medium">{pr.title}</p>
           {pr.body && (
             <ScrollArea
               className="rounded-md bg-muted/50"
@@ -178,15 +190,20 @@ export function GitReview({ approval }: { approval: Approval }) {
       )}
 
       {rv && (
-        <section className="grid gap-1.5">
-          <h3 className="text-xs font-medium">Commits</h3>
+        <section className="grid gap-2">
+          <SectionHeader
+            title="Commits"
+            icon={GitCommitIcon}
+            area="git"
+            count={(rv.commits?.length ?? 0) + rv.moreCommits}
+          />
           <ul className="divide-y rounded-md text-xs ring-1 ring-foreground/10">
             {(rv.commits ?? []).map((c) => (
               <li key={c.sha} className="grid gap-0.5 px-2 py-1.5">
                 <div className="flex min-w-0 items-baseline gap-2">
-                  <span className="font-mono text-muted-foreground">
+                  <Ident copy className="text-muted-foreground">
                     {short(c.sha)}
-                  </span>
+                  </Ident>
                   <span className="truncate font-medium">{c.subject}</span>
                   <span className="ml-auto shrink-0 text-muted-foreground">
                     {c.author} · {formatAge(c.when)}
@@ -209,11 +226,15 @@ export function GitReview({ approval }: { approval: Approval }) {
       )}
 
       {rv && (
-        <section className="grid min-w-0 gap-1.5">
-          <h3 className="flex items-center gap-2 text-xs font-medium">
-            Diff
-            {rv.diffTruncated && <Badge variant="outline">truncated</Badge>}
-          </h3>
+        <section className="grid min-w-0 gap-2">
+          <SectionHeader
+            title="Diff"
+            icon={GitDiffIcon}
+            area="git"
+            actions={
+              rv.diffTruncated && <Badge variant="outline">truncated</Badge>
+            }
+          />
           <UnifiedDiff diff={rv.diff} />
         </section>
       )}
@@ -305,20 +326,21 @@ export function GitReviewSheet({
   approval?: Approval
   onOpenChange: (open: boolean) => void
 }) {
+  const kind = approval && approvalKind(approval)
   return (
     <Sheet open={approval !== undefined} onOpenChange={onOpenChange}>
       <SheetContent className="data-[side=right]:sm:max-w-3xl">
-        {approval && (
+        {approval && kind && (
           <>
             <SheetHeader>
-              <SheetTitle className="flex items-center gap-2">
-                {approval.git?.pullRequest ? (
-                  <GitPullRequestIcon />
-                ) : (
-                  <GitBranchIcon />
-                )}
-                {gitSummary(approval)}
-              </SheetTitle>
+              <KindChip
+                area={kind.area}
+                icon={kind.icon}
+                className="self-start"
+              >
+                {kind.title}
+              </KindChip>
+              <SheetTitle>{gitSummary(approval)}</SheetTitle>
               <SheetDescription>
                 {approval.git?.pullRequest
                   ? "The push was approved and is on the forge. Approving opens this pull request."
