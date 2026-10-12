@@ -32,8 +32,9 @@ import (
 // shown and undone.
 //
 // The store is a directory owned by the agent process with mode 0700, in the agent
-// user's home on the root disk: blobs/<2 hex>/<sha256> and manifests/<id>.json. The
-// workspace is walked through directory descriptors without following any symlink;
+// user's home (the home disk, or the root disk of older sandboxes): blobs/<2 hex>/<sha256>
+// and manifests/<id>.json. The workspace is walked through directory descriptors without
+// following any symlink;
 // symlinks are recorded and restored as links, never followed. Every .git directory is
 // skipped, and in a git work tree only what `git ls-files -co --exclude-standard` lists
 // is kept, so ignored files are neither snapshotted, nor restored, nor removed.
