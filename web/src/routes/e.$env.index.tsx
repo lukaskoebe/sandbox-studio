@@ -53,6 +53,16 @@ export const Route = createFileRoute("/e/$env/")({ component: Overview })
 const tableColumns =
   "lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_6.5rem_8.5rem_minmax(0,1fr)_3.5rem]"
 
+/** Each cell's column and row from the large breakpoint, placed explicitly so a row stays on one line. */
+const cellAt = {
+  name: "lg:col-start-1 lg:row-start-1",
+  owner: "lg:col-start-2 lg:row-start-1",
+  template: "lg:col-start-3 lg:row-start-1",
+  status: "lg:col-start-4 lg:row-start-1",
+  ports: "lg:col-start-5 lg:row-start-1",
+  waiting: "lg:col-start-6 lg:row-start-1",
+}
+
 /**
  * The environment at a glance: the numbers, the sandboxes as a table with what waits on each,
  * their family tree, and on the right the approvals and the teammates.
@@ -107,10 +117,8 @@ function Overview() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Stats
           running={list.filter(isReady).length}
-          total={list.length}
           approvals={waiting.length}
           working={people.filter((p) => presence(p.id) === "working").length}
-          waitingFor={people.filter((p) => presence(p.id) === "waiting").length}
         />
         <div className="grid gap-6 p-3 md:p-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="grid min-w-0 content-start gap-6">
@@ -184,25 +192,17 @@ function Overview() {
 /** The numbers you can count without another request: sandboxes, approvals and teammates. */
 function Stats({
   running,
-  total,
   approvals,
   working,
-  waitingFor,
 }: {
   running: number
-  total: number
   approvals: number
   working: number
-  waitingFor: number
 }) {
   const items = [
-    { label: "Sandboxes", value: running, rest: `/ ${total} running` },
-    { label: "Approvals", value: approvals, rest: "waiting for you" },
-    {
-      label: "Teammates",
-      value: working,
-      rest: `working · ${waitingFor} waiting`,
-    },
+    { label: "Sandboxes", value: running, rest: "running" },
+    { label: "Approvals", value: approvals, rest: "waiting" },
+    { label: "Teammates", value: working, rest: "working" },
   ]
   return (
     <div className="grid grid-cols-3 border-b bg-[linear-gradient(var(--wb-grid)_1px,transparent_1px),linear-gradient(90deg,var(--wb-grid)_1px,transparent_1px)] bg-size-[12px_12px]">
@@ -275,7 +275,12 @@ function SandboxTable({
                 tableColumns
               )}
             >
-              <span className="flex min-w-0 flex-1 items-baseline gap-2">
+              <span
+                className={cn(
+                  "flex min-w-0 flex-1 items-baseline gap-2",
+                  cellAt.name
+                )}
+              >
                 <span className="truncate font-mono font-medium">
                   {sb.name}
                 </span>
@@ -283,12 +288,17 @@ function SandboxTable({
                   {sb.id}
                 </span>
               </span>
-              <span className="shrink-0 justify-self-end lg:col-start-6">
+              <span className={cn("shrink-0 justify-self-end", cellAt.waiting)}>
                 <WaitingCount count={waiting.get(sb.id) ?? 0} />
               </span>
               <span className="flex min-w-0 basis-full flex-wrap items-center gap-x-3 gap-y-1 text-xs lg:contents">
                 {owner ? (
-                  <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                  <span
+                    className={cn(
+                      "flex min-w-0 items-center gap-1.5 text-muted-foreground",
+                      cellAt.owner
+                    )}
+                  >
                     <TeammateAvatar
                       name={owner}
                       className="size-4 rounded-[3px] text-[0.5rem]"
@@ -296,13 +306,20 @@ function SandboxTable({
                     <span className="truncate">{owner}</span>
                   </span>
                 ) : (
-                  <span className="text-muted-foreground/60">No owner</span>
+                  <span
+                    className={cn("text-muted-foreground/60", cellAt.owner)}
+                  >
+                    No owner
+                  </span>
                 )}
-                <span className="max-lg:hidden">
+                <span className={cn("max-lg:hidden", cellAt.template)}>
                   <Ident>{shortTemplate(sb.templateId)}</Ident>
                 </span>
-                <StatusDot {...phaseDot(phase(sb))} className="shrink-0" />
-                <RowPorts env={env} sandbox={sb} />
+                <StatusDot
+                  {...phaseDot(phase(sb))}
+                  className={cn("shrink-0", cellAt.status)}
+                />
+                <RowPorts env={env} sandbox={sb} className={cellAt.ports} />
               </span>
             </Link>
           )
@@ -313,7 +330,15 @@ function SandboxTable({
 }
 
 /** A sandbox's listening ports, in the table. They are only asked for while it runs. */
-function RowPorts({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
+function RowPorts({
+  env,
+  sandbox: sb,
+  className,
+}: {
+  env: string
+  sandbox: Sandbox
+  className?: string
+}) {
   const ports = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/ports",
@@ -322,9 +347,11 @@ function RowPorts({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   )
   const list: PreviewPort[] = ports.data ?? []
   if (list.length === 0)
-    return <span className="text-muted-foreground/60">None</span>
+    return (
+      <span className={cn("text-muted-foreground/60", className)}>None</span>
+    )
   return (
-    <span className="flex min-w-0 flex-wrap gap-1">
+    <span className={cn("flex min-w-0 flex-wrap gap-1", className)}>
       {list.map((p) => (
         <Ident key={p.port}>{`:${p.port}`}</Ident>
       ))}

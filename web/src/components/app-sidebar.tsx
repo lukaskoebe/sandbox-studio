@@ -319,7 +319,7 @@ export function AppSidebar({ env }: { env: string }) {
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border p-2">
         <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsible=icon]:hidden">
-          <p className="text-[0.625rem] text-muted-foreground">
+          <p className="min-w-0 truncate text-[0.625rem] text-muted-foreground">
             Sandbox Studio{" "}
             <span className="font-mono">{health.data?.version}</span>
           </p>
