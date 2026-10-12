@@ -2839,6 +2839,10 @@
           "id": {
             "type": "string"
           },
+          "name": {
+            "description": "The template's display name; empty for sandboxes without one, or for a template that is gone",
+            "type": "string"
+          },
           "sandboxes": {
             "items": {
               "$ref": "#/components/schemas/LineageTreeNode"
@@ -4670,6 +4674,10 @@
           "id": {
             "type": "string"
           },
+          "name": {
+            "description": "The display name: the template's stack and version, such as node-22+python-3.13@2",
+            "type": "string"
+          },
           "platform": {
             "type": "string"
           },
@@ -4679,6 +4687,7 @@
         },
         "required": [
           "id",
+          "name",
           "environmentId",
           "platform",
           "resources",
@@ -5329,6 +5338,10 @@
             "$ref": "#/components/schemas/Progress",
             "description": "The create or fork that runs or failed"
           },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
           "status": {
             "description": "The VM's runtime status; creating or failed while a create or fork runs or after it failed",
             "enum": [
@@ -5350,6 +5363,10 @@
             "type": "string"
           },
           "templateId": {
+            "type": "string"
+          },
+          "templateName": {
+            "description": "The display name of the template the sandbox runs, such as node-22+python-3.13@2",
             "type": "string"
           },
           "workspaceMiB": {
@@ -9447,7 +9464,7 @@
         ]
       },
       "post": {
-        "description": "Stop the sandbox first; checkpoint capture requires a stopped sandbox.",
+        "description": "Captures the disks of a running or stopped sandbox. A running sandbox is frozen while its filesystems are flushed; one created with systemd as its init must be stopped first.",
         "operationId": "createCheckpoint",
         "parameters": [
           {
