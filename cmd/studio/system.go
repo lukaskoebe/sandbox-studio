@@ -23,9 +23,7 @@ import (
 // doctorCheck runs the host checks. Studio's own listeners count as healthy when owned.
 // The SSH agent is checked when agentForges SSH forges sign with it.
 func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool, agentForges int) doctor.Report {
-	p := doctor.HostProbes()
-	p.MSBPath = runtime.MSBPath
-	p.ImageCached = runtime.ImageCached
+	p := hostProbes()
 	p.SSHAgent = func(ctx context.Context) (int, string, error) {
 		st := gitreview.CheckAgent(ctx)
 		if !st.Available {

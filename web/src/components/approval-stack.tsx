@@ -84,7 +84,10 @@ export function ApprovalStack() {
   if (items.length === 0) return sheet
 
   return (
-    <div className="fixed right-4 bottom-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
+    <section
+      aria-label="Approvals"
+      className="fixed right-4 bottom-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+    >
       <div className="flex items-center gap-2 px-1 text-xs">
         <span className="font-medium">Approvals</span>
         <span className="text-muted-foreground">{items.length}</span>
@@ -125,7 +128,7 @@ export function ApprovalStack() {
         />
       )}
       {sheet}
-    </div>
+    </section>
   )
 }
 
@@ -172,7 +175,7 @@ function ApprovalCard({
     .filter(Boolean)
     .join(" · ")
   return (
-    <Card size="sm" className="gap-2 shadow-lg">
+    <Card size="sm" className="gap-2 shadow-lg" data-testid="approval-card">
       <CardHeader>
         <CardTitle className="flex items-start gap-1.5">
           <kind.icon

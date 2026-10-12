@@ -56,3 +56,31 @@ jobs:
       - run: pnpm lint
       - run: pnpm check
       - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Chromium for Playwright
+        working-directory: web
+        run: pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium
+      - run: go vet -tags e2e,nobadger,nomysql,nopgx ./...
+      - name: End-to-end suite against the fake runtime
+        run: make e2e
+      - name: Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results

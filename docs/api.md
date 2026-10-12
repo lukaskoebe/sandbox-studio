@@ -16,6 +16,8 @@
   the browser live view; sandbox export download and import upload.
 - The handler chain is `api.Guard(auth.Middleware(preview.Route(…, mux)))`; the embedded UI
   (`internal/webui`) is served at `/`.
+- The e2e build (`-tags e2e`) adds a control API under `/api/e2e/` for the fake runtime. It
+  isn't in the OpenAPI document; see [frontend](frontend.md#end-to-end-tests).
 
 ## Auth
 

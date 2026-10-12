@@ -168,7 +168,8 @@ internal/
   preview/ webauth/ api/ events/ webui/ HTTP surface
   store/                                SQLite catalog and migrations
   doctor/ autostart/ updates/ diskspace/ paths/ version/
-web/                  Vite + React + TanStack Router + shadcn (Base UI)
+  e2e/                                  fakes of the e2e build (-tags e2e only)
+web/                  Vite + React + TanStack Router + shadcn (Base UI); e2e tests in web/e2e
 images/base/          base image (Dockerfile + rootfs)
 images/browser/       browser VM image
 site/                 user documentation (Astro Starlight)
@@ -191,13 +192,19 @@ docs/                 developer documentation
 
 - Go unit tests per package, all with fakes: no VMs, no real LLM APIs, no keychain.
 - `internal/sandboxes/integration_test.go` (`-tags integration`) boots the real base image.
-  It needs a microsandbox-capable host and runs by hand, not in CI.
+  It needs a microsandbox-capable host with KVM; `nightly.yml` runs it on a KVM runner.
+- End-to-end tests: the Playwright suite in `web/e2e` runs against Studio built with `-tags e2e`,
+  where `internal/e2e` replaces the VM runtime and the guest agent with fakes. See
+  [frontend](frontend.md#end-to-end-tests).
 - `internal/harness/opencode-plugin.test.mjs` tests the OpenCode plugin with `node --test`.
 - Live qualifications are programs under `spikes/`; results are in [spikes](spikes.md).
 - CI (`.github/workflows/ci.yml`): on Linux, macOS and Windows, `go vet`, `go test`,
   `go build`; on Linux also gofmt, the OpenAPI schema check, the guest agent build,
   `install.sh` tests and shellcheck. The web job checks the generated API types, then runs
-  typecheck, ESLint, Prettier and the build. `docs.yml` builds the site.
+  typecheck, ESLint, Prettier and the build. The e2e job runs `make e2e` on Linux with
+  Playwright's Chromium. `docs.yml` builds the site.
+- Nightly (`.github/workflows/nightly.yml`): the integration test on a KVM runner, after
+  Studio has installed microsandbox on its first start.
 - Releases: see [release](release.md).
 
 ## Conventions

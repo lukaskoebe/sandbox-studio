@@ -8,7 +8,7 @@ TAGS := nobadger,nomysql,nopgx
 # pipefail in the image recipes needs bash.
 SHELL := bash
 
-.PHONY: all web build agent api test lint dev clean image image-browser
+.PHONY: all web build agent api test lint e2e e2e-bin dev clean image image-browser
 
 all: web build
 
@@ -35,6 +35,14 @@ test:
 lint:
 	test -z "$$(gofmt -l .)"
 	cd web && pnpm typecheck && pnpm lint && pnpm check
+
+# End-to-end tests: the web UI against Studio built with in-process fakes instead of VMs
+# (internal/e2e). Needs Chromium; see CONTRIBUTING.md.
+e2e: web e2e-bin
+	cd web && pnpm e2e
+
+e2e-bin:
+	go build -tags "e2e,$(TAGS)" -ldflags "$(LDFLAGS)" -o bin/studio-e2e ./cmd/studio
 
 dev:
 	go run ./cmd/studio & cd web && pnpm dev
