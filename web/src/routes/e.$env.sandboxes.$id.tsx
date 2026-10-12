@@ -46,6 +46,7 @@ import { CheckpointsSheet } from "@/components/checkpoints-sheet"
 import { ConnectionsSheet } from "@/components/connections-sheet"
 import { ExportSandboxButton } from "@/components/export-sandbox-button"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
+import { LineageTimeline } from "@/components/lineage-timeline"
 import { AgentSessions } from "@/components/agent-sessions"
 import { SandboxChats } from "@/components/chat/sandbox-chats"
 import { PageHeader } from "@/components/page-header"
@@ -260,6 +261,19 @@ function SandboxPage() {
             className="flex min-h-0 min-w-0 flex-1 flex-col"
           >
             <Body env={env} sandbox={sb} focus={focus} />
+            {/* lineage */}
+            <section
+              aria-labelledby="sandbox-history"
+              className="shrink-0 border-t px-3 py-3"
+            >
+              <h2
+                id="sandbox-history"
+                className="mb-2 text-xs font-medium text-muted-foreground"
+              >
+                History
+              </h2>
+              <LineageTimeline environmentId={env} sandboxId={sb.id} />
+            </section>
           </div>
           {browserOpen && sb.teammateId && (
             <>
