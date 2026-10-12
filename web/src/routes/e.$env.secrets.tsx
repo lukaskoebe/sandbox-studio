@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   CopyIcon,
+  KeyIcon,
   PencilSimpleIcon,
   PlusIcon,
   TrashIcon,
@@ -38,8 +39,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Ident } from "@/components/ident"
 import { PageHeader } from "@/components/page-header"
 import { SecretDialog } from "@/components/secret-dialog"
+import { SectionHeader } from "@/components/section-header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { $api, errorMessage, type Secret } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
@@ -107,118 +110,125 @@ function SecretsPage() {
         </p>
         {secrets.isPending ? (
           <Spinner className="mx-auto block" />
-        ) : list.length ? (
-          <div className="rounded-lg ring-1 ring-foreground/10">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Scope</TableHead>
-                  <TableHead>Hosts</TableHead>
-                  <TableHead>Placeholder</TableHead>
-                  <TableHead>Note</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead>
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {list.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-mono">
-                      {s.name}
-                      {managed.has(s.id) && (
-                        <Badge variant="secondary" className="ml-1.5 font-sans">
-                          Provider {managed.get(s.id)}
-                        </Badge>
-                      )}
-                      {s.studioOnly && (
-                        <Badge variant="secondary" className="ml-1.5 font-sans">
-                          {s.name.endsWith("_SSH_KEY")
-                            ? "Forge SSH key"
-                            : "Forge token"}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <ScopeCell
-                        secret={s}
-                        teammates={teammateNames}
-                        sandboxes={sandboxNames}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex max-w-xs flex-wrap gap-1">
-                        {(s.hosts ?? []).map((host) => (
-                          <Badge
-                            key={host}
-                            variant="outline"
-                            className="font-mono"
-                          >
-                            {host}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <span className="block max-w-40 truncate font-mono text-muted-foreground">
-                          {s.placeholder}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          title="Copy placeholder"
-                          aria-label="Copy placeholder"
-                          onClick={() => copy(s.placeholder)}
-                        >
-                          <CopyIcon />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      <span className="block max-w-48 truncate">{s.note}</span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatAge(s.updatedAt)}
-                    </TableCell>
-                    <TableCell>
-                      {!managed.has(s.id) && !s.studioOnly && (
-                        <div className="flex justify-end gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Edit secret"
-                            onClick={() => setDialog({ secret: s })}
-                          >
-                            <PencilSimpleIcon />
-                          </Button>
-                          <DeleteSecret env={env} secret={s} />
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
         ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No secrets yet</EmptyTitle>
-              <EmptyDescription>
-                Add one to let a sandbox use a credential without ever seeing
-                its value.
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <Button onClick={() => setDialog({})}>
-                <PlusIcon />
-                Add secret
-              </Button>
-            </EmptyContent>
-          </Empty>
+          <div className="space-y-2">
+            <SectionHeader title="Secrets" icon={KeyIcon} count={list.length} />
+            {list.length ? (
+              <div className="rounded-lg ring-1 ring-foreground/10">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Scope</TableHead>
+                      <TableHead>Hosts</TableHead>
+                      <TableHead>Placeholder</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead>Updated</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {list.map((s) => (
+                      <TableRow key={s.id}>
+                        <TableCell>
+                          <Ident>{s.name}</Ident>
+                          {managed.has(s.id) && (
+                            <Badge
+                              variant="secondary"
+                              className="ml-1.5 font-sans"
+                            >
+                              Provider {managed.get(s.id)}
+                            </Badge>
+                          )}
+                          {s.studioOnly && (
+                            <Badge
+                              variant="secondary"
+                              className="ml-1.5 font-sans"
+                            >
+                              {s.name.endsWith("_SSH_KEY")
+                                ? "Forge SSH key"
+                                : "Forge token"}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <ScopeCell
+                            secret={s}
+                            teammates={teammateNames}
+                            sandboxes={sandboxNames}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex max-w-xs flex-wrap gap-x-2 gap-y-0.5">
+                            {(s.hosts ?? []).map((host) => (
+                              <Ident key={host}>{host}</Ident>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <span className="block max-w-40 truncate text-muted-foreground">
+                              <Ident>{s.placeholder}</Ident>
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              title="Copy placeholder"
+                              aria-label="Copy placeholder"
+                              onClick={() => copy(s.placeholder)}
+                            >
+                              <CopyIcon />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          <span className="block max-w-48 truncate">
+                            {s.note}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatAge(s.updatedAt)}
+                        </TableCell>
+                        <TableCell>
+                          {!managed.has(s.id) && !s.studioOnly && (
+                            <div className="flex justify-end gap-0.5">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Edit secret"
+                                onClick={() => setDialog({ secret: s })}
+                              >
+                                <PencilSimpleIcon />
+                              </Button>
+                              <DeleteSecret env={env} secret={s} />
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyTitle>No secrets yet</EmptyTitle>
+                  <EmptyDescription>
+                    Add one to let a sandbox use a credential without ever
+                    seeing its value.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button onClick={() => setDialog({})}>
+                    <PlusIcon />
+                    Add secret
+                  </Button>
+                </EmptyContent>
+              </Empty>
+            )}
+          </div>
         )}
       </ScrollArea>
       <SecretDialog
