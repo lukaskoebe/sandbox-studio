@@ -1,4 +1,4 @@
-// Package agentmem is the host side of memory in agent sessions (PLAN §6.7): it answers
+// Package agentmem is the host side of memory in agent sessions (docs/memory.md): it answers
 // the hooks and memory tools that guests call over their channel, keeps a log of what was
 // recalled and written in each session, and extracts facts from transcripts with the
 // teammate's provider's utility model.

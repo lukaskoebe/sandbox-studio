@@ -18,7 +18,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// Consolidation ("dream", PLAN §6.7): per scope, merge near-duplicates, let the utility
+// Consolidation ("dream", docs/memory.md): per scope, merge near-duplicates, let the utility
 // model judge pairs of facts about the same entity or attribute, apply supersessions,
 // open conflicts for the user, and regenerate entity pages from the current facts.
 

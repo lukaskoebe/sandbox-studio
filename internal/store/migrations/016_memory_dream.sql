@@ -1,4 +1,4 @@
--- Consolidation ("dream", PLAN §6.7). A conflict remembers the judge's reason and the
+-- Consolidation ("dream", docs/memory.md). A conflict remembers the judge's reason and the
 -- memory.conflict approval it opened; a fact pair has at most one conflict.
 ALTER TABLE memory_conflicts ADD COLUMN reason TEXT NOT NULL DEFAULT '';
 ALTER TABLE memory_conflicts ADD COLUMN approval_id TEXT;

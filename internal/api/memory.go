@@ -23,7 +23,7 @@ type memoryPath struct {
 	ID  string `path:"id"`
 }
 
-// registerMemory adds the memory endpoints (PLAN §6.7). Everything written here comes from
+// registerMemory adds the memory endpoints (docs/memory.md). Everything written here comes from
 // the user, so it is stored with tier user and no author teammate.
 func (s *Server) registerMemory(api huma.API) {
 	tags := []string{"memory"}

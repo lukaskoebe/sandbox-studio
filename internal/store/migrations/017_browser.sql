@@ -1,4 +1,4 @@
--- The browser broker (PLAN §6.8). A persona's browser VM is a sandbox row of kind
+-- The browser broker (docs/browser.md). A persona's browser VM is a sandbox row of kind
 -- 'browser': one per persona, created lazily, hidden from the sandbox API.
 ALTER TABLE sandboxes ADD COLUMN kind TEXT NOT NULL DEFAULT '' CHECK (kind IN ('', 'browser'));
 CREATE UNIQUE INDEX sandboxes_browser ON sandboxes (persona_id) WHERE kind = 'browser';

@@ -1,5 +1,5 @@
 // Package integrations is the seam between Studio's core and the services it offers
-// sandboxes on the host (PLAN.md §6.9). An integration serves virtual hosts under
+// sandboxes on the host (docs/git-review.md). An integration serves virtual hosts under
 // studio.internal through the gateway and settles the approvals it raises; the core
 // knows nothing else about it. The git review remote is the first one.
 package integrations

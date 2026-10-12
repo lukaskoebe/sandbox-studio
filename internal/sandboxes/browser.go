@@ -10,7 +10,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// A teammate's browser VM (PLAN §6.8, internal/browser) is a sandbox row of kind browser.
+// A teammate's browser VM (docs/browser.md, internal/browser) is a sandbox row of kind browser.
 // It runs the browser image, is created on the first browser call, stopped when idle and
 // never shown or reachable as a sandbox: Public hides it from the sandbox API, terminals
 // and previews.
