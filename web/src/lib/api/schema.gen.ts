@@ -303,6 +303,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/forges/parse-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Describes the forge for a pasted repository URL (git@host:owner/repo.git, ssh://… or https://…), with a short name not yet taken in the environment. */
+        post: operations["parseForgeURL"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/forges/scan": {
         parameters: {
             query?: never;
@@ -332,6 +349,40 @@ export interface paths {
         post?: never;
         /** @description Removes the forge, its token and the staged pushes to it. Pending pushes can no longer be approved. */
         delete: operations["deleteForge"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/forges/{id}/auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Switches an SSH forge between the host's SSH agent and a key Studio generates. Switching to a key returns its public key; switching to the agent deletes the key. */
+        put: operations["setForgeAuth"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/forges/{id}/dismiss-agent-hint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Hides the suggestion to use a Studio key after the SSH agent asked for confirmation. */
+        post: operations["dismissForgeAgentHint"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1488,6 +1539,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/ssh-agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check the host's SSH agent
+         * @description Whether Studio reaches the SSH agent it signs with for SSH forges, and the keys the agent holds.
+         */
+        get: operations["getSSHAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/updates": {
         parameters: {
             query?: never;
@@ -1529,6 +1600,21 @@ export interface components {
         AgentInfo: {
             arch: string;
             version: string;
+        };
+        AgentKey: {
+            comment?: string;
+            /** @description SHA256 fingerprint */
+            fingerprint: string;
+            type: string;
+        };
+        AgentStatus: {
+            available: boolean;
+            /** @description How to make it available */
+            fix?: string;
+            /** @description The keys the agent holds; Studio offers hosts the first six */
+            keys: components["schemas"]["AgentKey"][] | null;
+            /** @description Why the agent can't be used */
+            message?: string;
         };
         ApprovalView: {
             /** Format: int64 */
@@ -2189,6 +2275,18 @@ export interface components {
             truncated?: boolean;
         };
         Forge: {
+            /** @description The user dismissed the suggestion to use a Studio key instead */
+            agentHintDismissed?: boolean;
+            /**
+             * Format: date-time
+             * @description When a signature by the SSH agent last waited for the user to confirm it
+             */
+            agentSlowAt?: string;
+            /**
+             * @description Kind ssh: sign with the host's SSH agent, or with a key Studio generated
+             * @enum {string}
+             */
+            auth?: "agent" | "key";
             /** @description https://host[/path], or ssh://user@host[:port] for kind ssh */
             baseUrl: string;
             /** Format: date-time */
@@ -2205,19 +2303,28 @@ export interface components {
             kind: "forgejo" | "github" | "https" | "ssh";
             /** @description The URL segment: https://git.studio.internal/<name>/<path>.git */
             name: string;
-            /** @description The public half of the SSH key Studio generated (ssh), to add to the host */
+            /** @description The public half of the SSH key Studio generated (auth key), to add to the host */
             publicKey?: string;
-            /** @description The studio-only vault secret holding the token or SSH key */
-            secretId: string;
+            /** @description The studio-only vault secret holding the token or SSH key; none for auth agent */
+            secretId?: string;
             /** Format: date-time */
             updatedAt: string;
             /** @description The basic-auth user (https) or SSH user (ssh) */
             username?: string;
         };
+        ForgeAuth: {
+            /** @enum {string} */
+            auth: "agent" | "key";
+        };
         ForgeHostKey: {
             hostKey: string;
         };
         ForgeInput: {
+            /**
+             * @description Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge
+             * @enum {string}
+             */
+            auth?: "agent" | "key";
             /** @description The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222 */
             baseUrl: string;
             /** @description Kind ssh: the host key to pin, as scanned and confirmed by the user */
@@ -2437,6 +2544,9 @@ export interface components {
             slug?: string;
             title: string;
         };
+        ParseForgeURLRequest: {
+            url: string;
+        };
         PermissionBody: {
             options: components["schemas"]["PermissionOption"][] | null;
             outcome?: string;
@@ -2595,6 +2705,21 @@ export interface components {
         RebaseInBody: {
             /** @description A ready template in the same environment */
             templateId: string;
+        };
+        RepoURL: {
+            /**
+             * @description Kind ssh: the host's SSH agent
+             * @enum {string}
+             */
+            auth?: "agent" | "key";
+            /** @description The forge's base URL, or SSH address for kind ssh */
+            baseUrl: string;
+            /** @enum {string} */
+            kind: "forgejo" | "github" | "https" | "ssh";
+            /** @description A short name for the forge, not yet taken in the environment */
+            name: string;
+            /** @description The repository's path on the forge, without .git */
+            path: string;
         };
         Resources: {
             /** Format: int64 */
@@ -3823,6 +3948,42 @@ export interface operations {
             };
         };
     };
+    parseForgeURL: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParseForgeURLRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoURL"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     scanForgeHostKey: {
         parameters: {
             query?: never;
@@ -3860,6 +4021,76 @@ export interface operations {
         };
     };
     deleteForge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setForgeAuth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgeAuth"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forge"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    dismissForgeAgentHint: {
         parameters: {
             query?: never;
             header?: never;
@@ -7065,6 +7296,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DoctorReport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSSHAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentStatus"];
                 };
             };
             /** @description Error */
