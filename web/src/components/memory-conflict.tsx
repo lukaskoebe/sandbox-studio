@@ -75,7 +75,7 @@ export function ConflictSheet({
   const c = detail.data
   return (
     <Sheet open={conflictId !== undefined} onOpenChange={onOpenChange}>
-      <SheetContent className="data-[side=right]:sm:max-w-3xl">
+      <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-3xl">
         <SheetHeader>
           <KindChip area="memory" icon={ScalesIcon}>
             Memory conflict
@@ -469,7 +469,10 @@ export function MemoryConflictDecision({
   )
 }
 
-/** A run's status: the three that are sandbox statuses too get their dot; a finished run is only its word. */
+/**
+ * A run's status: running, failed and stopped get their status dot; a finished run is only its
+ * word.
+ */
 function RunStatus({ status }: { status: DreamRun["status"] }) {
   return status === "done" ? (
     <span className="text-muted-foreground">Done</span>

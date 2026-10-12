@@ -73,7 +73,7 @@ export function BuildJobSheet({
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="gap-0 data-[side=right]:sm:max-w-2xl">
+      <SheetContent className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
         <SheetHeader className="border-b pr-12">
           <SheetTitle>
             Build <Ident>{shortId(id)}</Ident>
