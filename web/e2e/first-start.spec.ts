@@ -27,6 +27,7 @@ test("first start: login link, onboarding, provider, teammate and sandbox", asyn
     await onboarding.getByRole("button", { name: /^Chat/ }).click()
     await expect(onboarding).toBeHidden()
 
+    await page.getByRole("link", { name: "Settings" }).click()
     await page.getByRole("link", { name: "Providers" }).click()
     await page.getByRole("button", { name: "Add provider" }).first().click()
     const provider = page.getByRole("dialog", { name: "Add provider" })
@@ -51,7 +52,7 @@ test("first start: login link, onboarding, provider, teammate and sandbox", asyn
     await expect(teammate).toBeHidden()
     await expect(page.getByRole("cell", { name: "Ada" }).first()).toBeVisible()
 
-    await page.getByRole("link", { name: "Overview" }).click()
+    await page.getByRole("link", { name: "Home" }).click()
     await page.getByRole("button", { name: "New sandbox" }).first().click()
     const create = page.getByRole("dialog", { name: "New sandbox" })
     await create.getByLabel("Name", { exact: true }).fill("first")
