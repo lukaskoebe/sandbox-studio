@@ -6,6 +6,11 @@ import {
   useState,
 } from "react"
 import { cn } from "@/lib/utils"
+import {
+  pointerToPage,
+  type DrawnFrame,
+  type FrameMetadata,
+} from "@/lib/browser-coords"
 
 // Chrome accepts CDP char text one Unicode code point at a time.
 const mobileInputSentinel = "\u200b"
@@ -53,6 +58,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
+// The frame's metadata, with the frame's own size and no offset or zoom where it is missing.
+function frameMetadata(
+  value: unknown,
+  width: number,
+  height: number
+): FrameMetadata {
+  // verify (live): deviceWidth/Height and offsetTop are DIP, pageScaleFactor is DIP per CSS px.
+  const m = isRecord(value) ? value : {}
+  const field = (v: unknown, fallback: number, positive = false) =>
+    typeof v === "number" && Number.isFinite(v) && (!positive || v > 0)
+      ? v
+      : fallback
+  return {
+    deviceWidth: field(m.deviceWidth, width, true),
+    deviceHeight: field(m.deviceHeight, height, true),
+    offsetTop: field(m.offsetTop, 0),
+    pageScaleFactor: field(m.pageScaleFactor, 1, true),
+  }
+}
+
+// Wheel deltas arrive in pixels, lines (16 px each) or pages (one viewport height).
+function wheelPixels(delta: number, mode: number) {
+  if (mode === WheelEvent.DOM_DELTA_LINE) return delta * 16
+  if (mode === WheelEvent.DOM_DELTA_PAGE) return delta * window.innerHeight
+  return delta
+}
+
 export function BrowserLive({
   url,
   driving,
@@ -75,10 +107,12 @@ export function BrowserLive({
   )
   const socket = useRef<WebSocket | null>(null)
   const activeSocketURL = useRef<string | undefined>(undefined)
-  const device = useRef({ width: 1280, height: 720 })
+  // The frame on the canvas, with its own metadata: clicks map through it, not a newer frame's.
+  const drawnFrame = useRef<DrawnFrame | undefined>(undefined)
+  // The button a press holds: a move while it is held is a drag, and its release names it.
+  const heldButton = useRef<string | undefined>(undefined)
   const onPageURLRef = useRef(onPageURL)
   const activePageURLRef = useRef(pageURL)
-  const pointerType = useRef("mouse")
   const composing = useRef(false)
   const compositionEcho = useRef("")
   const compositionEchoTimer = useRef<
@@ -222,6 +256,7 @@ export function BrowserLive({
       setNotice("")
       setRenderedPageURL(undefined)
       setHasRenderedFrame(false)
+      drawnFrame.current = undefined
       const isCurrent = () =>
         !stopped && activeSocket === ws && socket.current === ws
       ws.onopen = () => {
@@ -259,20 +294,8 @@ export function BrowserLive({
         const seq = parsed.seq
         if (typeof seq === "number")
           ws.send(JSON.stringify({ type: "ack", seq }))
-        // verify (live): the metadata names the page's size in CSS pixels.
+        // The metadata is applied when this frame is painted, not when it arrives.
         const metadataValue = parsed.metadata
-        const metadata = isRecord(metadataValue) ? metadataValue : undefined
-        const w = metadata?.deviceWidth
-        const h = metadata?.deviceHeight
-        if (
-          typeof w === "number" &&
-          Number.isFinite(w) &&
-          w > 0 &&
-          typeof h === "number" &&
-          Number.isFinite(h) &&
-          h > 0
-        )
-          device.current = { width: w, height: h }
         const img = new Image()
         img.onload = () => {
           if (!isCurrent() || frameNumber < paintedFrameSerial) return
@@ -286,6 +309,11 @@ export function BrowserLive({
           if (!context) return
           context.drawImage(img, 0, 0)
           paintedFrameSerial = frameNumber
+          drawnFrame.current = {
+            width: img.width,
+            height: img.height,
+            metadata: frameMetadata(metadataValue, img.width, img.height),
+          }
           setRenderedPageURL(framePageURL)
           setHasRenderedFrame(true)
           setState("live")
@@ -300,6 +328,7 @@ export function BrowserLive({
         clearMobileBuffer()
         mobileInput.current?.blur()
         controlLatched.current = false
+        heldButton.current = undefined
         setKeyboardShown(false)
         setControlPressed(false)
         setDesktopControlsOpen(false)
@@ -315,6 +344,7 @@ export function BrowserLive({
       clearMobileBuffer()
       mobileInput.current?.blur()
       controlLatched.current = false
+      heldButton.current = undefined
       const ws = activeSocket
       activeSocket = null
       if (socket.current === ws) {
@@ -330,6 +360,7 @@ export function BrowserLive({
     clearMobileBuffer()
     mobileInput.current?.blur()
     controlLatched.current = false
+    heldButton.current = undefined
     setKeyboardShown(false)
     setControlPressed(false)
     setDesktopControlsOpen(false)
@@ -352,24 +383,47 @@ export function BrowserLive({
     (e.ctrlKey ? 2 : 0) |
     (e.metaKey ? 4 : 0) |
     (e.shiftKey ? 8 : 0)
-  const point = (e: React.MouseEvent) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    return {
-      x: Math.round(((e.clientX - r.left) / r.width) * device.current.width),
-      y: Math.round(((e.clientY - r.top) / r.height) * device.current.height),
-    }
+  // The page point under a pointer, through the drawn frame; null when it is not on the page.
+  const pagePoint = (e: React.MouseEvent, clamp: boolean) => {
+    const frame = drawnFrame.current
+    if (!frame) return null
+    return pointerToPage(
+      { x: e.clientX, y: e.clientY },
+      e.currentTarget.getBoundingClientRect(),
+      frame,
+      clamp
+    )
   }
   const buttons = ["left", "middle", "right", "back", "forward"]
-  const mouse = (eventType: string, e: React.MouseEvent, extra = {}) =>
-    send({
-      type: "input_mouse",
-      eventType,
-      ...point(e),
-      button: eventType === "mouseMoved" ? "none" : buttons[e.button],
-      clickCount: eventType === "mouseMoved" ? 0 : Math.max(1, e.detail),
-      modifiers: modifiers(e),
-      ...extra,
-    })
+  const mouse = (
+    eventType: string,
+    e: React.MouseEvent,
+    button: string,
+    clamp = false,
+    extra = {}
+  ) => {
+    const at = pagePoint(e, clamp)
+    return (
+      !!at &&
+      send({
+        type: "input_mouse",
+        eventType,
+        ...at,
+        button,
+        clickCount: eventType === "mouseMoved" ? 0 : Math.max(1, e.detail),
+        modifiers: modifiers(e),
+        ...extra,
+      })
+    )
+  }
+  // Ends a press that was sent. Its release clamps to the frame, so the page is not left pressed
+  // when the pointer has been dragged out of the canvas.
+  const release = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const button = heldButton.current
+    if (!e.isPrimary || button === undefined) return
+    heldButton.current = undefined
+    mouse("mouseReleased", e, button, true)
+  }
   const lastMove = useRef(0)
   const keyboardEvent = (
     eventType: "keyDown" | "keyUp",
@@ -725,34 +779,38 @@ export function BrowserLive({
         tabIndex={canDrive ? 0 : -1}
         aria-label="Live view of the browser"
         className={cn(
-          "block h-auto w-full outline-none",
+          "block h-auto w-full touch-none outline-none",
           canDrive
             ? "cursor-default ring-2 ring-primary"
             : "pointer-events-none",
           state !== "live" && "opacity-40"
         )}
         onPointerDown={(e) => {
-          pointerType.current = e.pointerType
+          if (!e.isPrimary) return
+          // Capture keeps moves and the release coming when the pointer leaves the canvas.
+          e.currentTarget.setPointerCapture(e.pointerId)
+          if (e.pointerType === "mouse") e.currentTarget.focus()
+          else e.preventDefault()
+          const button = buttons[e.button]
+          if (mouse("mousePressed", e, button)) heldButton.current = button
+          // The tap goes out before the hidden input takes focus, which opens the keyboard.
           if (e.pointerType !== "mouse") focusMobileInput()
         }}
-        onTouchStart={() => {
-          pointerType.current = "touch"
-          focusMobileInput()
-        }}
-        onMouseDown={(e) => {
-          if (pointerType.current === "mouse") e.currentTarget.focus()
-          else e.preventDefault()
-          mouse("mousePressed", e)
-        }}
-        onMouseUp={(e) => mouse("mouseReleased", e)}
-        onMouseMove={(e) => {
+        onPointerMove={(e) => {
+          if (!e.isPrimary) return
           const now = performance.now()
           if (now - lastMove.current < 50) return
           lastMove.current = now
-          mouse("mouseMoved", e)
+          const held = heldButton.current
+          mouse("mouseMoved", e, held ?? "none", held !== undefined)
         }}
+        onPointerUp={release}
+        onPointerCancel={release}
         onWheel={(e) =>
-          mouse("mouseWheel", e, { deltaX: e.deltaX, deltaY: e.deltaY })
+          mouse("mouseWheel", e, buttons[e.button], false, {
+            deltaX: wheelPixels(e.deltaX, e.deltaMode),
+            deltaY: wheelPixels(e.deltaY, e.deltaMode),
+          })
         }
         onContextMenu={(e) => canDrive && e.preventDefault()}
         onKeyDown={(e) => key("keyDown", e)}
