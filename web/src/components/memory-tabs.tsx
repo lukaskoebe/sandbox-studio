@@ -2,10 +2,13 @@ import { useState, type FormEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  BrainIcon,
   MagnifyingGlassIcon,
+  NotebookIcon,
   PencilSimpleIcon,
   PlusIcon,
   ProhibitIcon,
+  ScalesIcon,
   ShareNetworkIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
@@ -40,6 +43,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Ident } from "@/components/ident"
+import { KindChip } from "@/components/kind-chip"
+import { SectionHeader } from "@/components/section-header"
 import {
   FactDialog,
   PageDialog,
@@ -50,8 +56,9 @@ import {
 } from "@/components/memory-dialogs"
 import { ConflictSheet, DreamPanel } from "@/components/memory-conflict"
 import { MemorySessionsTab } from "@/components/memory-sessions"
+import { ruleClass } from "@/lib/accents"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
-import { formatAge } from "@/lib/utils"
+import { cn, formatAge } from "@/lib/utils"
 
 /** The scope name of shared memory; a teammate's private memory is scoped "teammate:<id>". */
 export const sharedScope = "shared"
@@ -110,10 +117,18 @@ function PagesTab({ env, scope }: { env: string; scope: string }) {
 
   return (
     <div className="space-y-3">
-      <Button size="sm" variant="outline" onClick={() => setDialog({})}>
-        <PlusIcon />
-        New page
-      </Button>
+      <SectionHeader
+        title="Pages"
+        icon={NotebookIcon}
+        area="memory"
+        count={pages.data ? list.length : undefined}
+        actions={
+          <Button size="sm" variant="outline" onClick={() => setDialog({})}>
+            <PlusIcon />
+            New page
+          </Button>
+        }
+      />
       {pages.isPending ? (
         <Spinner className="mx-auto block" />
       ) : list.length === 0 ? (
@@ -137,8 +152,8 @@ function PagesTab({ env, scope }: { env: string; scope: string }) {
                   onClick={() => setSelected(p.id)}
                 >
                   <span className="block truncate">{p.title}</span>
-                  <span className="block truncate font-mono text-[0.625rem] text-muted-foreground">
-                    {p.slug}
+                  <span className="block truncate text-[0.625rem] text-muted-foreground">
+                    <Ident>{p.slug}</Ident>
                     {p.alwaysLoad && " · core"}
                   </span>
                 </button>
@@ -225,7 +240,7 @@ function PageView({
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap items-center gap-1.5">
-        <h2 className="mr-1 text-sm font-medium">{p.title}</h2>
+        <h3 className="mr-1 text-sm font-medium">{p.title}</h3>
         <Badge variant="outline">{p.kind}</Badge>
         <TierBadge tier={p.tier} />
         {p.alwaysLoad && <Badge>core</Badge>}
@@ -358,10 +373,18 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
 
   return (
     <div className="space-y-3">
-      <Button size="sm" variant="outline" onClick={() => setDialog({})}>
-        <PlusIcon />
-        Add fact
-      </Button>
+      <SectionHeader
+        title="Facts"
+        icon={BrainIcon}
+        area="memory"
+        count={facts.data ? list.length : undefined}
+        actions={
+          <Button size="sm" variant="outline" onClick={() => setDialog({})}>
+            <PlusIcon />
+            Add fact
+          </Button>
+        }
+      />
       {facts.isPending ? (
         <Spinner className="mx-auto block" />
       ) : list.length === 0 ? (
@@ -395,10 +418,14 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
                   <TableCell className="max-w-md">
                     <span className="block whitespace-pre-wrap">{f.text}</span>
                     {(f.attribute || f.authorTeammate) && (
-                      <span className="block font-mono text-[0.625rem] text-muted-foreground">
-                        {f.attribute}
+                      <span className="block text-[0.625rem] text-muted-foreground">
+                        {f.attribute && <Ident>{f.attribute}</Ident>}
                         {f.attribute && f.authorTeammate && " · "}
-                        {f.authorTeammate && `by teammate:${f.authorTeammate}`}
+                        {f.authorTeammate && (
+                          <>
+                            by <Ident>teammate:{f.authorTeammate}</Ident>
+                          </>
+                        )}
                       </span>
                     )}
                   </TableCell>
@@ -495,6 +522,12 @@ function ConflictsTab({ env, scope }: { env: string; scope: string }) {
 
   return (
     <div className="space-y-3">
+      <SectionHeader
+        title="Conflicts"
+        icon={ScalesIcon}
+        area="memory"
+        count={conflicts.data ? list.length : undefined}
+      />
       <DreamPanel env={env} scope={scope} />
       {conflicts.isPending ? (
         <Spinner className="mx-auto block" />
@@ -512,9 +545,15 @@ function ConflictsTab({ env, scope }: { env: string; scope: string }) {
         list.map((c) => (
           <div
             key={c.id}
-            className="space-y-2 rounded-lg p-3 ring-1 ring-foreground/10"
+            className={cn(
+              "space-y-2 rounded-lg border-l-[3px] p-3 ring-1 ring-foreground/10",
+              ruleClass("memory")
+            )}
           >
             <div className="flex flex-wrap items-center gap-1.5">
+              <KindChip area="memory" icon={ScalesIcon}>
+                Memory conflict
+              </KindChip>
               <Badge variant="outline">{c.verdict.replaceAll("_", " ")}</Badge>
               <Badge
                 variant={c.status === "open" ? "destructive" : "secondary"}
@@ -544,8 +583,8 @@ function ConflictsTab({ env, scope }: { env: string; scope: string }) {
               ).map(([name, fact]) => (
                 <div key={name} className="rounded-md bg-muted/50 p-2">
                   <span className="font-medium">{name}</span>{" "}
-                  <span className="font-mono text-[0.625rem] text-muted-foreground">
-                    {fact.scope}
+                  <span className="text-[0.625rem] text-muted-foreground">
+                    <Ident>{fact.scope}</Ident>
                   </span>
                   <p className="whitespace-pre-wrap">{fact.text}</p>
                   <div className="mt-1 flex gap-1">
@@ -592,6 +631,7 @@ function SearchTab({ env, scope }: { env: string; scope: string }) {
 
   return (
     <div className="space-y-3">
+      <SectionHeader title="Search" icon={MagnifyingGlassIcon} area="memory" />
       <form
         className="flex flex-wrap items-center gap-3"
         onSubmit={(e) => {
@@ -651,8 +691,8 @@ function SearchHit({ hit }: { hit: MemoryHit }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="outline">{hit.type}</Badge>
         <span className="font-medium">{title}</span>
-        <span className="font-mono text-[0.625rem] text-muted-foreground">
-          {hit.scope}
+        <span className="text-[0.625rem] text-muted-foreground">
+          <Ident>{hit.scope}</Ident>
         </span>
         {hit.disputed && <Badge variant="destructive">disputed</Badge>}
         {hit.superseded && <Badge variant="outline">superseded</Badge>}
