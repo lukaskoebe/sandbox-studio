@@ -120,7 +120,7 @@ function ChatPage() {
             }
           >
             <CubeIcon />
-            Sandbox
+            <span className="max-sm:sr-only">Sandbox</span>
           </Button>
           {(chat.state === "idle" || chat.state === "running") && (
             <OpenInTerminal env={env} chat={chat} />
@@ -144,9 +144,9 @@ function ChatPage() {
       {(log.status === "error" || !log.live) && (
         <div
           role="status"
-          className="flex shrink-0 items-center gap-2 border-b bg-amber-500/5 px-3 py-1 text-xs text-amber-700 dark:text-amber-400"
+          className="flex shrink-0 items-center gap-2 border-b bg-muted px-3 py-1 text-xs"
         >
-          <WarningIcon className="size-3 shrink-0" />
+          <WarningIcon className="size-3 shrink-0 text-muted-foreground" />
           {log.error
             ? `${log.error} Trying again…`
             : "Reconnecting… new messages show up once Studio is back."}
@@ -208,7 +208,7 @@ function OpenInTerminal({ env, chat }: { env: string; chat: Chat }) {
       onClick={() => void open()}
     >
       {busy ? <Spinner /> : <ArrowSquareOutIcon />}
-      Open in terminal
+      <span className="max-sm:sr-only">Open in terminal</span>
     </Button>
   )
 }
