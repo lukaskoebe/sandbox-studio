@@ -9,26 +9,30 @@ A template describes the software in a sandbox's root filesystem. Its YAML can s
 
 ## Example
 
+New builds start from this Web app template. **Insert example** in the editor puts it back.
+
 ```yaml
 resources:
-  cpus: 1
-  memory: "512MiB"
-  max_memory: "1024MiB"
-  workspace: "1024MiB"
-  docker: "1024MiB"
+  cpus: 2
+  memory: 4GiB
+  workspace: 20GiB
+  docker: 20GiB
 tools:
   node: "22"
+  python: "3.13"
 apt:
   - postgresql-client
 setup: |
-  node --version
+  corepack enable
 ```
 
 Quote tool versions. The currently supported tools are `node`, `python`, and `go`. Resource sizes use `MiB`, `GiB`, or `G`; CPU counts are whole numbers.
 
 ## Importing YAML does not run it
 
-**Import YAML** only loads the file into the editor. It does not validate or submit the spec, create a VM, or execute commands. Review the text, then select **Build template** when you want Studio to validate and run the build.
+**Import YAML** only loads the file into the editor. It does not submit the spec, create a VM, or execute commands. Review the text, then select **Build template** when you want Studio to run the build.
+
+As you type, the editor highlights the YAML, suggests keys, tool names, and size units, and marks each problem at its line and column. These checks use the same parser as the build and create nothing.
 
 After you submit a build, Studio runs the apt installs, language tool installs, and `setup` script in a temporary builder VM. Apt runs as root; the setup script runs as the `agent` user. Treat `setup` as executable shell code. You can follow the job status and read its bounded log on the Builds page. A successful template is cached for later builds. **A ready build does not start a sandbox**; choose **Create sandbox** separately when you want to use it.
 
