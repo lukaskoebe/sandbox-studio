@@ -13,11 +13,11 @@ You can allow or deny the request, or add a rule with a wider scope. Studio hold
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
-The Network page shows approval requests and existing rules. Open a sandbox's **Connections** panel to see which hosts it reached and which rules decided those connections.
+The Network page has three tabs. **Rules** lists your rules, grouped by domain, with search and filters for scope and action. **Requests** lists the connections waiting for your decision, and **Activity** lists the ones you already decided. To see which hosts one sandbox reached, open its **Connections** panel.
 
 ## Add a rule
 
-Choose **Network → Add rule**. Enter a host such as `api.example.com` or `*.example.com`; a wildcard covers the root host and its subdomains. Add comma-separated ports, or leave ports empty to match every port. Choose whether the rule applies to the whole environment, one teammate, or one sandbox.
+On the Network page's **Rules** tab, choose **Add rule**. Enter a host such as `api.example.com` or `*.example.com`; a wildcard covers the root host and its subdomains. Add comma-separated ports, or leave ports empty to match every port. Choose whether the rule applies to the whole environment, one teammate, or one sandbox.
 
 ![The Add rule dialog with host, port, action, and scope fields](../../assets/screenshots/rule-dialog.jpg)
 
