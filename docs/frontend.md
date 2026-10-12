@@ -13,7 +13,10 @@ binary embeds (`//go:embed`) and serves at `/`.
   `src/routeTree.gen.ts`.
 - Data: `openapi-fetch` and `openapi-react-query` over the types generated from Studio's
   OpenAPI document (`src/lib/api`, see [API](api.md)). `src/hooks/use-events.ts` subscribes
-  to `/api/events` and invalidates the affected queries.
+  to `/api/events` and invalidates the affected queries. Lineage views don't poll: every
+  sandbox start, stop, suspend, resume, rebase, checkpoint change and history change
+  publishes on the `sandboxes` topic. A VM that stops on its own publishes nothing, so its
+  lineage status updates at the next change or reload.
 - Terminals: xterm.js. Editors: CodeMirror (YAML specs, Caddyfiles). Toasts: sonner.
 - Theme: the design tokens are in `src/styles.css` (the Workbench theme, see
   [design/ui-style.md](design/ui-style.md)). `src/lib/theme.ts` applies the system, light or

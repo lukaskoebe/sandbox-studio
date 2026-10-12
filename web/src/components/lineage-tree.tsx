@@ -19,13 +19,9 @@ export function LineageTree({
   environmentId: string
   compact?: boolean
 }) {
-  const tree = $api.useQuery(
-    "get",
-    "/api/environments/{env}/lineage",
-    { params: { path: { env: environmentId } } },
-    // Statuses change without a change event, so the tree refreshes on the list's timer too.
-    { refetchInterval: 3000 }
-  )
+  const tree = $api.useQuery("get", "/api/environments/{env}/lineage", {
+    params: { path: { env: environmentId } },
+  })
 
   if (!tree.data) {
     return tree.isError ? (

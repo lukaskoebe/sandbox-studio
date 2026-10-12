@@ -12,7 +12,8 @@ const (
 	TopicBuilds    = "builds"
 	TopicTeammates = "teammates"
 	TopicChats     = "chats" // a chat was created, deleted, renamed or changed state
-	// TopicSandboxes: a sandbox's create or fork moved on, or a sandbox was deleted.
+	// TopicSandboxes: a sandbox changed (its create or fork, lifecycle, checkpoints, rebases,
+	// history or deletion), so its lineage and the lineage tree are stale.
 	TopicSandboxes = "sandboxes"
 )
 

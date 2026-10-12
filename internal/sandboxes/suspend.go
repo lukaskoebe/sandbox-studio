@@ -22,6 +22,7 @@ func (e lifecycleError) Is(target error) bool { return target == ErrLifecycleSta
 // suspended sandbox does not survive a host reboot. Fork, rebase and checkpoints refuse a
 // suspended sandbox; Stop and Delete resume it first.
 func (m *Manager) Suspend(ctx context.Context, envID, id string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -55,6 +56,7 @@ func (m *Manager) Suspend(ctx context.Context, envID, id string) (View, error) {
 
 // Resume continues a suspended sandbox and waits briefly for its agent to reconnect.
 func (m *Manager) Resume(ctx context.Context, envID, id string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}

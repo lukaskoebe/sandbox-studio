@@ -36,6 +36,7 @@ func (m *Manager) Checkpoints(ctx context.Context, envID, id string) ([]store.Ch
 
 // CreateCheckpoint captures the current sandbox disks, of a running or a stopped sandbox.
 func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) (store.Checkpoint, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return store.Checkpoint{}, err
 	}
@@ -93,6 +94,7 @@ func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) 
 // DeleteCheckpoint removes the runtime snapshot before deleting its catalog record. A
 // failed runtime removal leaves the row in deleting state so the caller can retry.
 func (m *Manager) DeleteCheckpoint(ctx context.Context, envID, id, checkpointID string) error {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return err
 	}
@@ -162,6 +164,7 @@ func (m *Manager) deleteCheckpointsLocked(ctx context.Context, envID, id string,
 // already be stopped; it remains intact until the stopped candidate is adopted in the
 // catalog.
 func (m *Manager) RestoreCheckpoint(ctx context.Context, envID, id, checkpointID string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}

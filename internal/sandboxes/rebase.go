@@ -18,6 +18,7 @@ import (
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
 // catalog switches, any failure removes the new VM and returns the source to its state.
 func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}

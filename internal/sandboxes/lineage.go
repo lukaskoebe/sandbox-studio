@@ -280,6 +280,7 @@ func (m *Manager) LineageTree(ctx context.Context, envID string) (LineageTree, e
 
 // RenameCheckpoint gives a ready checkpoint another name. Its disks are not touched.
 func (m *Manager) RenameCheckpoint(ctx context.Context, envID, id, checkpointID, name string) (store.Checkpoint, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return store.Checkpoint{}, err
 	}

@@ -64,7 +64,8 @@ type Manager struct {
 	// Forget removes host-side state kept for a sandbox elsewhere (git staging repos) once
 	// it is deleted; nil keeps none.
 	Forget func(envID, id string) error
-	// Bus, if set, gets an events.TopicSandboxes notice whenever a create or fork moves on.
+	// Bus, if set, gets an events.TopicSandboxes notice whenever a sandbox changes: its
+	// lifecycle, checkpoints, rebases, forks or history.
 	Bus *events.Bus
 
 	opsMu sync.Mutex
@@ -507,6 +508,7 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 
 // Start boots a stopped sandbox.
 func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -548,6 +550,7 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 
 // Stop shuts a sandbox down. Its disks and catalog record are kept.
 func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
+	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
