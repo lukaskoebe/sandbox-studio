@@ -7,7 +7,6 @@ import {
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -16,12 +15,8 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, type HostCheck } from "@/lib/api/client"
 
-/** The host checks (doctor) with their fixes, and a button to run them again. */
+/** The host checks (doctor) of the settings page, with their fixes. */
 export function RuntimeCard() {
-  const doctor = $api.useQuery("get", "/api/system/doctor", undefined, {
-    staleTime: 60_000,
-  })
-  const report = doctor.data
   return (
     <Card className="max-w-3xl">
       <CardHeader>
@@ -31,41 +26,54 @@ export function RuntimeCard() {
           space and ports. The same checks run at startup and as{" "}
           <code>studio doctor</code>.
         </CardDescription>
-        <CardAction>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={doctor.isFetching}
-            onClick={() => doctor.refetch()}
-          >
-            {doctor.isFetching ? <Spinner /> : <ArrowClockwiseIcon />}
-            Check again
-          </Button>
-        </CardAction>
       </CardHeader>
-      <CardContent className="space-y-3 text-xs">
-        {doctor.error && (
-          <p className="text-destructive">{errorMessage(doctor.error)}</p>
-        )}
-        {doctor.isPending && <Spinner className="mx-auto block" />}
-        {report && (
-          <ul className="space-y-2">
-            {report.checks?.map((c) => (
-              <li key={c.id} className="flex gap-2">
-                <CheckIcon status={c.status} />
-                <div className="min-w-0 space-y-0.5">
-                  <p>
-                    <span className="font-medium">{c.name}</span>{" "}
-                    <span className="text-muted-foreground">{c.message}</span>
-                  </p>
-                  {c.fix && <p className="text-muted-foreground">{c.fix}</p>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+      <CardContent>
+        <HostChecks />
       </CardContent>
     </Card>
+  )
+}
+
+/** The host checks with their fixes, and a button to run them again. */
+export function HostChecks() {
+  const doctor = $api.useQuery("get", "/api/system/doctor", undefined, {
+    staleTime: 60_000,
+  })
+  const report = doctor.data
+  return (
+    <div className="space-y-3 text-xs">
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={doctor.isFetching}
+          onClick={() => doctor.refetch()}
+        >
+          {doctor.isFetching ? <Spinner /> : <ArrowClockwiseIcon />}
+          Check again
+        </Button>
+      </div>
+      {doctor.error && (
+        <p className="text-destructive">{errorMessage(doctor.error)}</p>
+      )}
+      {doctor.isPending && <Spinner className="mx-auto block" />}
+      {report && (
+        <ul className="space-y-2">
+          {report.checks?.map((c) => (
+            <li key={c.id} className="flex gap-2">
+              <CheckIcon status={c.status} />
+              <div className="min-w-0 space-y-0.5">
+                <p>
+                  <span className="font-medium">{c.name}</span>{" "}
+                  <span className="text-muted-foreground">{c.message}</span>
+                </p>
+                {c.fix && <p className="text-muted-foreground">{c.fix}</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
