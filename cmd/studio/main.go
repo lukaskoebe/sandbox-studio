@@ -41,6 +41,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
+	"github.com/lukaskoebe/sandbox-studio/internal/netreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/preview"
@@ -211,7 +212,7 @@ func run(addr, image string, log *slog.Logger) error {
 		return err
 	}
 	bus := &events.Bus{}
-	engine := &policy.Engine{Store: st, Bus: bus, Hold: 60 * time.Second, Log: log}
+	engine := &policy.Engine{Store: st, Bus: bus, Hold: 60 * time.Second, Log: log, Reviewer: &netreview.Reviewer{Store: st, Keys: vault}}
 	policyDone := make(chan struct{})
 	go func() { defer close(policyDone); engine.Run(ctx) }()
 	defer func() {

@@ -313,7 +313,7 @@ func apiError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, gitreview.ErrInvalid), errors.Is(err, integrations.ErrAction):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, policy.ErrDecided):
+	case errors.Is(err, policy.ErrDecided), errors.Is(err, policy.ErrNotReviewed):
 		return huma.Error409Conflict(err.Error())
 	}
 	return huma.Error500InternalServerError(err.Error())

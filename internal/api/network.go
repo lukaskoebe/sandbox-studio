@@ -481,6 +481,32 @@ func (s *Server) registerNetwork(api huma.API) {
 		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 	})
 
+	type revertIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Approval ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "revertApproval", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/revert", Tags: []string{"approvals"},
+		Description: "Undoes a decision the AI reviewer made: its rule is deleted, and the request is asked about from then on. Other decisions can't be reverted.",
+	}, func(ctx context.Context, in *revertIn) (*struct{ Body ApprovalView }, error) {
+		a, err := s.Policy.Revert(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getReviewer", Method: http.MethodGet, Path: "/api/environments/{env}/reviewer", Tags: []string{"network"},
+		Description: "Whether the assisted level can ask an AI reviewer: the environment needs a provider whose utility model can be called.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body reviewerView }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		v, err := s.reviewer(ctx, in.Env)
+		return &struct{ Body reviewerView }{v}, apiError(err)
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "listRules", Method: http.MethodGet, Path: "/api/environments/{env}/rules", Tags: []string{"network"},
 	}, func(ctx context.Context, in *envPath) (*struct{ Body []store.Rule }, error) {
@@ -679,6 +705,25 @@ func (s *Server) registerNetwork(api huma.API) {
 		}
 		return &struct{ Body []gateway.Conn }{s.Conns.List(in.ID)}, nil
 	})
+}
+
+// reviewerView says whether the AI reviewer of the assisted level can answer, and with which model.
+type reviewerView struct {
+	Available bool   `json:"available" doc:"Whether the assisted level asks the AI reviewer; without a utility model it asks the user, as guarded does"`
+	Provider  string `json:"provider,omitempty" doc:"The provider whose utility model answers"`
+	Model     string `json:"model,omitempty" doc:"The utility model that answers"`
+}
+
+func (s *Server) reviewer(ctx context.Context, env string) (reviewerView, error) {
+	prov, ok, err := agentmem.EnvironmentUtility(ctx, s.Store, env)
+	if err != nil {
+		return reviewerView{}, err
+	}
+	if !ok {
+		return reviewerView{}, nil
+	}
+	m, _ := agentmem.UtilityFor(prov)
+	return reviewerView{Available: true, Provider: prov.Name, Model: m.Model}, nil
 }
 
 // curatedView is the curated list, with the environment's switch for each entry.

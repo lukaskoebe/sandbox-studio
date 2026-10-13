@@ -21,6 +21,14 @@ const (
 	ask          verdict = iota // the user decides
 	allowCurated                // the curated list covers the host
 	allowOpen                   // the level open allows a public address
+	review                      // the AI reviewer decides (assisted)
+)
+
+// Decided names how a request that no rule covers was decided without asking (NetworkRequest.Decided).
+const (
+	DecidedOpen     = "open"     // the security level open
+	DecidedCurated  = "curated"  // the curated list
+	DecidedReviewer = "reviewer" // the AI reviewer
 )
 
 // levelInput is what the decision table reads.
@@ -29,6 +37,7 @@ type levelInput struct {
 	curated     bool // the host is on the curated list, and its entry is on
 	placeholder bool // the request carries a placeholder of a secret the host isn't bound to
 	public      bool // the host is a name, which the dialer checks, or a public address
+	reviewer    bool // an AI reviewer is set up
 }
 
 // decide is the decision table. Locked asks for everything, as Studio did before levels. A request
@@ -42,6 +51,8 @@ func (in levelInput) decide() verdict {
 		return allowOpen
 	case in.curated && (in.level == store.LevelGuarded || in.level == store.LevelAssisted):
 		return allowCurated
+	case in.level == store.LevelAssisted && in.reviewer:
+		return review
 	}
 	return ask
 }
@@ -82,12 +93,14 @@ func (e *Engine) byLevel(ctx context.Context, req Request, teammate, host string
 		return store.Rule{}, false, err
 	}
 	entry, listed := curatedMatch(host, req.Port, off)
-	in := levelInput{level: level, curated: listed, placeholder: req.Placeholder, public: publicHost(host)}
+	in := levelInput{level: level, curated: listed, placeholder: req.Placeholder, public: publicHost(host), reviewer: e.Reviewer != nil}
 	switch in.decide() {
 	case allowOpen:
-		e.recordAllowed(ctx, req, teammate, host, "open", "")
+		e.recordAllowed(ctx, req, teammate, host, DecidedOpen, "")
 	case allowCurated:
-		e.recordAllowed(ctx, req, teammate, host, "curated", entry.Name)
+		e.recordAllowed(ctx, req, teammate, host, DecidedCurated, entry.Name)
+	case review:
+		return e.reviewWith(ctx, req, teammate, host)
 	default:
 		return store.Rule{}, false, nil
 	}

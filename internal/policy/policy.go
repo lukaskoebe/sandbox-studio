@@ -135,11 +135,16 @@ type Engine struct {
 
 	// Browsers, if set, tells which page a browser's requests belong to.
 	Browsers Browsers
+	// Reviewer, if set, decides the requests no rule covers at the assisted level (reviewer.go).
+	Reviewer Reviewer
 
 	mu    sync.Mutex
 	rules map[string][]store.Rule  // per environment, loaded on demand
 	wake  map[string]chan struct{} // closed when an environment's rules or approvals change
 	hits  map[string]ruleHits      // connections rules decided, not yet written to the store
+
+	reviewMu sync.Mutex
+	reviews  map[string]*question // the reviewer's questions this session, by reviewKey
 }
 
 // ruleHits are the connections one rule decided since the hits were last written.
