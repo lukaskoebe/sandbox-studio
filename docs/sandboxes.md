@@ -152,6 +152,20 @@ restores a stopped replacement VM as a new generation, adopts it in the catalog,
 removes the old VM; a durable record lets startup finish or discard an interrupted restore.
 As a guard, Studio refuses a candidate whose stored network config differs from Create's.
 
+On 2026-10-13 the gate is still closed, and no release of the pinned microsandbox can open it.
+[Upstream #1736](https://github.com/superradcompany/microsandbox/issues/1736) was filed on
+2026-10-02 and is still open, with no pull request linked to it. On 2026-10-02 a maintainer
+said they were leaning towards exposing the flags on `msb restore` rather than on
+`msb run --from-sandbox`, and that a fix was in progress. Neither released version carries it:
+msb 0.7.7 (pinned) and 0.7.8 (2026-10-09) have the same restore surface. The SDK's restore takes
+a network policy with rules and default egress and ingress only, and the Rust `RestoreBuilder`
+has no setter for a proxy or a DNS resolver. The 0.7.9 release bump (#1829) is still open. So
+there is nothing to bump yet. When a release adds restore options for the proxy and resolver,
+the bump updates the `sdk/go` module in `go.mod` and `go.sum` and the msb runtime that
+`runtime.Ensure` installs. Then `CheckpointRestoreSupported` can return true and
+`RestoreCheckpoint` must pass Studio's egress to the restore. `checkEgress` and its tests stay
+as the guard.
+
 ## Lineage
 
 Each sandbox keeps its history in `sandbox_events` (`store.SandboxEvent`): one row per
