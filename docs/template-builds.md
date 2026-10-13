@@ -218,9 +218,9 @@ job ready. Cleanup can finish after that status transition.
 The export is capped at its byte limit (8 GiB of tar by default), and it fails when a capture
 goes over. Its disk is guarded too: publishing
 copies the artifact, so the export checks the free space under its staging directory before it
-starts and every 64 MiB of output, and it stops, removing its partial artifact, unless the disk
-still holds a second copy of what it has received and keeps 1 GiB free (`templateexport`,
-`ErrDiskSpace`).
+starts and every 64 MiB of output, and it stops, removing its partial artifact, unless the free
+space still covers a second copy of the artifact, including the next 64 MiB, and keeps 1 GiB free
+(`templateexport`, `ErrDiskSpace`).
 
 `runtime.Run` requests bounded startup, cancellation, output, and cleanup handling, but
 the microsandbox FFI may continue a native call after its Go context is cancelled. The
