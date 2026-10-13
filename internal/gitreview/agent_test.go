@@ -5,8 +5,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
-	"net"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -23,21 +21,10 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// serveAgent serves a on a temporary unix socket and points SSH_AUTH_SOCK at it, as a
-// user's ssh-agent would be.
+// serveAgent serves a where a user's ssh-agent would be and points SSH_AUTH_SOCK at it.
 func serveAgent(t *testing.T, a agent.Agent) {
 	t.Helper()
-	// Unix socket paths are short (104 bytes on macOS); the test's TMPDIR may be long.
-	dir, err := os.MkdirTemp("", "sa")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
-	sock := filepath.Join(dir, "agent.sock")
-	ln, err := net.Listen("unix", sock)
-	if err != nil {
-		t.Skipf("no unix sockets: %v", err)
-	}
+	ln, addr := listenAgent(t)
 	t.Cleanup(func() { ln.Close() })
 	go func() {
 		for {
@@ -51,7 +38,7 @@ func serveAgent(t *testing.T, a agent.Agent) {
 			}()
 		}
 	}()
-	t.Setenv("SSH_AUTH_SOCK", sock)
+	t.Setenv("SSH_AUTH_SOCK", addr)
 }
 
 // addAgentKey adds a new ed25519 key to the keyring and returns its public key.
@@ -179,10 +166,9 @@ func TestSSHAgentRefusedAndMissing(t *testing.T) {
 		t.Fatalf("status of an empty agent = %+v", st)
 	}
 
-	t.Setenv("SSH_AUTH_SOCK", "")
-	os.Unsetenv("SSH_AUTH_SOCK")
+	noAgent(t)
 	_, err = sh.svc.TestForge(sh.ctx, sh.forge, "owner/repo")
-	if !errors.Is(err, ErrNoAgent) || !strings.Contains(err.Error(), "SSH_AUTH_SOCK") {
+	if !errors.Is(err, ErrNoAgent) || !strings.Contains(err.Error(), noAgentHint) {
 		t.Fatalf("no agent: %v", err)
 	}
 	g := sh.guest(t, sh.env.ID, "one")

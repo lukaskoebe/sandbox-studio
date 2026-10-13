@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -130,8 +131,14 @@ func TestSSHForges(t *testing.T) {
 	for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
 		t.Setenv(name, tmp)
 	}
-	// No SSH agent: the test must never reach the developer's.
-	t.Setenv("SSH_AUTH_SOCK", "")
+	// No SSH agent: the test must never reach the developer's. On Windows an empty
+	// SSH_AUTH_SOCK means OpenSSH's own pipe, so it names a pipe nobody serves.
+	noAgent, noAgentHint := "", "SSH_AUTH_SOCK"
+	if runtime.GOOS == "windows" {
+		noAgent = `\\.\pipe\studio-test-no-agent`
+		noAgentHint = noAgent
+	}
+	t.Setenv("SSH_AUTH_SOCK", noAgent)
 	h, s := newTestServer(t)
 	hostKey, dial := testSSHHost(t)
 	staging := t.TempDir()
@@ -282,7 +289,7 @@ func TestSSHForges(t *testing.T) {
 
 	// Without an SSH agent, the status says why and how to fix it.
 	st := decode[gitreview.AgentStatus](t, do(h, "GET", testOrigin+"/api/system/ssh-agent", ""))
-	if st.Available || !strings.Contains(st.Message, "SSH_AUTH_SOCK") || st.Fix == "" {
+	if st.Available || !strings.Contains(st.Message, noAgentHint) || st.Fix == "" {
 		t.Fatalf("agent status: %+v", st)
 	}
 }
