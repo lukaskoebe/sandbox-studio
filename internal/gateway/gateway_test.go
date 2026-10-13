@@ -115,7 +115,7 @@ func (h *harness) lastDial() string {
 	return h.dialed[len(h.dialed)-1]
 }
 
-func clientHello(t *testing.T, serverName string) []byte {
+func clientHello(t testing.TB, serverName string) []byte {
 	t.Helper()
 	a, b := net.Pipe()
 	go tls.Client(a, &tls.Config{ServerName: serverName}).Handshake()
