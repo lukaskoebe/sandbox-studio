@@ -586,6 +586,51 @@ func (s *Server) registerNetwork(api huma.API) {
 		return &struct{ Body trackersView }{v}, err
 	})
 
+	type setLevelIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Level string `json:"level" enum:"locked,guarded,assisted,open" doc:"What happens when no rule matches: locked asks, guarded allows the curated list and asks, assisted also asks an AI reviewer, open allows public addresses"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setSecurityLevel", Method: http.MethodPut, Path: "/api/environments/{env}/security-level", Tags: []string{"network"},
+		Description: "Sets the environment's security level. It applies to the connections made after the change; approvals already waiting stay as they are. Teammates can override it.",
+	}, func(ctx context.Context, in *setLevelIn) (*struct{ Body store.Environment }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		if err := s.Store.SetSecurityLevel(ctx, in.Env, in.Body.Level); err != nil {
+			return nil, apiError(err)
+		}
+		e, err := s.Store.Environment(ctx, in.Env)
+		return &struct{ Body store.Environment }{e}, apiError(err)
+	})
+
+	type setTeammateLevelIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Teammate ID"`
+		Body struct {
+			Level string `json:"level" doc:"The level of the teammate's sandboxes, one of locked, guarded, assisted or open; empty hands the teammate back to the environment's level"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setTeammateSecurityLevel", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{id}/security-level", Tags: []string{"network"},
+		Description: "Overrides the environment's security level for one teammate's sandboxes, or clears the override.",
+	}, func(ctx context.Context, in *setTeammateLevelIn) (*struct{ Body store.Teammate }, error) {
+		if in.Body.Level != "" && !slices.Contains(store.Levels, in.Body.Level) {
+			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("%q is not a security level", in.Body.Level))
+		}
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		t, err := s.Store.SetTeammateSecurityLevel(ctx, in.Env, in.ID, in.Body.Level)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{t}, nil
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "listConnections", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/connections", Tags: []string{"network"},
 		Description: "The sandbox's most recent connections, newest first. The log is kept in memory only.",
