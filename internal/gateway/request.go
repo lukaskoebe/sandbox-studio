@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,17 +10,19 @@ import (
 	"unicode/utf8"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // decideRequest decides one request on a terminated connection of a browser VM. The request
 // goes on if the policy allows it, which may take the user's answer; otherwise the message says
-// why it was refused, and is returned.
-func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host string, port int) string {
+// why it was refused, and is returned. all are the secrets the sandbox's requests may carry.
+func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host string, port int, all []secrets.Binding) string {
 	info := requestInfo(r, host)
 	rule, err := g.Policy.Decide(r.Context(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name,
 		Host: host, Port: port, Browser: true, Deferred: true, HTTP: info,
+		Placeholder: carriesPlaceholder(r, all, host),
 	})
 	where := fmt.Sprintf("%s:%d", host, port)
 	switch {
@@ -38,6 +41,35 @@ func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host str
 	}
 	g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
 	return fmt.Sprintf("Sandbox Studio could not decide the request to %s: %v", where, err)
+}
+
+// carriesPlaceholder reports whether a request holds the placeholder of a secret that host isn't
+// bound to, which the rewrite refuses (intercept.go). The headers, the path and the query are
+// checked, and the credentials of a Basic Authorization header decoded. A security level never
+// allows such a request.
+func carriesPlaceholder(r *http.Request, all []secrets.Binding, host string) bool {
+	texts := []string{r.URL.EscapedPath(), r.URL.RawQuery}
+	for name, values := range r.Header {
+		for _, v := range values {
+			texts = append(texts, v)
+			if strings.EqualFold(name, "Authorization") && len(v) > 6 && strings.EqualFold(v[:6], "Basic ") {
+				if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(v[6:])); err == nil {
+					texts = append(texts, string(decoded))
+				}
+			}
+		}
+	}
+	for _, b := range all {
+		if b.Placeholder == "" || !b.Foreign && covers(b, host) {
+			continue
+		}
+		for _, t := range texts {
+			if strings.Contains(t, b.Placeholder) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ruleRequest applies the request-level rules to a request on a connection that a proxy rule
