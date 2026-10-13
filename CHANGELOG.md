@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.2.0 — 2026-10-13
+
+Shaped by feedback on v0.1: a new layout and look, a guided setup, and safer defaults for
+git and secrets.
+
+- **Guided setup:** a first start opens `/setup`, a stepper through the host check, work
+  mode, AI provider, a default teammate (Iris), git, network and a first sandbox. Every step
+  can be skipped, and Home shows a setup card until it is done or dismissed. The login link
+  is printed as a banner at startup.
+- **New layout:** a compact sidebar with sandboxes, their status and the approvals waiting
+  on them. Teammates get their own pages (overview, chats, memory, browser, settings), and
+  settings are split into general, providers, git, templates and runtime. Each sandbox has a
+  dashboard (facts, uptime, ports, connections, history, checkpoints, chats, terminals) and a
+  separate workspace with one side panel at a time. Old addresses redirect.
+- **Workbench look:** denser tables and lists, monospace identifiers with copy buttons,
+  status dots with words, an accent color per area, and a light/dark/system theme toggle in
+  the sidebar footer. Home shows a stat strip, a sandbox table, the family tree, approvals
+  and teammates.
+- **Network:** rules, requests and activity are tabs with their own URLs; rules are grouped
+  by domain with filters kept in the URL.
+- **Sandbox creation and fork** run in the background with step-by-step progress.
+- **Lineage:** each sandbox records where it came from and what happened to it (created,
+  forked, rebased, checkpointed, restored, deleted); the dashboard shows its history and
+  Home the family tree, both updated live. Templates are named by their stack, such as
+  `node-22+python-3.13@2`.
+- **Persistent home directory:** new sandboxes get a 4 GiB home disk that is kept across
+  rebases and is part of forks, checkpoints and exports. Template toolchains moved to
+  `/opt/mise`. Exports from v0.1 still import.
+- **Git over the host's SSH agent:** forges can use your SSH agent instead of a stored key,
+  with a hint to use a dedicated key and a warning when signing is slow.
+- **Scoped secrets:** a secret can belong to an environment, a teammate or a single
+  sandbox; the narrowest one wins.
+- **Template editor:** the template spec editor has YAML highlighting, completion from the
+  spec vocabulary, validation as you type and an example template.
+- **Agent browser:** a teammate can open an ephemeral session that starts clean and is
+  discarded when closed, next to its usual one. Clicks in the live view land where you
+  click.
+- **New chat** preselects the teammate or sandbox it was started from; a chat started in a
+  workspace opens there.
+- **End-to-end tests:** a Playwright suite against a fake runtime runs in CI and nightly.
+- **Base image:** the image build fails if the mise download fails.
+
 ## v0.1.1 — 2026-10-12
 
 - Mobile terminals have touch controls for Ctrl, Esc, Tab, arrows and the keyboard.

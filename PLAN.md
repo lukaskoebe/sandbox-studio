@@ -1,6 +1,7 @@
 # Sandbox Studio — Plan
 
-Status: in progress · 2026-10-12
+Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 (D5) is still a concept; the backlog
+below stays open.
 
 The v2 plan is implemented (v0.1.0 and v0.1.1). How it works now is in the
 [developer documentation](docs/README.md). This plan covers the next round, driven by user
