@@ -386,13 +386,11 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
 - Subscription logins (Claude Pro/Max, ChatGPT/Codex) and CLI-based utility calls; spike S8
   → [harnesses](docs/harnesses.md#verified-vs-pending)
 - Live hook verification for all three harnesses; spike S7
-- Teammate default rule scope, approval auto-patterns and an avatar field
 - Teammate tasks and heartbeats (proactive work)
-- Per-environment export/import and copying a teammate to another environment
 
 **Network and approvals**
 - DNS-level deny; per-rule upstream, Host, SNI and CA overrides
-- Request-level `network.request` approvals; allow-once/deny-once decisions
+- Request-level `network.request` approvals
 - Access to private networks through explicit rules (public addresses only today)
 
 **Memory**
@@ -406,8 +404,7 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
   rejected; GitLab merge requests → [git review](docs/git-review.md)
 
 **Quality**
-- SNI parser fuzz test, memory eval corpus, recorded hook fixtures for all adapters,
-  golangci-lint
+- The open golangci-lint errcheck findings (errcheck is off in CI until they are fixed)
 
 ## Testing and conventions
 
