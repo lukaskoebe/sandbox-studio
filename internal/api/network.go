@@ -236,6 +236,14 @@ func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.
 	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, TeammateID: in.TeammateID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note}, nil
 }
 
+// expiryFrom checks when a rule expires: it must still be in the future.
+func expiryFrom(expires *time.Time) (*time.Time, error) {
+	if expires != nil && !expires.After(time.Now()) {
+		return nil, huma.Error422UnprocessableEntity(policy.ErrExpired.Error())
+	}
+	return expires, nil
+}
+
 type rulePath struct {
 	Env string `path:"env" doc:"Environment ID"`
 	ID  string `path:"id" doc:"Rule ID"`
@@ -271,12 +279,13 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action   string `json:"action" enum:"allow,deny,dismiss" doc:"For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
-			Host     string `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
-			Ports    []int  `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
-			Scope    string `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
-			Note     string `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
-			Remember bool   `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
+			Action    string     `json:"action" enum:"allow,deny,dismiss" doc:"For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
+			Host      string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
+			Ports     []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
+			Scope     string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
+			Note      string     `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
+			Remember  bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
+			ExpiresAt *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -289,6 +298,9 @@ func (s *Server) registerNetwork(api huma.API) {
 			return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 		}
 		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope}
+		if in.Body.ExpiresAt != nil {
+			d.ExpiresAt = *in.Body.ExpiresAt
+		}
 		a, err := s.Policy.Resolve(ctx, in.Env, in.ID, d)
 		if err != nil {
 			return nil, apiError(err)
@@ -308,7 +320,10 @@ func (s *Server) registerNetwork(api huma.API) {
 
 	type createRuleIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
-		Body RuleInput
+		Body struct {
+			RuleInput
+			ExpiresAt *time.Time `json:"expiresAt,omitempty" doc:"When the rule stops matching; it must be in the future. Empty means it never expires"`
+		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "createRule", Method: http.MethodPost, Path: "/api/environments/{env}/rules", Tags: []string{"network"},
@@ -317,10 +332,15 @@ func (s *Server) registerNetwork(api huma.API) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
 		}
-		r, err := s.ruleFrom(ctx, in.Env, in.Body)
+		expires, err := expiryFrom(in.Body.ExpiresAt)
 		if err != nil {
 			return nil, err
 		}
+		r, err := s.ruleFrom(ctx, in.Env, in.Body.RuleInput)
+		if err != nil {
+			return nil, err
+		}
+		r.ExpiresAt = expires
 		if r, err = s.Store.CreateRule(ctx, r); err != nil {
 			return nil, apiError(err)
 		}

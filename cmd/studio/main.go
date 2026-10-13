@@ -211,7 +211,16 @@ func run(addr, image string, log *slog.Logger) error {
 		return err
 	}
 	bus := &events.Bus{}
-	engine := &policy.Engine{Store: st, Bus: bus, Hold: 60 * time.Second}
+	engine := &policy.Engine{Store: st, Bus: bus, Hold: 60 * time.Second, Log: log}
+	policyDone := make(chan struct{})
+	go func() { defer close(policyDone); engine.Run(ctx) }()
+	defer func() {
+		stop()
+		select {
+		case <-policyDone:
+		case <-time.After(5 * time.Second):
+		}
+	}()
 	resolvers := &gateway.Resolvers{Upstreams: dnsproxy.SystemUpstreams(), Log: log}
 	defer resolvers.Close()
 	conns := &gateway.ConnLog{}

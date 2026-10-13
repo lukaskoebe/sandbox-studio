@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 	"sync"
@@ -26,6 +27,7 @@ var (
 	ErrDecided      = errors.New("the request was already decided")
 	ErrDoesNotCover = errors.New("the rule must cover the requested host and port")
 	ErrNoTeammate   = errors.New("the sandbox has no teammate")
+	ErrExpired      = errors.New("a rule must expire in the future")
 )
 
 // Request is a connection attempt from a sandbox.
@@ -50,7 +52,9 @@ type NetworkRequest struct {
 type Engine struct {
 	Store *store.Store
 	Bus   *events.Bus
-	Hold  time.Duration // how long an unanswered connection is held
+	Hold  time.Duration    // how long an unanswered connection is held
+	Now   func() time.Time // the clock rules expire by; nil uses time.Now
+	Log   *slog.Logger     // for housekeeping errors; nil uses slog.Default
 
 	mu    sync.Mutex
 	rules map[string][]store.Rule  // per environment, loaded on demand
@@ -69,7 +73,7 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	if err != nil {
 		return store.Rule{}, err
 	}
-	if r, ok := Match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
+	if r, ok := Match(e.active(rules), req.SandboxID, teammate, req.Host, req.Port); ok {
 		return r, nil
 	}
 	host := Normalize(req.Host)
@@ -99,7 +103,7 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		if rules, wake, err = e.snapshot(ctx, req.EnvironmentID); err != nil {
 			return store.Rule{}, err
 		}
-		if r, ok := Match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
+		if r, ok := Match(e.active(rules), req.SandboxID, teammate, req.Host, req.Port); ok {
 			return r, nil
 		}
 		if cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID); err != nil || cur.Status != store.StatusPending {
@@ -110,10 +114,11 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 
 // Decision is the user's answer to a network approval.
 type Decision struct {
-	Action string // allow, deny or dismiss
-	Host   string // host pattern; empty means the requested host
-	Ports  []int  // nil means DefaultPorts of the requested port
-	Scope  string // sandbox, teammate (the requesting sandbox's owner) or environment
+	Action    string    // allow, deny or dismiss
+	Host      string    // host pattern; empty means the requested host
+	Ports     []int     // nil means DefaultPorts of the requested port
+	Scope     string    // sandbox, teammate (the requesting sandbox's owner) or environment
+	ExpiresAt time.Time // when the rule stops matching; zero means it never expires
 }
 
 // Resolve answers a pending network approval, creating a rule unless it is dismissed.
@@ -164,6 +169,12 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if !Covers(rule.Host, req.Host) || (len(rule.Ports) > 0 && !slices.Contains(rule.Ports, req.Port)) {
 		return a, ErrDoesNotCover
 	}
+	if !d.ExpiresAt.IsZero() {
+		if !d.ExpiresAt.After(e.now()) {
+			return a, ErrExpired
+		}
+		rule.ExpiresAt = &d.ExpiresAt
+	}
 	if _, err := e.Store.CreateRule(ctx, rule); err != nil {
 		return a, err
 	}
@@ -193,7 +204,7 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 		if a.Kind != KindNetwork || json.Unmarshal(a.Payload, &req) != nil {
 			continue
 		}
-		r, ok := Match(rules, a.SandboxID, teammates[a.SandboxID], req.Host, req.Port)
+		r, ok := Match(e.active(rules), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port)
 		if !ok {
 			continue
 		}
@@ -258,4 +269,57 @@ func (e *Engine) changed(envID string, rules bool) {
 	if rules {
 		e.Bus.Publish(events.Event{Topic: events.TopicRules, EnvironmentID: envID})
 	}
+}
+
+// now is the time rules expire by.
+func (e *Engine) now() time.Time {
+	if e.Now != nil {
+		return e.Now()
+	}
+	return time.Now()
+}
+
+// active returns the rules that match at the current time. A rule stops matching at its
+// ExpiresAt, before the sweep deletes it.
+func (e *Engine) active(rules []store.Rule) []store.Rule {
+	now := e.now()
+	var live []store.Rule
+	for _, r := range rules {
+		if r.ExpiresAt == nil || now.Before(*r.ExpiresAt) {
+			live = append(live, r)
+		}
+	}
+	return live
+}
+
+// Run deletes expired rules once a minute until ctx ends.
+func (e *Engine) Run(ctx context.Context) {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := e.sweep(ctx); err != nil && ctx.Err() == nil {
+				e.log().Error("network rules: delete expired rules", "err", err)
+			}
+		}
+	}
+}
+
+// sweep deletes the rules that have expired and tells their environments.
+func (e *Engine) sweep(ctx context.Context) error {
+	envs, err := e.Store.DeleteExpiredRules(ctx, e.now())
+	for _, env := range envs {
+		e.changed(env, true)
+	}
+	return err
+}
+
+func (e *Engine) log() *slog.Logger {
+	if e.Log != nil {
+		return e.Log
+	}
+	return slog.Default()
 }

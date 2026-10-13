@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -79,6 +80,7 @@ type Rule struct {
 	Config        RuleConfig `json:"config"`
 	Note          string     `json:"note"`
 	Origin        string     `json:"origin" enum:"manual,approval,curated,reviewer" doc:"Where the rule came from. Read-only: set when the rule is created"`
+	ExpiresAt     *time.Time `json:"expiresAt,omitempty" doc:"When the rule stops matching; empty means it never expires"`
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
@@ -90,13 +92,14 @@ type RuleConfig struct {
 	Caddyfile string `json:"caddyfile,omitempty"`
 }
 
-const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, created_at"
+const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, expires_at, created_at"
 
 func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 	var r Rule
 	var ports, config string
+	var expires sql.NullInt64
 	var created int64
-	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &created); err != nil {
+	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &expires, &created); err != nil {
 		return r, err
 	}
 	r.Ports = []int{}
@@ -104,6 +107,10 @@ func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 		if n, err := strconv.Atoi(p); err == nil {
 			r.Ports = append(r.Ports, n)
 		}
+	}
+	if expires.Valid {
+		t := time.Unix(expires.Int64, 0)
+		r.ExpiresAt = &t
 	}
 	r.CreatedAt = time.Unix(created, 0)
 	return r, json.Unmarshal([]byte(config), &r.Config)
@@ -137,8 +144,12 @@ func (s *Store) CreateRule(ctx context.Context, r Rule) (Rule, error) {
 	if err != nil {
 		return r, err
 	}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, origin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.Origin, r.CreatedAt.Unix())
+	var expires any // NULL: the rule never expires
+	if r.ExpiresAt != nil {
+		expires = r.ExpiresAt.Unix()
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, origin, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.Origin, expires, r.CreatedAt.Unix())
 	return r, err
 }
 
@@ -196,6 +207,27 @@ func (s *Store) DeleteRule(ctx context.Context, envID, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// DeleteExpiredRules deletes the rules that expired at or before now. It returns the IDs of
+// the environments they belonged to, each once.
+func (s *Store) DeleteExpiredRules(ctx context.Context, now time.Time) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, "DELETE FROM rules WHERE expires_at IS NOT NULL AND expires_at <= ? RETURNING environment_id", now.Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var envs []string
+	for rows.Next() {
+		var env string
+		if err := rows.Scan(&env); err != nil {
+			return nil, err
+		}
+		if !slices.Contains(envs, env) {
+			envs = append(envs, env)
+		}
+	}
+	return envs, rows.Err()
 }
 
 // --- approvals ------------------------------------------------------------------------

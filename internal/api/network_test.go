@@ -375,3 +375,33 @@ func awaitLine(t *testing.T, lines <-chan string, want string) {
 		}
 	}
 }
+
+// Rules can expire: the API takes a future expiresAt, keeps it through edits, and rules made
+// through it are manual.
+func TestRuleExpiry(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	rules := testOrigin + "/api/environments/" + env.ID + "/rules"
+	past := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	future := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+
+	if rec := do(h, "POST", rules, `{"host":"tmp.example.org","action":"allow","expiresAt":"`+past+`"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a rule that expired already: %d %s", rec.Code, rec.Body)
+	}
+	rec := do(h, "POST", rules, `{"host":"tmp.example.org","action":"allow","expiresAt":"`+future.Format(time.RFC3339)+`"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	created := decode[store.Rule](t, rec)
+	if created.ExpiresAt == nil || !created.ExpiresAt.Equal(future) || created.Origin != store.OriginManual {
+		t.Fatalf("created: %+v", created)
+	}
+
+	rec = do(h, "PUT", rules+"/"+created.ID, `{"host":"tmp.example.org","action":"deny","note":"changed"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body)
+	}
+	if updated := decode[store.Rule](t, rec); updated.Action != store.ActionDeny || updated.ExpiresAt == nil || !updated.ExpiresAt.Equal(future) {
+		t.Fatalf("an edit changed the expiry: %+v", updated)
+	}
+}
