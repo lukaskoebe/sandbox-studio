@@ -209,6 +209,8 @@ No level does these things:
 - allow a private or otherwise non-public address, such as loopback, RFC 1918, carrier-grade NAT or
   link-local. The dialer refuses them anyway, unless a [private host](#private-hosts-company-vpn)
   names them;
+- allow a [private host](#private-hosts-company-vpn), even at `open`: the AI reviewer never sees
+  one either. Only a rule you make or an approval reaches a company host;
 - lift the tracker list for a browser VM, or an explicit deny rule;
 - send a secret to a host it isn't bound to. Secrets reach bound hosts at every level.
 

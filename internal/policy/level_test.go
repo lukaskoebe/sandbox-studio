@@ -49,6 +49,14 @@ func TestLevelDecisionTable(t *testing.T) {
 			t.Errorf("%s curated=%v placeholder=%v public=%v: got %v, want %v", r.level, r.curated, r.placeholder, r.public, got, r.want)
 		}
 	}
+	// A private host is asked at every level, curated or not and with a reviewer: only rules and
+	// approvals reach it.
+	for _, level := range []string{store.LevelLocked, store.LevelGuarded, store.LevelAssisted, store.LevelOpen} {
+		in := levelInput{level: level, curated: true, public: true, private: true, reviewer: true}
+		if got := in.decide(); got != ask {
+			t.Errorf("%s private host: got %v, want ask", level, got)
+		}
+	}
 }
 
 func TestPublicHost(t *testing.T) {
@@ -136,6 +144,13 @@ func TestLevels(t *testing.T) {
 	if got := string(logged[0].Payload); !strings.Contains(got, `"decided":"open"`) {
 		t.Errorf("the allow doesn't say it was decided by the level: %s", got)
 	}
+
+	// A private host is never opened by a level, not even Open.
+	if err := e.Store.SetPrivateHosts(ctx, env.ID, []store.PrivateHost{{Host: "*.company.local", Ports: []int{}}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = decide(sb, "git.company.local", 443, false)
+	expectAsked("open asks for a private host", err)
 
 	// An explicit rule wins over the level, in both directions.
 	setLevel(store.LevelOpen)

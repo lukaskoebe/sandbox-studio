@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
+	"slices"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -37,15 +38,17 @@ type levelInput struct {
 	curated     bool // the host is on the curated list, and its entry is on
 	placeholder bool // the request carries a placeholder of a secret the host isn't bound to
 	public      bool // the host is a name, which the dialer checks, or a public address
+	private     bool // the host is on the environment's private hosts list
 	reviewer    bool // an AI reviewer is set up
 }
 
 // decide is the decision table. Locked asks for everything, as Studio did before levels. A request
-// that carries a placeholder to a host the secret isn't bound to, and an address that isn't public,
-// are asked at every level: no level allows them, and the dialer refuses private addresses anyway.
+// that carries a placeholder to a host the secret isn't bound to, an address that isn't public and
+// a private host (a company host behind a VPN) are asked at every level: only a rule the user made
+// or an approval reaches them, never a level or the AI reviewer.
 func (in levelInput) decide() verdict {
 	switch {
-	case in.level == store.LevelLocked, in.placeholder, !in.public:
+	case in.level == store.LevelLocked, in.placeholder, !in.public, in.private:
 		return ask
 	case in.level == store.LevelOpen:
 		return allowOpen
@@ -92,8 +95,13 @@ func (e *Engine) byLevel(ctx context.Context, req Request, teammate, host string
 	if err != nil {
 		return store.Rule{}, false, err
 	}
+	privateHosts, err := e.Store.PrivateHosts(ctx, req.EnvironmentID)
+	if err != nil {
+		return store.Rule{}, false, err
+	}
+	private := slices.ContainsFunc(privateHosts, func(h store.PrivateHost) bool { return Covers(h.Host, host) })
 	entry, listed := curatedMatch(host, req.Port, off)
-	in := levelInput{level: level, curated: listed, placeholder: req.Placeholder, public: publicHost(host), reviewer: e.Reviewer != nil}
+	in := levelInput{level: level, curated: listed, placeholder: req.Placeholder, public: publicHost(host), private: private, reviewer: e.Reviewer != nil}
 	switch in.decide() {
 	case allowOpen:
 		e.recordAllowed(ctx, req, teammate, host, DecidedOpen, "")
