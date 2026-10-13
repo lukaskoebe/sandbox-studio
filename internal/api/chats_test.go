@@ -470,6 +470,8 @@ func TestChatStream(t *testing.T) {
 	if !strings.Contains(seen[0], `"Second"`) {
 		t.Fatalf("items: %v", seen)
 	}
+	// The open stream follows the chat's state too: idle again once the turn ends.
+	next(t, ch, "chat", func(d string) bool { return strings.Contains(d, `"state":"idle"`) })
 
 	// Deleting the chat ends its stream.
 	var wg sync.WaitGroup

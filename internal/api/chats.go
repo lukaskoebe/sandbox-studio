@@ -418,7 +418,7 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "retry: 2000\n\n")
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
-	var sent *store.Chat
+	var sent *store.Chat // a copy: c is overwritten by each read
 	for {
 		// Turns and items in rev order, so the last ID sent is a safe place to resume;
 		// the chat comes last, since its rev covers everything read with it.
@@ -433,7 +433,8 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request) {
 		}
 		if sent == nil || c.State != sent.State || c.Title != sent.Title || c.ACPSessionID != sent.ACPSessionID {
 			writeEvent(w, "chat", c.Rev, c)
-			sent = &c
+			last := c
+			sent = &last
 		}
 		after = max(after, c.Rev)
 		if rc.Flush() != nil {
