@@ -1,7 +1,7 @@
 # Sandbox Studio — Plan
 
 Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 is approved and in progress, with the
-v2 backlog below.
+v2 backlog below. C2 (terminal UI) is a concept awaiting D7 and D8.
 
 The v2 plan is implemented (v0.1.0 and v0.1.1). How it works now is in the
 [developer documentation](docs/README.md). This plan covers the next round, driven by user
@@ -23,6 +23,8 @@ on before anything is built.
 | D4 | Default teammate | "Iris", generalist engineer: curious, careful and direct; short soul |
 | D5 | Network security levels (Concept C1) | Approved as written (2026-10-13); built in the order the concept gives |
 | D6 | Host ssh-agent by default (reverses "never use the host agent") | Approved. When signing waits on a host confirmation (hardware key, password manager), show a dismissible hint to set up a dedicated Studio key |
+| D7 | Terminal UI library (Concept C2) | Open: Bubble Tea v2 + Lip Gloss + Bubbles recommended |
+| D8 | Should plain `studio` open the TUI when a server already runs? (Concept C2) | Open: no recommended, `studio tui` only |
 
 ## N1 — Safety net: end-to-end tests
 
@@ -360,6 +362,90 @@ Allow all for this site, Review individually, or Deny. This replaces "+4 more".
 site-scoped browsing with the tracker list. Then the levels with the curated list, and
 Assisted last. Items 3 and 4 are done: grouped approvals and rule hygiene, with allow-once
 and deny-once.
+
+## C2 — Terminal UI (Concept)
+
+**Problem.** Studio is a browser app on a loopback-only server. Using it from another
+machine means a tunnel or the LAN Vite setup. People who live in a terminal still switch to
+a browser to answer an approval. Over plain SSH, on a dev box, a homelab server or a cloud
+VM, nothing works without forwarding a port.
+
+**Idea.** `studio tui` is a keyboard-first terminal client for the running Studio, in the
+same binary. It covers the daily loop: see sandboxes, answer approvals, talk to a teammate
+and drop into a terminal. Everything else stays in the browser, and the TUI says where. It
+is a client of the same HTTP API, so it adds no second way to change state.
+
+**1. Scope: the daily loop, not parity.**
+
+| Screen | Shows | Actions |
+|---|---|---|
+| **Home** | sandboxes (status dot, name, teammate, template name, uptime), pending approvals count | open, new (teammate + template, live progress), start/stop, delete (confirm) |
+| **Approvals** | the stack as a list, grouped like the web cards; network and git push approvals | allow / deny with the same choices as the web card (scope, pattern, once, for 1 hour); git push opens the diff in a pager |
+| **Chat** | a sandbox's chats; the transcript streaming, tool calls folded to one line | send a prompt, cancel, new chat, expand a tool call |
+| **Terminal** | the sandbox's tmux session, full screen, raw passthrough | detach with `Ctrl-]` back to the TUI |
+| **Activity** | the connections and decisions log, tailing | filter by sandbox, open the rule a decision came from |
+
+Not in the TUI, with an "open in browser" hint that prints the URL: settings, providers,
+teammates' souls, the template editor, lineage, memory, the rules editor, the browser.
+
+**2. Layout.** One screen at a time, with a header and a key bar. No panes, so it works at
+80×24 and over slow links.
+
+```
+ Sandbox Studio · default                              ● 2 approvals  ? help
+ ─────────────────────────────────────────────────────────────────────────────
+   ● blub            Iris   node@3      up 2h 14m
+ ▸ ● api-refactor    Finn   go@2        up 12m      1 approval
+   ○ docs-site       Iris   node@3      stopped
+   ◐ demo            —      base        starting…
+ ─────────────────────────────────────────────────────────────────────────────
+ enter open  n new  s start/stop  a approvals  t terminal  c chat  / filter  q quit
+```
+
+- Workbench style in the terminal: the terminal's own foreground and background, one accent
+  color for focus and status, dim text for secondary facts, `NO_COLOR` honored. Status uses
+  the web's words and dots (● running, ○ stopped, ◐ busy).
+- A new approval rings the terminal bell once and shows in the header from every screen. `a`
+  jumps to it.
+- Keys are the same everywhere: `enter` open, `esc`/`q` back, `?` help, `/` filter, `a`
+  approvals. Nothing to configure.
+
+**3. Connection and auth.**
+- `studio tui` connects to the running Studio on its loopback address. It authenticates the
+  way `studio login-url` already does, as the local installation owner with the control
+  credential from the catalog, and exchanges it for a session of its own. That session is
+  never a browser ticket, and it ends when the TUI exits. Only the same OS user on the same
+  machine can do this, which is the point: over SSH you run the TUI *on* the host, so
+  nothing new listens on the network and the server stays loopback-only.
+- If Studio isn't running, it says so and prints the start command (or `studio autostart
+  status`). It doesn't start the server itself.
+- Live updates come from the existing SSE topics (`/api/events`, the chat stream). The
+  terminal uses the existing attach websocket. The TUI adds no new endpoints except, if
+  needed, the session exchange for a non-browser client.
+
+**4. Building it.**
+- A new `internal/tui` package. Its typed API client reuses the API's Go types, so it can't
+  drift from the OpenAPI schema. `cmd/studio` gets the `tui` subcommand.
+- Library (D7): Charm's Bubble Tea v2 with Lip Gloss and Bubbles (`charm.land/*/v2`, MIT,
+  widely used, works on Windows terminals). The alternatives are `tview` (heavier widgets,
+  less control over the look) or a hand-rolled renderer on `golang.org/x/term` (no new
+  dependency, much more code). No markdown renderer: chat text gets light styling (bold
+  headings, indented code blocks) instead of a glamour dependency.
+- Tests: model/update tests and golden views (fixed width, `NO_COLOR`), against the e2e
+  fake runtime's API in-process. One smoke test drives `studio tui` in a PTY (creack/pty is
+  already a dependency): open Home, answer an approval, detach from a terminal.
+- Docs: docs/tui.md, and a site page with a screenshot from the golden test.
+
+**Order once agreed.**
+1. Home, Approvals and auth: the part that saves a browser trip.
+2. Terminal attach.
+3. Chat.
+4. Activity and git push diffs.
+
+**Open questions.** D7 (library). D8: should `studio tui` also be what `studio` opens when
+it runs in an interactive terminal and a server is already running? It would print the
+banner otherwise. The recommendation is no: keep `studio` the server and `studio tui` the
+client, so scripts and autostart never get a UI.
 
 ## Backlog: still open from the v2 plan
 
