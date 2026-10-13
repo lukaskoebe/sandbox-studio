@@ -10,8 +10,8 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
 | `anthropic_api` | claude, opencode | key bound to `api.anthropic.com`, guests see `ANTHROPIC_API_KEY` |
 | `openai_api` | codex, opencode | key bound to `api.openai.com`, guests see `OPENAI_API_KEY` |
 | `openai_compatible` | opencode, codex | key bound to the base URL's host, `OPENAI_API_KEY` |
-| `claude_subscription` | claude | none yet: state `login_required` |
-| `chatgpt_subscription` | codex | none yet: state `login_required` |
+| `claude_subscription` | claude | the long-lived token of `claude setup-token`, a secret like an API key |
+| `chatgpt_subscription` | codex | the ChatGPT login `codex login` writes, kept by Studio ([subscription logins](#subscription-logins)) |
 
 - An API key is stored as an environment secret named `PROVIDER_<NAME>_KEY`. It is created,
   rotated and deleted only with its provider, in one transaction; the secrets API answers
@@ -22,8 +22,53 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
 - An API-key provider can exist without its key: an imported environment's providers do
   (`state` `key_required`). Its first key is added with `PUT` and `apiKey`, and sessions and
   memory jobs answer 409 or skip until then.
-- The subscription login flow (`claude setup-token` / `codex login` in a system sandbox) is
-  a TODO.
+- A subscription has no key to type: it signs in, as described under
+  [subscription logins](#subscription-logins). Its state is `login_required` until a login is
+  stored, `expired` once a ChatGPT login has lapsed and could not be refreshed, and `ready`
+  otherwise.
+
+## Subscription logins
+
+A subscription signs in with the vendor's own CLI. Studio (`internal/login`) runs the sign-in
+in a system VM: a sandbox row of a system kind (`store/system.go`), with the same image as
+other sandboxes, no project, and network only to the hosts its kind needs
+([network](network.md#system-vms)). The dialog shows the sign-in; `GET
+/api/environments/{env}/providers/{id}/login` reports its state (`starting`, `waiting`,
+`saving`, `done`, `failed`, or `idle`).
+
+- **Claude Pro/Max (`claude_subscription`).** `claude setup-token` runs in a tmux session named
+  `login` in the login VM, which reaches `console.anthropic.com` and `api.anthropic.com`. The
+  user opens the page it prints, signs in, and pastes the code into the terminal the dialog
+  shows. Studio reads the long-lived token from the pane, stores it as the provider's secret
+  bound to `api.anthropic.com`, and removes the VM. If it can't read the token, the dialog
+  offers to paste it instead.
+- **ChatGPT (`chatgpt_subscription`).** `codex login --device-auth` runs in the login VM, which
+  reaches `auth.openai.com`. The dialog shows the page and the one-time code the device login
+  prints. When Codex has written `~/.codex/auth.json`, Studio reads it and stores two things:
+  the access token's signature, as the provider's secret bound to `chatgpt.com`, and the whole
+  login as a studio-only secret named `PROVIDER_<NAME>_LOGIN`, which no sandbox sees and which
+  holds the refresh token.
+- **Sessions and chats.** A Claude teammate gets `CLAUDE_CODE_OAUTH_TOKEN` set to the
+  provider's placeholder, as an API key's placeholder is; the gateway swaps the token in on
+  `api.anthropic.com`. A ChatGPT teammate gets `~/.codex/auth.json` with placeholders only. Its
+  tokens keep their headers and payloads, so Codex reads the same claims and expiry, and their
+  signatures are placeholders. The access token's placeholder is swapped on `chatgpt.com`. The
+  refresh token and the id token's signature are placeholders that nothing swaps, so a refresh
+  the guest attempts fails instead of handing new tokens to the sandbox.
+- **Refresh.** Studio refreshes a ChatGPT login at the OAuth token endpoint from the host, five
+  minutes before its access token expires, checking every minute. The new login replaces the
+  old one, and the running sandboxes of the provider's teammates get the new auth file. A refused
+  refresh leaves the login as it was; once the access token has lapsed the provider is
+  `expired`. Claude tokens are long-lived and are not refreshed.
+- **Utility calls.** When the environment's utility model is a subscription, its calls (memory
+  extraction and the dream judge) run as one-shot `claude -p --model haiku` or
+  `codex exec -m gpt-6-luna` in the provider's utility VM, with the prompt on stdin. The VM
+  starts on demand and stops after ten minutes without a call. A subscription has no known
+  price, so its calls are capped by number per day, as an endpoint without a price is.
+- **Startup.** Login VMs left by an earlier run are removed when Studio starts, and utility VMs
+  are stopped; they start again when used.
+
+What is built and what is verified is in [harnesses](harnesses.md#subscription-logins-built-pending-live-verification).
 
 ## Teammates
 

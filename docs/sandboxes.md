@@ -10,8 +10,9 @@ A sandbox is a microsandbox microVM that persists across stop and start. Code:
   (`sandboxes.VMName`); every VM Studio owns starts with `ss-`.
 - Rebase (and restore, once enabled) creates generation `n+1` and retires `n`. The UI keeps
   one identity.
-- Catalog rows also hold template build VMs and teammates' browser VMs. Only ordinary
-  sandboxes appear in the sandbox API (`Manager.Public`).
+- Catalog rows also hold template build VMs, teammates' browser VMs and the system VMs of
+  subscription logins (`store/system.go`). Only ordinary sandboxes appear in the sandbox API
+  (`Manager.Public`).
 - On start, `Manager.Reconcile` re-attaches agent listeners and recovers interrupted imports,
   rebases and restores. Detached VMs kept running meanwhile.
 

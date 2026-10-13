@@ -9,7 +9,8 @@ An agent session is a teammate's harness TUI in a named tmux session in one of i
 `POST /api/environments/{env}/sandboxes/{id}/sessions` refuses with 409 when:
 
 - the sandbox has no owner teammate,
-- the teammate's provider is `login_required` (subscriptions, until S8),
+- the teammate's provider needs a sign-in: `login_required`, or `expired` for a ChatGPT login
+  that lapsed ([subscription logins](teammates.md#subscription-logins)),
 - the provider's key isn't bound to its host (the vendor host, or the base URL's host for
   `openai_compatible`): the gateway swaps the placeholder only on bound hosts,
 - the sandbox isn't running.
@@ -161,8 +162,8 @@ below; a golden test enforces it.
 
 The adapters are installed without their own copies of the Claude Code and Codex binaries,
 so chats and terminals run the same pinned versions. Studio advertises no file system or
-terminal capability, and chats refuse `claude_subscription` teammates: Claude chats need an
-API-key provider. The guest kills the agent's process group when the stream closes (SIGTERM,
+terminal capability. A Claude subscription runs chats too, with the same token placeholder as
+sessions. The guest kills the agent's process group when the stream closes (SIGTERM,
 SIGKILL after 5 s) and runs at most 4 per sandbox, one per chat; its stderr goes to
 `/run/studio-agent/acp-<chat>.log`, capped at 256 KiB.
 
@@ -198,5 +199,33 @@ Pending S7 (`// verify (S7)` in the code):
   ID is the ID its TUI resumes.
 - The model ID `gpt-6-luna` and its price (third-party listings only).
 
-Pending S8: subscription logins (`claude_subscription`, `chatgpt_subscription`). Sessions
-refuse these providers until the login flow exists.
+## Subscription logins: built, pending live verification
+
+The sign-in flows, the placeholders, the refresh and the utility calls of
+[subscription logins](teammates.md#subscription-logins) are built and covered by fakes in tests.
+No test ran a vendor CLI or reached a vendor's host. The owner checks them with their own
+accounts. Each assumption is marked `verify (S8)` in the code. The steps:
+
+1. Claude Pro/Max. In Settings → Providers, Add provider → Claude subscription → Add. Choose
+   Sign in with Claude. Expect a terminal showing `claude setup-token` and a page link. Open the
+   link, sign in, and paste the code into the terminal. Expect "The sign-in is saved." and the
+   provider `ready`. If the token isn't read, paste the printed token in the dialog instead.
+2. Claude teammate. Create one on that provider with the Claude Code harness and start a session.
+   In its terminal, `echo $CLAUDE_CODE_OAUTH_TOKEN` shows a `studio-` placeholder, and a prompt
+   gets an answer.
+3. Claude chat for the same teammate, and a memory extraction (a utility call through
+   `claude -p`). Check the activity for extraction results or a reported failure.
+4. ChatGPT. Add provider → ChatGPT subscription → Add, then Sign in with ChatGPT. Expect the page
+   and the code. Enter the code on the page. Expect "The sign-in is saved." and `ready`.
+5. ChatGPT teammate. Start a session. In its terminal, `~/.codex/auth.json` holds `studio-`
+   placeholders and no refresh token, and a prompt gets an answer.
+6. Refresh. Nothing to do, unless an access token is near its end: then the log shows the refresh,
+   and a running session keeps working.
+7. Failures. Cancel a sign-in, Sign in again, and check that an expired ChatGPT login shows
+   "Sign-in expired" and refuses sessions.
+
+The assumptions to confirm against the pinned CLIs: the hosts in `internal/policy/system.go`; the
+`sk-ant-oat` token format and how `claude setup-token` prints it; tmux `remain-on-exit` and
+`pane_dead`; the device login's page and code text, and `~/.codex/auth.json`'s shape; the
+ChatGPT token endpoint and client ID; the JSON that `claude -p --output-format json` and
+`codex exec --json` print; and that Codex reads only the claims of its JWTs in the guest's copy.

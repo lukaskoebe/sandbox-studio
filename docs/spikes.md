@@ -15,7 +15,7 @@ written; current behavior is in the component pages linked from the [index](READ
 | S5 | Owned vs named volumes in snapshots and forks; rebase mechanism | decision recorded | ✅ (one upstream gap) | ⏳ | ⏳ |
 | S6 | Client timeouts while a connection is held | defaults chosen per client | ✅ | n/a (guest-side) | n/a |
 | S7 | Harness hooks for the pinned versions, without trust prompts | context injection proven in all three harnesses | ⏳ | | |
-| S8 | Subscription auth (Claude OAuth token via placeholder, Codex ChatGPT login, headless utility calls) | a login-based teammate runs without the long-lived credential in the guest, or the fallback is documented | ⏳ needs the logins | | |
+| S8 | Subscription auth (Claude OAuth token via placeholder, Codex ChatGPT login, headless utility calls) | a login-based teammate runs without the long-lived credential in the guest, or the fallback is documented | ⏳ built, awaiting the owner's accounts | | |
 | S9 | yzma + embeddinggemma latency and memory | under 50 ms per short query on CPU | ✅ works; 70 ms per query, over the target | ⏳ | ⏳ |
 
 S7 and S8 details: [harnesses](harnesses.md#verified-vs-pending).
@@ -353,7 +353,8 @@ and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze
 - S1–S3 and S9 on the Mac; Windows needs a cloud VM with nested virtualization.
 - S7: verify hook payloads and context injection for OpenCode, Claude Code and Codex against
   a fake model endpoint (no credentials needed).
-- S8: subscription logins; needs Claude and ChatGPT accounts in an interactive session.
+- S8: subscription logins are built; the owner's Claude and ChatGPT accounts verify them, with
+  the steps in [harnesses](harnesses.md#subscription-logins-built-pending-live-verification).
 - Template builds: live qualification of the exec export path including network installs,
   cold-cache base pulls, a build on a release base, arm64 guests, oversized or backpressured
   captures ([template builds](template-builds.md#current-qualification-boundary)).

@@ -162,8 +162,8 @@ func TestInstructionsBlock(t *testing.T) {
 }
 
 func TestSubscriptionProviders(t *testing.T) {
-	// Sessions refuse login_required providers until S8, but the adapters render without
-	// a credential variable.
+	// Sessions refuse providers that need a sign-in (api.planSession), but the adapters render
+	// without a credential variable.
 	sub := Provider{Kind: teammates.KindClaudeSubscription, EnvVar: "CLAUDE_CODE_OAUTH_TOKEN"}
 	if len(Env(sub)) != 0 {
 		t.Fatal("env without a placeholder")
