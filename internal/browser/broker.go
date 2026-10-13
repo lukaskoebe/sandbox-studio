@@ -293,6 +293,10 @@ type batchItem struct {
 	Error   string          `json:"error"`
 }
 
+// lostReply is a command whose reply did not reach Studio, for example because the channel to
+// the browser VM broke. The command may have run, so the tools check the page before they answer.
+type lostReply struct{ error }
+
 // exec runs one agent-browser command in a session of the teammate's browser VM. Errors
 // are scrubbed.
 func (s *Service) exec(ctx context.Context, st *state, pg *page, cmd agentproto.BrowserCommand) (json.RawMessage, []byte, error) {
@@ -315,7 +319,7 @@ func (s *Service) exec(ctx context.Context, st *state, pg *page, cmd agentproto.
 			s.mu.Unlock()
 			return nil, nil, refuse("ephemeral session %s ended with its browser; open a new one with browser_open", pg.id)
 		}
-		return nil, nil, errors.New(Scrub(err.Error(), secrets))
+		return nil, nil, lostReply{errors.New(Scrub(err.Error(), secrets))}
 	}
 	if len(cmd.Args) > 0 && cmd.Args[0] == "batch" {
 		return res.Output, res.Screenshot, nil

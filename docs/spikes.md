@@ -304,7 +304,8 @@ artifact without extracting it. It keeps the artifact only after framing, tar, g
 file completion succeed; failures close the source and discard the partial file.
 
 Guest→host bulk data over a vsock route stalls after roughly 128–256 KiB on msb 0.7.7 and
-0.7.8 ([vsock bulk probe](../spikes/vsock-bulk/README.md)), while msb exec stdout delivered
+0.7.8 ([vsock bulk probe](../spikes/vsock-bulk/README.md); the channel's narrower limits are in
+[guest agent](guest-agent.md#limits-of-the-channel-on-msbs-vsock)), while msb exec stdout delivered
 about 6.3 MB/s. Bulk data therefore goes over msb exec: the worker runs `studio-agent
 export-layer` and streams its stdout into the receiver, and the agent channel carries no
 exports. The persistent authenticated registry and pure image

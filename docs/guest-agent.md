@@ -36,8 +36,31 @@ Stream kinds:
 | `call` | guest → host | hooks, memory tools and browser tools |
 
 Bulk transfers (template layer export, workspace copies) don't use the channel: guest→host
-bulk data over vsock stalls after roughly 128–256 KiB on msb 0.7.7/0.7.8, so they run over
-msb exec instead (see [spikes](spikes.md#layer-transfer-and-capture-foundations)).
+bulk data over vsock stalls on msb 0.7.7/0.7.8, so they run over msb exec instead (see
+[spikes](spikes.md#layer-transfer-and-capture-foundations)).
+
+### Limits of the channel on msb's vsock
+
+The guest's writes to the host are the weak direction. Two limits were measured on
+2026-10-13 with a scratch Studio (msb 0.7.7, amd64), using file reads of the same reply
+shape as a browser command's:
+
+- **A single guest write over 32 KiB breaks the channel.** Reading a 24,500-byte file (a
+  reply of about 32.7 KB) took 3 ms; a 24,540-byte file (about 32.8 KB) stalled until the
+  host gave up after 24 to 40 s, and the host saw a yamux protocol error, a `\x00` in a JSON
+  reply, or EOF. yamux writes a frame's body in one call, so the guest's `channelConn`
+  (`internal/guest/agent.go`) splits every write into pieces of at most 16 KiB. With that,
+  the same reads finish in milliseconds.
+- **A reply longer than one stream window (256 KiB) waits for the host's window update,
+  which takes seconds.** A 196,500-byte file (a reply of about 262 KB) took 9 ms; a
+  196,700-byte file (about 262.3 KB) took 8 s; a 300 KB file (about 410 KB) ended with EOF
+  after 15 to 21 s. yamux also gives each frame 10 s to be written, so a reply that waits
+  this long can fail. Keep replies within one window. Browser screenshots are capped at
+  180 KiB of JPEG for this (`agentproto.MaxBrowserScreenshot`), which keeps their reply near
+  246 KB.
+
+Other replies can exceed these limits too (file reads go up to 1 MiB), so keep new replies
+small or move their bytes to msb exec.
 
 ## Subcommands
 

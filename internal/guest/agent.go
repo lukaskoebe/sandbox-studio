@@ -103,12 +103,39 @@ func (a *Agent) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
+// maxChannelWrite bounds one write to the host. msb's vsock breaks the channel when a single
+// guest write is larger than 32 KiB (docs/guest-agent.md), and yamux writes a frame's body
+// in one call, up to a stream window of 256 KiB. Smaller writes each stay under the limit.
+const maxChannelWrite = 16 << 10
+
+// channelConn is the guest's end of the host channel. Its writes are split into pieces of at
+// most maxChannelWrite bytes; reads and Close are the connection's.
+type channelConn struct{ net.Conn }
+
+func (c channelConn) Write(p []byte) (int, error) {
+	n := 0
+	for len(p) > 0 {
+		m, err := c.Conn.Write(p[:min(len(p), maxChannelWrite)])
+		n += m
+		if err != nil {
+			return n, err
+		}
+		p = p[m:]
+	}
+	return n, nil
+}
+
+// hostSession runs the guest's yamux session over the host channel conn.
+func hostSession(conn net.Conn) (*yamux.Session, error) {
+	return yamux.Client(channelConn{conn}, yamux.DefaultConfig())
+}
+
 func (a *Agent) serveOnce(ctx context.Context) error {
 	conn, err := vsock.Dial(vsock.Host, agentproto.VsockPort, nil)
 	if err != nil {
 		return fmt.Errorf("dial host: %w", err)
 	}
-	sess, err := yamux.Client(conn, yamux.DefaultConfig())
+	sess, err := hostSession(conn)
 	if err != nil {
 		conn.Close()
 		return err

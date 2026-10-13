@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -28,6 +29,8 @@ type call struct {
 
 // userError is a refusal the agent should read as is.
 type userError struct{ error }
+
+func (e userError) Unwrap() error { return e.error }
 
 func refuse(format string, args ...any) error { return userError{fmt.Errorf(format, args...)} }
 
@@ -108,6 +111,12 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 			secrets = c.pg.secrets
 		}
 		s.mu.Unlock()
+		var lost lostReply
+		if errors.As(err, &lost) {
+			s.log().Warn("browser reply lost", "tool", method, "sandbox", sandboxID, "err", Scrub(err.Error(), secrets))
+			return nil, errors.New(method + " failed: the browser's reply did not arrive (" + Scrub(err.Error(), secrets) +
+				"). Take a browser_snapshot to see the page before you act on it.")
+		}
 		var ue userError
 		if errors.As(err, &ue) || errors.Is(err, ErrPaused) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, errors.New(Scrub(err.Error(), secrets))
@@ -154,6 +163,34 @@ func (c *call) currentURL(ctx context.Context) (string, error) {
 	}
 	c.s.mu.Unlock()
 	return v.URL, nil
+}
+
+// pageAfterLostReply asks the page where it is, once, after a command's reply was lost. The
+// channel to the browser VM reconnects within seconds, so it waits a second first.
+func (c *call) pageAfterLostReply(ctx context.Context) (string, error) {
+	select {
+	case <-time.After(time.Second):
+	case <-ctx.Done():
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return c.currentURL(ctx)
+}
+
+// lostMessage tells the agent what Studio knows after a command's reply was lost. known says
+// whether the page answered, and at is its address then.
+func lostMessage(tool string, cause error, known bool, at string) string {
+	if !known {
+		return fmt.Sprintf("%s: the browser's reply did not arrive (%v), and the page could not be checked. Take a browser_snapshot before you act on it.", tool, cause)
+	}
+	return fmt.Sprintf("%s: the browser's reply did not arrive (%v). The page is at %s, and the command may have run. Take a browser_snapshot before you act on the page.", tool, cause, at)
+}
+
+// scrub removes the credentials filled into the current page from s.
+func (c *call) scrub(s string) string {
+	c.s.mu.Lock()
+	defer c.s.mu.Unlock()
+	return Scrub(s, c.pg.secrets)
 }
 
 var refPattern = regexp.MustCompile(`^@?(e[0-9]{1,6})$`)
@@ -246,6 +283,11 @@ func (c *call) act(ctx context.Context, action, ref string, args []string, text,
 	}
 	e := entry{actor: "agent", sandbox: c.sb.ID, action: action, target: target(info.Role, info.Name), url: url, outcome: "ok", detail: detail, shot: shot}
 	if err != nil {
+		var lost lostReply
+		if errors.As(err, &lost) {
+			at, rerr := c.pageAfterLostReply(ctx)
+			err = errors.New(c.scrub(lostMessage("browser_"+action, err, rerr == nil, at)))
+		}
 		e.outcome, e.detail = "failed", err.Error()
 		c.s.record(ctx, c.st, c.pg, e)
 		return nil, userError{err}
@@ -321,9 +363,24 @@ func (c *call) openPage(ctx context.Context, url, origin string) (string, error)
 	data, shot, err := c.run(ctx, []string{"open", url}, true)
 	e := entry{actor: "agent", sandbox: c.sb.ID, action: "open", url: url, outcome: "ok", shot: shot}
 	if err != nil {
-		e.outcome, e.detail = "failed", err.Error()
+		var lost lostReply
+		if !errors.As(err, &lost) {
+			e.outcome, e.detail = "failed", err.Error()
+			c.s.record(ctx, c.st, c.pg, e)
+			return "", userError{err}
+		}
+		// The open may have run. On the origin it asked for, it did: the agent gets the address
+		// and no screenshot, which came in the lost reply.
+		at, rerr := c.pageAfterLostReply(ctx)
+		if rerr == nil && Origin(at) == origin {
+			e.outcome, e.detail = "ok", "the reply did not arrive, so there is no screenshot"
+			c.s.record(ctx, c.st, c.pg, e)
+			return c.scrub(fmt.Sprintf("opened %s, but its reply did not arrive (%v), so there is no screenshot or title. The page is at %s. Take a browser_snapshot to see the page.", url, err, at)), nil
+		}
+		msg := c.scrub(lostMessage("browser_open", err, rerr == nil, at))
+		e.outcome, e.detail = "failed", msg
 		c.s.record(ctx, c.st, c.pg, e)
-		return "", userError{err}
+		return "", userError{errors.New(msg)}
 	}
 	var v struct {
 		URL   string `json:"url"`

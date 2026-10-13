@@ -31,7 +31,7 @@ func ref() map[string]any {
 func init() {
 	mcpInstructions += browserInstructions
 	tools := []Tool{
-		{agentproto.MethodBrowserOpen, "Open a URL in your browser. With ephemeral true it starts a new throwaway session and returns its ID.",
+		{agentproto.MethodBrowserOpen, "Open a URL in your browser. The result is text: read the page with browser_snapshot. With ephemeral true it starts a new throwaway session and returns its ID.",
 			obj([]string{"url"}, map[string]any{
 				"url": str("An http or https URL", "maxLength", 4000),
 				"ephemeral": map[string]any{"type": "boolean", "description": "Open in a new ephemeral session: an empty profile whose cookies and storage are deleted on browser_close, " +
@@ -56,7 +56,7 @@ func init() {
 			})},
 		{agentproto.MethodBrowserGetText, "The text content of an element.",
 			obj([]string{"ref"}, map[string]any{"ref": ref()})},
-		{agentproto.MethodBrowserScreenshot, "A screenshot of the viewport.", obj(nil, map[string]any{})},
+		{agentproto.MethodBrowserScreenshot, "A screenshot of the viewport, as an image. For the text and the element refs, use browser_snapshot: it is much smaller.", obj(nil, map[string]any{})},
 		{agentproto.MethodBrowserWait, "Wait for text to appear, for the URL to match, or for some milliseconds. Give one.",
 			obj(nil, map[string]any{
 				"text": str("Text to wait for", "maxLength", 1000),
