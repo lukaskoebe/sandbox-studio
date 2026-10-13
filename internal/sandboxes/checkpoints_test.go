@@ -583,7 +583,9 @@ type fakeSandboxRuntime struct {
 	restoredEgress     runtime.Egress
 	onCreateCheckpoint func()
 	onRemove           func(string)
-	guestBoots         bool // a created VM's agent connects to its socket and answers, see answerGuest
+	guestBoots         bool                    // a created VM's agent connects to its socket and answers, see answerGuest
+	sizes              map[string]runtime.Size // by VM name: the CPUs and memory it is configured with
+	liveResize         bool                    // a running VM takes a resize live, see Resize
 }
 
 func newFakeSandboxRuntime() *fakeSandboxRuntime {
@@ -592,11 +594,15 @@ func newFakeSandboxRuntime() *fakeSandboxRuntime {
 		checkpoints:        make(map[string]bool),
 		checkpointChildren: make(map[string]string),
 		failures:           make(map[string]error),
+		sizes:              make(map[string]runtime.Size),
 	}
 }
 
-func (f *fakeSandboxRuntime) Create(_ context.Context, name string, _ runtime.Spec, socket string, _ map[string]string) error {
+func (f *fakeSandboxRuntime) Create(_ context.Context, name string, spec runtime.Spec, socket string, _ map[string]string) error {
 	f.record("create:" + name)
+	f.mu.Lock()
+	f.sizes[name] = runtime.Size{CPUs: spec.CPUs, MemoryMiB: spec.MemoryMiB}
+	f.mu.Unlock()
 	f.setStatus(name, runtime.StatusRunning)
 	if err := f.failure("create:" + name); err != nil {
 		return err
@@ -641,6 +647,73 @@ func (f *fakeSandboxRuntime) Resume(_ context.Context, name string) error {
 	}
 	f.setStatus(name, runtime.StatusRunning)
 	return nil
+}
+
+// Resize models msb's dry run: a running VM takes a changed CPU count or memory size live
+// when liveResize is set, and any other change is saved for the next start. Each step has a
+// failure name (resize-cpus-live, resize-memory-live, resize-next-start), so a test can fail
+// one step after the earlier ones took effect.
+func (f *fakeSandboxRuntime) Resize(_ context.Context, name string, size runtime.Size) (runtime.Resized, error) {
+	f.record("resize:" + name)
+	f.mu.Lock()
+	cur := f.sizes[name]
+	live := f.liveResize && f.statuses[name] == runtime.StatusRunning
+	f.mu.Unlock()
+	var out runtime.Resized
+	cpusChanged, memoryChanged := size.CPUs != cur.CPUs, size.MemoryMiB != cur.MemoryMiB
+	if !cpusChanged {
+		out.CPUs = runtime.AppliedUnchanged
+	}
+	if !memoryChanged {
+		out.MemoryMiB = runtime.AppliedUnchanged
+	}
+	setSize := func(s runtime.Size) {
+		f.mu.Lock()
+		f.sizes[name] = s
+		f.mu.Unlock()
+	}
+	if cpusChanged && live {
+		f.record("resize-cpus-live:" + name)
+		if err := f.failure("resize-cpus-live:" + name); err != nil {
+			return out, err
+		}
+		cur.CPUs = size.CPUs
+		setSize(cur)
+		out.CPUs = runtime.AppliedLive
+	}
+	if memoryChanged && live {
+		f.record("resize-memory-live:" + name)
+		if err := f.failure("resize-memory-live:" + name); err != nil {
+			return out, err
+		}
+		cur.MemoryMiB = size.MemoryMiB
+		setSize(cur)
+		out.MemoryMiB = runtime.AppliedLive
+	}
+	nextCPUs, nextMemory := cpusChanged && !live, memoryChanged && !live
+	if nextCPUs || nextMemory {
+		f.record("resize-next-start:" + name)
+		if err := f.failure("resize-next-start:" + name); err != nil {
+			return out, err
+		}
+		if nextCPUs {
+			cur.CPUs = size.CPUs
+			out.CPUs = runtime.AppliedNextStart
+		}
+		if nextMemory {
+			cur.MemoryMiB = size.MemoryMiB
+			out.MemoryMiB = runtime.AppliedNextStart
+		}
+		setSize(cur)
+	}
+	return out, nil
+}
+
+// configuredSize is the CPUs and memory the fake has configured a VM with.
+func (f *fakeSandboxRuntime) configuredSize(name string) runtime.Size {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.sizes[name]
 }
 
 func (f *fakeSandboxRuntime) Remove(_ context.Context, name string) error {

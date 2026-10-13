@@ -209,6 +209,17 @@ func testLayerTar() []byte {
 	return out.Bytes()
 }
 
+// bigLayerTar is a valid layer tar of about 4 KiB, past the 1 KiB input limit a test sets.
+func bigLayerTar() []byte {
+	var out bytes.Buffer
+	writer := tar.NewWriter(&out)
+	payload := bytes.Repeat([]byte("big layer "), 400)
+	_ = writer.WriteHeader(&tar.Header{Name: "etc/big", Mode: 0o644, Size: int64(len(payload)), Typeflag: tar.TypeReg, Format: tar.FormatUSTAR})
+	_, _ = writer.Write(payload)
+	_ = writer.Close()
+	return out.Bytes()
+}
+
 func exportWire(raw []byte) []byte {
 	var wire bytes.Buffer
 	_, _ = agentproto.WriteExport(context.Background(), &wire, bytes.NewReader(raw), int64(len(raw)+1))
@@ -372,6 +383,10 @@ func TestExportRejectsInvalidStreamOrFailedCommand(t *testing.T) {
 		"truncated stream":     func(h *buildHarness) { wire := exportWire(testLayerTar()); h.exportWire = wire[:len(wire)-1] },
 		"nonzero exit":         func(h *buildHarness) { h.exportExit = 1 },
 		"invalid tar in frame": func(h *buildHarness) { h.exportWire = exportWire([]byte("not a tar")) },
+		"capture over its input limit": func(h *buildHarness) {
+			h.w.ExportLimits = ocilayer.Limits{MaxInputBytes: 1 << 10}
+			h.exportWire = exportWire(bigLayerTar())
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := newBuildHarness(t)

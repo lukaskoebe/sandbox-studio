@@ -40,14 +40,8 @@ func Defaults() Resources {
 
 // Validate checks resolved values. It deliberately does not apply defaults.
 func (r Resources) Validate() error {
-	if r.CPUs < 1 || r.CPUs > 64 {
-		return fmt.Errorf("%w: cpus must be between 1 and 64", ErrInvalid)
-	}
-	if r.MemoryMiB < 512 {
-		return fmt.Errorf("%w: memoryMiB must be at least 512", ErrInvalid)
-	}
-	if r.MaxMemoryMiB < r.MemoryMiB {
-		return fmt.Errorf("%w: maxMemoryMiB must be at least memoryMiB", ErrInvalid)
+	if err := r.ValidateSize(); err != nil {
+		return err
 	}
 	if r.WorkspaceMiB < 1024 {
 		return fmt.Errorf("%w: workspaceMiB must be at least 1024", ErrInvalid)
@@ -59,10 +53,34 @@ func (r Resources) Validate() error {
 		name  string
 		value int64
 	}{
-		{"memoryMiB", r.MemoryMiB},
-		{"maxMemoryMiB", r.MaxMemoryMiB},
 		{"workspaceMiB", r.WorkspaceMiB},
 		{"dockerMiB", r.DockerMiB},
+	} {
+		if field.value > maxMiBValue {
+			return fmt.Errorf("%w: %s must not exceed %d", ErrInvalid, field.name, maxMiBValue)
+		}
+	}
+	return nil
+}
+
+// ValidateSize checks the CPU count and the memory size and ceiling: the part of the resources
+// a resize changes. Validate checks the rest as well.
+func (r Resources) ValidateSize() error {
+	if r.CPUs < 1 || r.CPUs > 64 {
+		return fmt.Errorf("%w: cpus must be between 1 and 64", ErrInvalid)
+	}
+	if r.MemoryMiB < 512 {
+		return fmt.Errorf("%w: memoryMiB must be at least 512", ErrInvalid)
+	}
+	if r.MaxMemoryMiB < r.MemoryMiB {
+		return fmt.Errorf("%w: maxMemoryMiB must be at least memoryMiB", ErrInvalid)
+	}
+	for _, field := range []struct {
+		name  string
+		value int64
+	}{
+		{"memoryMiB", r.MemoryMiB},
+		{"maxMemoryMiB", r.MaxMemoryMiB},
 	} {
 		if field.value > maxMiBValue {
 			return fmt.Errorf("%w: %s must not exceed %d", ErrInvalid, field.name, maxMiBValue)

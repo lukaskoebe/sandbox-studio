@@ -104,7 +104,31 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
 
 Defaults: 2 CPUs, 4 GiB memory, 20 GiB workspace, 20 GiB Docker disk. The 4 GiB home disk is
 fixed. `max_memory` defaults to the initial memory and is passed as the VM's memory ceiling.
-A template's spec fixes the resources of sandboxes created from it. There is no live resize.
+A template's spec fixes the resources of sandboxes created from it, and a rebase builds the
+new generation from the template, so it resets the CPUs and memory as well.
+
+`PUT /api/environments/{env}/sandboxes/{id}/resources` with `{"cpus", "memoryMiB"}` sets the
+CPUs (1–64) and the memory size (at least 512 MiB). The sandbox dashboard's Resources dialog
+calls it. Studio asks msb's `modify` for a dry run and applies each changed resource as the
+plan says:
+
+- **live**: a running sandbox's VM takes the change now. msb allows this up to the VM's
+  boot-time capacity: its memory ceiling, and its CPU maximum, which Studio sets to the CPU
+  count the VM boots with.
+- **nextStart**: the change is saved in the sandbox's config and used at its next start, and
+  the running VM is left alone. Stopped and suspended sandboxes always get this, and so does a
+  running sandbox's change above its boot-time capacity.
+
+The response's `applied` says how each resource changed: `live`, `nextStart` or `unchanged`.
+Live changes are made one resource per call, and the rest in one call with msb's no-restart
+policy, so a resize never restarts a running VM. A memory size above the ceiling raises the
+ceiling to match, as msb requires. If a step fails, the steps before it stay in effect, and the
+catalog records what took effect.
+
+Verified vs. pending: the Studio side is covered by fake-runtime and API tests. Nothing has run
+against a live VM yet. A live run should check that a CPU decrease and a memory decrease apply
+to the running VM without a restart, and that a growth above the boot-time capacity reports
+`nextStart` and takes effect at the next start.
 
 ## Checkpoints
 
@@ -127,6 +151,20 @@ view. The restore path is implemented and tested with fakes: it needs a stopped 
 restores a stopped replacement VM as a new generation, adopts it in the catalog, then
 removes the old VM; a durable record lets startup finish or discard an interrupted restore.
 As a guard, Studio refuses a candidate whose stored network config differs from Create's.
+
+On 2026-10-13 the gate is still closed, and no release of the pinned microsandbox can open it.
+[Upstream #1736](https://github.com/superradcompany/microsandbox/issues/1736) was filed on
+2026-10-02 and is still open, with no pull request linked to it. On 2026-10-02 a maintainer
+said they were leaning towards exposing the flags on `msb restore` rather than on
+`msb run --from-sandbox`, and that a fix was in progress. Neither released version carries it:
+msb 0.7.7 (pinned) and 0.7.8 (2026-10-09) have the same restore surface. The SDK's restore takes
+a network policy with rules and default egress and ingress only, and the Rust `RestoreBuilder`
+has no setter for a proxy or a DNS resolver. The 0.7.9 release bump (#1829) is still open. So
+there is nothing to bump yet. When a release adds restore options for the proxy and resolver,
+the bump updates the `sdk/go` module in `go.mod` and `go.sum` and the msb runtime that
+`runtime.Ensure` installs. Then `CheckpointRestoreSupported` can return true and
+`RestoreCheckpoint` must pass Studio's egress to the restore. `checkEgress` and its tests stay
+as the guard.
 
 ## Lineage
 
@@ -165,7 +203,14 @@ An in-place pause (msb pause/resume): vCPUs stop, memory stays with the VM proce
 resume continues every process, TUIs and tmux included. It frees no memory and doesn't
 survive a host reboot. The agent session is dropped on suspend and reconnects on resume.
 Fork, rebase and checkpoints refuse a suspended sandbox; Stop and Delete resume it first.
-A full (memory) snapshot plus stop would need restore, so it waits on #1736 too.
+A resize of a suspended sandbox is saved for its next start (see [resources](#resources)).
+
+Suspend to disk (a full memory snapshot, then the VM's process freed) is not built. A memory
+snapshot resumes only through restore, and restore can't set the sandbox's gateway proxy or DNS
+resolver (see [checkpoints](#checkpoints)). Studio never restores a VM without them, so the
+feature waits for #1736. The restore would also need the source's vsock route, which
+[spikes](spikes.md#s5--volumes-snapshots-and-forks) records as a device-layout requirement.
+Studio therefore keeps suspend in place.
 
 ## Fork, rebase, export and import
 

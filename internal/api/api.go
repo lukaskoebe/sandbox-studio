@@ -236,6 +236,20 @@ func (s *Server) registerSandboxes(api huma.API) {
 		return &sandboxOut{v}, apiError(err)
 	})
 
+	type resizeSandboxIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Body sandboxes.ResizeRequest
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "resizeSandbox", Method: http.MethodPut, Path: "/api/environments/{env}/sandboxes/{id}/resources", Tags: []string{"sandboxes"},
+		Summary:     "Set a sandbox's CPUs and memory",
+		Description: "A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource.",
+	}, func(ctx context.Context, in *resizeSandboxIn) (*struct{ Body sandboxes.Resized }, error) {
+		v, err := s.Sandboxes.Resize(context.WithoutCancel(ctx), in.Env, in.ID, in.Body)
+		return &struct{ Body sandboxes.Resized }{v}, apiError(err)
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "deleteSandbox", Method: http.MethodDelete, Path: "/api/environments/{env}/sandboxes/{id}", Tags: []string{"sandboxes"},
 		DefaultStatus: http.StatusNoContent,

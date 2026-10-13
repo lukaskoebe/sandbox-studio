@@ -4,6 +4,7 @@ import {
   ArrowSquareOutIcon,
   BroadcastIcon,
   ChatCircleDotsIcon,
+  CpuIcon,
   GitForkIcon,
   PlugsConnectedIcon,
   PlusIcon,
@@ -15,6 +16,7 @@ import { CheckpointsSection } from "@/components/checkpoints-section"
 import { RecentConnections } from "@/components/connections-panel"
 import { Ident } from "@/components/ident"
 import { LineageTimeline } from "@/components/lineage-timeline"
+import { ResizeSandboxDialog } from "@/components/resize-sandbox-dialog"
 import { StartButton, StopButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
@@ -123,6 +125,7 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const p = phase(sb)
   // Uptime is relative to now, so the clock is read again every minute.
   const [now, setNow] = useState(Date.now)
+  const [resizing, setResizing] = useState(false)
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(timer)
@@ -187,6 +190,18 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           {(p === "ready" || p === "booting" || p === "suspended") && (
             <StopButton env={env} sandbox={sb} />
           )}
+          {(p === "ready" || p === "stopped" || p === "suspended") && (
+            <Button variant="outline" onClick={() => setResizing(true)}>
+              <CpuIcon />
+              Resources
+            </Button>
+          )}
+          <ResizeSandboxDialog
+            env={env}
+            sandbox={sb}
+            open={resizing}
+            onOpenChange={setResizing}
+          />
           {p !== "creating" && (
             <Button
               variant="outline"

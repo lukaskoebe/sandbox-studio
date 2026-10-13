@@ -75,3 +75,13 @@ func TestValidateRejectsInvalidValues(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSizeIgnoresDisks(t *testing.T) {
+	// A resize checks the CPUs and memory of a sandbox whose disks it doesn't change.
+	if err := (Resources{CPUs: 4, MemoryMiB: 2048, MaxMemoryMiB: 4096}).ValidateSize(); err != nil {
+		t.Fatalf("ValidateSize() rejected CPUs and memory alone: %v", err)
+	}
+	if err := (Resources{CPUs: 4, MemoryMiB: 2048, MaxMemoryMiB: 1024}).ValidateSize(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("ValidateSize() = %v; want ErrInvalid for a ceiling below the memory size", err)
+	}
+}

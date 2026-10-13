@@ -89,6 +89,7 @@ type SandboxRuntime interface {
 	Stop(context.Context, string) error
 	Pause(context.Context, string) error
 	Resume(context.Context, string) error
+	Resize(context.Context, string, runtime.Size) (runtime.Resized, error)
 	Remove(context.Context, string) error
 	Status(context.Context, string) (runtime.Status, error)
 	Statuses(context.Context, string) (map[string]runtime.Status, error)

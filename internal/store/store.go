@@ -435,6 +435,23 @@ func (s *Store) MarkSandboxStarted(ctx context.Context, envID, id string, at tim
 	return nil
 }
 
+// SetSandboxResources records a sandbox's CPUs and memory, and its memory ceiling.
+func (s *Store) SetSandboxResources(ctx context.Context, envID, id string, cpus, memoryMiB, maxMemoryMiB int) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET cpus = ?, memory_mib = ?, max_memory_mib = ? WHERE environment_id = ? AND id = ?",
+		cpus, memoryMiB, maxMemoryMiB, envID, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // DeleteSandbox removes a sandbox record.
 func (s *Store) DeleteSandbox(ctx context.Context, envID, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)

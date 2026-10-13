@@ -1310,6 +1310,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a sandbox's CPUs and memory
+         * @description A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource.
+         */
+        put: operations["resizeSandbox"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/resume": {
         parameters: {
             query?: never;
@@ -3422,6 +3442,60 @@ export interface components {
             name: string;
             /** @description The repository's path on the forge, without .git */
             path: string;
+        };
+        ResizeApplied: {
+            /** @enum {string} */
+            cpus: "unchanged" | "live" | "nextStart";
+            /** @enum {string} */
+            memoryMiB: "unchanged" | "live" | "nextStart";
+        };
+        ResizeRequest: {
+            /**
+             * Format: int64
+             * @description The CPU count
+             */
+            cpus: number;
+            /**
+             * Format: int64
+             * @description The memory size in MiB
+             */
+            memoryMiB: number;
+        };
+        Resized: {
+            agent?: components["schemas"]["AgentInfo"];
+            applied: components["schemas"]["ResizeApplied"];
+            checkpointRestoreSupported: boolean;
+            /** Format: int64 */
+            cpus: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            dockerMiB: number;
+            environmentId: string;
+            /** Format: int64 */
+            generation: number;
+            id: string;
+            /** Format: int64 */
+            maxMemoryMiB: number;
+            /** Format: int64 */
+            memoryMiB: number;
+            name: string;
+            /** @description The create or fork that runs or failed */
+            progress?: components["schemas"]["Progress"];
+            /** Format: date-time */
+            startedAt?: string;
+            /**
+             * @description The VM's runtime status; creating or failed while a create or fork runs or after it failed
+             * @enum {string}
+             */
+            status: "absent" | "created" | "starting" | "running" | "draining" | "suspended" | "stopped" | "crashed" | "creating" | "failed";
+            /** @description The teammate that owns the sandbox; empty for unowned sandboxes */
+            teammateId?: string;
+            templateId?: string;
+            /** @description The display name of the template the sandbox runs, such as node-22+python-3.13@2 */
+            templateName?: string;
+            /** Format: int64 */
+            workspaceMiB: number;
         };
         Resources: {
             /** Format: int64 */
@@ -7453,6 +7527,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    resizeSandbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResizeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Resized"];
                 };
             };
             /** @description Error */

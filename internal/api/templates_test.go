@@ -137,6 +137,10 @@ func (r *apiTemplateRuntime) Create(_ context.Context, _ string, spec runtime.Sp
 
 func (*apiTemplateRuntime) Remove(context.Context, string) error { return nil }
 
+func (*apiTemplateRuntime) Resize(context.Context, string, runtime.Size) (runtime.Resized, error) {
+	return runtime.Resized{}, errors.New("the template runtime has no VMs to resize")
+}
+
 func (*apiTemplateRuntime) Status(context.Context, string) (runtime.Status, error) {
 	return runtime.StatusRunning, nil
 }

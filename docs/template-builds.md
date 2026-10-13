@@ -215,6 +215,13 @@ limit, or earlier if `export-layer` exits or dies, including after its stdout br
 publishes the derived image through the persistent authenticated registry, and marks the
 job ready. Cleanup can finish after that status transition.
 
+The export is capped at its byte limit (8 GiB of tar by default), and it fails when a capture
+goes over. Its disk is guarded too: publishing
+copies the artifact, so the export checks the free space under its staging directory before it
+starts and every 64 MiB of output, and it stops, removing its partial artifact, unless the free
+space still covers a second copy of the artifact, including the next 64 MiB, and keeps 1 GiB free
+(`templateexport`, `ErrDiskSpace`).
+
 `runtime.Run` requests bounded startup, cancellation, output, and cleanup handling, but
 the microsandbox FFI may continue a native call after its Go context is cancelled. The
 runtime retains its slot while known native calls or cleanup remain active. If canceled
@@ -283,3 +290,99 @@ Still open: live qualification of the exec export path including apt/mise networ
 installs, cold-cache base pulls, a template build on a release base, macOS and Windows host
 VM runs, arm64, and oversized or backpressured captures. Restore remains blocked by
 microsandbox [#1736](https://github.com/superradcompany/microsandbox/issues/1736).
+The [qualification runbook](#qualification-runbook) lists the steps for the first four.
+
+## Qualification runbook
+
+These are the open qualifications from the boundary above. Each one is run by hand, on a
+disposable Linux amd64 host with msb 0.7.7 installed. The runs create build and template VMs,
+so run them one at a time, and never on a host whose Studio is in use. The driver is
+`spikes/template-jobs`, which uses a private Store, registry and state root, not Studio's data
+directory. Build the guest agent once from the repository root:
+
+```sh
+GOMAXPROCS=2 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -p=1 -trimpath -o /tmp/studio-agent ./cmd/studio-agent
+```
+
+Every run starts from the repository root with `GOMAXPROCS=2 go run -p=1 ./spikes/template-jobs
+-agent /tmp/studio-agent`, plus `-network-installs` where a step says so. The driver builds on
+`sandbox-studio-base:dev`, the image `make image` loads, unless a step changes its `baseImage`
+constant. Those changes are local and never committed: after the runs, `git checkout --
+spikes/template-jobs/main.go` restores the file.
+
+### 1. Release base
+
+Goal: a template build on the digest-pinned base that a release uses. This has not run live.
+
+1. Read the release digest with `docker buildx imagetools inspect
+   ghcr.io/lukaskoebe/sandbox-studio-base:v0.2.0` (the latest release tag) and copy its
+   `Digest:` value. The reference is `ghcr.io/lukaskoebe/sandbox-studio-base@<digest>`. The
+   image must be public, as [release](release.md) requires.
+2. Set `baseImage` in `spikes/template-jobs/main.go` to that reference.
+3. Run the driver with no flags.
+
+Expected: exit status 0, and each of these PASS lines is printed: `fresh worker build`,
+`private loopback registry HTTP handler authenticated`, `canonical-equivalent request created a
+new job`, `fresh-template instances`, `worker cancellation`, and `production worker stopped with
+no runtime command or owner cleanup pending`. The `exit-7 build` line is printed only when the
+run has not passed its five-minute mark. `msb list` shows no `ss-` VM afterwards.
+
+### 2. Cold-cache pulls
+
+Goal: the release base is pulled into an empty msb image cache, and a second build reuses it.
+
+1. Remove the base from the cache: `msb image rm ghcr.io/lukaskoebe/sandbox-studio-base@<digest>`.
+   Expected: removed, or not found if it was never pulled. msb refuses with `-f` unset while a
+   sandbox uses the image.
+2. Check: `msb image ls` no longer lists the reference.
+3. Run the step 1 driver command under `time`. Expected: the step 1 PASS lines; the job log
+   shows `Preparing the Studio base image` and then `Template is ready`; `msb image ls` lists the
+   release base now. Record the wall time and `msb image inspect` for the cached size.
+4. Run the same command again without removing the image. Expected: the same PASS lines, and
+   `msb image ls` showed the image before the run, so the second run pulled nothing.
+
+### 3. Live exec export with network installs
+
+Goal: a build that ran apt and mise over the network exports its root layer. The Linux amd64
+retry recorded in the [spike README](../spikes/template-jobs/README.md#opt-in-network-install-qualification)
+failed at export before the exec path was changed. The host needs outbound access to the six
+hosts in that README's allowlist.
+
+Run `GOMAXPROCS=2 go run -p=1 ./spikes/template-jobs -agent /tmp/studio-agent -network-installs`.
+
+Expected: the driver prints the export stream's byte count and rate. Its PASS lines include
+`private gateway held and allowed N exact builder connection(s)`, one `held private approval`
+line per approval, `network template layer retained /usr/bin/tree and the pinned node 22.14.0
+install while excluding apt and temporary caches`, `canonical-equivalent network build reused
+the same TemplateID without repeating apt or mise installs`, `fresh network-template instance
+executed tree and node from the agent login profile`, and `private network-install worker stopped with no
+runtime command or owner cleanup pending`. The exit status is 0 and `msb list` shows no `ss-`
+VM. An approval for a host outside the README table is a failure to report, not to allow.
+
+### 4. Oversized captures
+
+Goal: a root-layer capture over the export limit fails cleanly. The export stops, the build
+fails, nothing is published, and the builder is removed. The `-network-installs` run caps its
+capture at 512 MiB, so a larger file in the root layer goes over it.
+
+1. Add a setup line to `networkSetupScript` in `spikes/template-jobs/main.go`, as its first line
+   and not committed: `sudo sh -c 'head -c 600000000 /dev/urandom >
+   /usr/local/share/studio-oversized-capture.bin'`. The exporter keeps `/usr/local`, while it
+   excludes `workspace`, `/tmp`, `/var/tmp`, `/var/log`, `/opt/studio` and the rest of its list.
+2. Run `GOMAXPROCS=2 go run -p=1 ./spikes/template-jobs -agent /tmp/studio-agent -network-installs`.
+
+Expected: the driver exits non-zero with `wait for network-install setup log entry: job reached
+status "failed" before logging`. The job log shows `Exporting the template root layer` and
+then `Template export failed`. The cause is one of two errors: `export exceeds maximum size`,
+or `OCI layer input limit exceeded` when the tar is counted first. On a disk with less than about
+2.6 GiB free, the disk guard stops the export first with `not enough free disk space for the
+template layer`, which passes this step too. In every case nothing is published, `msb list`
+shows no `ss-` VM, and any private root the driver keeps holds no `.oci-layer-*` file. A
+pending cleanup or a retained root that holds an artifact fails the step.
+
+### Notes
+
+The unit tests cover the same paths without a VM: `internal/templateexport` for the input and
+disk limits, and `internal/templatebuild` for an export over its input limit. A live run of
+these steps is still needed for the release base, cold pulls, the network-install export and the
+oversized capture.

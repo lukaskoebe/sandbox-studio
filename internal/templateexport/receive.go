@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/diskspace"
 	"github.com/lukaskoebe/sandbox-studio/internal/ocilayer"
 )
 
@@ -93,6 +94,10 @@ func Receive(ctx context.Context, dir string, src io.ReadCloser, limits ocilayer
 	if limits.MaxInputBytes == 0 {
 		limits.MaxInputBytes = ocilayer.DefaultLimits().MaxInputBytes
 	}
+	guard := &spaceGuard{dir: dir}
+	if err := guard.check(0); err != nil {
+		return Layer{}, err
+	}
 
 	var err error
 	artifact, err = os.CreateTemp(dir, ".oci-layer-*.tar.gz")
@@ -105,7 +110,7 @@ func Receive(ctx context.Context, dir string, src io.ReadCloser, limits ocilayer
 	}
 
 	blobHash := sha256.New()
-	blobOutput := &countingWriter{writer: io.MultiWriter(artifact, blobHash)}
+	blobOutput := &countingWriter{writer: io.MultiWriter(artifact, blobHash), guard: guard}
 	gz, err := gzip.NewWriterLevel(blobOutput, gzip.DefaultCompression)
 	if err != nil {
 		return Layer{}, fmt.Errorf("create gzip writer: %w", err)
@@ -211,10 +216,51 @@ func Receive(ctx context.Context, dir string, src io.ReadCloser, limits ocilayer
 type countingWriter struct {
 	writer io.Writer
 	count  int64
+	guard  *spaceGuard
 }
 
 func (w *countingWriter) Write(p []byte) (int, error) {
 	n, err := w.writer.Write(p)
 	w.count += int64(n)
+	if err == nil {
+		err = w.guard.check(w.count)
+	}
 	return n, err
+}
+
+// Free disk space checks, as variables so tests can model a disk. Publish copies the received
+// artifact into the registry, so the disk must still hold a second copy of it, and keep the
+// floor free for everything else Studio writes. The artifact can grow by up to one check
+// interval before the next check, which is counted in as well.
+var (
+	exportFloorBytes uint64 = 1 << 30
+	exportCheckBytes int64  = 64 << 20
+	freeSpace               = diskspace.Free
+)
+
+// ErrDiskSpace reports that the disk can't hold a received layer and its publish copy.
+var ErrDiskSpace = errors.New("not enough free disk space for the template layer")
+
+// spaceGuard stops a layer export before it can fill its disk. It checks before the artifact
+// exists, then each time the artifact has grown by exportCheckBytes. A disk whose free space
+// can't be read is not a reason to refuse the layer.
+type spaceGuard struct {
+	dir    string
+	nextAt int64 // artifact size at which the disk is checked next
+}
+
+func (g *spaceGuard) check(written int64) error {
+	if written < g.nextAt {
+		return nil
+	}
+	g.nextAt = written + exportCheckBytes
+	free, err := freeSpace(g.dir)
+	if err != nil {
+		return nil
+	}
+	need := exportFloorBytes + 2*uint64(written+exportCheckBytes)
+	if free < need {
+		return fmt.Errorf("%w: %d bytes free under %s, %d needed", ErrDiskSpace, free, g.dir, need)
+	}
+	return nil
 }
