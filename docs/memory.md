@@ -61,6 +61,22 @@ scope plus shared.
 Every hit carries `why`: both ranks, the similarity, whether vectors were used
 (`used`, `not_ready`, `not_embedded`), the RRF score, both boosts and a one-line summary.
 
+## Retrieval eval
+
+`internal/memory/testdata/eval/corpus.json` holds 27 facts and 4 pages, and 22 queries with
+the items each should find. `TestRetrievalEval` (`internal/memory/eval_test.go`) runs the
+queries through `Search` and reports recall@3 and MRR:
+
+    go test ./internal/memory -run TestRetrievalEval -v
+
+It measures the keyword side only. The eval never prepares an embedder, and unit tests do not
+load the real model (a download and a native library), so the vector side is not in the
+numbers. The keyword side
+scores 0.909 on both today, and the test fails below 0.90 (`minRecallAt3`, `minMRR`). Two
+queries miss on words alone: "postgres version" (the fact says PostgreSQL) and "which
+relational engine holds our data", the paraphrase the vector side is for. When the corpus
+changes, update the thresholds in the same commit and say why.
+
 ## Embeddings
 
 - `memory.Embedder` has a production implementation (`Llama`: embeddinggemma-300m Q8_0
