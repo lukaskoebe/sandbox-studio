@@ -69,7 +69,9 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
   - While the user drives (takeover), the browser VM's own rules apply: its teammate's rules
     plus the environment's.
   - The tracker list applies to the VM's requests before any approval (see
-    [network](network.md#trackers)).
+    [network](network.md#trackers)). The environment's security level decides the requests no
+    rule covers after that, and never allows a request that carries a placeholder (see
+    [security levels](network.md#security-levels)).
   - Site approvals last the browser session, and cover a page's requests once the user allows
     its site (see [network](network.md#hold-and-ask)). They end when the VM stops.
 
