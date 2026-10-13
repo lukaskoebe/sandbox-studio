@@ -10,8 +10,10 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // The production side of the seams the e2e build (runtime_e2e.go) fills with fakes.
@@ -35,4 +37,4 @@ func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return gw }
 func upstreamDial() gatewayDial { return nil }
 
 // registerControl adds the e2e control API to the API mux; production has none.
-func registerControl(*http.ServeMux) {}
+func registerControl(*http.ServeMux, *store.Store, *policy.Engine) {}

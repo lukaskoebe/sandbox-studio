@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, type Approval } from "@/lib/api/client"
-import { formatAge } from "@/lib/utils"
+import { isNetworkApproval } from "@/lib/approval-kinds"
+import { formatAge, hostPort } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/network/activity")({
   component: ActivityTab,
@@ -24,8 +25,9 @@ const decisionWords: Record<string, string> = {
   dismissed: "Dismissed",
 }
 
-/** How a decided request is named: "Approved", or "Denied once" for one connection only. */
+/** How a decided request is named: "Approved", or "Denied once" for one connection only, or "Denied · tracker". */
 function decisionOf(a: Approval) {
+  if (a.network?.tracker) return "Denied · tracker"
   const word = decisionWords[a.status] ?? a.status
   return a.once ? `${word} once` : word
 }
@@ -37,7 +39,7 @@ function ActivityTab() {
     params: { path: { env }, query: { status: "all" } },
   })
   const decided = (approvals.data ?? [])
-    .filter((a) => a.kind === "network" && a.status !== "pending")
+    .filter((a) => isNetworkApproval(a) && a.status !== "pending")
     .slice(0, 50)
 
   if (approvals.isPending) return <Spinner className="mx-auto block" />
@@ -67,7 +69,11 @@ function ActivityTab() {
               {decided.map((a) => (
                 <TableRow key={a.id}>
                   <TableCell>
-                    <Ident>{a.subject}</Ident>
+                    <Ident>
+                      {a.network
+                        ? hostPort(a.network.host, a.network.port)
+                        : a.subject}
+                    </Ident>
                   </TableCell>
                   <TableCell>{a.network?.sandboxName}</TableCell>
                   <TableCell>{decisionOf(a)}</TableCell>

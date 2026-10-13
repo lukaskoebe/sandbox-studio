@@ -46,9 +46,10 @@ type interception struct {
 	headers map[string]string // set on every request; values may reference {secret.NAME}
 	bound   []secrets.Binding // secrets that may be sent to host
 	unbound []secrets.Binding
-	masked  [][]byte // values to mask in responses
-	caddy   bool     // requests go through a caddy rule
-	broken  string   // why every request is refused
+	masked  [][]byte                   // values to mask in responses
+	caddy   bool                       // requests go through a caddy rule
+	broken  string                     // why every request is refused
+	gate    func(*http.Request) string // decides each request before it is rewritten; "" lets it on
 	proxy   *httputil.ReverseProxy
 	log     *slog.Logger
 
@@ -99,8 +100,8 @@ func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (ma
 
 // intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
 // nil. It returns the bytes sent and received on c and the last refused request, if any.
-func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled) (sent, received int64, problem string) {
-	ic := &interception{host: host, tls: isTLS, headers: rule.Config.Headers, log: g.Log}
+func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string) (sent, received int64, problem string) {
+	ic := &interception{host: host, tls: isTLS, headers: rule.Config.Headers, log: g.Log, gate: gate}
 	var transport http.RoundTripper
 	if caddy == nil {
 		ic.bound, ic.unbound = boundTo(all, host)
@@ -186,6 +187,12 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ic.broken != "" {
 		ic.refuse(w, http.StatusForbidden, ic.broken)
 		return
+	}
+	if ic.gate != nil {
+		if msg := ic.gate(r); msg != "" {
+			ic.refuse(w, http.StatusForbidden, msg)
+			return
+		}
 	}
 	out := r.Clone(r.Context())
 	if out.Host == "" {

@@ -18,6 +18,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"strconv"
@@ -39,6 +40,9 @@ type Gateway struct {
 	Key    []byte
 	Policy interface {
 		Decide(context.Context, policy.Request) (store.Rule, error)
+		// Terminates reports whether a rule names methods or paths for the connection's host, so
+		// its requests are checked one by one even where a host rule would splice it.
+		Terminates(context.Context, policy.Request) bool
 	}
 	Sandbox   func(ctx context.Context, id string) (store.Sandbox, error)
 	Resolvers *Resolvers
@@ -181,10 +185,19 @@ func (g *Gateway) handle(c net.Conn) {
 			decider = d
 		}
 	}
+	// A browser VM's HTTPS is always terminated, whatever rule allows it: the browser trusts the
+	// environment's CA, and its requests are checked one by one (docs/network.md).
+	browserTLS := sb.Kind == store.SandboxKindBrowser && proto == "tls"
 	rule, err := g.Policy.Decide(context.Background(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name, Host: host, Port: port,
+		Browser: sb.Kind == store.SandboxKindBrowser, Deferred: browserTLS,
 	})
 	ruleID = rule.ID
+	// Without a rule, a browser VM's HTTPS is not held here: its requests are decided one by one
+	// once the connection is terminated (decideRequest).
+	if browserTLS && errors.Is(err, policy.ErrPerRequest) {
+		err = nil
+	}
 	switch {
 	case errors.Is(err, policy.ErrUndecided):
 		verdict = VerdictUndecided
@@ -197,6 +210,10 @@ func (g *Gateway) handle(c net.Conn) {
 	case errors.Is(err, policy.ErrDenied):
 		verdict = VerdictDenied
 		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("The user denied the request to connect to %s:%d.", host, port))
+		return
+	case errors.Is(err, policy.ErrTracker):
+		verdict, problem = VerdictDenied, "tracker"
+		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("%s is on the tracker list that Sandbox Studio blocks in browsers. A network rule that allows it lets the browser through.", host))
 		return
 	case err != nil:
 		problem = err.Error()
@@ -218,8 +235,12 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 	web := proto == "tls" || proto == "http"
-	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy
-	if bound, _ := boundTo(all, host); handled || len(bound) > 0 && web {
+	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy || browserTLS
+	// A request-level rule for an allowed host needs the requests, so the connection is terminated.
+	checked := rule.Action == store.ActionAllow && web && g.Policy.Terminates(context.Background(), policy.Request{
+		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, Host: host, Port: port,
+	})
+	if bound, _ := boundTo(all, host); handled || checked || len(bound) > 0 && web {
 		if !web {
 			problem = rule.Action + " rules only handle HTTP and TLS connections"
 			return
@@ -238,9 +259,16 @@ func (g *Gateway) handle(c net.Conn) {
 			}
 			caddy = &compiled
 		}
+		var gate func(*http.Request) string
+		switch {
+		case browserTLS:
+			gate = func(r *http.Request) string { return g.decideRequest(r, decider, host, port) }
+		case rule.Action == store.ActionProxy || checked:
+			gate = func(r *http.Request) string { return g.ruleRequest(r, decider, host, port) }
+		}
 		g.Conns.opened(entry, ruleID, true)
 		verdict = VerdictAllowed
-		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy)
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate)
 		return
 	}
 

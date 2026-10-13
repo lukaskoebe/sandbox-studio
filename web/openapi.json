@@ -1410,8 +1410,17 @@
             "minLength": 1,
             "type": "string"
           },
+          "method": {
+            "description": "allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it",
+            "type": "string"
+          },
           "note": {
             "maxLength": 500,
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path",
+            "maxLength": 512,
             "type": "string"
           },
           "ports": {
@@ -1559,13 +1568,14 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request",
+            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request",
             "enum": [
               "allow",
               "deny",
               "dismiss",
               "allow_once",
-              "deny_once"
+              "deny_once",
+              "allow_site"
             ],
             "type": "string"
           },
@@ -1578,9 +1588,17 @@
             "description": "Host pattern the rule covers; empty means the requested host",
             "type": "string"
           },
+          "method": {
+            "description": "For network requests allowed or denied with a rule: the request method the rule covers; empty covers any",
+            "type": "string"
+          },
           "note": {
             "description": "For git approvals: a note passed on to the sandbox, such as why a push was rejected",
             "maxLength": 2000,
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path",
             "type": "string"
           },
           "ports": {
@@ -1840,6 +1858,9 @@
       "Environment": {
         "additionalProperties": false,
         "properties": {
+          "blockTrackers": {
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -1854,7 +1875,8 @@
         "required": [
           "id",
           "name",
-          "createdAt"
+          "createdAt",
+          "blockTrackers"
         ],
         "type": "object"
       },
@@ -3596,6 +3618,24 @@
           "host": {
             "type": "string"
           },
+          "initiator": {
+            "description": "Origin of the Referer header, as the browser sent it; shown, never trusted",
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "navigation": {
+            "description": "A top-level navigation: the page moves to another site",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "The request path, without the query",
+            "type": "string"
+          },
+          "pathPattern": {
+            "type": "string"
+          },
           "patterns": {
             "description": "Suggested host patterns, most specific first",
             "items": {
@@ -3612,6 +3652,13 @@
           },
           "sandboxName": {
             "type": "string"
+          },
+          "site": {
+            "description": "The top-level site the request belongs to: the navigation's own, or the browser's page",
+            "type": "string"
+          },
+          "tracker": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -4527,6 +4574,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "method": {
+            "description": "Allow and deny rules only: the request method the rule covers, such as GET; empty covers any method",
+            "type": "string"
+          },
           "note": {
             "type": "string"
           },
@@ -4538,6 +4589,10 @@
               "curated",
               "reviewer"
             ],
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "Allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path",
             "type": "string"
           },
           "ports": {
@@ -4628,8 +4683,17 @@
             "minLength": 1,
             "type": "string"
           },
+          "method": {
+            "description": "allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it",
+            "type": "string"
+          },
           "note": {
             "maxLength": 500,
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path",
+            "maxLength": 512,
             "type": "string"
           },
           "ports": {
@@ -4894,6 +4958,19 @@
           "lastEventAt",
           "injections",
           "writes"
+        ],
+        "type": "object"
+      },
+      "SetTrackersInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "description": "Deny the listed domains to the environment's browsers unless a rule allows them",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "block"
         ],
         "type": "object"
       },
@@ -5584,6 +5661,35 @@
         },
         "required": [
           "toolCallId"
+        ],
+        "type": "object"
+      },
+      "TrackersView": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "description": "Whether the environment's browsers are denied the listed domains",
+            "type": "boolean"
+          },
+          "domains": {
+            "description": "The listed domains, sorted; an entry also covers its subdomains",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "version": {
+            "description": "The version of the built-in tracker list",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "block",
+          "domains"
         ],
         "type": "object"
       },
@@ -12847,6 +12953,99 @@
         "tags": [
           "templates",
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/trackers": {
+      "get": {
+        "description": "The built-in tracker list and whether the environment's browsers are denied it.",
+        "operationId": "getTrackers",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackersView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "put": {
+        "operationId": "setTrackers",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTrackersInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackersView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
         ]
       }
     },

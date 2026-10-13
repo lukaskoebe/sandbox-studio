@@ -40,6 +40,7 @@ import {
   approvalKind,
   approvalSource,
   approvalTeammateId,
+  isNetworkApproval,
 } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
 
@@ -82,7 +83,7 @@ export function ApprovalStack() {
     (a) =>
       !(
         onNetwork &&
-        a.kind === "network" &&
+        isNetworkApproval(a) &&
         a.environmentId === onNetwork.env
       ) && !(onChat && a.chatPermission?.chatId === onChat.chat)
   )
@@ -270,7 +271,7 @@ function ApprovalCard({
           <BrowserCredentialDecision approval={approval} />
         ) : approval.kind === "chat.permission" && approval.chatPermission ? (
           <ChatPermissionSummary approval={approval} />
-        ) : approval.kind === "network" ? (
+        ) : isNetworkApproval(approval) ? (
           <ApprovalDecision approval={approval} compact />
         ) : (
           <p className="text-xs text-muted-foreground" role="status">

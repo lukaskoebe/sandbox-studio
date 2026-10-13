@@ -1,29 +1,4 @@
-import { expect, test, type Api } from "./fixtures"
-
-/** A teammate on a fake Anthropic key, added through the API if the environment has none yet. */
-async function addTeammate(api: Api, env: string, name: string) {
-  const providers = await api.json<
-    { id: string; harnesses: string[] | null }[]
-  >("GET", `/api/environments/${env}/providers`)
-  const provider =
-    providers?.at(0) ??
-    (await api.json<{ id: string; harnesses: string[] | null }>(
-      "POST",
-      `/api/environments/${env}/providers`,
-      { name: "Anthropic", kind: "anthropic_api", apiKey: "sk-ant-e2e-fake" }
-    ))!
-  const teammate = await api.json<{ id: string }>(
-    "POST",
-    `/api/environments/${env}/teammates`,
-    {
-      name,
-      harness: provider.harnesses?.at(0) ?? "claude",
-      providerId: provider.id,
-      model: "claude-sonnet-5-5",
-    }
-  )
-  return teammate!.id
-}
+import { addTeammate, expect, test } from "./fixtures"
 
 test("the sidebar opens a teammate, whose tabs each render", async ({
   page,

@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
 import { RuleDialog } from "@/components/rule-dialog"
+import { TrackerBlocking } from "@/components/tracker-blocking"
 import { SectionHeader } from "@/components/section-header"
 import { $api, errorMessage, type Rule } from "@/lib/api/client"
 import {
@@ -249,6 +250,11 @@ function RulesTab() {
                       <TableCell>
                         <span className="inline-flex max-w-full items-center gap-1.5">
                           <Ident>{r.host}</Ident>
+                          {(r.method || r.pathPrefix) && (
+                            <RuleChip>
+                              {`${r.method || "any method"} ${r.pathPrefix || "any path"}`}
+                            </RuleChip>
+                          )}
                           {isUnused(r, now) && <RuleChip>unused</RuleChip>}
                         </span>
                       </TableCell>
@@ -302,6 +308,7 @@ function RulesTab() {
           </Table>
         </div>
       )}
+      <TrackerBlocking env={env} />
       <RuleDialog
         env={env}
         rule={dialog?.rule}

@@ -1570,6 +1570,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/trackers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The built-in tracker list and whether the environment's browsers are denied it. */
+        get: operations["getTrackers"];
+        put: operations["setTrackers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -2194,7 +2211,11 @@ export interface components {
             expiresAt?: string;
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
+            /** @description allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it */
+            method?: string;
             note?: string;
+            /** @description allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path */
+            pathPrefix?: string;
             /** @description Empty or omitted means any port */
             ports?: number[] | null;
             /** @description Limits the rule to one sandbox of this environment */
@@ -2237,10 +2258,10 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
+             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
              * @enum {string}
              */
-            action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once";
+            action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once" | "allow_site";
             /**
              * Format: date-time
              * @description For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires
@@ -2248,8 +2269,12 @@ export interface components {
             expiresAt?: string;
             /** @description Host pattern the rule covers; empty means the requested host */
             host?: string;
+            /** @description For network requests allowed or denied with a rule: the request method the rule covers; empty covers any */
+            method?: string;
             /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected */
             note?: string;
+            /** @description For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path */
+            pathPrefix?: string;
             /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
             ports?: number[] | null;
             /** @description For browser.action: allow (or deny) the action on the origin from now on */
@@ -2368,6 +2393,7 @@ export interface components {
             teammate?: string;
         };
         Environment: {
+            blockTrackers: boolean;
             /** Format: date-time */
             createdAt: string;
             id: string;
@@ -2918,11 +2944,22 @@ export interface components {
         };
         NetworkRequest: {
             host: string;
+            /** @description Origin of the Referer header, as the browser sent it; shown, never trusted */
+            initiator?: string;
+            method?: string;
+            /** @description A top-level navigation: the page moves to another site */
+            navigation?: boolean;
+            /** @description The request path, without the query */
+            path?: string;
+            pathPattern?: string;
             /** @description Suggested host patterns, most specific first */
             patterns: string[] | null;
             /** Format: int64 */
             port: number;
             sandboxName: string;
+            /** @description The top-level site the request belongs to: the navigation's own, or the browser's page */
+            site?: string;
+            tracker?: boolean;
         };
         Page: {
             /** @description A core page, loaded into every session of the scope */
@@ -3201,12 +3238,16 @@ export interface components {
              * @description When the rule last decided a connection, as of the last write
              */
             lastHitAt?: string;
+            /** @description Allow and deny rules only: the request method the rule covers, such as GET; empty covers any method */
+            method?: string;
             note: string;
             /**
              * @description Where the rule came from. Read-only: set when the rule is created
              * @enum {string}
              */
             origin: "manual" | "approval" | "curated" | "reviewer";
+            /** @description Allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path */
+            pathPrefix?: string;
             /** @description Empty means any port */
             ports: number[] | null;
             sandboxId?: string;
@@ -3236,7 +3277,11 @@ export interface components {
             config?: components["schemas"]["RuleConfigInput"];
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
+            /** @description allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it */
+            method?: string;
             note?: string;
+            /** @description allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path */
+            pathPrefix?: string;
             /** @description Empty or omitted means any port */
             ports?: number[] | null;
             /** @description Limits the rule to one sandbox of this environment */
@@ -3323,6 +3368,10 @@ export interface components {
             teammateId: string;
             /** Format: int64 */
             writes: number;
+        };
+        SetTrackersInBody: {
+            /** @description Deny the listed domains to the environment's browsers unless a rule allows them */
+            block: boolean;
         };
         Setup: {
             /**
@@ -3549,6 +3598,14 @@ export interface components {
             status?: string;
             title?: string;
             toolCallId: string;
+        };
+        TrackersView: {
+            /** @description Whether the environment's browsers are denied the listed domains */
+            block: boolean;
+            /** @description The listed domains, sorted; an entry also covers its subdomains */
+            domains: string[] | null;
+            /** @description The version of the built-in tracker list */
+            version: string;
         };
         Turn: {
             /** @description The files the turn changed, once it ended */
@@ -7952,6 +8009,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTrackers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackersView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setTrackers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTrackersInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackersView"];
                 };
             };
             /** @description Error */

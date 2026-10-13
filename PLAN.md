@@ -361,7 +361,8 @@ Allow all for this site, Review individually, or Deny. This replaces "+4 more".
 **Order once agreed.** Grouped approvals and rule hygiene first (no new risk). Then
 site-scoped browsing with the tracker list. Then the levels with the curated list, and
 Assisted last. Items 3 and 4 are done: grouped approvals and rule hygiene, with allow-once
-and deny-once.
+and deny-once. Item 2 is done too: a browser's requests are decided one at a time, with site
+approvals and the tracker list.
 
 ## C2 — Terminal UI (Concept)
 

@@ -10,6 +10,7 @@ is pending raises `attempts` instead of adding a row.
 | Kind | Raised by | Decided by |
 |---|---|---|
 | `network` | a held connection to a host no rule covers | `internal/policy` ([network](network.md#hold-and-ask)) |
+| `network.request` | a request on a connection the gateway terminates (a browser VM's HTTPS) that no rule covers | `internal/policy` ([network](network.md#hold-and-ask)) |
 | `git.push`, `git.pr` | a push to the virtual remote; a PR proposal after an approved push | `internal/gitreview` ([git review](git-review.md)) |
 | `browser.action`, `browser.credential` | broker tools that need a decision; `fill_credential` | `internal/browser` ([browser](browser.md)) |
 | `memory.share`, `memory.conflict` | `share`, `remember` with scope `shared`, "promote to shared"; consolidation | `internal/agentmem` ([memory](memory.md)) |
@@ -53,14 +54,20 @@ change it.
   own permission requests) leave those out of the stack. More than one card, or a narrow
   page, folds the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
+- A browser request's approval also offers its method and first directory, such as "GET
+  /repos/*". The decision then carries `method` and `pathPrefix`, and the rule covers only
+  those requests ([network](network.md#request-rules)).
+- A browser navigation to a new site offers "Allow site <site> for this browser session", which
+  approves the site for the session without a rule (`allow_site`).
 - Network requests from one sandbox that arrive within 3 seconds of each other are one card,
   "<sandbox> wants N hosts", with the hosts listed, Allow all, Deny all, and Review
-  individually (which turns them into the per-host cards). The pill counts requests, not
+  individually (which turns them into the per-host cards). A browser's requests group by the
+  page they belong to instead: one sandbox's pending requests to one top-level site are one
+  card, "<site> wants N hosts"; a navigation keeps its own card. The pill counts requests, not
   cards. Allow all and Deny all decide each host with a rule of its own, with the scope
   chosen under Options. The grouping is client-side (`web/src/lib/approval-groups.ts`), so
   the API has no group. The server records arrival to the second, so the window is
-  approximate; requests carry no page yet, so grouping by page waits for site-scoped
-  approvals.
+  approximate.
 - New approvals raise a browser notification (Notification API) once the user allows it.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts

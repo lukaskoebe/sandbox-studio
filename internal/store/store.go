@@ -161,11 +161,13 @@ type Environment struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
+	// BlockTrackers: the browser VMs' requests to the tracker list are denied (docs/network.md).
+	BlockTrackers bool `json:"blockTrackers"`
 }
 
 // CreateEnvironment inserts an environment.
 func (s *Store) CreateEnvironment(ctx context.Context, name string) (Environment, error) {
-	e := Environment{ID: NewID(), Name: name, CreatedAt: time.Unix(now(), 0)}
+	e := Environment{ID: NewID(), Name: name, CreatedAt: time.Unix(now(), 0), BlockTrackers: true}
 	_, err := s.db.ExecContext(ctx, "INSERT INTO environments (id, name, created_at) VALUES (?, ?, ?)", e.ID, e.Name, e.CreatedAt.Unix())
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return e, fmt.Errorf("an environment named %q: %w", name, ErrExists)
@@ -175,7 +177,7 @@ func (s *Store) CreateEnvironment(ctx context.Context, name string) (Environment
 
 // Environments lists environments by creation time.
 func (s *Store) Environments(ctx context.Context) ([]Environment, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, created_at FROM environments ORDER BY created_at, name")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, created_at, block_trackers FROM environments ORDER BY created_at, name")
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +186,7 @@ func (s *Store) Environments(ctx context.Context) ([]Environment, error) {
 	for rows.Next() {
 		var e Environment
 		var created int64
-		if err := rows.Scan(&e.ID, &e.Name, &created); err != nil {
+		if err := rows.Scan(&e.ID, &e.Name, &created, &e.BlockTrackers); err != nil {
 			return nil, err
 		}
 		e.CreatedAt = time.Unix(created, 0)
@@ -197,7 +199,7 @@ func (s *Store) Environments(ctx context.Context) ([]Environment, error) {
 func (s *Store) Environment(ctx context.Context, id string) (Environment, error) {
 	var e Environment
 	var created int64
-	err := s.db.QueryRowContext(ctx, "SELECT id, name, created_at FROM environments WHERE id = ?", id).Scan(&e.ID, &e.Name, &created)
+	err := s.db.QueryRowContext(ctx, "SELECT id, name, created_at, block_trackers FROM environments WHERE id = ?", id).Scan(&e.ID, &e.Name, &created, &e.BlockTrackers)
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, ErrNotFound
 	}

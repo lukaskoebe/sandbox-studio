@@ -37,10 +37,10 @@ Per connection (`gateway.go`):
 5. Act:
    - `allow`: dial the **name** (not the IP the sandbox picked) through a public-only dialer
      and splice the bytes.
-   - `proxy` and `caddy` rules, and any web connection to a host a secret is bound to, are
-     intercepted: TLS is terminated with a certificate from the environment's CA, then each
-     HTTP request is checked, rewritten and sent on over a new connection to the same host.
-     Non-web traffic under such a rule fails.
+   - `proxy` and `caddy` rules, any web connection to a host a secret is bound to, and every
+     HTTPS connection of a browser VM are intercepted: TLS is terminated with a certificate from
+     the environment's CA, then each HTTP request is checked, rewritten and sent on over a new
+     connection to the same host. Non-web traffic under such a rule fails.
    - `deny`, a dismissed approval, or no answer in time: HTTP and intercepted TLS get a
      readable 403 (`X-Sandbox-Studio: refused`) telling the agent what happened and whether
      to retry; other protocols are closed.
@@ -75,19 +75,47 @@ Matching (`policy/match.go`):
 - Otherwise sandbox rules beat teammate rules, which beat environment rules. Teammate rules
   apply only to sandboxes the catalog says that teammate owns.
 - Within a scope: the most specific host pattern wins (`*.example.com` also matches
-  `example.com`), then rules that name ports, then `deny` over `allow`.
+  `example.com`), then rules that name ports, then rules that name a request, then `deny` over
+  `allow`.
+
+### Request rules
+
+An allow or deny rule can also name the requests it covers: `method` (`GET`, `HEAD`, `POST`,
+`PUT`, `PATCH`, `DELETE` or `OPTIONS`; empty is any) and `pathPrefix` (a path ending in `*`,
+such as `/repos/*`; empty is any path). Such a rule decides only requests on connections
+Studio terminates, and a connection is terminated when a rule names its host's requests: the
+browser VM's HTTPS always is, and so is a connection that a host rule allows when a request
+rule names its host. The other requests of the host are decided by its host rules as before.
+Connections are matched without request rules, so a connection is never decided by one.
+
+Paths are matched after cleaning (dot segments and doubled slashes resolved). An allow covers
+only a path that is already clean: `/repos/../x` isn't covered by `/repos/*`, since the upstream
+might read it as `/x`. A deny matches the cleaned path, so it can't be walked around.
+
+A browser request's approval offers the request's first directory as a rule, such as `GET
+/repos/*` (see [approvals](approvals.md#network-approval-cards)).
+
+## Trackers
+
+A browser VM is denied the built-in tracker list without being asked: `internal/policy/trackers.txt`,
+shipped with Studio and versioned. Its domains are measurement, audience, session-replay and
+ad-delivery services, in the spirit of EasyPrivacy; an entry also covers its subdomains. The
+check comes after an explicit rule (an allow rule for the host wins, a deny rule denies) and
+before any approval or site approval. The environment switch "Block trackers in the browser"
+(`environments.block_trackers`, on by default) turns the list off. Each denial shows in Activity
+as "Denied · tracker", one row per host with its attempts.
 
 ## The Network page
 
 The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route:
 
-- **Rules** lists the environment's rules. Its search and scope, action, origin and unused
+- **Rules** lists the environment's rules, and below them the tracker list with its switch. Its search and scope, action, origin and unused
   filters are URL search params (`q`, `scope`, `action`, `origin`, `unused=1`), so a filtered
   view can be shared. Each rule shows its origin as a chip, and an unused rule an "unused"
   chip. Delete unused removes the unused rules the filters show, after a confirmation. Rules are grouped
   by registrable domain: the last two labels, or three under a short list of two-label
   suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
-- **Requests** lists the pending network approvals; Allow, Deny and Ignore work as on the
+- **Requests** lists the pending network approvals (connections and browser requests); Allow, Deny and Ignore work as on the
   approval card.
 - **Activity** lists decided network approvals, newest first, up to 50.
 
@@ -110,11 +138,26 @@ connections held for this request, and the next connection to the host asks agai
 shows them as "Approved once" and "Denied once"; a connection denied once gets a 403 that says
 the user denied it.
 
-Requests from one sandbox that arrive within 3 seconds of each other show as one card on the
+Connections from one sandbox that arrive within 3 seconds of each other show as one card on the
 approval stack, with Allow all, Review individually and Deny all (see
-[approvals](approvals.md#realtime-and-ui)). Requests carry no information about the page that
-made them yet, so the grouping is by sandbox and arrival time; grouping by page comes with
-site-scoped approvals.
+[approvals](approvals.md#realtime-and-ui)). A browser's requests group by the page they belong
+to instead: one sandbox's pending requests to one top-level site are one card, titled with the
+site. A navigation keeps its own card, since it needs the site decision.
+
+A browser VM's HTTPS is held differently. Its connections are terminated first, with no hold
+(see [interception](#interception-and-secrets)), and each request that no rule covers is held
+as a `network.request` approval. That approval names the request: method and path (never the
+query), the top-level site it belongs to, and the Referer the browser sent, which is shown and
+never trusted. A navigation's site is its own host; a subresource belongs to the page the
+browser drove last (`browser.TopLevel`). Approvals are keyed by host and site, so a page's
+requests to one host share one card.
+
+A navigation's card offers "Allow site <site> for this browser session". That approves the
+site for the browser session, not through a rule: its navigations are allowed, and so are its
+subresources while every page the browser has open is on an approved site (a subresource's page
+isn't known for certain when several are open, so none may be unapproved). The approved sites
+end with the browser session: when the browser VM stops, idles out or is removed. The pending
+requests of the page's site are approved with it.
 
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.

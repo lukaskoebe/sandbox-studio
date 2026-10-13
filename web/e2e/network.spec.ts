@@ -1,4 +1,4 @@
-import { approvals, expect, sandboxName, test } from "./fixtures"
+import { addTeammate, approvals, expect, sandboxName, test } from "./fixtures"
 
 test("a held connection asks; Allow adds a rule and clears the card in every tab", async ({
   page,
@@ -175,3 +175,45 @@ test("allow once and deny once answer the held connection without a rule; Activi
     "Denied once"
   )
 })
+
+// A browser navigation to a new site asks with the site; allowing the site lets the navigation
+// through for the browser session, and makes no rule.
+test("a browser navigation asks with its site; Allow site lets it through without a rule", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const teammate = await addTeammate(api, env, `browser-${freshLabel()}`)
+  const id = await api.createSandbox(sandboxName("nav"), teammate)
+  const host = `www.${freshLabel()}.example.org`
+
+  await page.goto(`/e/${env}`)
+  const decided = api.json<{ outcome: string }>("POST", "/api/e2e/requests", {
+    sandboxId: id,
+    host,
+    port: 443,
+    method: "GET",
+    path: "/",
+    navigation: true,
+    site: "example.org",
+  })
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: host })
+  await expect(card).toBeVisible()
+  await card
+    .getByRole("button", {
+      name: "Allow site example.org for this browser session",
+    })
+    .click()
+  await expect(card).toBeHidden()
+  await expect(decided).resolves.toEqual({ outcome: "allowed" })
+
+  await page.goto(`/e/${env}/network/rules`)
+  await expect(page.getByRole("cell", { name: host, exact: true })).toBeHidden()
+})
+
+function freshLabel() {
+  return Math.random().toString(36).slice(2, 8)
+}

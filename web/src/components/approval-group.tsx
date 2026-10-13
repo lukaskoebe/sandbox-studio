@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card"
 import { errorMessage, fetchClient, type Approval } from "@/lib/api/client"
 import { ruleClass } from "@/lib/accents"
+import { groupSite } from "@/lib/approval-groups"
 import { approvalKind, approvalSource } from "@/lib/approval-kinds"
 import { cn, formatAge, hostPort } from "@/lib/utils"
 
@@ -26,6 +27,7 @@ import { cn, formatAge, hostPort } from "@/lib/utils"
  * The network requests one sandbox made close together, as one card: the hosts, then Allow all,
  * Deny all, or Review individually for the per-host cards. Allow all and Deny all decide each
  * host with a rule of its own, covering the scope chosen under Options as on a single card.
+ * A browser page's requests say which site the page is on, and the card is titled with it.
  */
 export function NetworkGroupCard({
   approvals,
@@ -47,7 +49,8 @@ export function NetworkGroupCard({
   const [working, setWorking] = useState<"allow" | "deny">()
   const kind = approvalKind(first)
   const sandbox = approvalSource(first)
-  const details = [envName, formatAge(first.createdAt)]
+  const site = groupSite(approvals)
+  const details = [site && sandbox, envName, formatAge(first.createdAt)]
     .filter(Boolean)
     .join(" · ")
   const hosts = approvals.map((a) =>
@@ -92,7 +95,7 @@ export function NetworkGroupCard({
           </CardDescription>
         </div>
         <CardTitle className="min-w-0 break-words">
-          {`${sandbox ?? "A sandbox"} wants ${approvals.length} hosts`}
+          {`${site ?? sandbox ?? "A sandbox"} wants ${approvals.length} hosts`}
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2">

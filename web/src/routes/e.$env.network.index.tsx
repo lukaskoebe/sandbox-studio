@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { $api } from "@/lib/api/client"
+import { isNetworkApproval } from "@/lib/approval-kinds"
 
 // Requests that wait for a decision come first; otherwise the rules.
 export const Route = createFileRoute("/e/$env/network/")({
@@ -11,7 +12,7 @@ export const Route = createFileRoute("/e/$env/network/")({
         })
       )
       .catch(() => [])
-    const to = (pending ?? []).some((a) => a.kind === "network")
+    const to = (pending ?? []).some(isNetworkApproval)
       ? "/e/$env/network/requests"
       : "/e/$env/network/rules"
     throw redirect({ to, params, replace: true })

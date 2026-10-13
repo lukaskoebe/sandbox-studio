@@ -55,7 +55,7 @@ type ApprovalView struct {
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
 	v := ApprovalView{Approval: a}
 	switch a.Kind {
-	case policy.KindNetwork:
+	case policy.KindNetwork, policy.KindRequest:
 		var req policy.NetworkRequest
 		if json.Unmarshal(a.Payload, &req) == nil {
 			v.Network = &req
@@ -90,7 +90,7 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 			v.MemoryConflict = &p
 		}
 	}
-	if a.Kind == policy.KindNetwork {
+	if policy.IsNetworkKind(a.Kind) {
 		v.Teammate = s.approvalOwner(ctx, a)
 	}
 	return v
@@ -143,6 +143,8 @@ type RuleInput struct {
 	Ports      []int           `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
 	Action     string          `json:"action" enum:"allow,proxy,caddy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile"`
 	Config     RuleConfigInput `json:"config,omitempty"`
+	Method     string          `json:"method,omitempty" doc:"allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it"`
+	PathPrefix string          `json:"pathPrefix,omitempty" maxLength:"512" doc:"allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path"`
 	SandboxID  string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
 	TeammateID string          `json:"teammateId,omitempty" doc:"Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId"`
 	Note       string          `json:"note,omitempty" maxLength:"500"`
@@ -266,7 +268,31 @@ func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.
 	if err != nil {
 		return store.Rule{}, err
 	}
-	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, TeammateID: in.TeammateID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note}, nil
+	method, path, err := requestPattern(in.Action, in.Method, in.PathPrefix)
+	if err != nil {
+		return store.Rule{}, err
+	}
+	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, TeammateID: in.TeammateID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note, Method: method, PathPrefix: path}, nil
+}
+
+// requestPattern checks the method and path a rule names: only allow and deny rules can name
+// them, and they must be valid.
+func requestPattern(action, method, pathPrefix string) (string, string, error) {
+	if method == "" && pathPrefix == "" {
+		return "", "", nil
+	}
+	if action != store.ActionAllow && action != store.ActionDeny {
+		return "", "", huma.Error422UnprocessableEntity("only allow and deny rules can name a method or path")
+	}
+	m, err := policy.ValidMethod(method)
+	if err != nil {
+		return "", "", huma.Error422UnprocessableEntity(err.Error())
+	}
+	p, err := policy.ValidPathPrefix(pathPrefix)
+	if err != nil {
+		return "", "", huma.Error422UnprocessableEntity(err.Error())
+	}
+	return m, p, nil
 }
 
 // expiryFrom checks when a rule expires: it must still be in the future.
@@ -312,13 +338,15 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action    string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
-			Host      string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
-			Ports     []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
-			Scope     string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
-			Note      string     `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
-			Remember  bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
-			ExpiresAt *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`
+			Action     string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once,allow_site" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
+			Host       string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
+			Ports      []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
+			Scope      string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
+			Note       string     `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
+			Remember   bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
+			Method     string     `json:"method,omitempty" doc:"For network requests allowed or denied with a rule: the request method the rule covers; empty covers any"`
+			PathPrefix string     `json:"pathPrefix,omitempty" doc:"For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path"`
+			ExpiresAt  *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -330,7 +358,7 @@ func (s *Server) registerNetwork(api huma.API) {
 			}
 			return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 		}
-		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope}
+		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope, Method: in.Body.Method, PathPrefix: in.Body.PathPrefix}
 		if in.Body.ExpiresAt != nil {
 			d.ExpiresAt = *in.Body.ExpiresAt
 		}
@@ -420,6 +448,33 @@ func (s *Server) registerNetwork(api huma.API) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "getTrackers", Method: http.MethodGet, Path: "/api/environments/{env}/trackers", Tags: []string{"network"},
+		Description: "The built-in tracker list and whether the environment's browsers are denied it.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body trackersView }, error) {
+		v, err := s.trackers(ctx, in.Env)
+		return &struct{ Body trackersView }{v}, err
+	})
+
+	type setTrackersIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Block bool `json:"block" doc:"Deny the listed domains to the environment's browsers unless a rule allows them"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setTrackers", Method: http.MethodPut, Path: "/api/environments/{env}/trackers", Tags: []string{"network"},
+	}, func(ctx context.Context, in *setTrackersIn) (*struct{ Body trackersView }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		if err := s.Store.SetBlockTrackers(ctx, in.Env, in.Body.Block); err != nil {
+			return nil, apiError(err)
+		}
+		v, err := s.trackers(ctx, in.Env)
+		return &struct{ Body trackersView }{v}, err
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "listConnections", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/connections", Tags: []string{"network"},
 		Description: "The sandbox's most recent connections, newest first. The log is kept in memory only.",
 	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body []gateway.Conn }, error) {
@@ -428,6 +483,22 @@ func (s *Server) registerNetwork(api huma.API) {
 		}
 		return &struct{ Body []gateway.Conn }{s.Conns.List(in.ID)}, nil
 	})
+}
+
+// trackersView is the built-in tracker list and the environment's switch for it.
+type trackersView struct {
+	Version string   `json:"version" doc:"The version of the built-in tracker list"`
+	Block   bool     `json:"block" doc:"Whether the environment's browsers are denied the listed domains"`
+	Domains []string `json:"domains" doc:"The listed domains, sorted; an entry also covers its subdomains"`
+}
+
+func (s *Server) trackers(ctx context.Context, env string) (trackersView, error) {
+	e, err := s.Store.Environment(ctx, env)
+	if err != nil {
+		return trackersView{}, apiError(err)
+	}
+	version, domains := policy.TrackerList()
+	return trackersView{Version: version, Block: e.BlockTrackers, Domains: domains}, nil
 }
 
 // streamEvents sends change notifications as server-sent events; clients refetch what changed.

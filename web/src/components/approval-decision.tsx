@@ -25,9 +25,12 @@ type Action = "allow" | "deny" | "dismiss"
  * The buttons: an action; an allow whose rule expires after an hour; or an allow or deny for
  * the one connection, without a rule.
  */
-type Choice = Action | "allowHour" | "allowOnce" | "denyOnce"
+type Choice = Action | "allowHour" | "allowOnce" | "denyOnce" | "allowSite"
 
 const hour = 60 * 60 * 1000
+
+/** The host-pattern toggle's value for a rule that names a request's method and path. */
+const REQUEST_LEVEL = "request"
 
 /** The ports a request is decided for by default: HTTP and HTTPS together, else the requested port. */
 function defaultPorts(port: number) {
@@ -149,6 +152,12 @@ export function ApprovalDecision({
   const preferred =
     patterns.find((p) => patternLevel(p) === owner?.patternLevel) ?? patterns[0]
   const [pattern, setPattern] = useState(preferred)
+  // A browser request can also be allowed by its method and path, such as GET /repos/*.
+  const requestPattern =
+    net?.method && net.pathPattern
+      ? `${net.method} ${net.pathPattern}`
+      : undefined
+  const [requestLevel, setRequestLevel] = useState(false)
   const [anyPort, setAnyPort] = useState(false)
   // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
   const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
@@ -165,10 +174,22 @@ export function ApprovalDecision({
     const params = {
       params: { path: { env: approval.environmentId, id: approval.id } },
     }
-    const rule = { scope, host: pattern, ports: anyPort ? [] : undefined }
+    const rule = {
+      scope,
+      host: pattern,
+      ports: anyPort ? [] : undefined,
+      ...(requestLevel && net?.method && net.pathPattern
+        ? { method: net.method, pathPrefix: net.pathPattern }
+        : {}),
+    }
     switch (choice) {
       case "dismiss":
         return decide.mutate({ ...params, body: { action: choice, scope } })
+      case "allowSite":
+        return decide.mutate({
+          ...params,
+          body: { action: "allow_site", scope },
+        })
       // A once decision answers this connection; the server ignores the rule's fields.
       case "allowOnce":
         return decide.mutate({
@@ -196,13 +217,29 @@ export function ApprovalDecision({
 
   return (
     <div className="grid grid-cols-1 gap-2">
-      {patterns.length > 1 && (
+      {net?.method && (
+        <div className="grid gap-0.5 text-xs">
+          <p className="truncate font-mono" title={`${net.method} ${net.path}`}>
+            {net.method} {net.path}
+          </p>
+          {net.initiator && (
+            <p className="truncate text-muted-foreground" title={net.initiator}>
+              From {net.initiator}
+            </p>
+          )}
+        </div>
+      )}
+      {(patterns.length > 1 || requestPattern) && (
         <ToggleGroup
           aria-label="Host pattern"
           variant="outline"
-          value={[pattern]}
+          value={[requestLevel ? REQUEST_LEVEL : pattern]}
           onValueChange={(v) => {
-            if (v[0]) setPattern(v[0])
+            if (v[0] === REQUEST_LEVEL) setRequestLevel(true)
+            else if (v[0]) {
+              setPattern(v[0])
+              setRequestLevel(false)
+            }
           }}
           className="w-full"
         >
@@ -217,7 +254,29 @@ export function ApprovalDecision({
               <span className="truncate">{p}</span>
             </ToggleGroupItem>
           ))}
+          {requestPattern && (
+            <ToggleGroupItem
+              value={REQUEST_LEVEL}
+              size="sm"
+              title={`Only ${requestPattern} requests`}
+              className="min-w-0 flex-1 shrink font-mono"
+            >
+              <span className="truncate">{requestPattern}</span>
+            </ToggleGroupItem>
+          )}
         </ToggleGroup>
+      )}
+      {net?.navigation && net.site && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          disabled={decide.isPending}
+          onClick={() => act("allowSite")}
+        >
+          {busy("allowSite") && <Spinner />}
+          {`Allow site ${net.site} for this browser session`}
+        </Button>
       )}
       {(!compact || optionsOpen) && (
         <>
