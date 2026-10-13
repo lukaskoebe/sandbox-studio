@@ -31,6 +31,7 @@ var (
 	keyNo        = key.NewBinding(key.WithKeys("n", "esc"), key.WithHelp("n", "keep"))
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
 	keyApprovals = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "approvals"))
+	keyTerminal  = key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "terminal"))
 	keyAllow     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow"))
 	keyDeny      = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "deny"))
 	keyOnce      = key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "allow once"))
@@ -98,6 +99,8 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.startFilter()
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
+	case key.Matches(msg, keyTerminal):
+		return m, m.attachTo(m.selected())
 	case key.Matches(msg, keyEsc):
 		if m.filter != "" {
 			m.filter = ""
@@ -121,6 +124,8 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.openChat(m.selected())
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
+	case key.Matches(msg, keyTerminal):
+		return m, m.attachTo(m.selected())
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}
@@ -252,7 +257,7 @@ func (m *app) bindings() []key.Binding {
 	}
 	switch m.screen {
 	case screenDetail:
-		return []key.Binding{keyLifecycle, keyDelete, keyChat, keyBack, keyHelp}
+		return []key.Binding{keyTerminal, keyLifecycle, keyDelete, keyChat, keyBack, keyHelp}
 	case screenEnvs:
 		return []key.Binding{keyUp, keyChoose, keyCancel}
 	case screenHelp:
@@ -260,7 +265,7 @@ func (m *app) bindings() []key.Binding {
 	case screenApprovals:
 		return m.approvalBindings()
 	}
-	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyDelete, keyEnv, keyFilter, keyHelp, keyQuit}
+	return []key.Binding{keyOpen, keyApprovals, keyTerminal, keyLifecycle, keyDelete, keyHelp, keyQuit}
 }
 
 // approvalBindings are the keys the key bar shows for the approvals card under the cursor.

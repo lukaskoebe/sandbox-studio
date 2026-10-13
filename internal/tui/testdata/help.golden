@@ -4,6 +4,7 @@ Keys
   enter      open the sandbox
   s          start, stop or resume the sandbox
   d          delete the sandbox, after asking
+  t          the sandbox's terminal; Ctrl-] returns here
   c          the sandbox's chats, in the browser
   n          new sandbox, in the browser
   e          switch environment
@@ -16,7 +17,6 @@ Keys
 
 Settings, providers, teammates, templates, rules, memory, the browser and
 Activity stay in the browser, at http://127.0.0.1:7878/.
-
 
 
 ────────────────────────────────────────────────────────────────────────────────

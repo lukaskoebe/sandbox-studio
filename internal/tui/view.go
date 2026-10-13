@@ -96,6 +96,7 @@ func (m *app) helpBody() []string {
 		{"enter", "open the sandbox"},
 		{"s", "start, stop or resume the sandbox"},
 		{"d", "delete the sandbox, after asking"},
+		{"t", "the sandbox's terminal; Ctrl-] returns here"},
 		{"c", "the sandbox's chats, in the browser"},
 		{"n", "new sandbox, in the browser"},
 		{"e", "switch environment"},

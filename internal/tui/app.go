@@ -177,6 +177,13 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setNotice(msg.done, false)
 		}
 		return m, m.refresh()
+	case attachDone:
+		if msg.err != nil {
+			m.setNotice("Could not open the terminal: "+msg.err.Error(), true)
+		} else {
+			m.setNotice("Detached from "+msg.sandbox+".", false)
+		}
+		return m, m.refresh()
 	}
 	return m, nil
 }

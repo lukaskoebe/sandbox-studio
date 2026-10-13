@@ -20,5 +20,5 @@ Sandbox Studio · Default                                            ● 1 appro
 
 
 ────────────────────────────────────────────────────────────────────────────────
-enter open  n new  s start/stop  d delete  e env  / filter  ? help  q quit
+enter open  a approvals  t terminal  s start/stop  d delete  ? help  q quit
 open in browser: http://127.0.0.1:7878/e/env1/sandboxes/sb1/work
