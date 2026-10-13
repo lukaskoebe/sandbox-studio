@@ -94,7 +94,7 @@ func TestTasksFromTheTab(t *testing.T) {
 	ch, unsubscribe := f.bus.Subscribe()
 	defer unsubscribe()
 
-	task, err := f.svc.Create(ctx, f.env.ID, f.iris.ID, store.TaskByUser, Input{Title: "  Write the report  ", Details: "Scope first.\n", Due: "2026-10-20", Status: "done"})
+	task, err := f.svc.Create(ctx, f.env.ID, f.iris.ID, store.TaskByUser, TaskInput{Title: "  Write the report  ", Details: "Scope first.\n", Due: "2026-10-20", Status: "done"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestTasksFromTheTab(t *testing.T) {
 		t.Fatal("creating a task published no event")
 	}
 
-	for _, in := range []Input{
+	for _, in := range []TaskInput{
 		{Title: "   "},
 		{Title: "Ok", Due: "next week"},
 		{Title: "Ok", Details: strings.Repeat("x", teammates.MaxTaskDetailsSize+1)},
@@ -121,15 +121,15 @@ func TestTasksFromTheTab(t *testing.T) {
 		}
 	}
 
-	edited, err := f.svc.Update(ctx, f.env.ID, f.iris.ID, task.ID, Input{Title: "Write the final report", Details: "", Due: "", Status: store.TaskDone})
+	edited, err := f.svc.Update(ctx, f.env.ID, f.iris.ID, task.ID, TaskInput{Title: "Write the final report", Details: "", Due: "", Status: store.TaskDone})
 	if err != nil || edited.Title != "Write the final report" || edited.Status != store.TaskDone || edited.Details != "" || edited.Due != "" {
 		t.Fatalf("update: %+v (%v)", edited, err)
 	}
-	if _, err := f.svc.Update(ctx, f.env.ID, f.iris.ID, task.ID, Input{Title: "x", Status: "later"}); !errors.Is(err, teammates.ErrInvalid) {
+	if _, err := f.svc.Update(ctx, f.env.ID, f.iris.ID, task.ID, TaskInput{Title: "x", Status: "later"}); !errors.Is(err, teammates.ErrInvalid) {
 		t.Errorf("an unknown status: %v", err)
 	}
 	// Another teammate's task is not this one's to edit.
-	if _, err := f.svc.Update(ctx, f.env.ID, f.sibling.ID, task.ID, Input{Title: "x", Status: store.TaskOpen}); !errors.Is(err, store.ErrNotFound) {
+	if _, err := f.svc.Update(ctx, f.env.ID, f.sibling.ID, task.ID, TaskInput{Title: "x", Status: store.TaskOpen}); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("another teammate's task: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func TestTaskToolsActForTheSandboxOwnerOnly(t *testing.T) {
 func TestTaskToolsRefuseWhatTheAgentCannotDo(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
-	mine, err := f.svc.Create(ctx, f.env.ID, f.sibling.ID, store.TaskByUser, Input{Title: "Ada's task"})
+	mine, err := f.svc.Create(ctx, f.env.ID, f.sibling.ID, store.TaskByUser, TaskInput{Title: "Ada's task"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestTaskToolsRefuseWhatTheAgentCannotDo(t *testing.T) {
 func TestNoteStaysWithinTheDetailsLimit(t *testing.T) {
 	ctx := context.Background()
 	f := newFixture(t)
-	task, err := f.svc.Create(ctx, f.env.ID, f.iris.ID, store.TaskByUser, Input{Title: "Long"})
+	task, err := f.svc.Create(ctx, f.env.ID, f.iris.ID, store.TaskByUser, TaskInput{Title: "Long"})
 	if err != nil {
 		t.Fatal(err)
 	}

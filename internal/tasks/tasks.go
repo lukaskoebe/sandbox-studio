@@ -17,8 +17,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
-// Input is the editable part of a task. Due is a day as YYYY-MM-DD, or empty.
-type Input struct {
+// TaskInput is the editable part of a task. Due is a day as YYYY-MM-DD, or empty.
+type TaskInput struct {
 	Title   string `json:"title" minLength:"1" maxLength:"200"`
 	Details string `json:"details,omitempty" maxLength:"8192" doc:"Markdown, at most 8 KiB"`
 	Due     string `json:"due,omitempty" maxLength:"10" doc:"A day, YYYY-MM-DD"`
@@ -46,7 +46,7 @@ func (s *Service) List(ctx context.Context, envID, teammateID string) ([]store.T
 
 // Create adds a task to a teammate's list, created by the user or by the teammate (by is
 // store.TaskByUser or store.TaskByTeammate). A new task is open.
-func (s *Service) Create(ctx context.Context, envID, teammateID, by string, in Input) (store.Task, error) {
+func (s *Service) Create(ctx context.Context, envID, teammateID, by string, in TaskInput) (store.Task, error) {
 	in = normalize(in)
 	if err := validate(in); err != nil {
 		return store.Task{}, err
@@ -62,7 +62,7 @@ func (s *Service) Create(ctx context.Context, envID, teammateID, by string, in I
 }
 
 // Update replaces the title, details, due and status of a task of a teammate.
-func (s *Service) Update(ctx context.Context, envID, teammateID, id string, in Input) (store.Task, error) {
+func (s *Service) Update(ctx context.Context, envID, teammateID, id string, in TaskInput) (store.Task, error) {
 	in = normalize(in)
 	if err := validate(in); err != nil {
 		return store.Task{}, err
@@ -134,7 +134,7 @@ func (s *Service) changed(envID string) {
 	}
 }
 
-func normalize(in Input) Input {
+func normalize(in TaskInput) TaskInput {
 	in.Title = strings.TrimSpace(in.Title)
 	in.Details = strings.TrimSpace(in.Details)
 	in.Due = strings.TrimSpace(in.Due)
@@ -142,7 +142,7 @@ func normalize(in Input) Input {
 	return in
 }
 
-func validate(in Input) error {
+func validate(in TaskInput) error {
 	if err := teammates.CheckTaskTitle(in.Title); err != nil {
 		return err
 	}
@@ -218,7 +218,7 @@ func (s *Service) call(ctx context.Context, sb store.Sandbox, method string, par
 		if err := decode(params, &in); err != nil {
 			return nil, err
 		}
-		return s.Create(ctx, sb.EnvironmentID, sb.TeammateID, store.TaskByTeammate, Input{Title: in.Title, Details: in.Details, Due: in.Due})
+		return s.Create(ctx, sb.EnvironmentID, sb.TeammateID, store.TaskByTeammate, TaskInput{Title: in.Title, Details: in.Details, Due: in.Due})
 	case agentproto.MethodTaskUpdateStatus:
 		var in struct {
 			TaskID string `json:"task_id"`

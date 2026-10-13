@@ -32,7 +32,7 @@ func (s *Server) registerTasks(api huma.API) {
 	type createTaskIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Teammate ID"`
-		Body tasks.Input
+		Body tasks.TaskInput
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "createTeammateTask", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/{id}/tasks", Tags: []string{"teammates"},
@@ -50,7 +50,7 @@ func (s *Server) registerTasks(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Teammate ID"`
 		Task string `path:"task" doc:"Task ID"`
-		Body tasks.Input
+		Body tasks.TaskInput
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "updateTeammateTask", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{id}/tasks/{task}", Tags: []string{"teammates"},
