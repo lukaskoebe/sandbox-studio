@@ -15,6 +15,7 @@ export function formatBytes(bytes: number): string {
 
 /** host:port, with brackets around an IPv6 host: [2606:4700::1]:443. */
 export function hostPort(host: string, port: number): string {
+  if (!port) return host // a lookup refused before any connection has no port
   return host.includes(":") ? `[${host}]:${port}` : `${host}:${port}`
 }
 
