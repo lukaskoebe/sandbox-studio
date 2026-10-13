@@ -61,7 +61,7 @@ scope plus shared.
    of the compiled truth of their page, which reach sessions without a query.
 5. Shared wins: a teammate fact in an open conflict with a shared fact is marked
    `overriddenBy` and the shared fact is placed right above it (pulled in if search missed
-   it) until the user resolves the conflict.
+   it) until the user resolves the conflict. A shared fact with a context does not win.
 
 Every hit carries `why`: both ranks, the similarity, whether vectors were used
 (`used`, `not_ready`, `not_embedded`), the RRF score, both boosts and a one-line summary.
