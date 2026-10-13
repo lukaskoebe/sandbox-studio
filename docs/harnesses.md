@@ -105,7 +105,16 @@ Every hook runs `/opt/studio/bin/studio-agent hook <event> --harness <h>` (docs/
   and the [move payload](https://github.com/anomalyco/opencode/blob/v2.0.26/packages/schema/src/session-inbox.ts)
   define `location.directory`. Event payloads use `data`; a move refreshes the cached
   directory and session context.
-- Golden files: `internal/harness/testdata/hooks/`.
+- Hook fixtures: `internal/harness/testdata/hooks/<harness>/<event>.json` hold one payload
+  per harness and hook event (15 in all). They are documentation-derived, not live
+  recordings: Claude Code's hooks reference and Codex's hooks page give the stdin fields,
+  and the OpenCode fixtures follow what the plugin writes. No harness was run to record
+  them; live recording is spike S7. `TestHookFixtures` checks the neutral event each one
+  parses to. OpenCode's plugin sends no `session-end` today (its `session.deleted` handler
+  only clears caches), so that fixture is the shape the parser accepts.
+- Golden files: `internal/harness/testdata/hooks/<harness>.golden`, the rendered answers
+  for the fixtures (`go test ./internal/harness -run TestHookGolden -args -update` after a
+  deliberate change).
 
 ## Persistence
 
@@ -170,6 +179,9 @@ Compatibility tests cover the V1 hooks and V2 lifecycle, context, compaction and
 failure handling. End-to-end model-driven hook delivery still needs qualification.
 
 Pending S7 (`// verify (S7)` in the code):
+
+- Hook payloads as the pinned versions send them: the fixtures under
+  `internal/harness/testdata/hooks/` are documentation-derived, not recordings.
 
 - Claude Code may ask once whether to use `ANTHROPIC_API_KEY`, and a fresh home shows its
   onboarding. Both are answered in the TUI and remembered in `~/.claude.json`, which Studio
