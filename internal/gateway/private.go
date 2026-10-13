@@ -28,10 +28,11 @@ import (
 // The gateway resolves a listed name itself, when it dials, through the host's resolver (the
 // dialer's Resolver, which is net.DefaultResolver: /etc/resolv.conf and nsswitch.conf, or
 // getaddrinfo with cgo, so a VPN's split DNS applies). The addresses the sandbox saw in its own
-// DNS answers are never dialed. Every address the dialer connects to is checked against the
-// name it was dialed for. Loopback, link-local (the cloud metadata address among them),
-// unspecified and multicast addresses, Studio's virtual services (198.18.0.0/15), and Studio's
-// own listening ports stay refused for every name.
+// DNS answers are never dialed: the sandbox's lookups of a listed name get virtual addresses
+// instead (dns.go), which the gateway maps back to the name. Every address the dialer connects
+// to is checked against the name it was dialed for. Loopback, link-local (the cloud metadata
+// address among them), unspecified and multicast addresses, Studio's virtual services
+// (198.18.0.0/15), and Studio's own listening ports stay refused for every name.
 
 // privateRanges are the private addresses a listed name may resolve to: RFC 1918, carrier-grade
 // NAT (100.64.0.0/10, which VPNs such as Tailscale use) and IPv6 unique local addresses.
