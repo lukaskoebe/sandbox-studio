@@ -24,6 +24,7 @@ import { Route as EEnvProvidersRouteImport } from './routes/e.$env.providers'
 import { Route as EEnvSecretsRouteImport } from './routes/e.$env.secrets'
 import { Route as EEnvSettingsRouteImport } from './routes/e.$env.settings'
 import { Route as MockupsDirectionScreenRouteImport } from './routes/mockups.$direction.$screen'
+import { Route as MockupsTeammateConceptRouteImport } from './routes/mockups.teammate.$concept'
 import { Route as EEnvChatsIndexRouteImport } from './routes/e.$env.chats.index'
 import { Route as EEnvChatsChatRouteImport } from './routes/e.$env.chats.$chat'
 import { Route as EEnvChatsNewRouteImport } from './routes/e.$env.chats.new'
@@ -123,6 +124,11 @@ const EEnvSettingsRoute = EEnvSettingsRouteImport.update({
 const MockupsDirectionScreenRoute = MockupsDirectionScreenRouteImport.update({
   id: '/$direction/$screen',
   path: '/$direction/$screen',
+  getParentRoute: () => MockupsRoute,
+} as any)
+const MockupsTeammateConceptRoute = MockupsTeammateConceptRouteImport.update({
+  id: '/teammate/$concept',
+  path: '/teammate/$concept',
   getParentRoute: () => MockupsRoute,
 } as any)
 const EEnvChatsIndexRoute = EEnvChatsIndexRouteImport.update({
@@ -266,6 +272,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
   '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
+  '/mockups/teammate/$concept': typeof MockupsTeammateConceptRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
@@ -304,6 +311,7 @@ export interface FileRoutesByTo {
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
+  '/mockups/teammate/$concept': typeof MockupsTeammateConceptRoute
   '/e/$env': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
@@ -345,6 +353,7 @@ export interface FileRoutesById {
   '/e/$env/secrets': typeof EEnvSecretsRoute
   '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
   '/mockups/$direction/$screen': typeof MockupsDirectionScreenRoute
+  '/mockups/teammate/$concept': typeof MockupsTeammateConceptRoute
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
@@ -389,6 +398,7 @@ export interface FileRouteTypes {
     | '/e/$env/secrets'
     | '/e/$env/settings'
     | '/mockups/$direction/$screen'
+    | '/mockups/teammate/$concept'
     | '/e/$env/'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
@@ -427,6 +437,7 @@ export interface FileRouteTypes {
     | '/e/$env/providers'
     | '/e/$env/secrets'
     | '/mockups/$direction/$screen'
+    | '/mockups/teammate/$concept'
     | '/e/$env'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
@@ -467,6 +478,7 @@ export interface FileRouteTypes {
     | '/e/$env/secrets'
     | '/e/$env/settings'
     | '/mockups/$direction/$screen'
+    | '/mockups/teammate/$concept'
     | '/e/$env/'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
@@ -607,6 +619,13 @@ declare module '@tanstack/react-router' {
       path: '/$direction/$screen'
       fullPath: '/mockups/$direction/$screen'
       preLoaderRoute: typeof MockupsDirectionScreenRouteImport
+      parentRoute: typeof MockupsRoute
+    }
+    '/mockups/teammate/$concept': {
+      id: '/mockups/teammate/$concept'
+      path: '/teammate/$concept'
+      fullPath: '/mockups/teammate/$concept'
+      preLoaderRoute: typeof MockupsTeammateConceptRouteImport
       parentRoute: typeof MockupsRoute
     }
     '/e/$env/chats/': {
@@ -790,11 +809,13 @@ declare module '@tanstack/react-router' {
 interface MockupsRouteChildren {
   MockupsIndexRoute: typeof MockupsIndexRoute
   MockupsDirectionScreenRoute: typeof MockupsDirectionScreenRoute
+  MockupsTeammateConceptRoute: typeof MockupsTeammateConceptRoute
 }
 
 const MockupsRouteChildren: MockupsRouteChildren = {
   MockupsIndexRoute: MockupsIndexRoute,
   MockupsDirectionScreenRoute: MockupsDirectionScreenRoute,
+  MockupsTeammateConceptRoute: MockupsTeammateConceptRoute,
 }
 
 const MockupsRouteWithChildren =

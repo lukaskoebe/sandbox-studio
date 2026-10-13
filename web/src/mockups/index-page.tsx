@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { screenTitles, screens, type Direction } from "./shared"
+import { conceptInfo, concepts } from "./teammate/frame"
 
 const directions: { id: Direction; name: string; pitch: string }[] = [
   {
@@ -49,6 +50,26 @@ export function MockupIndex() {
               ))}
             </ul>
           </section>
+        ))}
+      </div>
+      <h2 className="mt-12 text-lg font-semibold tracking-tight">
+        Teammate page concepts
+      </h2>
+      <p className="mt-1 text-muted-foreground">
+        Interactive, with static data. The pill at the bottom switches the
+        concept, the teammate's presence (free, working, waiting) and the theme.
+      </p>
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
+        {concepts.map((c) => (
+          <Link
+            key={c}
+            to="/mockups/teammate/$concept"
+            params={{ concept: c }}
+            className="rounded-lg border p-5 hover:bg-muted"
+          >
+            <h3 className="font-semibold">{conceptInfo[c].name}</h3>
+            <p className="mt-1 text-muted-foreground">{conceptInfo[c].pitch}</p>
+          </Link>
         ))}
       </div>
     </main>
