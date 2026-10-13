@@ -1,51 +1,17 @@
 package tui
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/lukaskoebe/sandbox-studio/internal/api"
-	"github.com/lukaskoebe/sandbox-studio/internal/events"
-	"github.com/lukaskoebe/sandbox-studio/internal/store"
-	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
 
-// testStudio runs the API behind the same guards as the server, over an in-memory catalog with
-// one environment. It returns the address and the control credential of the installation.
-func testStudio(t *testing.T) (addr, control string) {
-	t.Helper()
-	ctx := context.Background()
-	st, err := store.Open(ctx, ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { st.Close() })
-	if _, err := st.CreateEnvironment(ctx, "Default"); err != nil {
-		t.Fatal(err)
-	}
-	key := bytes.Repeat([]byte{7}, 32)
-	auth, err := webauth.New(key, func(string) bool { return false })
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := &api.Server{Store: st, Bus: &events.Bus{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
-	mux := http.NewServeMux()
-	s.Register(mux)
-	srv := httptest.NewServer(api.Guard(auth.Middleware(mux)))
-	t.Cleanup(srv.Close)
-	return strings.TrimPrefix(srv.URL, "http://"), webauth.ControlToken(key)
-}
-
 func TestConnectSignsInAsTheOwner(t *testing.T) {
-	addr, control := testStudio(t)
+	studio := startStudio(t)
+	addr, control := studio.Addr, studio.Control
 	ctx := context.Background()
 	c, err := Connect(ctx, addr, control)
 	if err != nil {
@@ -70,7 +36,7 @@ func TestConnectSignsInAsTheOwner(t *testing.T) {
 }
 
 func TestConnectRefusesAWrongCredential(t *testing.T) {
-	addr, _ := testStudio(t)
+	addr := startStudio(t).Addr
 	if _, err := Connect(context.Background(), addr, "not-the-control-credential"); err == nil {
 		t.Fatal("wrong control credential accepted")
 	}

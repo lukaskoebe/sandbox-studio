@@ -1,0 +1,24 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+▸ ● Running   blub             Iris      node-22+python-… up 2h 14m  
+  ● Running   api-refactor     Finn      go@2             up 12m     1 approval
+  ○ Stopped   docs-site        Iris      node@3                      
+  ◐ Booting   demo             —         base                        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+enter open  n new  s start/stop  d delete  e env  / filter  ? help  q quit
+open in browser: http://127.0.0.1:7878/e/env1/sandboxes/sb1/work

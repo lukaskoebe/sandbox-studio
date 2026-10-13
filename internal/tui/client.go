@@ -3,6 +3,7 @@
 package tui
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,6 +15,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
@@ -39,7 +43,6 @@ type Client struct {
 	addr    string
 	session string // the value of the session cookie
 	http    *http.Client
-	stream  *http.Client // no timeout: the event stream stays open
 }
 
 // Connect signs in to the Studio at addr as the local owner. control is the control credential
@@ -54,18 +57,18 @@ func Connect(ctx context.Context, addr, control string) (*Client, error) {
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		return nil, errors.New("the terminal UI connects to a loopback address only")
 	}
-	transport := &http.Transport{Proxy: nil}
 	c := &Client{
 		addr: addr,
 		http: &http.Client{
-			Transport: transport, Timeout: 30 * time.Second,
+			Transport:     &http.Transport{Proxy: nil},
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		stream: &http.Client{Transport: transport},
 	}
 	if !c.running(ctx) {
 		return nil, fmt.Errorf("%w at %s. Start it with `studio`, then run `studio tui` again", ErrNotRunning, addr)
 	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
 	var ticket struct {
 		Token string `json:"token"`
 	}
@@ -110,6 +113,81 @@ func (c *Client) Environments(ctx context.Context) ([]store.Environment, error) 
 	var out []store.Environment
 	_, err := c.send(ctx, http.MethodGet, "/api/environments", nil, nil, &out)
 	return out, err
+}
+
+// Sandboxes lists an environment's sandboxes with their live state.
+func (c *Client) Sandboxes(ctx context.Context, env string) ([]sandboxes.View, error) {
+	var out []sandboxes.View
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes", nil, nil, &out)
+	return out, err
+}
+
+// Teammates lists an environment's teammates, whose names the sandboxes show.
+func (c *Client) Teammates(ctx context.Context, env string) ([]store.Teammate, error) {
+	var out []store.Teammate
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/teammates", nil, nil, &out)
+	return out, err
+}
+
+// PendingApprovals lists the pending approvals of every environment, newest first.
+func (c *Client) PendingApprovals(ctx context.Context) ([]api.ApprovalView, error) {
+	var out []api.ApprovalView
+	_, err := c.send(ctx, http.MethodGet, "/api/approvals?status=pending", nil, nil, &out)
+	return out, err
+}
+
+// Lifecycle starts, stops or resumes a sandbox and returns it as it is then. A start or resume
+// returns when the VM is up, which can take a while.
+func (c *Client) Lifecycle(ctx context.Context, env, id, action string) (sandboxes.View, error) {
+	var out sandboxes.View
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+id+"/"+action, nil, nil, &out)
+	return out, err
+}
+
+// DeleteSandbox deletes a sandbox and its disks.
+func (c *Client) DeleteSandbox(ctx context.Context, env, id string) error {
+	_, err := c.send(ctx, http.MethodDelete, "/api/environments/"+env+"/sandboxes/"+id, nil, nil, nil)
+	return err
+}
+
+// Subscribe opens the change notifications (/api/events). The channel closes when the stream
+// ends for any reason, and the caller then reconnects and refetches what it shows.
+func (c *Client) Subscribe(ctx context.Context) (<-chan events.Event, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+c.addr+"/api/events", nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, &APIError{Status: resp.StatusCode, Detail: http.StatusText(resp.StatusCode)}
+	}
+	ch := make(chan events.Event)
+	go func() {
+		defer close(ch)
+		defer resp.Body.Close()
+		scanner := bufio.NewScanner(resp.Body)
+		for scanner.Scan() {
+			data, ok := strings.CutPrefix(scanner.Text(), "data: ")
+			if !ok {
+				continue // keep-alive comments and the retry hint
+			}
+			var ev events.Event
+			if json.Unmarshal([]byte(data), &ev) != nil {
+				continue
+			}
+			select {
+			case ch <- ev:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch, nil
 }
 
 // send makes one request. in, when not nil, is sent as JSON, and a success answer is decoded
