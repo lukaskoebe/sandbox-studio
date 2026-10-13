@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.3.0 — 2026-10-14
+
+Teammates you talk to in one place, a command line, subscription sign-ins, and network
+security levels.
+
+- **Teammate conversation:** a teammate's page opens on one thread: its chat turns with
+  their tools, the facts it learned (with Forget), its tasks and its terminal sessions, the
+  approvals it waits on, and the running turn live. The composer sends a message, hands over
+  a task or teaches a fact; a rail shows what it is doing, knows and runs on.
+- **Command line:** `studio ls`, `show`, `start`, `stop`, `suspend`, `resume`, `create`,
+  `fork`, `rm`, `shell`, `ask`, `approvals`, `approve`, `deny`, `checkpoints`, `checkpoint`,
+  `restore` and `envs` talk to the running Studio, with `--json`, exit codes for scripts and
+  shell completion.
+- **Terminal UI:** `studio tui` lists sandboxes live, starts and stops them, decides
+  approvals and attaches to a sandbox's terminal in full screen.
+- **Memory:** chats are remembered once they go idle, each session leaves a short summary
+  that the next sessions see, and the memory tools say when to use them. The memory page
+  shows quality numbers, suggestions to promote or accept, and exports and imports one
+  markdown file per scope. Facts can hold in a context, and each sandbox has a read-only
+  `~/memory`.
+- **Teammate tasks and check-ins:** teammates keep a task list with MCP tools, and check in
+  on open tasks on a schedule.
+- **Subscription sign-ins:** Claude and ChatGPT subscriptions sign in through small system
+  VMs; their tokens stay on the host. Claude subscription chats run through Claude Code, and
+  `claude` in a terminal starts without asking how to sign in.
+- **Security levels:** each environment and teammate has a level that decides requests no
+  rule covers, with a curated list of development infrastructure and an AI reviewer at the
+  assisted level, which Activity lets you revert.
+- **Network rules and approvals:** rules record their origin, can expire, count their hits
+  and are flagged when unused for 30 days. Approvals can allow once or for an hour, are
+  grouped when they arrive together, and start at the teammate's scope and pattern level.
+  Rules can name a request's method and path; proxy rules can send requests to another
+  upstream. Private hosts (such as a company VPN) are reachable only through an explicit
+  per-environment list, and deny rules answer lookups with NXDOMAIN.
+- **Browser:** browsing is scoped per site with request-level approvals, a tracker list is
+  denied, downloads go to the agent and to you, and lost replies and large screenshots no
+  longer break a call.
+- **Teammates:** emoji or generated avatars, copying a teammate to another environment,
+  environment export and import, and agents are told which sandbox they are in.
+- **Sandboxes:** live CPU and memory resize where the VM allows, uploads from the Files
+  panel, SSH docs, Nix as a template tool, and an export disk guard.
+- **Git:** GitLab as a forge, integration MCP tools for push and pull request status, and a
+  note in the next chat when a push is rejected.
+- **Look:** Home as one dashboard with inline approvals and an activity feed, polished
+  sandbox and Settings pages, Settings at the bottom of the sidebar, and themed scrollbars.
+- **Quality:** golangci-lint in CI, fuzz targets for the gateway's parsers and the Caddyfile
+  compiler, and a memory retrieval eval.
+
 ## v0.2.0 — 2026-10-13
 
 Shaped by feedback on v0.1: a new layout and look, a guided setup, and safer defaults for
