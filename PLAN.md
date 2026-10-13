@@ -473,15 +473,6 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
 - Live hook verification for all three harnesses; spike S7
 - Teammate tasks and heartbeats (proactive work)
 
-**Network and approvals**
-- DNS-level deny; per-rule upstream, Host, SNI and CA overrides
-- Request-level `network.request` approvals
-- Access to private networks through explicit rules (public addresses only today)
-
-**Memory**
-- `context_dependent` judge verdict, dream promotion suggestions and core-page candidates
-- Browsable `~/memory`, quality metrics UI, markdown export/import
-
 **Browser and git**
 - Browser downloads handed to the agent; the browser items pending a live run →
   [browser](docs/browser.md#verified-vs-pending-live)
