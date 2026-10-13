@@ -378,7 +378,6 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
   network installs, oversized captures →
   [template builds](docs/template-builds.md#current-qualification-boundary)
 - Nix as an optional extra in the base image
-- File upload into the guest; documented SSH access (`msb ssh serve`)
 - Signed and notarized releases (the workflow exists, never exercised) →
   [release](docs/release.md)
 
