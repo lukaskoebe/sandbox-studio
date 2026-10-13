@@ -12,6 +12,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
@@ -37,11 +38,15 @@ func browserImage(base string) string {
 	return strings.Replace(base, "sandbox-studio-base", "sandbox-studio-browser", 1)
 }
 
-// routeCalls sends a guest's browser tool calls to the broker and the rest to next.
-func routeCalls(brw *browser.Service, next func(ctx context.Context, id, method string, params json.RawMessage) (any, error)) func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
+// routeCalls sends a guest's browser tool calls to the broker, its task tool calls to the task
+// service, and the rest to next.
+func routeCalls(brw *browser.Service, tsk *tasks.Service, next func(ctx context.Context, id, method string, params json.RawMessage) (any, error)) func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
 	return func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
 		if strings.HasPrefix(method, agentproto.BrowserMethodPrefix) {
 			return brw.HandleCall(ctx, id, method, params)
+		}
+		if strings.HasPrefix(method, agentproto.TaskMethodPrefix) {
+			return tsk.HandleCall(ctx, id, method, params)
 		}
 		return next(ctx, id, method, params)
 	}
