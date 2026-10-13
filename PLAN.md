@@ -460,7 +460,8 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
   [spikes](docs/spikes.md#still-open)
 - Checkpoint restore, blocked by microsandbox #1736 →
   [sandboxes](docs/sandboxes.md#checkpoints) (N9's "Restore" and "Fork from here" wait on it)
-- Full-snapshot suspend instead of in-place pause; live CPU/memory resize
+- Full-snapshot suspend instead of in-place pause (a restored VM can't get Studio's proxy and DNS)
+- Live CPU/memory resize: built, pending a live run → [sandboxes](docs/sandboxes.md#resources)
 - Template build qualifications: release base, cold-cache pulls, live exec export with
   network installs, oversized captures →
   [template builds](docs/template-builds.md#current-qualification-boundary)
@@ -468,8 +469,9 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
   [release](docs/release.md)
 
 **Agents and providers**
-- Subscription logins (Claude Pro/Max, ChatGPT/Codex) and CLI-based utility calls; spike S8
-  → [harnesses](docs/harnesses.md#verified-vs-pending)
+- Subscription logins (Claude Pro/Max, ChatGPT/Codex) and CLI-based utility calls: built,
+  pending the owner's accounts (spike S8) →
+  [harnesses](docs/harnesses.md#subscription-logins-built-pending-live-verification)
 - Live hook verification for all three harnesses; spike S7
 
 **Browser and git**
