@@ -357,11 +357,10 @@ func (s *Server) registerForges(api huma.API) {
 				if err != nil {
 					return nil, err
 				}
-				err = s.Store.SetForgeKey(ctx, in.Env, f.ID, pub, sec)
-			} else {
-				err = s.Store.SetForgeAgent(ctx, in.Env, f.ID)
-			}
-			if err != nil {
+				if err := s.Store.SetForgeKey(ctx, in.Env, f.ID, pub, sec); err != nil {
+					return nil, apiError(err)
+				}
+			} else if err := s.Store.SetForgeAgent(ctx, in.Env, f.ID); err != nil {
 				return nil, apiError(err)
 			}
 			s.Vault.Changed(in.Env)
