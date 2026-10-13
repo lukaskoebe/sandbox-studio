@@ -85,3 +85,38 @@ The staged file is deleted on success and failure. A failure removes the half-ma
 sandbox. Error messages never contain host paths. At startup, imports still in progress
 are marked failed, their sandboxes are removed and the staging directory is emptied.
 Statuses older than 7 days are pruned.
+
+## Environments
+
+An environment's configuration is exported as a `.studio-environment` file, a JSON document,
+and imported as a new environment. Settings → General has both buttons.
+
+- `GET /api/environments/{env}/export` downloads the file.
+- `POST /api/environment-imports` with the file as an `application/json` body creates the
+  environment and replies `201` with the environment and what is still to add.
+
+Included: the name, the providers (name, kind, base URL and model for an OpenAI-compatible
+endpoint), the teammates (role, avatar, approval scope, soul, harness, provider by name,
+model, git identity), the network rules of the environment and of its teammates, the secret
+names with the hosts they bind to and the teammate they are scoped to, and the template
+specs in YAML.
+
+Not included: sandboxes, sandbox-scoped rules and secrets, provider keys, secret values,
+Studio's own secrets (forge tokens), memory, approvals, chats, the approval pattern levels
+teammates remember, and built templates (only their specs). The template specs and the
+teammates' soul are free text: they can contain whatever the user wrote, so read the file
+before sharing it.
+
+On import, the file is untrusted. It is read with a 2 MiB limit, unknown fields and trailing
+data are refused, and every value goes through the same checks as the API: names, hosts,
+models, base URLs, avatars, harness and provider pairing, rule configuration (a Caddyfile is
+compiled, and a header may name only a secret the file lists), template specs. Teammates,
+providers, secrets and rules refer to each other by name within the file. An invalid file
+creates nothing; the errors name the offending value, never a host path. Validation runs
+against the file's own secrets, which are not created yet, so a rule may name them.
+
+The import creates everything in one transaction. Providers come without keys, which makes
+them `key_required` until a key is added on the provider page (`PUT /api/environments/{env}/
+providers/{id}` with `apiKey`). Secrets are not created, because a secret needs a value;
+`toAdd` lists each one with its hosts and teammate. `templates` holds the template specs to
+build from the Builds page. A name already in use gets a number: `work 2`, `work 3`.

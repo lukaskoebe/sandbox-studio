@@ -29,6 +29,19 @@ its approval kinds with a decide function, and the API hands the decision to the
   no rule; the approval then has `once: true`. Git approvals take an optional `note`;
   `browser.action` takes `remember` to allow or deny the action on that origin from now on.
 
+## Network approval cards
+
+The card offers the host pattern (the name itself, or its registrable domain as a wildcard)
+and the scope of the rule. Without an owner the scopes are the environment and the one
+sandbox. For a sandbox a teammate owns, the card also offers the teammate's sandboxes, and
+starts with the scope the teammate sets (`approvalScope`, [teammates](teammates.md)). The
+response's `teammate` field carries the owner and that scope; the user can still pick another.
+
+The pattern level is remembered per teammate: `exact` (the host itself) or `wildcard` (its
+registrable domain), whichever the last allow or deny of one of its sandboxes used. Its next
+card preselects that level (`teammate.patternLevel`). Other patterns, such as `*.org`, don't
+change it.
+
 ## Realtime and UI
 
 - `internal/events` publishes change notices as SSE at `/api/events`, with topics such as

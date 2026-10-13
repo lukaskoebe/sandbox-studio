@@ -161,3 +161,23 @@ func Suggestions(host string) []string {
 	}
 	return out
 }
+
+// The levels of host pattern a teammate's approvals remember: the requested host itself, or
+// the wildcard of its registrable domain.
+const (
+	LevelExact    = "exact"
+	LevelWildcard = "wildcard"
+)
+
+// PatternLevel names the level of pattern for a request to host: LevelExact for host itself,
+// LevelWildcard for the wildcard that Suggestions offers, and "" for any other pattern.
+func PatternLevel(pattern, host string) string {
+	pattern = Normalize(pattern)
+	switch {
+	case pattern == Normalize(host):
+		return LevelExact
+	case strings.HasPrefix(pattern, "*.") && slices.Contains(Suggestions(host), pattern):
+		return LevelWildcard
+	}
+	return ""
+}

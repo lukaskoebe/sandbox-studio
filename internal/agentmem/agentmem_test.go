@@ -553,7 +553,11 @@ func TestDefaultUtilityNeverLogsKey(t *testing.T) {
 	if _, m, err := DefaultUtility(store.Provider{Kind: "chatgpt_subscription"}, ""); !errors.Is(err, ErrNoUtility) || m.Model != "" {
 		t.Fatal("subscription has a utility model")
 	}
-	if m, _ := UtilityFor(store.Provider{Kind: "openai_compatible", BaseURL: "http://x/v1", Model: "qwen"}); m.Model != "qwen" || m.Priced {
+	if m, _ := UtilityFor(store.Provider{Kind: "openai_compatible", BaseURL: "http://x/v1", Model: "qwen", SecretID: "key"}); m.Model != "qwen" || m.Priced {
 		t.Fatalf("%+v", m)
+	}
+	// A provider whose key was never added has no utility model: its calls would carry no key.
+	if _, ok := UtilityFor(store.Provider{Kind: "openai_compatible", BaseURL: "http://x/v1", Model: "qwen"}); ok {
+		t.Fatal("a provider without its key can make utility calls")
 	}
 }

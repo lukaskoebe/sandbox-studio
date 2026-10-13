@@ -19,19 +19,38 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
 - `openai_compatible` takes an `https://` base URL on a public host (no credentials, query
   or fragment, no private, loopback or link-local address) and the endpoint's single model.
 - Name and kind are fixed. A provider used by a teammate can't be deleted (409).
+- An API-key provider can exist without its key: an imported environment's providers do
+  (`state` `key_required`). Its first key is added with `PUT` and `apiKey`, and sessions and
+  memory jobs answer 409 or skip until then.
 - The subscription login flow (`claude setup-token` / `codex login` in a system sandbox) is
   a TODO.
 
 ## Teammates
 
-- Name (unique in the environment), role, soul (markdown, at most 16 KiB), harness,
-  provider, model, git name and email.
+- Name (unique in the environment), role, avatar, approval scope, soul (markdown, at most
+  16 KiB), harness, provider, model, git name and email.
+- The avatar is one emoji or one of the generated avatars, stored as `shape:<name>` (`circle`,
+  `square`, `diamond`, `triangle`, `pentagon`, `hexagon`, `star`, `cross`), which the UI draws
+  in the teammate's color. Empty shows the initials. Nothing is uploaded.
 - The harness must be supported by the provider's kind. API-key providers need a model;
   `openai_compatible` defaults to the provider's model.
 - Git name defaults to the name, git email to `<slug>@agents.invalid`. Both are one line
   without control characters, quotes or angle brackets, so they are safe in git config.
 - A teammate that owns sandboxes can't be deleted (409). Deleting a teammate deletes the
   network rules scoped to it.
+- The approval scope is `sandbox`, `teammate` or `environment` (the default, and what rules
+  from approvals did before). It is the scope the approval cards for this teammate's
+  sandboxes preselect for a new rule; the card still lets the user pick another. See
+  [approvals](approvals.md#network-approval-cards).
+
+## Copying a teammate
+
+`POST /api/environments/{env}/teammates/{id}/copy` with `targetEnvironmentId` creates the
+teammate in another environment, with the same name (" 2", " 3", … if the name is taken in
+the target), role, avatar, soul, harness, model, git identity and approval scope. Its provider
+is the target's provider of the same kind, preferring one with the same name. With none, the
+copy has no provider (`providerId` is empty and sessions answer 409 until one is chosen).
+Sandboxes, chats, memory, secrets, provider keys and the remembered pattern level stay behind.
 
 ## Default teammate
 

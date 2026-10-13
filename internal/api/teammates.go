@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -26,7 +27,7 @@ type ProviderKind struct {
 // ProviderView is a provider with what its kind implies. It never carries the key.
 type ProviderView struct {
 	store.Provider
-	State     string   `json:"state" enum:"ready,login_required" doc:"login_required until a subscription login is stored"`
+	State     string   `json:"state" enum:"ready,login_required,key_required" doc:"login_required until a subscription login is stored; key_required until an API key is added"`
 	EnvVar    string   `json:"envVar,omitempty" doc:"The variable guests get the placeholder in"`
 	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses teammates using this provider can run"`
 }
@@ -34,10 +35,13 @@ type ProviderView struct {
 func providerView(p store.Provider) ProviderView {
 	k, _ := teammates.LookupKind(p.Kind)
 	v := ProviderView{Provider: p, EnvVar: k.EnvVar, Harnesses: k.Harnesses, State: teammates.StateReady}
-	if !k.APIKey {
+	switch {
+	case !k.APIKey:
 		// TODO(M4): run `claude setup-token` / `codex login` in a system sandbox and store the
 		// result as the provider's secret; until then subscription providers can't log in.
 		v.State = teammates.StateLoginRequired
+	case p.SecretID == "":
+		v.State = teammates.StateKeyRequired
 	}
 	return v
 }
@@ -54,14 +58,16 @@ type teammatePath struct {
 
 // TeammateInput is the editable part of a teammate.
 type TeammateInput struct {
-	Name       string `json:"name" minLength:"1" maxLength:"64"`
-	Role       string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
-	Soul       string `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
-	Harness    string `json:"harness" enum:"opencode,claude,codex"`
-	ProviderID string `json:"providerId" minLength:"1"`
-	Model      string `json:"model,omitempty" maxLength:"128" doc:"Required for API-key providers; defaults to the model of an OpenAI-compatible provider"`
-	GitName    string `json:"gitName,omitempty" maxLength:"100" doc:"Defaults to the name"`
-	GitEmail   string `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
+	Name          string `json:"name" minLength:"1" maxLength:"64"`
+	Role          string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
+	Avatar        string `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, or shape:<name> for a generated avatar; omitted shows the initials"`
+	ApprovalScope string `json:"approvalScope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
+	Soul          string `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
+	Harness       string `json:"harness" enum:"opencode,claude,codex"`
+	ProviderID    string `json:"providerId" minLength:"1"`
+	Model         string `json:"model,omitempty" maxLength:"128" doc:"Required for API-key providers; defaults to the model of an OpenAI-compatible provider"`
+	GitName       string `json:"gitName,omitempty" maxLength:"100" doc:"Defaults to the name"`
+	GitEmail      string `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
 }
 
 func (s *Server) registerTeammates(api huma.API) {
@@ -201,19 +207,40 @@ func (s *Server) registerTeammates(api huma.API) {
 		} else if b.BaseURL != nil || b.Model != nil {
 			return nil, huma.Error422UnprocessableEntity("only OpenAI-compatible providers have a base URL and model")
 		}
+		// A provider whose key was never added (an import) gets its first key here; the rest of
+		// the update is applied before it, so the key is bound to the host the update names.
+		addKey := false
 		if b.APIKey != nil {
-			if p.SecretID == "" {
+			k, _ := teammates.LookupKind(p.Kind)
+			switch {
+			case !k.APIKey:
 				return nil, huma.Error422UnprocessableEntity("subscription providers log in instead of taking an API key")
-			}
-			if u.Sealed, err = s.Vault.SealValue(p.SecretID, *b.APIKey); err != nil {
-				return nil, apiError(err)
+			case p.SecretID == "":
+				addKey = true
+			default:
+				if u.Sealed, err = s.Vault.SealValue(p.SecretID, *b.APIKey); err != nil {
+					return nil, apiError(err)
+				}
 			}
 		}
 		updated, err := s.Store.UpdateProvider(ctx, in.Env, in.ID, u)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		if u.Sealed != nil || u.Hosts != nil {
+		if addKey {
+			host, err := providerHost(updated)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			sec, err := s.Vault.Prepare(in.Env, teammates.SecretName(updated.Name, updated.ID), *b.APIKey, []string{host}, "Key of provider "+updated.Name)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			if updated, err = s.Store.AttachProviderSecret(ctx, in.Env, in.ID, sec); err != nil {
+				return nil, apiError(err)
+			}
+		}
+		if u.Sealed != nil || u.Hosts != nil || addKey {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)
 		}
@@ -317,14 +344,100 @@ func (s *Server) registerTeammates(api huma.API) {
 		// Its rules are gone; held connections and cached rules must see that.
 		return nil, apiError(s.Policy.Settle(ctx, in.Env))
 	})
+
+	type copyTeammateIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Teammate ID"`
+		Body struct {
+			TargetEnvironmentID string `json:"targetEnvironmentId" minLength:"1" doc:"The environment to copy the teammate to; not the one it is in"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "copyTeammate", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/{id}/copy", Tags: []string{"teammates"},
+		DefaultStatus: http.StatusCreated,
+		Description: "Creates a copy of the teammate in another environment, with its name (a number is added if taken), role, avatar, soul, " +
+			"harness, model, git identity and approval scope. The copy uses the target environment's provider of the same kind, preferring one with the same name; " +
+			"without one it has no provider until one is chosen. Sandboxes, chats, memory, secrets and provider keys are not copied.",
+	}, func(ctx context.Context, in *copyTeammateIn) (*struct{ Body store.Teammate }, error) {
+		src, err := s.Store.Teammate(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		target := in.Body.TargetEnvironmentID
+		if target == in.Env {
+			return nil, huma.Error422UnprocessableEntity("the teammate is already in this environment")
+		}
+		if _, err := s.Store.Environment(ctx, target); errors.Is(err, store.ErrNotFound) {
+			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("environment %s does not exist", target))
+		} else if err != nil {
+			return nil, apiError(err)
+		}
+		p := store.Teammate{
+			ID: store.NewID(), EnvironmentID: target, Role: src.Role, Avatar: src.Avatar, ApprovalScope: src.ApprovalScope,
+			Soul: src.Soul, Harness: src.Harness, Model: src.Model, GitName: src.GitName, GitEmail: src.GitEmail,
+		}
+		if p.ProviderID, err = s.matchingProvider(ctx, in.Env, target, src.ProviderID); err != nil {
+			return nil, err
+		}
+		existing, err := s.Store.Teammates(ctx, target)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		p.Name = uniqueName(src.Name, func(n string) bool {
+			return slices.ContainsFunc(existing, func(t store.Teammate) bool { return t.Name == n })
+		})
+		created, err := s.Store.CreateTeammate(ctx, p)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		s.publishTeammates(target)
+		return &struct{ Body store.Teammate }{created}, nil
+	})
+}
+
+// matchingProvider returns the provider of environment to that a teammate copied from
+// environment from, with provider fromID, is given: one of the same kind, preferring one with
+// the same name. It returns "" if there is none, and the teammate then has no provider.
+func (s *Server) matchingProvider(ctx context.Context, from, to, fromID string) (string, error) {
+	var kind, name string
+	if fromID != "" {
+		src, err := s.Store.Provider(ctx, from, fromID)
+		if err != nil {
+			return "", apiError(err)
+		}
+		kind, name = src.Kind, src.Name
+	}
+	if kind == "" {
+		return "", nil
+	}
+	list, err := s.Store.Providers(ctx, to)
+	if err != nil {
+		return "", apiError(err)
+	}
+	match := ""
+	for _, p := range list {
+		if p.Kind != kind {
+			continue
+		}
+		if p.Name == name {
+			return p.ID, nil
+		}
+		if match == "" {
+			match = p.ID
+		}
+	}
+	return match, nil
 }
 
 // teammateFrom validates in and returns the teammate it describes, with defaults filled in.
 func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateInput) (store.Teammate, error) {
 	p := store.Teammate{
-		ID: id, EnvironmentID: env, Name: in.Name, Role: strings.TrimSpace(in.Role), Soul: in.Soul,
+		ID: id, EnvironmentID: env, Name: in.Name, Role: strings.TrimSpace(in.Role), Avatar: in.Avatar, Soul: in.Soul,
 		Harness: in.Harness, ProviderID: in.ProviderID, Model: strings.TrimSpace(in.Model),
-		GitName: strings.TrimSpace(in.GitName), GitEmail: strings.TrimSpace(in.GitEmail),
+		GitName: strings.TrimSpace(in.GitName), GitEmail: strings.TrimSpace(in.GitEmail), ApprovalScope: in.ApprovalScope,
+	}
+	if p.ApprovalScope == "" {
+		p.ApprovalScope = teammates.ScopeEnvironment
 	}
 	if p.GitName == "" {
 		p.GitName = p.Name
@@ -333,8 +446,8 @@ func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateIn
 		p.GitEmail = teammates.DefaultGitEmail(p.Name, id)
 	}
 	for _, err := range []error{
-		teammates.CheckName("teammate", p.Name), teammates.CheckRole(p.Role), teammates.CheckSoul(p.Soul),
-		teammates.CheckGitName(p.GitName), teammates.CheckGitEmail(p.GitEmail),
+		teammates.CheckName("teammate", p.Name), teammates.CheckRole(p.Role), teammates.CheckAvatar(p.Avatar),
+		teammates.CheckSoul(p.Soul), teammates.CheckGitName(p.GitName), teammates.CheckGitEmail(p.GitEmail),
 	} {
 		if err != nil {
 			return p, apiError(err)

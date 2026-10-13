@@ -45,6 +45,11 @@ export function refreshDecisions(queryClient: QueryClient) {
   })
 }
 
+/** The level of a host pattern the server suggests: the wildcard of a domain, or the host itself. */
+function patternLevel(pattern: string) {
+  return pattern.startsWith("*.") ? "wildcard" : "exact"
+}
+
 /** Allow, deny or dismiss an approval; refreshes the lists the decision changes. */
 export function useDecideApproval() {
   const queryClient = useQueryClient()
@@ -65,25 +70,32 @@ export function useDecideApproval() {
 }
 
 /** Who a rule covers: the whole environment, or only the sandbox that asked. */
-export type DecisionScope = "environment" | "sandbox"
+export type DecisionScope = "environment" | "teammate" | "sandbox"
 
 /** The scope choice of a network decision, as two toggles. */
 export function ScopeToggle({
   value,
   onChange,
   sandboxName,
+  owner,
 }: {
   value: DecisionScope
   onChange: (scope: DecisionScope) => void
   sandboxName?: string
+  /** The teammate that owns the sandbox, which adds its sandboxes as a scope. */
+  owner?: string
 }) {
+  const scopes: DecisionScope[] = owner
+    ? ["environment", "teammate", "sandbox"]
+    : ["environment", "sandbox"]
   return (
     <ToggleGroup
       aria-label="Scope"
       variant="outline"
       value={[value]}
       onValueChange={(v) => {
-        if (v[0]) onChange(v[0] === "sandbox" ? "sandbox" : "environment")
+        const next = scopes.find((s) => s === v[0])
+        if (next) onChange(next)
       }}
       className="w-full"
     >
@@ -94,6 +106,16 @@ export function ScopeToggle({
       >
         Environment
       </ToggleGroupItem>
+      {owner && (
+        <ToggleGroupItem
+          value="teammate"
+          size="sm"
+          title={`${owner}'s sandboxes`}
+          className="min-w-0 flex-1 shrink"
+        >
+          <span className="truncate">{owner}&apos;s sandboxes</span>
+        </ToggleGroupItem>
+      )}
       <ToggleGroupItem
         value="sandbox"
         size="sm"
@@ -120,17 +142,23 @@ export function ApprovalDecision({
   compact?: boolean
 }) {
   const net = approval.network
-  // Without patterns from the server, the requested host itself is the one choice.
+  const owner = approval.teammate
+  // Without patterns from the server, the requested host itself is the one choice. The level
+  // the owner chose last is preselected.
   const patterns = net?.patterns?.length ? net.patterns : net ? [net.host] : []
-  const [pattern, setPattern] = useState(patterns[0] ?? "")
+  const preferred =
+    patterns.find((p) => patternLevel(p) === owner?.patternLevel) ?? patterns[0]
+  const [pattern, setPattern] = useState(preferred)
   const [anyPort, setAnyPort] = useState(false)
-  const [scope, setScope] = useState<DecisionScope>("environment")
+  // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
+  const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
+  const [scope, setScope] = useState<DecisionScope>(defaultScope)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
   const [chosen, setChosen] = useState<Choice>()
   const busy = (choice: Choice) => decide.isPending && chosen === choice
   // A folded choice that differs from the default still shows on the Options button.
-  const changed = anyPort || scope === "sandbox"
+  const changed = anyPort || scope !== defaultScope
 
   const act = (choice: Choice) => {
     setChosen(choice)
@@ -206,6 +234,7 @@ export function ApprovalDecision({
             value={scope}
             onChange={setScope}
             sandboxName={net?.sandboxName}
+            owner={owner?.name}
           />
           <div className="flex flex-wrap justify-end gap-1.5">
             <Button

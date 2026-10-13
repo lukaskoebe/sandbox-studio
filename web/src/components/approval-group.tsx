@@ -37,10 +37,14 @@ export function NetworkGroupCard({
   onReview: () => void
 }) {
   const queryClient = useQueryClient()
-  const [scope, setScope] = useState<DecisionScope>("environment")
+  const first = approvals[0]
+  // As on a single card: a teammate's sandbox starts with the scope its teammate sets.
+  const owner = first.teammate
+  const [scope, setScope] = useState<DecisionScope>(
+    owner?.approvalScope ?? "environment"
+  )
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [working, setWorking] = useState<"allow" | "deny">()
-  const first = approvals[0]
   const kind = approvalKind(first)
   const sandbox = approvalSource(first)
   const details = [envName, formatAge(first.createdAt)]
@@ -104,6 +108,7 @@ export function NetworkGroupCard({
             value={scope}
             onChange={setScope}
             sandboxName={sandbox}
+            owner={owner?.name}
           />
         )}
         <div className="flex flex-wrap items-center gap-1.5">

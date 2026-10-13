@@ -84,8 +84,10 @@ function ProviderForm({
 
   const subscription = isSubscription(kind)
   const compatible = kind === "openai_compatible"
+  // A provider that was imported without its key needs one before it can be used.
+  const keyMissing = provider?.state === "key_required"
   const canSave = provider
-    ? !subscription
+    ? !subscription && (!keyMissing || apiKey !== "")
     : name.trim() !== "" &&
       (subscription || apiKey !== "") &&
       (!compatible || (baseUrl.trim() !== "" && model.trim() !== ""))
@@ -256,7 +258,11 @@ function ProviderForm({
                 data-lpignore="true"
                 spellCheck={false}
                 placeholder={
-                  provider ? "Leave empty to keep the current key" : undefined
+                  keyMissing
+                    ? "Paste the API key"
+                    : provider
+                      ? "Leave empty to keep the current key"
+                      : undefined
                 }
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}

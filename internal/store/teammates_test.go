@@ -44,9 +44,13 @@ func TestProvidersAndTeammates(t *testing.T) {
 	if _, err := s.CreateProvider(ctx, Provider{ID: "p3", EnvironmentID: work.ID, Name: "sub", Kind: "claude_subscription"}, nil); err != nil {
 		t.Fatalf("subscription provider: %v", err)
 	}
-	// The table's CHECKs: API kinds need a secret, subscriptions have none, compatible needs a URL and model.
-	if _, err := s.CreateProvider(ctx, Provider{ID: "p4", EnvironmentID: work.ID, Name: "nokey", Kind: "openai_api"}, nil); err == nil {
-		t.Fatal("API provider without a secret accepted")
+	// The table's CHECKs: subscriptions have no key, compatible needs a URL and model. An API
+	// provider may wait for its key, as an imported one does.
+	if _, err := s.CreateProvider(ctx, Provider{ID: "p4", EnvironmentID: work.ID, Name: "nokey", Kind: "openai_api"}, nil); err != nil {
+		t.Fatalf("API provider without a key: %v", err)
+	}
+	if _, err := s.CreateProvider(ctx, Provider{ID: "p6", EnvironmentID: work.ID, Name: "subkey", Kind: "chatgpt_subscription"}, providerSecret(work.ID, "s7", "SUB_KEY")); err == nil {
+		t.Fatal("subscription provider with a key accepted")
 	}
 	if _, err := s.CreateProvider(ctx, Provider{ID: "p5", EnvironmentID: work.ID, Name: "compat", Kind: "openai_compatible"}, providerSecret(work.ID, "s5", "COMPAT_KEY")); err == nil {
 		t.Fatal("compatible provider without a base URL accepted")

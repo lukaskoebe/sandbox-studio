@@ -5,6 +5,7 @@ import {
   GitBranchIcon,
   IdentificationCardIcon,
   RobotIcon,
+  ShieldCheckIcon,
   SparkleIcon,
   type Icon,
 } from "@phosphor-icons/react"
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import {
   $api,
   errorMessage,
@@ -35,9 +37,54 @@ import {
   type Provider,
 } from "@/lib/api/client"
 import type { Area } from "@/lib/accents"
-import { harnessLabels, isSubscription, kindLabels } from "@/lib/teammates"
+import {
+  approvalScopeLabels,
+  approvalScopes,
+  harnessLabels,
+  isSubscription,
+  kindLabels,
+} from "@/lib/teammates"
+import { cn } from "@/lib/utils"
 
 const maxSoulBytes = 16 * 1024
+
+/** The emoji a teammate can wear, besides the generated avatars. */
+const emojiAvatars = [
+  "🦊",
+  "🐙",
+  "🦉",
+  "🐢",
+  "🦄",
+  "🐝",
+  "🐳",
+  "🦋",
+  "🌵",
+  "🍄",
+  "🚀",
+  "🧭",
+  "🔭",
+  "🧪",
+  "🔧",
+  "📚",
+  "🎨",
+  "🎯",
+  "🌊",
+  "🔥",
+  "⚡",
+  "🌟",
+  "🧩",
+  "🪴",
+]
+const shapeAvatars = [
+  "circle",
+  "square",
+  "diamond",
+  "triangle",
+  "pentagon",
+  "hexagon",
+  "star",
+  "cross",
+]
 
 /** The slug the server derives the default git email from. */
 function slug(name: string) {
@@ -77,6 +124,10 @@ export function TeammateForm({
   const [gitName, setGitName] = useState(teammate?.gitName ?? "")
   const [gitEmail, setGitEmail] = useState(teammate?.gitEmail ?? "")
   const [soul, setSoul] = useState(teammate?.soul ?? "")
+  const [avatar, setAvatar] = useState(teammate?.avatar ?? "")
+  const [approvalScope, setApprovalScope] = useState<Teammate["approvalScope"]>(
+    teammate?.approvalScope ?? "environment"
+  )
   const [formError, setFormError] = useState<string>()
 
   const soulBytes = new TextEncoder().encode(soul).length
@@ -129,6 +180,8 @@ export function TeammateForm({
       model: model.trim() || undefined,
       gitName: gitName.trim() || undefined,
       gitEmail: gitEmail.trim() || undefined,
+      avatar: avatar || undefined,
+      approvalScope,
     }
     if (teammate)
       update.mutate({ params: { path: { env, id: teammate.id } }, body })
@@ -169,6 +222,14 @@ export function TeammateForm({
             />
           </Field>
         </div>
+        <Field>
+          <FieldLabel>Avatar</FieldLabel>
+          <AvatarPicker name={name} value={avatar} onChange={setAvatar} />
+          <FieldDescription>
+            An emoji or a generated shape. Without one, the teammate shows its
+            initials.
+          </FieldDescription>
+        </Field>
       </FormSection>
       <FormSection title="Agent" icon={RobotIcon} area="chat">
         <Field>
@@ -187,7 +248,13 @@ export function TeammateForm({
             items={Object.fromEntries(providers.map((p) => [p.id, p.name]))}
           >
             <SelectTrigger id="teammate-provider" className="w-full">
-              <SelectValue placeholder="Add a provider first" />
+              <SelectValue
+                placeholder={
+                  providers.length
+                    ? "Choose a provider"
+                    : "Add a provider first"
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               {providers.map((p) => (
@@ -273,6 +340,31 @@ export function TeammateForm({
           </Field>
         </div>
       </FormSection>
+      <FormSection title="Approvals" icon={ShieldCheckIcon} area="network">
+        <Field>
+          <FieldLabel>New rules from approvals apply to</FieldLabel>
+          <ToggleGroup
+            aria-label="New rules from approvals apply to"
+            variant="outline"
+            value={[approvalScope]}
+            onValueChange={(v) => {
+              const next = approvalScopes.find((s) => s === v[0])
+              if (next) setApprovalScope(next)
+            }}
+            className="w-full"
+          >
+            {approvalScopes.map((s) => (
+              <ToggleGroupItem key={s} value={s} className="flex-1">
+                {approvalScopeLabels[s]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <FieldDescription>
+            Preselected on the approval cards for this teammate's sandboxes. The
+            card still lets you pick another scope.
+          </FieldDescription>
+        </Field>
+      </FormSection>
       <FormSection title="Soul" icon={SparkleIcon} area="chat">
         <Field data-invalid={soulBytes > maxSoulBytes || undefined}>
           {/* The section's title is the visible label; the textarea keeps its name. */}
@@ -308,6 +400,47 @@ export function TeammateForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+/** The avatars to pick from: the initials, the generated shapes, then the emoji. */
+function AvatarPicker({
+  name,
+  value,
+  onChange,
+}: {
+  name: string
+  value: string
+  onChange: (avatar: string) => void
+}) {
+  const choices = [
+    "",
+    ...shapeAvatars.map((shape) => `shape:${shape}`),
+    ...emojiAvatars,
+  ]
+  return (
+    <div role="group" aria-label="Avatar" className="flex flex-wrap gap-1">
+      {choices.map((choice) => (
+        <button
+          key={choice || "initials"}
+          type="button"
+          aria-pressed={value === choice}
+          aria-label={choice || "Initials"}
+          title={choice || "Initials"}
+          onClick={() => onChange(choice)}
+          className={cn(
+            "rounded-full p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            value === choice && "ring-2 ring-primary"
+          )}
+        >
+          <TeammateAvatar
+            name={name.trim() || "?"}
+            avatar={choice}
+            className="size-7 text-[0.6875rem]"
+          />
+        </button>
+      ))}
+    </div>
   )
 }
 

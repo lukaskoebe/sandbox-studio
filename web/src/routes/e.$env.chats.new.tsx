@@ -144,7 +144,11 @@ function NewChatPage() {
         ) : (
           <>
             <div className="m-auto flex flex-col items-center gap-2 text-center">
-              <TeammateAvatar name={owner?.name ?? "?"} className="size-10" />
+              <TeammateAvatar
+                name={owner?.name ?? "?"}
+                avatar={owner?.avatar}
+                className="size-10"
+              />
               <p className="text-sm font-medium">
                 What should {owner?.name ?? "your teammate"} do?
               </p>

@@ -55,8 +55,18 @@ func (m UtilityModel) cost(in, out int) int64 {
 // ErrNoUtility means the provider has no utility model Studio can call.
 var ErrNoUtility = errors.New("no utility model for this provider")
 
-// UtilityFor is the utility model of a provider kind; ok is false for subscriptions.
+// UtilityFor is the utility model of a provider; ok is false for subscriptions, and for an
+// API-key provider whose key was never added, since its calls would carry no key.
 func UtilityFor(p store.Provider) (UtilityModel, bool) {
+	m, ok := utilityModelOf(p)
+	if ok && p.SecretID == "" {
+		return UtilityModel{Kind: p.Kind, Note: "the provider has no key yet"}, false
+	}
+	return m, ok
+}
+
+// utilityModelOf is the utility model of a provider kind, whether or not its key is there.
+func utilityModelOf(p store.Provider) (UtilityModel, bool) {
 	switch p.Kind {
 	case teammates.KindAnthropicAPI:
 		return UtilityModel{Kind: p.Kind, Model: "claude-haiku-4-5", PriceInPerM: 1, PriceOutPerM: 5, Priced: true}, true

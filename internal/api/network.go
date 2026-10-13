@@ -25,11 +25,22 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
+// ApprovalTeammate is the teammate owning the sandbox of a network approval, with the
+// settings its card starts with.
+type ApprovalTeammate struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	ApprovalScope string `json:"approvalScope" enum:"sandbox,teammate,environment" doc:"The scope the card preselects"`
+	PatternLevel  string `json:"patternLevel,omitempty" enum:"exact,wildcard" doc:"The host pattern level the teammate last chose, which the card preselects; empty if none"`
+}
+
 // ApprovalView is an approval with the details of its request decoded from the payload.
 type ApprovalView struct {
 	store.Approval
 	Network *policy.NetworkRequest `json:"network,omitempty"`
-	Git     *gitreview.GitDetail   `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
+	// Teammate is set for network approvals from a sandbox that a teammate owns.
+	Teammate *ApprovalTeammate    `json:"teammate,omitempty"`
+	Git      *gitreview.GitDetail `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
 	// MemoryShare is set for memory.share approvals.
 	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A teammate's proposal for shared memory"`
 	// MemoryConflict is set for memory.conflict approvals.
@@ -79,7 +90,27 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 			v.MemoryConflict = &p
 		}
 	}
+	if a.Kind == policy.KindNetwork {
+		v.Teammate = s.approvalOwner(ctx, a)
+	}
 	return v
+}
+
+// approvalOwner returns the teammate owning the sandbox of an approval, or nil if the
+// sandbox is unowned or gone.
+func (s *Server) approvalOwner(ctx context.Context, a store.Approval) *ApprovalTeammate {
+	if a.SandboxID == "" {
+		return nil
+	}
+	sb, err := s.Store.Sandbox(ctx, a.EnvironmentID, a.SandboxID)
+	if err != nil || sb.TeammateID == "" {
+		return nil
+	}
+	t, err := s.Store.Teammate(ctx, a.EnvironmentID, sb.TeammateID)
+	if err != nil {
+		return nil
+	}
+	return &ApprovalTeammate{ID: t.ID, Name: t.Name, ApprovalScope: t.ApprovalScope, PatternLevel: t.ApprovalPattern}
 }
 
 // approvalViews lists up to 200 approvals of an environment (all of them if env is empty),
@@ -132,18 +163,24 @@ var headersNotSet = []string{
 
 // ruleConfigFrom validates the config of a rule with action in environment env.
 func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in RuleConfigInput) (store.RuleConfig, error) {
+	secrets, err := s.ruleSecrets(ctx, env)
+	if err != nil {
+		return store.RuleConfig{}, apiError(err)
+	}
+	return s.checkRuleConfig(action, in, secrets)
+}
+
+// checkRuleConfig validates the config of a rule with action. The secrets are the ones its
+// references may name; they are read from the environment, or from an import file.
+func (s *Server) checkRuleConfig(action string, in RuleConfigInput, secrets []store.Secret) (store.RuleConfig, error) {
 	if action == store.ActionCaddy || in.Caddyfile != "" {
-		return s.caddyConfigFrom(ctx, env, action, in)
+		return s.caddyConfigFrom(action, in, secrets)
 	}
 	if len(in.Headers) == 0 {
 		return store.RuleConfig{}, nil
 	}
 	if action != store.ActionProxy {
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules set headers")
-	}
-	secrets, err := s.ruleSecrets(ctx, env)
-	if err != nil {
-		return store.RuleConfig{}, apiError(err)
 	}
 	headers := make(map[string]string, len(in.Headers))
 	for name, value := range in.Headers {
@@ -172,8 +209,8 @@ func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in Rule
 
 // ruleFrom validates in and returns the rule it describes in environment env.
 // caddyConfigFrom validates the config of a caddy rule: a Caddyfile that Caddy accepts and
-// only sends secrets of the environment to hosts they are bound to.
-func (s *Server) caddyConfigFrom(ctx context.Context, env, action string, in RuleConfigInput) (store.RuleConfig, error) {
+// only sends secrets to hosts they are bound to.
+func (s *Server) caddyConfigFrom(action string, in RuleConfigInput, secrets []store.Secret) (store.RuleConfig, error) {
 	switch {
 	case action != store.ActionCaddy:
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only caddy rules have a Caddyfile")
@@ -187,10 +224,6 @@ func (s *Server) caddyConfigFrom(ctx context.Context, env, action string, in Rul
 	compiled, err := s.Caddy.Check(in.Caddyfile)
 	if err != nil {
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("Caddyfile: " + err.Error())
-	}
-	secrets, err := s.ruleSecrets(ctx, env)
-	if err != nil {
-		return store.RuleConfig{}, apiError(err)
 	}
 	for _, name := range slices.Sorted(maps.Keys(compiled.Secrets)) {
 		named := slices.DeleteFunc(slices.Clone(secrets), func(s store.Secret) bool { return s.Name != name })

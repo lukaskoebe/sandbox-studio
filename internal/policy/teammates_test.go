@@ -121,3 +121,54 @@ func TestResolveTeammateScope(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveRemembersPatternLevel(t *testing.T) {
+	ctx := context.Background()
+	e, env, _, ada, bob := newTeammateEngine(t)
+	e.Hold = 20 * time.Millisecond
+	ask := func(sb store.Sandbox, host string) store.Approval {
+		t.Helper()
+		if _, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: host, Port: 443}); !errors.Is(err, ErrUndecided) {
+			t.Fatalf("got %v", err)
+		}
+		pending, _ := e.Store.Approvals(ctx, env.ID, store.StatusPending, 10)
+		for _, a := range pending {
+			if a.SandboxID == sb.ID && a.Subject == host+":443" {
+				return a
+			}
+		}
+		t.Fatalf("no approval for %s", host)
+		return store.Approval{}
+	}
+	level := func(sb store.Sandbox) string {
+		t.Helper()
+		p, err := e.Store.Teammate(ctx, env.ID, sb.TeammateID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.ApprovalPattern
+	}
+	decide := func(a store.Approval, action, host string) {
+		t.Helper()
+		if _, err := e.Resolve(ctx, env.ID, a.ID, Decision{Action: action, Host: host, Scope: "sandbox"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if level(ada) != "" {
+		t.Fatalf("a new teammate remembers %q", level(ada))
+	}
+	decide(ask(ada, "api.stripe.com"), "allow", "*.stripe.com")
+	if level(ada) != LevelWildcard || level(bob) != "" {
+		t.Fatalf("wildcard choice: ada %q, bob %q", level(ada), level(bob))
+	}
+	decide(ask(ada, "uploads.github.com"), "deny", "uploads.github.com")
+	if level(ada) != LevelExact {
+		t.Fatalf("exact choice: %q", level(ada))
+	}
+	// A pattern that is neither the host nor its wildcard leaves the remembered level alone.
+	decide(ask(ada, "files.npmjs.org"), "allow", "*.org")
+	if level(ada) != LevelExact {
+		t.Fatalf("custom pattern changed the level to %q", level(ada))
+	}
+}

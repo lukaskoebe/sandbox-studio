@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environment-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an environment from a .studio-environment file
+         * @description Creates the environment, its providers, teammates, rules and secret names in one transaction; a name already in use gets a number. The reply lists the provider keys and secret values to add, and the template specs to build. The file is at most 2 MiB; unknown fields are refused.
+         */
+        post: operations["importEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments": {
         parameters: {
             query?: never;
@@ -297,6 +317,26 @@ export interface paths {
         put?: never;
         /** @description Puts the sandbox's workspace back as it was before the turn, undoing it and every later turn (.git and ignored files stay). The turns get undoneAt and the next prompt tells the agent. 409 while a turn runs, in the terminal, and for turns that aren't undoable. */
         post: operations["undoTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download an environment as a .studio-environment file
+         * @description The providers without their keys, teammates, network rules, secret names with the hosts they bind to, and template specs. Sandboxes, memory, approvals, chats, sandbox-scoped rules, keys and secret values are not included.
+         */
+        get: operations["exportEnvironment"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1346,6 +1386,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates a copy of the teammate in another environment, with its name (a number is added if taken), role, avatar, soul, harness, model, git identity and approval scope. The copy uses the target environment's provider of the same kind, preferring one with the same name; without one it has no provider until one is chosen. Sandboxes, chats, memory, secrets and provider keys are not copied. */
+        post: operations["copyTeammate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser": {
         parameters: {
             query?: never;
@@ -1712,6 +1769,20 @@ export interface components {
             /** @description Why the agent can't be used */
             message?: string;
         };
+        ApprovalTeammate: {
+            /**
+             * @description The scope the card preselects
+             * @enum {string}
+             */
+            approvalScope: "sandbox" | "teammate" | "environment";
+            id: string;
+            name: string;
+            /**
+             * @description The host pattern level the teammate last chose, which the card preselects; empty if none
+             * @enum {string}
+             */
+            patternLevel?: "exact" | "wildcard";
+        };
         ApprovalView: {
             /** Format: int64 */
             attempts: number;
@@ -1740,6 +1811,7 @@ export interface components {
             /** @enum {string} */
             status: "pending" | "approved" | "denied" | "dismissed";
             subject: string;
+            teammate?: components["schemas"]["ApprovalTeammate"];
             /** Format: date-time */
             updatedAt: string;
         };
@@ -2067,6 +2139,10 @@ export interface components {
             type: string;
             uri?: string;
         };
+        CopyTeammateInBody: {
+            /** @description The environment to copy the teammate to; not the one it is in */
+            targetEnvironmentId: string;
+        };
         CreateCheckpointInBody: {
             /** @description Human-readable checkpoint name */
             name: string;
@@ -2293,6 +2369,27 @@ export interface components {
             id: string;
             name: string;
         };
+        EnvironmentFile: {
+            /** Format: date-time */
+            exportedAt: string;
+            /** @enum {string} */
+            format: "studio-environment";
+            /** @description The environment's name; an import gets a number if it is taken */
+            name: string;
+            /** @description LLM providers, without their keys */
+            providers: components["schemas"]["FileProvider"][] | null;
+            /** @description Network rules of the environment and of its teammates */
+            rules: components["schemas"]["FileRule"][] | null;
+            /** @description Secret names and the hosts they bind to, without values */
+            secrets: components["schemas"]["FileSecret"][] | null;
+            teammates: components["schemas"]["FileTeammate"][] | null;
+            templates: components["schemas"]["FileTemplate"][] | null;
+            /**
+             * Format: int64
+             * @enum {integer}
+             */
+            version: 1;
+        };
         ErrorDetail: {
             /** @description Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id' */
             location?: string;
@@ -2434,6 +2531,51 @@ export interface components {
             entries: components["schemas"]["FileEntry"][] | null;
             /** @description More than 1,000 entries */
             truncated?: boolean;
+        };
+        FileProvider: {
+            /** @description openai_compatible only */
+            baseUrl?: string;
+            /** @enum {string} */
+            kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
+            /** @description openai_compatible only: the endpoint's single model */
+            model?: string;
+            name: string;
+        };
+        FileRule: {
+            /** @enum {string} */
+            action: "allow" | "proxy" | "caddy" | "deny";
+            caddyfile?: string;
+            headers?: {
+                [key: string]: string;
+            };
+            host: string;
+            note?: string;
+            ports?: number[] | null;
+            teammate?: string;
+        };
+        FileSecret: {
+            hosts: string[] | null;
+            name: string;
+            note?: string;
+            teammate?: string;
+        };
+        FileTeammate: {
+            /** @enum {string} */
+            approvalScope?: "sandbox" | "teammate" | "environment";
+            avatar?: string;
+            gitEmail?: string;
+            gitName?: string;
+            /** @enum {string} */
+            harness: "opencode" | "claude" | "codex";
+            model?: string;
+            name: string;
+            /** @description The name of a provider of this file; empty if the teammate has none */
+            provider?: string;
+            role?: string;
+            soul?: string;
+        };
+        FileTemplate: {
+            spec: string;
         };
         Forge: {
             /** @description The user dismissed the suggestion to use a Studio key instead */
@@ -2611,6 +2753,13 @@ export interface components {
             name: string;
             /** @enum {string} */
             status: "ok" | "warn" | "fail";
+        };
+        ImportedEnvironment: {
+            environment: components["schemas"]["Environment"];
+            /** @description Template specifications of the file, in YAML, to build */
+            templates: string[] | null;
+            /** @description Provider keys and secret values to add */
+            toAdd: components["schemas"]["ToAdd"][] | null;
         };
         Item: {
             approvalId?: string;
@@ -2910,10 +3059,10 @@ export interface components {
             secretId?: string;
             secretName?: string;
             /**
-             * @description login_required until a subscription login is stored
+             * @description login_required until a subscription login is stored; key_required until an API key is added
              * @enum {string}
              */
-            state: "ready" | "login_required";
+            state: "ready" | "login_required" | "key_required";
             /** Format: date-time */
             updatedAt: string;
         };
@@ -3264,6 +3413,13 @@ export interface components {
             session?: string;
         };
         Teammate: {
+            /**
+             * @description The scope the approval cards for this teammate's sandboxes preselect for new rules
+             * @enum {string}
+             */
+            approvalScope: "sandbox" | "teammate" | "environment";
+            /** @description One emoji, shape:<name> for a generated avatar, or empty to show the initials */
+            avatar: string;
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
@@ -3274,6 +3430,7 @@ export interface components {
             id: string;
             model: string;
             name: string;
+            /** @description Empty while a copied teammate has no provider of its kind in this environment */
             providerId: string;
             role: string;
             /** @description Personality and working rules, as markdown */
@@ -3282,6 +3439,14 @@ export interface components {
             updatedAt: string;
         };
         TeammateInput: {
+            /**
+             * @description The scope the approval cards for this teammate's sandboxes preselect for new rules
+             * @default environment
+             * @enum {string}
+             */
+            approvalScope: "sandbox" | "teammate" | "environment";
+            /** @description One emoji, or shape:<name> for a generated avatar; omitted shows the initials */
+            avatar?: string;
             /** @description Defaults to <slug>@agents.invalid */
             gitEmail?: string;
             /** @description Defaults to the name */
@@ -3332,6 +3497,17 @@ export interface components {
             factId?: string;
             sourceId?: string;
             text: string;
+        };
+        ToAdd: {
+            /** @description For secret: the hosts the value may be sent to */
+            hosts?: string[] | null;
+            /** @enum {string} */
+            kind: "providerKey" | "secret";
+            name: string;
+            /** @description For providerKey: the provider to add the key to */
+            providerId?: string;
+            /** @description For secret: the teammate it is scoped to */
+            teammate?: string;
         };
         ToggleInBody: {
             enabled: boolean;
@@ -3606,6 +3782,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalView"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    importEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvironmentFile"];
+            };
+        };
+        responses: {
+            /** @description The new environment and what is still to add */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportedEnvironment"];
                 };
             };
             /** @description Error */
@@ -4293,6 +4502,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    exportEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The environment file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentFile"];
+                };
             };
             /** @description Error */
             default: {
@@ -7191,6 +7432,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    copyTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyTeammateInBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
             };
             /** @description Error */
             default: {

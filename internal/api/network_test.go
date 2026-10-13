@@ -320,6 +320,59 @@ func TestCreatedRuleSettlesPendingApproval(t *testing.T) {
 	}
 }
 
+func TestApprovalShowsTeammateScope(t *testing.T) {
+	ctx := context.Background()
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	anthropic := createProvider(t, h, env, `{"name":"anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	base := testOrigin + "/api/environments/" + env.ID + "/teammates"
+
+	rec := do(h, "POST", base, `{"name":"Ada","harness":"claude","providerId":"`+anthropic.ID+`","model":"m","approvalScope":"teammate"}`)
+	ada := decode[store.Teammate](t, rec)
+	if rec.Code != http.StatusCreated || ada.ApprovalScope != "teammate" {
+		t.Fatalf("create: %d %+v", rec.Code, ada)
+	}
+	rec = do(h, "POST", base, `{"name":"Bob","harness":"claude","providerId":"`+anthropic.ID+`","model":"m"}`)
+	if bob := decode[store.Teammate](t, rec); rec.Code != http.StatusCreated || bob.ApprovalScope != "environment" {
+		t.Fatalf("default scope: %d %+v", rec.Code, bob)
+	}
+	if rec := do(h, "POST", base, `{"name":"Cy","harness":"claude","providerId":"`+anthropic.ID+`","model":"m","approvalScope":"everywhere"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown scope: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(h, "PUT", base+"/"+ada.ID, `{"name":"Ada","harness":"claude","providerId":"`+anthropic.ID+`","model":"m","approvalScope":"sandbox"}`)
+	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.ApprovalScope != "sandbox" {
+		t.Fatalf("update scope: %d %+v", rec.Code, got)
+	}
+
+	owned, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := newSandbox(t, s, env, "plain")
+	for _, sb := range []store.Sandbox{owned, plain} {
+		go s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: sb.Name + ".example.com", Port: 443})
+	}
+
+	// The card of a sandbox's network approval names its owner and the scope it starts with.
+	ownedApproval := awaitApproval(t, h, "ada-dev.example.com", 443)
+	if ownedApproval.Teammate == nil || ownedApproval.Teammate.ID != ada.ID || ownedApproval.Teammate.Name != "Ada" || ownedApproval.Teammate.ApprovalScope != "sandbox" || ownedApproval.Teammate.PatternLevel != "" {
+		t.Fatalf("owned sandbox's approval: %+v", ownedApproval.Teammate)
+	}
+	if a := awaitApproval(t, h, "plain.example.com", 443); a.Teammate != nil {
+		t.Fatalf("unowned sandbox's approval has a teammate: %+v", a.Teammate)
+	}
+
+	// Allowing the wildcard remembers its level for Ada, so her next card preselects it.
+	decide := testOrigin + "/api/environments/" + env.ID + "/approvals/" + ownedApproval.ID + "/decide"
+	if rec := do(h, "POST", decide, `{"action":"allow","host":"*.example.com"}`); rec.Code != http.StatusOK {
+		t.Fatalf("decide: %d %s", rec.Code, rec.Body)
+	}
+	go s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: owned.ID, SandboxName: owned.Name, Host: "api.example.org", Port: 443})
+	if next := awaitApproval(t, h, "api.example.org", 443); next.Teammate == nil || next.Teammate.PatternLevel != "wildcard" {
+		t.Fatalf("next approval: %+v", next.Teammate)
+	}
+}
+
 func TestEventsStream(t *testing.T) {
 	h, s := newTestServer(t)
 	srv := httptest.NewServer(h)

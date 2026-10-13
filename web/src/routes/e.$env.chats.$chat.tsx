@@ -52,8 +52,8 @@ function ChatPage() {
   })
   const chat = log.chat
   const panel = useWorkspacePanel()
-  const teammateName =
-    teammates.data?.find((t) => t.id === chat?.teammateId)?.name ?? "Teammate"
+  const owner = teammates.data?.find((t) => t.id === chat?.teammateId)
+  const teammateName = owner?.name ?? "Teammate"
 
   const label = (t: ChatTurn) => requestLabel(log.items, t)
 
@@ -99,7 +99,11 @@ function ChatPage() {
   return (
     <>
       <PageHeader>
-        <TeammateAvatar name={teammateName} className="size-5 text-[0.5rem]" />
+        <TeammateAvatar
+          name={teammateName}
+          avatar={owner?.avatar}
+          className="size-5 text-[0.5rem]"
+        />
         <h1
           className="min-w-0 truncate text-sm font-medium"
           title={chatTitle(chat)}

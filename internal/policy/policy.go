@@ -186,16 +186,18 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if rule.Ports == nil {
 		rule.Ports = DefaultPorts(req.Port)
 	}
+	owner, err := e.teammate(ctx, envID, a.SandboxID)
+	if err != nil {
+		return a, err
+	}
 	switch d.Scope {
 	case "sandbox":
 		rule.SandboxID = a.SandboxID
 	case "teammate":
-		if rule.TeammateID, err = e.teammate(ctx, envID, a.SandboxID); err != nil {
-			return a, err
-		}
-		if rule.TeammateID == "" {
+		if owner == "" {
 			return a, ErrNoTeammate
 		}
+		rule.TeammateID = owner
 	}
 	if rule.Host, err = ValidPattern(rule.Host); err != nil {
 		return a, err
@@ -211,6 +213,12 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	}
 	if _, err := e.Store.CreateRule(ctx, rule); err != nil {
 		return a, err
+	}
+	// The owner's next card starts with the pattern level chosen here.
+	if level := PatternLevel(rule.Host, req.Host); owner != "" && level != "" {
+		if err := e.Store.SetApprovalPattern(ctx, envID, owner, level); err != nil {
+			return a, err
+		}
 	}
 	if err := e.Settle(ctx, envID); err != nil {
 		return a, err

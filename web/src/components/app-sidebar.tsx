@@ -252,6 +252,7 @@ export function AppSidebar({ env }: { env: string }) {
                   >
                     <TeammateAvatar
                       name={p.name}
+                      avatar={p.avatar}
                       className="size-4 text-[0.5rem]"
                     />
                     <span className="truncate">{p.name}</span>

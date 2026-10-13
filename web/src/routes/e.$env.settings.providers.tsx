@@ -109,6 +109,8 @@ function ProvidersPage() {
                     <TableCell>
                       {p.state === "login_required" ? (
                         <Badge variant="outline">Login required</Badge>
+                      ) : p.state === "key_required" ? (
+                        <Badge variant="outline">Key required</Badge>
                       ) : (
                         <div className="whitespace-normal">
                           {p.envVar && <Ident>{p.envVar}</Ident>}

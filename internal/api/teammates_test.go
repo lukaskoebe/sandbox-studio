@@ -9,6 +9,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 const providerKey = "sk-ant-api03-4be1c9d07a"
@@ -259,6 +260,38 @@ func TestTeammatesCRUD(t *testing.T) {
 	}
 }
 
+func TestTeammateAvatar(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	base := testOrigin + "/api/environments/" + env.ID + "/teammates"
+	anthropic := createProvider(t, h, env, `{"name":"anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	body := func(avatar string) string {
+		return `{"name":"Ada","harness":"claude","providerId":"` + anthropic.ID + `","model":"m","avatar":"` + avatar + `"}`
+	}
+
+	rec := do(h, "POST", base, body("🧑🏽‍💻"))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create with emoji: %d %s", rec.Code, rec.Body)
+	}
+	ada := decode[store.Teammate](t, rec)
+	if ada.Avatar != "🧑🏽‍💻" {
+		t.Fatalf("avatar %q", ada.Avatar)
+	}
+	rec = do(h, "PUT", base+"/"+ada.ID, body("shape:hexagon"))
+	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.Avatar != "shape:hexagon" {
+		t.Fatalf("generated avatar: %d %+v", rec.Code, got)
+	}
+	rec = do(h, "PUT", base+"/"+ada.ID, body(""))
+	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.Avatar != "" {
+		t.Fatalf("back to initials: %d %+v", rec.Code, got)
+	}
+	for _, avatar := range []string{"shape:blob", "🦊🦊", "Ada", "<img src=x>", "data:image/png;base64,AAAA"} {
+		if rec := do(h, "PUT", base+"/"+ada.ID, body(avatar)); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("avatar %q: got %d (%s)", avatar, rec.Code, rec.Body)
+		}
+	}
+}
+
 func TestSandboxTeammateValidation(t *testing.T) {
 	h, s := newTestServer(t)
 	env := newEnvironment(t, s, "work")
@@ -292,6 +325,104 @@ func TestTeammateEndpointsGuarded(t *testing.T) {
 	for _, path := range []string{"/providers", "/teammates", "/../../provider-kinds"} {
 		if rec := do(authed, "GET", testOrigin+"/api/environments/"+env.ID+path, ""); rec.Code != http.StatusUnauthorized {
 			t.Errorf("GET %s without a session: %d", path, rec.Code)
+		}
+	}
+}
+
+func TestCopyTeammate(t *testing.T) {
+	ctx := context.Background()
+	h, s := newTestServer(t)
+	work := newEnvironment(t, s, "work")
+	private := newEnvironment(t, s, "private")
+	other := newEnvironment(t, s, "other")
+	anthropic := createProvider(t, h, work, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	base := testOrigin + "/api/environments/" + work.ID + "/teammates"
+	ada := decode[store.Teammate](t, do(h, "POST", base, `{"name":"Ada Lovelace","role":"Reviewer","avatar":"🦊","soul":"# Ada","harness":"claude","providerId":"`+anthropic.ID+`","model":"claude-sonnet-5-5","gitName":"Ada (agent)","gitEmail":"ada@agents.invalid","approvalScope":"teammate"}`))
+	if _, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: work.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Vault.Create(ctx, store.Secret{EnvironmentID: work.ID, TeammateID: ada.ID, Name: "ADA_TOKEN", Hosts: []string{"api.example.com"}}, "tok"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Store.SetApprovalPattern(ctx, work.ID, ada.ID, "wildcard"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The private environment has its own Anthropic provider and already has an Ada Lovelace.
+	privateAnthropic := createProvider(t, h, private, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"sk-private"}`)
+	if rec := do(h, "POST", testOrigin+"/api/environments/"+private.ID+"/teammates", `{"name":"Ada Lovelace","harness":"claude","providerId":"`+privateAnthropic.ID+`","model":"m"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("taken name: %d %s", rec.Code, rec.Body)
+	}
+	copyURL := base + "/" + ada.ID + "/copy"
+	ch, unsubscribe := s.Bus.Subscribe()
+	defer unsubscribe()
+
+	rec := do(h, "POST", copyURL, `{"targetEnvironmentId":"`+private.ID+`"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("copy: %d %s", rec.Code, rec.Body)
+	}
+	copied := decode[store.Teammate](t, rec)
+	if copied.ID == ada.ID || copied.EnvironmentID != private.ID || copied.Name != "Ada Lovelace 2" || copied.ProviderID != privateAnthropic.ID {
+		t.Fatalf("copy identity: %+v", copied)
+	}
+	if copied.Role != ada.Role || copied.Avatar != ada.Avatar || copied.Soul != ada.Soul || copied.Harness != ada.Harness ||
+		copied.Model != ada.Model || copied.GitName != ada.GitName || copied.GitEmail != ada.GitEmail || copied.ApprovalScope != "teammate" {
+		t.Fatalf("copied settings differ: %+v", copied)
+	}
+	expectEvent(t, ch, events.Event{Topic: events.TopicTeammates, EnvironmentID: private.ID})
+	// The remembered pattern level, sandboxes and secrets stay behind.
+	if got, _ := s.Store.Teammate(ctx, private.ID, copied.ID); got.ApprovalPattern != "" {
+		t.Fatalf("the pattern level was copied: %q", got.ApprovalPattern)
+	}
+	if list, _ := s.Store.Sandboxes(ctx, private.ID); len(list) != 0 {
+		t.Fatalf("sandboxes copied: %+v", list)
+	}
+	if list, _ := s.Store.Secrets(ctx, private.ID); slices.ContainsFunc(list, func(sec store.Secret) bool { return sec.Name == "ADA_TOKEN" }) {
+		t.Fatalf("the teammate's secret was copied: %+v", list)
+	}
+	if _, err := s.Store.Teammate(ctx, work.ID, ada.ID); err != nil {
+		t.Fatalf("the source teammate changed: %v", err)
+	}
+	if rec := do(h, "POST", copyURL, `{"targetEnvironmentId":"`+private.ID+`"}`); decode[store.Teammate](t, rec).Name != "Ada Lovelace 3" {
+		t.Fatalf("second copy: %d %s", rec.Code, rec.Body)
+	}
+
+	// Without a provider of the same kind the copy is created with none.
+	createProvider(t, h, other, `{"name":"OpenAI","kind":"openai_api","apiKey":"sk-openai"}`)
+	rec = do(h, "POST", copyURL, `{"targetEnvironmentId":"`+other.ID+`"}`)
+	if none := decode[store.Teammate](t, rec); rec.Code != http.StatusCreated || none.ProviderID != "" || none.Name != "Ada Lovelace" {
+		t.Fatalf("copy without a provider: %d %+v", rec.Code, none)
+	}
+
+	for _, tc := range []struct {
+		name, url, body string
+		want            int
+	}{
+		{"same environment", copyURL, `{"targetEnvironmentId":"` + work.ID + `"}`, http.StatusUnprocessableEntity},
+		{"unknown environment", copyURL, `{"targetEnvironmentId":"nope"}`, http.StatusUnprocessableEntity},
+		{"no target", copyURL, `{}`, http.StatusUnprocessableEntity},
+		{"unknown teammate", base + "/nope/copy", `{"targetEnvironmentId":"` + private.ID + `"}`, http.StatusNotFound},
+	} {
+		if rec := do(h, "POST", tc.url, tc.body); rec.Code != tc.want {
+			t.Errorf("%s: got %d, want %d (%s)", tc.name, rec.Code, tc.want, rec.Body)
+		}
+	}
+}
+
+func TestUniqueName(t *testing.T) {
+	long := strings.Repeat("a", teammates.MaxNameLen)
+	for _, tc := range []struct {
+		name, want string
+		taken      []string
+	}{
+		{"Ada", "Ada", nil},
+		{"Ada", "Ada 2", []string{"Ada"}},
+		{"Ada", "Ada 3", []string{"Ada", "Ada 2"}},
+		{long, strings.Repeat("a", teammates.MaxNameLen-2) + " 2", []string{long}},
+	} {
+		got := uniqueName(tc.name, func(n string) bool { return slices.Contains(tc.taken, n) })
+		if got != tc.want || len([]rune(got)) > teammates.MaxNameLen {
+			t.Errorf("uniqueName(%q, %v) = %q, want %q", tc.name, tc.taken, got, tc.want)
 		}
 	}
 }

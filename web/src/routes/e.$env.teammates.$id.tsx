@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-router"
 import { PageHeader } from "@/components/page-header"
 import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
+import { TeammateOptionsMenu } from "@/components/teammate-options-menu"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePresence, presenceLabels } from "@/hooks/use-teammate-presence"
@@ -62,6 +63,7 @@ function TeammateLayout() {
       <PageHeader>
         <TeammateAvatar
           name={teammate.name}
+          avatar={teammate.avatar}
           className="size-5 text-[0.5625rem]"
         />
         <h1 className="truncate text-sm font-medium">{teammate.name}</h1>
@@ -69,6 +71,9 @@ function TeammateLayout() {
           <PresenceDot presence={state} />
           {presenceLabels[state]}
         </span>
+        <div className="ml-auto">
+          <TeammateOptionsMenu env={env} teammate={teammate} />
+        </div>
       </PageHeader>
       <div className="overflow-x-auto border-b px-3 py-2">
         <Tabs value={active?.value ?? "overview"}>

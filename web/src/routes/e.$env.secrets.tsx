@@ -73,6 +73,9 @@ function SecretsPage() {
   const teammateNames = new Map(
     (teammates.data ?? []).map((p) => [p.id, p.name])
   )
+  const teammateAvatars = new Map(
+    (teammates.data ?? []).map((p) => [p.id, p.avatar])
+  )
   const sandboxNames = new Map(
     (sandboxes.data ?? []).map((sb) => [sb.id, sb.name])
   )
@@ -157,6 +160,7 @@ function SecretsPage() {
                           <ScopeCell
                             secret={s}
                             teammates={teammateNames}
+                            teammateAvatars={teammateAvatars}
                             sandboxes={sandboxNames}
                           />
                         </TableCell>
@@ -267,10 +271,12 @@ function sortByScope(
 function ScopeCell({
   secret,
   teammates,
+  teammateAvatars,
   sandboxes,
 }: {
   secret: Secret
   teammates: Map<string, string>
+  teammateAvatars: Map<string, string | undefined>
   sandboxes: Map<string, string>
 }) {
   if (secret.teammateId) {
@@ -280,7 +286,11 @@ function ScopeCell({
         className="inline-flex min-w-0 items-center gap-1.5"
         title="Every sandbox of this teammate"
       >
-        <TeammateAvatar name={name} className="size-5 text-[0.5625rem]" />
+        <TeammateAvatar
+          name={name}
+          avatar={teammateAvatars.get(secret.teammateId)}
+          className="size-5 text-[0.5625rem]"
+        />
         <span className="truncate">{name}</span>
       </span>
     )
