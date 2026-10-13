@@ -1073,7 +1073,11 @@ export interface paths {
         /** @description Lists a directory of the sandbox's workspace, directories first, at most 1,000 entries. Symlinks are listed, never followed. */
         get: operations["listFiles"];
         put?: never;
-        post?: never;
+        /**
+         * Upload a file into a folder of the workspace
+         * @description Writes the body as the file name in the folder path (relative to /workspace; empty is /workspace itself). A file is at most 100 MiB and is owned by the agent user, mode 0644. Its name must be one file name. conflict decides a name already taken: fail (the default) answers 409 and writes nothing, replace overwrites a regular file, and keep writes it as "name (2).ext", the next free name. A folder or a link under the name is never replaced. The upload is written under a hidden name and renamed into place, so readers never see half a file.
+         */
+        post: operations["uploadFile"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3634,6 +3638,14 @@ export interface components {
             latest?: string;
             /** @description The newest release's page */
             url?: string;
+        };
+        UploadedFile: {
+            /** @description The name the file was written under; under conflict keep it can differ from the requested name */
+            name: string;
+            /** @description The file's path, relative to /workspace */
+            path: string;
+            /** Format: int64 */
+            size: number;
         };
         Usage: {
             /** Format: int64 */
@@ -6597,6 +6609,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    uploadFile: {
+        parameters: {
+            query: {
+                /** @description Folder, relative to /workspace; empty for /workspace itself */
+                path?: string;
+                /** @description The file's name */
+                name: string;
+                /** @description What to do when the name is taken */
+                conflict?: "fail" | "replace" | "keep";
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The file was written */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadedFile"];
                 };
             };
             /** @description Error */
