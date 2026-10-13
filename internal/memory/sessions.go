@@ -25,13 +25,13 @@ func (s *Service) PageBySlug(ctx context.Context, envID, scope, slug string) (Pa
 
 // FactsChangedSince lists the facts of a scope created or edited after since, newest
 // first, leaving out those written by exceptAuthor. Retracted and superseded facts are not
-// listed.
+// listed, nor facts that hold in a context only: they surface when a search names it.
 func (s *Service) FactsChangedSince(ctx context.Context, envID, scope string, since time.Time, exceptAuthor string, limit int) ([]Fact, error) {
 	if err := ValidateScope(scope); err != nil {
 		return nil, err
 	}
 	rows, err := s.db.QueryContext(ctx, "SELECT "+factCols+` FROM memory_facts
-		WHERE environment_id = ? AND scope = ? AND updated_at > ? AND author_teammate != ? AND status IN ('active', 'disputed')
+		WHERE environment_id = ? AND scope = ? AND updated_at > ? AND author_teammate != ? AND status IN ('active', 'disputed') AND context = ''
 		ORDER BY updated_at DESC, id LIMIT ?`, envID, scope, since.Unix(), exceptAuthor, limit)
 	if err != nil {
 		return nil, err

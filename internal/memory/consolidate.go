@@ -254,6 +254,41 @@ func (s *Service) FactsCreatedBetween(ctx context.Context, envID, scope string, 
 		ORDER BY created_at, id`, envID, scope, from.Unix(), to.Unix())
 }
 
+// AttachContext makes a fact hold in a context only (where, see FactInput.Context): the fact
+// stays, and searches surface it only when they name the context. A fact keeps a context it
+// has. The change goes on the fact's entity page without the fact's text, which would surface
+// the fact outside its context. changed is false when the fact already had a context.
+func (s *Service) AttachContext(ctx context.Context, envID, factID, where string) (changed bool, err error) {
+	if err := ValidateContext(where); err != nil {
+		return false, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	f, err := factTx(ctx, tx, envID, factID)
+	if err != nil {
+		return false, err
+	}
+	if f.Context != "" {
+		return false, nil
+	}
+	now := s.unix()
+	if _, err := tx.ExecContext(ctx, "UPDATE memory_facts SET context = ?, updated_at = ? WHERE id = ?", where, now, factID); err != nil {
+		return false, err
+	}
+	chunks, err := s.noteOnPage(ctx, tx, envID, f, f, time.Unix(now, 0), fmt.Sprintf("Holds in the context %q only; searches surface it only where that is named.", where))
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	s.enqueue(chunks...)
+	return true, nil
+}
+
 // CountFactsSince counts the facts of a scope created after since (by the second).
 func (s *Service) CountFactsSince(ctx context.Context, envID, scope string, since time.Time) (int, error) {
 	var n int
@@ -394,6 +429,9 @@ func (s *Service) CompileEntityPage(ctx context.Context, envID, scope, entity st
 	if err != nil {
 		return CompileResult{}, err
 	}
+	// The compiled truth reaches every session that loads the page, so facts that hold in a
+	// context only stay out of it.
+	facts = slices.DeleteFunc(facts, func(f Fact) bool { return f.Context != "" })
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return CompileResult{}, err

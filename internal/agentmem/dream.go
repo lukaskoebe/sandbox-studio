@@ -31,7 +31,7 @@ const (
 	// DreamHour is the local hour after which the nightly dream runs.
 	DreamHour = 3
 
-	judgePromptVersion = 1
+	judgePromptVersion = 2
 	judgeMaxTokens     = 300
 	maxJudgedPairs     = 100 // per run; the rest waits for the next run
 	maxRelated         = 8   // facts each new fact is compared with
@@ -53,10 +53,11 @@ const (
 
 // Judge verdicts.
 const (
-	VerdictNone          = "no_conflict"
-	VerdictDuplicate     = "duplicate"
-	VerdictSupersedes    = "supersedes"
-	VerdictContradiction = "contradiction"
+	VerdictNone             = "no_conflict"
+	VerdictDuplicate        = "duplicate"
+	VerdictSupersedes       = "supersedes"
+	VerdictContradiction    = "contradiction"
+	VerdictContextDependent = "context_dependent"
 )
 
 // ErrDreamRunning means the scope is being consolidated already.
@@ -71,6 +72,7 @@ type DreamStats struct {
 	Rejected     int    `json:"rejected" doc:"Judge answers rejected as malformed; nothing was changed for them"`
 	Merged       int    `json:"merged" doc:"Near-duplicates merged"`
 	Superseded   int    `json:"superseded"`
+	Contextual   int    `json:"contextual" doc:"Facts that got a context: they stay, and surface only where it is named"`
 	Conflicts    int    `json:"conflicts" doc:"Conflicts opened for the user"`
 	Pages        int    `json:"pages" doc:"Entity pages created or regenerated"`
 	InputTokens  int    `json:"inputTokens"`
@@ -476,7 +478,7 @@ func (d *dreamer) dedupe(ctx context.Context, f memory.Fact) error {
 // nearDuplicate is a cheap test for facts that say the same: same words, or nearly the
 // same words about the same attribute.
 func nearDuplicate(a, b memory.Fact) bool {
-	if a.Kind != b.Kind {
+	if a.Kind != b.Kind || a.Context != b.Context {
 		return false
 	}
 	if normalize(a.Text) == normalize(b.Text) {
@@ -654,8 +656,10 @@ func (d *dreamer) setupJudge(ctx context.Context) {
 var verdictSchema = map[string]any{
 	"type": "object", "additionalProperties": false, "required": []string{"verdict", "reason"},
 	"properties": map[string]any{
-		"verdict": map[string]any{"type": "string", "enum": []string{VerdictNone, VerdictDuplicate, VerdictSupersedes, VerdictContradiction}},
-		"reason":  map[string]any{"type": "string"},
+		"verdict":  map[string]any{"type": "string", "enum": []string{VerdictNone, VerdictDuplicate, VerdictSupersedes, VerdictContradiction, VerdictContextDependent}},
+		"reason":   map[string]any{"type": "string"},
+		"contextA": map[string]any{"type": "string"},
+		"contextB": map[string]any{"type": "string"},
 	},
 }
 
@@ -666,19 +670,26 @@ Answer with one verdict:
 - "no_conflict": both can be true together.
 - "duplicate": they say the same thing.
 - "supersedes": B is a newer value of the same thing and replaces A (A was true until B was observed).
+- "context_dependent": both are true, each only in a different context (a project, an environment, a platform), so they do not contradict each other. Name the context of each fact that holds in one only, in contextA or contextB, with the fewest words that name it, e.g. "renart" or "staging". Leave a context empty for a fact that holds everywhere. Give at least one context.
 - "contradiction": they cannot both be true and B does not simply replace A, or you cannot tell which is right.
-reason is one or two short sentences for the user.
+reason is one or two short sentences for the user. contextA and contextB are empty unless the verdict is "context_dependent".
 Answer with JSON only, no prose, matching this schema: ` + string(schema)
 	side := func(name string, f memory.Fact) string {
-		return fmt.Sprintf("%s (%s, tier %s, observed %s, entities %s, attribute %q):\n%s\n", name, f.Kind, f.Tier,
-			f.ObservedAt.Format(time.DateOnly), strings.Join(f.EntityIDs, ", "), f.Attribute, f.Text)
+		holds := ""
+		if f.Context != "" {
+			holds = fmt.Sprintf(", holds only in context %q", f.Context)
+		}
+		return fmt.Sprintf("%s (%s, tier %s, observed %s, entities %s, attribute %q%s):\n%s\n", name, f.Kind, f.Tier,
+			f.ObservedAt.Format(time.DateOnly), strings.Join(f.EntityIDs, ", "), f.Attribute, holds, f.Text)
 	}
 	return system, side("A", a) + "\n" + side("B", b)
 }
 
 type verdictOut struct {
-	Verdict string `json:"verdict"`
-	Reason  string `json:"reason"`
+	Verdict  string `json:"verdict"`
+	Reason   string `json:"reason"`
+	ContextA string `json:"contextA,omitempty"`
+	ContextB string `json:"contextB,omitempty"`
 }
 
 // parseVerdict validates the judge's answer strictly; any violation rejects it.
@@ -689,8 +700,10 @@ func parseVerdict(text string, a, b memory.Fact) (verdictOut, error) {
 	dec := json.NewDecoder(bytes.NewReader([]byte(strings.TrimSpace(text))))
 	dec.DisallowUnknownFields()
 	var out struct {
-		Verdict *string `json:"verdict"`
-		Reason  *string `json:"reason"`
+		Verdict  *string `json:"verdict"`
+		Reason   *string `json:"reason"`
+		ContextA *string `json:"contextA"`
+		ContextB *string `json:"contextB"`
 	}
 	if err := dec.Decode(&out); err != nil {
 		return verdictOut{}, fmt.Errorf("not the schema: %v", err)
@@ -702,8 +715,14 @@ func parseVerdict(text string, a, b memory.Fact) (verdictOut, error) {
 		return verdictOut{}, errors.New("not the schema: verdict and reason are required")
 	}
 	v := verdictOut{Verdict: *out.Verdict, Reason: strings.TrimSpace(*out.Reason)}
+	if out.ContextA != nil {
+		v.ContextA = strings.TrimSpace(*out.ContextA)
+	}
+	if out.ContextB != nil {
+		v.ContextB = strings.TrimSpace(*out.ContextB)
+	}
 	switch v.Verdict {
-	case VerdictNone, VerdictDuplicate, VerdictContradiction:
+	case VerdictNone, VerdictDuplicate, VerdictContradiction, VerdictContextDependent:
 	case VerdictSupersedes:
 		if !a.ObservedAt.Before(b.ObservedAt) {
 			return verdictOut{}, errors.New("supersedes needs B to be observed after A")
@@ -717,6 +736,23 @@ func parseVerdict(text string, a, b memory.Fact) (verdictOut, error) {
 	if secretLike.MatchString(v.Reason) {
 		return verdictOut{}, errors.New("reason contains something like a credential")
 	}
+	if v.Verdict == VerdictContextDependent && v.ContextA == "" && v.ContextB == "" {
+		return verdictOut{}, errors.New("context_dependent needs a context for at least one fact")
+	}
+	if v.Verdict != VerdictContextDependent && (v.ContextA != "" || v.ContextB != "") {
+		return verdictOut{}, errors.New("contexts are only for context_dependent")
+	}
+	for _, c := range []string{v.ContextA, v.ContextB} {
+		if c == "" {
+			continue
+		}
+		if err := memory.ValidateContext(c); err != nil {
+			return verdictOut{}, err
+		}
+		if secretLike.MatchString(c) {
+			return verdictOut{}, errors.New("context contains something like a credential")
+		}
+	}
 	return v, nil
 }
 
@@ -724,15 +760,15 @@ func parseVerdict(text string, a, b memory.Fact) (verdictOut, error) {
 func pairHash(a, b memory.Fact) string {
 	h := sha256.New()
 	for _, f := range []memory.Fact{a, b} {
-		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00", f.Scope, f.Kind, f.Tier, strings.Join(f.EntityIDs, ","), f.Attribute, f.Text, f.ObservedAt.Unix())
+		fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00", f.Scope, f.Kind, f.Tier, strings.Join(f.EntityIDs, ","), f.Attribute, f.Text, f.Context, f.ObservedAt.Unix())
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
 
 func (d *dreamer) cached(ctx context.Context, hash string) (verdictOut, bool, error) {
 	var v verdictOut
-	err := d.s.db.QueryRowContext(ctx, `SELECT verdict, reason FROM memory_judgments
-		WHERE environment_id = ? AND pair_hash = ? AND model = ? AND prompt_version = ?`, d.env, hash, d.model.Model, judgePromptVersion).Scan(&v.Verdict, &v.Reason)
+	err := d.s.db.QueryRowContext(ctx, `SELECT verdict, reason, context_a, context_b FROM memory_judgments
+		WHERE environment_id = ? AND pair_hash = ? AND model = ? AND prompt_version = ?`, d.env, hash, d.model.Model, judgePromptVersion).Scan(&v.Verdict, &v.Reason, &v.ContextA, &v.ContextB)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, false, nil
 	}
@@ -790,8 +826,8 @@ func (d *dreamer) judgeAndApply(ctx context.Context, p [2]memory.Fact) (called b
 			s.Log.Info("memory judge answer rejected", "env", d.env, "err", err)
 			return true, nil // nothing changes; not cached, so a later run asks again
 		}
-		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO memory_judgments (environment_id, pair_hash, model, prompt_version, verdict, reason, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`, d.env, hash, d.model.Model, judgePromptVersion, v.Verdict, v.Reason, s.now().Unix()); err != nil {
+		if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO memory_judgments (environment_id, pair_hash, model, prompt_version, verdict, reason, context_a, context_b, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, d.env, hash, d.model.Model, judgePromptVersion, v.Verdict, v.Reason, v.ContextA, v.ContextB, s.now().Unix()); err != nil {
 			return true, err
 		}
 		called = true
@@ -808,8 +844,8 @@ func (d *dreamer) apply(ctx context.Context, a, b memory.Fact, v verdictOut) err
 	case VerdictNone:
 		return nil
 	case VerdictDuplicate:
-		if a.Scope != b.Scope {
-			return nil // a teammate's copy of a shared fact is harmless
+		if a.Scope != b.Scope || a.Context != b.Context {
+			return nil // a teammate's copy of a shared fact is harmless; facts of other contexts differ
 		}
 		ok, err := s.Memory.MergeFacts(ctx, d.env, a.ID, b.ID)
 		if ok {
@@ -827,6 +863,26 @@ func (d *dreamer) apply(ctx context.Context, a, b memory.Fact, v verdictOut) err
 			return err
 		}
 		return d.conflict(ctx, a, b, "temporal_supersession", v.Reason)
+	case VerdictContextDependent:
+		// Both stay active; each fact that holds in a context only gets it, and the page drops
+		// the fact from its compiled truth.
+		for _, side := range []struct {
+			f     memory.Fact
+			where string
+		}{{a, v.ContextA}, {b, v.ContextB}} {
+			if side.where == "" {
+				continue
+			}
+			changed, err := s.Memory.AttachContext(ctx, d.env, side.f.ID, side.where)
+			if err != nil {
+				return err
+			}
+			if changed {
+				d.r.Stats.Contextual++
+				d.touch(side.f)
+			}
+		}
+		return nil
 	case VerdictContradiction:
 		return d.conflict(ctx, a, b, "contradiction", v.Reason)
 	}

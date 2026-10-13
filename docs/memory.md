@@ -21,9 +21,10 @@ Tables live in the catalog database (`013_memory.sql`, all prefixed `memory_`):
   ref, author teammate and a short evidence quote. Every fact write adds one.
 - `facts`: kind (`preference`, `decision`, `fact`, `procedure`, `event`), entities,
   attribute, text, `observed_at`, validity, confidence, tier, support count, status
-  (`active`, `superseded`, `disputed`, `retracted`), `supersedes` and author teammate.
-  Superseding marks the old fact `superseded` and ends its validity; a conflict marks both
-  facts `disputed` in one scope, only the teammate's fact across scopes.
+  (`active`, `superseded`, `disputed`, `retracted`), `supersedes`, author teammate and
+  context (see [Search](#search)). Superseding marks the old fact `superseded` and ends its
+  validity; a conflict marks both facts `disputed` in one scope, only the teammate's fact
+  across scopes.
 - `pages`: slug (unique per scope), title, kind, compiled truth, `always_load`, tier. Core
   (`always_load`) pages of one scope share 4000 characters; a write over that is refused
   with a list of the other core pages and how much room is left.
@@ -33,7 +34,7 @@ Tables live in the catalog database (`013_memory.sql`, all prefixed `memory_`):
   `keep_both` keeps both as tier `user`, optionally rewritten with a qualifier; `edit`
   writes one new `user` fact that supersedes both. Each adds a timeline entry.
 - `dream_runs` and `judgments` (`016_memory_dream.sql`): consolidation runs and cached
-  verdicts.
+  verdicts, with the contexts the judge named (`029_memory_consolidation.sql`).
 - `chunks`: the searchable text of facts, pages (split at about 1200 characters) and
   timeline entries, indexed by FTS5 (`porter unicode61`) through triggers.
 - `embeddings`: one int8 vector per chunk with its scale, dimensions and model name.
@@ -53,7 +54,11 @@ scope plus shared.
    boost `0.5 + 0.5 · 0.5^(age / half-life)`. Half-lives: preference 365 days, decision and
    procedure 180, fact 90, event 14, page 180.
 4. Retracted facts never show; superseded and expired (`valid_until` past) facts only with
-   `includeSuperseded`, marked. Disputed facts are marked.
+   `includeSuperseded`, marked. Disputed facts are marked. A fact with a context shows only
+   when the query names every word of the context (words of three letters or more, without
+   stopwords such as "the"), so "renart" surfaces a fact that holds in the renart repo and
+   "api database" does not. Facts with a context are left out of the session-start pack and
+   of the compiled truth of their page, which reach sessions without a query.
 5. Shared wins: a teammate fact in an open conflict with a shared fact is marked
    `overriddenBy` and the shared fact is placed right above it (pulled in if search missed
    it) until the user resolves the conflict.
@@ -197,21 +202,27 @@ ends included); a teammate's run also takes new shared facts.
    entity) of its scope and shared; new shared facts against the teammate's facts. At most
    100 pairs per run; pairs with a conflict are skipped.
 3. Judge: the teammate's utility model, as for extraction; none for subscriptions, S8, so
-   those runs only dedupe and compile. Shared memory uses the teammate that has had a
+   those runs only dedupe and compile. The judge sees each fact's context, if it has one. Shared memory uses the teammate that has had a
    utility model the longest. Studio does not record when a teammate's provider was set, so
    that is the oldest teammate whose provider has one (by creation time, then ID); there is
    no fallback to another teammate if its key or client fails. The run records the teammate,
    `GET usage` reports it as `sharedJudge`, and the memory page shows "Consolidated with
    <teammate>'s model" on the shared scope. Calls count against the environment's daily
-   budget, which extraction shares; there is no per-teammate budget. The answer must be exactly `{"verdict", "reason"}` with a verdict of
-   `no_conflict`, `duplicate`, `supersedes` or `contradiction`; `supersedes` needs B
-   observed after A. Anything else is counted as rejected and changes nothing. Valid
-   verdicts are cached per pair, model and prompt version.
-4. Apply: `duplicate` merges (same scope). `supersedes` applies by itself, with a timeline
-   entry on the entity page, when B's tier is at least A's and B is in A's scope or shared;
-   a teammate fact never replaces a shared one. Otherwise, and for every `contradiction`, a
-   conflict opens with a `memory.conflict` approval in the inbox. Dismissing the approval
-   only hides it; the conflict stays open until resolved on the memory page.
+   budget, which extraction shares; there is no per-teammate budget. The answer must be
+   `{"verdict", "reason"}` with a verdict of `no_conflict`, `duplicate`, `supersedes`,
+   `contradiction` or `context_dependent`; `supersedes` needs B observed after A. Only
+   `context_dependent` may also carry `contextA` and `contextB`: the context each fact holds
+   in, if one does (at least one is needed). Anything else is counted as rejected and
+   changes nothing. Valid verdicts are cached per pair (with the contexts the judge saw),
+   model and prompt version.
+4. Apply: `duplicate` merges (same scope and context). `supersedes` applies by itself, with
+   a timeline entry on the entity page, when B's tier is at least A's and B is in A's scope
+   or shared; a teammate fact never replaces a shared one. Otherwise, and for every
+   `contradiction`, a conflict opens with a `memory.conflict` approval in the inbox.
+   Dismissing the approval only hides it; the conflict stays open until resolved on the
+   memory page. `context_dependent` opens nothing: both facts stay active, and each fact
+   that holds in a context only gets that context (`context`, a timeline entry that names it
+   but not the fact's text). A fact keeps a context it already has.
 5. Compiled truth: the touched entities' pages (`<entity>` or `topic/<entity>`, created at
    two facts) get a regenerated block between `<!-- studio:compiled -->` markers; text the
    user wrote outside it stays. A core page that would exceed the core budget keeps its old

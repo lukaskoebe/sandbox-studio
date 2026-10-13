@@ -96,11 +96,47 @@ type chunkHit struct {
 	sim     float64
 }
 
+// words splits text into lowercase words of letters and digits.
+func words(text string) []string {
+	return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+}
+
+// contextStopwords do not name a context; they only lead phrases such as "in the renart repo".
+var contextStopwords = map[string]bool{"the": true, "and": true, "for": true, "with": true, "from": true, "that": true,
+	"this": true, "only": true, "into": true, "when": true, "where": true}
+
+// contextWords are the words that name a context: three letters or more, not a stopword.
+func contextWords(context string) []string {
+	var out []string
+	for _, w := range words(context) {
+		if len(w) >= 3 && !contextStopwords[w] && !slices.Contains(out, w) {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// contextNamed reports whether a query names a fact's context: every word of the context
+// appears in the query. A context without a word that can be named is never named.
+func contextNamed(context, query string) bool {
+	want := contextWords(context)
+	if len(want) == 0 {
+		return false
+	}
+	have := words(query)
+	for _, w := range want {
+		if !slices.Contains(have, w) {
+			return false
+		}
+	}
+	return true
+}
+
 // ftsQuery turns free text into an FTS5 OR-query of quoted terms.
 func ftsQuery(q string) string {
 	seen := map[string]bool{}
 	var terms []string
-	for _, w := range strings.FieldsFunc(strings.ToLower(q), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+	for _, w := range words(q) {
 		if !seen[w] {
 			seen[w] = true
 			terms = append(terms, `"`+w+`"`)
@@ -111,7 +147,7 @@ func ftsQuery(q string) string {
 
 // Search runs BM25 and vector retrieval over the request's scopes, fuses them with
 // reciprocal-rank fusion and boosts by tier and recency. Retracted facts never match;
-// superseded and expired ones only on request; disputed ones carry a marker.
+// superseded and expired ones only on request; disputed ones carry a marker; a fact with a context only when the query names it.
 func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) ([]Hit, error) {
 	scopes := []string{SharedScope}
 	if req.Teammate != "" {
@@ -161,7 +197,7 @@ func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) (
 			order = append(order, h.owner)
 		}
 	}
-	if err := s.loadOwners(ctx, envID, order, cands, req.IncludeSuperseded); err != nil {
+	if err := s.loadOwners(ctx, envID, order, cands, req.Query, req.IncludeSuperseded); err != nil {
 		return nil, err
 	}
 
@@ -349,8 +385,9 @@ func ownerKey(fact, page string) string {
 	return "page:" + page
 }
 
-// loadOwners fills the candidates' facts and pages and removes those the request excludes.
-func (s *Service) loadOwners(ctx context.Context, envID string, keys []string, cands map[string]*candidate, includeSuperseded bool) error {
+// loadOwners fills the candidates' facts and pages and removes those the request excludes:
+// superseded or retracted facts, and facts whose context the query does not name.
+func (s *Service) loadOwners(ctx context.Context, envID string, keys []string, cands map[string]*candidate, query string, includeSuperseded bool) error {
 	now := s.now()
 	for _, key := range keys {
 		c := cands[key]
@@ -367,7 +404,7 @@ func (s *Service) loadOwners(ctx context.Context, envID string, keys []string, c
 			}
 			expired := f.ValidUntil != nil && !f.ValidUntil.After(now)
 			superseded := f.Status == StatusSuperseded || expired
-			if f.Status == StatusRetracted || (superseded && !includeSuperseded) {
+			if f.Status == StatusRetracted || (superseded && !includeSuperseded) || (f.Context != "" && !contextNamed(f.Context, query)) {
 				delete(cands, key)
 				continue
 			}

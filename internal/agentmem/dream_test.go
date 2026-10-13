@@ -658,3 +658,104 @@ func TestSharedJudgeIsTheOldestTeammateWithAUtilityModel(t *testing.T) {
 		t.Fatalf("judge %s with no utility model", got)
 	}
 }
+
+// Two facts that hold in different contexts are kept, each with the context it holds in: no
+// conflict, and only searches that name a context surface the fact.
+func TestContextDependentKeepsBothInTheirContexts(t *testing.T) {
+	f := newFixture(t)
+	ada := memory.TeammateScope(f.ada.ID)
+	npm := f.mk(ada, "Install packages with npm", memory.TierUser, "", "tooling", "install.tool", day(1))
+	pnpm := f.mk(ada, "Install packages with pnpm", memory.TierUser, "", "tooling", "install.tool", day(2))
+	f.llm.respond = func(r Request) (string, error) {
+		if strings.Contains(r.User, "npm") && strings.Contains(r.User, "pnpm") {
+			return `{"verdict": "context_dependent", "reason": "each tool belongs to its own repo", "contextA": "renart", "contextB": "sandbox studio"}`, nil
+		}
+		return `{"verdict": "no_conflict", "reason": "unrelated"}`, nil
+	}
+
+	r := f.dream(ada)
+	if r.Status != DreamDone || r.Stats.Contextual != 2 || r.Stats.Conflicts != 0 || r.Stats.Superseded != 0 {
+		t.Fatalf("run %+v", r)
+	}
+	if a := f.get(npm.ID); a.Status != memory.StatusActive || a.Context != "renart" {
+		t.Fatalf("npm %+v", a)
+	}
+	if b := f.get(pnpm.ID); b.Status != memory.StatusActive || b.Context != "sandbox studio" {
+		t.Fatalf("pnpm %+v", b)
+	}
+	if list, _ := f.mem.Conflicts(f.ctx, f.env, ada); len(list) != 0 {
+		t.Fatalf("conflicts %+v", list)
+	}
+
+	// Recall names the context: the fact surfaces only for prompts that name it.
+	recalled := func(query string) []string {
+		hits, err := f.mem.Search(f.ctx, f.env, memory.SearchRequest{Query: query, Teammate: f.ada.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, h := range factHits(hits) {
+			out = append(out, h.ID)
+		}
+		return out
+	}
+	if got := recalled("how do I install packages"); len(got) != 0 {
+		t.Fatalf("recalled outside the contexts: %v", got)
+	}
+	if got := recalled("install packages in renart"); len(got) != 1 || got[0] != npm.ID {
+		t.Fatalf("renart recall %v", got)
+	}
+	if got := recalled("install packages sandbox studio"); len(got) != 1 || got[0] != pnpm.ID {
+		t.Fatalf("sandbox studio recall %v", got)
+	}
+
+	// The cache key holds the contexts the judge saw, so the run after they were attached asks
+	// once more; the run after that is answered from the cache.
+	f.dream(ada)
+	calls := f.llm.n()
+	if r := f.dream(ada); r.Status != DreamDone || r.Stats.Contextual != 0 || r.Stats.Cached != 1 || f.llm.n() != calls {
+		t.Fatalf("cached run %+v, %d calls", r, f.llm.n()-calls)
+	}
+	if a := f.get(npm.ID); a.Context != "renart" {
+		t.Fatalf("context lost: %+v", a)
+	}
+}
+
+// A context-dependent verdict must name a context for at least one fact, and only then.
+func TestContextVerdictParsing(t *testing.T) {
+	a := memory.Fact{ObservedAt: day(1)}
+	b := memory.Fact{ObservedAt: day(2)}
+	ok := []string{
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "renart"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "", "contextB": "staging"}`,
+		`{"verdict": "no_conflict", "reason": "x", "contextA": ""}`,
+	}
+	for _, s := range ok {
+		if _, err := parseVerdict(s, a, b); err != nil {
+			t.Errorf("%q: %v", s, err)
+		}
+	}
+	bad := []string{
+		`{"verdict": "context_dependent", "reason": "x"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": ""}`,
+		`{"verdict": "contradiction", "reason": "x", "contextA": "renart"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "the"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": 7}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "` + strings.Repeat("a", 201) + `"}`,
+	}
+	for _, s := range bad {
+		if v, err := parseVerdict(s, a, b); err == nil {
+			t.Errorf("%q accepted as %+v", s, v)
+		}
+	}
+}
+
+func TestNearDuplicatesKeepTheirContexts(t *testing.T) {
+	plain := memory.Fact{Kind: memory.KindFact, Text: "Deploy with make ship"}
+	inContext := plain
+	inContext.Context = "renart"
+	if nearDuplicate(plain, inContext) || !nearDuplicate(plain, plain) {
+		t.Fatal("facts of different contexts count as duplicates")
+	}
+}
