@@ -299,6 +299,11 @@ func (s *Server) chats() (*chat.Service, error) {
 	return s.Chats, nil
 }
 
+// ChatLaunch plans a chat's agent in a sandbox, as sending a chat prompt does. Heartbeats use it.
+func (s *Server) ChatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch, error) {
+	return s.chatLaunch(ctx, sb)
+}
+
 // chatLaunch plans a chat's agent like an agent session. Claude subscriptions are
 // refused: Anthropic doesn't allow claude.ai login in third-party agents.
 func (s *Server) chatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch, error) {
