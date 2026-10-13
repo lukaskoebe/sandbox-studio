@@ -1,0 +1,26 @@
+# golangci-lint v2: the standard linters (errcheck, govet, ineffassign, staticcheck, unused),
+# run with the build tags the tests use (Makefile TAGS). gosec is left out: it reports about
+# 500 findings, most of them unchecked conversions and file permissions.
+version: "2"
+
+run:
+  build-tags:
+    - nobadger
+    - nomysql
+    - nopgx
+
+linters:
+  default: standard
+  settings:
+    staticcheck:
+      # ST1005 is off: error strings are sentences the API and the CLI show as written.
+      checks: ["all", "-ST1000", "-ST1003", "-ST1005", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
+  exclusions:
+    # Errors from Close, Flush, Remove and the print functions are conventionally ignored.
+    presets:
+      - std-error-handling
+
+issues:
+  # Report every finding: the defaults hide all but 50 per linter and 3 of the same message.
+  max-issues-per-linter: 0
+  max-same-issues: 0
