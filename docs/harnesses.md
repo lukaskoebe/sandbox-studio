@@ -157,13 +157,13 @@ below; a golden test enforces it.
 | Harness | Command | Extra environment | MCP servers in `session/new` |
 |---|---|---|---|
 | OpenCode | `opencode acp` | none | none (read from `opencode.json`) |
-| Claude | `claude-agent-acp` | `CLAUDE_CODE_EXECUTABLE=/usr/local/bin/claude` | `studio`: `studio-agent mcp` |
+| Claude | `claude-agent-acp`; a Claude subscription: `studio-agent claude-acp` | `CLAUDE_CODE_EXECUTABLE=/usr/local/bin/claude` | `studio`: `studio-agent mcp` |
 | Codex | `codex-acp` | `CODEX_PATH=/usr/local/bin/codex`, `NO_BROWSER=1`, `INITIAL_AGENT_MODE=agent-full-access`, `MODEL_PROVIDER=studio` (API-key providers) | none (read from `config.toml`) |
 
 The adapters are installed without their own copies of the Claude Code and Codex binaries,
 so chats and terminals run the same pinned versions. Studio advertises no file system or
-terminal capability. Chats refuse a teammate on a Claude subscription (Anthropic doesn't
-allow claude.ai logins in third-party agents); its terminal sessions run Claude Code itself. The guest kills the agent's process group when the stream closes (SIGTERM,
+terminal capability. A Claude subscription's chats run `studio-agent claude-acp` instead
+([below](#claude-subscription-chats)). The guest kills the agent's process group when the stream closes (SIGTERM,
 SIGKILL after 5 s) and runs at most 4 per sandbox, one per chat; its stderr goes to
 `/run/studio-agent/acp-<chat>.log`, capped at 256 KiB.
 
@@ -172,6 +172,76 @@ tmux session `chat-<chat>` tagged `@studio_chat`. The `<id>` is the ACP session 
 is the harness's own session ID. Studio only passes IDs matching
 `[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`. The ACP agent is stopped while the TUI runs, since only
 one process may write a session.
+
+### Claude subscription chats
+
+A chat for a Claude subscription runs `studio-agent claude-acp`, the guest's copy of Studio's
+agent binary, as its ACP agent. The shim (`internal/claudeacp`) serves one session on stdio
+and runs Claude Code itself for its turns: `claude -p --input-format stream-json
+--output-format stream-json --verbose --include-partial-messages`, one process per session,
+which stays up between prompts. API-key chats keep `claude-agent-acp` for now; switching
+every Claude chat to the shim is a later step, after a live check.
+
+**Whether this use of a Claude subscription fits Anthropic's terms is the owner's decision.**
+The design notes in [chat mode](design/chat-mode.md) quote the terms on claude.ai logins in
+third-party agents. The shim runs the Claude Code binary, not the Agent SDK, but the question
+is the same.
+
+Claude Code's output becomes ACP updates:
+
+| Claude Code | ACP |
+|---|---|
+| `stream_event` text and thinking deltas | `agent_message_chunk`, `agent_thought_chunk` |
+| `assistant` message with a `tool_use` block (complete input) | `tool_call`, pending; the title and kind come from the tool, with its input and the files it touches |
+| `user` message with a `tool_result` | `tool_call_update`, `completed` or `failed` (`is_error`), with the result's text |
+| `assistant` `TodoWrite` | `plan` |
+| `system` `compact_boundary` | `compaction_update` |
+| `result` | the prompt's response: `end_turn`, `max_tokens`, `refusal` or `max_turn_requests`; an error result fails the prompt; `total_cost_usd` is a `usage_update` cost |
+
+Text that streamed as deltas isn't shown again from the complete message. Messages of
+subagents (`parent_tool_use_id` set) aren't shown.
+
+**Permissions.** The shim passes `--permission-mode default`, which overrides the
+`bypassPermissions` that the teammate's `settings.json` sets for the TUI, and
+`--permission-prompt-tool mcp__plugin_studio_permissions__prompt`. Claude Code asks that tool
+before each action it doesn't approve itself. The tool is the permissions server, `studio-agent
+claude-permission`, which sends the question over the session's socket to the shim. The socket
+is `0600` in the shim's private run directory. The shim asks Studio with
+`session/request_permission`, offering **Allow** (`allow_once`) and **Deny** (`reject_once`);
+Studio's Ignore is a denial. Studio's own MCP tools run without asking, through
+`--allowedTools`, since the `studio` server decides what the teammate may read and write.
+`AskUserQuestion` is denied with a message, because chats don't take answers yet. The options
+don't include "don't ask again": the shim doesn't write Claude Code rules, and the prompt tool's
+rule-writing result isn't verified.
+
+**Plugin.** The shim writes a plugin and loads it with `--plugin-dir`: a manifest named
+`studio`, and a `.mcp.json` with the servers `session/new` sends (`studio`, which is
+`studio-agent mcp`) and the permissions server. Plugin servers start with the session and need
+no approval, unlike a project's `.mcp.json`. Their tools are named
+`mcp__plugin_studio_<server>__<tool>`. The Claude Code docs support `--plugin-dir` and plugin
+`.mcp.json`, so there is no `--mcp-config` fallback.
+
+**Sessions and cancel.** `session/new` picks a UUID and starts Claude Code with `--session-id`.
+Once a transcript exists (`<config>/projects/<project>/<id>.jsonl`), a new process uses
+`--resume`. `session/resume` answers "Resource not found" when there is no transcript, and
+Studio ends the chat. The session ID is Claude Code's, so the terminal's `claude --resume <id>`
+continues the same conversation. `session/cancel` sends SIGTERM to Claude Code (SIGKILL after 5
+s), and the turn ends `cancelled`. The next prompt starts Claude Code with `--resume`, which
+the docs say leaves an interrupted turn as it is.
+
+Not done yet:
+
+- Back to chat after a terminal session shows a marker, "Continued in the terminal. This agent
+  can't show those messages here.", not the terminal's turns. That needs `session/load` with a
+  transcript replay.
+- Attachments: text files as text, PDFs as documents, PNG, JPEG, GIF and WebP as images, other
+  files named in a text block.
+
+The docs were checked, not a binary: the flags, the plugin layout and tool names, the
+stream-json fields and the transcript location come from the Claude Code docs at
+code.claude.com. `internal/claudeacp/testdata` holds fixtures written from those docs, not
+recordings. The tests run a fake `claude` (the test binary) that prints them and asks the real
+permissions server over MCP. No real `claude` ran, and no model was called.
 
 ## Verified vs pending
 
@@ -198,6 +268,10 @@ Pending S7 (`// verify (S7)` in the code):
 - The resume commands for chats opened in the terminal, and that each harness's ACP session
   ID is the ID its TUI resumes.
 - The model ID `gpt-6-luna` and its price (third-party listings only).
+- Claude subscription chats, as above: the stream-json input shape (from the Agent SDK example),
+  the `--session-id` and `--resume` lifecycle, the permission prompt tool's MCP tool name and
+  answer format, `--allowedTools` on plugin tools, "Resource not found" detection, and whether
+  the subscription's token is accepted by `claude -p` in the sandbox.
 
 ## Subscription logins: built, pending live verification
 
@@ -213,8 +287,11 @@ accounts. Each assumption is marked `verify (S8)` in the code. The steps:
 2. Claude teammate. Create one on that provider with the Claude Code harness and start a session.
    In its terminal, `echo $CLAUDE_CODE_OAUTH_TOKEN` shows a `studio-` placeholder, and a prompt
    gets an answer.
-3. A memory extraction for the same environment, with the subscription as its utility model (a
-   utility call through `claude -p`). A chat for the teammate is refused, by design. Check the activity for extraction results or a reported failure.
+3. A chat on the subscription. It streams an answer, and a tool call that needs approval shows a
+   permission card with Allow and Deny. Studio's own tools (memory, tasks) don't ask. Then a
+   memory extraction for the same environment, with the subscription as its utility model (a
+   utility call through `claude -p`): check the activity for extraction results or a reported
+   failure.
 4. ChatGPT. Add provider → ChatGPT subscription → Add, then Sign in with ChatGPT. Expect the page
    and the code. Enter the code on the page. Expect "The sign-in is saved." and `ready`.
 5. ChatGPT teammate. Start a session. In its terminal, `~/.codex/auth.json` holds `studio-`

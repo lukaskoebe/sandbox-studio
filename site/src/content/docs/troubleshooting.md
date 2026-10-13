@@ -16,7 +16,7 @@ On first start, Studio may need to download the runtime and base image. Check th
 - Add an API key to the provider and verify it is still valid.
 - Confirm an environment network rule does not deny the provider's API host.
 
-Claude Pro/Max and ChatGPT subscriptions sign in from Settings → Providers. A Claude subscription works in terminal sessions, not in chats; use an Anthropic API key for chats.
+Claude Pro/Max and ChatGPT subscriptions sign in from Settings → Providers. A Claude subscription works in terminal sessions and in chats.
 
 ## A command says it is waiting for network approval
 

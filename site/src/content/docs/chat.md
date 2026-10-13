@@ -18,11 +18,11 @@ Closing the dialog without choosing picks Chat. You can change it any time under
 
 A chat talks to the teammate that owns a sandbox, so you need:
 
-1. A provider with an API key: Anthropic API key, OpenAI API key, or an OpenAI-compatible endpoint. See [Teammates and providers](../teammates-providers/).
+1. A provider: an Anthropic API key, an OpenAI API key, an OpenAI-compatible endpoint, or a signed-in Claude subscription. See [Teammates and providers](../teammates-providers/).
 2. A teammate that uses it.
 3. A sandbox owned by that teammate, running.
 
-**Claude subscriptions can't be used in chats.** Anthropic doesn't allow claude.ai logins in third-party agents, so Studio refuses to start a chat for a teammate on a Claude subscription. Give the teammate an Anthropic API key provider, or use a terminal session instead.
+A Claude subscription runs chats too: Studio runs Claude Code itself for the teammate, and its permission requests appear as cards like any other agent's. Studio's own tools (memory and tasks) don't ask.
 
 ## Start a chat
 
