@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -362,4 +363,107 @@ func (s *closeErrorSource) Close() error {
 func (c *observedConn) Read(p []byte) (int, error) {
 	c.readOnce.Do(func() { close(c.readStarted) })
 	return c.Conn.Read(p)
+}
+
+// modelDisk makes the export guard see a disk of capacity bytes, whose free space is what the
+// files in its directory don't use, with small thresholds so a test can fill it. The test's
+// cleanup restores the guard.
+func modelDisk(t *testing.T, capacity, floor uint64, interval int64) {
+	t.Helper()
+	oldFloor, oldInterval, oldFree := exportFloorBytes, exportCheckBytes, freeSpace
+	t.Cleanup(func() { exportFloorBytes, exportCheckBytes, freeSpace = oldFloor, oldInterval, oldFree })
+	exportFloorBytes, exportCheckBytes = floor, interval
+	freeSpace = func(dir string) (uint64, error) {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return 0, err
+		}
+		var used uint64
+		for _, entry := range entries {
+			info, err := entry.Info()
+			if err != nil {
+				return 0, err
+			}
+			used += uint64(info.Size())
+		}
+		if used >= capacity {
+			return 0, nil
+		}
+		return capacity - used, nil
+	}
+}
+
+// makeLargeTar returns a tar holding one file of n random bytes, which gzip can't shrink.
+func makeLargeTar(t *testing.T, n int) []byte {
+	t.Helper()
+	payload := make([]byte, n)
+	if _, err := rand.Read(payload); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	writer := tar.NewWriter(&output)
+	if err := writer.WriteHeader(&tar.Header{
+		Name: "large.bin", Mode: 0o644, Size: int64(n), Typeflag: tar.TypeReg, Format: tar.FormatUSTAR,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writer.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return output.Bytes()
+}
+
+func TestReceiveRefusesWhenTheDiskCannotHoldAPublishCopy(t *testing.T) {
+	// The first check needs the floor plus two check intervals: 4096 + 2 × 1024 bytes.
+	modelDisk(t, 6143, 4096, 1024)
+	dir := t.TempDir()
+	_, err := Receive(context.Background(), dir, io.NopCloser(bytes.NewReader(makeExportWire(t, makeTestTar(t)))), ocilayer.Limits{})
+	if !errors.Is(err, ErrDiskSpace) {
+		t.Fatalf("Receive on a disk that can't hold a publish copy = %v, want ErrDiskSpace", err)
+	}
+	assertNoArtifacts(t, dir)
+}
+
+func TestReceiveStopsWhenTheDiskFillsDuringTheExport(t *testing.T) {
+	modelDisk(t, 64<<10, 4096, 1024)
+	raw := makeLargeTar(t, 256<<10)
+	dir := t.TempDir()
+	_, err := Receive(context.Background(), dir, io.NopCloser(bytes.NewReader(makeExportWire(t, raw))), ocilayer.Limits{})
+	if !errors.Is(err, ErrDiskSpace) {
+		t.Fatalf("Receive while the disk fills = %v, want ErrDiskSpace", err)
+	}
+	assertNoArtifacts(t, dir)
+
+	// A small layer on the same disk is still received.
+	layer, err := Receive(context.Background(), dir, io.NopCloser(bytes.NewReader(makeExportWire(t, makeTestTar(t)))), ocilayer.Limits{})
+	if err != nil {
+		t.Fatalf("Receive of a small layer on the same disk: %v", err)
+	}
+	defer os.Remove(layer.Path)
+	checkLayer(t, layer, "payload.txt", "layer payload")
+}
+
+func TestReceiveKeepsGoingWhenFreeSpaceIsUnknown(t *testing.T) {
+	modelDisk(t, 1, 4096, 1024)
+	freeSpace = func(string) (uint64, error) { return 0, errors.New("free space is unknown") }
+	dir := t.TempDir()
+	layer, err := Receive(context.Background(), dir, io.NopCloser(bytes.NewReader(makeExportWire(t, makeTestTar(t)))), ocilayer.Limits{})
+	if err != nil {
+		t.Fatalf("Receive with unknown free space: %v", err)
+	}
+	defer os.Remove(layer.Path)
+	checkLayer(t, layer, "payload.txt", "layer payload")
+}
+
+func TestReceiveOversizedCaptureRemovesArtifact(t *testing.T) {
+	raw := makeLargeTar(t, 64<<10)
+	dir := t.TempDir()
+	_, err := Receive(context.Background(), dir, io.NopCloser(bytes.NewReader(makeExportWire(t, raw))), ocilayer.Limits{MaxInputBytes: 16 << 10})
+	if err == nil {
+		t.Fatal("a capture larger than its input limit was received")
+	}
+	assertNoArtifacts(t, dir)
 }
