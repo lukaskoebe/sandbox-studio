@@ -26,6 +26,7 @@ type BuildJobSummary struct {
 	EnvironmentID  string    `json:"environmentId"`
 	Status         string    `json:"status" enum:"queued,preparing,setting_up,exporting,ready,failed,cancelled"`
 	TemplateID     string    `json:"templateId,omitempty"`
+	TemplateName   string    `json:"templateName,omitempty" doc:"The display name of the template a ready build made, such as node-22+python-3.13@2"`
 	Error          string    `json:"error,omitempty"`
 	CleanupError   string    `json:"cleanupError,omitempty"`
 	CleanupPending bool      `json:"cleanupPending"`
@@ -61,17 +62,19 @@ type BuildSourceValidation struct {
 	Problems []BuildSourceProblem `json:"problems"`
 }
 
-func publicBuildJobSummary(job store.BuildJob) BuildJobSummary {
+// publicBuildJobSummary names the template the job made, from the environment's template names
+// (store.TemplateNames).
+func publicBuildJobSummary(job store.BuildJob, names map[string]string) BuildJobSummary {
 	return BuildJobSummary{
 		ID: job.ID, EnvironmentID: job.EnvironmentID,
-		Status: job.Status, TemplateID: job.TemplateID, Error: job.Error,
+		Status: job.Status, TemplateID: job.TemplateID, TemplateName: names[job.TemplateID], Error: job.Error,
 		CleanupError: job.CleanupError, CleanupPending: job.CleanupPending,
 		CreatedAt: job.CreatedAt, UpdatedAt: job.UpdatedAt,
 	}
 }
 
-func publicBuildJob(job store.BuildJob) BuildJobView {
-	return BuildJobView{BuildJobSummary: publicBuildJobSummary(job), Source: job.Source}
+func publicBuildJob(job store.BuildJob, names map[string]string) BuildJobView {
+	return BuildJobView{BuildJobSummary: publicBuildJobSummary(job, names), Source: job.Source}
 }
 
 type buildJobPath struct {
@@ -132,9 +135,13 @@ func (s *Server) registerBuilds(api huma.API) {
 		if err != nil {
 			return nil, buildOperationError(err)
 		}
+		names, err := s.Store.TemplateNames(ctx, in.Env)
+		if err != nil {
+			return nil, buildOperationError(err)
+		}
 		out := make([]BuildJobSummary, len(jobs))
 		for i, job := range jobs {
-			out[i] = publicBuildJobSummary(job)
+			out[i] = publicBuildJobSummary(job, names)
 		}
 		return &struct{ Body []BuildJobSummary }{out}, nil
 	})
@@ -165,7 +172,11 @@ func (s *Server) registerBuilds(api huma.API) {
 		if job.EnvironmentID != in.Env || job.ID == "" {
 			return nil, huma.Error500InternalServerError("build operation failed")
 		}
-		return &struct{ Body BuildJobView }{publicBuildJob(job)}, nil
+		names, err := s.Store.TemplateNames(ctx, in.Env)
+		if err != nil {
+			return nil, buildOperationError(err)
+		}
+		return &struct{ Body BuildJobView }{publicBuildJob(job, names)}, nil
 	})
 
 	// Validation runs only the spec parser: it creates no job and does not
@@ -216,7 +227,11 @@ func (s *Server) registerBuilds(api huma.API) {
 		if err != nil {
 			return nil, buildOperationError(err)
 		}
-		return &struct{ Body BuildJobView }{publicBuildJob(job)}, nil
+		names, err := s.Store.TemplateNames(ctx, in.Env)
+		if err != nil {
+			return nil, buildOperationError(err)
+		}
+		return &struct{ Body BuildJobView }{publicBuildJob(job, names)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -235,7 +250,11 @@ func (s *Server) registerBuilds(api huma.API) {
 		if job.EnvironmentID != in.Env || job.ID != in.ID {
 			return nil, huma.Error404NotFound("build job not found")
 		}
-		return &struct{ Body BuildJobView }{publicBuildJob(job)}, nil
+		names, err := s.Store.TemplateNames(ctx, in.Env)
+		if err != nil {
+			return nil, buildOperationError(err)
+		}
+		return &struct{ Body BuildJobView }{publicBuildJob(job, names)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
