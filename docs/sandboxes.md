@@ -205,7 +205,12 @@ survive a host reboot. The agent session is dropped on suspend and reconnects on
 Fork, rebase and checkpoints refuse a suspended sandbox; Stop and Delete resume it first.
 A resize of a suspended sandbox is saved for its next start (see [resources](#resources)).
 
-A full (memory) snapshot plus stop would need restore, so it waits on #1736 too.
+Suspend to disk (a full memory snapshot, then the VM's process freed) is not built. A memory
+snapshot resumes only through restore, and restore can't set the sandbox's gateway proxy or DNS
+resolver (see [checkpoints](#checkpoints)). Studio never restores a VM without them, so the
+feature waits for #1736. The restore would also need the source's vsock route, which
+[spikes](spikes.md#s5--volumes-snapshots-and-forks) records as a device-layout requirement.
+Studio therefore keeps suspend in place.
 
 ## Fork, rebase, export and import
 
