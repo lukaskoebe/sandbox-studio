@@ -127,7 +127,7 @@ func TestAttachForwardsResizes(t *testing.T) {
 	sizes := make(chan string, 4)
 	query := make(chan string, 1)
 	client := fakeTerminal(t, func(ctx context.Context, c *websocket.Conn, r *http.Request) {
-		query <- r.URL.RawQuery
+		query <- r.URL.RawQuery + "|" + r.Header.Get("Cookie")
 		for {
 			typ, data, err := c.Read(ctx)
 			if err != nil {
@@ -146,8 +146,8 @@ func TestAttachForwardsResizes(t *testing.T) {
 		return 120, 40
 	}
 	pw, _, done := attach(t, client, size)
-	if q := <-query; q != "cols=80&rows=24" {
-		t.Fatalf("attach size: %q", q)
+	if q := <-query; q != "cols=80&rows=24|studio_session=test" {
+		t.Fatalf("attach size and session: %q", q)
 	}
 	select {
 	case msg := <-sizes:
