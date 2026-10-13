@@ -46,7 +46,7 @@ change it.
 ## Realtime and UI
 
 - `internal/events` publishes change notices as SSE at `/api/events`, with topics such as
-  `approvals`, `rules`, `secrets`, `builds`, `teammates` and `chats`. Events say what
+  `approvals`, `rules`, `secrets`, `builds`, `teammates`, `chats` and `tasks`. Events say what
   changed; clients refetch. Slow subscribers are disconnected.
 - The approval stack (`web/src/components/approval-stack.tsx`) shows on every page, for
   every environment, with the environment's name on cards from other environments. Pages
