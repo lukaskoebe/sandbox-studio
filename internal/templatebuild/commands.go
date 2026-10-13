@@ -265,11 +265,12 @@ chown -Rh agent:agent "$skel"
 `
 
 // rootNixBody prepares the single-user install. /nix belongs to the agent user; the system
-// config turns on the new CLI and flakes, and channels are not added. Login shells of the agent
-// load its profile, which the install creates under the home.
+// config turns on the new CLI and flakes, trusts the system CA bundle (which holds the
+// environment's CA), and adds no channels. Login shells of the agent load its profile, which
+// the install creates under the home.
 const rootNixBody = `install -d -m 0755 -o agent -g agent /nix
 install -d -m 0755 /etc/nix
-printf '%s\n' 'experimental-features = nix-command flakes' > /etc/nix/nix.conf
+printf '%s\n' 'experimental-features = nix-command flakes' 'ssl-cert-file = /etc/ssl/certs/ca-certificates.crt' > /etc/nix/nix.conf
 cat > /etc/profile.d/studio-nix.sh <<'PROFILE'
 # Nix, a template extra (docs/template-builds.md): the agent user's profile.
 if [ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then . "$HOME/.nix-profile/etc/profile.d/nix.sh"; fi

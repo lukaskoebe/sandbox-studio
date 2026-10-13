@@ -108,7 +108,7 @@ live in `internal/templatespec/nix.go`, taken from the `.sha256` files releases.
 publishes beside each tarball. A new release is a new entry with both checksums.
 
 The `nix` stage (root) makes `/nix` belong to `agent`, writes `/etc/nix/nix.conf` with
-`experimental-features = nix-command flakes`, and writes the login hook
+`experimental-features = nix-command flakes` and the system CA bundle, and writes the login hook
 `/etc/profile.d/studio-nix.sh`. The `nix-install` stage (agent) downloads the tarball from
 `releases.nixos.org`, checks its sha256 before unpacking, and runs the release's installer as
 a single user: `--no-daemon`, with no channel added and no shell profile edited. The store
