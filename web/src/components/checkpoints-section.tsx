@@ -60,8 +60,7 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
   const checkpoints = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/checkpoints",
-    path,
-    { refetchInterval: 15000 }
+    path
   )
   const list = checkpoints.data ?? []
 
