@@ -65,9 +65,16 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await open("Git")
     await page.getByRole("button", { name: "Skip", exact: true }).click()
 
-    // Network: going through it is the step; the approval flow is explained on its page.
-    await open("Network")
+    // Network level: new environments start at Guarded; choosing Locked is saved as it is made.
+    await open("Network level")
+    await expect(
+      page.getByRole("button", { name: "Guarded", exact: true })
+    ).toHaveAttribute("aria-pressed", "true")
     await expect(page.getByRole("link", { name: "Learn more" })).toBeVisible()
+    await page.getByRole("button", { name: "Locked", exact: true }).click()
+    await expect(
+      page.getByRole("button", { name: "Locked", exact: true })
+    ).toHaveAttribute("aria-pressed", "true")
     await next().click()
 
     // First sandbox: created by Iris, with its progress shown until the workspace opens.

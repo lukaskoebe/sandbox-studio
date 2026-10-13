@@ -481,6 +481,32 @@ func (s *Server) registerNetwork(api huma.API) {
 		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 	})
 
+	type revertIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Approval ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "revertApproval", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/revert", Tags: []string{"approvals"},
+		Description: "Undoes a decision the AI reviewer made: its rule is deleted, and the request is asked about from then on. Other decisions can't be reverted.",
+	}, func(ctx context.Context, in *revertIn) (*struct{ Body ApprovalView }, error) {
+		a, err := s.Policy.Revert(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getReviewer", Method: http.MethodGet, Path: "/api/environments/{env}/reviewer", Tags: []string{"network"},
+		Description: "Whether the assisted level can ask an AI reviewer: the environment needs a provider whose utility model can be called.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body reviewerView }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		v, err := s.reviewer(ctx, in.Env)
+		return &struct{ Body reviewerView }{v}, apiError(err)
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "listRules", Method: http.MethodGet, Path: "/api/environments/{env}/rules", Tags: []string{"network"},
 	}, func(ctx context.Context, in *envPath) (*struct{ Body []store.Rule }, error) {
@@ -586,6 +612,90 @@ func (s *Server) registerNetwork(api huma.API) {
 		return &struct{ Body trackersView }{v}, err
 	})
 
+	type setLevelIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Level string `json:"level" enum:"locked,guarded,assisted,open" doc:"What happens when no rule matches: locked asks, guarded allows the curated list and asks, assisted also asks an AI reviewer, open allows public addresses"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setSecurityLevel", Method: http.MethodPut, Path: "/api/environments/{env}/security-level", Tags: []string{"network"},
+		Description: "Sets the environment's security level. It applies to the connections made after the change; approvals already waiting stay as they are. Teammates can override it.",
+	}, func(ctx context.Context, in *setLevelIn) (*struct{ Body store.Environment }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		if err := s.Store.SetSecurityLevel(ctx, in.Env, in.Body.Level); err != nil {
+			return nil, apiError(err)
+		}
+		e, err := s.Store.Environment(ctx, in.Env)
+		return &struct{ Body store.Environment }{e}, apiError(err)
+	})
+
+	type setTeammateLevelIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Teammate ID"`
+		Body struct {
+			Level string `json:"level" doc:"The level of the teammate's sandboxes, one of locked, guarded, assisted or open; empty hands the teammate back to the environment's level"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setTeammateSecurityLevel", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{id}/security-level", Tags: []string{"network"},
+		Description: "Overrides the environment's security level for one teammate's sandboxes, or clears the override.",
+	}, func(ctx context.Context, in *setTeammateLevelIn) (*struct{ Body store.Teammate }, error) {
+		if in.Body.Level != "" && !slices.Contains(store.Levels, in.Body.Level) {
+			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("%q is not a security level", in.Body.Level))
+		}
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		t, err := s.Store.SetTeammateSecurityLevel(ctx, in.Env, in.ID, in.Body.Level)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{t}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getCurated", Method: http.MethodGet, Path: "/api/environments/{env}/curated", Tags: []string{"network"},
+		Description: "The curated list of development infrastructure, shipped with Studio, and the entries this environment turned off.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body curatedView }, error) {
+		v, err := s.curated(ctx, in.Env)
+		return &struct{ Body curatedView }{v}, err
+	})
+
+	type setCuratedIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Disabled []string `json:"disabled" maxItems:"64" doc:"The IDs of the curated entries this environment turns off. The whole list, which replaces the current one"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setCurated", Method: http.MethodPut, Path: "/api/environments/{env}/curated", Tags: []string{"network"},
+		Description: "Turns curated entries off or on for the environment. A turned-off entry is asked about like any other host.",
+	}, func(ctx context.Context, in *setCuratedIn) (*struct{ Body curatedView }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		_, entries := policy.CuratedList()
+		off := []string{}
+		for _, id := range in.Body.Disabled {
+			if !slices.ContainsFunc(entries, func(e policy.CuratedEntry) bool { return e.ID == id }) {
+				return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("%q is not an entry of the curated list", id))
+			}
+			if !slices.Contains(off, id) {
+				off = append(off, id)
+			}
+		}
+		slices.Sort(off)
+		if err := s.Store.SetCuratedOff(ctx, in.Env, off); err != nil {
+			return nil, apiError(err)
+		}
+		v, err := s.curated(ctx, in.Env)
+		return &struct{ Body curatedView }{v}, err
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "listConnections", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/connections", Tags: []string{"network"},
 		Description: "The sandbox's most recent connections, newest first. The log is kept in memory only.",
@@ -595,6 +705,53 @@ func (s *Server) registerNetwork(api huma.API) {
 		}
 		return &struct{ Body []gateway.Conn }{s.Conns.List(in.ID)}, nil
 	})
+}
+
+// reviewerView says whether the AI reviewer of the assisted level can answer, and with which model.
+type reviewerView struct {
+	Available bool   `json:"available" doc:"Whether the assisted level asks the AI reviewer; without a utility model it asks the user, as guarded does"`
+	Provider  string `json:"provider,omitempty" doc:"The provider whose utility model answers"`
+	Model     string `json:"model,omitempty" doc:"The utility model that answers"`
+}
+
+func (s *Server) reviewer(ctx context.Context, env string) (reviewerView, error) {
+	prov, ok, err := agentmem.EnvironmentUtility(ctx, s.Store, env)
+	if err != nil {
+		return reviewerView{}, err
+	}
+	if !ok {
+		return reviewerView{}, nil
+	}
+	m, _ := agentmem.UtilityFor(prov)
+	return reviewerView{Available: true, Provider: prov.Name, Model: m.Model}, nil
+}
+
+// curatedView is the curated list, with the environment's switch for each entry.
+type curatedView struct {
+	Version string             `json:"version" doc:"The version of the curated list"`
+	Entries []curatedEntryView `json:"entries"`
+}
+
+type curatedEntryView struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Group   string   `json:"group"`
+	Hosts   []string `json:"hosts"`
+	Ports   []int    `json:"ports"`
+	Enabled bool     `json:"enabled" doc:"Whether the guarded and assisted levels allow the entry's hosts"`
+}
+
+func (s *Server) curated(ctx context.Context, env string) (curatedView, error) {
+	e, err := s.Store.Environment(ctx, env)
+	if err != nil {
+		return curatedView{}, apiError(err)
+	}
+	version, entries := policy.CuratedList()
+	v := curatedView{Version: version, Entries: make([]curatedEntryView, 0, len(entries))}
+	for _, c := range entries {
+		v.Entries = append(v.Entries, curatedEntryView{ID: c.ID, Name: c.Name, Group: c.Group, Hosts: c.Hosts, Ports: c.Ports, Enabled: !slices.Contains(e.CuratedOff, c.ID)})
+	}
+	return v, nil
 }
 
 // trackersView is the built-in tracker list and the environment's switch for it.

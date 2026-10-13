@@ -521,3 +521,38 @@ func TestMigrateMemoryConsolidation(t *testing.T) {
 		t.Fatal("unknown verdict accepted")
 	}
 }
+
+// Migration 030 makes existing environments locked, which is what Studio did before levels, and
+// new ones guarded. Existing approvals are not reverted.
+func TestMigrateSecurityLevels(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 29); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	var level, off string
+	if err := db.QueryRowContext(ctx, "SELECT security_level, curated_off FROM environments WHERE id = 'env'").Scan(&level, &off); err != nil || level != LevelLocked || off != "[]" {
+		t.Fatalf("existing environment: level %q, curated %q: %v", level, off, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO environments (id, name, created_at) VALUES ('new', 'New', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT security_level FROM environments WHERE id = 'new'").Scan(&level); err != nil || level != LevelGuarded {
+		t.Fatalf("new environment: level %q: %v", level, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE environments SET security_level = 'paranoid' WHERE id = 'env'`); err == nil {
+		t.Error("an unknown level accepted")
+	}
+}

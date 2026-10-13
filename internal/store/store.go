@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/base32"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -163,12 +164,31 @@ type Environment struct {
 	CreatedAt time.Time `json:"createdAt"`
 	// BlockTrackers: the browser VMs' requests to the tracker list are denied (docs/network.md).
 	BlockTrackers bool `json:"blockTrackers"`
+	// SecurityLevel decides what happens to a request no rule covers (docs/network.md).
+	SecurityLevel string `json:"securityLevel" enum:"locked,guarded,assisted,open" doc:"What happens when no rule matches: locked asks, guarded allows the curated list and asks, assisted also asks an AI reviewer, open allows public addresses"`
+	// CuratedOff lists the curated list entries the environment turned off.
+	CuratedOff []string `json:"curatedOff" doc:"IDs of the curated list entries turned off in this environment"`
 }
 
-// CreateEnvironment inserts an environment.
+// environmentCols selects an environment; scanEnvironment reads them in this order.
+const environmentCols = "id, name, created_at, block_trackers, security_level, curated_off"
+
+func scanEnvironment(row interface{ Scan(...any) error }) (Environment, error) {
+	var e Environment
+	var created int64
+	var off string
+	if err := row.Scan(&e.ID, &e.Name, &created, &e.BlockTrackers, &e.SecurityLevel, &off); err != nil {
+		return e, err
+	}
+	e.CreatedAt = time.Unix(created, 0)
+	e.CuratedOff = []string{}
+	return e, json.Unmarshal([]byte(off), &e.CuratedOff)
+}
+
+// CreateEnvironment inserts an environment, which starts at the guarded level.
 func (s *Store) CreateEnvironment(ctx context.Context, name string) (Environment, error) {
-	e := Environment{ID: NewID(), Name: name, CreatedAt: time.Unix(now(), 0), BlockTrackers: true}
-	_, err := s.db.ExecContext(ctx, "INSERT INTO environments (id, name, created_at) VALUES (?, ?, ?)", e.ID, e.Name, e.CreatedAt.Unix())
+	e := Environment{ID: NewID(), Name: name, CreatedAt: time.Unix(now(), 0), BlockTrackers: true, SecurityLevel: LevelGuarded, CuratedOff: []string{}}
+	_, err := s.db.ExecContext(ctx, "INSERT INTO environments (id, name, created_at, security_level) VALUES (?, ?, ?, ?)", e.ID, e.Name, e.CreatedAt.Unix(), e.SecurityLevel)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return e, fmt.Errorf("an environment named %q: %w", name, ErrExists)
 	}
@@ -177,19 +197,17 @@ func (s *Store) CreateEnvironment(ctx context.Context, name string) (Environment
 
 // Environments lists environments by creation time.
 func (s *Store) Environments(ctx context.Context) ([]Environment, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, created_at, block_trackers FROM environments ORDER BY created_at, name")
+	rows, err := s.db.QueryContext(ctx, "SELECT "+environmentCols+" FROM environments ORDER BY created_at, name")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []Environment{}
 	for rows.Next() {
-		var e Environment
-		var created int64
-		if err := rows.Scan(&e.ID, &e.Name, &created, &e.BlockTrackers); err != nil {
+		e, err := scanEnvironment(rows)
+		if err != nil {
 			return nil, err
 		}
-		e.CreatedAt = time.Unix(created, 0)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -197,13 +215,10 @@ func (s *Store) Environments(ctx context.Context) ([]Environment, error) {
 
 // Environment returns one environment.
 func (s *Store) Environment(ctx context.Context, id string) (Environment, error) {
-	var e Environment
-	var created int64
-	err := s.db.QueryRowContext(ctx, "SELECT id, name, created_at, block_trackers FROM environments WHERE id = ?", id).Scan(&e.ID, &e.Name, &created, &e.BlockTrackers)
+	e, err := scanEnvironment(s.db.QueryRowContext(ctx, "SELECT "+environmentCols+" FROM environments WHERE id = ?", id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, ErrNotFound
 	}
-	e.CreatedAt = time.Unix(created, 0)
 	return e, err
 }
 

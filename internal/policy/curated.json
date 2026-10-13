@@ -1,0 +1,27 @@
+{
+  "version": "2026.10.1",
+  "entries": [
+    {"id": "npm", "name": "npm registry", "group": "Package registries", "hosts": ["registry.npmjs.org"], "ports": [443]},
+    {"id": "pypi", "name": "PyPI", "group": "Package registries", "hosts": ["pypi.org", "files.pythonhosted.org"], "ports": [443]},
+    {"id": "go-modules", "name": "Go module proxy and checksum database", "group": "Package registries", "hosts": ["proxy.golang.org", "sum.golang.org"], "ports": [443]},
+    {"id": "crates", "name": "crates.io", "group": "Package registries", "hosts": ["crates.io", "index.crates.io", "static.crates.io"], "ports": [443]},
+    {"id": "rubygems", "name": "RubyGems", "group": "Package registries", "hosts": ["rubygems.org", "index.rubygems.org"], "ports": [443]},
+    {"id": "maven", "name": "Maven Central", "group": "Package registries", "hosts": ["repo.maven.apache.org", "repo1.maven.org"], "ports": [443]},
+    {"id": "nuget", "name": "NuGet", "group": "Package registries", "hosts": ["api.nuget.org", "globalcdn.nuget.org"], "ports": [443]},
+    {"id": "debian", "name": "Debian archives", "group": "Package registries", "hosts": ["deb.debian.org", "security.debian.org"], "ports": [80, 443]},
+    {"id": "ubuntu", "name": "Ubuntu archives", "group": "Package registries", "hosts": ["archive.ubuntu.com", "security.ubuntu.com"], "ports": [80, 443]},
+    {"id": "alpine", "name": "Alpine packages", "group": "Package registries", "hosts": ["dl-cdn.alpinelinux.org"], "ports": [80, 443]},
+    {"id": "nodejs", "name": "Node.js downloads", "group": "Toolchains", "hosts": ["nodejs.org"], "ports": [443]},
+    {"id": "go-downloads", "name": "Go downloads", "group": "Toolchains", "hosts": ["go.dev", "dl.google.com"], "ports": [443]},
+    {"id": "rust", "name": "Rust toolchains", "group": "Toolchains", "hosts": ["static.rust-lang.org"], "ports": [443]},
+    {"id": "github-releases", "name": "GitHub release downloads", "group": "Toolchains", "hosts": ["objects.githubusercontent.com", "release-assets.githubusercontent.com"], "ports": [443]},
+    {"id": "docker-hub", "name": "Docker Hub", "group": "Container registries", "hosts": ["registry-1.docker.io", "auth.docker.io", "production.cloudflare.docker.com"], "ports": [443]},
+    {"id": "ghcr", "name": "GitHub Container Registry", "group": "Container registries", "hosts": ["ghcr.io", "pkg-containers.githubusercontent.com"], "ports": [443]},
+    {"id": "quay", "name": "Quay", "group": "Container registries", "hosts": ["quay.io"], "ports": [443]},
+    {"id": "github", "name": "GitHub (read access)", "group": "Forge read access", "hosts": ["github.com", "codeload.github.com", "raw.githubusercontent.com"], "ports": [443]},
+    {"id": "gitlab", "name": "GitLab (read access)", "group": "Forge read access", "hosts": ["gitlab.com"], "ports": [443]},
+    {"id": "jsdelivr", "name": "jsDelivr", "group": "CDNs", "hosts": ["cdn.jsdelivr.net"], "ports": [443]},
+    {"id": "unpkg", "name": "unpkg", "group": "CDNs", "hosts": ["unpkg.com"], "ports": [443]},
+    {"id": "cdnjs", "name": "cdnjs", "group": "CDNs", "hosts": ["cdnjs.cloudflare.com"], "ports": [443]}
+  ]
+}

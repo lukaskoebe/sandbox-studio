@@ -1,7 +1,6 @@
 # Sandbox Studio — Plan
 
-Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 is approved and in progress, with the
-v2 backlog below. C2 (terminal UI) is a concept awaiting D7 and D8.
+Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 is built, with the v2 backlog below. C2 (terminal UI) is a concept awaiting D7 and D8.
 
 The v2 plan is implemented (v0.1.0 and v0.1.1). How it works now is in the
 [developer documentation](docs/README.md). This plan covers the next round, driven by user
@@ -21,7 +20,7 @@ on before anything is built.
 | D2 | Resizable panels: shadcn `Resizable` or our own splitter | Our own splitter as a shared component, no new dependency |
 | D3 | Visual direction for the redesign (N4) | A, "Workbench" (2026-10-13), with the accent colors toned down slightly |
 | D4 | Default teammate | "Iris", generalist engineer: curious, careful and direct; short soul |
-| D5 | Network security levels (Concept C1) | Approved as written (2026-10-13); built in the order the concept gives |
+| D5 | Network security levels (Concept C1) | Approved as written (2026-10-13); built in the order the concept gives, all four items done |
 | D6 | Host ssh-agent by default (reverses "never use the host agent") | Approved. When signing waits on a host confirmation (hardware key, password manager), show a dismissible hint to set up a dedicated Studio key |
 | D7 | Terminal UI library (Concept C2) | Open: Bubble Tea v2 + Lip Gloss + Bubbles recommended |
 | D8 | Should plain `studio` open the TUI when a server already runs? (Concept C2) | Open: no recommended, `studio tui` only |
@@ -175,7 +174,7 @@ getting louder.
     4. Teammate: the default teammate prefilled, so one click accepts it.
     5. Git: detect the host SSH agent and the repository you want to work on (N6). Skip
        keeps git local.
-    6. Network level (C1, once built; until then a short explanation of approvals).
+    6. Network level (C1): one sentence per level, with the default Guarded; change it later in Network.
     7. First sandbox: created with live progress, then you land in its chat or terminal.
   - Progress is stored server-side (`settings` key `setup.v1`).
   - Home shows a checklist card until setup is complete or dismissed.
@@ -360,9 +359,10 @@ Allow all for this site, Review individually, or Deny. This replaces "+4 more".
 
 **Order once agreed.** Grouped approvals and rule hygiene first (no new risk). Then
 site-scoped browsing with the tracker list. Then the levels with the curated list, and
-Assisted last. Items 3 and 4 are done: grouped approvals and rule hygiene, with allow-once
-and deny-once. Item 2 is done too: a browser's requests are decided one at a time, with site
-approvals and the tracker list.
+Assisted last. All four items are done: grouped approvals and rule hygiene, with allow-once
+and deny-once; a browser's requests decided one at a time, with site approvals and the tracker
+list; the security levels with the curated list; and the Assisted level's AI reviewer, with
+revert. The details are in [network](docs/network.md#security-levels).
 
 ## C2 — Terminal UI (Concept)
 

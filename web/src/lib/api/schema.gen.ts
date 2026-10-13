@@ -89,6 +89,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/approvals/{id}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Undoes a decision the AI reviewer made: its rule is deleted, and the request is asked about from then on. Other decisions can't be reverted. */
+        post: operations["revertApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/builds": {
         parameters: {
             query?: never;
@@ -317,6 +334,24 @@ export interface paths {
         put?: never;
         /** @description Puts the sandbox's workspace back as it was before the turn, undoing it and every later turn (.git and ignored files stay). The turns get undoneAt and the next prompt tells the agent. 409 while a turn runs, in the terminal, and for turns that aren't undoable. */
         post: operations["undoTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/curated": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The curated list of development infrastructure, shipped with Studio, and the entries this environment turned off. */
+        get: operations["getCurated"];
+        /** @description Turns curated entries off or on for the environment. A turned-off entry is asked about like any other host. */
+        put: operations["setCurated"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -955,6 +990,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/reviewer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Whether the assisted level can ask an AI reviewer: the environment needs a provider whose utility model can be called. */
+        get: operations["getReviewer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/rules": {
         parameters: {
             query?: never;
@@ -1497,6 +1549,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/security-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets the environment's security level. It applies to the connections made after the change; approvals already waiting stay as they are. Teammates can override it. */
+        put: operations["setSecurityLevel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates": {
         parameters: {
             query?: never;
@@ -1541,6 +1610,23 @@ export interface paths {
         put?: never;
         /** @description Creates a copy of the teammate in another environment, with its name (a number is added if taken), role, avatar, soul, harness, model, git identity and approval scope. The copy uses the target environment's provider of the same kind, preferring one with the same name; without one it has no provider until one is chosen. Sandboxes, chats, memory, secrets and provider keys are not copied. */
         post: operations["copyTeammate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{id}/security-level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Overrides the environment's security level for one teammate's sandboxes, or clears the override. */
+        put: operations["setTeammateSecurityLevel"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1967,6 +2053,8 @@ export interface components {
             network?: components["schemas"]["NetworkRequest"];
             /** @description Set when a network request was decided for its one connection, without a rule */
             once?: boolean;
+            /** @description Set when the user undid an AI reviewer's decision and its rule was deleted */
+            reverted?: boolean;
             ruleId?: string;
             sandboxId?: string;
             /** @enum {string} */
@@ -2399,6 +2487,20 @@ export interface components {
             teammateName: string;
             url: string;
         };
+        CuratedEntryView: {
+            /** @description Whether the guarded and assisted levels allow the entry's hosts */
+            enabled: boolean;
+            group: string;
+            hosts: string[] | null;
+            id: string;
+            name: string;
+            ports: number[] | null;
+        };
+        CuratedView: {
+            entries: components["schemas"]["CuratedEntryView"][] | null;
+            /** @description The version of the curated list */
+            version: string;
+        };
         DecideInBody: {
             /**
              * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
@@ -2549,8 +2651,15 @@ export interface components {
             blockTrackers: boolean;
             /** Format: date-time */
             createdAt: string;
+            /** @description IDs of the curated list entries turned off in this environment */
+            curatedOff: string[] | null;
             id: string;
             name: string;
+            /**
+             * @description What happens when no rule matches: locked asks, guarded allows the curated list and asks, assisted also asks an AI reviewer, open allows public addresses
+             * @enum {string}
+             */
+            securityLevel: "locked" | "guarded" | "assisted" | "open";
         };
         EnvironmentFile: {
             /** Format: date-time */
@@ -3133,6 +3242,11 @@ export interface components {
             url: string;
         };
         NetworkRequest: {
+            /**
+             * @description How the request was decided without asking; empty when the user decided it
+             * @enum {string}
+             */
+            decided?: "open" | "curated" | "reviewer";
             host: string;
             /** @description Origin of the Referer header, as the browser sent it; shown, never trusted */
             initiator?: string;
@@ -3146,6 +3260,8 @@ export interface components {
             patterns: string[] | null;
             /** Format: int64 */
             port: number;
+            /** @description The curated entry, or the reviewer's reason */
+            reason?: string;
             sandboxName: string;
             /** @description The top-level site the request belongs to: the navigation's own, or the browser's page */
             site?: string;
@@ -3509,6 +3625,14 @@ export interface components {
             /** Format: int64 */
             workspaceMiB: number;
         };
+        ReviewerView: {
+            /** @description Whether the assisted level asks the AI reviewer; without a utility model it asks the user, as guarded does */
+            available: boolean;
+            /** @description The utility model that answers */
+            model?: string;
+            /** @description The provider whose utility model answers */
+            provider?: string;
+        };
         Rule: {
             /** @enum {string} */
             action: "allow" | "proxy" | "caddy" | "deny";
@@ -3677,9 +3801,24 @@ export interface components {
             /** Format: int64 */
             writes: number;
         };
+        SetCuratedInBody: {
+            /** @description The IDs of the curated entries this environment turns off. The whole list, which replaces the current one */
+            disabled: string[] | null;
+        };
+        SetLevelInBody: {
+            /**
+             * @description What happens when no rule matches: locked asks, guarded allows the curated list and asks, assisted also asks an AI reviewer, open allows public addresses
+             * @enum {string}
+             */
+            level: "locked" | "guarded" | "assisted" | "open";
+        };
         SetPrivateHostsInBody: {
             /** @description The whole list, which replaces the current one */
             hosts: components["schemas"]["PrivateHostInput"][] | null;
+        };
+        SetTeammateLevelInBody: {
+            /** @description The level of the teammate's sandboxes, one of locked, guarded, assisted or open; empty hands the teammate back to the environment's level */
+            level: string;
         };
         SetTrackersInBody: {
             /** @description Deny the listed domains to the environment's browsers unless a rule allows them */
@@ -3810,6 +3949,11 @@ export interface components {
             /** @description Empty while a copied teammate has no provider of its kind in this environment */
             providerId: string;
             role: string;
+            /**
+             * @description The network security level of this teammate's sandboxes; empty means the environment's
+             * @enum {string}
+             */
+            securityLevel: "" | "locked" | "guarded" | "assisted" | "open";
             /** @description Personality and working rules, as markdown */
             soul: string;
             /** Format: date-time */
@@ -4335,6 +4479,40 @@ export interface operations {
                 "application/json": components["schemas"]["DecideInBody"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    revertApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -4895,6 +5073,74 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getCurated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratedView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setCurated: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCuratedInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratedView"];
+                };
             };
             /** @description Error */
             default: {
@@ -6540,6 +6786,38 @@ export interface operations {
             };
         };
     };
+    getReviewer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewerView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listRules: {
         parameters: {
             query?: never;
@@ -8020,6 +8298,42 @@ export interface operations {
             };
         };
     };
+    setSecurityLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLevelInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environment"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listTeammates: {
         parameters: {
             query?: never;
@@ -8212,6 +8526,44 @@ export interface operations {
         responses: {
             /** @description Created */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setTeammateSecurityLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTeammateLevelInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

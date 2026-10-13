@@ -29,6 +29,17 @@ its approval kinds with a decide function, and the API hands the decision to the
   request. `allow_once` and `deny_once` answer only the connections held for the request, with
   no rule; the approval then has `once: true`. Git approvals take an optional `note`;
   `browser.action` takes `remember` to allow or deny the action on that origin from now on.
+- `POST /api/environments/{env}/approvals/{id}/revert` undoes a decision of the AI reviewer. Other
+  decisions can't be reverted, and a reviewer's decision only once.
+
+## Decided without asking
+
+A network request that a security level or the curated list allowed, and the AI reviewer's
+decisions, are decided approvals too, so Activity lists them. The `network.decided` field of the
+payload says how: `open`, `curated` or `reviewer`. `network.reason` holds the curated entry's name or
+the reviewer's reason. A reviewer's allow or deny has the `ruleId` of the rule it made. Revert deletes
+that rule, sets `reverted`, and asks about the request from then on (see
+[network](network.md#ai-reviewer-assisted)).
 
 ## Network approval cards
 

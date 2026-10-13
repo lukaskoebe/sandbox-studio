@@ -73,6 +73,9 @@ type Request struct {
 	// RulesOnly decides by the rules alone: nothing is asked, and ErrUndecided means no rule
 	// covers the request.
 	RulesOnly bool
+	// Placeholder is set for a request on a terminated connection that carries the placeholder of
+	// a secret the host isn't bound to. No security level allows such a request (see level.go).
+	Placeholder bool
 	// HTTP is the request, for a request on a terminated connection; nil for a connection.
 	HTTP *HTTPRequest
 }
@@ -100,6 +103,12 @@ type NetworkRequest struct {
 	PathPattern string `json:"pathPattern,omitempty"`
 	// Tracker is set for a request of a browser denied because its host is on the tracker list.
 	Tracker bool `json:"tracker,omitempty"`
+	// Decided says how a request that no rule covers was decided without asking: "open" (the
+	// security level Open), "curated" (the curated list) or "reviewer" (the AI reviewer). Empty
+	// means the user decided it.
+	Decided string `json:"decided,omitempty" enum:"open,curated,reviewer" doc:"How the request was decided without asking; empty when the user decided it"`
+	// Reason is what the list entry or the reviewer says about the decision.
+	Reason string `json:"reason,omitempty" doc:"The curated entry, or the reviewer's reason"`
 }
 
 // Browsers is what the policy asks of teammates' browsers (internal/browser).
@@ -126,11 +135,16 @@ type Engine struct {
 
 	// Browsers, if set, tells which page a browser's requests belong to.
 	Browsers Browsers
+	// Reviewer, if set, decides the requests no rule covers at the assisted level (reviewer.go).
+	Reviewer Reviewer
 
 	mu    sync.Mutex
 	rules map[string][]store.Rule  // per environment, loaded on demand
 	wake  map[string]chan struct{} // closed when an environment's rules or approvals change
 	hits  map[string]ruleHits      // connections rules decided, not yet written to the store
+
+	reviewMu sync.Mutex
+	reviews  map[string]*question // the reviewer's questions this session, by reviewKey
 }
 
 // ruleHits are the connections one rule decided since the hits were last written.
@@ -164,7 +178,13 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		return store.Rule{}, ErrPerRequest
 	}
 	host := Normalize(req.Host)
-	kind, subject, payload := e.approvalOf(ctx, req, host, teammate)
+	if r, ok, err := e.byLevel(ctx, req, teammate, host); err != nil {
+		return store.Rule{}, err
+	} else if ok {
+		return r, nil
+	}
+	kind, subject, n := e.approvalOf(ctx, req, host, teammate)
+	payload, _ := json.Marshal(n)
 	a, _, err := e.Store.RequestApproval(ctx, store.Approval{
 		EnvironmentID: req.EnvironmentID,
 		SandboxID:     req.SandboxID,
@@ -277,8 +297,8 @@ func (e *Engine) recordTracker(ctx context.Context, req Request) {
 // approvalOf describes the approval for a request that no rule covers: its kind, its subject
 // (which repeated attempts share) and its payload. A request on a terminated connection is
 // about its top-level site: a navigation's own site, else the site of the browser's page.
-func (e *Engine) approvalOf(ctx context.Context, req Request, host, teammate string) (kind, subject string, payload []byte) {
-	n := NetworkRequest{Host: host, Port: req.Port, SandboxName: req.SandboxName, Patterns: Suggestions(host)}
+func (e *Engine) approvalOf(ctx context.Context, req Request, host, teammate string) (kind, subject string, n NetworkRequest) {
+	n = NetworkRequest{Host: host, Port: req.Port, SandboxName: req.SandboxName, Patterns: Suggestions(host)}
 	kind, subject = KindNetwork, host+":"+strconv.Itoa(req.Port)
 	if req.HTTP != nil {
 		kind, n.HTTPRequest = KindRequest, *req.HTTP
@@ -290,8 +310,7 @@ func (e *Engine) approvalOf(ctx context.Context, req Request, host, teammate str
 			subject += " " + n.Site
 		}
 	}
-	payload, _ = json.Marshal(n)
-	return kind, subject, payload
+	return kind, subject, n
 }
 
 // onceAnswer is what a held connection gets when its request is no longer pending without a

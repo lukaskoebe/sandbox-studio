@@ -270,15 +270,18 @@ type Teammate struct {
 	GitEmail        string    `json:"gitEmail"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
+	// SecurityLevel overrides the environment's network security level for this teammate's
+	// sandboxes; empty means the environment's.
+	SecurityLevel string `json:"securityLevel" enum:",locked,guarded,assisted,open" doc:"The network security level of this teammate's sandboxes; empty means the environment's"`
 }
 
 // teammateCols selects a teammate; provider_id reads as "" for a teammate without a provider.
-const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at"
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
 	var created, updated int64
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated)
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel)
 	p.CreatedAt, p.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return p, err
 }
@@ -313,6 +316,19 @@ func insertTeammate(ctx context.Context, q execer, p Teammate, t int64) error {
 		provider_id, model, git_name, git_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, t, t)
 	return err
+}
+
+// SetTeammateSecurityLevel sets a teammate's security level override; "" hands the teammate back
+// to the environment's level.
+func (s *Store) SetTeammateSecurityLevel(ctx context.Context, envID, id, level string) (Teammate, error) {
+	res, err := s.db.ExecContext(ctx, "UPDATE teammates SET security_level = ?, updated_at = ? WHERE environment_id = ? AND id = ?", level, now(), envID, id)
+	if err != nil {
+		return Teammate{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Teammate{}, ErrNotFound
+	}
+	return s.Teammate(ctx, envID, id)
 }
 
 // SetApprovalPattern remembers the host pattern level a teammate's approval was decided with.

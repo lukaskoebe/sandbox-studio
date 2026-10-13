@@ -23,6 +23,8 @@
 | 2026-10-10 | Studio's own services are virtual hosts under `*.studio.internal` (S2) |
 | 2026-10-11 | Personas renamed to teammates (migration 018) |
 | 2026-10-11 | Chats: harnesses driven over ACP alongside the terminal TUI ([design](design/chat-mode.md)) |
+| 2026-10-13 | Network security levels (C1): locked, guarded (default for new environments), assisted and open decide what no rule covers, per environment with a teammate override; existing environments migrate to locked |
+| 2026-10-13 | The curated list of development infrastructure ships as data and is allowed by guarded and up; assisted asks an AI reviewer on the environment's utility model, whose allows and denies expire after a day and can be reverted |
 
 ## From v1
 

@@ -13,7 +13,28 @@ You can allow or deny the request, or add a rule with a wider scope. Studio hold
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
-The Network page has three tabs. **Rules** lists your rules, grouped by domain, with search and filters for scope and action. **Requests** lists the connections waiting for your decision, and **Activity** lists the ones you already decided. To see which hosts one sandbox reached, open its **Connections** panel.
+The Network page has three tabs. **Rules** sets the security level, lists your rules, grouped by domain, with search and filters for scope and action, and lists the curated hosts. **Requests** lists the connections waiting for your decision, and **Activity** lists the ones you already decided. To see which hosts one sandbox reached, open its **Connections** panel.
+
+## Security levels
+
+Each environment has a security level, set on the Network page's **Rules** tab. It decides what happens when no rule matches a host. Rules always win, whichever way they allow or deny.
+
+| Level | When no rule matches |
+| --- | --- |
+| **Locked** | Ask for every host. |
+| **Guarded** | Allow the curated hosts (see below) and ask for the rest. New environments start here. |
+| **Assisted** | Allow the curated hosts. An AI reviewer decides the rest, and asks you when it is unsure. |
+| **Open** | Allow public hosts and log them in Activity. Deny rules and the tracker list still apply. |
+
+A teammate can have its own level, and **Environment default** follows the environment's. Environments that existed before levels were introduced are Locked, so nothing opens up on upgrade. At every level, a secret reaches only the hosts it is bound to, and a level never allows a private address.
+
+## The curated list
+
+The **Rules** tab lists the development hosts Studio allows at Guarded, Assisted and Open: package registries, toolchain downloads, container registries, read access to code forges, and content delivery networks. Each entry has a switch. Switch an entry off for an environment, and its hosts ask you like any other.
+
+## Assisted and the AI reviewer
+
+At Assisted, a host that no rule and no curated entry covers goes to an AI reviewer first. The reviewer answers from the host, the port, the page a browser request belongs to, and the sandbox's last prompt. It never sees secrets, request bodies, or secret placeholders. Its allow or deny lasts a day and appears in **Activity**, with a **Revert** that undoes it. Without a provider that has a utility model, Assisted asks you like Guarded does.
 
 ## Add a rule
 

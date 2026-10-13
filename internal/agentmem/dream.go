@@ -655,7 +655,20 @@ type SharedJudge struct {
 // record when a teammate's provider was set, so that is the oldest teammate (created first,
 // then the lowest ID). ok is false when no teammate has a utility model.
 func (s *Service) sharedJudge(ctx context.Context, env string) (p store.Teammate, prov store.Provider, ok bool, err error) {
-	teammates, err := s.Store.Teammates(ctx, env)
+	return judgeOf(ctx, s.Store, env)
+}
+
+// EnvironmentUtility returns the provider whose utility model serves an environment's shared work,
+// and the network reviewer (docs/network.md): the one sharedJudge picks. ok is false when no
+// teammate's provider has a utility model.
+func EnvironmentUtility(ctx context.Context, st *store.Store, env string) (prov store.Provider, ok bool, err error) {
+	_, prov, ok, err = judgeOf(ctx, st, env)
+	return prov, ok, err
+}
+
+// judgeOf is sharedJudge without the service.
+func judgeOf(ctx context.Context, st *store.Store, env string) (p store.Teammate, prov store.Provider, ok bool, err error) {
+	teammates, err := st.Teammates(ctx, env)
 	if err != nil {
 		return p, prov, false, err
 	}
@@ -666,7 +679,7 @@ func (s *Service) sharedJudge(ctx context.Context, env string) (p store.Teammate
 		return strings.Compare(a.ID, b.ID)
 	})
 	for _, p = range teammates {
-		if prov, err = s.Store.Provider(ctx, env, p.ProviderID); errors.Is(err, store.ErrNotFound) {
+		if prov, err = st.Provider(ctx, env, p.ProviderID); errors.Is(err, store.ErrNotFound) {
 			continue
 		} else if err != nil {
 			return p, prov, false, err

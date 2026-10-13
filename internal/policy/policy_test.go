@@ -86,6 +86,10 @@ func newEngine(t *testing.T) (*Engine, store.Environment, store.Sandbox) {
 func TestHoldAndApprove(t *testing.T) {
 	ctx := context.Background()
 	e, env, sb := newEngine(t)
+	// Guarded would allow the curated host below; the test is about the approval of an unlisted one.
+	if err := e.Store.SetSecurityLevel(ctx, env.ID, store.LevelLocked); err != nil {
+		t.Fatal(err)
+	}
 	sub, cancel := e.Bus.Subscribe()
 	defer cancel()
 

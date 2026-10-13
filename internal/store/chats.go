@@ -465,3 +465,24 @@ func nullBytes(b []byte) any {
 	}
 	return b
 }
+
+// LastUserPrompt returns the text of the newest prompt a sandbox's chats received, which is what
+// its current task is: "" if none was sent. The network reviewer reads it (docs/network.md).
+func (s *Store) LastUserPrompt(ctx context.Context, envID, sandboxID string) (string, error) {
+	var body []byte
+	err := s.db.QueryRowContext(ctx, `SELECT i.body FROM chat_items i JOIN chats c ON c.id = i.chat_id
+		WHERE c.environment_id = ? AND c.sandbox_id = ? AND i.kind = 'user' ORDER BY i.rowid DESC LIMIT 1`, envID, sandboxID).Scan(&body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var prompt struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(body, &prompt); err != nil {
+		return "", err
+	}
+	return prompt.Text, nil
+}

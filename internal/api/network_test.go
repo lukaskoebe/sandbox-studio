@@ -191,6 +191,10 @@ func TestDecideFlow(t *testing.T) {
 	ctx := context.Background()
 	h, s := newTestServer(t)
 	env := newEnvironment(t, s, "work")
+	// Guarded would allow the curated registry below without asking; this test is about the asking.
+	if err := s.Store.SetSecurityLevel(ctx, env.ID, store.LevelLocked); err != nil {
+		t.Fatal(err)
+	}
 	sb := newSandbox(t, s, env, "dev")
 	approvals := testOrigin + "/api/environments/" + env.ID + "/approvals"
 

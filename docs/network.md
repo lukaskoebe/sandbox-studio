@@ -62,9 +62,11 @@ headers to set (values may use `{secret.NAME}`) and where its requests go (see
 [proxy rule overrides](#proxy-rule-overrides)); for `caddy`, a Caddyfile snippet.
 
 A rule also records its origin: `manual` for rules written on the Rules page or through the
-API, `approval` for rules created by approving or denying a request. `curated` (the shipped
-list) and `reviewer` (the AI reviewer) are reserved for later. The origin is read-only and
-set when the rule is created; rules from before origins existed are `manual`.
+API, `approval` for rules created by approving or denying a request, and `reviewer` for a rule
+the [AI reviewer](#ai-reviewer-assisted) made. `curated` is reserved: the curated list allows
+hosts as a decision of the level, not as a rule, and Activity shows it (see
+[security levels](#security-levels)). The origin is read-only and set when the rule is created;
+rules from before origins existed are `manual`.
 
 A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
 within a minute. The approval card's Options offers "Allow for 1 hour"; the API takes
@@ -84,6 +86,8 @@ Matching (`policy/match.go`):
 - Within a scope: the most specific host pattern wins (`*.example.com` also matches
   `example.com`), then rules that name ports, then rules that name a request, then `deny` over
   `allow`.
+
+Only when no rule matches does a [security level](#security-levels) decide, and then the user.
 
 ### Request rules
 
@@ -108,7 +112,7 @@ A browser VM is denied the built-in tracker list without being asked: `internal/
 shipped with Studio and versioned. Its domains are measurement, audience, session-replay and
 ad-delivery services, in the spirit of EasyPrivacy; an entry also covers its subdomains. The
 check comes after an explicit rule (an allow rule for the host wins, a deny rule denies) and
-before any approval or site approval. The environment switch "Block trackers in the browser"
+before any approval, site approval or security level. The environment switch "Block trackers in the browser"
 (`environments.block_trackers`, on by default) turns the list off. Each denial shows in Activity
 as "Denied · tracker", one row per host with its attempts.
 
@@ -117,7 +121,9 @@ as "Denied · tracker", one row per host with its attempts.
 The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route. The private
 hosts list is edited under Settings → Network:
 
-- **Rules** lists the environment's rules, and below them the tracker list with its switch. Its search and scope, action, origin and unused
+- **Rules** starts with the environment's [security level](#security-levels), then lists the
+  rules, the [curated list](#curated-list) with a switch for each entry, and the tracker list with
+  its switch. The rules' search and scope, action, origin and unused
   filters are URL search params (`q`, `scope`, `action`, `origin`, `unused=1`), so a filtered
   view can be shared. Each rule shows its origin as a chip, and an unused rule an "unused"
   chip. Delete unused removes the unused rules the filters show, after a confirmation. Rules are grouped
@@ -125,13 +131,16 @@ hosts list is edited under Settings → Network:
   suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
 - **Requests** lists the pending network approvals (connections and browser requests); Allow, Deny and Ignore work as on the
   approval card.
-- **Activity** lists decided network approvals, newest first, up to 50.
+- **Activity** lists decided network approvals, newest first, up to 50: the ones you decided, and
+  the ones a level, the curated list or the [AI reviewer](#ai-reviewer-assisted) allowed or denied.
+  A reviewer's decision has a Revert.
 
 `/e/$env/network` opens Requests when any wait for a decision, and Rules otherwise.
 
 ## Hold and ask
 
-With no matching rule, the gateway holds the connection (the TLS ClientHello stays
+With no matching rule, and no [security level](#security-levels) allowing it, the gateway holds
+the connection (the TLS ClientHello stays
 buffered) for up to 60 s and raises a `network` approval. Repeated attempts for the same
 subject merge into one pending approval with an attempt counter.
 
@@ -170,6 +179,96 @@ requests of the page's site are approved with it.
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.
 
+## Security levels
+
+Each environment has one level, which decides what happens when no rule matches. Explicit rules
+always win, in either direction, and so do the tracker list and the sites a browser session was
+approved for, which come before the level. Each teammate can override the level for its own
+sandboxes; "Environment default" follows the environment. The level is set on the Network page's
+Rules tab, in the teammate's settings, and in the setup's network step.
+
+| Level | No rule matches → | For whom |
+| --- | --- | --- |
+| `locked` | ask for every host, as before levels | sensitive work |
+| `guarded` (default for new environments) | allow the [curated list](#curated-list); ask for the rest | most users |
+| `assisted` | allow the curated list; the [AI reviewer](#ai-reviewer-assisted) decides the rest, and asks when it is unsure | people who find prompts tiring |
+| `open` | allow public names and public addresses, and log them in Activity as "Allowed · level Open" | throwaway experiments |
+
+The decision table is `levelInput.decide` in `internal/policy/level.go`. It reads the level,
+whether the host is on the curated list, whether the request carries a placeholder of a secret the
+host isn't bound to, and whether the host is a name or a public address. The tests cover every
+combination, and the engine tests cover the level with rules, the tracker list and teammates.
+
+No level does these things:
+
+- allow a request that carries a placeholder of a secret its host isn't bound to: the request is
+  asked about, and the gateway refuses to send the placeholder's value anywhere else. The AI
+  reviewer never sees such a request. A connection the gateway doesn't terminate isn't read, so its
+  bytes pass as before: a placeholder there is only a random name that no host can turn into a
+  secret;
+- allow a private or otherwise non-public address, such as loopback, RFC 1918, carrier-grade NAT or
+  link-local. The dialer refuses them anyway, unless a [private host](#private-hosts-company-vpn)
+  names them;
+- allow a [private host](#private-hosts-company-vpn), even at `open`: the AI reviewer never sees
+  one either. Only a rule you make or an approval reaches a company host;
+- lift the tracker list for a browser VM, or an explicit deny rule;
+- send a secret to a host it isn't bound to. Secrets reach bound hosts at every level.
+
+An allow by a level or the curated list makes no rule. It is recorded in Activity, with the
+reason (the curated entry's name, or the level), and a host's repeated connections count as its
+attempts. Changing the level applies to the connections made after the change; approvals that are
+already waiting stay in the inbox.
+
+Existing environments were made `locked` by migration 030, which is what Studio did before levels,
+so an upgrade opens nothing up. New environments start at `guarded`. An environment import starts at
+`guarded` as well, since the file carries neither the level nor the curated switches. Where no
+provider has a utility model, `assisted` asks like `guarded`, and the Rules tab says so.
+
+## Curated list
+
+The curated list is development infrastructure that Studio ships as data:
+`internal/policy/curated.json`, embedded in the binary and versioned by its `version` field. It has
+package registries, toolchain downloads, container registries, forge read access and the CDNs they
+use. Each entry has a stable `id`, a name, a group, its exact host names and its ports (80 and 443
+only, and 80 only where the source needs it).
+
+The `guarded`, `assisted` and `open` levels allow an entry's hosts on its ports when no rule matches.
+The Rules tab lists the entries with a search and a switch for each one. A switched-off entry is
+asked about like any other host. An environment stores its switched-off IDs (`curated_off`, migration
+030).
+
+To propose a change, open a pull request that edits `internal/policy/curated.json`: add or change an
+entry with a stable ID, the exact host names, and only the ports its source needs; give the
+reason in the description, showing that the hosts are development infrastructure and not trackers
+or general content hosts; and bump `version` (`YYYY.M.N`). `TestCuratedListIsWellFormed` checks the
+shape of the file.
+
+## AI reviewer (assisted)
+
+At `assisted`, a request that no rule and no curated entry covers goes to an AI reviewer before the
+user is asked. The reviewer is the environment's utility model, the one the memory consolidation
+uses: of the teammates whose provider has a utility model, the one that has had it longest
+(`agentmem.EnvironmentUtility`). Without one, the request is asked about.
+
+- **What it sees:** the host and port; the method and path, for requests Studio reads (a browser
+  VM's HTTPS); the site of the page, for a browser request; and the sandbox's current task, its last
+  user prompt, cut to 500 characters. Never secrets, bodies, headers other than the ones named here,
+  or placeholders. A request that carries a placeholder is never sent: it is asked about.
+- **How it is asked:** the request is one JSON object between `<request>` and `</request>`. The
+  host, path, page and task are untrusted data, and the system prompt says so. JSON escaping keeps
+  them from closing the tags. The answer must be exactly one JSON object,
+  `{"decision": "allow" | "ask" | "deny", "reason": "..."}`, with nothing before or after it.
+  Anything else, a timeout of 8 seconds, or an error asks the user.
+- **What it decides:** an allow or a deny makes a rule of origin `reviewer` for the sandbox, the
+  host and the ports an approval would use, which expires after 24 hours. Activity shows the
+  decision and its reason, with a Revert. Reverting deletes the rule; the host is then asked about
+  for the rest of the session, and not reviewed again for that task.
+- **How often:** a question is asked once per sandbox, task and host:port for the session. Connections
+  that arrive while a question is open wait for its answer. A new prompt is a new task, so the
+  host is asked about again.
+- **Costs:** the calls go to the provider, and are not counted in the memory extraction budget.
+- **Tests** use a fake model. Nothing calls a real API in them.
+
 ## DNS-level deny
 
 A deny rule that covers every port of a name refuses the name at lookup too: the sandbox's
@@ -197,7 +296,9 @@ environment's private hosts list (Settings → Network) is the opt-in for such h
   rebinds to a private address is still blocked. An IP address is never a private host: a
   sandbox can't reach a private address by naming it.
 - The list only lifts the address restriction. The policy still decides, so a private host
-  needs an allow rule or an approval like any other host. Approvals, rules, the AI reviewer
+  needs an allow rule, an approval or a security level's allow like any other host. A level never
+  allows a private address, so a listed name is decided like any other name. Approvals, rules,
+  the AI reviewer
   and imports never add to the list. An environment file doesn't carry it, so an import
   starts without private hosts.
 - An entry is a host name or a wildcard over a domain of its own: `git.company.local` or
@@ -263,6 +364,9 @@ On intercepted connections (`intercept.go`):
 
 - placeholders are swapped for values in request headers (including Basic credentials),
   path and query, never in bodies (an upstream may store a body and hand it back);
+- a request that carries a placeholder of a secret its host isn't bound to is never allowed by a
+  [security level](#security-levels): a browser request is asked about, and the rewrite refuses
+  it either way;
 - a placeholder of a secret not bound to this host refuses the request, and so does one of a
   secret the sandbox doesn't see (another sandbox's or teammate's, or one a more specific
   secret of the same name overrides);
