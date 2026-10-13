@@ -98,6 +98,7 @@ type Service struct {
 	mu       sync.Mutex
 	bg       context.Context // lives as long as Run; sign-ins outlive their requests
 	attempts map[string]*attempt
+	idle     map[string]utilityUse // utility VMs by provider ID, for the idle stop
 }
 
 // New returns a service with the default clock and polling.
@@ -105,7 +106,7 @@ func New(st *store.Store, vault Vault, vms Machines, guest Guest, log *slog.Logg
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{Store: st, Vault: vault, VMs: vms, Guest: guest, Log: log, attempts: map[string]*attempt{}}
+	return &Service{Store: st, Vault: vault, VMs: vms, Guest: guest, Log: log, attempts: map[string]*attempt{}, idle: map[string]utilityUse{}}
 }
 
 const (

@@ -82,7 +82,9 @@ type fakeMachines struct {
 	mu      sync.Mutex
 	live    map[string]bool // name → running
 	failOn  string          // a VM name whose start fails
+	ensured []string
 	removed []string
+	stopped []string
 }
 
 func newFakeMachines() *fakeMachines { return &fakeMachines{live: map[string]bool{}} }
@@ -94,6 +96,7 @@ func (m *fakeMachines) EnsureSystem(ctx context.Context, envID, kind, name strin
 		return store.Sandbox{}, errors.New("no capacity")
 	}
 	m.live[name] = true
+	m.ensured = append(m.ensured, name)
 	return store.Sandbox{ID: "vm-" + name, EnvironmentID: envID, Kind: kind, Name: name}, nil
 }
 
@@ -109,6 +112,7 @@ func (m *fakeMachines) StopSystem(ctx context.Context, envID, kind, name string)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.live, name)
+	m.stopped = append(m.stopped, name)
 	return nil
 }
 
@@ -130,6 +134,10 @@ type fakeGuest struct {
 	runs      []string
 	written   [][]agentproto.HomeFile
 	connected map[string]bool
+	// cli is the answer to a one-shot CLI call (claude or codex), and calls records the calls.
+	cli   agentproto.RunResult
+	clErr error
+	calls []agentproto.RunRequest
 }
 
 func newFakeGuest() *fakeGuest {
@@ -173,6 +181,9 @@ func (g *fakeGuest) Run(ctx context.Context, id string, req agentproto.RunReques
 			return agentproto.RunResult{Stdout: "1\n"}, nil
 		}
 		return agentproto.RunResult{Stdout: "0\n"}, nil
+	case req.Args[0] == "claude" || req.Args[0] == "codex":
+		g.calls = append(g.calls, req)
+		return g.cli, g.clErr
 	case strings.HasPrefix(line, "cat "):
 		if content, ok := g.files[req.Args[1]]; ok {
 			return agentproto.RunResult{Stdout: content}, nil

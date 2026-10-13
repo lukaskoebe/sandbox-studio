@@ -349,7 +349,7 @@ func TestDreamWithoutUtilityModel(t *testing.T) {
 	f.mk(bob, "Bob prefers dark mode in the editor.", memory.TierUser, "", "editor", "", day(2))
 	f.mk(bob, "Bob uses vim keybindings in the editor", memory.TierUser, "", "editor", "", day(3))
 	r := f.dream(bob)
-	if r.Status != DreamDone || r.Stats.Merged != 1 || f.llm.n() != 0 || !strings.Contains(r.Note, "subscriptions") || r.Stats.Pages != 1 {
+	if r.Status != DreamDone || r.Stats.Merged != 1 || f.llm.n() != 0 || !strings.Contains(r.Note, "has no key yet") || r.Stats.Pages != 1 {
 		t.Fatalf("run %+v", r)
 	}
 	if got := f.get(keep.ID); got.SupportCount != 2 || got.Tier != memory.TierUser {

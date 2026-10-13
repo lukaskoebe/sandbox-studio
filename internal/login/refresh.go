@@ -108,7 +108,8 @@ func (s *Service) refreshCodex(ctx context.Context, l codexLogin) (codexLogin, e
 }
 
 // Run runs the service's background work until ctx ends: it removes the login VMs an earlier
-// process left, and every minute refreshes the ChatGPT logins whose access tokens expire soon.
+// process left, every minute refreshes the ChatGPT logins whose access tokens expire soon, and
+// stops the utility VMs that went idle.
 func (s *Service) Run(ctx context.Context) {
 	s.mu.Lock()
 	s.bg = ctx
@@ -122,6 +123,7 @@ func (s *Service) Run(ctx context.Context) {
 			return
 		case <-t.C:
 			s.refreshDue(ctx)
+			s.stopIdleUtility(ctx)
 		}
 	}
 }
