@@ -130,9 +130,9 @@ site-scoped approvals.
 
 A deny rule that covers every port of a name refuses the name at lookup too: the sandbox's
 lookups of it get NXDOMAIN, so tools fail at once instead of waiting on a held connection. The
-rule may be scoped to the sandbox, its teammate or the environment. A rule that names ports
-doesn't do this, since it may allow the name on other ports, and nor does a name nothing
-refuses: unknown names resolve, so that they can be approved. Connections are still checked
+rule may be scoped to the sandbox, its teammate or the environment. A name that some rule with
+ports also covers is never refused at lookup, since that rule may allow it on other ports. A
+name nothing refuses still resolves, so that it can be approved. Connections are still checked
 when they are made, so a refusal here is only the faster answer. A refused lookup goes in the
 sandbox's connection log, once a minute per name, with the rule that refused it.
 
