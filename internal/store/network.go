@@ -67,6 +67,18 @@ const (
 	OriginReviewer = "reviewer" // reserved for the AI reviewer
 )
 
+// Security levels, from the most closed to the most open (docs/network.md). They decide what
+// happens to a request that no rule covers.
+const (
+	LevelLocked   = "locked"   // ask for everything
+	LevelGuarded  = "guarded"  // allow the curated list, ask for the rest
+	LevelAssisted = "assisted" // like guarded, then an AI reviewer decides the rest
+	LevelOpen     = "open"     // allow public addresses, and log it
+)
+
+// Levels lists the security levels, from the most closed to the most open.
+var Levels = []string{LevelLocked, LevelGuarded, LevelAssisted, LevelOpen}
+
 // Rule decides what happens to connections to Host. SandboxID and TeammateID are empty for
 // rules that cover the whole environment; at most one of them is set.
 type Rule struct {
@@ -301,17 +313,18 @@ type Approval struct {
 	Status        string          `json:"status" enum:"pending,approved,denied,dismissed"`
 	RuleID        string          `json:"ruleId,omitempty"`
 	Once          bool            `json:"once,omitempty" doc:"Set when a network request was decided for its one connection, without a rule"`
+	Reverted      bool            `json:"reverted,omitempty" doc:"Set when the user undid an AI reviewer's decision and its rule was deleted"`
 	CreatedAt     time.Time       `json:"createdAt"`
 	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
-const approvalCols = "id, environment_id, IFNULL(sandbox_id, ''), kind, subject, payload, attempts, status, IFNULL(rule_id, ''), created_at, updated_at, once"
+const approvalCols = "id, environment_id, IFNULL(sandbox_id, ''), kind, subject, payload, attempts, status, IFNULL(rule_id, ''), created_at, updated_at, once, reverted"
 
 func scanApproval(row interface{ Scan(...any) error }) (Approval, error) {
 	var a Approval
 	var payload string
 	var created, updated int64
-	err := row.Scan(&a.ID, &a.EnvironmentID, &a.SandboxID, &a.Kind, &a.Subject, &payload, &a.Attempts, &a.Status, &a.RuleID, &created, &updated, &a.Once)
+	err := row.Scan(&a.ID, &a.EnvironmentID, &a.SandboxID, &a.Kind, &a.Subject, &payload, &a.Attempts, &a.Status, &a.RuleID, &created, &updated, &a.Once, &a.Reverted)
 	a.Payload = json.RawMessage(payload)
 	a.CreatedAt, a.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return a, err
@@ -527,17 +540,74 @@ func (s *Store) SetBlockTrackers(ctx context.Context, envID string, on bool) err
 // list shows it. A record of the same subject, decided the same way, counts the attempt again
 // instead of adding a row.
 func (s *Store) RecordDenied(ctx context.Context, a Approval) error {
+	_, err := s.RecordDecided(ctx, a, StatusDenied, "")
+	return err
+}
+
+// RecordDecided records a request decided without asking (a denial, or an allow by a level, the
+// curated list or the reviewer) as a decided approval with the rule it made, if any. A record of
+// the same subject, decided the same way with the same rule, counts the attempt again instead of
+// adding a row. added reports whether a row was added.
+func (s *Store) RecordDecided(ctx context.Context, a Approval, status, ruleID string) (added bool, err error) {
 	t := now()
 	res, err := s.db.ExecContext(ctx, `UPDATE approvals SET attempts = attempts + 1, updated_at = ?, decided_at = ?
-		WHERE environment_id = ? AND IFNULL(sandbox_id, '') = ? AND kind = ? AND subject = ? AND status = 'denied' AND once = 0`,
-		t, t, a.EnvironmentID, a.SandboxID, a.Kind, a.Subject)
+		WHERE environment_id = ? AND IFNULL(sandbox_id, '') = ? AND kind = ? AND subject = ? AND status = ? AND IFNULL(rule_id, '') = ?
+		AND once = 0 AND reverted = 0`,
+		t, t, a.EnvironmentID, a.SandboxID, a.Kind, a.Subject, status, ruleID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return false, nil
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO approvals (id, environment_id, sandbox_id, kind, subject, payload, status, rule_id, created_at, updated_at, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		NewID(), a.EnvironmentID, nullable(a.SandboxID), a.Kind, a.Subject, string(a.Payload), status, nullable(ruleID), t, t, t)
+	return err == nil, err
+}
+
+// RevertApproval marks a decided approval as reverted: its rule, if any, is deleted by the caller.
+// It returns ErrNotFound if the approval is not there or was reverted already.
+func (s *Store) RevertApproval(ctx context.Context, envID, id string) error {
+	t := now()
+	res, err := s.db.ExecContext(ctx, "UPDATE approvals SET reverted = 1, updated_at = ? WHERE environment_id = ? AND id = ? AND reverted = 0", t, envID, id)
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n > 0 {
-		return nil
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
 	}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO approvals (id, environment_id, sandbox_id, kind, subject, payload, status, created_at, updated_at, decided_at) VALUES (?, ?, ?, ?, ?, ?, 'denied', ?, ?, ?)",
-		NewID(), a.EnvironmentID, nullable(a.SandboxID), a.Kind, a.Subject, string(a.Payload), t, t, t)
-	return err
+	return nil
+}
+
+// --- security levels ------------------------------------------------------------------
+
+// SetSecurityLevel sets the environment's security level.
+func (s *Store) SetSecurityLevel(ctx context.Context, envID, level string) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE environments SET security_level = ? WHERE id = ?", level, envID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetCuratedOff replaces the curated list entries the environment has turned off.
+func (s *Store) SetCuratedOff(ctx context.Context, envID string, ids []string) error {
+	if ids == nil {
+		ids = []string{}
+	}
+	raw, err := json.Marshal(ids)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, "UPDATE environments SET curated_off = ? WHERE id = ?", string(raw), envID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

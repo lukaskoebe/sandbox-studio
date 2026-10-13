@@ -49,5 +49,7 @@ func (s *Store) ImportEnvironment(ctx context.Context, env Environment, provider
 			return env, err
 		}
 	}
+	// The file doesn't carry the level or the curated list: an import starts as a new environment does.
+	env.SecurityLevel, env.CuratedOff = LevelGuarded, []string{}
 	return env, tx.Commit()
 }
