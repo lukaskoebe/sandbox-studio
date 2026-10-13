@@ -341,7 +341,7 @@ func run(addr, image string, log *slog.Logger) error {
 	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
 		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats}).Register(mux)
 	mux.Handle("/", webui.Handler())
-	registerControl(mux)
+	registerControl(mux, st, engine)
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up

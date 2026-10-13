@@ -10,8 +10,10 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/e2e"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // The e2e build (`go build -tags e2e`) runs Studio against in-process fakes: no VMs, no
@@ -41,5 +43,16 @@ func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return e2e.Egress{Gat
 
 func upstreamDial() gatewayDial { return e2e.Dial }
 
-// registerControl serves the control API behind the API's login, like the rest of the API.
-func registerControl(mux *http.ServeMux) { mux.Handle(e2e.ControlPrefix, fakeRuntime.Control()) }
+// registerControl serves the control API behind the API's login, like the rest of the API. Its
+// requests are decided by the policy, as a sandbox's connections are.
+func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine) {
+	e2e.Requests = func(ctx context.Context, sandboxID, host string, port int, req policy.HTTPRequest) (store.Rule, error) {
+		sb, err := st.LookupSandbox(ctx, sandboxID)
+		if err != nil {
+			return store.Rule{}, err
+		}
+		return engine.Decide(ctx, policy.Request{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, SandboxName: sb.Name,
+			Host: host, Port: port, Browser: true, Deferred: true, HTTP: &req})
+	}
+	mux.Handle(e2e.ControlPrefix, fakeRuntime.Control())
+}

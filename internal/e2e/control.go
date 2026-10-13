@@ -6,14 +6,22 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // ControlPrefix is where the control API is served, on Studio's own loopback listener.
 const ControlPrefix = "/api/e2e/"
+
+// Requests decides a browser request of a sandbox the way the gateway does (POST
+// /api/e2e/requests). Studio sets it: the request needs no browser VM, only the policy.
+var Requests func(ctx context.Context, sandboxID, host string, port int, req policy.HTTPRequest) (store.Rule, error)
 
 // Control returns the control API, which Studio mounts under ControlPrefix on its API mux:
 // it gets the same login and Host and Origin checks as the rest of the API. It exists only
@@ -23,6 +31,9 @@ const ControlPrefix = "/api/e2e/"
 //	POST /api/e2e/sandboxes/{id}/connect  {"host": "example.com", "port": 80}: an HTTP request
 //	                                    through the gateway, in the background
 //	PUT  /api/e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
+//	POST /api/e2e/requests                {"sandboxId", "host", "port", "method", "path", "navigation",
+//	                                    "site"}: decides one browser request, as the gateway would, and
+//	                                    answers with the outcome once it is decided
 func (r *Runtime) Control() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/e2e/sandboxes/{id}", func(w http.ResponseWriter, req *http.Request) {
@@ -52,6 +63,37 @@ func (r *Runtime) Control() http.Handler {
 		}
 		g.Connect(body.Host, body.Port)
 		writeJSON(w, http.StatusAccepted, struct{}{})
+	})
+	mux.HandleFunc("POST /api/e2e/requests", func(w http.ResponseWriter, req *http.Request) {
+		if Requests == nil {
+			http.Error(w, "no policy to decide with", http.StatusNotImplemented)
+			return
+		}
+		var body struct {
+			SandboxID  string `json:"sandboxId"`
+			Host       string `json:"host"`
+			Port       int    `json:"port"`
+			Method     string `json:"method"`
+			Path       string `json:"path"`
+			Navigation bool   `json:"navigation"`
+			Site       string `json:"site"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil || body.SandboxID == "" || body.Host == "" {
+			http.Error(w, "want {sandboxId, host, port, method, path, navigation, site}", http.StatusBadRequest)
+			return
+		}
+		rq := policy.HTTPRequest{Method: body.Method, Path: body.Path, Navigation: body.Navigation, Site: body.Site}
+		rule, err := Requests(req.Context(), body.SandboxID, body.Host, body.Port, rq)
+		outcome := "allowed"
+		switch {
+		case errors.Is(err, policy.ErrDenied), errors.Is(err, policy.ErrDismissed), err == nil && rule.Action == store.ActionDeny:
+			outcome = "denied"
+		case err != nil:
+			outcome = "failed: " + err.Error()
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Outcome string `json:"outcome"`
+		}{outcome})
 	})
 	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/ports", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))
