@@ -216,7 +216,7 @@ func (s *Service) openConflicts(ctx context.Context, c caller, changes []memory.
 	}
 	var out []memory.Conflict
 	for _, cf := range all {
-		if cf.Status != "open" || !readable(cf.FactA) || !readable(cf.FactB) || !(touches(cf.FactA) || touches(cf.FactB)) {
+		if cf.Status != "open" || !readable(cf.FactA) || !readable(cf.FactB) || (!touches(cf.FactA) && !touches(cf.FactB)) {
 			continue
 		}
 		out = append(out, cf)

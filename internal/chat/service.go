@@ -541,7 +541,7 @@ func (l *live) write(r *run, changes []change) {
 	wrote := false
 	for _, c := range changes {
 		e := c.e
-		if e.saved && !(c.ended && e.dirty) {
+		if e.saved && (!c.ended || !e.dirty) {
 			continue
 		}
 		if err := l.s.save(r.turn, e); err != nil {

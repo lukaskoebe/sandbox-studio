@@ -78,7 +78,7 @@ func isHostName(s string) bool {
 			return false
 		}
 		for i := range len(label) {
-			if c := label[i]; !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			if c := label[i]; (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' && c != '_' {
 				return false
 			}
 		}

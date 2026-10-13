@@ -277,7 +277,7 @@ func ValidDigest(value string) bool {
 	}
 	for i := len(digestPrefix); i < len(value); i++ {
 		c := value[i]
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}

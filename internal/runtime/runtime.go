@@ -487,7 +487,7 @@ func ValidName(name string) error {
 		return ErrInvalidName
 	}
 	for _, r := range name {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
 			return ErrInvalidName
 		}
 	}

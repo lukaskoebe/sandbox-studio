@@ -137,7 +137,7 @@ func validPrewarmIdentity(name, token string) bool {
 	}
 	for _, value := range []string{name[len(prewarmNamePrefix):], token} {
 		for i := 0; i < len(value); i++ {
-			if !((value[i] >= '0' && value[i] <= '9') || (value[i] >= 'a' && value[i] <= 'f')) {
+			if (value[i] < '0' || value[i] > '9') && (value[i] < 'a' || value[i] > 'f') {
 				return false
 			}
 		}
@@ -353,7 +353,7 @@ func validDNSHost(host string) bool {
 		}
 		for i := 0; i < len(label); i++ {
 			c := label[i]
-			if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
 				return false
 			}
 		}
@@ -431,12 +431,6 @@ func supportedBaseLayerMediaType(mediaType string) bool {
 	default:
 		return false
 	}
-}
-
-func withPrewarmCleanupContext(ctx context.Context, cleanup func(context.Context) error) error {
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), prewarmCleanupTimeout)
-	defer cancel()
-	return cleanup(cleanupCtx)
 }
 
 func cleanupCreatedPrewarm(ctx context.Context, engine templateBaseEngine, vm prewarmVM, name, token string) error {
