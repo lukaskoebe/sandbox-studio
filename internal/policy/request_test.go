@@ -11,11 +11,11 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// fakeSites is a browser whose page is page and whose approved sites are approved.
+// fakeSites is a browser whose page is page, per teammate: each teammate's browser approves its own sites.
 type fakeSites struct {
 	mu       sync.Mutex
 	page     string
-	approved map[string]bool
+	approved map[string]map[string]bool // teammate ID -> site
 }
 
 func (f *fakeSites) TopLevel(context.Context, string, string) string {
@@ -24,19 +24,22 @@ func (f *fakeSites) TopLevel(context.Context, string, string) string {
 	return f.page
 }
 
-func (f *fakeSites) Allows(_ context.Context, _, _ string, r HTTPRequest) bool {
+func (f *fakeSites) Allows(_ context.Context, _, teammate string, r HTTPRequest) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r.Navigation {
-		return f.approved[r.Site]
+		return f.approved[teammate][r.Site]
 	}
-	return f.page != "" && f.approved[f.page]
+	return f.page != "" && f.approved[teammate][f.page]
 }
 
-func (f *fakeSites) Approve(_ context.Context, _, _, site string) {
+func (f *fakeSites) Approve(_ context.Context, _, teammate, site string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.approved[site] = true
+	if f.approved[teammate] == nil {
+		f.approved[teammate] = map[string]bool{}
+	}
+	f.approved[teammate][site] = true
 }
 
 func (f *fakeSites) setPage(page string) {
@@ -100,7 +103,7 @@ func TestDeferredConnectionIsNotHeld(t *testing.T) {
 func TestRequestApprovalNamesTheRequest(t *testing.T) {
 	ctx := context.Background()
 	e, env, sb := newEngine(t)
-	e.Browsers = &fakeSites{page: "docs.example.com", approved: map[string]bool{}}
+	e.Browsers = &fakeSites{page: "docs.example.com", approved: map[string]map[string]bool{}}
 	held := make(chan heldResult, 2)
 	hold := func(req Request) {
 		r, err := e.Decide(ctx, req)
@@ -169,31 +172,45 @@ func TestRequestApprovalNamesTheRequest(t *testing.T) {
 
 // Allowing a navigation's site for the browser session answers the navigation, and the requests
 // its page made to that site while it waited. Later requests of the page are allowed without
-// asking; a page on another site still asks, and only a navigation can be allowed for its site.
+// asking; a page on another site still asks, only a navigation can be allowed for its site, and
+// another teammate's browser approves nothing of this one's.
 func TestSiteApprovalCoversTheNavigationAndItsPage(t *testing.T) {
 	ctx := context.Background()
-	e, env, _, sb, _ := newTeammateEngine(t) // the browser's teammate owns the sandbox
-	sites := &fakeSites{page: "docs.example.com", approved: map[string]bool{}}
+	e, env, _, sb, bob := newTeammateEngine(t) // the browser's teammate owns sb; bob's teammate owns bob
+	sites := &fakeSites{page: "docs.example.com", approved: map[string]map[string]bool{}}
 	e.Browsers = sites
-	held := make(chan heldResult, 4)
-	hold := func(req Request) {
-		r, err := e.Decide(ctx, req)
+	held := make(chan heldResult, 8)
+	hold := func(sandbox string, host string, http HTTPRequest) {
+		r, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sandbox, Host: host, Port: 443, Browser: true, Deferred: true, HTTP: &http})
 		held <- heldResult{r, err}
 	}
-	request := func(host string, http HTTPRequest) Request {
-		return Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: host, Port: 443, Browser: true, Deferred: true, HTTP: &http}
-	}
 
-	go hold(request("news.example", HTTPRequest{Method: "GET", Path: "/", Navigation: true, Site: "news.example"}))
+	go hold(sb.ID, "news.example", HTTPRequest{Method: "GET", Path: "/", Navigation: true, Site: "news.example"})
 	sites.setPage("news.example")
-	go hold(request("img.news.example", HTTPRequest{Method: "GET", Path: "/a.png"}))
-	pending := waitPending(t, e, env.ID, 2)
+	go hold(sb.ID, "img.news.example", HTTPRequest{Method: "GET", Path: "/a.png"})
+	go hold(bob.ID, "img.news.example", HTTPRequest{Method: "GET", Path: "/d.png"})
+	// Three approvals are pending: the navigation, the page's request and bob's, which shares
+	// its subject with the page's.
+	var all []store.Approval
+	for deadline := time.Now().Add(5 * time.Second); len(all) < 3; {
+		if time.Now().After(deadline) {
+			t.Fatalf("pending approvals: %+v", all)
+		}
+		all, _ = e.Store.Approvals(ctx, env.ID, store.StatusPending, 10)
+		time.Sleep(time.Millisecond)
+	}
+	pending := map[string]store.Approval{}
+	for _, a := range all {
+		if a.SandboxID == sb.ID {
+			pending[a.Subject] = a
+		}
+	}
 	nav, ok := pending["news.example:443 news.example"]
 	if !ok {
 		t.Fatalf("no navigation approval: %v", pending)
 	}
 	sub, ok := pending["img.news.example:443 news.example"]
-	if !ok {
+	if !ok || sub.Kind != KindRequest {
 		t.Fatalf("no subresource approval of the page: %v", pending)
 	}
 
@@ -203,12 +220,15 @@ func TestSiteApprovalCoversTheNavigationAndItsPage(t *testing.T) {
 	if a, _ := e.Store.Approval(ctx, env.ID, nav.ID); a.Status != store.StatusApproved || a.RuleID != "" {
 		t.Errorf("site approval: %+v", a)
 	}
-	for range 2 {
+	// The navigation and the page's own request are answered; bob's request still waits.
+	answered := 0
+	for answered < 2 {
 		select {
 		case r := <-held:
 			if r.err != nil || r.rule.Action != store.ActionAllow {
 				t.Errorf("held request after the site was approved: %+v %v", r.rule, r.err)
 			}
+			answered++
 		case <-time.After(5 * time.Second):
 			t.Fatal("held requests were not answered by the site approval")
 		}
@@ -216,15 +236,13 @@ func TestSiteApprovalCoversTheNavigationAndItsPage(t *testing.T) {
 	if rules, _ := e.Store.Rules(ctx, env.ID); len(rules) != 0 {
 		t.Errorf("a site approval made rules: %+v", rules)
 	}
-	if left, _ := e.Store.Approvals(ctx, env.ID, store.StatusPending, 10); len(left) != 0 {
-		t.Errorf("still pending: %+v", left)
-	}
-	if sub.Kind != KindRequest {
-		t.Errorf("subresource approval %+v", sub)
+	left, _ := e.Store.Approvals(ctx, env.ID, store.StatusPending, 10)
+	if len(left) != 1 || left[0].SandboxID != bob.ID {
+		t.Errorf("pending after the site approval: %+v", left)
 	}
 
 	// The page is on the approved site now: its requests pass without an approval.
-	go hold(request("cdn.news.example", HTTPRequest{Method: "GET", Path: "/b.js"}))
+	go hold(sb.ID, "cdn.news.example", HTTPRequest{Method: "GET", Path: "/b.js"})
 	select {
 	case r := <-held:
 		if r.err != nil || r.rule.Action != store.ActionAllow {
@@ -236,10 +254,10 @@ func TestSiteApprovalCoversTheNavigationAndItsPage(t *testing.T) {
 
 	// A page on another site asks for its subresources, and a subresource can't be a site.
 	sites.setPage("docs.example.com")
-	go hold(request("cdn.example.net", HTTPRequest{Method: "GET", Path: "/c.js"}))
-	pending = waitPending(t, e, env.ID, 1)
-	docs := pending["cdn.example.net:443 docs.example.com"]
-	if docs.ID == "" {
+	go hold(sb.ID, "cdn.example.net", HTTPRequest{Method: "GET", Path: "/c.js"})
+	pending = waitPending(t, e, env.ID, 2)
+	docs, ok := pending["cdn.example.net:443 docs.example.com"]
+	if !ok {
 		t.Fatalf("no approval for the other page: %v", pending)
 	}
 	if _, err := e.Resolve(ctx, env.ID, docs.ID, Decision{Action: ActionAllowSite}); !errors.Is(err, ErrNotSite) {

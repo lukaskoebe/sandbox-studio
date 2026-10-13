@@ -301,6 +301,7 @@ func apiError(err error) error {
 		return huma.Error409Conflict("the sandbox is not running or still booting")
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern), errors.Is(err, policy.ErrExpired),
+		errors.Is(err, policy.ErrNotSite), errors.Is(err, policy.ErrNotRequest), errors.Is(err, policy.ErrInvalidRequest),
 		errors.Is(err, secrets.ErrInvalid), errors.Is(err, teammates.ErrInvalid), errors.Is(err, policy.ErrNoTeammate),
 		errors.Is(err, chat.ErrInvalid), errors.Is(err, chat.ErrInvalidAnswer), errors.Is(err, chat.ErrInvalidDecision):
 		return huma.Error422UnprocessableEntity(err.Error())

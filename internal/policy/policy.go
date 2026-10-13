@@ -457,9 +457,13 @@ func (e *Engine) decideSite(ctx context.Context, a store.Approval) (store.Approv
 	if err != nil {
 		return a, err
 	}
+	owners, err := e.Store.SandboxTeammates(ctx, a.EnvironmentID)
+	if err != nil {
+		return a, err
+	}
 	for _, p := range pending {
 		var pr NetworkRequest
-		if p.Kind != KindRequest || json.Unmarshal(p.Payload, &pr) != nil || pr.Navigation || pr.Site != req.Site {
+		if p.Kind != KindRequest || owners[p.SandboxID] != teammate || json.Unmarshal(p.Payload, &pr) != nil || pr.Navigation || pr.Site != req.Site {
 			continue
 		}
 		if err := e.Store.DecideApproval(ctx, a.EnvironmentID, p.ID, store.StatusApproved, ""); err != nil && !errors.Is(err, store.ErrNotFound) {
