@@ -405,3 +405,31 @@ func TestRuleExpiry(t *testing.T) {
 		t.Fatalf("an edit changed the expiry: %+v", updated)
 	}
 }
+
+// A once decision answers the held connection and creates no rule.
+func TestDecideOnceCreatesNoRule(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	sb := newSandbox(t, s, env, "dev")
+	ctx := context.Background()
+	held := make(chan error, 1)
+	go func() {
+		_, err := s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: "once.example.org", Port: 443})
+		held <- err
+	}()
+	pending := awaitApproval(t, h, "once.example.org", 443)
+
+	rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/approvals/"+pending.ID+"/decide", `{"action":"allow_once"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("decide: %d %s", rec.Code, rec.Body)
+	}
+	if decided := decode[ApprovalView](t, rec); decided.Status != store.StatusApproved || !decided.Once || decided.RuleID != "" {
+		t.Fatalf("decided: %+v", decided)
+	}
+	if err := <-held; err != nil {
+		t.Fatalf("held connection: %v", err)
+	}
+	if rules := decode[[]store.Rule](t, do(h, "GET", testOrigin+"/api/environments/"+env.ID+"/rules", "")); len(rules) != 0 {
+		t.Fatalf("a once decision created rules: %+v", rules)
+	}
+}

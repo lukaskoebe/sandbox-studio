@@ -279,7 +279,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action    string     `json:"action" enum:"allow,deny,dismiss" doc:"For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
+			Action    string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
 			Host      string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports     []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
 			Scope     string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`

@@ -252,17 +252,18 @@ type Approval struct {
 	Attempts      int             `json:"attempts"`
 	Status        string          `json:"status" enum:"pending,approved,denied,dismissed"`
 	RuleID        string          `json:"ruleId,omitempty"`
+	Once          bool            `json:"once,omitempty" doc:"Set when a network request was decided for its one connection, without a rule"`
 	CreatedAt     time.Time       `json:"createdAt"`
 	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
-const approvalCols = "id, environment_id, IFNULL(sandbox_id, ''), kind, subject, payload, attempts, status, IFNULL(rule_id, ''), created_at, updated_at"
+const approvalCols = "id, environment_id, IFNULL(sandbox_id, ''), kind, subject, payload, attempts, status, IFNULL(rule_id, ''), created_at, updated_at, once"
 
 func scanApproval(row interface{ Scan(...any) error }) (Approval, error) {
 	var a Approval
 	var payload string
 	var created, updated int64
-	err := row.Scan(&a.ID, &a.EnvironmentID, &a.SandboxID, &a.Kind, &a.Subject, &payload, &a.Attempts, &a.Status, &a.RuleID, &created, &updated)
+	err := row.Scan(&a.ID, &a.EnvironmentID, &a.SandboxID, &a.Kind, &a.Subject, &payload, &a.Attempts, &a.Status, &a.RuleID, &created, &updated, &a.Once)
 	a.Payload = json.RawMessage(payload)
 	a.CreatedAt, a.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return a, err
@@ -425,6 +426,22 @@ func (s *Store) ApprovalsByKind(ctx context.Context, kind, status string, limit 
 // approval does not exist or was already decided.
 func (s *Store) DecideApproval(ctx context.Context, envID, id, status, ruleID string) error {
 	return DecideApprovalTx(ctx, s.db, envID, id, status, ruleID)
+}
+
+// DecideApprovalOnce moves a pending network request to status for its one connection: no
+// rule is involved, and the decision is recorded as once. It returns ErrNotFound if the
+// approval is not pending.
+func (s *Store) DecideApprovalOnce(ctx context.Context, envID, id, status string) error {
+	t := now()
+	res, err := s.db.ExecContext(ctx, `UPDATE approvals SET status = ?, once = 1, decided_at = ?, updated_at = ?
+		WHERE environment_id = ? AND id = ? AND status = 'pending'`, status, t, t, envID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // DecideApprovalTx is DecideApproval inside tx, a transaction on the catalog database, so

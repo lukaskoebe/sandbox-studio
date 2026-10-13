@@ -20,10 +20,18 @@ import (
 // KindNetwork is the approval kind for connections to a host no rule covers.
 const KindNetwork = "network"
 
+// Network decisions beyond allow, deny and dismiss (store.ActionAllow and ActionDeny, and
+// dismiss). The "once" ones answer the held connections of one request, without a rule.
+const (
+	ActionAllowOnce = "allow_once"
+	ActionDenyOnce  = "deny_once"
+)
+
 // Errors returned by Decide and Resolve.
 var (
 	ErrUndecided    = errors.New("the request is waiting for approval")
 	ErrDismissed    = errors.New("the request was dismissed")
+	ErrDenied       = errors.New("the request was denied for this connection")
 	ErrDecided      = errors.New("the request was already decided")
 	ErrDoesNotCover = errors.New("the rule must cover the requested host and port")
 	ErrNoTeammate   = errors.New("the sandbox has no teammate")
@@ -106,10 +114,26 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		if r, ok := Match(e.active(rules), req.SandboxID, teammate, req.Host, req.Port); ok {
 			return r, nil
 		}
-		if cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID); err != nil || cur.Status != store.StatusPending {
-			return store.Rule{}, ErrDismissed
+		cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID)
+		if err != nil || cur.Status != store.StatusPending {
+			return onceAnswer(cur, err, host, req.Port)
 		}
 	}
+}
+
+// onceAnswer is what a held connection gets when its request is no longer pending without a
+// rule covering it: a once decision answers this connection, anything else dismisses it.
+func onceAnswer(a store.Approval, err error, host string, port int) (store.Rule, error) {
+	switch {
+	case err != nil || !a.Once:
+		return store.Rule{}, ErrDismissed
+	case a.Status == store.StatusApproved:
+		// Not stored: a once decision creates no rule, so there is no rule ID to report.
+		return store.Rule{EnvironmentID: a.EnvironmentID, Host: host, Ports: []int{port}, Action: store.ActionAllow}, nil
+	case a.Status == store.StatusDenied:
+		return store.Rule{}, ErrDenied
+	}
+	return store.Rule{}, ErrDismissed
 }
 
 // Decision is the user's answer to a network approval.
@@ -137,6 +161,9 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 		}
 		e.changed(envID, false)
 		return e.Store.Approval(ctx, envID, id)
+	}
+	if d.Action == ActionAllowOnce || d.Action == ActionDenyOnce {
+		return e.decideOnce(ctx, a, d.Action == ActionAllowOnce)
 	}
 	if d.Action != store.ActionAllow && d.Action != store.ActionDeny {
 		return a, fmt.Errorf("unsupported decision %q", d.Action)
@@ -182,6 +209,23 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 		return a, err
 	}
 	return e.Store.Approval(ctx, envID, id)
+}
+
+// decideOnce answers a pending network request for its one connection. No rule is created, so
+// the connections held for the request get the answer and the next connection asks again.
+func (e *Engine) decideOnce(ctx context.Context, a store.Approval, allow bool) (store.Approval, error) {
+	status := store.StatusDenied
+	if allow {
+		status = store.StatusApproved
+	}
+	if err := e.Store.DecideApprovalOnce(ctx, a.EnvironmentID, a.ID, status); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return a, ErrDecided
+		}
+		return a, err
+	}
+	e.changed(a.EnvironmentID, false)
+	return e.Store.Approval(ctx, a.EnvironmentID, a.ID)
 }
 
 // Settle decides every pending network approval of an environment that a rule now covers,

@@ -318,3 +318,56 @@ func TestSweepDeletesExpiredRules(t *testing.T) {
 		t.Fatal("no rules event after the sweep")
 	}
 }
+
+func TestOnceDecisions(t *testing.T) {
+	ctx := context.Background()
+	e, env, sb := newEngine(t)
+	type result struct {
+		rule store.Rule
+		err  error
+	}
+	ask := func(host string) <-chan result {
+		ch := make(chan result, 1)
+		go func() {
+			r, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: host, Port: 443})
+			ch <- result{r, err}
+		}()
+		return ch
+	}
+
+	allowed := ask("once.example.org")
+	first := awaitPending(t, e, env.ID)
+	a, err := e.Resolve(ctx, env.ID, first.ID, Decision{Action: ActionAllowOnce})
+	if err != nil || a.Status != store.StatusApproved || !a.Once || a.RuleID != "" {
+		t.Fatalf("allow once: %+v %v", a, err)
+	}
+	if r := <-allowed; r.err != nil || r.rule.Action != store.ActionAllow || r.rule.ID != "" {
+		t.Fatalf("held connection after allow once: %+v %v", r.rule, r.err)
+	}
+	if rules, _ := e.Store.Rules(ctx, env.ID); len(rules) != 0 {
+		t.Fatalf("allow once created a rule: %+v", rules)
+	}
+	if _, err := e.Resolve(ctx, env.ID, first.ID, Decision{Action: ActionDenyOnce}); !errors.Is(err, ErrDecided) {
+		t.Fatalf("decided twice: %v", err)
+	}
+
+	// The next connection to the host asks again, and deny once refuses it, still without a rule.
+	denied := ask("once.example.org")
+	second := awaitPending(t, e, env.ID)
+	if second.ID == first.ID {
+		t.Fatalf("the decided request is still pending")
+	}
+	if a, err := e.Resolve(ctx, env.ID, second.ID, Decision{Action: ActionDenyOnce}); err != nil || a.Status != store.StatusDenied || !a.Once {
+		t.Fatalf("deny once: %+v %v", a, err)
+	}
+	if r := <-denied; !errors.Is(r.err, ErrDenied) {
+		t.Fatalf("held connection after deny once: %+v %v", r.rule, r.err)
+	}
+	if rules, _ := e.Store.Rules(ctx, env.ID); len(rules) != 0 {
+		t.Fatalf("deny once created a rule: %+v", rules)
+	}
+	all, _ := e.Store.Approvals(ctx, env.ID, "", 10)
+	if once := slices.DeleteFunc(all, func(a store.Approval) bool { return !a.Once }); len(once) != 2 {
+		t.Fatalf("once decisions in the activity: %+v", all)
+	}
+}
