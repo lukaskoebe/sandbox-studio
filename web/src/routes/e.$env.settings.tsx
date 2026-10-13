@@ -28,6 +28,9 @@ function SettingsLayout() {
         <SettingsLink to="/e/$env/settings/git" env={env}>
           Git
         </SettingsLink>
+        <SettingsLink to="/e/$env/settings/network" env={env}>
+          Network
+        </SettingsLink>
         <SettingsLink to="/e/$env/settings/templates" env={env}>
           Templates
         </SettingsLink>
@@ -51,6 +54,7 @@ function SettingsLink({
     | "/e/$env/settings/general"
     | "/e/$env/settings/providers"
     | "/e/$env/settings/git"
+    | "/e/$env/settings/network"
     | "/e/$env/settings/templates"
     | "/e/$env/settings/runtime"
   env: string

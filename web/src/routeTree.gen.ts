@@ -35,6 +35,7 @@ import { Route as EEnvSandboxesIdRouteImport } from './routes/e.$env.sandboxes.$
 import { Route as EEnvSettingsIndexRouteImport } from './routes/e.$env.settings.index'
 import { Route as EEnvSettingsGeneralRouteImport } from './routes/e.$env.settings.general'
 import { Route as EEnvSettingsGitRouteImport } from './routes/e.$env.settings.git'
+import { Route as EEnvSettingsNetworkRouteImport } from './routes/e.$env.settings.network'
 import { Route as EEnvSettingsProvidersRouteImport } from './routes/e.$env.settings.providers'
 import { Route as EEnvSettingsRuntimeRouteImport } from './routes/e.$env.settings.runtime'
 import { Route as EEnvSettingsTemplatesRouteImport } from './routes/e.$env.settings.templates'
@@ -178,6 +179,11 @@ const EEnvSettingsGitRoute = EEnvSettingsGitRouteImport.update({
   path: '/git',
   getParentRoute: () => EEnvSettingsRoute,
 } as any)
+const EEnvSettingsNetworkRoute = EEnvSettingsNetworkRouteImport.update({
+  id: '/network',
+  path: '/network',
+  getParentRoute: () => EEnvSettingsRoute,
+} as any)
 const EEnvSettingsProvidersRoute = EEnvSettingsProvidersRouteImport.update({
   id: '/providers',
   path: '/providers',
@@ -263,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRouteWithChildren
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
+  '/e/$env/settings/network': typeof EEnvSettingsNetworkRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
   '/e/$env/settings/templates': typeof EEnvSettingsTemplatesRoute
@@ -298,6 +305,7 @@ export interface FileRoutesByTo {
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
+  '/e/$env/settings/network': typeof EEnvSettingsNetworkRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
   '/e/$env/settings/templates': typeof EEnvSettingsTemplatesRoute
@@ -338,6 +346,7 @@ export interface FileRoutesById {
   '/e/$env/sandboxes/$id': typeof EEnvSandboxesIdRouteWithChildren
   '/e/$env/settings/general': typeof EEnvSettingsGeneralRoute
   '/e/$env/settings/git': typeof EEnvSettingsGitRoute
+  '/e/$env/settings/network': typeof EEnvSettingsNetworkRoute
   '/e/$env/settings/providers': typeof EEnvSettingsProvidersRoute
   '/e/$env/settings/runtime': typeof EEnvSettingsRuntimeRoute
   '/e/$env/settings/templates': typeof EEnvSettingsTemplatesRoute
@@ -380,6 +389,7 @@ export interface FileRouteTypes {
     | '/e/$env/sandboxes/$id'
     | '/e/$env/settings/general'
     | '/e/$env/settings/git'
+    | '/e/$env/settings/network'
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
     | '/e/$env/settings/templates'
@@ -415,6 +425,7 @@ export interface FileRouteTypes {
     | '/e/$env/network/rules'
     | '/e/$env/settings/general'
     | '/e/$env/settings/git'
+    | '/e/$env/settings/network'
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
     | '/e/$env/settings/templates'
@@ -454,6 +465,7 @@ export interface FileRouteTypes {
     | '/e/$env/sandboxes/$id'
     | '/e/$env/settings/general'
     | '/e/$env/settings/git'
+    | '/e/$env/settings/network'
     | '/e/$env/settings/providers'
     | '/e/$env/settings/runtime'
     | '/e/$env/settings/templates'
@@ -662,6 +674,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvSettingsGitRouteImport
       parentRoute: typeof EEnvSettingsRoute
     }
+    '/e/$env/settings/network': {
+      id: '/e/$env/settings/network'
+      path: '/network'
+      fullPath: '/e/$env/settings/network'
+      preLoaderRoute: typeof EEnvSettingsNetworkRouteImport
+      parentRoute: typeof EEnvSettingsRoute
+    }
     '/e/$env/settings/providers': {
       id: '/e/$env/settings/providers'
       path: '/providers'
@@ -783,6 +802,7 @@ const EEnvNetworkRouteWithChildren = EEnvNetworkRoute._addFileChildren(
 interface EEnvSettingsRouteChildren {
   EEnvSettingsGeneralRoute: typeof EEnvSettingsGeneralRoute
   EEnvSettingsGitRoute: typeof EEnvSettingsGitRoute
+  EEnvSettingsNetworkRoute: typeof EEnvSettingsNetworkRoute
   EEnvSettingsProvidersRoute: typeof EEnvSettingsProvidersRoute
   EEnvSettingsRuntimeRoute: typeof EEnvSettingsRuntimeRoute
   EEnvSettingsTemplatesRoute: typeof EEnvSettingsTemplatesRoute
@@ -792,6 +812,7 @@ interface EEnvSettingsRouteChildren {
 const EEnvSettingsRouteChildren: EEnvSettingsRouteChildren = {
   EEnvSettingsGeneralRoute: EEnvSettingsGeneralRoute,
   EEnvSettingsGitRoute: EEnvSettingsGitRoute,
+  EEnvSettingsNetworkRoute: EEnvSettingsNetworkRoute,
   EEnvSettingsProvidersRoute: EEnvSettingsProvidersRoute,
   EEnvSettingsRuntimeRoute: EEnvSettingsRuntimeRoute,
   EEnvSettingsTemplatesRoute: EEnvSettingsTemplatesRoute,
