@@ -19,6 +19,7 @@ func TestEditorVocabularyParses(t *testing.T) {
 		"workspace":  "resources:\n  workspace: 20GiB\n",
 		"docker":     "resources:\n  docker: 20GiB\n",
 		"go":         "tools:\n  go: \"1.24\"\n",
+		"nix":        "tools:\n  nix: \"2.35.1\"\n",
 		"node":       "tools:\n  node: \"22\"\n",
 		"python":     "tools:\n  python: \"3.13\"\n",
 	}

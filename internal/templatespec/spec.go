@@ -363,6 +363,10 @@ func parseTools(key, node *yaml.Node, p *problems) []ToolPin {
 			p.addErr(at(name, value), err)
 			continue
 		}
+		if _, _, ok := NixSums(version); name.Value == NixTool && !ok {
+			p.add(at(name, value), "nix %s is not pinned; the supported versions are %s", version, nixVersions())
+			continue
+		}
 		tools = append(tools, ToolPin{Name: name.Value, Version: version})
 	}
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
@@ -436,6 +440,9 @@ func validateSpecFields(spec Spec) error {
 		seenTools[tool.Name] = struct{}{}
 		if len(tool.Version) > 64 || !toolVersion.MatchString(tool.Version) {
 			return invalid("tool versions must be numeric dotted strings of at most 64 bytes")
+		}
+		if _, _, ok := NixSums(tool.Version); tool.Name == NixTool && !ok {
+			return invalid("nix %s is not pinned; the supported versions are %s", tool.Version, nixVersions())
 		}
 	}
 	if len(spec.Apt) > maxAptPackages {

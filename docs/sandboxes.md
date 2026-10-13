@@ -174,6 +174,41 @@ A full (memory) snapshot plus stop would need restore, so it waits on #1736 too.
 - [Export and import](export-import.md): a `.studio-sandbox` file (manifest, home tar and
   workspace tar), recreated through a template build and the same copies.
 
+## SSH access
+
+microsandbox serves a running VM over SSH with its own `msb ssh` commands (msb 0.7.7).
+Studio neither starts nor stops them: you run them yourself, for example for an editor that
+connects over SSH, such as VS Code Remote-SSH.
+
+1. **Find the VM.** Studio names a sandbox's VM `ss-<id>-g<generation>`, where `<id>` is the
+   sandbox ID shown in its workspace status line and the generation is 1 until the sandbox is
+   rebased. `msb list` shows the names (every VM Studio owns starts with `ss-`). Studio shows
+   the name nowhere yet, so it is not in the API or the UI.
+2. **Authorize your key.** `msb ssh authorize --file ~/.ssh/id_ed25519.pub` adds your own
+   public key to microsandbox's SSH authorization. Use your own key only. Studio's keys and
+   secrets never go into a sandbox; an SSH login shell gets the same placeholders as a terminal
+   (see [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest)).
+3. **Connect.** `msb ssh connect ss-<id>-g1` opens a shell. For Remote-SSH, add a host to
+   `~/.ssh/config` that serves the connection over stdio:
+
+   ```
+   Host studio-<id>
+       HostName ss-<id>-g1
+       ProxyCommand msb ssh serve --stdio ss-<id>-g1
+       IdentityFile ~/.ssh/id_ed25519
+   ```
+
+   `msb ssh serve --port <port> <name>` listens on a host port instead, for clients that can't
+   run a ProxyCommand.
+
+SSH sessions run inside the sandbox's VM, so the network policy applies to them as it does to
+terminals: egress is fixed when the VM is created, and only what it allows gets out (see
+[network](network.md)).
+
+Verified vs. pending: the commands and flags come from `msb 0.7.7 --help`. Nothing here has
+been run against a live VM. The login user, the default port and the `ProxyCommand` form are
+unverified until someone connects once.
+
 ## Base image
 
 `images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, Node,

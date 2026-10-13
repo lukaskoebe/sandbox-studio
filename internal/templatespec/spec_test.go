@@ -205,6 +205,7 @@ func TestParseRejectsMalformedOrUnsupportedYAML(t *testing.T) {
 		{name: "numeric version needs quotes", input: []byte("tools: {node: 22}\n")},
 		{name: "string version needs quotes", input: []byte("tools: {node: 22.1.2}\n")},
 		{name: "unsupported tool", input: []byte("tools: {ruby: \"3.3\"}\n")},
+		{name: "unpinned nix", input: []byte("tools: {nix: \"2.1.0\"}\n")},
 		{name: "version placeholder", input: []byte("tools: {node: \"latest\"}\n")},
 		{name: "apt not a sequence", input: []byte("apt: postgresql-client\n")},
 		{name: "apt value not a string", input: []byte("apt: [123]\n")},
@@ -318,5 +319,30 @@ func TestStackNamesToolPinsOrBase(t *testing.T) {
 	spec := Spec{Tools: []ToolPin{{Name: "node", Version: "22"}, {Name: "python", Version: "3.13"}}}
 	if got := Stack(spec); got != "node-22+python-3.13" {
 		t.Fatalf("Stack() = %q, want node-22+python-3.13", got)
+	}
+}
+
+func TestNixToolNeedsAPinnedRelease(t *testing.T) {
+	spec, err := ParseYAML([]byte("tools:\n  nix: \"2.35.1\"\n  node: \"22\"\n"))
+	if err != nil {
+		t.Fatalf("ParseYAML() error = %v", err)
+	}
+	if got := Stack(spec); got != "nix-2.35.1+node-22" {
+		t.Fatalf("Stack() = %q", got)
+	}
+	x86_64, aarch64, ok := NixSums("2.35.1")
+	if !ok || len(x86_64) != 64 || len(aarch64) != 64 || x86_64 == aarch64 {
+		t.Fatalf("NixSums() = %q, %q, %v", x86_64, aarch64, ok)
+	}
+	if _, _, ok := NixSums("2.1.0"); ok {
+		t.Fatal("an unpinned release has checksums")
+	}
+
+	_, err = ParseYAML([]byte("tools:\n  nix: \"2.1.0\"\n"))
+	if err == nil || !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "supported versions are 2.35.1") {
+		t.Fatalf("unpinned nix: %v", err)
+	}
+	if _, err := CanonicalJSON(Spec{Resources: resources.Defaults(), Tools: []ToolPin{{Name: "nix", Version: "2.1.0"}}}); err == nil {
+		t.Fatal("a constructed spec with an unpinned nix was canonicalized")
 	}
 }

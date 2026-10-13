@@ -3,7 +3,7 @@ title: Templates and builds
 description: Build a reusable sandbox root filesystem from a small YAML specification.
 ---
 
-A template describes the software in a sandbox's root filesystem. Its YAML can set CPU, memory, workspace, and Docker sizes; install Node.js, Python, or Go; install apt packages; and run a setup script.
+A template describes the software in a sandbox's root filesystem. Its YAML can set CPU, memory, workspace, and Docker sizes; install Node.js, Python, Go, or Nix; install apt packages; and run a setup script.
 
 ![The Templates settings page with the template build dialog](../../assets/screenshots/build-dialog.jpg)
 
@@ -26,7 +26,7 @@ setup: |
   corepack enable
 ```
 
-Quote tool versions. The currently supported tools are `node`, `python`, and `go`. Resource sizes use `MiB`, `GiB`, or `G`; CPU counts are whole numbers.
+Quote tool versions. The currently supported tools are `go`, `node`, `nix`, and `python`. `nix` takes only the Nix releases Studio pins, currently 2.35.1. Resource sizes use `MiB`, `GiB`, or `G`; CPU counts are whole numbers.
 
 ## Importing YAML does not run it
 

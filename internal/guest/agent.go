@@ -180,6 +180,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.snapshot(st, br)
 	case agentproto.KindFiles:
 		err = a.files(st, br)
+	case agentproto.KindUpload:
+		err = a.upload(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"time"
@@ -268,4 +269,9 @@ func (s *Service) Changes(ctx context.Context, envID, chatID, turnID string) (Tu
 // Files lists a directory or reads a file of a sandbox's workspace.
 func (s *Service) Files(ctx context.Context, sandboxID string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 	return s.Guest.Files(ctx, sandboxID, req)
+}
+
+// Upload streams a file into a folder of a sandbox's workspace.
+func (s *Service) Upload(ctx context.Context, sandboxID string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error) {
+	return s.Guest.Upload(ctx, sandboxID, req, body)
 }

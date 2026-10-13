@@ -1,17 +1,41 @@
-import { useMemo } from "react"
+import { useMemo, useRef, useState } from "react"
 import {
   ArrowClockwiseIcon,
   ArrowLeftIcon,
+  DotsThreeIcon,
   DownloadSimpleIcon,
   FileIcon,
   FolderIcon,
   LinkSimpleIcon,
+  UploadSimpleIcon,
 } from "@phosphor-icons/react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Progress } from "@/components/ui/progress"
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
+import {
+  maxUploadBytes,
+  uploadWorkspaceFile,
+  type UploadConflict,
+} from "@/lib/workspace-upload"
 import { cn, formatBytes } from "@/lib/utils"
 
 type FileEntry = components["schemas"]["FileEntry"]
@@ -22,8 +46,8 @@ function join(dir: string, name: string) {
 }
 
 /**
- * A read-only browser of the sandbox's /workspace: one folder at a time, and a viewer for
- * text files and images. Files the selected request changed are marked.
+ * A browser of the sandbox's /workspace: one folder at a time, a viewer for text files and
+ * images, and uploads into the folder shown. Files the selected request changed are marked.
  */
 export function FilesPanel({
   env,
@@ -61,6 +85,210 @@ export function FilesPanel({
   )
 }
 
+/** One file of an upload, from waiting to done or failed. */
+type UploadItem = {
+  id: number
+  name: string
+  state: "waiting" | "uploading" | "done" | "failed"
+  percent: number
+  error?: string
+}
+
+/** A file to upload into the folder, and the policy for its name if it is taken there. */
+type Planned = { file: File; conflict: UploadConflict }
+
+function hasFiles(dt: DataTransfer) {
+  return Array.from(dt.types).includes("Files")
+}
+
+/** The files of a drop, and the names of the folders in it: folders are not uploaded. */
+function droppedFiles(dt: DataTransfer) {
+  const files: File[] = []
+  const folders: string[] = []
+  for (const item of Array.from(dt.items)) {
+    if (item.kind !== "file") continue
+    const entry = item.webkitGetAsEntry()
+    if (entry?.isDirectory) folders.push(entry.name)
+    else {
+      const file = item.getAsFile()
+      if (file) files.push(file)
+    }
+  }
+  return { files, folders }
+}
+
+/**
+ * The uploads into one folder. Files go one at a time, each with its progress. A name the
+ * folder already has is asked about first: replace it, or keep both.
+ */
+function useFolderUploads({
+  env,
+  sandboxId,
+  dir,
+  entries,
+  onDone,
+}: {
+  env: string
+  sandboxId: string
+  dir: string
+  entries: FileEntry[]
+  onDone: () => void
+}) {
+  const [items, setItems] = useState<UploadItem[]>([])
+  const [clash, setClash] = useState<{ files: File[]; taken: string[] } | null>(
+    null
+  )
+  const nextId = useRef(0)
+
+  const addItems = (list: Omit<UploadItem, "id">[]) => {
+    const first = nextId.current
+    nextId.current += list.length
+    setItems((prev) => [
+      ...prev,
+      ...list.map((item, i) => ({ ...item, id: first + i })),
+    ])
+    return list.map((_, i) => first + i)
+  }
+  const update = (id: number, change: Partial<UploadItem>) =>
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...change } : item))
+    )
+
+  const run = async (plan: Planned[]) => {
+    const ids = addItems(
+      plan.map(({ file }) => ({
+        name: file.name,
+        state: "waiting",
+        percent: 0,
+      }))
+    )
+    for (const [i, { file, conflict }] of plan.entries()) {
+      const id = ids[i]
+      update(id, { state: "uploading" })
+      try {
+        const saved = await uploadWorkspaceFile(
+          env,
+          sandboxId,
+          dir,
+          file,
+          conflict,
+          (percent) => update(id, { percent })
+        )
+        // Keep both saves the file under another name, which the list then shows.
+        update(id, { state: "done", percent: 100, name: saved.name })
+      } catch (err) {
+        update(id, { state: "failed", error: errorMessage(err) })
+      }
+    }
+    onDone()
+  }
+
+  /** Queues the files of a drop, a picker or the menu for the folder. */
+  const start = (files: File[], folders: string[] = []) => {
+    const refused = [
+      ...folders.map((name) => ({
+        name,
+        error: "Folders aren't uploaded: drop the files in them instead",
+      })),
+      ...files
+        .filter((f) => f.size > maxUploadBytes)
+        .map((f) => ({
+          name: f.name,
+          error: `Larger than ${maxUploadBytes >> 20} MiB`,
+        })),
+    ]
+    if (refused.length > 0) {
+      addItems(
+        refused.map((item) => ({ ...item, state: "failed", percent: 0 }))
+      )
+    }
+    const accepted = files.filter((f) => f.size <= maxUploadBytes)
+    if (accepted.length === 0) return
+    const taken = accepted
+      .map((f) => f.name)
+      .filter((name) => entries.some((e) => e.name === name))
+    if (taken.length > 0) setClash({ files: accepted, taken })
+    else void run(accepted.map((file) => ({ file, conflict: "fail" })))
+  }
+
+  const decide = (choice: "replace" | "keep") => {
+    if (!clash) return
+    const plan = clash.files.map((file) => ({
+      file,
+      conflict: clash.taken.includes(file.name) ? choice : ("fail" as const),
+    }))
+    setClash(null)
+    void run(plan)
+  }
+
+  return {
+    items,
+    clear: () => setItems([]),
+    start,
+    clash,
+    cancelClash: () => setClash(null),
+    decide,
+  }
+}
+
+const uploadStates = {
+  waiting: "Waiting",
+  uploading: "Uploading",
+  done: "Uploaded",
+  failed: "Failed",
+} as const
+
+function UploadList({
+  items,
+  onClear,
+}: {
+  items: UploadItem[]
+  onClear: () => void
+}) {
+  const busy = items.some(
+    (i) => i.state === "waiting" || i.state === "uploading"
+  )
+  return (
+    <div className="grid gap-2 rounded-md bg-muted/40 p-2 ring-1 ring-foreground/10">
+      <ul className="grid gap-1.5">
+        {items.map((item) => (
+          <li key={item.id} className="grid min-w-0 gap-1 text-xs">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="min-w-0 flex-1 truncate" title={item.name}>
+                {item.name}
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 tabular-nums",
+                  item.state === "failed"
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                )}
+              >
+                {item.state === "uploading"
+                  ? `${Math.round(item.percent)}%`
+                  : uploadStates[item.state]}
+              </span>
+            </div>
+            {item.state === "uploading" && <Progress value={item.percent} />}
+            {item.error && <p className="text-destructive">{item.error}</p>}
+          </li>
+        ))}
+      </ul>
+      {!busy && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="justify-self-end"
+          onClick={onClear}
+        >
+          Clear
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function FolderView({
   env,
   sandboxId,
@@ -80,6 +308,16 @@ function FolderView({
     { params: { path: { env, id: sandboxId }, query: { path: dir } } }
   )
   const { refetch } = list
+  const entries = list.data?.entries ?? []
+  const uploads = useFolderUploads({
+    env,
+    sandboxId,
+    dir,
+    entries,
+    onDone: () => void refetch(),
+  })
+  const input = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
 
   // Folders that hold a changed file are marked too.
   const changedHere = useMemo(() => {
@@ -92,10 +330,32 @@ function FolderView({
   }, [changed, dir])
 
   const crumbs = dir ? dir.split("/") : []
-  const entries = list.data?.entries ?? []
 
   return (
-    <div className="grid min-w-0 content-start gap-2">
+    <div
+      className="relative grid min-w-0 content-start gap-2"
+      onDragOver={(e) => {
+        if (!hasFiles(e.dataTransfer)) return
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          setDragging(false)
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e.dataTransfer)) return
+        e.preventDefault()
+        setDragging(false)
+        const { files, folders } = droppedFiles(e.dataTransfer)
+        uploads.start(files, folders)
+      }}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-md border-2 border-dashed border-ring bg-background/90 text-xs font-medium">
+          Drop to upload into {dir || "the workspace"}
+        </div>
+      )}
       <div className="flex min-w-0 items-center gap-1">
         <nav
           aria-label="Folder"
@@ -130,7 +390,40 @@ function FolderView({
         >
           {list.isFetching ? <Spinner /> : <ArrowClockwiseIcon />}
         </Button>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Folder options"
+                title="Folder options"
+              />
+            }
+          >
+            <DotsThreeIcon weight="bold" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => input.current?.click()}>
+              <UploadSimpleIcon />
+              Upload…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <input
+          ref={input}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            uploads.start(Array.from(e.currentTarget.files ?? []))
+            e.currentTarget.value = ""
+          }}
+        />
       </div>
+      {uploads.items.length > 0 && (
+        <UploadList items={uploads.items} onClear={uploads.clear} />
+      )}
       {list.isError && (
         <p className="text-muted-foreground">
           Can't show the files: {errorMessage(list.error)}
@@ -161,6 +454,38 @@ function FolderView({
           Only the first 1,000 items of this folder are shown.
         </p>
       )}
+      <AlertDialog
+        open={uploads.clash !== null}
+        onOpenChange={(open) => {
+          if (!open) uploads.cancelClash()
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {uploads.clash?.taken.length === 1
+                ? `${uploads.clash.taken[0]} already exists`
+                : `${uploads.clash?.taken.length} files already exist`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Replace the existing file, or keep both: the new one is saved
+              beside it with a number, like “name (2).ext”.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => uploads.decide("keep")}>
+              Keep both
+            </AlertDialogAction>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => uploads.decide("replace")}
+            >
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -56,8 +56,9 @@ job. If omitted, resources use Studio defaults, and `max_memory` defaults to `me
 The supported top-level keys are `resources`, `tools`, `apt`, and `setup`. Specs must be
 one YAML mapping, at most 64 KiB, with valid UTF-8. Unknown or duplicate keys, aliases,
 merge keys, custom tags, multiple documents, and invalid resource values are rejected.
-Tool pins are currently limited to `node`, `python`, and `go`; versions must be quoted
-numeric dotted strings, for example `node: "22"`. Apt entries are bounded package names.
+Tool pins are limited to `go`, `node`, `nix`, and `python`; versions must be quoted
+numeric dotted strings, for example `node: "22"`. `nix` takes only the releases Studio
+pins (see [Nix](#nix-as-a-tool)). Apt entries are bounded package names.
 The decoded setup string is preserved, up to 64 KiB, and cannot contain NUL.
 
 An equivalent active request in the same environment reuses its existing job. The match
@@ -97,6 +98,26 @@ the source can still contain literal secrets or other values entered by the user
 rebuild in another environment, import the source there, review it, and explicitly build
 it. The download does not include the environment's secret vault, built images, or
 persistent disks.
+
+## Nix as a tool
+
+`tools: nix` adds Nix to a template, as an optional extra on top of the base image, which
+stays as it is. The version must be one Studio pins, for example `nix: "2.35.1"`, because
+each release needs the sha256 of its tarball for x86_64 and aarch64 Linux. Those checksums
+live in `internal/templatespec/nix.go`, taken from the `.sha256` files releases.nixos.org
+publishes beside each tarball. A new release is a new entry with both checksums.
+
+The `nix` stage (root) makes `/nix` belong to `agent`, writes `/etc/nix/nix.conf` with
+`experimental-features = nix-command flakes` and the system CA bundle, and writes the login hook
+`/etc/profile.d/studio-nix.sh`. The `nix-install` stage (agent) downloads the tarball from
+`releases.nixos.org`, checks its sha256 before unpacking, and runs the release's installer as
+a single user: `--no-daemon`, with no channel added and no shell profile edited. The store
+lives under `/nix` on the root layer, so every sandbox made from the template has it. The
+agent's profile is a symlink in the home, which the home skeleton carries.
+
+Verified here: the pinned x86_64 tarball matches its published sha256, and the installer
+takes the options above. Not verified: no template build with `tools: nix` has run, so the
+guest install and the login hook are unchecked.
 
 ## Job lifecycle and cleanup
 
@@ -178,6 +199,10 @@ commands run in order:
 4. As `root`, the home is copied to `/usr/share/sandbox-studio/home-skel`, owned by `agent`.
    A new sandbox's home disk is seeded from that copy on its first boot. Setup's files in
    the home therefore reach new sandboxes, and nothing else from the build does.
+
+With `tools: nix`, two stages run between mise and the setup script (see
+[Nix](#nix-as-a-tool)): `nix` as `root` prepares `/nix` and the system Nix config, and
+`nix-install` as `agent` installs the pinned release.
 
 After the commands succeed, the worker runs `studio-agent export-layer` as root over msb
 exec and streams its stdout into the untrusted-input validator, which normalizes and

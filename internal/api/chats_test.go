@@ -24,9 +24,11 @@ import (
 // chatGuest serves chats' ACP streams with a scripted agent.
 type chatGuest struct {
 	fakeGuest
-	agent *acptest.Agent
-	acp   []agentproto.StartACP
-	snaps []agentproto.SnapshotRequest
+	agent    *acptest.Agent
+	acp      []agentproto.StartACP
+	snaps    []agentproto.SnapshotRequest
+	uploads  []agentproto.UploadRequest
+	uploaded map[string]string // the contents of the uploads, by path; see Upload
 }
 
 func (g *chatGuest) OpenACP(_ context.Context, _ string, req agentproto.StartACP) (io.ReadWriteCloser, error) {

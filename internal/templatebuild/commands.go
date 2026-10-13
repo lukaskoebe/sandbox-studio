@@ -33,6 +33,7 @@ const (
 	miseTimeout  = 30 * time.Minute
 	setupTimeout = 15 * time.Minute
 	homeTimeout  = 15 * time.Minute
+	nixTimeout   = 20 * time.Minute
 )
 
 // Stage is one bounded command in a template build.
@@ -54,11 +55,16 @@ func Commands(spec templatespec.Spec) ([]Stage, error) {
 	toolPins := append([]templatespec.ToolPin(nil), spec.Tools...)
 	sort.Slice(toolPins, func(i, j int) bool { return toolPins[i].Name < toolPins[j].Name })
 	tools := make([]string, 0, len(toolPins))
+	var nix []Stage
 	for _, tool := range toolPins {
+		if tool.Name == templatespec.NixTool {
+			nix = nixStages(tool.Version)
+			continue
+		}
 		tools = append(tools, tool.Name+"@"+tool.Version)
 	}
 
-	return []Stage{
+	stages := []Stage{
 		{
 			Name: "apt",
 			Command: runtime.RunCommand{
@@ -81,7 +87,10 @@ func Commands(spec templatespec.Spec) ([]Stage, error) {
 				Timeout: miseTimeout,
 			},
 		},
-		{
+	}
+	stages = append(stages, nix...)
+	stages = append(stages,
+		Stage{
 			Name: "setup",
 			Command: runtime.RunCommand{
 				Path:    "/bin/bash",
@@ -92,7 +101,7 @@ func Commands(spec templatespec.Spec) ([]Stage, error) {
 				Timeout: setupTimeout,
 			},
 		},
-		{
+		Stage{
 			Name: "home",
 			Command: runtime.RunCommand{
 				Path:    "/bin/bash",
@@ -103,7 +112,39 @@ func Commands(spec templatespec.Spec) ([]Stage, error) {
 				Timeout: homeTimeout,
 			},
 		},
-	}, nil
+	)
+	return stages, nil
+}
+
+// nixStages install the pinned single-user Nix release, after mise and before the user's setup.
+// The root stage makes /nix belong to the agent user and writes the system config and the
+// login profile hook. The agent stage downloads the release, checks its sha256 and installs it.
+func nixStages(version string) []Stage {
+	x86_64, aarch64, _ := templatespec.NixSums(version) // Commands validated the spec
+	return []Stage{
+		{
+			Name: "nix",
+			Command: runtime.RunCommand{
+				Path:    "/bin/bash",
+				Args:    bashArgs(rootNixScript, "studio-template-nix", nil),
+				User:    "root",
+				Cwd:     "/",
+				Env:     rootEnvironment(),
+				Timeout: nixTimeout,
+			},
+		},
+		{
+			Name: "nix-install",
+			Command: runtime.RunCommand{
+				Path:    "/bin/bash",
+				Args:    bashArgs(nixInstallScript, "studio-template-nix-install", []string{version, x86_64, aarch64}),
+				User:    "agent",
+				Cwd:     agentHome,
+				Env:     agentEnvironment(),
+				Timeout: nixTimeout,
+			},
+		},
+	}
 }
 
 func bashArgs(script, commandName string, args []string) []string {
@@ -223,9 +264,43 @@ cp -a /home/agent "$skel"
 chown -Rh agent:agent "$skel"
 `
 
+// rootNixBody prepares the single-user install. /nix belongs to the agent user; the system
+// config turns on the new CLI and flakes, trusts the system CA bundle (which holds the
+// environment's CA), and adds no channels. Login shells of the agent load its profile, which
+// the install creates under the home.
+const rootNixBody = `install -d -m 0755 -o agent -g agent /nix
+install -d -m 0755 /etc/nix
+printf '%s\n' 'experimental-features = nix-command flakes' 'ssl-cert-file = /etc/ssl/certs/ca-certificates.crt' > /etc/nix/nix.conf
+cat > /etc/profile.d/studio-nix.sh <<'PROFILE'
+# Nix, a template extra (docs/template-builds.md): the agent user's profile.
+if [ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then . "$HOME/.nix-profile/etc/profile.d/nix.sh"; fi
+PROFILE
+chmod 0644 /etc/profile.d/studio-nix.sh
+`
+
+// nixInstallBody downloads the pinned release for this machine's architecture, checks it
+// against its sha256 before unpacking, and runs its installer for a single user. The installer
+// writes no shell profile and fetches no channel: flakes fetch what they need when used.
+const nixInstallBody = `version="$1"
+case "$(uname -m)" in
+    x86_64) system=x86_64-linux; sum="$2" ;;
+    aarch64) system=aarch64-linux; sum="$3" ;;
+    *) echo "Nix has no release for $(uname -m)" >&2; exit 1 ;;
+esac
+name="nix-$version-$system"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+curl -fsSLo "$work/$name.tar.xz" "https://releases.nixos.org/nix/nix-$version/$name.tar.xz"
+echo "$sum  $work/$name.tar.xz" | sha256sum -c -
+tar -xJf "$work/$name.tar.xz" -C "$work"
+sh "$work/$name/install" --no-daemon --yes --no-channel-add --no-modify-profile
+`
+
 var (
-	rootAptScript = fixedWrapper(rootEnvironment(), rootAptBody)
-	miseScript    = fixedWrapper(agentEnvironment(), miseBody)
-	setupScript   = fixedWrapper(agentEnvironment(), setupBody)
-	homeScript    = fixedWrapper(rootEnvironment(), homeBody)
+	rootAptScript    = fixedWrapper(rootEnvironment(), rootAptBody)
+	miseScript       = fixedWrapper(agentEnvironment(), miseBody)
+	rootNixScript    = fixedWrapper(rootEnvironment(), rootNixBody)
+	nixInstallScript = fixedWrapper(agentEnvironment(), nixInstallBody)
+	setupScript      = fixedWrapper(agentEnvironment(), setupBody)
+	homeScript       = fixedWrapper(rootEnvironment(), homeBody)
 )

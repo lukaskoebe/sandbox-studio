@@ -381,6 +381,76 @@ func (h *Hub) Files(ctx context.Context, id string, req agentproto.FilesRequest)
 	return out, err
 }
 
+// NameTakenError is the guest's refusal of an upload whose name is taken in its folder. The
+// message is meant for the user.
+type NameTakenError string
+
+func (e NameTakenError) Error() string { return string(e) }
+
+// Upload streams body into a folder of the guest's workspace as req describes. body must hold
+// exactly req.Size bytes. The guest replies once the file is in place, under the name it returns.
+func (h *Hub) Upload(ctx context.Context, id string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error) {
+	var out agentproto.UploadReply
+	if req.Size < 0 || req.Size > agentproto.MaxUploadBytes {
+		return out, fmt.Errorf("a file is at most %d MiB", agentproto.MaxUploadBytes>>20)
+	}
+	if len(req.Dir) > agentproto.MaxUploadDir || len(req.Name) > agentproto.MaxUploadName {
+		return out, errors.New("the folder or the file name is too long")
+	}
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
+	h.mu.Lock()
+	c, ok := h.sessions[id]
+	h.mu.Unlock()
+	if !ok {
+		return out, ErrNotConnected
+	}
+	st, release, err := openLimitedStream(ctx, c.requestOpen, c.sess.Open, ErrRequestsBusy)
+	if err != nil {
+		return out, err
+	}
+	defer release()
+	defer st.Close()
+	if dl, ok := ctx.Deadline(); ok {
+		st.SetDeadline(dl)
+	}
+	stopCancel := context.AfterFunc(ctx, func() {
+		_ = st.SetDeadline(time.Now())
+		_ = st.Close()
+	})
+	defer stopCancel()
+	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindUpload}); err != nil {
+		return out, err
+	}
+	if err := agentproto.WriteJSONLine(st, req); err != nil {
+		return out, err
+	}
+	// The guest reads the whole body even when it refuses the file, so this copy completes
+	// before any reply.
+	if _, err := io.CopyN(st, body, req.Size); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return out, ctxErr
+		}
+		return out, err
+	}
+	line, err := bufio.NewReader(io.LimitReader(st, 1<<20+1)).ReadBytes('\n')
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return out, ctxErr
+	}
+	if err != nil {
+		return out, err
+	}
+	var e agentproto.Error
+	if json.Unmarshal(line, &e) == nil && e.Error != "" {
+		if e.Code == agentproto.CodeExists {
+			return out, NameTakenError(e.Error)
+		}
+		return out, errors.New(e.Error)
+	}
+	return out, json.Unmarshal(line, &out)
+}
+
 // WriteHomeFiles writes harness config files into the terminal user's home in the guest.
 func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.HomeFile) error {
 	var ok struct{}

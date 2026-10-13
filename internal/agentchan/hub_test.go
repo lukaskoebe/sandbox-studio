@@ -51,6 +51,18 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 					agentproto.WriteJSONLine(st, []agentproto.Session{{Name: "main", Windows: 1}})
 				case agentproto.KindPorts:
 					agentproto.WriteJSONLine(st, agentproto.Error{Error: "boom"})
+				case agentproto.KindUpload:
+					var req agentproto.UploadRequest
+					agentproto.ReadJSONLine(br, &req)
+					data := make([]byte, req.Size)
+					if _, err := io.ReadFull(br, data); err != nil {
+						return
+					}
+					if req.Name == "taken" {
+						agentproto.WriteJSONLine(st, agentproto.Error{Error: "taken already exists", Code: agentproto.CodeExists})
+						return
+					}
+					agentproto.WriteJSONLine(st, agentproto.UploadReply{Name: req.Name, Size: int64(len(data))})
 				case agentproto.KindConfig:
 					var cfg agentproto.Config
 					agentproto.ReadJSONLine(br, &cfg)
