@@ -34,7 +34,7 @@ Start and stop are on the dashboard. The options menu (**⋯**, on both pages) h
 
 ## Side panels
 
-In the workspace, **Browser**, **Connections**, and **Files** open a panel beside the terminal or chat. **Connections** lists where the sandbox connects. **Files** shows the sandbox's files, the changes of its chats, and its running apps. Drag the panel's left edge to resize it on a desktop; on a phone it fills the screen. Close it with its close button or Escape.
+In the workspace, **Browser**, **Connections**, and **Files** open a panel beside the terminal or chat. **Connections** lists where the sandbox connects. **Files** shows the sandbox's files, the changes of its chats, and its running apps. To copy files in, drop them onto the Files panel or choose **Upload…** from its folder menu. They go into the folder shown, up to 100 MiB each. If a name is taken, you choose whether to replace the file or keep both. Drag the panel's left edge to resize it on a desktop; on a phone it fills the screen. Close it with its close button or Escape.
 
 Rebasing changes the template and carries over `/workspace` and the home directory; Docker data and terminal sessions are not carried over. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
 

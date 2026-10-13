@@ -30,7 +30,8 @@ Stream kinds:
 | `home-files` | host → guest | harness config files into `/home/agent` (at most 16 files, 256 KiB each, no symlinks) |
 | `start-session` | host → guest | a harness TUI in a detached tmux session |
 | `acp` | host → guest | stdin/stdout of an ACP agent process (chats) |
-| `snapshot`, `files` | host → guest | chat turn snapshots and the read-only file browser |
+| `snapshot`, `files` | host → guest | chat turn snapshots and the file browser's listings and reads |
+| `upload` | host → guest | a file streamed into a folder of `/workspace` (see [uploads](#uploads)) |
 | `browser` | host → guest | agent-browser commands in a browser VM |
 | `call` | guest → host | hooks, memory tools and browser tools |
 
@@ -64,8 +65,29 @@ msb exec instead (see [spikes](spikes.md#layer-transfer-and-capture-foundations)
   is its own origin.
   Opening one goes through a short-lived ticket (see [API](api.md#auth)). The UI lists the
   listening ports from the `ports` stream.
-- Files: chats have a read-only browser of `/workspace` that never follows symlinks and
-  only shows files the `agent` user may read. There is no upload.
+- Files: the Files panel browses `/workspace` read-only. Listings and reads never follow
+  symlinks, and only files the `agent` user may read are shown.
+
+## Uploads
+
+`POST /api/environments/{env}/sandboxes/{id}/files?path=&name=&conflict=` streams the body
+(`application/octet-stream`, with a Content-Length) to the guest as a `upload` stream: a
+request line `UploadRequest` with the folder, the name and the size, then exactly that many
+bytes, then one reply line. `agentproto.MaxUploadBytes` (100 MiB) bounds a file.
+
+- The folder is resolved beneath `/workspace` with `openat2` (`RESOLVE_BENEATH` and
+  `RESOLVE_NO_SYMLINKS`), so no symlink on the way leads out of the workspace, and the folder
+  must exist. The name is one file name: no separator, NUL, `.` or `..`, at most 255 bytes.
+- The file is written under a hidden `.studio-upload-*` name in its folder, owned by the
+  `agent` user with mode 0644, and synced. Only then is it linked or renamed to its name, so
+  readers never see half a file and a failed upload leaves nothing behind.
+- `conflict` decides a name already taken: `fail` (the default) answers 409 and writes
+  nothing; `replace` renames over a regular file but never over a folder or a link; `keep`
+  takes the next free `name (2).ext`. Links take a name atomically, so concurrent uploads
+  can't both take one.
+- The guest reads the whole body even when it refuses the upload, so the host's writes
+  complete and the reply arrives on the same stream.
+- Uploads never extract anything: a `.tar` is just a file.
 
 ## CA trust and placeholders in the guest
 
