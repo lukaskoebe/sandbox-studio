@@ -142,7 +142,11 @@ export function ApprovalStack() {
             onReview={(a) =>
               a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id)
             }
-            onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
+            onSplit={(ids) => {
+              setSplit((prev) => new Set([...prev, ...ids]))
+              // The hosts become cards of their own, which would fold the stack away.
+              setExpanded(true)
+            }}
           />
         ))}
         {cards.length > maxCards && (
