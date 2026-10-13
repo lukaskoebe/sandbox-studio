@@ -198,7 +198,7 @@ func (r *buildRecordingRuntime) RemoveOwned(ctx context.Context, owned runtime.O
 	if r.removeErr != nil {
 		return r.removeErr
 	}
-	return r.SandboxRuntime.Remove(ctx, owned.Name)
+	return r.Remove(ctx, owned.Name)
 }
 
 func TestBootAndCleanupBuildSandboxRetainStoreOwnership(t *testing.T) {

@@ -110,10 +110,10 @@ func Receive(ctx context.Context, dir string, src io.ReadCloser, limits ocilayer
 	if err != nil {
 		return Layer{}, fmt.Errorf("create gzip writer: %w", err)
 	}
-	gz.Header.ModTime = time.Time{}
-	gz.Header.Name = ""
-	gz.Header.Comment = ""
-	gz.Header.OS = 255
+	gz.ModTime = time.Time{}
+	gz.Name = ""
+	gz.Comment = ""
+	gz.OS = 255
 
 	diffHash := sha256.New()
 	normalizedOutput := io.MultiWriter(diffHash, gz)

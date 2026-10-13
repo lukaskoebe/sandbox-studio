@@ -54,7 +54,7 @@ func (r *templateRecordingRuntime) RemoveOwned(ctx context.Context, owned runtim
 	if r.removeOwnedErr != nil {
 		return r.removeOwnedErr
 	}
-	return r.SandboxRuntime.Remove(ctx, owned.Name)
+	return r.Remove(ctx, owned.Name)
 }
 
 func cloneStringMap(in map[string]string) map[string]string {
