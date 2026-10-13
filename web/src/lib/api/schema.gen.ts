@@ -2233,10 +2233,10 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
+             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
              * @enum {string}
              */
-            action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once";
+            action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once" | "allow_site";
             /**
              * Format: date-time
              * @description For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires

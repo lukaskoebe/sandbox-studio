@@ -33,6 +33,8 @@ func IsNetworkKind(kind string) bool { return kind == KindNetwork || kind == Kin
 const (
 	ActionAllowOnce = "allow_once"
 	ActionDenyOnce  = "deny_once"
+	// ActionAllowSite approves the top-level site of a browser navigation for the browser session.
+	ActionAllowSite = "allow_site"
 )
 
 // Errors returned by Decide and Resolve.
@@ -47,6 +49,7 @@ var (
 	// ErrPerRequest is what Decide returns for a deferred connection that no rule covers: the
 	// connection is not held, and its requests are decided one at a time (HTTP set).
 	ErrPerRequest = errors.New("the browser's requests are decided one at a time")
+	ErrNotSite    = errors.New("only a browser navigation to a new site can be allowed for its site")
 )
 
 // Request is a connection attempt from a sandbox, or a request on a connection the gateway
@@ -90,6 +93,12 @@ type Browsers interface {
 	// TopLevel returns the site of the page the browser of teammateID drove last, which the
 	// requests of the browser are attributed to, or "" if it has no page open.
 	TopLevel(ctx context.Context, envID, teammateID string) string
+	// Allows reports whether the sites the user approved for the browser session cover r: a
+	// top-level navigation to an approved site, or a subresource while every page the browser
+	// has open is on an approved site.
+	Allows(ctx context.Context, envID, teammateID string, r HTTPRequest) bool
+	// Approve approves a site for the browser session of teammateID.
+	Approve(ctx context.Context, envID, teammateID, site string)
 }
 
 // Engine decides connections. Every change to rules or approvals must go through it (or
@@ -129,7 +138,7 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	if err != nil {
 		return store.Rule{}, err
 	}
-	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
+	if r, ok := e.covered(ctx, rules, req, teammate); ok {
 		return r, nil
 	}
 	if req.Deferred && req.HTTP == nil {
@@ -162,14 +171,30 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		if rules, wake, err = e.snapshot(ctx, req.EnvironmentID); err != nil {
 			return store.Rule{}, err
 		}
-		if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
+		if r, ok := e.covered(ctx, rules, req, teammate); ok {
 			return r, nil
 		}
 		cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID)
+		if err == nil && cur.Status == store.StatusApproved && cur.RuleID == "" && !cur.Once {
+			// Approved for its site (decideSite): no rule was made, and none is needed.
+			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, nil
+		}
 		if err != nil || cur.Status != store.StatusPending {
 			return onceAnswer(cur, err, host, req.Port)
 		}
 	}
+}
+
+// covered returns the rule that decides req now: a matching rule, or else the site the user
+// approved for the browser session, which decides with no rule behind it.
+func (e *Engine) covered(ctx context.Context, rules []store.Rule, req Request, teammate string) (store.Rule, bool) {
+	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
+		return r, true
+	}
+	if req.HTTP != nil && e.Browsers != nil && e.Browsers.Allows(ctx, req.EnvironmentID, teammate, *req.HTTP) {
+		return store.Rule{EnvironmentID: req.EnvironmentID, Host: Normalize(req.Host), Action: store.ActionAllow}, true
+	}
+	return store.Rule{}, false
 }
 
 // approvalOf describes the approval for a request that no rule covers: its kind, its subject
@@ -234,6 +259,9 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	}
 	if d.Action == ActionAllowOnce || d.Action == ActionDenyOnce {
 		return e.decideOnce(ctx, a, d.Action == ActionAllowOnce)
+	}
+	if d.Action == ActionAllowSite {
+		return e.decideSite(ctx, a)
 	}
 	if d.Action != store.ActionAllow && d.Action != store.ActionDeny {
 		return a, fmt.Errorf("unsupported decision %q", d.Action)
@@ -301,6 +329,45 @@ func (e *Engine) decideOnce(ctx context.Context, a store.Approval, allow bool) (
 			return a, ErrDecided
 		}
 		return a, err
+	}
+	e.changed(a.EnvironmentID, false)
+	return e.Store.Approval(ctx, a.EnvironmentID, a.ID)
+}
+
+// decideSite approves the site a browser navigation goes to, for the browser session: no rule is
+// made. Pending requests of that site that the browser made from its page are approved with it,
+// so the page's requests don't ask again.
+func (e *Engine) decideSite(ctx context.Context, a store.Approval) (store.Approval, error) {
+	var req NetworkRequest
+	if a.Kind != KindRequest || json.Unmarshal(a.Payload, &req) != nil || !req.Navigation || req.Site == "" {
+		return a, ErrNotSite
+	}
+	teammate, err := e.teammate(ctx, a.EnvironmentID, a.SandboxID)
+	if err != nil {
+		return a, err
+	}
+	if teammate == "" || e.Browsers == nil {
+		return a, ErrNoTeammate
+	}
+	if err := e.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, store.StatusApproved, ""); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return a, ErrDecided
+		}
+		return a, err
+	}
+	e.Browsers.Approve(ctx, a.EnvironmentID, teammate, req.Site)
+	pending, err := e.Store.Approvals(ctx, a.EnvironmentID, store.StatusPending, 10000)
+	if err != nil {
+		return a, err
+	}
+	for _, p := range pending {
+		var pr NetworkRequest
+		if p.Kind != KindRequest || json.Unmarshal(p.Payload, &pr) != nil || pr.Navigation || pr.Site != req.Site {
+			continue
+		}
+		if err := e.Store.DecideApproval(ctx, a.EnvironmentID, p.ID, store.StatusApproved, ""); err != nil && !errors.Is(err, store.ErrNotFound) {
+			return a, err
+		}
 	}
 	e.changed(a.EnvironmentID, false)
 	return e.Store.Approval(ctx, a.EnvironmentID, a.ID)

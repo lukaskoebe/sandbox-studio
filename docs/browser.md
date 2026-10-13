@@ -68,6 +68,8 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     connections with the driving sandbox's rules. Domain approvals name that sandbox.
   - While the user drives (takeover), the browser VM's own rules apply: its teammate's rules
     plus the environment's.
+  - Site approvals last the browser session, and cover a page's requests once the user allows
+    its site (see [network](network.md#hold-and-ask)). They end when the VM stops.
 
 ## Browser TLS trust
 

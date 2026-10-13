@@ -1559,13 +1559,14 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request",
+            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request",
             "enum": [
               "allow",
               "deny",
               "dismiss",
               "allow_once",
-              "deny_once"
+              "deny_once",
+              "allow_site"
             ],
             "type": "string"
           },

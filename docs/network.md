@@ -124,6 +124,13 @@ never trusted. A navigation's site is its own host; a subresource belongs to the
 browser drove last (`browser.TopLevel`). Approvals are keyed by host and site, so a page's
 requests to one host share one card.
 
+A navigation's card offers "Allow site <site> for this browser session". That approves the
+site for the browser session, not through a rule: its navigations are allowed, and so are its
+subresources while every page the browser has open is on an approved site (a subresource's page
+isn't known for certain when several are open, so none may be unapproved). The approved sites
+end with the browser session: when the browser VM stops, idles out or is removed. The pending
+requests of the page's site are approved with it.
+
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.
 

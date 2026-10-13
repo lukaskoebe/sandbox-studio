@@ -25,7 +25,7 @@ type Action = "allow" | "deny" | "dismiss"
  * The buttons: an action; an allow whose rule expires after an hour; or an allow or deny for
  * the one connection, without a rule.
  */
-type Choice = Action | "allowHour" | "allowOnce" | "denyOnce"
+type Choice = Action | "allowHour" | "allowOnce" | "denyOnce" | "allowSite"
 
 const hour = 60 * 60 * 1000
 
@@ -169,6 +169,11 @@ export function ApprovalDecision({
     switch (choice) {
       case "dismiss":
         return decide.mutate({ ...params, body: { action: choice, scope } })
+      case "allowSite":
+        return decide.mutate({
+          ...params,
+          body: { action: "allow_site", scope },
+        })
       // A once decision answers this connection; the server ignores the rule's fields.
       case "allowOnce":
         return decide.mutate({
@@ -230,6 +235,18 @@ export function ApprovalDecision({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+      )}
+      {net?.navigation && net.site && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          disabled={decide.isPending}
+          onClick={() => act("allowSite")}
+        >
+          {busy("allowSite") && <Spinner />}
+          {`Allow site ${net.site} for this browser session`}
+        </Button>
       )}
       {(!compact || optionsOpen) && (
         <>

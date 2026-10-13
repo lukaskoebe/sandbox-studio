@@ -54,6 +54,8 @@ change it.
   own permission requests) leave those out of the stack. More than one card, or a narrow
   page, folds the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
+- A browser navigation to a new site offers "Allow site <site> for this browser session", which
+  approves the site for the session without a rule (`allow_site`).
 - Network requests from one sandbox that arrive within 3 seconds of each other are one card,
   "<sandbox> wants N hosts", with the hosts listed, Allow all, Deny all, and Review
   individually (which turns them into the per-host cards). The pill counts requests, not
