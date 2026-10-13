@@ -29,6 +29,14 @@ its approval kinds with a decide function, and the API hands the decision to the
 
 There is no allow-once for network requests: an answer is a rule (or a dismissal).
 
+## Network approval cards
+
+The card offers the host pattern (the name itself, or its registrable domain as a wildcard)
+and the scope of the rule. Without an owner the scopes are the environment and the one
+sandbox. For a sandbox a teammate owns, the card also offers the teammate's sandboxes, and
+starts with the scope the teammate sets (`approvalScope`, [teammates](teammates.md)). The
+response's `teammate` field carries the owner and that scope; the user can still pick another.
+
 ## Realtime and UI
 
 - `internal/events` publishes change notices as SSE at `/api/events`, with topics such as

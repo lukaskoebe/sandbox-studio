@@ -216,6 +216,7 @@ type Teammate struct {
 	Name          string    `json:"name"`
 	Role          string    `json:"role"`
 	Avatar        string    `json:"avatar" doc:"One emoji, shape:<name> for a generated avatar, or empty to show the initials"`
+	ApprovalScope string    `json:"approvalScope" enum:"sandbox,teammate,environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
 	Soul          string    `json:"soul" doc:"Personality and working rules, as markdown"`
 	Harness       string    `json:"harness" enum:"opencode,claude,codex"`
 	ProviderID    string    `json:"providerId"`
@@ -226,12 +227,12 @@ type Teammate struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
-const teammateCols = "id, environment_id, name, role, avatar, soul, harness, provider_id, model, git_name, git_email, created_at, updated_at"
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, soul, harness, provider_id, model, git_name, git_email, created_at, updated_at"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
 	var created, updated int64
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated)
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated)
 	p.CreatedAt, p.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return p, err
 }
@@ -254,16 +255,16 @@ func (s *Store) CreateTeammate(ctx context.Context, p Teammate) (Teammate, error
 		p.ID = NewID()
 	}
 	p.CreatedAt, p.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO teammates ("+teammateCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, t, t)
+	_, err := s.db.ExecContext(ctx, "INSERT INTO teammates ("+teammateCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, t, t)
 	return p, teammateExists(err, p.Name)
 }
 
 // UpdateTeammate replaces the editable fields of a teammate.
 func (s *Store) UpdateTeammate(ctx context.Context, p Teammate) (Teammate, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET name = ?, role = ?, avatar = ?, soul = ?, harness = ?, provider_id = ?, model = ?,
+	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET name = ?, role = ?, avatar = ?, approval_scope = ?, soul = ?, harness = ?, provider_id = ?, model = ?,
 		git_name = ?, git_email = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
-		p.Name, p.Role, p.Avatar, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, now(), p.EnvironmentID, p.ID)
+		p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, now(), p.EnvironmentID, p.ID)
 	if err := teammateExists(err, p.Name); err != nil {
 		return p, err
 	}

@@ -25,11 +25,21 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
+// ApprovalTeammate is the teammate owning the sandbox of a network approval, with the
+// settings its card starts with.
+type ApprovalTeammate struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	ApprovalScope string `json:"approvalScope" enum:"sandbox,teammate,environment" doc:"The scope the card preselects"`
+}
+
 // ApprovalView is an approval with the details of its request decoded from the payload.
 type ApprovalView struct {
 	store.Approval
 	Network *policy.NetworkRequest `json:"network,omitempty"`
-	Git     *gitreview.GitDetail   `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
+	// Teammate is set for network approvals from a sandbox that a teammate owns.
+	Teammate *ApprovalTeammate    `json:"teammate,omitempty"`
+	Git      *gitreview.GitDetail `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
 	// MemoryShare is set for memory.share approvals.
 	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A teammate's proposal for shared memory"`
 	// MemoryConflict is set for memory.conflict approvals.
@@ -79,7 +89,27 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 			v.MemoryConflict = &p
 		}
 	}
+	if a.Kind == policy.KindNetwork {
+		v.Teammate = s.approvalOwner(ctx, a)
+	}
 	return v
+}
+
+// approvalOwner returns the teammate owning the sandbox of an approval, or nil if the
+// sandbox is unowned or gone.
+func (s *Server) approvalOwner(ctx context.Context, a store.Approval) *ApprovalTeammate {
+	if a.SandboxID == "" {
+		return nil
+	}
+	sb, err := s.Store.Sandbox(ctx, a.EnvironmentID, a.SandboxID)
+	if err != nil || sb.TeammateID == "" {
+		return nil
+	}
+	t, err := s.Store.Teammate(ctx, a.EnvironmentID, sb.TeammateID)
+	if err != nil {
+		return nil
+	}
+	return &ApprovalTeammate{ID: t.ID, Name: t.Name, ApprovalScope: t.ApprovalScope}
 }
 
 // approvalViews lists up to 200 approvals of an environment (all of them if env is empty),

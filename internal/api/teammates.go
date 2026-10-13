@@ -54,15 +54,16 @@ type teammatePath struct {
 
 // TeammateInput is the editable part of a teammate.
 type TeammateInput struct {
-	Name       string `json:"name" minLength:"1" maxLength:"64"`
-	Role       string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
-	Avatar     string `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, or shape:<name> for a generated avatar; omitted shows the initials"`
-	Soul       string `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
-	Harness    string `json:"harness" enum:"opencode,claude,codex"`
-	ProviderID string `json:"providerId" minLength:"1"`
-	Model      string `json:"model,omitempty" maxLength:"128" doc:"Required for API-key providers; defaults to the model of an OpenAI-compatible provider"`
-	GitName    string `json:"gitName,omitempty" maxLength:"100" doc:"Defaults to the name"`
-	GitEmail   string `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
+	Name   string `json:"name" minLength:"1" maxLength:"64"`
+	Role   string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
+	Avatar string `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, or shape:<name> for a generated avatar; omitted shows the initials"`
+	ApprovalScope string `json:"approvalScope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
+	Soul          string `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
+	Harness       string `json:"harness" enum:"opencode,claude,codex"`
+	ProviderID    string `json:"providerId" minLength:"1"`
+	Model         string `json:"model,omitempty" maxLength:"128" doc:"Required for API-key providers; defaults to the model of an OpenAI-compatible provider"`
+	GitName       string `json:"gitName,omitempty" maxLength:"100" doc:"Defaults to the name"`
+	GitEmail      string `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
 }
 
 func (s *Server) registerTeammates(api huma.API) {
@@ -325,7 +326,10 @@ func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateIn
 	p := store.Teammate{
 		ID: id, EnvironmentID: env, Name: in.Name, Role: strings.TrimSpace(in.Role), Avatar: in.Avatar, Soul: in.Soul,
 		Harness: in.Harness, ProviderID: in.ProviderID, Model: strings.TrimSpace(in.Model),
-		GitName: strings.TrimSpace(in.GitName), GitEmail: strings.TrimSpace(in.GitEmail),
+		GitName: strings.TrimSpace(in.GitName), GitEmail: strings.TrimSpace(in.GitEmail), ApprovalScope: in.ApprovalScope,
+	}
+	if p.ApprovalScope == "" {
+		p.ApprovalScope = teammates.ScopeEnvironment
 	}
 	if p.GitName == "" {
 		p.GitName = p.Name

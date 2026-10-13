@@ -42,6 +42,15 @@ const (
 	StateLoginRequired = "login_required"
 )
 
+// Scopes of new rules from approvals of a teammate's sandboxes: the sandbox, the teammate's
+// sandboxes or the environment. ScopeEnvironment is the default and the behaviour before the
+// setting existed.
+const (
+	ScopeSandbox     = "sandbox"
+	ScopeTeammate    = "teammate"
+	ScopeEnvironment = "environment"
+)
+
 // Kind describes a provider kind. The table is fixed (docs/teammates.md).
 type Kind struct {
 	Kind      string

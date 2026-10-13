@@ -24,8 +24,8 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
 
 ## Teammates
 
-- Name (unique in the environment), role, avatar, soul (markdown, at most 16 KiB), harness,
-  provider, model, git name and email.
+- Name (unique in the environment), role, avatar, approval scope, soul (markdown, at most
+  16 KiB), harness, provider, model, git name and email.
 - The avatar is one emoji or one of the generated avatars, stored as `shape:<name>` (`circle`,
   `square`, `diamond`, `triangle`, `pentagon`, `hexagon`, `star`, `cross`), which the UI draws
   in the teammate's color. Empty shows the initials. Nothing is uploaded.
@@ -35,6 +35,10 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
   without control characters, quotes or angle brackets, so they are safe in git config.
 - A teammate that owns sandboxes can't be deleted (409). Deleting a teammate deletes the
   network rules scoped to it.
+- The approval scope is `sandbox`, `teammate` or `environment` (the default, and what rules
+  from approvals did before). It is the scope the approval cards for this teammate's
+  sandboxes preselect for a new rule; the card still lets the user pick another. See
+  [approvals](approvals.md#network-approval-cards).
 
 ## Default teammate
 
