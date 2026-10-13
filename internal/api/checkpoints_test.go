@@ -73,6 +73,11 @@ func (r *checkpointFakeRuntime) Resume(_ context.Context, name string) error {
 	return nil
 }
 
+// Resize saves every change for the next start, which is what a stopped VM does.
+func (r *checkpointFakeRuntime) Resize(context.Context, string, runtime.Size) (runtime.Resized, error) {
+	return runtime.Resized{CPUs: runtime.AppliedNextStart, MemoryMiB: runtime.AppliedNextStart}, nil
+}
+
 func (r *checkpointFakeRuntime) Remove(_ context.Context, name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

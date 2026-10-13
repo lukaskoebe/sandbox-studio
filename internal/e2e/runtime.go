@@ -38,6 +38,7 @@ type vm struct {
 	status    runtime.Status
 	socket    string
 	egress    runtime.Egress
+	size      runtime.Size
 }
 
 // NewRuntime returns a runtime without VMs.
@@ -59,7 +60,7 @@ func (r *Runtime) Create(_ context.Context, name string, spec runtime.Spec, sock
 	if _, ok := r.vms[name]; ok {
 		return errors.New("a VM named " + name + " already exists")
 	}
-	v := &vm{sandboxID: labels["studio.sandbox-id"], socket: socket, egress: spec.Egress}
+	v := &vm{sandboxID: labels["studio.sandbox-id"], socket: socket, egress: spec.Egress, size: runtime.Size{CPUs: spec.CPUs, MemoryMiB: spec.MemoryMiB}}
 	r.vms[name] = v
 	r.bootLocked(v)
 	return nil
@@ -119,6 +120,30 @@ func (r *Runtime) setStatus(name string, from, to runtime.Status) error {
 	}
 	v.status = to
 	return nil
+}
+
+// Resize models msb's dry run: a running VM takes every change live, and any other VM saves
+// its changes for the next start.
+func (r *Runtime) Resize(_ context.Context, name string, size runtime.Size) (runtime.Resized, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.vms[name]
+	if !ok {
+		return runtime.Resized{}, errors.New("no VM named " + name)
+	}
+	applied := runtime.AppliedNextStart
+	if v.status == runtime.StatusRunning {
+		applied = runtime.AppliedLive
+	}
+	out := runtime.Resized{CPUs: runtime.AppliedUnchanged, MemoryMiB: runtime.AppliedUnchanged}
+	if v.size.CPUs != size.CPUs {
+		out.CPUs = applied
+	}
+	if v.size.MemoryMiB != size.MemoryMiB {
+		out.MemoryMiB = applied
+	}
+	v.size = size
+	return out, nil
 }
 
 func (r *Runtime) Remove(_ context.Context, name string) error {
