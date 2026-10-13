@@ -632,6 +632,45 @@ func (s *Server) registerNetwork(api huma.API) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "getCurated", Method: http.MethodGet, Path: "/api/environments/{env}/curated", Tags: []string{"network"},
+		Description: "The curated list of development infrastructure, shipped with Studio, and the entries this environment turned off.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body curatedView }, error) {
+		v, err := s.curated(ctx, in.Env)
+		return &struct{ Body curatedView }{v}, err
+	})
+
+	type setCuratedIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Disabled []string `json:"disabled" maxItems:"64" doc:"The IDs of the curated entries this environment turns off. The whole list, which replaces the current one"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setCurated", Method: http.MethodPut, Path: "/api/environments/{env}/curated", Tags: []string{"network"},
+		Description: "Turns curated entries off or on for the environment. A turned-off entry is asked about like any other host.",
+	}, func(ctx context.Context, in *setCuratedIn) (*struct{ Body curatedView }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		_, entries := policy.CuratedList()
+		off := []string{}
+		for _, id := range in.Body.Disabled {
+			if !slices.ContainsFunc(entries, func(e policy.CuratedEntry) bool { return e.ID == id }) {
+				return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("%q is not an entry of the curated list", id))
+			}
+			if !slices.Contains(off, id) {
+				off = append(off, id)
+			}
+		}
+		slices.Sort(off)
+		if err := s.Store.SetCuratedOff(ctx, in.Env, off); err != nil {
+			return nil, apiError(err)
+		}
+		v, err := s.curated(ctx, in.Env)
+		return &struct{ Body curatedView }{v}, err
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "listConnections", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/connections", Tags: []string{"network"},
 		Description: "The sandbox's most recent connections, newest first. The log is kept in memory only.",
 	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body []gateway.Conn }, error) {
@@ -640,6 +679,34 @@ func (s *Server) registerNetwork(api huma.API) {
 		}
 		return &struct{ Body []gateway.Conn }{s.Conns.List(in.ID)}, nil
 	})
+}
+
+// curatedView is the curated list, with the environment's switch for each entry.
+type curatedView struct {
+	Version string             `json:"version" doc:"The version of the curated list"`
+	Entries []curatedEntryView `json:"entries"`
+}
+
+type curatedEntryView struct {
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Group   string   `json:"group"`
+	Hosts   []string `json:"hosts"`
+	Ports   []int    `json:"ports"`
+	Enabled bool     `json:"enabled" doc:"Whether the guarded and assisted levels allow the entry's hosts"`
+}
+
+func (s *Server) curated(ctx context.Context, env string) (curatedView, error) {
+	e, err := s.Store.Environment(ctx, env)
+	if err != nil {
+		return curatedView{}, apiError(err)
+	}
+	version, entries := policy.CuratedList()
+	v := curatedView{Version: version, Entries: make([]curatedEntryView, 0, len(entries))}
+	for _, c := range entries {
+		v.Entries = append(v.Entries, curatedEntryView{ID: c.ID, Name: c.Name, Group: c.Group, Hosts: c.Hosts, Ports: c.Ports, Enabled: !slices.Contains(e.CuratedOff, c.ID)})
+	}
+	return v, nil
 }
 
 // trackersView is the built-in tracker list and the environment's switch for it.

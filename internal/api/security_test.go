@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -66,5 +67,44 @@ func TestTeammateSecurityLevelAPI(t *testing.T) {
 	}
 	if rec := do(h, "PUT", testOrigin+"/api/environments/"+env.ID+"/teammates/missing/security-level", `{"level":"open"}`); rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown teammate: %d", rec.Code)
+	}
+}
+
+// The curated list: shipped entries, switched per environment; unknown entries are refused.
+func TestCuratedAPI(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	url := testOrigin + "/api/environments/" + env.ID + "/curated"
+
+	list := decode[curatedView](t, do(h, "GET", url, ""))
+	if list.Version == "" || len(list.Entries) < 20 {
+		t.Fatalf("the shipped list: %+v", list)
+	}
+	for _, e := range list.Entries {
+		if !e.Enabled {
+			t.Fatalf("a new environment has %s off", e.ID)
+		}
+	}
+
+	rec := do(h, "PUT", url, `{"disabled":["pypi","npm","pypi"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("turn off: %d %s", rec.Code, rec.Body)
+	}
+	if got, _ := s.Store.Environment(context.Background(), env.ID); !slices.Equal(got.CuratedOff, []string{"npm", "pypi"}) {
+		t.Fatalf("stored: %v", got.CuratedOff)
+	}
+	for _, e := range decode[curatedView](t, rec).Entries {
+		if want := e.ID != "npm" && e.ID != "pypi"; e.Enabled != want {
+			t.Errorf("%s enabled %v, want %v", e.ID, e.Enabled, want)
+		}
+	}
+	if rec := do(h, "PUT", url, `{"disabled":["no-such-entry"]}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown entry: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", url, `{"disabled":[]}`); rec.Code != http.StatusOK {
+		t.Fatalf("turn all on: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "GET", testOrigin+"/api/environments/missing/curated", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown environment: %d", rec.Code)
 	}
 }

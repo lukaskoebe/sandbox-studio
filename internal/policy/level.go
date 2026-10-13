@@ -77,16 +77,21 @@ func (e *Engine) level(ctx context.Context, envID, teammateID string) (string, [
 // true when the level allows it: the returned allow decides the connection, and the allow is
 // recorded in Activity. Otherwise the user decides.
 func (e *Engine) byLevel(ctx context.Context, req Request, teammate, host string) (allow store.Rule, ok bool, err error) {
-	level, _, err := e.level(ctx, req.EnvironmentID, teammate)
+	level, off, err := e.level(ctx, req.EnvironmentID, teammate)
 	if err != nil {
 		return store.Rule{}, false, err
 	}
-	in := levelInput{level: level, placeholder: req.Placeholder, public: publicHost(host)}
-	if in.decide() == allowOpen {
+	entry, listed := curatedMatch(host, req.Port, off)
+	in := levelInput{level: level, curated: listed, placeholder: req.Placeholder, public: publicHost(host)}
+	switch in.decide() {
+	case allowOpen:
 		e.recordAllowed(ctx, req, teammate, host, "open", "")
-		return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, true, nil
+	case allowCurated:
+		e.recordAllowed(ctx, req, teammate, host, "curated", entry.Name)
+	default:
+		return store.Rule{}, false, nil
 	}
-	return store.Rule{}, false, nil
+	return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, true, nil
 }
 
 // recordAllowed records a connection a level or the curated list allowed, so Activity shows why it
