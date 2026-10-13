@@ -125,7 +125,7 @@ rule the user set holds. Any other host is refused without a hold and without an
 
 A template build's VM (`build-<job>`) reaches the hosts its own steps download from on ports 80
 and 443 without anyone being asked, at every security level: the Debian archives and Docker's
-apt repository, mise's version lists, Node.js, Go, Python's version index and its precompiled builds on GitHub and the
+apt repository, mise's version lists, Node.js, Go, Python's version index and its precompiled builds on GitHub, the Sigstore trust roots mise checks their attestations against and the
 Nix releases (`BuildHosts` in `internal/policy/system.go`). A deny rule still wins. Any other host,
 such as one a spec's `setup` script fetches from, is held and asked as for any sandbox.
 

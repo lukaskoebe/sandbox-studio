@@ -25,6 +25,8 @@ var buildHosts = []string{
 	// builds on GitHub.
 	"mise-versions.jdx.dev", "nodejs.org", "go.dev", "dl.google.com", "downloads.python.org",
 	"github.com", "api.github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com",
+	// The trust roots mise checks GitHub's build attestations against.
+	"tuf-repo-cdn.sigstore.dev", "tuf-repo.github.com",
 	// The pinned Nix release.
 	"releases.nixos.org",
 }
