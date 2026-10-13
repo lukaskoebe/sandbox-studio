@@ -1897,7 +1897,7 @@ func verifyPublishedLayer(ctx context.Context, st *store.Store, registry *templa
 			}
 		}
 		if cleanName == proofPath {
-			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			if header.Typeflag != tar.TypeReg && header.Typeflag != 0 {
 				return closeLayerReaders(gz, file, errors.New("published proof path is not a regular file"))
 			}
 			contents, readErr := io.ReadAll(io.LimitReader(reader, 1024))
@@ -1910,13 +1910,13 @@ func verifyPublishedLayer(ctx context.Context, st *store.Store, registry *templa
 			proofFound = true
 		}
 		if cleanName == "usr/bin/tree" {
-			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			if header.Typeflag != tar.TypeReg && header.Typeflag != 0 {
 				return closeLayerReaders(gz, file, errors.New("published tree executable is not a regular file"))
 			}
 			treeFound = true
 		}
 		if cleanName == "home/agent/.local/share/mise/installs/node/22.14.0/bin/node" {
-			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			if header.Typeflag != tar.TypeReg && header.Typeflag != 0 {
 				return closeLayerReaders(gz, file, errors.New("published pinned node executable is not a regular file"))
 			}
 			nodeFound = true

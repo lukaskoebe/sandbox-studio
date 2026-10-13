@@ -224,7 +224,7 @@ func validID(id string) bool {
 		return false
 	}
 	for _, c := range id {
-		if !(c >= 'a' && c <= 'z' || c >= '2' && c <= '7') {
+		if (c < 'a' || c > 'z') && (c < '2' || c > '7') {
 			return false
 		}
 	}

@@ -10,29 +10,72 @@ import (
 	"testing"
 )
 
-// hookInputs are hook payloads per harness and event, as the vendor docs describe them.
-var hookInputs = map[string]map[string]string{
+// hookFixture is a hook payload as the harness sends it: testdata/hooks/<harness>/<event>.json,
+// one per harness and event, shaped after the harness's documentation. They are not live
+// recordings (docs/harnesses.md, "Hook fixtures").
+func hookFixture(t *testing.T, harness, event string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "hooks", harness, event+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+const (
+	claudeSession    = "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10"
+	claudeTranscript = "/home/agent/.claude/projects/-workspace/" + claudeSession + ".jsonl"
+	codexSession     = "019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44"
+	codexTranscript  = "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-" + codexSession + ".jsonl"
+	opencodeSession  = "ses_2f9b7c1d0e4a8KQx"
+)
+
+// hookWant is the neutral event each fixture parses to. The test fills in Harness and Event.
+var hookWant = map[string]map[string]HookEvent{
 	"claude": {
-		HookSessionStart: `{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"SessionStart","source":"compact","model":"claude-x"}`,
-		HookUserPrompt:   `{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"UserPromptSubmit","prompt":"How do we deploy to staging?"}`,
-		HookPreCompact:   `{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"PreCompact","trigger":"auto","custom_instructions":""}`,
-		HookStop:         `{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"Stop","stop_hook_active":false}`,
-		HookSessionEnd:   `{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"SessionEnd","reason":"prompt_input_exit"}`,
+		HookSessionStart: {SessionID: claudeSession, Source: "startup", Cwd: "/workspace", TranscriptPath: claudeTranscript},
+		HookUserPrompt:   {SessionID: claudeSession, Prompt: "How do we deploy to staging?", Cwd: "/workspace", TranscriptPath: claudeTranscript},
+		HookPreCompact:   {SessionID: claudeSession, Cwd: "/workspace", TranscriptPath: claudeTranscript},
+		HookStop:         {SessionID: claudeSession, Cwd: "/workspace", TranscriptPath: claudeTranscript},
+		HookSessionEnd:   {SessionID: claudeSession, Cwd: "/workspace", TranscriptPath: claudeTranscript},
 	},
 	"codex": {
-		HookSessionStart: `{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"SessionStart","model":"gpt-x","source":"startup"}`,
-		HookUserPrompt:   `{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"UserPromptSubmit","model":"gpt-x","turn_id":"t1","prompt":"Run the tests"}`,
-		HookPreCompact:   `{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"PreCompact","model":"gpt-x","turn_id":"t2","trigger":"manual"}`,
-		HookStop:         `{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"Stop","model":"gpt-x","turn_id":"t2","stop_hook_active":false,"last_assistant_message":"Done."}`,
-		HookSessionEnd:   `{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"SessionEnd","model":"gpt-x","reason":"other"}`,
+		HookSessionStart: {SessionID: codexSession, Source: "startup", Cwd: "/workspace", TranscriptPath: codexTranscript},
+		HookUserPrompt:   {SessionID: codexSession, Prompt: "Run the tests", Cwd: "/workspace", TranscriptPath: codexTranscript},
+		HookPreCompact:   {SessionID: codexSession, Cwd: "/workspace", TranscriptPath: codexTranscript},
+		HookStop:         {SessionID: codexSession, Cwd: "/workspace", TranscriptPath: codexTranscript},
+		HookSessionEnd:   {SessionID: codexSession, Cwd: "/workspace", TranscriptPath: codexTranscript},
 	},
 	"opencode": {
-		HookSessionStart: `{"sessionID":"ses_1","source":"startup","cwd":"/workspace"}`,
-		HookUserPrompt:   `{"sessionID":"ses_1","prompt":"Which port does the API use?","cwd":"/workspace"}`,
-		HookPreCompact:   `{"sessionID":"ses_1","cwd":"/workspace","transcript":"user: use pnpm\nassistant: ok\n","transcriptOffset":0}`,
-		HookStop:         `{"sessionID":"ses_1","cwd":"/workspace","transcript":"user: more\n","transcriptOffset":30}`,
-		HookSessionEnd:   `{"sessionID":"ses_1","cwd":"/workspace"}`,
+		HookSessionStart: {SessionID: opencodeSession, Source: "startup", Cwd: "/workspace"},
+		HookUserPrompt:   {SessionID: opencodeSession, Prompt: "Which port does the API use?", Cwd: "/workspace"},
+		HookPreCompact:   {SessionID: opencodeSession, Cwd: "/workspace", Transcript: "user: use pnpm\nassistant: ok\n"},
+		HookStop:         {SessionID: opencodeSession, Cwd: "/workspace", Transcript: "user: more\n", TranscriptOffset: 30},
+		HookSessionEnd:   {SessionID: opencodeSession, Cwd: "/workspace"},
 	},
+}
+
+// TestHookFixtures runs every fixture through its harness's adapter and checks the neutral
+// event it parses to.
+func TestHookFixtures(t *testing.T) {
+	for _, h := range all {
+		for _, event := range agenthook.Events {
+			t.Run(h.Name()+"/"+event, func(t *testing.T) {
+				want, ok := hookWant[h.Name()][event]
+				if !ok {
+					t.Fatal("no expected event")
+				}
+				want.Harness, want.Event = h.Name(), event
+				got, err := h.ParseHook(event, []byte(hookFixture(t, h.Name(), event)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got != want {
+					t.Errorf("parsed %+v, want %+v", got, want)
+				}
+			})
+		}
+	}
 }
 
 // TestHookGolden parses each harness's payload for every event, renders the answer with
@@ -43,7 +86,7 @@ func TestHookGolden(t *testing.T) {
 		t.Run(h.Name(), func(t *testing.T) {
 			var b strings.Builder
 			for _, event := range agenthook.Events {
-				in := hookInputs[h.Name()][event]
+				in := hookFixture(t, h.Name(), event)
 				ev, err := h.ParseHook(event, []byte(in))
 				if err != nil {
 					t.Fatalf("%s: %v", event, err)

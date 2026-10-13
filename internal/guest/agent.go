@@ -78,7 +78,8 @@ func New(log *slog.Logger) (*Agent, error) {
 // Run dials the host and serves sessions until ctx is done, reconnecting with backoff.
 func (a *Agent) Run(ctx context.Context) error {
 	go func() {
-		if err := a.serveCalls(ctx); err != nil && ctx.Err() == nil {
+		// serveCalls returns only errors, so err is set whenever it returns.
+		if err := a.serveCalls(ctx); ctx.Err() == nil {
 			a.log.Error("call socket failed; memory hooks and tools are unavailable", "err", err)
 		}
 	}()
@@ -271,7 +272,7 @@ func validSessionName(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' && r != '_' {
 			return false
 		}
 	}

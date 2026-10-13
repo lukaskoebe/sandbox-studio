@@ -83,11 +83,10 @@ type Why struct {
 }
 
 type candidate struct {
-	hit      Hit
-	chunk    string // text of the best chunk
-	embedded bool
-	age      time.Duration
-	half     time.Duration
+	hit   Hit
+	chunk string // text of the best chunk
+	age   time.Duration
+	half  time.Duration
 }
 
 type chunkHit struct {

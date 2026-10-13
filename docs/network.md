@@ -28,7 +28,9 @@ Per connection (`gateway.go`):
 2. Name the destination: the SOCKS domain if the client sent one, else the sandbox's DNS
    map, else sniff TLS SNI or the HTTP Host header. Sniffing waits up to 5 s on ports 80 and
    443, 300 ms when the name is already known, 1 s otherwise, because some protocols (SSH)
-   wait for the server to speak first.
+   wait for the server to speak first. A name the client sends is lower-cased and loses one
+   trailing dot; then it must be a host name or IP address, with no spaces and no wildcard.
+   A sniffed name that fails this is ignored; a SOCKS domain that fails it is refused.
 3. Names under `*.studio.internal` (DNS answer `198.18.0.1`) are virtual hosts served by the
    gateway itself, e.g. `git.studio.internal` for [git review](git-review.md).
 4. Ask the policy (below). Without a decision, the connection is held.

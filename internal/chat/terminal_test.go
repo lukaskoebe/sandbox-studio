@@ -162,3 +162,25 @@ func TestTerminalSessionGone(t *testing.T) {
 		t.Fatalf("delete: %v %v", err, f.g.sessions)
 	}
 }
+
+// A TUI that fails to start gives its error back and leaves the chat idle, so the chat can
+// be used again.
+func TestTerminalStartFailureUnlocksChat(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Steps: steps(chunk(agentChunk, "Hi"))}}})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	f.wait(t, f.send(t, "first").ID)
+
+	f.g.startErr = errors.New("tmux refused the session")
+	if name, err := f.s.OpenInTerminal(ctx, env, f.chat.ID, f.launch()); err == nil || name != "" {
+		t.Fatalf("open with a failing TUI: %q %v", name, err)
+	}
+	c, _ := f.s.Store.Chat(ctx, env, f.chat.ID)
+	if c.State == store.ChatTerminal {
+		t.Fatalf("state %s after the TUI failed to start", c.State)
+	}
+	f.g.startErr = nil
+	if _, err := f.s.OpenInTerminal(ctx, env, f.chat.ID, f.launch()); err != nil {
+		t.Fatalf("open after the failure: %v", err)
+	}
+}

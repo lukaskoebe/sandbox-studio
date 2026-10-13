@@ -86,7 +86,7 @@ func TestForkOfLegacySandboxHasNoHomeDisk(t *testing.T) {
 	tf.setWorkspace(VMName(source.Sandbox), "files")
 	tf.setHome(VMName(source.Sandbox), "root home")
 
-	fork, err := f.manager.Fork(f.ctx, f.env.ID, source.Sandbox.ID, "legacy-fork")
+	fork, err := f.manager.Fork(f.ctx, f.env.ID, source.ID, "legacy-fork")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestRebaseLegacySandboxOntoCurrentTemplateCopiesRootHome(t *testing.T) {
 	tf.setHome(VMName(source.Sandbox), "root home")
 	current := rebaseTemplate(t, f, rebaseResources)
 
-	view, err := f.manager.Rebase(f.ctx, f.env.ID, source.Sandbox.ID, current.ID)
+	view, err := f.manager.Rebase(f.ctx, f.env.ID, source.ID, current.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestRebaseLegacySandboxOntoLegacyTemplateKeepsItsShape(t *testing.T) {
 	tf.setHome(VMName(source.Sandbox), "root home")
 	other := legacyTemplate(t, f, resources.Resources{CPUs: 1, MemoryMiB: 1024, MaxMemoryMiB: 1024, WorkspaceMiB: 4096, DockerMiB: 2048})
 
-	view, err := f.manager.Rebase(f.ctx, f.env.ID, source.Sandbox.ID, other.ID)
+	view, err := f.manager.Rebase(f.ctx, f.env.ID, source.ID, other.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestExportOfLegacySandboxHasEmptyHomeSection(t *testing.T) {
 	tf.setWorkspace(VMName(source.Sandbox), "files")
 	tf.setHome(VMName(source.Sandbox), "root home")
 
-	file, manifest := exportToBuffer(t, f, source.Sandbox.ID)
+	file, manifest := exportToBuffer(t, f, source.ID)
 	if manifest.Format != ExportFormat {
 		t.Fatalf("format = %d, want %d", manifest.Format, ExportFormat)
 	}

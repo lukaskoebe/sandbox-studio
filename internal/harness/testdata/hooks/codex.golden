@@ -1,44 +1,90 @@
 == session-start
 -- stdin
-{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"SessionStart","model":"gpt-x","source":"startup"}
--- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
-{"harness":"codex","event":"session-start","sessionId":"019a","source":"startup","cwd":"/workspace"}
+{
+  "session_id": "019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44",
+  "transcript_path": "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl",
+  "cwd": "/workspace",
+  "permission_mode": "default",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-5.4",
+  "source": "startup"
+}
+
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl")
+{"harness":"codex","event":"session-start","sessionId":"019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44","source":"startup","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"SessionStart"}}
 == user-prompt
 -- stdin
-{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"UserPromptSubmit","model":"gpt-x","turn_id":"t1","prompt":"Run the tests"}
--- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
-{"harness":"codex","event":"user-prompt","sessionId":"019a","prompt":"Run the tests","cwd":"/workspace"}
+{
+  "session_id": "019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44",
+  "transcript_path": "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl",
+  "cwd": "/workspace",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-5.4",
+  "turn_id": "019a6c40-1b7e-7a03-9d55-6e2f8c1a4b91",
+  "prompt": "Run the tests"
+}
+
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl")
+{"harness":"codex","event":"user-prompt","sessionId":"019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44","prompt":"Run the tests","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"UserPromptSubmit"}}
 == pre-compact
 -- stdin
-{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"PreCompact","model":"gpt-x","turn_id":"t2","trigger":"manual"}
--- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
-{"harness":"codex","event":"pre-compact","sessionId":"019a","cwd":"/workspace"}
+{
+  "session_id": "019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44",
+  "transcript_path": "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl",
+  "cwd": "/workspace",
+  "hook_event_name": "PreCompact",
+  "model": "gpt-5.4",
+  "turn_id": "019a6c44-5d20-7e91-a3c8-0f7b2d9e1c56",
+  "trigger": "manual"
+}
+
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl")
+{"harness":"codex","event":"pre-compact","sessionId":"019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {}
 == stop
 -- stdin
-{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"Stop","model":"gpt-x","turn_id":"t2","stop_hook_active":false,"last_assistant_message":"Done."}
--- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
-{"harness":"codex","event":"stop","sessionId":"019a","cwd":"/workspace"}
+{
+  "session_id": "019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44",
+  "transcript_path": "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl",
+  "cwd": "/workspace",
+  "permission_mode": "default",
+  "hook_event_name": "Stop",
+  "model": "gpt-5.4",
+  "turn_id": "019a6c40-1b7e-7a03-9d55-6e2f8c1a4b91",
+  "stop_hook_active": false,
+  "last_assistant_message": "All 42 tests pass."
+}
+
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl")
+{"harness":"codex","event":"stop","sessionId":"019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {}
 == session-end
 -- stdin
-{"session_id":"019a","transcript_path":"/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl","cwd":"/workspace","hook_event_name":"SessionEnd","model":"gpt-x","reason":"other"}
--- parsed (transcript path "/home/agent/.codex/sessions/2026/10/10/rollout-019a.jsonl")
-{"harness":"codex","event":"session-end","sessionId":"019a","cwd":"/workspace"}
+{
+  "session_id": "019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44",
+  "transcript_path": "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl",
+  "cwd": "/workspace",
+  "hook_event_name": "SessionEnd",
+  "reason": "other"
+}
+
+-- parsed (transcript path "/home/agent/.codex/sessions/2026/10/13/rollout-2026-10-13T09-12-44-019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44.jsonl")
+{"harness":"codex","event":"session-end","sessionId":"019a6c3e-8f21-7d40-b5e2-3c9a1f0e7d44","cwd":"/workspace"}
 -- neutral
 {}
 -- with context

@@ -197,16 +197,14 @@ func (w *processWatchdog) writeCommand(command byte) error {
 	if err := w.control.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
 		return err
 	}
-	for {
-		n, err := w.control.Write([]byte{command})
-		if err != nil {
-			return err
-		}
-		if n != 1 {
-			return io.ErrShortWrite
-		}
-		return nil
+	n, err := w.control.Write([]byte{command})
+	if err != nil {
+		return err
 	}
+	if n != 1 {
+		return io.ErrShortWrite
+	}
+	return nil
 }
 
 func (w *processWatchdog) readEvent(ctx context.Context, deadline time.Time) (watchdogEvent, error) {

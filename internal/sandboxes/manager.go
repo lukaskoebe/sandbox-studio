@@ -517,14 +517,14 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 		return View{}, err
 	}
 	defer unlock()
-	rec, err := m.PublicSandbox(ctx, envID, id)
+	_, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
 	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
-	rec, err = m.PublicSandbox(ctx, envID, id)
+	rec, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
@@ -559,14 +559,14 @@ func (m *Manager) Stop(ctx context.Context, envID, id string) (View, error) {
 		return View{}, err
 	}
 	defer unlock()
-	rec, err := m.PublicSandbox(ctx, envID, id)
+	_, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
 	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
-	rec, err = m.PublicSandbox(ctx, envID, id)
+	rec, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
@@ -586,14 +586,14 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 		return err
 	}
 	defer unlock()
-	rec, err := m.PublicSandbox(ctx, envID, id)
+	_, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return err
 	}
 	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return err
 	}
-	rec, err = m.PublicSandbox(ctx, envID, id)
+	rec, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return err
 	}

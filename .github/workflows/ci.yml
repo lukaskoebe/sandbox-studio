@@ -18,6 +18,13 @@ jobs:
       - name: gofmt
         if: runner.os == 'Linux'
         run: test -z "$(gofmt -l .)"
+      - name: golangci-lint
+        if: runner.os == 'Linux'
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.14.0
+          # errcheck has open findings (see .golangci.yml); CI runs the other linters.
+          args: --disable errcheck
       - run: go vet ./...
       - run: go test ./...
       - run: go build ./cmd/studio

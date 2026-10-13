@@ -390,7 +390,7 @@ func (g *Gateway) handshake(c net.Conn, br *bufio.Reader) (store.Sandbox, socksT
 		if _, err := io.ReadFull(br, name); err != nil {
 			return sb, t, err
 		}
-		if t.domain = policy.Normalize(string(name)); !validHost(t.domain) {
+		if t.domain = clientHost(string(name)); t.domain == "" {
 			c.Write([]byte{5, 4, 0, 1, 0, 0, 0, 0, 0, 0})
 			return sb, t, fmt.Errorf("invalid destination %q", name)
 		}

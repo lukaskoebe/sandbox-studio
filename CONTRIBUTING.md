@@ -16,6 +16,7 @@ Run these before sending a change; CI runs them too.
 
 ```sh
 gofmt -l .                                    # must print nothing
+golangci-lint run --disable errcheck          # the linters CI runs; see .golangci.yml
 go vet -tags nobadger,nomysql,nopgx ./...
 go vet -tags e2e,nobadger,nomysql,nopgx ./... # the e2e build, see below
 go test -tags nobadger,nomysql,nopgx ./...
@@ -35,6 +36,17 @@ host, `make image` and `make agent`:
 ```sh
 go test -tags integration -run TestSandboxLifecycle -v ./internal/sandboxes
 ```
+
+The parsers of untrusted input have fuzz targets: `FuzzSniffTLS` and `FuzzSniffHTTP`
+(`internal/gateway`), `FuzzSOCKSHandshake` (`internal/gateway`), `FuzzParseRepoURL`
+(`internal/gitreview`) and `FuzzCompile` (`internal/caddyrule`). Their seeds run in every
+`go test`. To fuzz one for a minute, run it alone:
+
+```sh
+go test -run='^$' -fuzz='^FuzzSniffTLS$' -fuzztime=60s ./internal/gateway/
+```
+
+A failing input is written to `testdata/fuzz/` and then runs as a regression test.
 
 ## End-to-end tests
 

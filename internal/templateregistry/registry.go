@@ -391,7 +391,7 @@ func (r *Registry) Reconcile(ctx context.Context) error {
 				continue
 			}
 			publishing := strings.TrimSuffix(strings.TrimPrefix(e.Name(), "."), ".publishing")
-			if e.Name() != ".incoming" && !validID(e.Name()) && !(strings.HasPrefix(e.Name(), ".") && strings.HasSuffix(e.Name(), ".publishing") && validID(publishing)) {
+			if e.Name() != ".incoming" && !validID(e.Name()) && (!strings.HasPrefix(e.Name(), ".") || !strings.HasSuffix(e.Name(), ".publishing") || !validID(publishing)) {
 				return errors.New("unexpected entry in private template environment directory")
 			}
 			if err := r.root.RemoveAll(rel); err != nil {

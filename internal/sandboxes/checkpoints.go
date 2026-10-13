@@ -46,14 +46,14 @@ func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) 
 	}
 	defer unlock()
 
-	sb, err := m.PublicSandbox(ctx, envID, id)
+	_, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return store.Checkpoint{}, err
 	}
 	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return store.Checkpoint{}, err
 	}
-	sb, err = m.PublicSandbox(ctx, envID, id)
+	sb, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return store.Checkpoint{}, err
 	}
@@ -174,14 +174,14 @@ func (m *Manager) RestoreCheckpoint(ctx context.Context, envID, id, checkpointID
 	}
 	defer unlock()
 
-	sb, err := m.PublicSandbox(ctx, envID, id)
+	_, err = m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}
 	if err := m.ensureSettled(ctx, envID, id, ""); err != nil {
 		return View{}, err
 	}
-	sb, err = m.PublicSandbox(ctx, envID, id)
+	sb, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
 	}

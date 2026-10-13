@@ -115,7 +115,7 @@ func (h *harness) lastDial() string {
 	return h.dialed[len(h.dialed)-1]
 }
 
-func clientHello(t *testing.T, serverName string) []byte {
+func clientHello(t testing.TB, serverName string) []byte {
 	t.Helper()
 	a, b := net.Pipe()
 	go tls.Client(a, &tls.Config{ServerName: serverName}).Handshake()
@@ -254,6 +254,15 @@ func TestSniffHelpers(t *testing.T) {
 	} {
 		if got := httpHost([]byte(head)); got != want {
 			t.Errorf("%q: got %q, want %q", head, got, want)
+		}
+	}
+	// Client names are kept only in the form the policy stores, never trimmed into one.
+	for name, want := range map[string]string{
+		"Example.COM.": "example.com", " example.com": "", "example.com ": "", "example.com..": "",
+		"*.example.com": "", "exa mple.com": "", "10.0.0.1": "10.0.0.1",
+	} {
+		if got := clientHost(name); got != want {
+			t.Errorf("clientHost(%q): got %q, want %q", name, got, want)
 		}
 	}
 }

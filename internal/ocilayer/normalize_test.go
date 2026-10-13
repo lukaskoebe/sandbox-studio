@@ -41,7 +41,7 @@ func makeTar(t *testing.T, members ...member) []byte {
 		if h.Typeflag == 0 {
 			h.Typeflag = tar.TypeReg
 		}
-		if h.Typeflag == tar.TypeReg || h.Typeflag == tar.TypeRegA {
+		if h.Typeflag == tar.TypeReg || h.Typeflag == 0 {
 			h.Size = int64(len(m.data))
 		}
 		if err := tw.WriteHeader(&h); err != nil {
