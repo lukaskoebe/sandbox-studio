@@ -18,8 +18,8 @@ import (
 const peekSize = 16<<10 + 5
 
 // sniff waits up to timeout for the client's first bytes and returns the server name they
-// carry (TLS SNI or the HTTP Host header). Nothing is consumed: the peeked bytes stay in br
-// and are forwarded upstream.
+// carry (TLS SNI or the HTTP Host header), as clientHost keeps it. Nothing is consumed: the
+// peeked bytes stay in br and are forwarded upstream.
 func sniff(c net.Conn, br *bufio.Reader, timeout time.Duration) (name, proto string) {
 	c.SetReadDeadline(time.Now().Add(timeout))
 	defer c.SetReadDeadline(time.Time{})
@@ -34,7 +34,7 @@ func sniff(c net.Conn, br *bufio.Reader, timeout time.Duration) (name, proto str
 		}
 		n := min(5+(int(hdr[3])<<8|int(hdr[4])), peekSize)
 		rec, _ := br.Peek(n) // a short record still often holds the SNI
-		return serverName(rec[5:]), "tls"
+		return clientHost(serverName(rec[5:])), "tls"
 	}
 	if !looksLikeHTTP(br) {
 		return "", ""
@@ -42,11 +42,11 @@ func sniff(c net.Conn, br *bufio.Reader, timeout time.Duration) (name, proto str
 	for {
 		b, _ := br.Peek(br.Buffered())
 		if end := bytes.Index(b, []byte("\r\n\r\n")); end >= 0 || len(b) >= peekSize {
-			return httpHost(b), "http"
+			return clientHost(httpHost(b)), "http"
 		}
 		if _, err := br.Peek(len(b) + 1); err != nil {
 			b, _ = br.Peek(br.Buffered())
-			return httpHost(b), "http"
+			return clientHost(httpHost(b)), "http"
 		}
 	}
 }
@@ -128,6 +128,18 @@ func serverName(msg []byte) string {
 		}
 	}
 	return ""
+}
+
+// clientHost returns name in the form the gateway keeps hosts (lower case, no trailing dot)
+// if it is a host name or IP address, and "" otherwise. Names from a sandbox are only hosts
+// when they need no trimming: policy.ValidPattern would accept " example.com" and drop the
+// spaces, and the gateway would then use the untrimmed name.
+func clientHost(name string) string {
+	n := policy.Normalize(name)
+	if p, err := policy.ValidPattern(n); err != nil || p != n || strings.Contains(n, "*") {
+		return ""
+	}
+	return n
 }
 
 // validHost reports whether name can be used as a dial target and rule subject.
