@@ -1527,6 +1527,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Turns the teammate's check-ins on, or changes their schedule: every everyHours hours while the local hour is in [fromHour, toHour). A check-in gives the teammate a chat turn in its latest sandbox when it has open tasks. */
+        put: operations["setTeammateHeartbeat"];
+        post?: never;
+        /** @description Turns the teammate's check-ins off. The schedule's window is kept for the next time. */
+        delete: operations["clearTeammateHeartbeat"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{id}/heartbeats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The teammate's logged check-ins, newest first: the heartbeat chats they started, and the ones skipped with why. */
+        get: operations["listHeartbeats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{id}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The teammate's tasks: the ones not done first, then oldest first. */
+        get: operations["listTeammateTasks"];
+        put?: never;
+        /** @description Adds a task to the teammate's list, created by the user. A new task is open; its status is not read. */
+        post: operations["createTeammateTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{id}/tasks/{task}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Replaces the task's title, details, due day and status. Status done marks it finished. */
+        put: operations["updateTeammateTask"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser": {
         parameters: {
             query?: never;
@@ -1971,6 +2041,18 @@ export interface components {
             stale: boolean;
             supported: boolean;
         };
+        Beat: {
+            /** Format: date-time */
+            at: string;
+            /** @description The heartbeat chat it started */
+            chatId?: string;
+            id: string;
+            /** @enum {string} */
+            outcome: "started" | "skipped";
+            /** @description Why the check-in was skipped */
+            reason?: string;
+            teammateId: string;
+        };
         BrowserAction: {
             action: string;
             /** @enum {string} */
@@ -2118,6 +2200,7 @@ export interface components {
             createdAt: string;
             environmentId: string;
             harness: string;
+            heartbeat: boolean;
             id: string;
             /**
              * Format: int64
@@ -2895,6 +2978,23 @@ export interface components {
             /** @enum {string} */
             status: "ok";
             version: string;
+        };
+        Heartbeat: {
+            /**
+             * Format: int64
+             * @description Hours between check-ins
+             */
+            everyHours: number;
+            /**
+             * Format: int64
+             * @description The first local hour a check-in may start in
+             */
+            fromHour: number;
+            /**
+             * Format: int64
+             * @description The local hour the check-ins stop before
+             */
+            toHour: number;
         };
         Hit: {
             /** @description The fact is part of an open conflict; treat it with care */
@@ -3715,6 +3815,34 @@ export interface components {
             /** @description An ephemeral session's ID; empty for the persistent profile */
             session?: string;
         };
+        Task: {
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description teammate: the teammate created it for itself
+             * @enum {string}
+             */
+            createdBy: "user" | "teammate";
+            details?: string;
+            /** @description A day, YYYY-MM-DD */
+            due?: string;
+            id: string;
+            /** @enum {string} */
+            status: "open" | "in_progress" | "done";
+            teammateId: string;
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TaskInput: {
+            /** @description Markdown, at most 8 KiB */
+            details?: string;
+            /** @description A day, YYYY-MM-DD */
+            due?: string;
+            /** @enum {string} */
+            status?: "open" | "in_progress" | "done";
+            title: string;
+        };
         Teammate: {
             /**
              * @description The scope the approval cards for this teammate's sandboxes preselect for new rules
@@ -3730,6 +3858,7 @@ export interface components {
             gitName: string;
             /** @enum {string} */
             harness: "opencode" | "claude" | "codex";
+            heartbeat?: components["schemas"]["Heartbeat"];
             id: string;
             model: string;
             name: string;
@@ -8105,6 +8234,222 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Teammate"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setTeammateHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Heartbeat"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    clearTeammateHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listHeartbeats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Beat"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTeammateTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    createTeammateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    updateTeammateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+                /** @description Task ID */
+                task: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
                 };
             };
             /** @description Error */
