@@ -24,12 +24,16 @@ type fakePolicy struct {
 	mu    sync.Mutex
 	asked []policy.Request
 	rules map[string]store.Rule // by host
+	errs  map[string]error      // by host: the connection's answer is this error
 }
 
 func (p *fakePolicy) Decide(_ context.Context, req policy.Request) (store.Rule, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.asked = append(p.asked, req)
+	if err := p.errs[req.Host]; err != nil {
+		return store.Rule{}, err
+	}
 	if r, ok := p.rules[req.Host]; ok {
 		return r, nil
 	}
@@ -326,5 +330,24 @@ func TestDriverDecides(t *testing.T) {
 	}
 	if log := h.gw.Conns.List("sb1"); len(log) != 2 {
 		t.Fatalf("connections are logged for the browser VM: %+v", log)
+	}
+}
+
+// A request denied for its one connection gets a 403 that says so, and no rule is involved.
+func TestDeniedOnce(t *testing.T) {
+	h := newHarness(t, "")
+	h.policy.errs = map[string]error{"refused.example": policy.ErrDenied}
+	c, err := h.dial(t, Password([]byte("key"), "sb1"), "192.0.2.1:80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Write([]byte("GET / HTTP/1.1\r\nHost: refused.example:80\r\nUser-Agent: test\r\n\r\n"))
+	resp, _ := io.ReadAll(c)
+	c.Close()
+	if !strings.HasPrefix(string(resp), "HTTP/1.1 403 ") || !strings.Contains(string(resp), "The user denied the request to connect to refused.example:80.") {
+		t.Errorf("got %q", resp)
+	}
+	if log := h.gw.Conns.List("sb1"); len(log) != 1 || log[0].Verdict != VerdictDenied {
+		t.Fatalf("connection log: %+v", log)
 	}
 }

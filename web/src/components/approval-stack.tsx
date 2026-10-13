@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react"
 import { ApprovalDecision } from "@/components/approval-decision"
+import { NetworkGroupCard } from "@/components/approval-group"
 import {
   BrowserActionDecision,
   BrowserCredentialDecision,
@@ -30,6 +31,11 @@ import {
 } from "@/components/ui/card"
 import { $api, type Approval } from "@/lib/api/client"
 import { ruleClass } from "@/lib/accents"
+import {
+  approvalCards,
+  cardApproval,
+  type ApprovalCard,
+} from "@/lib/approval-groups"
 import {
   approvalKind,
   approvalSource,
@@ -63,6 +69,8 @@ export function ApprovalStack() {
   const [conflict, setConflict] = useState<Approval>()
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
+  // Requests the user chose to review one by one, which then no longer group.
+  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   const all = pending.data ?? []
   useTitleCount(all.length)
 
@@ -96,11 +104,14 @@ export function ApprovalStack() {
       />
     </>
   )
-  if (items.length === 0) return sheet
+  const cards = approvalCards(items, split)
+  if (cards.length === 0) return sheet
+  const envName = (a: Approval) =>
+    envs.data?.find((e) => e.id === a.environmentId)?.name
 
   // One card needs no pill on a wide page, so it shows there; below sm the CSS hides it until the
   // pill opens it. Several cards start folded.
-  const single = items.length === 1
+  const single = cards.length === 1
   return (
     <section
       aria-label="Approvals"
@@ -123,20 +134,21 @@ export function ApprovalStack() {
             Enable notifications
           </Button>
         )}
-        {items.slice(0, maxCards).map((a) => (
-          <ApprovalCard
-            key={a.id}
-            approval={a}
-            envName={envs.data?.find((e) => e.id === a.environmentId)?.name}
-            onReview={() =>
+        {cards.slice(0, maxCards).map((card) => (
+          <StackCard
+            key={cardApproval(card).id}
+            card={card}
+            envName={envName}
+            onReview={(a) =>
               a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id)
             }
+            onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
           />
         ))}
-        {items.length > maxCards && (
+        {cards.length > maxCards && (
           <MoreLink
-            approval={items[maxCards]}
-            count={items.length - maxCards}
+            approval={cardApproval(cards[maxCards])}
+            count={cards.length - maxCards}
           />
         )}
       </div>
@@ -149,11 +161,41 @@ export function ApprovalStack() {
         className={cn("rounded-full bg-card shadow-lg", single && "sm:hidden")}
       >
         <WaitingCount count={items.length} />
-        {single ? "approval" : "approvals"}
+        {items.length === 1 ? "approval" : "approvals"}
         {expanded ? <CaretDownIcon aria-hidden /> : <CaretUpIcon aria-hidden />}
       </Button>
       {sheet}
     </section>
+  )
+}
+
+/** One card of the stack: a single approval, or the network requests of one sandbox together. */
+function StackCard({
+  card,
+  envName,
+  onReview,
+  onSplit,
+}: {
+  card: ApprovalCard
+  envName: (a: Approval) => string | undefined
+  onReview: (a: Approval) => void
+  onSplit: (ids: string[]) => void
+}) {
+  if (card.kind === "single") {
+    return (
+      <ApprovalCard
+        approval={card.approval}
+        envName={envName(card.approval)}
+        onReview={() => onReview(card.approval)}
+      />
+    )
+  }
+  return (
+    <NetworkGroupCard
+      approvals={card.approvals}
+      envName={envName(card.approvals[0])}
+      onReview={() => onSplit(card.approvals.map((a) => a.id))}
+    />
   )
 }
 

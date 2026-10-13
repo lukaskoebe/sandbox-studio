@@ -1733,6 +1733,8 @@ export interface components {
             /** @description A teammate's proposal for shared memory */
             memoryShare?: components["schemas"]["SharePayload"];
             network?: components["schemas"]["NetworkRequest"];
+            /** @description Set when a network request was decided for its one connection, without a rule */
+            once?: boolean;
             ruleId?: string;
             sandboxId?: string;
             /** @enum {string} */
@@ -2098,6 +2100,28 @@ export interface components {
             /** Format: int64 */
             workspaceMiB?: number;
         };
+        CreateRuleInBody: {
+            /**
+             * @description allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile
+             * @enum {string}
+             */
+            action: "allow" | "proxy" | "caddy" | "deny";
+            config?: components["schemas"]["RuleConfigInput"];
+            /**
+             * Format: date-time
+             * @description When the rule stops matching; it must be in the future. Empty means it never expires
+             */
+            expiresAt?: string;
+            /** @description example.com, *.example.com (includes example.com), or an IP address */
+            host: string;
+            note?: string;
+            /** @description Empty or omitted means any port */
+            ports?: number[] | null;
+            /** @description Limits the rule to one sandbox of this environment */
+            sandboxId?: string;
+            /** @description Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId */
+            teammateId?: string;
+        };
         CreateSecretInBody: {
             /** @description Host patterns the value may be sent to, e.g. api.openai.com or *.example.com */
             hosts: string[] | null;
@@ -2133,10 +2157,15 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
+             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
              * @enum {string}
              */
-            action: "allow" | "deny" | "dismiss";
+            action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once";
+            /**
+             * Format: date-time
+             * @description For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires
+             */
+            expiresAt?: string;
             /** @description Host pattern the rule covers; empty means the requested host */
             host?: string;
             /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected */
@@ -3001,10 +3030,30 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
+            /**
+             * Format: date-time
+             * @description When the rule stops matching; empty means it never expires
+             */
+            expiresAt?: string;
+            /**
+             * Format: int64
+             * @description Connections the rule decided, as of the last write, which happens about once a minute
+             */
+            hits: number;
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
             id: string;
+            /**
+             * Format: date-time
+             * @description When the rule last decided a connection, as of the last write
+             */
+            lastHitAt?: string;
             note: string;
+            /**
+             * @description Where the rule came from. Read-only: set when the rule is created
+             * @enum {string}
+             */
+            origin: "manual" | "approval" | "curated" | "reviewer";
             /** @description Empty means any port */
             ports: number[] | null;
             sandboxId?: string;
@@ -5629,7 +5678,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RuleInput"];
+                "application/json": components["schemas"]["CreateRuleInBody"];
             };
         };
         responses: {

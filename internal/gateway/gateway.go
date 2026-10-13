@@ -194,6 +194,10 @@ func (g *Gateway) handle(c net.Conn) {
 		verdict = VerdictDenied
 		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("The user dismissed the request to connect to %s:%d.", host, port))
 		return
+	case errors.Is(err, policy.ErrDenied):
+		verdict = VerdictDenied
+		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("The user denied the request to connect to %s:%d.", host, port))
+		return
 	case err != nil:
 		problem = err.Error()
 		g.Log.Error("network policy", "sandbox", sb.ID, "host", host, "err", err)

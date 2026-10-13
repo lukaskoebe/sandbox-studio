@@ -169,6 +169,10 @@
           "network": {
             "$ref": "#/components/schemas/NetworkRequest"
           },
+          "once": {
+            "description": "Set when a network request was decided for its one connection, without a rule",
+            "type": "boolean"
+          },
           "ruleId": {
             "type": "string"
           },
@@ -1329,6 +1333,64 @@
         ],
         "type": "object"
       },
+      "CreateRuleInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile",
+            "enum": [
+              "allow",
+              "proxy",
+              "caddy",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "config": {
+            "$ref": "#/components/schemas/RuleConfigInput"
+          },
+          "expiresAt": {
+            "description": "When the rule stops matching; it must be in the future. Empty means it never expires",
+            "format": "date-time",
+            "type": "string"
+          },
+          "host": {
+            "description": "example.com, *.example.com (includes example.com), or an IP address",
+            "minLength": 1,
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "ports": {
+            "description": "Empty or omitted means any port",
+            "items": {
+              "format": "int64",
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "sandboxId": {
+            "description": "Limits the rule to one sandbox of this environment",
+            "type": "string"
+          },
+          "teammateId": {
+            "description": "Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "action"
+        ],
+        "type": "object"
+      },
       "CreateSecretInBody": {
         "additionalProperties": false,
         "properties": {
@@ -1446,12 +1508,19 @@
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "For network requests allow or deny creates a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request",
+            "description": "For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request",
             "enum": [
               "allow",
               "deny",
-              "dismiss"
+              "dismiss",
+              "allow_once",
+              "deny_once"
             ],
+            "type": "string"
+          },
+          "expiresAt": {
+            "description": "For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires",
+            "format": "date-time",
             "type": "string"
           },
           "host": {
@@ -4061,6 +4130,16 @@
           "environmentId": {
             "type": "string"
           },
+          "expiresAt": {
+            "description": "When the rule stops matching; empty means it never expires",
+            "format": "date-time",
+            "type": "string"
+          },
+          "hits": {
+            "description": "Connections the rule decided, as of the last write, which happens about once a minute",
+            "format": "int64",
+            "type": "integer"
+          },
           "host": {
             "description": "example.com, *.example.com (includes example.com), or an IP address",
             "type": "string"
@@ -4068,7 +4147,22 @@
           "id": {
             "type": "string"
           },
+          "lastHitAt": {
+            "description": "When the rule last decided a connection, as of the last write",
+            "format": "date-time",
+            "type": "string"
+          },
           "note": {
+            "type": "string"
+          },
+          "origin": {
+            "description": "Where the rule came from. Read-only: set when the rule is created",
+            "enum": [
+              "manual",
+              "approval",
+              "curated",
+              "reviewer"
+            ],
             "type": "string"
           },
           "ports": {
@@ -4098,6 +4192,8 @@
           "action",
           "config",
           "note",
+          "origin",
+          "hits",
           "createdAt"
         ],
         "type": "object"
@@ -8923,7 +9019,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RuleInput"
+                "$ref": "#/components/schemas/CreateRuleInBody"
               }
             }
           },

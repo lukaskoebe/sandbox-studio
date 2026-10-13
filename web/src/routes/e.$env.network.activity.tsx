@@ -11,12 +11,24 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
-import { $api } from "@/lib/api/client"
+import { $api, type Approval } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/network/activity")({
   component: ActivityTab,
 })
+
+const decisionWords: Record<string, string> = {
+  approved: "Approved",
+  denied: "Denied",
+  dismissed: "Dismissed",
+}
+
+/** How a decided request is named: "Approved", or "Denied once" for one connection only. */
+function decisionOf(a: Approval) {
+  const word = decisionWords[a.status] ?? a.status
+  return a.once ? `${word} once` : word
+}
 
 /** Network requests already decided, newest first: allowed, denied or ignored. */
 function ActivityTab() {
@@ -58,7 +70,7 @@ function ActivityTab() {
                     <Ident>{a.subject}</Ident>
                   </TableCell>
                   <TableCell>{a.network?.sandboxName}</TableCell>
-                  <TableCell className="capitalize">{a.status}</TableCell>
+                  <TableCell>{decisionOf(a)}</TableCell>
                   <TableCell>{a.attempts}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatAge(a.updatedAt)}

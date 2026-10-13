@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react"
+import { Fragment, useEffect, useState, type ReactNode } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -26,6 +26,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -48,9 +49,12 @@ import { RuleDialog } from "@/components/rule-dialog"
 import { SectionHeader } from "@/components/section-header"
 import { $api, errorMessage, type Rule } from "@/lib/api/client"
 import {
+  expiryText,
   filterRules,
   groupRules,
+  isUnused,
   ruleActions,
+  ruleOrigins,
   ruleScopes,
   type RuleFilter,
 } from "@/lib/network-rules"
@@ -62,6 +66,9 @@ export const Route = createFileRoute("/e/$env/network/rules")({
     q: typeof s.q === "string" && s.q !== "" ? s.q : undefined,
     scope: ruleScopes.find((v) => v === s.scope),
     action: ruleActions.find((v) => v === s.action),
+    origin: ruleOrigins.find((v) => v === s.origin),
+    // The URL holds 1; JSON parsing reads it back as a number, so accept the string too.
+    unused: s.unused === 1 || s.unused === "1" ? 1 : undefined,
   }),
 })
 
@@ -86,8 +93,10 @@ function RulesTab() {
   const teammateNames = new Map(
     (teammates.data ?? []).map((p) => [p.id, p.name])
   )
-  const shown = filterRules(rules.data ?? [], filter)
+  const now = useNow()
+  const shown = filterRules(rules.data ?? [], filter, now)
   const groups = groupRules(shown)
+  const unused = shown.filter((r) => isUnused(r, now))
 
   // Filters live in the URL, so a filtered view can be bookmarked or shared.
   const setFilter = (patch: RuleFilter) =>
@@ -97,7 +106,13 @@ function RulesTab() {
     })
   const clearFilters = () => {
     setQuery("")
-    setFilter({ q: undefined, scope: undefined, action: undefined })
+    setFilter({
+      q: undefined,
+      scope: undefined,
+      action: undefined,
+      origin: undefined,
+      unused: undefined,
+    })
   }
 
   return (
@@ -154,6 +169,30 @@ function RulesTab() {
             setFilter({ action: ruleActions.find((a) => a === v) })
           }
         />
+        <FilterSelect
+          label="Origin"
+          value={filter.origin ?? "any"}
+          options={{
+            any: "Any origin",
+            manual: "Manual",
+            approval: "Approval",
+            curated: "Curated",
+            reviewer: "Reviewer",
+          }}
+          onChange={(v) =>
+            setFilter({ origin: ruleOrigins.find((o) => o === v) })
+          }
+        />
+        <label className="flex items-center gap-2 text-xs">
+          <Checkbox
+            checked={filter.unused === 1}
+            onCheckedChange={(on) => setFilter({ unused: on ? 1 : undefined })}
+          />
+          Unused
+        </label>
+        {filter.unused === 1 && unused.length > 0 && (
+          <DeleteUnused env={env} rules={unused} />
+        )}
       </div>
 
       {rules.isPending ? (
@@ -183,6 +222,7 @@ function RulesTab() {
                 <TableHead>Host</TableHead>
                 <TableHead>Ports</TableHead>
                 <TableHead>Action</TableHead>
+                <TableHead>Origin</TableHead>
                 <TableHead>Scope</TableHead>
                 <TableHead>Note</TableHead>
                 <TableHead>Added</TableHead>
@@ -195,7 +235,7 @@ function RulesTab() {
               {groups.map((group) => (
                 <Fragment key={group.domain}>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                       <span className="inline-flex items-center gap-2">
                         <Ident className="font-medium">{group.domain}</Ident>
                         <span className="font-mono text-muted-foreground">
@@ -207,7 +247,10 @@ function RulesTab() {
                   {group.rules.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <Ident>{r.host}</Ident>
+                        <span className="inline-flex max-w-full items-center gap-1.5">
+                          <Ident>{r.host}</Ident>
+                          {isUnused(r, now) && <RuleChip>unused</RuleChip>}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {r.ports?.length ? (
@@ -218,6 +261,9 @@ function RulesTab() {
                       </TableCell>
                       <TableCell>
                         <RuleAction rule={r} />
+                      </TableCell>
+                      <TableCell>
+                        <RuleChip>{r.origin}</RuleChip>
                       </TableCell>
                       <TableCell>
                         {r.sandboxId
@@ -233,6 +279,7 @@ function RulesTab() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatAge(r.createdAt)}
+                        <ExpiryNote rule={r} now={now} />
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-0.5">
@@ -304,6 +351,31 @@ function FilterSelect({
   )
 }
 
+/** The current time, refreshed every minute, for text that counts down. */
+function useNow(intervalMs = 60_000) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs)
+    return () => clearInterval(id)
+  }, [intervalMs])
+  return now
+}
+
+/** When a rule stops matching, counted down; nothing for a rule that never expires. */
+function ExpiryNote({ rule, now }: { rule: Rule; now: number }) {
+  const text = expiryText(rule, now)
+  return text ? <span className="block">{text}</span> : null
+}
+
+/** A small monospace label on a rule: its action, origin or a flag. */
+function RuleChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset">
+      {children}
+    </span>
+  )
+}
+
 /** A rule's action, then its proxy headers or Caddyfile summary; secret values stay hidden. */
 function RuleAction({ rule }: { rule: Rule }) {
   const names =
@@ -318,9 +390,7 @@ function RuleAction({ rule }: { rule: Rule }) {
   const caddyLineCount = caddyfile ? caddyfile.split(/\r?\n/).length : 0
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset">
-        {rule.action}
-      </span>
+      <RuleChip>{rule.action}</RuleChip>
       {names && (
         <span className="block max-w-40 truncate" title={names}>
           <Ident>{names}</Ident>
@@ -337,6 +407,66 @@ function RuleAction({ rule }: { rule: Rule }) {
         </>
       )}
     </div>
+  )
+}
+
+/** Deletes the unused rules shown by the filters, after a confirmation. */
+function DeleteUnused({ env, rules }: { env: string; rules: Rule[] }) {
+  const queryClient = useQueryClient()
+  const remove = $api.useMutation(
+    "delete",
+    "/api/environments/{env}/rules/{id}"
+  )
+  const [working, setWorking] = useState(false)
+  const count = `${rules.length} unused ${rules.length === 1 ? "rule" : "rules"}`
+
+  const deleteAll = async () => {
+    setWorking(true)
+    let failed = 0
+    for (const r of rules) {
+      try {
+        await remove.mutateAsync({ params: { path: { env, id: r.id } } })
+      } catch {
+        failed++
+      }
+    }
+    setWorking(false)
+    void queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/rules"],
+    })
+    if (failed) {
+      toast.error(`Could not delete ${failed} of the ${count}`)
+    } else {
+      toast.success(`Deleted ${count}`)
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
+        <TrashIcon />
+        Delete unused
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {count}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Connections they cover wait for approval again.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={working}
+            onClick={() => void deleteAll()}
+          >
+            {working && <Spinner />}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

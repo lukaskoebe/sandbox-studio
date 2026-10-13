@@ -54,6 +54,21 @@ A rule (`store.Rule`) has a host pattern, ports (empty = any port), an action (`
 `proxy`, `caddy`, `deny`), a scope (sandbox, teammate or environment) and, for `proxy`,
 headers to set (values may use `{secret.NAME}`); for `caddy`, a Caddyfile snippet.
 
+A rule also records its origin: `manual` for rules written on the Rules page or through the
+API, `approval` for rules created by approving or denying a request. `curated` (the shipped
+list) and `reviewer` (the AI reviewer) are reserved for later. The origin is read-only and
+set when the rule is created; rules from before origins existed are `manual`.
+
+A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
+within a minute. The approval card's Options offers "Allow for 1 hour"; the API takes
+`expiresAt` when a rule is created and on an allow or deny decision (it must be in the
+future). The Rules tab counts down the time left.
+
+A rule counts the connections it decides (`hits`) and when it last did (`lastHitAt`). The
+policy counts them in memory and writes the counts about once a minute and at shutdown, so
+the figures can lag by a minute. A rule is unused when it has decided nothing in 30 days and
+is at least 30 days old; the Rules tab marks those, and `unused=1` shows only them.
+
 Matching (`policy/match.go`):
 
 - An environment-wide `deny` always wins, so it works as a fence.
@@ -66,8 +81,10 @@ Matching (`policy/match.go`):
 
 The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route:
 
-- **Rules** lists the environment's rules. Its search and scope and action filters are URL
-  search params (`q`, `scope`, `action`), so a filtered view can be shared. Rules are grouped
+- **Rules** lists the environment's rules. Its search and scope, action, origin and unused
+  filters are URL search params (`q`, `scope`, `action`, `origin`, `unused=1`), so a filtered
+  view can be shared. Each rule shows its origin as a chip, and an unused rule an "unused"
+  chip. Delete unused removes the unused rules the filters show, after a confirmation. Rules are grouped
   by registrable domain: the last two labels, or three under a short list of two-label
   suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
 - **Requests** lists the pending network approvals; Allow, Deny and Ignore work as on the
@@ -87,6 +104,17 @@ environment; host pattern from the suggestions: the name or its registrable doma
 wildcard, never a public suffix), or dismiss. Rules created this way cover 80 and 443 for web
 traffic, else the exact port. A new or changed rule settles other pending approvals it
 covers and wakes held connections, so an approved `npm install` finishes without a retry.
+
+"Allow once" and "Deny once" (in the card's Options) create no rule. They decide the
+connections held for this request, and the next connection to the host asks again. Activity
+shows them as "Approved once" and "Denied once"; a connection denied once gets a 403 that says
+the user denied it.
+
+Requests from one sandbox that arrive within 3 seconds of each other show as one card on the
+approval stack, with Allow all, Review individually and Deny all (see
+[approvals](approvals.md#realtime-and-ui)). Requests carry no information about the page that
+made them yet, so the grouping is by sandbox and arrival time; grouping by page comes with
+site-scoped approvals.
 
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.

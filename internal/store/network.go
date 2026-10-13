@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +59,14 @@ const (
 	ActionDeny  = "deny"
 )
 
+// Rule origins: how a rule came to exist.
+const (
+	OriginManual   = "manual"   // written on the Rules page or through the API
+	OriginApproval = "approval" // created by approving a network request
+	OriginCurated  = "curated"  // reserved for the curated list
+	OriginReviewer = "reviewer" // reserved for the AI reviewer
+)
+
 // Rule decides what happens to connections to Host. SandboxID and TeammateID are empty for
 // rules that cover the whole environment; at most one of them is set.
 type Rule struct {
@@ -70,6 +79,10 @@ type Rule struct {
 	Action        string     `json:"action" enum:"allow,proxy,caddy,deny"`
 	Config        RuleConfig `json:"config"`
 	Note          string     `json:"note"`
+	Origin        string     `json:"origin" enum:"manual,approval,curated,reviewer" doc:"Where the rule came from. Read-only: set when the rule is created"`
+	ExpiresAt     *time.Time `json:"expiresAt,omitempty" doc:"When the rule stops matching; empty means it never expires"`
+	Hits          int        `json:"hits" doc:"Connections the rule decided, as of the last write, which happens about once a minute"`
+	LastHitAt     *time.Time `json:"lastHitAt,omitempty" doc:"When the rule last decided a connection, as of the last write"`
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
@@ -81,13 +94,14 @@ type RuleConfig struct {
 	Caddyfile string `json:"caddyfile,omitempty"`
 }
 
-const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, created_at"
+const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, expires_at, hits, last_hit_at, created_at"
 
 func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 	var r Rule
 	var ports, config string
+	var expires, lastHit sql.NullInt64
 	var created int64
-	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &created); err != nil {
+	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &expires, &r.Hits, &lastHit, &created); err != nil {
 		return r, err
 	}
 	r.Ports = []int{}
@@ -95,6 +109,14 @@ func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 		if n, err := strconv.Atoi(p); err == nil {
 			r.Ports = append(r.Ports, n)
 		}
+	}
+	if expires.Valid {
+		t := time.Unix(expires.Int64, 0)
+		r.ExpiresAt = &t
+	}
+	if lastHit.Valid {
+		t := time.Unix(lastHit.Int64, 0)
+		r.LastHitAt = &t
 	}
 	r.CreatedAt = time.Unix(created, 0)
 	return r, json.Unmarshal([]byte(config), &r.Config)
@@ -115,18 +137,25 @@ func nullable(s string) any {
 	return s
 }
 
-// CreateRule inserts r, assigning its ID and creation time.
+// CreateRule inserts r, assigning its ID, creation time and, unless set, the manual origin.
 func (s *Store) CreateRule(ctx context.Context, r Rule) (Rule, error) {
 	r.ID, r.CreatedAt = NewID(), time.Unix(now(), 0)
 	if r.Ports == nil {
 		r.Ports = []int{}
 	}
+	if r.Origin == "" {
+		r.Origin = OriginManual
+	}
 	config, err := json.Marshal(r.Config)
 	if err != nil {
 		return r, err
 	}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.CreatedAt.Unix())
+	var expires any // NULL: the rule never expires
+	if r.ExpiresAt != nil {
+		expires = r.ExpiresAt.Unix()
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, origin, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.Origin, expires, r.CreatedAt.Unix())
 	return r, err
 }
 
@@ -186,6 +215,50 @@ func (s *Store) DeleteRule(ctx context.Context, envID, id string) error {
 	return nil
 }
 
+// DeleteExpiredRules deletes the rules that expired at or before now. It returns the IDs of
+// the environments they belonged to, each once.
+func (s *Store) DeleteExpiredRules(ctx context.Context, now time.Time) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, "DELETE FROM rules WHERE expires_at IS NOT NULL AND expires_at <= ? RETURNING environment_id", now.Unix())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var envs []string
+	for rows.Next() {
+		var env string
+		if err := rows.Scan(&env); err != nil {
+			return nil, err
+		}
+		if !slices.Contains(envs, env) {
+			envs = append(envs, env)
+		}
+	}
+	return envs, rows.Err()
+}
+
+// RuleHit is the connections a rule decided since the policy last wrote its hits.
+type RuleHit struct {
+	ID    string
+	Count int
+	Last  time.Time // when the last of them was decided
+}
+
+// AddRuleHits adds batched hits to their rules, in one transaction. Hits for rules deleted
+// in the meantime are dropped.
+func (s *Store) AddRuleHits(ctx context.Context, hits []RuleHit) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, h := range hits {
+		if _, err := tx.ExecContext(ctx, "UPDATE rules SET hits = hits + ?, last_hit_at = MAX(IFNULL(last_hit_at, 0), ?) WHERE id = ?", h.Count, h.Last.Unix(), h.ID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // --- approvals ------------------------------------------------------------------------
 
 // Approval statuses.
@@ -208,17 +281,18 @@ type Approval struct {
 	Attempts      int             `json:"attempts"`
 	Status        string          `json:"status" enum:"pending,approved,denied,dismissed"`
 	RuleID        string          `json:"ruleId,omitempty"`
+	Once          bool            `json:"once,omitempty" doc:"Set when a network request was decided for its one connection, without a rule"`
 	CreatedAt     time.Time       `json:"createdAt"`
 	UpdatedAt     time.Time       `json:"updatedAt"`
 }
 
-const approvalCols = "id, environment_id, IFNULL(sandbox_id, ''), kind, subject, payload, attempts, status, IFNULL(rule_id, ''), created_at, updated_at"
+const approvalCols = "id, environment_id, IFNULL(sandbox_id, ''), kind, subject, payload, attempts, status, IFNULL(rule_id, ''), created_at, updated_at, once"
 
 func scanApproval(row interface{ Scan(...any) error }) (Approval, error) {
 	var a Approval
 	var payload string
 	var created, updated int64
-	err := row.Scan(&a.ID, &a.EnvironmentID, &a.SandboxID, &a.Kind, &a.Subject, &payload, &a.Attempts, &a.Status, &a.RuleID, &created, &updated)
+	err := row.Scan(&a.ID, &a.EnvironmentID, &a.SandboxID, &a.Kind, &a.Subject, &payload, &a.Attempts, &a.Status, &a.RuleID, &created, &updated, &a.Once)
 	a.Payload = json.RawMessage(payload)
 	a.CreatedAt, a.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return a, err
@@ -381,6 +455,22 @@ func (s *Store) ApprovalsByKind(ctx context.Context, kind, status string, limit 
 // approval does not exist or was already decided.
 func (s *Store) DecideApproval(ctx context.Context, envID, id, status, ruleID string) error {
 	return DecideApprovalTx(ctx, s.db, envID, id, status, ruleID)
+}
+
+// DecideApprovalOnce moves a pending network request to status for its one connection: no
+// rule is involved, and the decision is recorded as once. It returns ErrNotFound if the
+// approval is not pending.
+func (s *Store) DecideApprovalOnce(ctx context.Context, envID, id, status string) error {
+	t := now()
+	res, err := s.db.ExecContext(ctx, `UPDATE approvals SET status = ?, once = 1, decided_at = ?, updated_at = ?
+		WHERE environment_id = ? AND id = ? AND status = 'pending'`, status, t, t, envID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // DecideApprovalTx is DecideApproval inside tx, a transaction on the catalog database, so

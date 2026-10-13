@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { CaretDownIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
@@ -21,9 +21,28 @@ import { cn } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
 
+/**
+ * The buttons: an action; an allow whose rule expires after an hour; or an allow or deny for
+ * the one connection, without a rule.
+ */
+type Choice = Action | "allowHour" | "allowOnce" | "denyOnce"
+
+const hour = 60 * 60 * 1000
+
 /** The ports a request is decided for by default: HTTP and HTTPS together, else the requested port. */
 function defaultPorts(port: number) {
   return port === 80 || port === 443 ? "ports 80 and 443" : `port ${port}`
+}
+
+/** Refetches what a decision changes: the approvals, and the rules a decision may create. */
+export function refreshDecisions(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
+  queryClient.invalidateQueries({
+    queryKey: ["get", "/api/environments/{env}/approvals"],
+  })
+  queryClient.invalidateQueries({
+    queryKey: ["get", "/api/environments/{env}/rules"],
+  })
 }
 
 /** Allow, deny or dismiss an approval; refreshes the lists the decision changes. */
@@ -33,15 +52,7 @@ export function useDecideApproval() {
     "post",
     "/api/environments/{env}/approvals/{id}/decide",
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/approvals"],
-        })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/rules"],
-        })
-      },
+      onSettled: () => refreshDecisions(queryClient),
       onError: (err, vars) => {
         // 409: the approval was already decided; the refetch shows that.
         if (errorStatus(err) === 409) return
@@ -53,11 +64,53 @@ export function useDecideApproval() {
   )
 }
 
+/** Who a rule covers: the whole environment, or only the sandbox that asked. */
+export type DecisionScope = "environment" | "sandbox"
+
+/** The scope choice of a network decision, as two toggles. */
+export function ScopeToggle({
+  value,
+  onChange,
+  sandboxName,
+}: {
+  value: DecisionScope
+  onChange: (scope: DecisionScope) => void
+  sandboxName?: string
+}) {
+  return (
+    <ToggleGroup
+      aria-label="Scope"
+      variant="outline"
+      value={[value]}
+      onValueChange={(v) => {
+        if (v[0]) onChange(v[0] === "sandbox" ? "sandbox" : "environment")
+      }}
+      className="w-full"
+    >
+      <ToggleGroupItem
+        value="environment"
+        size="sm"
+        className="min-w-0 flex-1 shrink"
+      >
+        Environment
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="sandbox"
+        size="sm"
+        title={`Only ${sandboxName ?? "this sandbox"}`}
+        className="min-w-0 flex-1 shrink"
+      >
+        <span className="truncate">Only {sandboxName ?? "this sandbox"}</span>
+      </ToggleGroupItem>
+    </ToggleGroup>
+  )
+}
+
 /**
  * Decides one network approval: the host pattern to allow or deny, any port or the default
  * ports, and whether the rule covers the whole environment or only the requesting sandbox.
- * Compact keeps the pattern and the buttons visible and folds the port and scope choices
- * behind an Options disclosure.
+ * Compact keeps the pattern and the buttons visible and folds the port, scope and lifetime
+ * choices (an hour, or this connection only) behind an Options disclosure.
  */
 export function ApprovalDecision({
   approval,
@@ -71,22 +124,47 @@ export function ApprovalDecision({
   const patterns = net?.patterns?.length ? net.patterns : net ? [net.host] : []
   const [pattern, setPattern] = useState(patterns[0] ?? "")
   const [anyPort, setAnyPort] = useState(false)
-  const [scope, setScope] = useState<"environment" | "sandbox">("environment")
+  const [scope, setScope] = useState<DecisionScope>("environment")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
-  const busy = (action: Action) =>
-    decide.isPending && decide.variables.body.action === action
+  const [chosen, setChosen] = useState<Choice>()
+  const busy = (choice: Choice) => decide.isPending && chosen === choice
   // A folded choice that differs from the default still shows on the Options button.
   const changed = anyPort || scope === "sandbox"
 
-  const act = (action: Action) =>
-    decide.mutate({
+  const act = (choice: Choice) => {
+    setChosen(choice)
+    const params = {
       params: { path: { env: approval.environmentId, id: approval.id } },
-      body:
-        action === "dismiss"
-          ? { action, scope }
-          : { action, scope, host: pattern, ports: anyPort ? [] : undefined },
-    })
+    }
+    const rule = { scope, host: pattern, ports: anyPort ? [] : undefined }
+    switch (choice) {
+      case "dismiss":
+        return decide.mutate({ ...params, body: { action: choice, scope } })
+      // A once decision answers this connection; the server ignores the rule's fields.
+      case "allowOnce":
+        return decide.mutate({
+          ...params,
+          body: { action: "allow_once", scope },
+        })
+      case "denyOnce":
+        return decide.mutate({
+          ...params,
+          body: { action: "deny_once", scope },
+        })
+      case "allowHour":
+        return decide.mutate({
+          ...params,
+          body: {
+            ...rule,
+            action: "allow",
+            expiresAt: new Date(Date.now() + hour).toISOString(),
+          },
+        })
+      default:
+        return decide.mutate({ ...params, body: { ...rule, action: choice } })
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 gap-2">
@@ -124,33 +202,40 @@ export function ApprovalDecision({
               </span>
             )}
           </label>
-          <ToggleGroup
-            aria-label="Scope"
-            variant="outline"
-            value={[scope]}
-            onValueChange={(v) => {
-              if (v[0]) setScope(v[0] === "sandbox" ? "sandbox" : "environment")
-            }}
-            className="w-full"
-          >
-            <ToggleGroupItem
-              value="environment"
+          <ScopeToggle
+            value={scope}
+            onChange={setScope}
+            sandboxName={net?.sandboxName}
+          />
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button
+              variant="outline"
               size="sm"
-              className="min-w-0 flex-1 shrink"
+              disabled={decide.isPending}
+              onClick={() => act("allowHour")}
             >
-              Environment
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="sandbox"
+              {busy("allowHour") && <Spinner />}
+              Allow for 1 hour
+            </Button>
+            <Button
+              variant="outline"
               size="sm"
-              title={`Only ${net?.sandboxName ?? "this sandbox"}`}
-              className="min-w-0 flex-1 shrink"
+              disabled={decide.isPending}
+              onClick={() => act("allowOnce")}
             >
-              <span className="truncate">
-                Only {net?.sandboxName ?? "this sandbox"}
-              </span>
-            </ToggleGroupItem>
-          </ToggleGroup>
+              {busy("allowOnce") && <Spinner />}
+              Allow once
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={decide.isPending}
+              onClick={() => act("denyOnce")}
+            >
+              {busy("denyOnce") && <Spinner />}
+              Deny once
+            </Button>
+          </div>
         </>
       )}
       <div className="flex items-center gap-1.5">

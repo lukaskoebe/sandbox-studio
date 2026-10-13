@@ -153,3 +153,37 @@ test("the network tabs fit a 390px screen", async ({ page, api, env }) => {
     expect(width, `network/${tab} scrolls sideways`).toBeLessThanOrEqual(390)
   }
 })
+
+test("the origin and unused filters live in the URL", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const rules = await seedRules(
+    api,
+    env,
+    await api.createSandbox(sandboxName("origin"))
+  )
+  const host = (name: string) => page.getByRole("cell", { name, exact: true })
+
+  // Rules made through the API are manual, so the approval origin leaves them out.
+  await page.goto(`/e/${env}/network/rules`)
+  await expect(host(rules.api)).toBeVisible()
+  await page.getByRole("combobox", { name: "Origin" }).click()
+  await page.getByRole("option", { name: "Approval", exact: true }).click()
+  await expect(page).toHaveURL(/[?&]origin=approval/)
+  await expect(host(rules.api)).toBeHidden()
+  await page.getByRole("combobox", { name: "Origin" }).click()
+  await page.getByRole("option", { name: "Manual", exact: true }).click()
+  await expect(page).toHaveURL(/[?&]origin=manual/)
+  await expect(host(rules.api)).toBeVisible()
+
+  // The rules were made just now, so none is unused.
+  await page.getByRole("checkbox", { name: "Unused" }).click()
+  await expect(page).toHaveURL(/[?&]unused=1/)
+  await expect(page.getByText("No rules match these filters.")).toBeVisible()
+  await page.getByRole("button", { name: "Clear filters" }).click()
+  await expect(page).not.toHaveURL(/[?&](origin|unused)=/)
+  await expect(host(rules.api)).toBeVisible()
+})

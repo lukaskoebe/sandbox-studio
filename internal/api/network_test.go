@@ -375,3 +375,61 @@ func awaitLine(t *testing.T, lines <-chan string, want string) {
 		}
 	}
 }
+
+// Rules can expire: the API takes a future expiresAt, keeps it through edits, and rules made
+// through it are manual.
+func TestRuleExpiry(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	rules := testOrigin + "/api/environments/" + env.ID + "/rules"
+	past := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	future := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+
+	if rec := do(h, "POST", rules, `{"host":"tmp.example.org","action":"allow","expiresAt":"`+past+`"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("a rule that expired already: %d %s", rec.Code, rec.Body)
+	}
+	rec := do(h, "POST", rules, `{"host":"tmp.example.org","action":"allow","expiresAt":"`+future.Format(time.RFC3339)+`"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	created := decode[store.Rule](t, rec)
+	if created.ExpiresAt == nil || !created.ExpiresAt.Equal(future) || created.Origin != store.OriginManual {
+		t.Fatalf("created: %+v", created)
+	}
+
+	rec = do(h, "PUT", rules+"/"+created.ID, `{"host":"tmp.example.org","action":"deny","note":"changed"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update: %d %s", rec.Code, rec.Body)
+	}
+	if updated := decode[store.Rule](t, rec); updated.Action != store.ActionDeny || updated.ExpiresAt == nil || !updated.ExpiresAt.Equal(future) {
+		t.Fatalf("an edit changed the expiry: %+v", updated)
+	}
+}
+
+// A once decision answers the held connection and creates no rule.
+func TestDecideOnceCreatesNoRule(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	sb := newSandbox(t, s, env, "dev")
+	ctx := context.Background()
+	held := make(chan error, 1)
+	go func() {
+		_, err := s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: "once.example.org", Port: 443})
+		held <- err
+	}()
+	pending := awaitApproval(t, h, "once.example.org", 443)
+
+	rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/approvals/"+pending.ID+"/decide", `{"action":"allow_once"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("decide: %d %s", rec.Code, rec.Body)
+	}
+	if decided := decode[ApprovalView](t, rec); decided.Status != store.StatusApproved || !decided.Once || decided.RuleID != "" {
+		t.Fatalf("decided: %+v", decided)
+	}
+	if err := <-held; err != nil {
+		t.Fatalf("held connection: %v", err)
+	}
+	if rules := decode[[]store.Rule](t, do(h, "GET", testOrigin+"/api/environments/"+env.ID+"/rules", "")); len(rules) != 0 {
+		t.Fatalf("a once decision created rules: %+v", rules)
+	}
+}

@@ -367,3 +367,41 @@ func TestMigrateSandboxLineage(t *testing.T) {
 		t.Fatalf("sandbox after migrating = %+v, %v", sb, err)
 	}
 }
+
+// Rules from before rule hygiene were made by hand or through the API, so they are manual.
+func TestMigrateRuleOrigin(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 24); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at) VALUES ('sb1', 'env', 'api', 1, 512, 1024, 0, 1)`,
+		`INSERT INTO rules (id, environment_id, host, ports, action, created_at) VALUES ('r1', 'env', 'example.com', '443', 'allow', 1)`,
+		`INSERT INTO rules (id, environment_id, sandbox_id, host, ports, action, created_at) VALUES ('r2', 'env', 'sb1', 'example.org', '', 'deny', 2)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, id := range []string{"r1", "r2"} {
+		r, err := s.Rule(ctx, "env", id)
+		if err != nil || r.Origin != OriginManual {
+			t.Fatalf("rule %s after migrating: %+v, %v", id, r, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO rules (id, environment_id, host, ports, action, created_at, origin) VALUES ('r3', 'env', 'x.example', '', 'allow', 1, 'someone')`); err == nil {
+		t.Error("an unknown origin was accepted")
+	}
+}

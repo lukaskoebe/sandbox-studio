@@ -5,12 +5,36 @@ export type RuleScope = (typeof ruleScopes)[number]
 
 export const ruleActions = ["allow", "proxy", "caddy", "deny"] as const
 
+/** Where a rule came from: written by hand, approved from a request, or by a curated list or the reviewer. */
+export const ruleOrigins = [
+  "manual",
+  "approval",
+  "curated",
+  "reviewer",
+] as const
+export type RuleOrigin = (typeof ruleOrigins)[number]
+
 /** The Rules tab's filters, kept in the URL; an unset one matches everything. */
 export type RuleFilter = {
   /** Text the host must contain. */
   q?: string
   scope?: RuleScope
   action?: (typeof ruleActions)[number]
+  origin?: RuleOrigin
+  /** 1 keeps only the unused rules (`unused=1` in the URL). */
+  unused?: 1
+}
+
+/** A rule is unused when it has decided no connection for this long, and is as old. */
+const unusedAfterMs = 30 * 24 * 60 * 60 * 1000
+
+/** Whether a rule is unused: created 30 days ago or more, and no connection in those 30 days. */
+export function isUnused(rule: Rule, now = Date.now()): boolean {
+  const cutoff = now - unusedAfterMs
+  return (
+    Date.parse(rule.createdAt) <= cutoff &&
+    (!rule.lastHitAt || Date.parse(rule.lastHitAt) <= cutoff)
+  )
 }
 
 /** Two-label public suffixes, under which a domain has three labels: example.co.uk. */
@@ -55,15 +79,37 @@ export function ruleScope(rule: Rule): RuleScope {
   return rule.teammateId ? "teammate" : "environment"
 }
 
-/** The rules that pass every filter. */
-export function filterRules(rules: Rule[], filter: RuleFilter): Rule[] {
+/** The rules that pass every filter, at the time now. */
+export function filterRules(
+  rules: Rule[],
+  filter: RuleFilter,
+  now = Date.now()
+): Rule[] {
   const q = filter.q?.trim().toLowerCase() ?? ""
   return rules.filter(
     (r) =>
       r.host.toLowerCase().includes(q) &&
       (!filter.scope || ruleScope(r) === filter.scope) &&
-      (!filter.action || r.action === filter.action)
+      (!filter.action || r.action === filter.action) &&
+      (!filter.origin || r.origin === filter.origin) &&
+      (!filter.unused || isUnused(r, now))
   )
+}
+
+/**
+ * When a rule stops matching, for people: "expires in 43 min", "expires in 2 h", or "expired"
+ * while the sweep has not yet deleted it. Undefined for a rule that never expires.
+ */
+export function expiryText(rule: Rule, now = Date.now()): string | undefined {
+  if (!rule.expiresAt) return undefined
+  const ms = Date.parse(rule.expiresAt) - now
+  if (ms <= 0) return "expired"
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) return "expires in under a minute"
+  if (minutes < 60) return `expires in ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) return `expires in ${hours} h`
+  return `expires in ${Math.floor(hours / 24)} d`
 }
 
 /** The rules by registrable domain, domains and hosts in alphabetical order. */

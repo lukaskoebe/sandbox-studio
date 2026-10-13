@@ -23,11 +23,11 @@ its approval kinds with a decide function, and the API hands the decision to the
 - `GET /api/approvals?status=pending`: all environments, for the global stack.
 - `GET /api/environments/{env}/approvals`
 - `POST /api/environments/{env}/approvals/{id}/decide` with `action` `allow`, `deny` or
-  `dismiss`. For `network`, allow and deny create a rule (`host`, `ports`, `scope`), and
-  dismiss only closes the request. Git approvals take an optional `note`; `browser.action`
-  takes `remember` to allow or deny the action on that origin from now on.
-
-There is no allow-once for network requests: an answer is a rule (or a dismissal).
+  `dismiss`. For `network`, allow and deny create a rule (`host`, `ports`, `scope`, and
+  `expiresAt` for a rule that stops matching at that time), and dismiss only closes the
+  request. `allow_once` and `deny_once` answer only the connections held for the request, with
+  no rule; the approval then has `once: true`. Git approvals take an optional `note`;
+  `browser.action` takes `remember` to allow or deny the action on that origin from now on.
 
 ## Realtime and UI
 
@@ -40,6 +40,14 @@ There is no allow-once for network requests: an answer is a rule (or a dismissal
   own permission requests) leave those out of the stack. More than one card, or a narrow
   page, folds the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
+- Network requests from one sandbox that arrive within 3 seconds of each other are one card,
+  "<sandbox> wants N hosts", with the hosts listed, Allow all, Deny all, and Review
+  individually (which turns them into the per-host cards). The pill counts requests, not
+  cards. Allow all and Deny all decide each host with a rule of its own, with the scope
+  chosen under Options. The grouping is client-side (`web/src/lib/approval-groups.ts`), so
+  the API has no group. The server records arrival to the second, so the window is
+  approximate; requests carry no page yet, so grouping by page waits for site-scoped
+  approvals.
 - New approvals raise a browser notification (Notification API) once the user allows it.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
