@@ -117,6 +117,7 @@ func TestImportIsStrict(t *testing.T) {
 		"page core":             header + "\n## page topic/x\n---\ntitle: x\nkind: topic\ncore: yes\ntier: user\nbytes: 1\n---\nx\n",
 		"page kind":             header + "\n## page topic/x\n---\ntitle: x\nkind: poem\ncore: false\ntier: user\nbytes: 1\n---\nx\n",
 		"invalid utf-8":         header + "\n## fact\n---\nkind: fact\ntier: user\nbytes: 1\n---\n\xff\n",
+		"credential":            header + fact("", "Key sk-abcdefghijklmnopqrstuvwxyz0123 is in use"),
 		"too large":             header + strings.Repeat("x", exchangeMaxBytes),
 	}
 	for name, md := range bad {

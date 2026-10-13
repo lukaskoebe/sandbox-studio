@@ -222,7 +222,7 @@ func (cand *candidate) check() error {
 }
 
 // secretLike matches API keys and Studio's placeholders, which memory never keeps.
-var secretLike = regexp.MustCompile(`\b(sk-[A-Za-z0-9_-]{16,}|studio-[0-9a-f]{32}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})`)
+var secretLike = memory.CredentialLike
 
 // writeWhy is the log's reason for a write.
 type writeWhy struct {

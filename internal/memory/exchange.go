@@ -322,6 +322,9 @@ func parseExchange(text, scope string) ([]importItem, error) {
 			if err := p.validate(); err != nil {
 				return nil, r.errf("%v", err)
 			}
+			if CredentialLike.MatchString(body) || CredentialLike.MatchString(p.Title) {
+				return nil, r.errf("page %s contains something like a credential", slug)
+			}
 			items = append(items, importItem{isPage: true, page: p})
 		case "fact":
 			if slug != "" {
@@ -372,6 +375,9 @@ func parseExchange(text, scope string) ([]importItem, error) {
 			in.Scope, in.Kind = scope, fm["kind"]
 			if err := in.validate(); err != nil {
 				return nil, r.errf("%v", err)
+			}
+			if CredentialLike.MatchString(in.Text) || CredentialLike.MatchString(in.Attribute) || CredentialLike.MatchString(in.Context) {
+				return nil, r.errf("a fact contains something like a credential")
 			}
 			items = append(items, importItem{fact: in})
 		default:
