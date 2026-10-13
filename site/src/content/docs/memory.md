@@ -7,7 +7,7 @@ Memory is scoped to an environment. Each teammate has its own memory, and teamma
 
 Studio can recall relevant notes when a supported agent session starts or when you send a prompt. Harness hooks can also send selected conversation text for fact extraction after a session event. Memory capture is best-effort; it does not block the agent session.
 
-![The Memory page showing saved facts and pages](../../assets/screenshots/memory.jpg)
+![The Memory page showing saved facts](../../assets/screenshots/memory.jpg)
 
 ## Review memory in Studio
 

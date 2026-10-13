@@ -5,7 +5,7 @@ description: Give a teammate a controlled Chromium browser without exposing its 
 
 Each teammate has its own Chromium browser running in a separate microVM. Agents control it with browser tools; they do not receive a remote debugging port. Cookies and logins belong to that teammate's browser profile.
 
-![A teammate's Browser tab showing its live view, action rules, and Start control](../../assets/screenshots/browser.jpg)
+![A teammate's Browser tab with its Start control and the Live, History, and Rules views](../../assets/screenshots/browser.jpg)
 
 ## Approve actions and access
 
