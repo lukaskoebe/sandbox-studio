@@ -75,7 +75,7 @@ var kinds = []string{"preference", "decision", "fact", "procedure", "event"}
 
 // Tools are the memory and task tools; their arguments go to Studio unchanged.
 var Tools = []Tool{
-	{agentproto.MethodMemorySearch, "Search your memory and the shared memory (facts and pages), ranked by relevance. Each hit says why it matched.",
+	{agentproto.MethodMemorySearch, "Search your memory and the shared memory (facts and pages), ranked by relevance; each hit says why it matched. Use it before non-trivial work in a project, and when the user refers to something from before that you don't have in context.",
 		obj([]string{"query"}, map[string]any{
 			"query": str("What to look for, in words", "maxLength", 2000),
 			"limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20, "description": "Default 8"},
@@ -85,7 +85,7 @@ var Tools = []Tool{
 			"id":   str("A fact or page ID from a search hit"),
 			"slug": str("A page slug, e.g. project/github.com/acme/api"),
 		})},
-	{agentproto.MethodRemember, "Save a fact to your own memory right away.",
+	{agentproto.MethodRemember, "Save a fact to your own memory right away. Use it when the user states a preference or decision, when you verified a procedure by running it, and for facts about people, projects or systems you will need again. Facts about one sandbox's files or tools should name the sandbox.",
 		obj([]string{"text", "kind"}, map[string]any{
 			"text":     str("One self-contained claim", "maxLength", 2000),
 			"kind":     str("What sort of fact", "enum", kinds),
@@ -101,7 +101,7 @@ var Tools = []Tool{
 			"kind":    str("With text: what sort of fact", "enum", kinds),
 			"entity":  str("With text: what it is about"),
 		})},
-	{agentproto.MethodCorrect, "Replace one of your own facts with a corrected version; the old one is kept as superseded.",
+	{agentproto.MethodCorrect, "Replace one of your own facts with a corrected version as soon as you find it wrong; the old one is kept as superseded.",
 		obj([]string{"fact_id", "text"}, map[string]any{
 			"fact_id": str("The fact to correct"),
 			"text":    str("The corrected claim", "maxLength", 2000),

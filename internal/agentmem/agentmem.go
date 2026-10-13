@@ -49,9 +49,15 @@ type Service struct {
 	Now    func() time.Time
 	// Notify, when set, is told that an environment has a new approval.
 	Notify func(envID string)
+	// ChatIdle overrides how long a chat stays idle before extraction; ChatIdle when zero.
+	ChatIdle time.Duration
 
 	db   *sql.DB
 	jobs chan extractJob
+
+	chatMu     sync.Mutex
+	chatTimers map[string]*time.Timer
+	chatsDue   chan chatDue
 
 	dreamMu  sync.Mutex
 	dreaming map[string]bool // env|scope being consolidated
@@ -79,7 +85,7 @@ func New(st *store.Store, mem *memory.Service, keys Keys, log *slog.Logger) *Ser
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{Store: st, Memory: mem, Keys: keys, Log: log, Budget: DefaultBudget, Now: time.Now,
-		db: st.DB(), jobs: make(chan extractJob, queueSize)}
+		db: st.DB(), jobs: make(chan extractJob, queueSize), chatTimers: map[string]*time.Timer{}, chatsDue: make(chan chatDue, queueSize)}
 }
 
 func (s *Service) now() time.Time { return s.Now().UTC() }
@@ -206,6 +212,51 @@ func (s *Service) previousSessionStart(ctx context.Context, c caller, se session
 		return time.Time{}, err
 	}
 	return time.Unix(started.Int64, 0).UTC(), nil
+}
+
+// sessionSummary is the running summary of a session; empty before its first extraction.
+func (s *Service) sessionSummary(ctx context.Context, sessionID string) (string, error) {
+	var summary string
+	err := s.db.QueryRowContext(ctx, "SELECT summary FROM memory_agent_sessions WHERE id = ?", sessionID).Scan(&summary)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return summary, err
+}
+
+func (s *Service) setSessionSummary(ctx context.Context, sessionID, summary string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE memory_agent_sessions SET summary = ?, summary_at = ? WHERE id = ?", summary, s.now().Unix(), sessionID)
+	return err
+}
+
+// pastSession is one of the teammate's earlier sessions, as its summary tells it.
+type pastSession struct {
+	id      string
+	sandbox string
+	at      time.Time
+	summary string
+}
+
+// recentSessions are the teammate's latest sessions with a summary, se aside, newest first.
+func (s *Service) recentSessions(ctx context.Context, c caller, se session, limit int) ([]pastSession, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, sandbox_name, last_event_at, summary FROM memory_agent_sessions
+		WHERE environment_id = ? AND teammate_id = ? AND id != ? AND summary != ''
+		ORDER BY last_event_at DESC LIMIT ?`, c.env, c.teammate.ID, se.id, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []pastSession
+	for rows.Next() {
+		var p pastSession
+		var at int64
+		if err := rows.Scan(&p.id, &p.sandbox, &at, &p.summary); err != nil {
+			return nil, err
+		}
+		p.at = time.Unix(at, 0).UTC()
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // Log kinds.

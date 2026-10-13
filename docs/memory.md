@@ -237,7 +237,8 @@ answer (`{}`) and exits 0.
 - *Session start* (also resume and compact) injects a context pack of at most 12 000
   characters inside `<studio-memory>` tags: core pages (teammate, then shared), the project
   page for the repository's normalized git remote (`project/<host/owner/repo>`, then
-  `project/<repo>`, teammate scope first), shared facts
+  `project/<repo>`, teammate scope first), the summaries of the teammate's 3 latest other
+  sessions with their date and sandbox, shared facts
   other teammates changed since the teammate's previous session (or the last 7 days, at most
   10), and up to 5 open conflicts that touch them or the teammate's own facts. The soul is not
   in it: it is in the harness's instructions file ([harnesses.md](harnesses.md#files)).
@@ -249,11 +250,29 @@ answer (`{}`) and exits 0.
   only when Studio accepted the delta. It reads only regular files under the harness's
   state dirs, only complete lines, at most 256 KiB at a time, and condenses them to user and
   assistant text (64 KiB), without tool calls or anything in `<studio-memory>` tags. A stop
-  sends only after 5 minutes and 2 KiB of new text; pre-compact and session end always do.
+  sends only after 2 minutes and 1 KiB of new text; pre-compact and session end always do.
+  A session that is one of the sandbox's chats sends nothing: Studio extracts the chat
+  itself (below), since its ACP agent never ends a session the way a terminal does.
 
 Every injection and write goes to the session log (migration `015_memory_sessions.sql`)
 with the item, its score and why: the search explanation plus the threshold it passed, or
 the extraction's model, tokens, cost and any rejection.
+
+**Chats.** When a chat goes idle (a turn ended, or it came back from the terminal), Studio
+waits 3 minutes; another turn moves that out. Then it condenses the chat's items after its
+cursor (`chats.memory_seq`, migration `034_session_summaries.sql`) the way the guest condenses
+a transcript: user and agent text, and one `[tool] <title>` line per tool call, without
+thoughts or tool output, the last 64 KiB. Less than 200 characters waits for more if the user
+said something, and is passed over otherwise. The cursor moves before the call, so a failed
+call is not repeated, as with hooks. The memory session is the chat's harness session (its
+hooks name it too), or `chat-<id>` before it has one. Heartbeat chats are not extracted. At
+startup Studio queues the idle chats of the last 7 days with items after their cursor.
+
+**Session summaries.** Each extraction also returns `summary`: the session so far in at most
+400 characters (cut at 600), updated from the previous summary, which the prompt includes.
+It is stored on the session (`summary`, `summary_at`); one that looks like a credential is
+dropped. Session-start packs show the latest ones, so a teammate knows what it did last and
+where.
 
 **Tools** (`studio-agent mcp`, a stdio MCP server): `memory_search`, `memory_get` (id or
 slug), `remember(text, kind, entity?, scope, source?)`, `share(fact_id | text)`,
@@ -269,7 +288,7 @@ again. "Promote to shared" on the memory page creates the same approval.
 resends) calls the provider's utility model directly with the real key from the vault,
 which is never logged: `claude-haiku-4-5` for `anthropic_api`, `gpt-6-luna` for
 `openai_api` (unconfirmed, S7), the endpoint's model for `openai_compatible`, none for
-subscriptions (S8). The answer must be `{"facts": [...]}` with at most 20 facts of text,
+subscriptions (S8). The answer must be `{"facts": [...], "summary": "…"}` with at most 20 facts of text,
 kind, tier (`user` or `inferred`), entities, attribute and an evidence quote found in the
 transcript; one bad fact, an unknown field or anything like a credential rejects the whole
 answer. `user` tier stays only if the quote is from a user line. The prompt names the

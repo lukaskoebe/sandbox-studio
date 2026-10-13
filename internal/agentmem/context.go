@@ -19,6 +19,7 @@ const (
 	projectBudget   = 3000
 	maxChanges      = 10
 	maxConflicts    = 5
+	maxPastSessions = 3
 	defaultLookback = 7 * 24 * time.Hour // shared changes shown to a teammate's first session
 
 	// RecallBudget caps what one prompt injects: about 500 tokens.
@@ -56,7 +57,11 @@ func (s *Service) hook(ctx context.Context, c caller, ev agenthook.Event) (agent
 	case agenthook.UserPrompt:
 		res.Context, err = s.recall(ctx, c, se, ev.Prompt)
 	default:
-		err = s.enqueue(c, se, ev)
+		// A chat's conversation is extracted from the chat itself (chats.go).
+		var inChat bool
+		if inChat, err = s.isChatSession(ctx, c, ev.SessionID); err == nil && !inChat {
+			err = s.enqueue(c, se, ev)
+		}
 	}
 	return res, err
 }
@@ -81,8 +86,8 @@ func (b *budget) add(text string, limit int) bool {
 	return true
 }
 
-// pack is the session-start context: core pages, the project page, shared changes since
-// the teammate's last session and open conflicts on them. The soul is not in it: it is in
+// pack is the session-start context: core pages, the project page, the summaries of the
+// teammate's recent sessions, shared changes since its last session and open conflicts on them. The soul is not in it: it is in
 // the harness's instructions file (harness.instructions), which every session reads.
 func (s *Service) pack(ctx context.Context, c caller, se session, remote, source string) (string, error) {
 	b := &budget{left: PackBudget}
@@ -117,6 +122,24 @@ func (s *Service) pack(ctx context.Context, c caller, se session, remote, source
 		if b.add(fmt.Sprintf("## This project: %s (%s)\n\n%s\n\n", p.Title, scopeLabel(p.Scope), strings.TrimSpace(p.Compiled)), projectBudget) {
 			logged = append(logged, entry{kind: LogContext, itemType: "page", itemID: p.ID, summary: "project page " + p.Slug + " for remote " + remote})
 		}
+	}
+
+	past, err := s.recentSessions(ctx, c, se, maxPastSessions)
+	if err != nil {
+		return "", err
+	}
+	if len(past) > 0 {
+		b.add("## Your recent sessions\n\nEach ran in its own sandbox; what one left on disk is only there.\n\n", 200)
+		for _, p := range past {
+			where := "sandbox " + p.sandbox
+			if p.sandbox == c.sandbox.Name {
+				where += " (this one)"
+			}
+			if b.add(fmt.Sprintf("- %s, %s: %s\n", p.at.Format(time.DateOnly), where, p.summary), maxSummary+100) {
+				logged = append(logged, entry{kind: LogContext, itemType: "session", itemID: p.id, summary: "recent session in " + p.sandbox})
+			}
+		}
+		b.add("\n", 1)
 	}
 
 	since, err := s.previousSessionStart(ctx, c, se)

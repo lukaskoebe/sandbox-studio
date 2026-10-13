@@ -26,8 +26,8 @@ const (
 	// Stop fires after every turn; it sends only when this much time passed since the
 	// last send and the delta has at least minStopDelta bytes. PreCompact and SessionEnd
 	// always send.
-	stopDebounce = 5 * time.Minute
-	minStopDelta = 2 << 10
+	stopDebounce = 2 * time.Minute
+	minStopDelta = 1 << 10
 
 	maxTracked = 500
 	trackedTTL = 30 * 24 * time.Hour

@@ -5,7 +5,7 @@ description: Let a teammate recall project notes and propose shared facts across
 
 Memory is scoped to an environment. Each teammate has its own memory, and teammates in that environment can also use shared memory. A sandbox needs an owner teammate to use memory tools.
 
-Studio can recall relevant notes when a supported agent session starts or when you send a prompt. Harness hooks can also send selected conversation text for fact extraction after a session event. Memory capture is best-effort; it does not block the agent session.
+Studio can recall relevant notes when a supported agent session starts or when you send a prompt. After a session, Studio extracts lasting facts from the conversation and keeps a short summary of it, so the teammate's next session knows what it did last and in which sandbox. Chats are read a few minutes after their last turn; terminal sessions send their conversation through harness hooks. Memory capture is best-effort; it does not block the agent session.
 
 ![The Memory page showing saved facts](../../assets/screenshots/memory.jpg)
 

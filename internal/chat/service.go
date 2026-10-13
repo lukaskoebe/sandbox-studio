@@ -91,6 +91,9 @@ type Service struct {
 	// note: what an integration must tell the agent, such as a rejected push. sent is called
 	// once the prompt went out, so a note that didn't go out is given again.
 	PromptNote func(ctx context.Context, envID, sandboxID string) (text string, sent func(), err error)
+	// OnIdle, when set, is told that a chat became idle again: a turn ended, or the chat came
+	// back from the terminal. Memory extracts the new turns once the chat stays idle.
+	OnIdle func(envID, chatID string)
 
 	mu    sync.Mutex
 	live  map[string]*live
@@ -346,6 +349,9 @@ func (s *Service) lock(ctx context.Context, c store.Chat, state string) (store.C
 func (s *Service) unlock(c store.Chat, state string) {
 	if _, err := s.Store.SetChatState(context.Background(), c.EnvironmentID, c.ID, store.ChatIdle, state); err == nil {
 		s.changed(c.EnvironmentID, c.ID, true)
+		if s.OnIdle != nil {
+			s.OnIdle(c.EnvironmentID, c.ID)
+		}
 	}
 }
 

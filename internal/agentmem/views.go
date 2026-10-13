@@ -9,17 +9,19 @@ import (
 
 // SessionView is a harness session that used memory.
 type SessionView struct {
-	ID          string    `json:"id"`
-	TeammateID  string    `json:"teammateId"`
-	SandboxID   string    `json:"sandboxId"`
-	SandboxName string    `json:"sandboxName"`
-	Harness     string    `json:"harness"`
-	SessionRef  string    `json:"sessionRef" doc:"The harness's session ID; \"tools\" for tool calls outside a hooked session"`
-	GitRemote   string    `json:"gitRemote,omitempty"`
-	StartedAt   time.Time `json:"startedAt"`
-	LastEventAt time.Time `json:"lastEventAt"`
-	Injections  int       `json:"injections" doc:"Items given to the session as context or recall"`
-	Writes      int       `json:"writes"`
+	ID          string     `json:"id"`
+	TeammateID  string     `json:"teammateId"`
+	SandboxID   string     `json:"sandboxId"`
+	SandboxName string     `json:"sandboxName"`
+	Harness     string     `json:"harness"`
+	SessionRef  string     `json:"sessionRef" doc:"The harness's session ID; \"tools\" for tool calls outside a hooked session"`
+	GitRemote   string     `json:"gitRemote,omitempty"`
+	StartedAt   time.Time  `json:"startedAt"`
+	LastEventAt time.Time  `json:"lastEventAt"`
+	Injections  int        `json:"injections" doc:"Items given to the session as context or recall"`
+	Writes      int        `json:"writes"`
+	Summary     string     `json:"summary,omitempty" doc:"What the session was about, as its last extraction summed it up"`
+	SummaryAt   *time.Time `json:"summaryAt,omitempty"`
 }
 
 // Sessions lists an environment's sessions, newest first, optionally of one teammate.
@@ -28,7 +30,7 @@ func (s *Service) Sessions(ctx context.Context, env, teammate string, limit int)
 		limit = 50
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT s.id, s.teammate_id, s.sandbox_id, s.sandbox_name, s.harness, s.session_ref, s.git_remote,
-		s.started_at, s.last_event_at,
+		s.started_at, s.last_event_at, s.summary, s.summary_at,
 		(SELECT COUNT(*) FROM memory_session_log l WHERE l.session_id = s.id AND l.kind IN ('context', 'recall')),
 		(SELECT COUNT(*) FROM memory_session_log l WHERE l.session_id = s.id AND l.kind = 'write')
 		FROM memory_agent_sessions s WHERE s.environment_id = ? AND (? = '' OR s.teammate_id = ?)
@@ -41,9 +43,14 @@ func (s *Service) Sessions(ctx context.Context, env, teammate string, limit int)
 	for rows.Next() {
 		var v SessionView
 		var started, last int64
+		var summaryAt sql.NullInt64
 		if err := rows.Scan(&v.ID, &v.TeammateID, &v.SandboxID, &v.SandboxName, &v.Harness, &v.SessionRef, &v.GitRemote,
-			&started, &last, &v.Injections, &v.Writes); err != nil {
+			&started, &last, &v.Summary, &summaryAt, &v.Injections, &v.Writes); err != nil {
 			return nil, err
+		}
+		if summaryAt.Valid {
+			at := time.Unix(summaryAt.Int64, 0).UTC()
+			v.SummaryAt = &at
 		}
 		v.StartedAt, v.LastEventAt = time.Unix(started, 0).UTC(), time.Unix(last, 0).UTC()
 		out = append(out, v)

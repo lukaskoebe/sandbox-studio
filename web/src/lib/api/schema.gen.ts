@@ -3998,6 +3998,10 @@ export interface components {
             sessionRef: string;
             /** Format: date-time */
             startedAt: string;
+            /** @description What the session was about, as its last extraction summed it up */
+            summary?: string;
+            /** Format: date-time */
+            summaryAt?: string;
             teammateId: string;
             /** Format: int64 */
             writes: number;

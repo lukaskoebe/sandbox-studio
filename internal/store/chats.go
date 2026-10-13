@@ -187,6 +187,40 @@ func (s *Store) ChatsInState(ctx context.Context, state string) ([]Chat, error) 
 	return s.chats(ctx, "SELECT "+chatCols+" FROM chats WHERE state = ?", state)
 }
 
+// ChatsToRemember lists the idle chats, heartbeats aside, with items after their memory cursor
+// that changed since since: the chats memory extraction hasn't read to the end.
+func (s *Store) ChatsToRemember(ctx context.Context, since time.Time) ([]Chat, error) {
+	return s.chats(ctx, "SELECT "+chatCols+` FROM chats c WHERE state = ? AND heartbeat = 0 AND updated_at >= ?
+		AND (SELECT IFNULL(MAX(seq), 0) FROM chat_items i WHERE i.chat_id = c.id) > memory_seq ORDER BY updated_at`,
+		ChatIdle, since.Unix())
+}
+
+// ChatMemorySeq is the seq of the last item memory extraction read; items after it are new.
+func (s *Store) ChatMemorySeq(ctx context.Context, chatID string) (int, error) {
+	var seq int
+	err := s.db.QueryRowContext(ctx, "SELECT memory_seq FROM chats WHERE id = ?", chatID).Scan(&seq)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	return seq, err
+}
+
+// SetChatMemorySeq moves the memory cursor. It doesn't count as a change of the chat.
+func (s *Store) SetChatMemorySeq(ctx context.Context, chatID string, seq int) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE chats SET memory_seq = ? WHERE id = ?", seq, chatID)
+	return err
+}
+
+// ChatItemsAfter lists a chat's items after seq, in order.
+func (s *Store) ChatItemsAfter(ctx context.Context, chatID string, seq int) ([]ChatItem, error) {
+	return s.chatItems(ctx, "SELECT "+chatItemCols+" FROM chat_items WHERE chat_id = ? AND seq > ? ORDER BY seq", chatID, seq)
+}
+
+// ChatBySession finds a sandbox's chat by its harness session ID.
+func (s *Store) ChatBySession(ctx context.Context, sandboxID, sessionID string) (Chat, error) {
+	return scanChat(s.db.QueryRowContext(ctx, "SELECT "+chatCols+" FROM chats WHERE sandbox_id = ? AND acp_session_id = ?", sandboxID, sessionID))
+}
+
 func (s *Store) chats(ctx context.Context, query string, args ...any) ([]Chat, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {

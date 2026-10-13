@@ -5665,6 +5665,14 @@
             "format": "date-time",
             "type": "string"
           },
+          "summary": {
+            "description": "What the session was about, as its last extraction summed it up",
+            "type": "string"
+          },
+          "summaryAt": {
+            "format": "date-time",
+            "type": "string"
+          },
           "teammateId": {
             "type": "string"
           },

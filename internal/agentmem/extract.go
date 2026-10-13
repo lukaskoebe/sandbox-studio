@@ -21,6 +21,7 @@ const (
 	maxFactText       = 500
 	maxEvidence       = 300
 	maxEntities       = 8
+	maxSummary        = 600 // a session's running summary, in characters
 	maxOutputTokens   = 2000
 	extractTimeout    = 2 * time.Minute
 	dupSimilarity     = 0.92 // the same fact in other words
@@ -48,13 +49,20 @@ func (s *Service) enqueue(c caller, se session, ev agenthook.Event) error {
 	}
 }
 
-// Run extracts queued transcripts until ctx ends. One worker, so the daily budget is
-// checked and spent in order.
+// Run extracts queued transcripts and idle chats until ctx ends. One worker, so the daily
+// budget is checked and spent in order.
 func (s *Service) Run(ctx context.Context) {
+	s.scanChats(ctx)
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case d := <-s.chatsDue:
+			jctx, cancel := context.WithTimeout(ctx, extractTimeout)
+			if err := s.extractChat(jctx, d); err != nil {
+				s.Log.Warn("memory extraction of a chat failed", "chat", d.chat, "err", err)
+			}
+			cancel()
 		case j := <-s.jobs:
 			jctx, cancel := context.WithTimeout(ctx, extractTimeout)
 			if err := s.extract(jctx, j); err != nil {
@@ -103,7 +111,11 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 	}
 	why.Model = model.Model
 
-	system, user := extractionPrompt(c, j.ev.Transcript)
+	previous, err := s.sessionSummary(ctx, se.id)
+	if err != nil {
+		return err
+	}
+	system, user := extractionPrompt(c, j.ev.Transcript, previous)
 	estIn := (len(system) + len(user)) / 3
 	if reason, err := s.overBudget(ctx, c.env, model, estIn); err != nil {
 		return err
@@ -138,7 +150,7 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 		done("extraction failed: " + truncate(err.Error(), 200))
 		return err
 	}
-	facts, err := parseFacts(resp.Text, j.ev.Transcript)
+	facts, summary, err := parseFacts(resp.Text, j.ev.Transcript)
 	if err != nil {
 		why.Rejected = err.Error()
 		done("extraction output rejected: " + err.Error())
@@ -146,6 +158,11 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 	}
 	why.Facts = len(facts)
 	done(fmt.Sprintf("extracted %d facts with %s", len(facts), model.Model))
+	if summary != "" {
+		if err := s.setSessionSummary(ctx, se.id, summary); err != nil {
+			return err
+		}
+	}
 	for _, f := range facts {
 		if _, _, err := s.write(ctx, c, se, f, "extraction"); err != nil {
 			return err
@@ -157,8 +174,9 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 // --- the prompt and its answer ----------------------------------------------------------
 
 var factsSchema = map[string]any{
-	"type": "object", "additionalProperties": false, "required": []string{"facts"},
+	"type": "object", "additionalProperties": false, "required": []string{"facts", "summary"},
 	"properties": map[string]any{
+		"summary": map[string]any{"type": "string"},
 		"facts": map[string]any{
 			"type": "array", "maxItems": maxFacts,
 			"items": map[string]any{
@@ -177,15 +195,19 @@ var factsSchema = map[string]any{
 	},
 }
 
-func extractionPrompt(c caller, transcript string) (system, user string) {
+func extractionPrompt(c caller, transcript, previous string) (system, user string) {
 	schema, _ := json.Marshal(factsSchema)
 	system = `You extract durable memories from a coding agent's session for the agent's teammate "` + c.teammate.Name + `".
 Keep only what will still matter in a later session: the user's preferences, decisions and their reasons, facts about people, projects and systems, and procedures that worked. Skip chit-chat, transient state, things any engineer knows, anything already marked as memory, and secrets of any kind.
 The session ran in the sandbox "` + c.sandbox.Name + `", one of several separate machines the teammate works in. A fact about the state of this sandbox (its files, branches, installed tools, services or paths) names it, e.g. "In sandbox ` + c.sandbox.Name + `, …"; preferences, decisions and procedures hold everywhere and name no sandbox.
 Each fact is one short self-contained sentence. tier is "user" only when the user said it, otherwise "inferred". entities are short lowercase names (a project, person, service or tool). attribute is a short key such as "test_command" when the fact sets one property of an entity, else "". evidence is a verbatim quote of at most 300 characters from the transcript that supports the fact.
+summary is the session so far in at most 400 characters, for the teammate's next sessions: what the user wanted, what was done and where it was left, naming the sandbox's project. It updates the previous summary with this excerpt; keep what still matters of it. No secrets.
 Answer with JSON only, no prose, matching this schema: ` + string(schema) + `
-When nothing is worth keeping, answer {"facts": []}.`
+When no fact is worth keeping, answer with "facts": [] and the summary.`
 	user = "Transcript excerpt:\n\n" + transcript
+	if previous != "" {
+		user = "Summary of the session before this excerpt:\n\n" + previous + "\n\n" + user
+	}
 	return system, user
 }
 
@@ -203,27 +225,29 @@ type factOut struct {
 	Evidence  string   `json:"evidence"`
 }
 
-// parseFacts validates the model's answer strictly: one violation rejects it all.
-func parseFacts(text, transcript string) ([]candidate, error) {
+// parseFacts validates the model's answer strictly: one violation rejects it all. A summary
+// that is too long is cut, one that looks like a credential dropped.
+func parseFacts(text, transcript string) ([]candidate, string, error) {
 	if m := fence.FindStringSubmatch(text); m != nil {
 		text = m[1]
 	}
 	dec := json.NewDecoder(bytes.NewReader([]byte(strings.TrimSpace(text))))
 	dec.DisallowUnknownFields()
 	var out struct {
-		Facts *[]factOut `json:"facts"`
+		Facts   *[]factOut `json:"facts"`
+		Summary string     `json:"summary"`
 	}
 	if err := dec.Decode(&out); err != nil {
-		return nil, fmt.Errorf("not the schema: %v", err)
+		return nil, "", fmt.Errorf("not the schema: %v", err)
 	}
 	if dec.More() {
-		return nil, errors.New("not the schema: trailing data")
+		return nil, "", errors.New("not the schema: trailing data")
 	}
 	if out.Facts == nil {
-		return nil, errors.New("not the schema: no facts array")
+		return nil, "", errors.New("not the schema: no facts array")
 	}
 	if len(*out.Facts) > maxFacts {
-		return nil, fmt.Errorf("more than %d facts", maxFacts)
+		return nil, "", fmt.Errorf("more than %d facts", maxFacts)
 	}
 	norm := normalize(transcript)
 	var res []candidate
@@ -232,23 +256,23 @@ func parseFacts(text, transcript string) ([]candidate, error) {
 		f.Text, f.Evidence = strings.TrimSpace(f.Text), strings.TrimSpace(f.Evidence)
 		switch {
 		case f.Text == "" || len([]rune(f.Text)) > maxFactText:
-			return nil, bad("text must have 1 to 500 characters")
+			return nil, "", bad("text must have 1 to 500 characters")
 		case f.Evidence == "" || len([]rune(f.Evidence)) > maxEvidence:
-			return nil, bad("evidence must have 1 to 300 characters")
+			return nil, "", bad("evidence must have 1 to 300 characters")
 		case f.Tier != memory.TierUser && f.Tier != memory.TierInferred:
-			return nil, bad("tier must be user or inferred")
+			return nil, "", bad("tier must be user or inferred")
 		case len(f.Entities) > maxEntities:
-			return nil, bad("too many entities")
+			return nil, "", bad("too many entities")
 		case !attributeKey.MatchString(f.Attribute):
-			return nil, bad("invalid attribute")
+			return nil, "", bad("invalid attribute")
 		case secretLike.MatchString(f.Text) || secretLike.MatchString(f.Evidence):
-			return nil, bad("contains something like a credential")
+			return nil, "", bad("contains something like a credential")
 		case !strings.Contains(norm, normalize(f.Evidence)):
-			return nil, bad("evidence is not in the transcript")
+			return nil, "", bad("evidence is not in the transcript")
 		}
 		cand := candidate{Text: f.Text, Kind: f.Kind, Tier: f.Tier, Attribute: f.Attribute, Evidence: f.Evidence}
 		if err := cand.check(); err != nil {
-			return nil, bad(err.Error())
+			return nil, "", bad(err.Error())
 		}
 		if cand.Tier == memory.TierUser && !saidByUser(transcript, f.Evidence) {
 			cand.Tier = memory.TierInferred // the model's claim that the user said it doesn't hold
@@ -260,7 +284,11 @@ func parseFacts(text, transcript string) ([]candidate, error) {
 		}
 		res = append(res, cand)
 	}
-	return res, nil
+	summary := strings.Join(strings.Fields(out.Summary), " ")
+	if secretLike.MatchString(summary) {
+		summary = ""
+	}
+	return res, truncate(summary, maxSummary), nil
 }
 
 func containsStr(list []string, s string) bool {

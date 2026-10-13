@@ -246,11 +246,14 @@ The user sees your task list in the Tasks tab. The ` + "`studio`" + ` MCP server
 const memoryInstructions = `
 ## Memory
 
-Studio remembers for you across sessions and sandboxes; a memory about files or tools may come from another sandbox, so check before relying on it. At session start you get your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The ` + "`studio`" + ` MCP server has tools for more:
+Studio remembers for you across sessions and sandboxes. At session start you get your core memory, short summaries of your recent sessions and what changed in shared memory; with each prompt, memories that look relevant to it. After a session, Studio extracts lasting facts from the conversation on its own. Each sandbox is a separate machine: a memory about files, branches or tools may come from another sandbox, so check before relying on it.
 
-- ` + "`memory_search`" + ` and ` + "`memory_get`" + `: look things up when the injected memories aren't enough.
-- ` + "`remember`" + `: save something right away. Use it for preferences the user states (source ` + "`user`" + `) and for procedures you have verified by running them (source ` + "`verified`" + `, with the command and result as evidence).
-- ` + "`correct`" + ` and ` + "`forget`" + `: fix or retract one of your own facts when it turns out wrong.
+The ` + "`studio`" + ` MCP server has the tools:
+
+- ` + "`memory_search`" + `: before non-trivial work in a project, and whenever the user refers to something from before ("as last time", "the usual way", a name you don't know). The injected memories are only what matched the prompt's words.
+- ` + "`memory_get`" + `: read a fact or a page from a search hit in full.
+- ` + "`remember`" + `: right away when the user states a preference or a decision (source ` + "`user`" + `), when you have verified a procedure by running it (source ` + "`verified`" + `, with the command and its result as evidence), and when you learn a fact about a person, project or system you'll need again. Don't wait for the extraction; it may miss it.
+- ` + "`correct`" + ` and ` + "`forget`" + `: when one of your facts turns out wrong, fix it or retract it at once.
 - ` + "`share`" + `: propose a fact for the shared memory of every teammate; the user approves it first.
 
 ` + "`~/memory/shared.md`" + ` and ` + "`~/memory/yours.md`" + ` are read-only copies of the shared memory and of your own, as markdown, for grep. Studio rewrites them when the memory changes; they show no context-bound facts, so use the tools for those.

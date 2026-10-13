@@ -114,8 +114,8 @@ export function MemorySessionsTab({
           <EmptyHeader>
             <EmptyTitle>No sessions yet</EmptyTitle>
             <EmptyDescription>
-              Agent sessions show up here once their hooks call Studio, with
-              everything memory injected and wrote and why.
+              Agent sessions and chats show up here once memory is used in them,
+              with a summary and everything memory injected and wrote and why.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -149,8 +149,16 @@ export function MemorySessionsTab({
                     {names.get(s.teammateId) ?? s.teammateId}
                   </TableCell>
                   <TableCell>{s.sandboxName}</TableCell>
-                  <TableCell className="text-[0.625rem]">
+                  <TableCell className="max-w-96 text-[0.625rem] whitespace-normal">
                     {s.harness} · <Ident>{s.sessionRef.slice(0, 12)}</Ident>
+                    {s.summary && (
+                      <p
+                        className="mt-0.5 line-clamp-2 text-xs text-muted-foreground"
+                        title={s.summary}
+                      >
+                        {s.summary}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell className="text-[0.625rem]">
                     {s.gitRemote && <Ident>{s.gitRemote}</Ident>}
