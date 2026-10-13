@@ -471,7 +471,6 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
 - Subscription logins (Claude Pro/Max, ChatGPT/Codex) and CLI-based utility calls; spike S8
   → [harnesses](docs/harnesses.md#verified-vs-pending)
 - Live hook verification for all three harnesses; spike S7
-- Teammate tasks and heartbeats (proactive work)
 
 **Browser and git**
 - Browser downloads handed to the agent; the browser items pending a live run →

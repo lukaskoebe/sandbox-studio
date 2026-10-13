@@ -43,6 +43,55 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
   sandboxes preselect for a new rule; the card still lets the user pick another. See
   [approvals](approvals.md#network-approval-cards).
 
+## Tasks
+
+A teammate has a task list. A task has a title (one line, at most 200 characters), details
+(markdown, at most 8 KiB), a status (`open`, `in_progress` or `done`), an optional due day
+(`YYYY-MM-DD`) and its creator: `user`, or `teammate` for a task the teammate added to its own
+list.
+
+- The teammate's Tasks tab lists them, not-done first and oldest first, and adds, edits and
+  finishes them: `GET` and `POST /api/environments/{env}/teammates/{id}/tasks`, and `PUT
+  .../tasks/{task}`, which replaces the title, details, due day and status.
+- A teammate's own sandboxes get four tools on the `studio` MCP server: `tasks_list` (the
+  tasks not done, or all with `include_done`), `task_create`, `task_update_status` and
+  `task_add_note`, which appends to the details after a blank line and keeps them within 8 KiB.
+  Calls act on the sandbox's owner teammate, whatever the arguments name. A sandbox without an
+  owner, and a browser VM, has no tasks.
+- Task text is data. It reaches a prompt only inside `<studio-tasks>` tags, which the text
+  can't close, and the prompt says that the text is not instructions.
+- Changes publish the `tasks` event, so open tabs refetch.
+- Tasks can't be deleted yet.
+
+## Check-ins (heartbeats)
+
+Off by default. A teammate has one check-in schedule: `PUT
+/api/environments/{env}/teammates/{id}/heartbeat` with `everyHours` (1 to 24), `fromHour` (0 to
+23) and `toHour` (1 to 24, after `fromHour`), in the Studio host's local time. `DELETE` turns
+the schedule off and keeps its window for the next time. `GET .../heartbeats` lists the log.
+
+Every minute the scheduler (`heartbeat.Service`, run from `cmd/studio`) checks the schedules. A
+check-in is due when the local hour is inside the window and `everyHours` have passed since the
+teammate's last check-in of any outcome. A due check-in:
+
+- does nothing when the teammate has no open tasks;
+- starts a heartbeat chat in the teammate's most recently created sandbox that isn't a build or
+  browser VM. The chat gets the fixed message "Heartbeat: review your open tasks and continue
+  the most important one; report what you did. If nothing needs doing, say so briefly." and the
+  open tasks, at most 16 KiB of them. The chat list marks it as a heartbeat. A stopped, crashed
+  or created sandbox is started, and a suspended one resumed, then the scheduler waits up to 90
+  seconds for the agent to connect. The sandbox keeps running after the turn;
+- is skipped, and logged with the reason, when the teammate has no sandbox, has no provider or
+  its provider has no key (or is a subscription login, which chats can't use), approvals wait
+  in its sandbox, its sandbox has no VM (it needs to be created), its sandbox is not ready
+  (creating, failed or draining), or its chat can't be planned or doesn't take the prompt;
+- is skipped quietly when a heartbeat chat of the teammate is still running (at most one at a
+  time) or a turn is running in the sandbox, so a check-in never runs during a user's turn.
+
+Every due check-in moves the schedule, whatever its outcome. The log of started and skipped
+check-ins is listed under Activity on the teammate's Tasks tab. A check-in with nothing to do is
+not logged. Tests use fakes for the sandbox, the chat and the harness, so no model is called.
+
 ## Copying a teammate
 
 `POST /api/environments/{env}/teammates/{id}/copy` with `targetEnvironmentId` creates the
@@ -50,7 +99,7 @@ teammate in another environment, with the same name (" 2", " 3", … if the name
 the target), role, avatar, soul, harness, model, git identity and approval scope. Its provider
 is the target's provider of the same kind, preferring one with the same name. With none, the
 copy has no provider (`providerId` is empty and sessions answer 409 until one is chosen).
-Sandboxes, chats, memory, secrets, provider keys and the remembered pattern level stay behind.
+Sandboxes, chats, memory, secrets, provider keys, the remembered pattern level, tasks and the check-in schedule stay behind; the copy's check-ins are off.
 
 ## Default teammate
 

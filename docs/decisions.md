@@ -23,6 +23,7 @@
 | 2026-10-10 | Studio's own services are virtual hosts under `*.studio.internal` (S2) |
 | 2026-10-11 | Personas renamed to teammates (migration 018) |
 | 2026-10-11 | Chats: harnesses driven over ACP alongside the terminal TUI ([design](design/chat-mode.md)) |
+| 2026-10-13 | Teammate tasks and check-ins: one schedule per teammate, which starts a chat only with open tasks, in the latest sandbox, starting it if it's stopped ([teammates](teammates.md#check-ins-heartbeats)) |
 
 ## From v1
 
