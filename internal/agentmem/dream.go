@@ -703,7 +703,7 @@ func (s *Service) SharedJudge(ctx context.Context, env string) (*SharedJudge, er
 }
 
 // setupJudge picks the utility model: the teammate's provider's, or for shared memory the
-// one of sharedJudge. Subscriptions have none (TODO S8). The chosen teammate never falls
+// one of sharedJudge. A subscription's model is only there once it is signed in. The chosen teammate never falls
 // back to another one, so the teammate the memory page names is the one that is used.
 func (d *dreamer) setupJudge(ctx context.Context) {
 	s := d.s
@@ -730,7 +730,7 @@ func (d *dreamer) setupJudge(ctx context.Context) {
 			d.noJudge = "listing teammates failed"
 			return
 		} else if !ok {
-			d.noJudge = "no teammate with a utility model (subscriptions have none yet)"
+			d.noJudge = "no teammate with a utility model (a subscription needs its sign-in first)"
 			return
 		}
 	}

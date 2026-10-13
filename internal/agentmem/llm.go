@@ -76,15 +76,21 @@ func utilityModelOf(p store.Provider) (UtilityModel, bool) {
 		return UtilityModel{Kind: p.Kind, Model: "gpt-6-luna", PriceInPerM: 0.10, PriceOutPerM: 0.50, Priced: true}, true
 	case teammates.KindOpenAICompatible:
 		return UtilityModel{Kind: p.Kind, Model: p.Model, Note: "the endpoint's single model; price unknown, so calls are capped instead"}, p.Model != "" && p.BaseURL != ""
+	case teammates.KindClaudeSubscription:
+		// Called as `claude -p --model haiku` in the provider's utility VM (login package). The
+		// subscription has no known price, so calls are capped by number instead.
+		return UtilityModel{Kind: p.Kind, Model: "haiku", Note: "a one-shot Claude Code call in the utility VM; capped by calls"}, true
+	case teammates.KindChatGPTSubscription:
+		// Called as `codex exec -m gpt-6-luna` in the provider's utility VM (login package).
+		return UtilityModel{Kind: p.Kind, Model: "gpt-6-luna", Note: "a one-shot Codex call in the utility VM; capped by calls"}, true
 	default:
-		// TODO (S8): subscriptions can't be called from the host; extraction would have to
-		// run in the guest's harness.
-		return UtilityModel{Kind: p.Kind, Note: "subscriptions have no extraction yet"}, false
+		return UtilityModel{Kind: p.Kind, Note: "no utility model for this kind"}, false
 	}
 }
 
 // DefaultUtility returns a client for the provider's utility model, calling the provider
-// directly from the host with the real key.
+// directly from the host with the real key. Subscriptions are not called this way: the login
+// package runs their CLIs in a VM, and it supplies their client to the service's Utility.
 func DefaultUtility(p store.Provider, key string) (LLM, UtilityModel, error) {
 	m, ok := UtilityFor(p)
 	if !ok {
@@ -96,8 +102,10 @@ func DefaultUtility(p store.Provider, key string) (LLM, UtilityModel, error) {
 		return &anthropicLLM{httpc: hc, url: "https://api.anthropic.com/v1/messages", key: key, model: m.Model}, m, nil
 	case teammates.KindOpenAIAPI:
 		return &openAILLM{httpc: hc, url: "https://api.openai.com/v1/responses", key: key, model: m.Model}, m, nil
-	default:
+	case teammates.KindOpenAICompatible:
 		return &chatLLM{httpc: hc, url: strings.TrimRight(p.BaseURL, "/") + "/chat/completions", key: key, model: m.Model}, m, nil
+	default:
+		return nil, m, ErrNoUtility
 	}
 }
 

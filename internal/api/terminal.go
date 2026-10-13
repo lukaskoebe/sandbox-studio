@@ -34,6 +34,11 @@ func (s *Server) attachTerminal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+	bridgeTerminal(w, r, pty)
+}
+
+// bridgeTerminal runs a terminal over a websocket until either side ends it, and closes pty.
+func bridgeTerminal(w http.ResponseWriter, r *http.Request, pty *agentchan.PTY) {
 	defer pty.Close()
 
 	// Accept verifies that Origin matches Host, so other sites can't attach.

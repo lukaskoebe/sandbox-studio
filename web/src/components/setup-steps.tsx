@@ -25,8 +25,13 @@ import { StatusBadge } from "@/components/status-badge"
 import { TeammateForm } from "@/components/teammate-form"
 import { WorkModePicker } from "@/components/agent-view"
 import { Ident } from "@/components/ident"
-import { $api, errorMessage, type Teammate } from "@/lib/api/client"
-import { kindLabels, harnessLabels } from "@/lib/teammates"
+import {
+  $api,
+  errorMessage,
+  type Provider,
+  type Teammate,
+} from "@/lib/api/client"
+import { isSubscription, kindLabels, harnessLabels } from "@/lib/teammates"
 import type { SetupKey } from "@/lib/setup"
 
 /** The body of one step of the guided setup. Each one uses the forms the settings pages use. */
@@ -107,6 +112,7 @@ function ProviderStep({ env }: { env: string }) {
     params: { path: { env } },
   })
   const [adding, setAdding] = useState(false)
+  const [signingIn, setSigningIn] = useState<Provider>()
   const list = providers.data ?? []
   return (
     <Column>
@@ -123,6 +129,16 @@ function ProviderStep({ env }: { env: string }) {
               <span className="text-muted-foreground">
                 {kindLabels[p.kind]}
               </span>
+              {isSubscription(p.kind) && p.state !== "ready" && (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="ml-auto"
+                  onClick={() => setSigningIn(p)}
+                >
+                  Sign in
+                </Button>
+              )}
             </li>
           ))}
         </ul>
@@ -136,6 +152,12 @@ function ProviderStep({ env }: { env: string }) {
         </Button>
       </div>
       <ProviderDialog env={env} open={adding} onOpenChange={setAdding} />
+      <ProviderDialog
+        env={env}
+        provider={signingIn}
+        open={!!signingIn}
+        onOpenChange={(open) => !open && setSigningIn(undefined)}
+      />
     </Column>
   )
 }

@@ -41,6 +41,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/heartbeat"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
+	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/netreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
@@ -51,6 +52,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatebuild"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 	"github.com/lukaskoebe/sandbox-studio/internal/updates"
@@ -345,9 +347,25 @@ func run(addr, image string, log *slog.Logger) error {
 		log.Warn("autostart is unavailable", "err", err)
 	}
 
+	// Subscription sign-ins run in system VMs, and the CLI calls of subscription providers' memory
+	// work run in their utility VMs (docs/teammates.md, subscription logins). The service also
+	// removes the login VMs an earlier run left, and refreshes ChatGPT logins.
+	logins := login.New(st, vault, mgr, hub, log)
+	logins.Notify = func(envID string) {
+		bus.Publish(events.Event{Topic: events.TopicTeammates, EnvironmentID: envID})
+		bus.Publish(events.Event{Topic: events.TopicSecrets, EnvironmentID: envID})
+	}
+	go logins.Run(ctx)
+	agentMem.Utility = func(p store.Provider, key string) (agentmem.LLM, agentmem.UtilityModel, error) {
+		if k, _ := teammates.LookupKind(p.Kind); k.Login {
+			return logins.Utility(p)
+		}
+		return agentmem.DefaultUtility(p, key)
+	}
+
 	mux := http.NewServeMux()
 	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
-		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats}
+		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats, Login: logins}
 	// Heartbeats give teammates with open tasks their check-ins, until ctx ends (docs/teammates.md).
 	beats := &heartbeat.Service{Store: st, Sandboxes: mgr, Chats: chats, Plan: apiServer.ChatLaunch, Bus: bus, Log: log}
 	go beats.Run(ctx)

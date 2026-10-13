@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { ProviderLogin } from "@/components/provider-login"
 import {
   errorMessage,
   fetchClient,
@@ -81,6 +82,9 @@ function ProviderForm({
   const [model, setModel] = useState(provider?.model ?? "")
   const [serverError, setServerError] = useState<string>()
   const [saving, setSaving] = useState(false)
+  // A subscription added in this dialog: its sign-in follows the creation, in the same dialog.
+  const [added, setAdded] = useState<Provider>()
+  const current = provider ?? added
 
   const subscription = isSubscription(kind)
   const compatible = kind === "openai_compatible"
@@ -129,6 +133,11 @@ function ProviderForm({
           queryKey: ["get", "/api/environments/{env}/teammates"],
         })
         queryClient.invalidateQueries({ queryKey: ["get", "/api/setup"] })
+        if (!provider && subscription) {
+          // A subscription has no key to type: its sign-in is the next step.
+          setAdded(result.data)
+          return
+        }
         onDone()
         return
       }
@@ -159,8 +168,8 @@ function ProviderForm({
       <DialogHeader>
         <DialogTitle>{provider ? "Edit provider" : "Add provider"}</DialogTitle>
         <DialogDescription>
-          How teammates reach a model. API keys are stored as secrets, so
-          sandboxes only ever see a placeholder.
+          How teammates reach a model. API keys and subscription logins are
+          stored as secrets, so sandboxes only ever see a placeholder.
         </DialogDescription>
       </DialogHeader>
       <Field>
@@ -170,12 +179,12 @@ function ProviderForm({
           autoFocus={!provider}
           autoComplete="off"
           maxLength={64}
-          readOnly={!!provider}
+          readOnly={!!current}
           placeholder="Anthropic"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        {provider && (
+        {current && (
           <FieldDescription>The name and kind can't change.</FieldDescription>
         )}
       </Field>
@@ -183,7 +192,7 @@ function ProviderForm({
         <FieldLabel htmlFor="provider-kind">Kind</FieldLabel>
         <Select
           value={kind}
-          disabled={!!provider}
+          disabled={!!current}
           onValueChange={(v) => {
             const next = providerKinds.find((k) => k === v)
             if (next) {
@@ -206,10 +215,13 @@ function ProviderForm({
         </Select>
       </Field>
       {subscription ? (
-        <p className="rounded-md bg-muted px-3 py-2 text-xs/relaxed text-muted-foreground">
-          Login flow coming soon. Until then, teammates can use this provider
-          but can't sign in with it.
-        </p>
+        current ? (
+          <ProviderLogin env={env} provider={current} />
+        ) : (
+          <p className="rounded-md bg-muted px-3 py-2 text-xs/relaxed text-muted-foreground">
+            Add the provider, then sign in with your subscription.
+          </p>
+        )
       ) : (
         <>
           {compatible && (
@@ -286,10 +298,16 @@ function ProviderForm({
       )}
       {serverError && <FieldError>{serverError}</FieldError>}
       <DialogFooter>
-        <Button type="submit" disabled={!canSave || saving}>
-          {saving && <Spinner />}
-          {provider ? "Save" : "Add provider"}
-        </Button>
+        {subscription && current ? (
+          <Button type="button" onClick={onDone}>
+            Done
+          </Button>
+        ) : (
+          <Button type="submit" disabled={!canSave || saving}>
+            {saving && <Spinner />}
+            {provider ? "Save" : "Add provider"}
+          </Button>
+        )}
       </DialogFooter>
     </form>
   )

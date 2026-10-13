@@ -318,17 +318,30 @@ func TestChatPermissionDecisionAPIValidation(t *testing.T) {
 	waitIdle(t, h, base)
 }
 
-// Claude subscriptions can't drive the Agent SDK: chats refuse them with a reason.
+// Claude subscriptions don't run chats, signed in or not: Anthropic doesn't allow claude.ai
+// logins in third-party agents. Terminal sessions run Claude Code itself.
 func TestChatsRefuseClaudeSubscription(t *testing.T) {
 	h, s, _, env := newChatServer(t, &acptest.Agent{})
-	prov, err := s.Store.CreateProvider(context.Background(), store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "Max", Kind: "claude_subscription"}, nil)
+	ctx := context.Background()
+	prov, err := s.Store.CreateProvider(ctx, store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "Max", Kind: "claude_subscription"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
-	rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/sandboxes/"+sb.ID+"/chats", "")
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Claude subscription") {
-		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	url := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID + "/chats"
+	if rec := do(h, "POST", url, ""); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Claude subscription") {
+		t.Fatalf("a chat before the sign-in: %d %s", rec.Code, rec.Body)
+	}
+	sec, err := s.Vault.Prepare(env.ID, "PROVIDER_MAX_KEY", "sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWx_-123456", []string{"api.anthropic.com"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Store.AttachProviderSecret(ctx, env.ID, prov.ID, sec); err != nil {
+		t.Fatal(err)
+	}
+	s.Vault.Changed(env.ID)
+	if rec := do(h, "POST", url, ""); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Claude subscription") {
+		t.Fatalf("a chat after the sign-in: %d %s", rec.Code, rec.Body)
 	}
 }
 

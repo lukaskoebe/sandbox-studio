@@ -49,7 +49,7 @@ func (Codex) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, erro
 		}
 		baseURL = provider.BaseURL
 	case teammates.KindChatGPTSubscription:
-		// The built-in openai provider with the ChatGPT login (S8).
+		// The built-in openai provider with the ChatGPT login: its auth file comes from the login package.
 	default:
 		return nil, fmt.Errorf("codex can't use a %s provider", provider.Kind)
 	}

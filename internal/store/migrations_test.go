@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -478,8 +481,9 @@ func TestMigrateTeammateSettings(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at) VALUES ('sub-key', 'env', 'S', x'00', 'x.example.com', 'ph-sub', 1, 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE providers SET secret_id = 'sub-key' WHERE id = 'prov'`); err == nil {
-		t.Error("a subscription took a key")
+	// Migration 033 lets a subscription hold its login's key (docs/teammates.md).
+	if _, err := db.ExecContext(ctx, `UPDATE providers SET secret_id = 'sub-key' WHERE id = 'prov'`); err != nil {
+		t.Errorf("a subscription login could not keep its key: %v", err)
 	}
 }
 
@@ -595,5 +599,82 @@ func TestMigrateGitLabForgeKind(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, secret_id, created_at, updated_at)
 		VALUES ('bad', 'env', 'bad', 'gitea', 'https://gitea.example.com', NULL, 1, 1)`); err == nil {
 		t.Fatal("an unknown forge kind was accepted")
+	}
+}
+
+// Migration 033 widens the kinds of sandboxes to the system VMs of subscription logins. The
+// sandboxes table is rebuilt, so its rows, indexes and owner triggers must come through.
+func TestMigrateSystemSandboxKinds(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	names, err := fs.Glob(migrations, "migrations/*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(names)
+	// The file's version is its position in the sorted list, so the migrations before it are
+	// that many.
+	before := slices.Index(names, "migrations/033_system_sandboxes.sql")
+	if before < 0 {
+		t.Fatal("migration 033 is missing")
+	}
+	if err := s.migrateTo(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Work', 1)`,
+		`INSERT INTO providers (id, environment_id, name, kind, created_at, updated_at) VALUES ('prov', 'env', 'Claude', 'claude_subscription', 1, 1)`,
+		`INSERT INTO teammates (id, environment_id, name, role, soul, harness, provider_id, model, git_name, git_email, created_at, updated_at)
+		 VALUES ('ada', 'env', 'Ada', '', '', 'claude', 'prov', '', 'Ada', 'ada@example.com', 1, 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at) VALUES ('sb1', 'env', 'api', 1, 512, 1024, 0, 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, teammate_id, kind) VALUES ('br', 'env', 'browser-ada', 1, 512, 1024, 0, 1, 'ada', 'browser')`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if sb, err := s.Sandbox(ctx, "env", "sb1"); err != nil || sb.Kind != "" || sb.Name != "api" {
+		t.Fatalf("ordinary sandbox after the rebuild: %+v, %v", sb, err)
+	}
+	if sb, err := s.BrowserSandbox(ctx, "env", "ada"); err != nil || sb.ID != "br" {
+		t.Fatalf("browser sandbox after the rebuild: %+v, %v", sb, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, kind) VALUES ('sys', 'env', 'login-p', 1, 512, 1024, 0, 1, 'codex-login')`); err != nil {
+		t.Fatalf("a system sandbox was refused: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, kind) VALUES ('bad', 'env', 'x', 1, 512, 1024, 0, 1, 'other')`); err == nil {
+		t.Fatal("an unknown sandbox kind was accepted")
+	}
+	// A subscription provider can hold its login's secret now; the OpenAI-compatible rule still holds.
+	for _, q := range []string{
+		`INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, note, created_at, updated_at) VALUES ('tok', 'env', 'PROVIDER_MAX_KEY', x'00', 'api.anthropic.com', 'studio-tok', '', 1, 1)`,
+		`INSERT INTO providers (id, environment_id, name, kind, secret_id, created_at, updated_at) VALUES ('max', 'env', 'Max', 'claude_subscription', 'tok', 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO providers (id, environment_id, name, kind, created_at, updated_at) VALUES ('compat', 'env', 'Local', 'openai_compatible', 1, 1)`); err == nil {
+		t.Fatal("an OpenAI-compatible provider without a base URL was accepted")
+	}
+	if prov, err := s.Provider(ctx, "env", "max"); err != nil || prov.SecretID != "tok" {
+		t.Fatalf("the subscription provider after the rebuild: %+v, %v", prov, err)
+	}
+	// The owner triggers still hold: a teammate of another environment is refused.
+	if _, err := db.ExecContext(ctx, `INSERT INTO environments (id, name, created_at) VALUES ('other', 'Other', 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, teammate_id) VALUES ('cross', 'other', 'x', 1, 512, 1024, 0, 1, 'ada')`); err == nil {
+		t.Fatal("a sandbox took a teammate of another environment")
 	}
 }

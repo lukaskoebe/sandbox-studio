@@ -29,13 +29,13 @@ export function Readiness({
       </Badge>
     )
   }
-  if (provider.state === "login_required") {
+  if (provider.state === "login_required" || provider.state === "expired") {
     return (
       <Badge
         variant="outline"
-        title={`${provider.name} needs a subscription login, which Studio can't do yet`}
+        title={`${provider.name} needs a sign-in, on the Providers page`}
       >
-        Login required
+        {provider.state === "expired" ? "Sign-in expired" : "Sign-in needed"}
       </Badge>
     )
   }

@@ -40,7 +40,9 @@ func scanSecret(row interface{ Scan(...any) error }) (Secret, error) {
 	var hosts string
 	var created, updated int64
 	err := row.Scan(&s.ID, &s.EnvironmentID, &s.Name, &s.Sealed, &hosts, &s.Placeholder, &s.Note, &created, &updated, &s.StudioOnly, &s.TeammateID, &s.SandboxID)
-	s.Hosts = strings.Split(hosts, ",")
+	if hosts != "" {
+		s.Hosts = strings.Split(hosts, ",")
+	}
 	s.CreatedAt, s.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
 	return s, err
 }
@@ -50,9 +52,9 @@ func scanSecret(row interface{ Scan(...any) error }) (Secret, error) {
 func (s *Store) CreateSecret(ctx context.Context, sec Secret) (Secret, error) {
 	t := now()
 	sec.CreatedAt, sec.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+", teammate_id, sandbox_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err := s.db.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+", studio_only, teammate_id, sandbox_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		sec.ID, sec.EnvironmentID, sec.Name, sec.Sealed, strings.Join(sec.Hosts, ","), sec.Placeholder, sec.Note, t, t,
-		nullable(sec.TeammateID), nullable(sec.SandboxID))
+		sec.StudioOnly, nullable(sec.TeammateID), nullable(sec.SandboxID))
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sec, fmt.Errorf("a secret named %q: %w", sec.Name, ErrExists)
 	}

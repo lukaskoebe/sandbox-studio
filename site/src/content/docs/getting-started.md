@@ -44,7 +44,7 @@ Then start the app:
 
 Studio prints a one-time link to its local UI at `http://127.0.0.1:7878`. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, use `./bin/studio login-url` from the repository root.
 
-This is the sign-in for your local Studio app. It does not sign an agent into an AI provider. For agent sessions, add an API-key provider in the environment first; subscription sign-in is not available.
+This is the sign-in for your local Studio app. It does not sign an agent into an AI provider. For agent sessions, add a provider in the environment first: an API key, or a Claude Pro/Max or ChatGPT subscription sign-in.
 
 Studio listens on loopback, so other computers on your network cannot open its UI. The UI and the sandbox services stay on the machine running Studio.
 

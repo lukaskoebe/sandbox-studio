@@ -36,11 +36,14 @@ const (
 	KindChatGPTSubscription = "chatgpt_subscription"
 )
 
-// Provider states. An API-key provider is key_required until its key is added.
+// Provider states. An API-key provider is key_required until its key is added; a subscription
+// provider is login_required until a login is stored, and expired once its stored login can no
+// longer be used and Studio couldn't refresh it (docs/teammates.md#subscription-logins).
 const (
 	StateReady         = "ready"
 	StateLoginRequired = "login_required"
 	StateKeyRequired   = "key_required"
+	StateExpired       = "expired"
 )
 
 // Scopes of new rules from approvals of a teammate's sandboxes: the sandbox, the teammate's
@@ -57,8 +60,10 @@ type Kind struct {
 	Kind      string
 	Harnesses []string
 	// APIKey kinds keep a key in the vault, bound to Host (or to the base URL's host for
-	// openai_compatible). Other kinds are subscription logins.
+	// openai_compatible). Login kinds keep what a subscription login yields in the vault, and
+	// Host is where the harness sends it.
 	APIKey bool
+	Login  bool
 	Host   string
 	// EnvVar is the variable the harness reads its credential from; the guest gets the
 	// placeholder of the provider's secret in it.
@@ -69,8 +74,15 @@ var kinds = []Kind{
 	{Kind: KindAnthropicAPI, Harnesses: []string{HarnessClaude, HarnessOpenCode}, APIKey: true, Host: "api.anthropic.com", EnvVar: "ANTHROPIC_API_KEY"},
 	{Kind: KindOpenAIAPI, Harnesses: []string{HarnessCodex, HarnessOpenCode}, APIKey: true, Host: "api.openai.com", EnvVar: "OPENAI_API_KEY"},
 	{Kind: KindOpenAICompatible, Harnesses: []string{HarnessOpenCode, HarnessCodex}, APIKey: true, EnvVar: "OPENAI_API_KEY"},
-	{Kind: KindClaudeSubscription, Harnesses: []string{HarnessClaude}, EnvVar: "CLAUDE_CODE_OAUTH_TOKEN"},
-	{Kind: KindChatGPTSubscription, Harnesses: []string{HarnessCodex}},
+	{Kind: KindClaudeSubscription, Harnesses: []string{HarnessClaude}, Login: true, Host: "api.anthropic.com", EnvVar: "CLAUDE_CODE_OAUTH_TOKEN"},
+	// verify (S8): the host the ChatGPT login's requests go to; the refresh token never leaves Studio.
+	{Kind: KindChatGPTSubscription, Harnesses: []string{HarnessCodex}, Login: true, Host: "chatgpt.com"},
+}
+
+// HostOf returns the host a provider kind's key or login is bound to, or "" for a kind without one.
+func HostOf(kind string) string {
+	k, _ := LookupKind(kind)
+	return k.Host
 }
 
 // LookupKind returns the description of a provider kind.
@@ -298,6 +310,13 @@ func Slug(name string) string {
 		}
 	}
 	return strings.TrimRight(b.String(), "-")
+}
+
+// LoginSecretName is the vault name of what a provider's subscription login keeps for Studio
+// alone (ChatGPT's refresh token and claims): PROVIDER_<NAME>_LOGIN, next to SecretName's
+// PROVIDER_<NAME>_KEY.
+func LoginSecretName(name, fallback string) string {
+	return strings.TrimSuffix(SecretName(name, fallback), "_KEY") + "_LOGIN"
 }
 
 // DefaultGitEmail is <slug>@agents.invalid; the .invalid TLD never resolves, so commits

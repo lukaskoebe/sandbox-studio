@@ -3883,6 +3883,41 @@
         ],
         "type": "object"
       },
+      "LoginView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The one-time code of ChatGPT's device sign-in",
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "paste": {
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "starting",
+              "waiting",
+              "saving",
+              "done",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "The page the user opens to finish the sign-in",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "paste"
+        ],
+        "type": "object"
+      },
       "MarkerBody": {
         "additionalProperties": false,
         "properties": {
@@ -4144,6 +4179,21 @@
         },
         "required": [
           "url"
+        ],
+        "type": "object"
+      },
+      "PasteTokenInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "description": "The long-lived token from claude setup-token, as the terminal printed it",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
         ],
         "type": "object"
       },
@@ -4610,11 +4660,12 @@
             "type": "string"
           },
           "state": {
-            "description": "login_required until a subscription login is stored; key_required until an API key is added",
+            "description": "login_required until a subscription login is stored; expired when a ChatGPT login lapsed and could not be refreshed; key_required until an API key is added",
             "enum": [
               "ready",
               "login_required",
-              "key_required"
+              "key_required",
+              "expired"
             ],
             "type": "string"
           },
@@ -11035,6 +11086,217 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateProviderInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/environments/{env}/providers/{id}/login": {
+      "delete": {
+        "description": "Ends a running sign-in and removes its system VM. Without one it does nothing.",
+        "operationId": "cancelProviderLogin",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      },
+      "get": {
+        "description": "The sign-in of a subscription provider as the dialog shows it: idle when none is running.",
+        "operationId": "getProviderLogin",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      },
+      "post": {
+        "description": "Starts the sign-in of a subscription provider. Its CLI runs in a system VM, the user finishes in their browser, and Studio stores the result as the provider's login. Poll the status, or attach the terminal, which the dialog shows.",
+        "operationId": "startProviderLogin",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/environments/{env}/providers/{id}/login/token": {
+      "post": {
+        "description": "Stores a Claude Code token the user copied from the terminal, when Studio couldn't read it there. It ends a running sign-in.",
+        "operationId": "pasteProviderLoginToken",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasteTokenInBody"
               }
             }
           },

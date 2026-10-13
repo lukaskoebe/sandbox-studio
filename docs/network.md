@@ -116,6 +116,13 @@ before any approval, site approval or security level. The environment switch "Bl
 (`environments.block_trackers`, on by default) turns the list off. Each denial shows in Activity
 as "Denied · tracker", one row per host with its attempts.
 
+## System VMs
+
+The VMs of subscription logins (`claude-login`, `codex-login`, `claude-utility` and
+`codex-utility`, see [subscription logins](teammates.md#subscription-logins)) reach only the hosts
+their kind needs, listed in `internal/policy/system.go`. The rules still decide first, so a deny
+rule the user set holds. Any other host is refused without a hold and without an approval card.
+
 ## The Network page
 
 The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route. The private

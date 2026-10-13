@@ -65,7 +65,7 @@ export function MemoryUsage({ env, shared }: { env: string; shared: boolean }) {
         {today.skipped > 0 && `, ${today.skipped} skipped`}
         {extracting.length > 0
           ? ` · ${extracting.map((m) => `${m.provider}: ${m.model}`).join(", ")}`
-          : " · no provider can extract (subscriptions can't yet)"}
+          : " · no provider can extract (a subscription needs its sign-in first)"}
         {extracting.some((m) => !m.priced) &&
           ` · unpriced models: at most ${budget.maxCalls} calls a day`}
       </p>

@@ -76,6 +76,9 @@ type Request struct {
 	// Placeholder is set for a request on a terminated connection that carries the placeholder of
 	// a secret the host isn't bound to. No security level allows such a request (see level.go).
 	Placeholder bool
+	// Allowed is set for a system sandbox (SystemHosts): the hosts it may reach without anyone
+	// being asked. Other hosts are refused, after the rules had their say.
+	Allowed []string
 	// HTTP is the request, for a request on a terminated connection; nil for a connection.
 	HTTP *HTTPRequest
 }
@@ -170,6 +173,12 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		return store.Rule{}, err
 	} else if ok {
 		return r, nil
+	}
+	if req.Allowed != nil {
+		if host := Normalize(req.Host); slices.Contains(req.Allowed, host) {
+			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, nil
+		}
+		return store.Rule{}, ErrUndecided
 	}
 	if req.RulesOnly {
 		return store.Rule{}, ErrUndecided

@@ -196,6 +196,8 @@ func (g *Gateway) handle(c net.Conn) {
 	rule, err := g.Policy.Decide(context.Background(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name, Host: host, Port: port,
 		Browser: sb.Kind == store.SandboxKindBrowser, Deferred: browserTLS,
+		// A system VM reaches only the hosts its kind needs, and nobody is asked (store/system.go).
+		Allowed: policy.SystemHosts(sb.Kind),
 	})
 	ruleID = rule.ID
 	// Without a rule, a browser VM's HTTPS is not held here: its requests are decided one by one

@@ -108,7 +108,9 @@ function ProvidersPage() {
                     </TableCell>
                     <TableCell>
                       {p.state === "login_required" ? (
-                        <Badge variant="outline">Login required</Badge>
+                        <Badge variant="outline">Sign-in needed</Badge>
+                      ) : p.state === "expired" ? (
+                        <Badge variant="destructive">Sign-in expired</Badge>
                       ) : p.state === "key_required" ? (
                         <Badge variant="outline">Key required</Badge>
                       ) : (
