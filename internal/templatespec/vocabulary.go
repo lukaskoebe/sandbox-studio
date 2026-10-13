@@ -3,7 +3,7 @@ package templatespec
 import "slices"
 
 // toolNames are the tools the parser accepts under tools, in suggestion order.
-var toolNames = []string{"go", "node", "python"}
+var toolNames = []string{"go", NixTool, "node", "python"}
 
 // Vocabulary lists the names a spec editor should suggest. Each name is one the
 // parser accepts; vocabulary_test.go keeps it that way.

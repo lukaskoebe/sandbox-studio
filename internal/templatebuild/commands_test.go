@@ -231,3 +231,69 @@ func TestCommandsEmptySpecDoesNotRequestNetworkWork(t *testing.T) {
 		t.Fatal("empty package and tool lists must skip apt and mise network commands")
 	}
 }
+
+func TestCommandsPlansPinnedNixBetweenMiseAndSetup(t *testing.T) {
+	spec := templatespec.Spec{
+		Resources: resources.Defaults(),
+		Tools: []templatespec.ToolPin{
+			{Name: "nix", Version: "2.35.1"},
+			{Name: "node", Version: "22"},
+		},
+	}
+	stages, err := Commands(spec)
+	if err != nil {
+		t.Fatalf("Commands() error = %v", err)
+	}
+	var names []string
+	for _, stage := range stages {
+		names = append(names, stage.Name)
+	}
+	if want := []string{"apt", "mise", "nix", "nix-install", "setup", "home"}; !reflect.DeepEqual(names, want) {
+		t.Fatalf("stage order = %v, want %v", names, want)
+	}
+
+	// Nix is not a mise tool: mise gets only node.
+	mise := stages[1].Command
+	if got := mise.Args[5:]; !reflect.DeepEqual(got, []string{"node@22"}) {
+		t.Fatalf("mise pin argv = %v", got)
+	}
+
+	root := stages[2].Command
+	if root.User != "root" || root.Cwd != "/" || root.Timeout != nixTimeout || root.Env["PATH"] != rootPath {
+		t.Fatalf("nix command = %+v", root)
+	}
+	if !reflect.DeepEqual(root.Args, bashArgs(rootNixScript, "studio-template-nix", nil)) {
+		t.Fatalf("nix argv = %#v", root.Args)
+	}
+
+	install := stages[3].Command
+	x86_64, aarch64, ok := templatespec.NixSums("2.35.1")
+	if !ok || install.User != "agent" || install.Cwd != agentHome || install.Timeout != nixTimeout {
+		t.Fatalf("nix-install command = %+v", install)
+	}
+	if !reflect.DeepEqual(install.Args, bashArgs(nixInstallScript, "studio-template-nix-install", []string{"2.35.1", x86_64, aarch64})) {
+		t.Fatalf("nix-install argv = %#v", install.Args)
+	}
+	// The checksum is checked before the tarball is unpacked or anything runs from it.
+	check := strings.Index(nixInstallScript, "sha256sum -c -")
+	if check < 0 || check > strings.Index(nixInstallScript, "tar -xJf") || check > strings.Index(nixInstallScript, "/install\" --no-daemon") {
+		t.Fatal("the Nix tarball must be checked before it is unpacked")
+	}
+}
+
+func TestCommandsNixOnlySpecSkipsMiseNetwork(t *testing.T) {
+	stages, err := Commands(templatespec.Spec{Resources: resources.Defaults(), Tools: []templatespec.ToolPin{{Name: "nix", Version: "2.35.1"}}})
+	if err != nil {
+		t.Fatalf("Commands() error = %v", err)
+	}
+	if len(stages) != 6 || len(stages[1].Command.Args) != 5 {
+		t.Fatalf("nix-only spec: %d stages, mise argv %#v", len(stages), stages[1].Command.Args)
+	}
+}
+
+func TestCommandsRejectsUnpinnedNix(t *testing.T) {
+	spec := templatespec.Spec{Resources: resources.Defaults(), Tools: []templatespec.ToolPin{{Name: "nix", Version: "2.1.0"}}}
+	if _, err := Commands(spec); err == nil {
+		t.Fatal("an unpinned Nix release was planned")
+	}
+}
