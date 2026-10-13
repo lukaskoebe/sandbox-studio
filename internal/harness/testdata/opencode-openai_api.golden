@@ -557,6 +557,8 @@ Studio remembers for you across sessions and sandboxes. At session start you get
 - `correct` and `forget`: fix or retract one of your own facts when it turns out wrong.
 - `share`: propose a fact for the shared memory of every teammate; the user approves it first.
 
+`~/memory/shared.md` and `~/memory/yours.md` are read-only copies of the shared memory and of your own, as markdown, for grep. Studio rewrites them when the memory changes; they show no context-bound facts, so use the tools for those.
+
 Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
 <!-- sandbox-studio:end -->
 == .config/git/config mode=644 block=false

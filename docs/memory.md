@@ -121,6 +121,21 @@ A teammate's private memory has the same tabs on its teammate page, where its fa
 proposed for shared memory ("promote to shared"). `memory.conflict` approvals show in the
 approval stack with the same sheet.
 
+## Browsable memory
+
+Each sandbox of a teammate has read-only markdown copies of what the teammate can read, in
+`~/memory`: `shared.md` (shared memory) and `yours.md` (the teammate's own). A copy holds the
+pages with their compiled truth, core pages first, then the facts no page holds. It leaves out
+what a query would not surface: superseded and retracted facts, facts that hold in a context
+only, and text that looks like a credential, which is redacted. A copy is capped at 200 KiB.
+
+Studio writes the copies through the guest's home-file path, the one the harness files use
+(mode 0444). It writes them when a session starts, and every 15 seconds it rewrites the copies
+of each connected sandbox whose memory changed. A sandbox that is not connected gets nothing
+until it is. Each scope is one file rather than one file per page, because that path cannot
+delete files: a per-page copy of a deleted page would stay behind. The managed instructions
+tell the agent the copies exist.
+
 ## Suggestions
 
 Consolidation proposes two things and never applies them. They are rows of `suggestions`

@@ -267,6 +267,7 @@ func run(addr, image string, log *slog.Logger) error {
 	integs = append(integs, agentMem) // settles memory.share and memory.conflict approvals; it serves no hosts
 
 	hub := agentchan.NewHub(log)
+	go agentMem.RunBrowse(ctx, hub) // ~/memory copies in the connected sandboxes, rewritten as memory changes
 	rt := newRuntime(runtime.Options{Image: image, GuestDir: p.Guest()}, log)
 	mgr := &sandboxes.Manager{
 		Store:     st,

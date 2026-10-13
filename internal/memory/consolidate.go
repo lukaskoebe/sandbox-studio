@@ -49,6 +49,9 @@ func EntitySlug(entity string) string {
 	return e
 }
 
+// FactPageSlug is the slug of the page that records a fact's changes, "" when it has none.
+func FactPageSlug(f Fact) string { return EntitySlug(pageEntity(f)) }
+
 func slugKind(slug string) string {
 	prefix, _, _ := strings.Cut(slug, "/")
 	switch prefix {
