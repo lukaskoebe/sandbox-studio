@@ -107,6 +107,26 @@ carried the call. That gives the teammate, and the teammate gives the browser. A
 `teammate`, `sandbox` or `env` field in the arguments is ignored. A sandbox without a teammate
 has no browser. A browser VM cannot call tools.
 
+**Text first.** `browser_open` answers with the address and title, and the agent reads the page
+with `browser_snapshot`. A screenshot's JPEG is at most 180 KiB, so its reply fits one stream
+window of the channel (see [guest agent](guest-agent.md#limits-of-the-channel-on-msbs-vsock)).
+Larger screenshots are dropped, and the tool says the screenshot failed or was too large.
+
+## Lost replies
+
+A command's reply can fail to reach Studio, when the channel to the browser VM breaks or the VM
+restarts. The command may still have run, so the tools say what Studio knows instead of a bare
+error (`TestLostReplyIsCheckedAgainstThePage`):
+
+- **`browser_open`** asks the page for its address, once, after a second. If the page is on the
+  origin the open asked for, the open went through: the result says so, without the screenshot
+  and title its reply carried, and the action log records it as `ok`.
+- **Page-changing actions** (click, fill, type, press, select) say that the reply did not arrive,
+  where the page is, and that the action may have run. They fail, so the agent takes a
+  `browser_snapshot` before it acts again.
+- **Other tools** fail with the reply's error and point to `browser_snapshot`.
+- When the page cannot be asked either, the result says that it could not be checked.
+
 ## Policy, checked before anything runs
 
 The order is:
@@ -282,7 +302,7 @@ on request:
 ## History
 
 - **Action log.** Each action is logged: actor, sandbox, action, target, URL, outcome and
-  a JPEG screenshot. The log is stored in sqlite (migration 017) and under
+  a JPEG screenshot of at most 180 KiB. The log is stored in sqlite (migration 017) and under
   `<data>/browser/`.
 - **Bounds.** The log keeps 500 actions per teammate and 200 MiB of screenshots overall,
   dropping the oldest first.
@@ -314,7 +334,11 @@ on request:
   `internal/policy`, `internal/browser`), and the site card in e2e through the request hook;
 - downloads: the guest's listing and reads (regular files only, no links, partials or hidden
   names, the upload size limit), the folder creation of an upload, the Hub's stream, the tools'
-  identity and ownership, the copy into `downloads/` and its log entry, and the API.
+  identity and ownership, the copy into `downloads/` and its log entry, and the API;
+- lost replies: an open that ran, a click whose outcome is unknown and an unreachable browser
+  (`internal/browser`);
+- the channel's write limit: a 740 KB reply through the guest's yamux session, with every
+  write under 16 KiB (`internal/guest`, `TestChannelWritesStayBounded`).
 
 **Verified live on Linux amd64 (2026-10-11):**
 
@@ -330,6 +354,11 @@ on request:
 
 **Pending a live run:**
 
+- Browser commands with screenshots over the channel, since the 2026-10-13 fix. The channel
+  limits were measured on a scratch Studio with file reads of the same reply shape (see
+  [guest agent](guest-agent.md#limits-of-the-channel-on-msbs-vsock)). The browser VM was not
+  run then: a screenshot-carrying `open` or `click` should succeed, and a failing one should
+  say what the page is.
 - The browser VM's HTTPS through the gateway's terminated connections: Chromium's pages load
   with the environment CA only, and its requests carry the `Sec-Fetch-*` headers the request
   decisions read (see [network](network.md#hold-and-ask)). The site approvals and tracker

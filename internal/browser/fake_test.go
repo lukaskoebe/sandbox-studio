@@ -37,7 +37,11 @@ type fakeBrowser struct {
 	blockArgs    string
 	blockStarted chan struct{}
 	blockRelease chan struct{}
-	dial         func(port int) (net.Conn, error)
+	// lostArgs is a command whose reply is lost: it runs, then its reply fails with EOF, as
+	// when the channel breaks. unreachable fails every command without running it.
+	lostArgs    string
+	unreachable bool
+	dial        func(port int) (net.Conn, error)
 	// downloads are the saved files by ephemeral slot, with their bodies by "slot/name".
 	downloads map[int][]agentproto.BrowserDownload
 	bodies    map[string]string
@@ -134,6 +138,9 @@ func (f *fakeBrowser) Browser(ctx context.Context, vm string, cmd agentproto.Bro
 	f.commands = append(f.commands, cmd)
 	f.vms = append(f.vms, vm)
 	var res agentproto.BrowserResult
+	if f.unreachable {
+		return res, io.EOF
+	}
 	if strings.Join(cmd.Args, " ") == f.blockArgs && f.blockStarted != nil && f.blockRelease != nil {
 		started, release := f.blockStarted, f.blockRelease
 		f.blockArgs = ""
@@ -169,6 +176,10 @@ func (f *fakeBrowser) Browser(ctx context.Context, vm string, cmd agentproto.Bro
 		return res, nil
 	}
 	data, err := f.answer(cmd.Args)
+	if strings.Join(cmd.Args, " ") == f.lostArgs {
+		f.lostArgs = ""
+		return res, io.EOF
+	}
 	if err != nil {
 		res.Output, _ = json.Marshal(map[string]any{"success": false, "data": nil, "error": err.Error()})
 	} else {

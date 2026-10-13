@@ -23,11 +23,14 @@ const ErrBrowserEphemeralGone = "the ephemeral browser session is gone"
 
 // Limits of a browser command.
 const (
-	MaxBrowserArgs       = 16
-	MaxBrowserArg        = 16 << 10
-	MaxBrowserStdin      = 64 << 10
-	MaxBrowserOutput     = 384 << 10 // agent-browser's JSON response
-	MaxBrowserScreenshot = 256 << 10 // JPEG; base64 keeps the reply line under 1 MiB
+	MaxBrowserArgs   = 16
+	MaxBrowserArg    = 16 << 10
+	MaxBrowserStdin  = 64 << 10
+	MaxBrowserOutput = 384 << 10 // agent-browser's JSON response
+	// MaxBrowserScreenshot is a JPEG. Base64 and the output of a command with a screenshot
+	// keep its reply line within one stream window of 256 KiB: a longer reply waits seconds
+	// for the host's window update on msb's vsock (docs/guest-agent.md).
+	MaxBrowserScreenshot = 180 << 10
 	MaxBrowserTimeoutMS  = 60_000
 )
 

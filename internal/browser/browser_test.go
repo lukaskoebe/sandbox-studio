@@ -544,6 +544,52 @@ func TestNavigateFailureScrubsStoredCredentialsAndRefreshesURL(t *testing.T) {
 	}
 }
 
+// A reply that does not arrive leaves the page to say what happened. An open that ran is
+// reported as opened, without the screenshot its reply carried; a click whose outcome is
+// unknown says so; a browser that cannot be reached says that it could not be checked.
+func TestLostReplyIsCheckedAgainstThePage(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.st.AddBrowserPattern(f.ctx, store.BrowserPattern{EnvironmentID: f.env, TeammateID: f.ada.ID, Action: "*", Origin: "https://example.com", Verdict: store.BrowserAllow}); err != nil {
+		t.Fatal(err)
+	}
+	const target = "https://example.com/lost"
+	f.fb.mu.Lock()
+	f.fb.lostArgs = "open " + target
+	f.fb.mu.Unlock()
+	res, err := f.call(f.sbAda, agentproto.MethodBrowserOpen, `{"url":"`+target+`"}`)
+	if text, _ := res.(string); err != nil || !strings.Contains(text, target) || !strings.Contains(text, "no screenshot") {
+		t.Fatalf("open whose reply was lost: %v, %v", res, err)
+	}
+	acts, _ := f.st.BrowserActions(f.ctx, f.env, f.ada.ID, "", 100)
+	opened := false
+	for _, a := range acts {
+		opened = opened || (a.Action == "open" && a.Outcome == "ok" && a.URL == target)
+	}
+	if !opened {
+		t.Errorf("the open that ran is not logged as ok: %+v", acts)
+	}
+
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`); err != nil {
+		t.Fatal(err)
+	}
+	f.fb.mu.Lock()
+	f.fb.lostArgs = "click @e4"
+	f.fb.mu.Unlock()
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserClick, `{"ref":"e4"}`); err == nil || !strings.Contains(err.Error(), "may have run") || !strings.Contains(err.Error(), target) {
+		t.Fatalf("click whose reply was lost: %v", err)
+	}
+
+	f.fb.mu.Lock()
+	f.fb.unreachable = true
+	f.fb.mu.Unlock()
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserOpen, `{"url":"https://example.com/other"}`); err == nil || !strings.Contains(err.Error(), "could not be checked") {
+		t.Fatalf("open with an unreachable browser: %v", err)
+	}
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`); err == nil || !strings.Contains(err.Error(), "did not arrive") {
+		t.Fatalf("snapshot with an unreachable browser: %v", err)
+	}
+}
+
 func TestActionApprovalAndRemember(t *testing.T) {
 	f := newFixture(t)
 	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
