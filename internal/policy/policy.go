@@ -140,7 +140,7 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if err := json.Unmarshal(a.Payload, &req); err != nil {
 		return a, fmt.Errorf("approval %s: %w", id, err)
 	}
-	rule := store.Rule{EnvironmentID: envID, Host: req.Host, Ports: d.Ports, Action: d.Action}
+	rule := store.Rule{EnvironmentID: envID, Host: req.Host, Ports: d.Ports, Action: d.Action, Origin: store.OriginApproval}
 	if d.Host != "" {
 		rule.Host = d.Host
 	}

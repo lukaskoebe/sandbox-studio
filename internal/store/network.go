@@ -58,6 +58,14 @@ const (
 	ActionDeny  = "deny"
 )
 
+// Rule origins: how a rule came to exist.
+const (
+	OriginManual   = "manual"   // written on the Rules page or through the API
+	OriginApproval = "approval" // created by approving a network request
+	OriginCurated  = "curated"  // reserved for the curated list
+	OriginReviewer = "reviewer" // reserved for the AI reviewer
+)
+
 // Rule decides what happens to connections to Host. SandboxID and TeammateID are empty for
 // rules that cover the whole environment; at most one of them is set.
 type Rule struct {
@@ -70,6 +78,7 @@ type Rule struct {
 	Action        string     `json:"action" enum:"allow,proxy,caddy,deny"`
 	Config        RuleConfig `json:"config"`
 	Note          string     `json:"note"`
+	Origin        string     `json:"origin" enum:"manual,approval,curated,reviewer" doc:"Where the rule came from. Read-only: set when the rule is created"`
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
@@ -81,13 +90,13 @@ type RuleConfig struct {
 	Caddyfile string `json:"caddyfile,omitempty"`
 }
 
-const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, created_at"
+const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, created_at"
 
 func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 	var r Rule
 	var ports, config string
 	var created int64
-	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &created); err != nil {
+	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &created); err != nil {
 		return r, err
 	}
 	r.Ports = []int{}
@@ -115,18 +124,21 @@ func nullable(s string) any {
 	return s
 }
 
-// CreateRule inserts r, assigning its ID and creation time.
+// CreateRule inserts r, assigning its ID, creation time and, unless set, the manual origin.
 func (s *Store) CreateRule(ctx context.Context, r Rule) (Rule, error) {
 	r.ID, r.CreatedAt = NewID(), time.Unix(now(), 0)
 	if r.Ports == nil {
 		r.Ports = []int{}
 	}
+	if r.Origin == "" {
+		r.Origin = OriginManual
+	}
 	config, err := json.Marshal(r.Config)
 	if err != nil {
 		return r, err
 	}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.CreatedAt.Unix())
+	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, origin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.Origin, r.CreatedAt.Unix())
 	return r, err
 }
 
