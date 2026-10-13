@@ -280,6 +280,9 @@ func (s *Server) registerTeammates(api huma.API) {
 		if err := s.Store.DeleteProvider(ctx, in.Env, in.ID); err != nil {
 			return nil, apiError(err)
 		}
+		if s.Login != nil {
+			s.Login.Forget(ctx, p)
+		}
 		if p.SecretID != "" {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)

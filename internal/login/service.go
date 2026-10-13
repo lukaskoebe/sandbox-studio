@@ -20,6 +20,7 @@ import (
 // Errors the API answers for.
 var (
 	ErrNotSubscription = errors.New("the provider is not a subscription")
+	ErrNoPaste         = errors.New("only a Claude subscription takes a pasted token")
 	ErrInvalidToken    = errors.New("that is not a Claude Code token: it starts with sk-ant-oat")
 	ErrNoLogin         = errors.New("no sign-in is running for this provider")
 )
@@ -292,7 +293,7 @@ func (s *Service) PasteToken(ctx context.Context, envID, providerID, token strin
 		return err
 	}
 	if p.Kind != teammates.KindClaudeSubscription {
-		return ErrNotSubscription
+		return ErrNoPaste
 	}
 	if !ValidClaudeToken(token) {
 		return ErrInvalidToken

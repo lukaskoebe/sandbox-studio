@@ -52,6 +52,23 @@ func (s *Service) Utility(p store.Provider) (agentmem.LLM, agentmem.UtilityModel
 	return cliLLM{s: s, p: p, model: m.Model}, m, nil
 }
 
+// Forget ends the sign-in of a provider that is being deleted and removes its utility VM. Its
+// login goes with the provider's secrets.
+func (s *Service) Forget(ctx context.Context, p store.Provider) {
+	if k, _ := teammates.LookupKind(p.Kind); !k.Login {
+		return
+	}
+	if err := s.Cancel(ctx, p.EnvironmentID, p.ID); err != nil {
+		s.Log.Warn("ending a sign-in of a deleted provider", "provider", p.ID, "err", err)
+	}
+	if err := s.VMs.RemoveSystem(ctx, p.EnvironmentID, utilityKind(p), utilityVM(p)); err != nil {
+		s.Log.Warn("removing the utility VM of a deleted provider", "provider", p.ID, "err", err)
+	}
+	s.mu.Lock()
+	delete(s.idle, p.ID)
+	s.mu.Unlock()
+}
+
 // cliLLM is a subscription's utility model (agentmem.LLM).
 type cliLLM struct {
 	s     *Service

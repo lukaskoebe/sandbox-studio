@@ -93,7 +93,7 @@ func loginError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, login.ErrNotSubscription), errors.Is(err, login.ErrInvalidToken):
+	case errors.Is(err, login.ErrNotSubscription), errors.Is(err, login.ErrNoPaste), errors.Is(err, login.ErrInvalidToken):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, login.ErrNoLogin):
 		return huma.Error409Conflict(err.Error())

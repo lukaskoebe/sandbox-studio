@@ -163,6 +163,25 @@ func TestIdleUtilityVMsStop(t *testing.T) {
 	}
 }
 
+// Deleting a subscription provider ends its sign-in and removes its utility VM.
+func TestForgetRemovesTheUtilityVM(t *testing.T) {
+	ctx := context.Background()
+	e := newTestEnv(t)
+	p := e.provider(t, "Max", teammates.KindClaudeSubscription)
+	e.guest.setPane("waiting", false)
+	if _, err := e.svc.Start(ctx, e.env, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return e.svc.Status(p.ID).State == StateWaiting })
+	e.svc.Forget(ctx, p)
+	if got := e.svc.Status(p.ID); got.State != StateIdle {
+		t.Fatalf("the sign-in after forgetting it: %+v", got)
+	}
+	if !contains(e.vms.removed, "utility-"+p.ID) {
+		t.Fatalf("removed %v; want the utility VM", e.vms.removed)
+	}
+}
+
 func contains(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
