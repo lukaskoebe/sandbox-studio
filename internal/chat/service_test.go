@@ -29,6 +29,7 @@ type fakeGuest struct {
 	conns    []io.ReadWriteCloser
 	sessions []agentproto.Session
 	started  []agentproto.StartSession
+	startErr error // returned by StartSession when set
 	killed   []string
 	// The workspace as path → content, and its snapshots by ID.
 	ws    map[string]string
@@ -146,6 +147,9 @@ func (g *fakeGuest) Sessions(context.Context, string) ([]agentproto.Session, err
 func (g *fakeGuest) StartSession(_ context.Context, _ string, req agentproto.StartSession) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.startErr != nil {
+		return g.startErr
+	}
 	g.started = append(g.started, req)
 	g.sessions = append(g.sessions, agentproto.Session{Name: req.Name, Harness: req.Harness, Chat: req.Chat, Windows: 1})
 	return nil

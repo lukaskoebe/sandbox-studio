@@ -60,7 +60,7 @@ func (s *Service) OpenInTerminal(ctx context.Context, envID, chatID string, laun
 	if l := s.get(c.ID); l != nil {
 		l.shutdown(ctx)
 	}
-	if err := s.killTUI(ctx, c); err == nil {
+	if err = s.killTUI(ctx, c); err == nil {
 		err = s.startTUI(ctx, c, launch)
 	}
 	if err != nil {
