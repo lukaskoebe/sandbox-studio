@@ -37,6 +37,11 @@ sandbox. For a sandbox a teammate owns, the card also offers the teammate's sand
 starts with the scope the teammate sets (`approvalScope`, [teammates](teammates.md)). The
 response's `teammate` field carries the owner and that scope; the user can still pick another.
 
+The pattern level is remembered per teammate: `exact` (the host itself) or `wildcard` (its
+registrable domain), whichever the last allow or deny of one of its sandboxes used. Its next
+card preselects that level (`teammate.patternLevel`). Other patterns, such as `*.org`, don't
+change it.
+
 ## Realtime and UI
 
 - `internal/events` publishes change notices as SSE at `/api/events`, with topics such as

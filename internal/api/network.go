@@ -31,6 +31,7 @@ type ApprovalTeammate struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	ApprovalScope string `json:"approvalScope" enum:"sandbox,teammate,environment" doc:"The scope the card preselects"`
+	PatternLevel  string `json:"patternLevel,omitempty" enum:"exact,wildcard" doc:"The host pattern level the teammate last chose, which the card preselects; empty if none"`
 }
 
 // ApprovalView is an approval with the details of its request decoded from the payload.
@@ -109,7 +110,7 @@ func (s *Server) approvalOwner(ctx context.Context, a store.Approval) *ApprovalT
 	if err != nil {
 		return nil
 	}
-	return &ApprovalTeammate{ID: t.ID, Name: t.Name, ApprovalScope: t.ApprovalScope}
+	return &ApprovalTeammate{ID: t.ID, Name: t.Name, ApprovalScope: t.ApprovalScope, PatternLevel: t.ApprovalPattern}
 }
 
 // approvalViews lists up to 200 approvals of an environment (all of them if env is empty),
