@@ -1,44 +1,86 @@
 == session-start
 -- stdin
-{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"SessionStart","source":"compact","model":"claude-x"}
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
-{"harness":"claude","event":"session-start","sessionId":"s-1","source":"compact","cwd":"/workspace"}
+{
+  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
+  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
+  "cwd": "/workspace",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-opus-5"
+}
+
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
+{"harness":"claude","event":"session-start","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","source":"startup","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"SessionStart"}}
 == user-prompt
 -- stdin
-{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"UserPromptSubmit","prompt":"How do we deploy to staging?"}
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
-{"harness":"claude","event":"user-prompt","sessionId":"s-1","prompt":"How do we deploy to staging?","cwd":"/workspace"}
+{
+  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
+  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
+  "cwd": "/workspace",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "How do we deploy to staging?"
+}
+
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
+{"harness":"claude","event":"user-prompt","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","prompt":"How do we deploy to staging?","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"UserPromptSubmit"}}
 == pre-compact
 -- stdin
-{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"PreCompact","trigger":"auto","custom_instructions":""}
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
-{"harness":"claude","event":"pre-compact","sessionId":"s-1","cwd":"/workspace"}
+{
+  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
+  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
+  "cwd": "/workspace",
+  "hook_event_name": "PreCompact",
+  "trigger": "manual",
+  "custom_instructions": null
+}
+
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
+{"harness":"claude","event":"pre-compact","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {}
 == stop
 -- stdin
-{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"Stop","stop_hook_active":false}
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
-{"harness":"claude","event":"stop","sessionId":"s-1","cwd":"/workspace"}
+{
+  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
+  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
+  "cwd": "/workspace",
+  "permission_mode": "default",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "The staging deploy runs make deploy-staging after the integration tests pass.",
+  "background_tasks": [],
+  "session_crons": []
+}
+
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
+{"harness":"claude","event":"stop","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {}
 == session-end
 -- stdin
-{"session_id":"s-1","transcript_path":"/home/agent/.claude/projects/-workspace/s-1.jsonl","cwd":"/workspace","hook_event_name":"SessionEnd","reason":"prompt_input_exit"}
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/s-1.jsonl")
-{"harness":"claude","event":"session-end","sessionId":"s-1","cwd":"/workspace"}
+{
+  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
+  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
+  "cwd": "/workspace",
+  "hook_event_name": "SessionEnd",
+  "reason": "other"
+}
+
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
+{"harness":"claude","event":"session-end","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
