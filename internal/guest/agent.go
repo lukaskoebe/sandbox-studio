@@ -174,6 +174,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.startSession(st, br)
 	case agentproto.KindBrowser:
 		err = a.browser(st, br)
+	case agentproto.KindBrowserDownloads:
+		err = a.browserDownloads(st, br)
 	case agentproto.KindACP:
 		err = a.serveACP(st, br)
 	case agentproto.KindSnapshot:

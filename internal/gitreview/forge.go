@@ -19,18 +19,31 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
-// Forge kinds. forgejo and github have an API (default branch, pull requests); https is
-// any host speaking git over HTTPS with a token; ssh is any host speaking git over SSH with
-// a key Studio generated.
+// Forge kinds. forgejo, github and gitlab have an API (default branch, pull or merge requests);
+// https is any host speaking git over HTTPS with a token; ssh is any host speaking git over SSH
+// with a key Studio generated.
 const (
 	KindForgejo = "forgejo"
 	KindGitHub  = "github"
+	KindGitLab  = "gitlab"
 	KindHTTPS   = "https"
 	KindSSH     = "ssh"
 )
 
-// hasAPI reports whether a kind has an API adapter, and so <owner>/<repo> paths and PRs.
-func hasAPI(kind string) bool { return kind == KindForgejo || kind == KindGitHub }
+// hasAPI reports whether a kind has an API adapter, and so repository paths and PRs.
+func hasAPI(kind string) bool { return kind == KindForgejo || kind == KindGitHub || kind == KindGitLab }
+
+// badOwner reports whether owner can't be the owner of a repository on a forge of kind. An API
+// forge needs one; Forgejo and GitHub take a single segment, GitLab any path (subgroups).
+func badOwner(kind, owner string) bool {
+	switch kind {
+	case KindForgejo, KindGitHub:
+		return owner == "" || strings.Contains(owner, "/")
+	case KindGitLab:
+		return owner == ""
+	}
+	return false
+}
 
 // errNoAPI is what API calls answer for kinds without one.
 var errNoAPI = errors.New("this kind of forge has no API")
@@ -71,6 +84,8 @@ func adapter(f store.Forge, client *http.Client) (Adapter, error) {
 		return &Forgejo{BaseURL: f.BaseURL, Client: client}, nil
 	case KindGitHub:
 		return &GitHub{BaseURL: f.BaseURL, Client: client}, nil
+	case KindGitLab:
+		return &GitLab{BaseURL: f.BaseURL, Client: client}, nil
 	case KindHTTPS:
 		return Plain{User: f.Username}, nil
 	case KindSSH:
@@ -102,7 +117,7 @@ func CheckForge(name, kind, baseURL, username string) (ForgeURL, error) {
 		return ForgeURL{}, fmt.Errorf("%w: the name must be 1 to 32 lower-case letters, digits and dashes, starting with a letter or digit", ErrInvalid)
 	}
 	switch kind {
-	case KindForgejo, KindGitHub, KindHTTPS:
+	case KindForgejo, KindGitHub, KindGitLab, KindHTTPS:
 	case KindSSH:
 		return ParseSSHURL(baseURL)
 	default:
@@ -407,6 +422,71 @@ func (g *GitHub) OpenPullRequest(ctx context.Context, token, owner, repo string,
 func (g *GitHub) call(ctx context.Context, token, method, path string, in, out any) (http.Header, error) {
 	return callJSON(ctx, g.Client, "Bearer "+token, token, method, g.api()+path,
 		map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": GitHubAPIVersion}, in, out)
+}
+
+// --- GitLab ---------------------------------------------------------------------------------
+
+// GitLab talks to the REST API v4 of gitlab.com or a self-hosted GitLab, under BaseURL. Git
+// over HTTPS takes oauth2 as the user with the token, which every kind of GitLab token accepts.
+type GitLab struct {
+	BaseURL string
+	Client  *http.Client
+}
+
+func (g *GitLab) GitAuth(token string) (string, string) { return "oauth2", token }
+
+func (g *GitLab) Check(ctx context.Context, token string) (Account, error) {
+	var user struct {
+		Username string `json:"username"`
+	}
+	if err := g.call(ctx, token, http.MethodGet, "/user", nil, &user); err != nil {
+		return Account{}, err
+	}
+	return Account{User: user.Username}, nil
+}
+
+// gitlabProject is a project's path as GitLab's API takes it: the whole path, slashes escaped.
+func gitlabProject(owner, repo string) string {
+	if owner == "" {
+		return url.PathEscape(repo)
+	}
+	return url.PathEscape(owner + "/" + repo)
+}
+
+func (g *GitLab) DefaultBranch(ctx context.Context, token, owner, repo string) (string, error) {
+	var p struct {
+		DefaultBranch string `json:"default_branch"`
+	}
+	if err := g.call(ctx, token, http.MethodGet, "/projects/"+gitlabProject(owner, repo), nil, &p); err != nil {
+		return "", err
+	}
+	return p.DefaultBranch, nil
+}
+
+// OpenPullRequest opens a merge request, GitLab's pull request, from head into base.
+func (g *GitLab) OpenPullRequest(ctx context.Context, token, owner, repo string, pr PullRequest) (string, error) {
+	in := struct {
+		Source      string `json:"source_branch"`
+		Target      string `json:"target_branch"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}{pr.Head, pr.Base, pr.Title, pr.Body}
+	var out struct {
+		WebURL string `json:"web_url"`
+		IID    int    `json:"iid"`
+	}
+	if err := g.call(ctx, token, http.MethodPost, "/projects/"+gitlabProject(owner, repo)+"/merge_requests", in, &out); err != nil {
+		return "", err
+	}
+	if out.WebURL == "" {
+		return fmt.Sprintf("!%d", out.IID), nil
+	}
+	return out.WebURL, nil
+}
+
+func (g *GitLab) call(ctx context.Context, token, method, path string, in, out any) error {
+	_, err := callJSON(ctx, g.Client, "Bearer "+token, token, method, g.BaseURL+"/api/v4"+path, nil, in, out)
+	return err
 }
 
 // mask removes token from text shown to anyone.

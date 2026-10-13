@@ -63,6 +63,18 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 						return
 					}
 					agentproto.WriteJSONLine(st, agentproto.UploadReply{Name: req.Name, Size: int64(len(data))})
+				case agentproto.KindBrowserDownloads:
+					var req agentproto.BrowserDownloadsRequest
+					agentproto.ReadJSONLine(br, &req)
+					switch req.Name {
+					case "":
+						agentproto.WriteJSONLine(st, agentproto.BrowserDownloadList{Files: []agentproto.BrowserDownload{{Name: "a.pdf", Size: 3}}})
+					case "gone":
+						agentproto.WriteJSONLine(st, agentproto.Error{Error: "no such download"})
+					default:
+						agentproto.WriteJSONLine(st, agentproto.BrowserDownload{Name: req.Name, Size: 3})
+						st.Write([]byte("abc"))
+					}
 				case agentproto.KindConfig:
 					var cfg agentproto.Config
 					agentproto.ReadJSONLine(br, &cfg)

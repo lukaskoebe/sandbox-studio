@@ -141,6 +141,9 @@ const (
 	MethodShare        = "share"
 	MethodCorrect      = "correct"
 	MethodForget       = "forget"
+	// MethodGitPushStatus and MethodGitPullRequestStatus are the git tools (docs/git-review.md).
+	MethodGitPushStatus        = "git_push_status"
+	MethodGitPullRequestStatus = "git_pull_request_status"
 )
 
 // MaxCallLine bounds a Call or CallReply line, escapes included.

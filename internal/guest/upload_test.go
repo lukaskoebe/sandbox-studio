@@ -236,3 +236,20 @@ func leftoverUploads(t *testing.T, dir string) []string {
 	}
 	return left
 }
+
+// A folder is created only when asked for, under an existing parent.
+func TestStoreUploadCreatesItsFolderOnRequest(t *testing.T) {
+	ws := t.TempDir()
+	if _, err := storeTestUpload(t, ws, agentproto.UploadRequest{Dir: "downloads", Name: "a.txt"}, "x"); err == nil {
+		t.Fatal("a missing folder was created without CreateDir")
+	}
+	if _, err := storeTestUpload(t, ws, agentproto.UploadRequest{Dir: "downloads", Name: "a.txt", CreateDir: true}, "x"); err != nil {
+		t.Fatalf("with CreateDir: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(ws, "downloads", "a.txt")); err != nil || string(b) != "x" {
+		t.Fatalf("file %q, %v", b, err)
+	}
+	if _, err := storeTestUpload(t, ws, agentproto.UploadRequest{Dir: "missing/deeper", Name: "a.txt", CreateDir: true}, "x"); err == nil {
+		t.Fatal("CreateDir made a folder whose parent does not exist")
+	}
+}

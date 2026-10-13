@@ -86,6 +86,10 @@ type Service struct {
 	Guest Guest
 	Bus   *events.Bus
 	Log   *slog.Logger
+	// PromptNote, when set, returns what a sandbox's next prompt starts with besides the undo
+	// note: what an integration must tell the agent, such as a rejected push. sent is called
+	// once the prompt went out, so a note that didn't go out is given again.
+	PromptNote func(ctx context.Context, envID, sandboxID string) (text string, sent func(), err error)
 
 	mu    sync.Mutex
 	live  map[string]*live
@@ -586,9 +590,35 @@ func (l *live) flush(r *run) {
 	}
 }
 
+// promptNotes is the text a chat's next prompt starts with: the undo note and the notes of the
+// integrations, one per line. sent tells the integrations the prompt went out with theirs.
+func (s *Service) promptNotes(ctx context.Context, c store.Chat) (string, func(), error) {
+	note, err := s.undoNote(ctx, c)
+	if err != nil {
+		return "", nil, err
+	}
+	if s.PromptNote == nil {
+		return note, func() {}, nil
+	}
+	text, sent, err := s.PromptNote(ctx, c.EnvironmentID, c.SandboxID)
+	if err != nil {
+		return "", nil, err
+	}
+	if sent == nil {
+		sent = func() {}
+	}
+	switch {
+	case note == "":
+		note = text
+	case text != "":
+		note += "\n" + text
+	}
+	return note, sent, nil
+}
+
 // start opens a turn with the user's item and runs the prompt in the background.
 func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Attachment, blocks []acp.ContentBlock) (store.ChatTurn, error) {
-	note, err := l.s.undoNote(ctx, c)
+	note, sent, err := l.s.promptNotes(ctx, c)
 	if err != nil {
 		return store.ChatTurn{}, err
 	}
@@ -616,6 +646,7 @@ func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Atta
 	if err != nil {
 		go l.end(r, acp.PromptResponse{}, err)
 	} else {
+		sent()
 		go l.run(r, prompt)
 	}
 	return t, nil

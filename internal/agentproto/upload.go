@@ -32,6 +32,9 @@ type UploadRequest struct {
 	Name     string `json:"name"`
 	Size     int64  `json:"size"`
 	Conflict string `json:"conflict,omitempty" enum:"fail,replace,keep"`
+	// CreateDir makes Dir when it is missing, as a folder of its parent, which must exist.
+	// Without it a missing folder is an error.
+	CreateDir bool `json:"createDir,omitempty"`
 }
 
 // UploadReply answers an UploadRequest. Name is the name the file was written under, which

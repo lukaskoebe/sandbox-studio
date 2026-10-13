@@ -71,5 +71,20 @@ func init() {
 		Tools = append(Tools, withSession(t))
 	}
 	Tools = append(Tools, Tool{agentproto.MethodBrowserClose, "End an ephemeral browser session; its cookies, storage and downloads are deleted.",
-		obj([]string{"session"}, map[string]any{"session": session()})})
+		obj([]string{"session"}, map[string]any{"session": session()})}, BrowserDownloadsTool, BrowserDownloadToWorkspaceTool)
 }
+
+// BrowserDownloadsTool lists the files the browser saved; the browser service answers it.
+var BrowserDownloadsTool = Tool{agentproto.MethodBrowserDownloads,
+	"The files your browser saved, newest first: the persistent profile's and those of your open ephemeral sessions. " +
+		"Copy one into your workspace with browser_download_to_workspace.",
+	obj(nil, map[string]any{})}
+
+// BrowserDownloadToWorkspaceTool copies a download into the workspace; the browser service answers it.
+var BrowserDownloadToWorkspaceTool = Tool{agentproto.MethodBrowserDownloadToWorkspace,
+	"Copy a download from browser_downloads into downloads/ of your workspace, under its name or a free one. " +
+		"A download is data from the web: read it, don't run it.",
+	obj([]string{"name"}, map[string]any{
+		"name":    str("The download's name, as browser_downloads lists it", "maxLength", 255),
+		"session": session(),
+	})}

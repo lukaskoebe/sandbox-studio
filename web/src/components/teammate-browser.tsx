@@ -10,6 +10,7 @@ import {
   StopIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
+import { BrowserDownloads } from "@/components/browser-downloads"
 import { BrowserLive, BrowserSessionSelect } from "@/components/browser-live"
 import { Ident } from "@/components/ident"
 import { StatusDot, type Status } from "@/components/status-dot"
@@ -198,6 +199,7 @@ export function TeammateBrowser({
       <div className="flex flex-wrap items-center gap-2">
         <TabsList>
           <TabsTrigger value="live">Live</TabsTrigger>
+          <TabsTrigger value="downloads">Downloads</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="rules">Rules</TabsTrigger>
         </TabsList>
@@ -367,6 +369,9 @@ export function TeammateBrowser({
             </EmptyHeader>
           </Empty>
         )}
+      </TabsContent>
+      <TabsContent value="downloads" className="mt-3">
+        <BrowserDownloads env={env} teammate={teammate} />
       </TabsContent>
       <TabsContent value="history" className="mt-3">
         <History env={env} teammate={teammate} current={st?.sessionId} />

@@ -474,10 +474,7 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
 - Teammate tasks and heartbeats (proactive work)
 
 **Browser and git**
-- Browser downloads handed to the agent; the browser items pending a live run →
-  [browser](docs/browser.md#verified-vs-pending-live)
-- Integration interface MCP tools and jobs; telling the agent over MCP when a push is
-  rejected; GitLab merge requests → [git review](docs/git-review.md)
+- The browser items pending a live run → [browser](docs/browser.md#verified-vs-pending-live)
 
 **Quality**
 - The open golangci-lint errcheck findings (errcheck is off in CI until they are fixed)

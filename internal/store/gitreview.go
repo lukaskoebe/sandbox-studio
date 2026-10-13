@@ -21,7 +21,7 @@ type Forge struct {
 	ID                 string     `json:"id"`
 	EnvironmentID      string     `json:"environmentId"`
 	Name               string     `json:"name" doc:"The URL segment: https://git.studio.internal/<name>/<path>.git"`
-	Kind               string     `json:"kind" enum:"forgejo,github,https,ssh"`
+	Kind               string     `json:"kind" enum:"forgejo,github,gitlab,https,ssh"`
 	BaseURL            string     `json:"baseUrl" doc:"https://host[/path], or ssh://user@host[:port] for kind ssh"`
 	Username           string     `json:"username,omitempty" doc:"The basic-auth user (https) or SSH user (ssh)"`
 	Auth               string     `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: sign with the host's SSH agent, or with a key Studio generated"`
@@ -409,6 +409,27 @@ func (s *Store) PendingGitPushes(ctx context.Context, envID, sandboxID, forgeID,
 		AND state = 'pending'`, envID, sandboxID, forgeID, owner, repo, ref)
 }
 
+// SandboxGitPushes lists a sandbox's pushes, newest first. ref, when set, keeps only the
+// pushes to that branch (refs/heads/...).
+func (s *Store) SandboxGitPushes(ctx context.Context, envID, sandboxID, ref string, limit int) ([]GitPush, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+pushCols+` FROM git_pushes
+		WHERE environment_id = ? AND sandbox_id = ? AND (? = '' OR ref = ?)
+		ORDER BY created_at DESC, rowid DESC LIMIT ?`, envID, sandboxID, ref, ref, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []GitPush{}
+	for rows.Next() {
+		p, err := scanPush(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // UndeliveredGitPushes lists the rejected or failed pushes of one sandbox to one
 // repository that the sandbox has not been told about yet.
 func (s *Store) UndeliveredGitPushes(ctx context.Context, envID, sandboxID, forgeID, owner, repo string) ([]GitPush, error) {
@@ -450,6 +471,20 @@ func (s *Store) SettleGitPush(ctx context.Context, envID, id, from, to, result, 
 // MarkGitPushDelivered records that the sandbox was told about a rejected or failed push.
 func (s *Store) MarkGitPushDelivered(ctx context.Context, envID, id string) error {
 	_, err := s.db.ExecContext(ctx, "UPDATE git_pushes SET delivered_at = ? WHERE environment_id = ? AND id = ? AND delivered_at IS NULL",
+		now(), envID, id)
+	return err
+}
+
+// UnnotifiedGitPushes lists the rejected or failed pushes of one sandbox that no chat prompt
+// has carried yet.
+func (s *Store) UnnotifiedGitPushes(ctx context.Context, envID, sandboxID string) ([]GitPush, error) {
+	return s.gitPushes(ctx, `environment_id = ? AND sandbox_id = ? AND state IN ('rejected', 'failed')
+		AND notified_at IS NULL`, envID, sandboxID)
+}
+
+// MarkGitPushNotified records that a chat prompt carried the note of a rejected or failed push.
+func (s *Store) MarkGitPushNotified(ctx context.Context, envID, id string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE git_pushes SET notified_at = ? WHERE environment_id = ? AND id = ? AND notified_at IS NULL",
 		now(), envID, id)
 	return err
 }

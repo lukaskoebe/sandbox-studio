@@ -30,7 +30,6 @@ func TestForges(t *testing.T) {
 		`{"name":"cb","kind":"forgejo","baseUrl":"http://codeberg.org","token":"x"}`,
 		`{"name":"cb","kind":"forgejo","baseUrl":"https://10.1.2.3","token":"x"}`,
 		`{"name":"cb","kind":"forgejo","baseUrl":"https://git.studio.internal","token":"x"}`,
-		`{"name":"cb","kind":"gitlab","baseUrl":"https://gitlab.com","token":"x"}`,
 		`{"name":"Bad","kind":"forgejo","baseUrl":"https://codeberg.org","token":"x"}`,
 		`{"name":"lab","kind":"https","baseUrl":"https://git.example.com","username":"a:b","token":"x"}`,
 	} {
@@ -51,6 +50,13 @@ func TestForges(t *testing.T) {
 	}
 	if got := decode[[]store.Forge](t, do(h, "GET", base, "")); len(got) != 1 || got[0].ID != f.ID {
 		t.Fatalf("list: %+v", got)
+	}
+	rec = do(h, "POST", base, `{"name":"lab","kind":"gitlab","baseUrl":"https://gitlab.com/","token":"`+token+`"}`)
+	if rec.Code != http.StatusCreated || decode[store.Forge](t, rec).Kind != "gitlab" {
+		t.Fatalf("gitlab forge: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "DELETE", base+"/"+decode[store.Forge](t, rec).ID, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete the gitlab forge: %d %s", rec.Code, rec.Body)
 	}
 
 	// The token is studio-only: it never binds to sandboxes, can't be edited as a secret

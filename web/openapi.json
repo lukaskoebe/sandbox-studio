@@ -372,6 +372,33 @@
         ],
         "type": "object"
       },
+      "BrowserDownloadInput": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "The file's name, as the list shows it",
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "sandboxId": {
+            "description": "The sandbox to copy the file into, under downloads/",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "session": {
+            "description": "The ephemeral session that saved the file; empty for the persistent profile",
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "sandboxId"
+        ],
+        "type": "object"
+      },
       "BrowserPattern": {
         "additionalProperties": false,
         "properties": {
@@ -1763,6 +1790,33 @@
         ],
         "type": "object"
       },
+      "Download": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "saved": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "session": {
+            "description": "The ephemeral session that saved it; empty for the persistent profile",
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session",
+          "name",
+          "size",
+          "saved"
+        ],
+        "type": "object"
+      },
       "DreamInBody": {
         "additionalProperties": false,
         "properties": {
@@ -2736,6 +2790,7 @@
             "enum": [
               "forgejo",
               "github",
+              "gitlab",
               "https",
               "ssh"
             ],
@@ -2828,6 +2883,7 @@
             "enum": [
               "forgejo",
               "github",
+              "gitlab",
               "https",
               "ssh"
             ],
@@ -4816,6 +4872,7 @@
             "enum": [
               "forgejo",
               "github",
+              "gitlab",
               "https",
               "ssh"
             ],
@@ -13870,6 +13927,128 @@
               }
             },
             "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/downloads": {
+      "get": {
+        "description": "The files the browser saved, newest first: the persistent profile's and those of its open ephemeral sessions. A stopped browser has none to list.",
+        "operationId": "listBrowserDownloads",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Download"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/downloads/send": {
+      "post": {
+        "description": "Copies a download into downloads/ of one of the teammate's sandboxes, under its name or a free one. The file is copied as bytes and never opened on the host.",
+        "operationId": "sendBrowserDownload",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrowserDownloadInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadedFile"
+                }
+              }
+            },
+            "description": "Created"
           },
           "default": {
             "content": {

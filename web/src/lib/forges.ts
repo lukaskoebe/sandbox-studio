@@ -9,6 +9,7 @@ export type Auth = "agent" | "key"
 export const kindLabels: Record<Kind, string> = {
   forgejo: "Forgejo",
   github: "GitHub",
+  gitlab: "GitLab",
   https: "Other HTTPS",
   ssh: "Other SSH",
 }
@@ -18,4 +19,5 @@ export const authLabels: Record<Auth, string> = {
   key: "A Studio key",
 }
 
-export const hasAPI = (kind: Kind) => kind === "forgejo" || kind === "github"
+export const hasAPI = (kind: Kind) =>
+  kind === "forgejo" || kind === "github" || kind === "gitlab"

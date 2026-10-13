@@ -556,3 +556,44 @@ func TestMigrateSecurityLevels(t *testing.T) {
 		t.Error("an unknown level accepted")
 	}
 }
+
+// Migration 031 accepts the gitlab forge kind and keeps every forge's columns.
+func TestMigrateGitLabForgeKind(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 30); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`,
+		`INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at, studio_only) VALUES ('sec', 'env', 'FORGE', x'00', '', 'ph', 1, 1, 1), ('sec2', 'env', 'GL', x'00', '', 'ph2', 1, 1, 1)`,
+		`INSERT INTO forges (id, environment_id, name, kind, base_url, secret_id, agent_slow_at, agent_hint_dismissed, created_at, updated_at)
+		 VALUES ('fg', 'env', 'gh', 'github', 'https://github.com', 'sec', 5, 1, 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	var slow int64
+	var dismissed bool
+	if err := db.QueryRowContext(ctx, "SELECT agent_slow_at, agent_hint_dismissed FROM forges WHERE id = 'fg'").Scan(&slow, &dismissed); err != nil || slow != 5 || !dismissed {
+		t.Fatalf("forge after the rebuild: %d %v: %v", slow, dismissed, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, secret_id, created_at, updated_at)
+		VALUES ('gl', 'env', 'gl', 'gitlab', 'https://gitlab.com', 'sec2', 1, 1)`); err != nil {
+		t.Fatalf("gitlab kind refused: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO forges (id, environment_id, name, kind, base_url, secret_id, created_at, updated_at)
+		VALUES ('bad', 'env', 'bad', 'gitea', 'https://gitea.example.com', NULL, 1, 1)`); err == nil {
+		t.Fatal("an unknown forge kind was accepted")
+	}
+}

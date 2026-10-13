@@ -9,9 +9,8 @@ https://git.studio.internal/<forge>/<path>.git
 
 `<forge>` is the name of a forge added under **Settings → Git**. `<path>` has 1 to 8
 segments (each `^[A-Za-z0-9_][A-Za-z0-9._-]{0,99}$`, no `..`), so gitolite's `repo`,
-GitHub's `owner/repo` and GitLab's `group/sub/repo` all work; on forges with an API
-(Forgejo, GitHub) it must be exactly `owner/repo`. The store keeps everything before the
-last segment in `owner`. The host resolves only
+GitHub's `owner/repo` and GitLab's `group/sub/repo` all work; on Forgejo and GitHub it must
+be exactly `owner/repo`. The store keeps everything before the last segment in `owner`. The host resolves only
 inside sandboxes (dnsproxy) and is served with the environment CA, like any intercepted
 host. Code: `internal/gitreview`, the API in `internal/api/git.go`, the UI in
 `web/src/routes/e.$env.git.tsx` and `web/src/components/git-review.tsx`.
@@ -36,9 +35,13 @@ the transport (HTTPS or SSH) and whether there is an API for pull requests.
     write**, **Pull requests: read and write** and **Metadata: read**. A fine-grained token
     can't push where you are only an outside collaborator; a classic token with `repo`
     works there too.
-  - `https` (GitLab, Bitbucket, any smart-HTTP host): git over HTTPS as
-    `<username>:<token>`; the username defaults to `git` (Bitbucket wants `x-token-auth`,
-    GitLab takes any). No API: no pull requests, and the default branch isn't needed.
+  - `gitlab` (gitlab.com, self-hosted GitLab): git over HTTPS as `oauth2:<token>`, API
+    `<base>/api/v4` with `Authorization: Bearer`. Use a personal or project access token with
+    the **api** and **write_repository** scopes. Repositories may be nested (`group/sub/repo`).
+    Pasting `https://gitlab.com/…` fills in this kind.
+  - `https` (Bitbucket, any smart-HTTP host): git over HTTPS as `<username>:<token>`; the
+    username defaults to `git` (Bitbucket wants `x-token-auth`). No API: no pull requests,
+    and the default branch isn't needed.
   - `ssh` (gitolite, a VPS, any host serving git over SSH): see [SSH forges](#ssh-forges).
 - Private, loopback, link-local and CGNAT hosts are refused, for HTTPS and SSH alike, and
   every upstream connection goes through `gateway.DialPublic`, so DNS can't rebind past the
@@ -174,12 +177,19 @@ commits, and a unified diff bounded at 512 KiB. Binary files, submodules and fil
 - **Reject** (optionally with a note) or **ignore:** the push becomes `rejected`.
 - A rejected or failed push is delivered to the sandbox on its next fetch of that
   repository: that fetch fails once with the reason and note, and the next one works.
-  Not built: also notifying the agent over MCP.
-- **Pull request** (Forgejo, GitHub): after an approved push to a branch other than the
+- The agent hears about it in its chat too. The next prompt of any chat in that sandbox
+  starts with a `[Studio] Some of your pushes did not go upstream` note that lists its
+  rejected and failed pushes no prompt has carried yet, and each is listed once. The note
+  rides on the prompt (the same way as the note after an undo). A chat takes a new prompt
+  only when it is idle, and an MCP notification never reaches the model, so a running turn
+  hears about it at its next prompt. The chat sends the note only once the prompt went out, so a
+  failed prompt leaves it for the next one.
+- **Pull request** (Forgejo, GitHub, GitLab): after an approved push to a branch other than the
   repository's default branch, Studio raises a `git.pr` approval proposing
   `<branch> → <default>` with a title and body from the commits. Approving it calls
-  `POST /api/v1/repos/<owner>/<repo>/pulls` (Forgejo, `Authorization: token <token>`) or
-  `POST /repos/<owner>/<repo>/pulls` (GitHub) and records the PR URL, or
+  `POST /api/v1/repos/<owner>/<repo>/pulls` (Forgejo, `Authorization: token <token>`),
+  `POST /repos/<owner>/<repo>/pulls` (GitHub) or `POST /api/v4/projects/<owner>%2F<repo>/merge_requests`
+  (GitLab, with the project path URL-encoded) and records the PR URL, or
   "failed: <reason>" (for example when a PR for the branch already exists). Rejecting it
   records "not opened". `https` and `ssh` forges have no API and get no PR proposal.
 
@@ -195,15 +205,36 @@ type Integration interface {
     ID() string
     Routes() []gateway.VirtualHost
     ApprovalKinds() []ApprovalKind // kind + Decide func
+    Tools() []Tool                 // MCP tools: definition + Handle on the host
+    Jobs() []Job                   // periodic background work: Every + Run
 }
 ```
 
-Git review is the only integration. MCP tools and jobs are added to the interface when an
-integration needs them.
+- **MCP tools.** A tool's definition (name, description, JSON schema) lives in
+  `agentcall.Tools`, the list `studio-agent mcp` serves in every sandbox. A call from the
+  agent comes back over the sandbox's channel, the same way memory calls do, and the hub
+  routes it by method name to the integration whose `Tools` names it. The handler gets the
+  calling sandbox, from the channel, and never a sandbox or teammate from the arguments.
+  Handlers decode their arguments strictly, so an unknown one is refused. An error the
+  handler wraps with `ToolError` is shown to the agent; any other error is logged and the
+  agent gets "<tool> failed".
+- **Jobs.** `Set.RunJobs` runs each job every `Every` until Studio stops; a failed run is
+  logged. No integration has a job yet.
+
+Git review serves two tools, both answered from Studio's records of the calling sandbox's
+pushes and never from a forge:
+
+- `git_push_status(limit?)`: the sandbox's recent pushes, newest first, with their state
+  (`pending`, `pushed`, `rejected`, `failed`, `superseded`), the forge's result and the
+  reviewer's note.
+- `git_pull_request_status(branch, forge?, repository?)`: the branch's latest push and its
+  pull request: `none`, `awaiting approval`, `opened` (with its URL), `not opened` or
+  `failed` (with the reason). `forge` and `repository` pick one when the branch went to
+  more than one repository.
 
 ## Limits and open points
 
 - Only branches; tags and deletes are refused.
 - The approve push runs inside the decide request (up to five minutes).
 - Computing a review walks the new commits (`revlist`); very large first pushes are slow.
-- No GitLab merge requests yet (GitLab works as kind `https`), no GitHub App sign-in.
+- No GitHub App sign-in.

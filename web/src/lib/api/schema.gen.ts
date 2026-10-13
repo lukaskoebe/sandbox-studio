@@ -1667,6 +1667,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/downloads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The files the browser saved, newest first: the persistent profile's and those of its open ephemeral sessions. A stopped browser has none to list. */
+        get: operations["listBrowserDownloads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser/downloads/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Copies a download into downloads/ of one of the teammate's sandboxes, under its name or a free one. The file is copied as bytes and never opened on the host. */
+        post: operations["sendBrowserDownload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/navigate": {
         parameters: {
             query?: never;
@@ -2102,6 +2136,14 @@ export interface components {
             target?: string;
             teammateId: string;
             url?: string;
+        };
+        BrowserDownloadInput: {
+            /** @description The file's name, as the list shows it */
+            name: string;
+            /** @description The sandbox to copy the file into, under downloads/ */
+            sandboxId: string;
+            /** @description The ephemeral session that saved the file; empty for the persistent profile */
+            session?: string;
         };
         BrowserPattern: {
             /** @description A browser action such as click or fill, or * for every action */
@@ -2548,6 +2590,15 @@ export interface components {
              */
             status: "ok" | "warn" | "fail";
         };
+        Download: {
+            name: string;
+            /** Format: date-time */
+            saved: string;
+            /** @description The ephemeral session that saved it; empty for the persistent profile */
+            session: string;
+            /** Format: int64 */
+            size: number;
+        };
         DreamInBody: {
             /** @description shared or teammate:<id> */
             scope: string;
@@ -2903,7 +2954,7 @@ export interface components {
             hostKeyMismatch?: string;
             id: string;
             /** @enum {string} */
-            kind: "forgejo" | "github" | "https" | "ssh";
+            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh";
             /** @description The URL segment: https://git.studio.internal/<name>/<path>.git */
             name: string;
             /** @description The public half of the SSH key Studio generated (auth key), to add to the host */
@@ -2933,7 +2984,7 @@ export interface components {
             /** @description Kind ssh: the host key to pin, as scanned and confirmed by the user */
             hostKey?: string;
             /** @enum {string} */
-            kind: "forgejo" | "github" | "https" | "ssh";
+            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh";
             /** @description Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git */
             name: string;
             /** @description Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it */
@@ -3553,7 +3604,7 @@ export interface components {
             /** @description The forge's base URL, or SSH address for kind ssh */
             baseUrl: string;
             /** @enum {string} */
-            kind: "forgejo" | "github" | "https" | "ssh";
+            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh";
             /** @description A short name for the forge, not yet taken in the environment */
             name: string;
             /** @description The repository's path on the forge, without .git */
@@ -8673,6 +8724,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrowserAction"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listBrowserDownloads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Download"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    sendBrowserDownload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrowserDownloadInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadedFile"];
                 };
             };
             /** @description Error */
