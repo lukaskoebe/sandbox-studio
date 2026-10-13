@@ -21,8 +21,11 @@ import { cn } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
 
-/** The buttons: an action, or an allow whose rule expires after an hour. */
-type Choice = Action | "allowHour"
+/**
+ * The buttons: an action; an allow whose rule expires after an hour; or an allow or deny for
+ * the one connection, without a rule.
+ */
+type Choice = Action | "allowHour" | "allowOnce" | "denyOnce"
 
 const hour = 60 * 60 * 1000
 
@@ -61,8 +64,8 @@ export function useDecideApproval() {
 /**
  * Decides one network approval: the host pattern to allow or deny, any port or the default
  * ports, and whether the rule covers the whole environment or only the requesting sandbox.
- * Compact keeps the pattern and the buttons visible and folds the port and scope choices
- * behind an Options disclosure.
+ * Compact keeps the pattern and the buttons visible and folds the port, scope and lifetime
+ * choices (an hour, or this connection only) behind an Options disclosure.
  */
 export function ApprovalDecision({
   approval,
@@ -86,20 +89,36 @@ export function ApprovalDecision({
 
   const act = (choice: Choice) => {
     setChosen(choice)
-    const rule = { scope, host: pattern, ports: anyPort ? [] : undefined }
-    decide.mutate({
+    const params = {
       params: { path: { env: approval.environmentId, id: approval.id } },
-      body:
-        choice === "dismiss"
-          ? { action: choice, scope }
-          : choice === "allowHour"
-            ? {
-                ...rule,
-                action: "allow",
-                expiresAt: new Date(Date.now() + hour).toISOString(),
-              }
-            : { ...rule, action: choice },
-    })
+    }
+    const rule = { scope, host: pattern, ports: anyPort ? [] : undefined }
+    switch (choice) {
+      case "dismiss":
+        return decide.mutate({ ...params, body: { action: choice, scope } })
+      // A once decision answers this connection; the server ignores the rule's fields.
+      case "allowOnce":
+        return decide.mutate({
+          ...params,
+          body: { action: "allow_once", scope },
+        })
+      case "denyOnce":
+        return decide.mutate({
+          ...params,
+          body: { action: "deny_once", scope },
+        })
+      case "allowHour":
+        return decide.mutate({
+          ...params,
+          body: {
+            ...rule,
+            action: "allow",
+            expiresAt: new Date(Date.now() + hour).toISOString(),
+          },
+        })
+      default:
+        return decide.mutate({ ...params, body: { ...rule, action: choice } })
+    }
   }
 
   return (
@@ -174,6 +193,24 @@ export function ApprovalDecision({
             >
               {busy("allowHour") && <Spinner />}
               Allow for 1 hour
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={decide.isPending}
+              onClick={() => act("allowOnce")}
+            >
+              {busy("allowOnce") && <Spinner />}
+              Allow once
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={decide.isPending}
+              onClick={() => act("denyOnce")}
+            >
+              {busy("denyOnce") && <Spinner />}
+              Deny once
             </Button>
           </div>
         </>

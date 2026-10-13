@@ -97,6 +97,17 @@ wildcard, never a public suffix), or dismiss. Rules created this way cover 80 an
 traffic, else the exact port. A new or changed rule settles other pending approvals it
 covers and wakes held connections, so an approved `npm install` finishes without a retry.
 
+"Allow once" and "Deny once" (in the card's Options) create no rule. They decide the
+connections held for this request, and the next connection to the host asks again. Activity
+shows them as "Approved once" and "Denied once"; a connection denied once gets a 403 that says
+the user denied it.
+
+Requests from one sandbox that arrive within 3 seconds of each other show as one card on the
+approval stack, with Allow all, Review individually and Deny all (see
+[approvals](approvals.md#realtime-and-ui)). Requests carry no information about the page that
+made them yet, so the grouping is by sandbox and arrival time; grouping by page comes with
+site-scoped approvals.
+
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.
 
