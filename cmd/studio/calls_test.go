@@ -70,7 +70,7 @@ func TestCallsRouteToolsByNameWithTheCallersSandbox(t *testing.T) {
 		return "memory", nil
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	route := routeCalls(st, integrations.Set{toolIntegration{tool}}, nil, log, next)
+	route := routeCalls(st, integrations.Set{toolIntegration{tool}}, nil, nil, log, next)
 	args := json.RawMessage(`{}`)
 
 	if res, err := route(ctx, agent.ID, agentcall.GitPushStatusTool.Name, args); err != nil || res.(map[string]string)["ok"] != "yes" || seen[0] != agent.ID {

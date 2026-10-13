@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -44,7 +45,7 @@ func TestRouteCallsSendsTaskToolsToTheTaskService(t *testing.T) {
 	defer st.Close()
 	tsk := &tasks.Service{Store: st}
 	var next []string
-	route := routeCalls(nil, tsk, func(_ context.Context, _, method string, _ json.RawMessage) (any, error) {
+	route := routeCalls(st, nil, nil, tsk, slog.New(slog.DiscardHandler), func(_ context.Context, _, method string, _ json.RawMessage) (any, error) {
 		next = append(next, method)
 		return nil, nil
 	})
