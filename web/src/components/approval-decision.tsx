@@ -20,10 +20,16 @@ import {
 import { cn } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
+type Scope = "environment" | "teammate" | "sandbox"
 
 /** The ports a request is decided for by default: HTTP and HTTPS together, else the requested port. */
 function defaultPorts(port: number) {
   return port === 80 || port === 443 ? "ports 80 and 443" : `port ${port}`
+}
+
+/** The level of a host pattern the server suggests: the wildcard of a domain, or the host itself. */
+function patternLevel(pattern: string) {
+  return pattern.startsWith("*.") ? "wildcard" : "exact"
 }
 
 /** Allow, deny or dismiss an approval; refreshes the lists the decision changes. */
@@ -67,17 +73,26 @@ export function ApprovalDecision({
   compact?: boolean
 }) {
   const net = approval.network
-  // Without patterns from the server, the requested host itself is the one choice.
+  const owner = approval.teammate
+  // Without patterns from the server, the requested host itself is the one choice. The level
+  // the owner chose last is preselected.
   const patterns = net?.patterns?.length ? net.patterns : net ? [net.host] : []
-  const [pattern, setPattern] = useState(patterns[0] ?? "")
+  const preferred =
+    patterns.find((p) => patternLevel(p) === owner?.patternLevel) ?? patterns[0]
+  const [pattern, setPattern] = useState(preferred)
   const [anyPort, setAnyPort] = useState(false)
-  const [scope, setScope] = useState<"environment" | "sandbox">("environment")
+  // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
+  const defaultScope: Scope = owner?.approvalScope ?? "environment"
+  const scopes: Scope[] = owner
+    ? ["environment", "teammate", "sandbox"]
+    : ["environment", "sandbox"]
+  const [scope, setScope] = useState<Scope>(defaultScope)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
   const busy = (action: Action) =>
     decide.isPending && decide.variables.body.action === action
   // A folded choice that differs from the default still shows on the Options button.
-  const changed = anyPort || scope === "sandbox"
+  const changed = anyPort || scope !== defaultScope
 
   const act = (action: Action) =>
     decide.mutate({
@@ -129,7 +144,8 @@ export function ApprovalDecision({
             variant="outline"
             value={[scope]}
             onValueChange={(v) => {
-              if (v[0]) setScope(v[0] === "sandbox" ? "sandbox" : "environment")
+              const next = scopes.find((s) => s === v[0])
+              if (next) setScope(next)
             }}
             className="w-full"
           >
@@ -140,6 +156,16 @@ export function ApprovalDecision({
             >
               Environment
             </ToggleGroupItem>
+            {owner && (
+              <ToggleGroupItem
+                value="teammate"
+                size="sm"
+                title={`${owner.name}'s sandboxes`}
+                className="min-w-0 flex-1 shrink"
+              >
+                <span className="truncate">{owner.name}&apos;s sandboxes</span>
+              </ToggleGroupItem>
+            )}
             <ToggleGroupItem
               value="sandbox"
               size="sm"
