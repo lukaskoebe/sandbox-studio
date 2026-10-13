@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"strings"
@@ -44,6 +45,10 @@ var (
 type Runner interface {
 	Browser(ctx context.Context, sandboxID string, cmd agentproto.BrowserCommand) (agentproto.BrowserResult, error)
 	DialTCP(ctx context.Context, sandboxID string, port int) (net.Conn, error)
+	BrowserDownloads(ctx context.Context, sandboxID string, req agentproto.BrowserDownloadsRequest) (agentproto.BrowserDownloadList, error)
+	BrowserDownload(ctx context.Context, sandboxID string, req agentproto.BrowserDownloadsRequest,
+		fn func(d agentproto.BrowserDownload, body io.Reader) error) error
+	Upload(ctx context.Context, sandboxID string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error)
 }
 
 // VMs creates, starts and stops browser VMs (sandboxes.Manager).

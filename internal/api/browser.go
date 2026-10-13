@@ -32,6 +32,13 @@ type BrowserPatternInput struct {
 	Verdict string `json:"verdict" enum:"allow,deny,sensitive"`
 }
 
+// BrowserDownloadInput is a download to copy into a sandbox of the teammate.
+type BrowserDownloadInput struct {
+	Session   string `json:"session,omitempty" maxLength:"64" doc:"The ephemeral session that saved the file; empty for the persistent profile"`
+	Name      string `json:"name" minLength:"1" maxLength:"255" doc:"The file's name, as the list shows it"`
+	SandboxID string `json:"sandboxId" minLength:"1" maxLength:"64" doc:"The sandbox to copy the file into, under downloads/"`
+}
+
 func (s *Server) browserError(err error) error {
 	switch {
 	case errors.Is(err, browser.ErrBadPattern), errors.Is(err, browser.ErrBadURL):
@@ -197,6 +204,34 @@ func (s *Server) registerBrowser(api huma.API) {
 			return nil, err
 		}
 		return nil, apiError(s.Store.DeleteBrowserPattern(ctx, in.Env, in.Teammate, in.ID))
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "listBrowserDownloads", Method: http.MethodGet, Path: "/api/environments/{env}/teammates/{teammate}/browser/downloads", Tags: []string{"browser"},
+		Description: "The files the browser saved, newest first: the persistent profile's and those of its open ephemeral sessions. A stopped browser has none to list.",
+	}, func(ctx context.Context, in *browserPath) (*struct{ Body []browser.Download }, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		list, err := s.Browser.Downloads(ctx, in.Env, in.Teammate)
+		return &struct{ Body []browser.Download }{list}, s.browserError(err)
+	})
+
+	type downloadIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Body     BrowserDownloadInput
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "sendBrowserDownload", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/{teammate}/browser/downloads/send", Tags: []string{"browser"},
+		DefaultStatus: http.StatusCreated,
+		Description:   "Copies a download into downloads/ of one of the teammate's sandboxes, under its name or a free one. The file is copied as bytes and never opened on the host.",
+	}, func(ctx context.Context, in *downloadIn) (*struct{ Body UploadedFile }, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		reply, err := s.Browser.SendDownload(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.Name, in.Body.SandboxID)
+		return &struct{ Body UploadedFile }{UploadedFile{Path: "downloads/" + reply.Name, Name: reply.Name, Size: reply.Size}}, s.browserError(err)
 	})
 }
 

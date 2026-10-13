@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"path/filepath"
@@ -37,6 +38,19 @@ type fakeBrowser struct {
 	blockStarted chan struct{}
 	blockRelease chan struct{}
 	dial         func(port int) (net.Conn, error)
+	// downloads are the saved files by ephemeral slot, with their bodies by "slot/name".
+	downloads map[int][]agentproto.BrowserDownload
+	bodies    map[string]string
+	// uploads are the copies that reached sandboxes, and uploadErr makes the next one fail.
+	uploads   []fakeUpload
+	uploadErr error
+}
+
+// fakeUpload is a file the fake sandboxes received.
+type fakeUpload struct {
+	sandbox string
+	req     agentproto.UploadRequest
+	body    string
 }
 
 func newFakeBrowser() *fakeBrowser {
@@ -179,6 +193,61 @@ func (f *fakeBrowser) DialTCP(_ context.Context, _ string, port int) (net.Conn, 
 		return nil, fmt.Errorf("no stream")
 	}
 	return f.dial(port)
+}
+
+// saveDownload makes a file appear in a session's downloads folder of the fake VM.
+func (f *fakeBrowser) saveDownload(slot int, name, body string, saved time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.downloads == nil {
+		f.downloads, f.bodies = map[int][]agentproto.BrowserDownload{}, map[string]string{}
+	}
+	f.downloads[slot] = append(f.downloads[slot], agentproto.BrowserDownload{Name: name, Size: int64(len(body)), Modified: saved.Unix()})
+	f.bodies[fmt.Sprintf("%d/%s", slot, name)] = body
+}
+
+func (f *fakeBrowser) BrowserDownloads(_ context.Context, _ string, req agentproto.BrowserDownloadsRequest) (agentproto.BrowserDownloadList, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return agentproto.BrowserDownloadList{Files: append([]agentproto.BrowserDownload(nil), f.downloads[req.Ephemeral]...)}, nil
+}
+
+func (f *fakeBrowser) BrowserDownload(_ context.Context, _ string, req agentproto.BrowserDownloadsRequest,
+	fn func(agentproto.BrowserDownload, io.Reader) error) error {
+	f.mu.Lock()
+	var d *agentproto.BrowserDownload
+	for i := range f.downloads[req.Ephemeral] {
+		if f.downloads[req.Ephemeral][i].Name == req.Name {
+			d = &f.downloads[req.Ephemeral][i]
+		}
+	}
+	body := f.bodies[fmt.Sprintf("%d/%s", req.Ephemeral, req.Name)]
+	f.mu.Unlock()
+	if d == nil {
+		return fmt.Errorf("no such download")
+	}
+	return fn(*d, strings.NewReader(body))
+}
+
+func (f *fakeBrowser) Upload(_ context.Context, sandboxID string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error) {
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return agentproto.UploadReply{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.uploadErr != nil {
+		err, f.uploadErr = f.uploadErr, nil
+		return agentproto.UploadReply{}, err
+	}
+	f.uploads = append(f.uploads, fakeUpload{sandbox: sandboxID, req: req, body: string(data)})
+	return agentproto.UploadReply{Name: req.Name, Size: int64(len(data))}, nil
+}
+
+func (f *fakeBrowser) sent() []fakeUpload {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeUpload(nil), f.uploads...)
 }
 
 func (f *fakeBrowser) allCommands() []agentproto.BrowserCommand {

@@ -94,7 +94,7 @@ func storeUpload(workspace string, owner [2]int, req agentproto.UploadRequest, b
 		return agentproto.UploadReply{}, err
 	}
 	defer unix.Close(root)
-	dir, err := unix.Openat2(root, rel, beneath)
+	dir, err := openUploadDir(root, rel, req.CreateDir, owner)
 	if err != nil {
 		return agentproto.UploadReply{}, browseError(err)
 	}
@@ -135,6 +135,34 @@ func storeUpload(workspace string, owner [2]int, req agentproto.UploadRequest, b
 		return agentproto.UploadReply{}, err
 	}
 	return agentproto.UploadReply{Name: final, Size: n}, nil
+}
+
+// openUploadDir opens the folder rel beneath the workspace root. With create, a missing folder is
+// made first, owned by owner; its parent must exist. No link on the way is followed.
+func openUploadDir(root int, rel string, create bool, owner [2]int) (int, error) {
+	dir, err := unix.Openat2(root, rel, beneath)
+	if !create || !errors.Is(err, unix.ENOENT) {
+		return dir, err
+	}
+	parent, base := ".", rel
+	if i := strings.LastIndexByte(rel, '/'); i >= 0 {
+		parent, base = rel[:i], rel[i+1:]
+	}
+	p, err := unix.Openat2(root, parent, beneath)
+	if err != nil {
+		return 0, err
+	}
+	defer unix.Close(p)
+	switch err := unix.Mkdirat(p, base, 0o755); {
+	case err == nil:
+		if err := unix.Fchownat(p, base, owner[0], owner[1], unix.AT_SYMLINK_NOFOLLOW); err != nil {
+			unix.Unlinkat(p, base, unix.AT_REMOVEDIR)
+			return 0, err
+		}
+	case !errors.Is(err, unix.EEXIST):
+		return 0, err
+	}
+	return unix.Openat2(root, rel, beneath)
 }
 
 // checkUploadName refuses anything but one file name: a separator, a NUL byte, "." and "..",

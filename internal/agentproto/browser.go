@@ -76,3 +76,38 @@ const (
 
 // BrowserMethodPrefix starts every browser method.
 const BrowserMethodPrefix = "browser_"
+
+// MethodBrowserDownloads and MethodBrowserDownloadToWorkspace are the download tools: the
+// files a browser saved, and copying one into the calling sandbox (docs/browser.md#downloads).
+const (
+	MethodBrowserDownloads           = "browser_downloads"
+	MethodBrowserDownloadToWorkspace = "browser_download_to_workspace"
+)
+
+// KindBrowserDownloads (host → guest, browser VMs only): the host writes a
+// BrowserDownloadsRequest line. Without a name the guest replies with one BrowserDownloadList
+// line. With a name it replies with one BrowserDownload line and then exactly the file's Size
+// bytes; or with an Error.
+const KindBrowserDownloads = "browser-downloads"
+
+// MaxBrowserDownloads bounds a listing of a session's downloads, newest first.
+const MaxBrowserDownloads = 100
+
+// BrowserDownloadsRequest names a download of one browser session: Ephemeral as in
+// BrowserCommand. Name is the file to read, or empty to list the session's downloads.
+type BrowserDownloadsRequest struct {
+	Ephemeral int    `json:"ephemeral,omitempty"`
+	Name      string `json:"name,omitempty"`
+}
+
+// BrowserDownload describes a file a browser saved. Modified is unix seconds.
+type BrowserDownload struct {
+	Name     string `json:"name"`
+	Size     int64  `json:"size"`
+	Modified int64  `json:"modified"`
+}
+
+// BrowserDownloadList is the reply to a listing request.
+type BrowserDownloadList struct {
+	Files []BrowserDownload `json:"files"`
+}

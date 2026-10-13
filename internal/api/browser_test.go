@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"testing"
 
@@ -40,6 +41,15 @@ func (noRunner) Browser(context.Context, string, agentproto.BrowserCommand) (age
 	return agentproto.BrowserResult{}, net.ErrClosed
 }
 func (noRunner) DialTCP(context.Context, string, int) (net.Conn, error) { return nil, net.ErrClosed }
+func (noRunner) BrowserDownloads(context.Context, string, agentproto.BrowserDownloadsRequest) (agentproto.BrowserDownloadList, error) {
+	return agentproto.BrowserDownloadList{}, net.ErrClosed
+}
+func (noRunner) BrowserDownload(context.Context, string, agentproto.BrowserDownloadsRequest, func(agentproto.BrowserDownload, io.Reader) error) error {
+	return net.ErrClosed
+}
+func (noRunner) Upload(context.Context, string, agentproto.UploadRequest, io.Reader) (agentproto.UploadReply, error) {
+	return agentproto.UploadReply{}, net.ErrClosed
+}
 
 func TestBrowserAPI(t *testing.T) {
 	h, s := newTestServer(t)
@@ -67,6 +77,12 @@ func TestBrowserAPI(t *testing.T) {
 	}
 	if rec := do(h, "POST", base+"/navigate", `{"url":"https://example.org"}`); rec.Code != 409 {
 		t.Errorf("navigation without takeover: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "GET", base+"/downloads", ""); rec.Code != 200 || !json.Valid(rec.Body.Bytes()) {
+		t.Errorf("downloads of a browser that is not running: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/downloads/send", `{"name":"a.pdf","sandboxId":"nope"}`); rec.Code != 404 {
+		t.Errorf("send to an unknown sandbox: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, "POST", base+"/patterns", `{"verdict":"allow","action":"click","origin":"javascript:alert(1)"}`); rec.Code != 422 {
 		t.Errorf("bad pattern: %d %s", rec.Code, rec.Body)

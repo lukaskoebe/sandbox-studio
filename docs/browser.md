@@ -94,6 +94,8 @@ enabled.
 - `wait(ms | text | url)`, `back`
 - `fill_credential(ref, name)`
 - `close(session)`, which ends an ephemeral session
+- `browser_downloads()` and `browser_download_to_workspace(name, session?)`, see
+  [Downloads](#downloads)
 
 Every tool takes an optional `session`, the ID that `open(ephemeral: true)` returned. Without
 it a tool drives the persistent profile. See [Ephemeral sessions](#ephemeral-sessions).
@@ -251,6 +253,30 @@ An agent can open a throwaway session next to the persistent profile:
 Two agent-browser sessions in one VM have not run live yet; see
 [Verified vs pending live](#verified-vs-pending-live).
 
+## Downloads
+
+A file the browser saves lands in its session's downloads folder: `/workspace/downloads` for
+the persistent profile (on the VM's disk, so it outlives a stop), and the session's tmpfs
+folder for an ephemeral session (gone when the session closes). Studio hands one to a sandbox
+on request:
+
+- **List.** The guest lists a session's folder: regular files only, newest first, at most 100.
+  Hidden files, Chromium's `.crdownload` partials, links and folders are not downloads. A
+  folder that does not exist yet has none. `browser_downloads` lists the persistent profile
+  and the ephemeral sessions the calling sandbox opened; the Browser page's **Downloads** tab
+  lists every session of the teammate's browser, while the browser runs.
+- **Copy.** A copy streams the file from the browser VM through the host into the target
+  sandbox's `downloads/` folder, with `Hub.Upload` (the upload path, the same name checks and
+  the 100 MiB limit). The sandbox's guest creates `downloads/` when it is missing and keeps an
+  existing file: a taken name gets a free one, `name (2).ext`. The host copies bytes only: a
+  download is never opened, run or extracted on the host, and the agent's tool result says it
+  is data from the web.
+- **Who.** An agent copies a download of the teammate's persistent profile, or of an ephemeral
+  session its own sandbox opened (another sandbox of the teammate is refused, as for driving
+  it). The user sends any of the teammate's downloads to any of the teammate's sandboxes from
+  the Browser page (`POST …/browser/downloads/send`). A stopped browser has no downloads to
+  list or copy. Each copy is in the action log as `send download`, with the outcome.
+
 ## History
 
 - **Action log.** Each action is logged: actor, sandbox, action, target, URL, outcome and
@@ -283,7 +309,10 @@ Two agent-browser sessions in one VM have not run live yet; see
 - the guest's slots: argv, environment, stream port and session checks (`internal/guest`);
 - the browser VM's HTTPS: termination, per-request holds with the request's method, path and
   site, site approvals for the session, the tracker list and request rules (`internal/gateway`,
-  `internal/policy`, `internal/browser`), and the site card in e2e through the request hook.
+  `internal/policy`, `internal/browser`), and the site card in e2e through the request hook;
+- downloads: the guest's listing and reads (regular files only, no links, partials or hidden
+  names, the upload size limit), the folder creation of an upload, the Hub's stream, the tools'
+  identity and ownership, the copy into `downloads/` and its log entry, and the API.
 
 **Verified live on Linux amd64 (2026-10-11):**
 
@@ -304,6 +333,8 @@ Two agent-browser sessions in one VM have not run live yet; see
   decisions read (see [network](network.md#hold-and-ask)). The site approvals and tracker
   denials were checked with fakes and a fake runtime, not in a page.
 - The browser image and agent-browser's native binary on arm64.
+- Chromium's downloads into the folder with agent-browser 0.39's `--download-path` flag: a
+  file the page saves should show in `browser_downloads`, and copy into `downloads/`.
 - Input message fields and frame metadata (`deviceWidth`/`deviceHeight`) for click mapping.
 - Snapshot details from a live Chromium:
   - password fields show no AX value or a masked one;
@@ -327,7 +358,6 @@ Two agent-browser sessions in one VM have not run live yet; see
 
 ## Limitations
 
-- Downloads stay in the VM's download directory; nothing hands them to the agent yet.
 - Background traffic from an idle page (polling, websockets) is attributed to the last
   sandbox that drove.
 - A "sensitive" pattern blanks a field's value line. A textarea whose own text forges
