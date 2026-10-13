@@ -110,11 +110,11 @@ connections held for this request, and the next connection to the host asks agai
 shows them as "Approved once" and "Denied once"; a connection denied once gets a 403 that says
 the user denied it.
 
-Requests from one sandbox that arrive within 3 seconds of each other show as one card on the
+Connections from one sandbox that arrive within 3 seconds of each other show as one card on the
 approval stack, with Allow all, Review individually and Deny all (see
-[approvals](approvals.md#realtime-and-ui)). Requests carry no information about the page that
-made them yet, so the grouping is by sandbox and arrival time; grouping by page comes with
-site-scoped approvals.
+[approvals](approvals.md#realtime-and-ui)). A browser's requests group by the page they belong
+to instead: one sandbox's pending requests to one top-level site are one card, titled with the
+site. A navigation keeps its own card, since it needs the site decision.
 
 A browser VM's HTTPS is held differently. Its connections are terminated first, with no hold
 (see [interception](#interception-and-secrets)), and each request that no rule covers is held

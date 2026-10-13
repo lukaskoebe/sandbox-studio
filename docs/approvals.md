@@ -58,12 +58,13 @@ change it.
   approves the site for the session without a rule (`allow_site`).
 - Network requests from one sandbox that arrive within 3 seconds of each other are one card,
   "<sandbox> wants N hosts", with the hosts listed, Allow all, Deny all, and Review
-  individually (which turns them into the per-host cards). The pill counts requests, not
+  individually (which turns them into the per-host cards). A browser's requests group by the
+  page they belong to instead: one sandbox's pending requests to one top-level site are one
+  card, "<site> wants N hosts"; a navigation keeps its own card. The pill counts requests, not
   cards. Allow all and Deny all decide each host with a rule of its own, with the scope
   chosen under Options. The grouping is client-side (`web/src/lib/approval-groups.ts`), so
   the API has no group. The server records arrival to the second, so the window is
-  approximate; requests carry no page yet, so grouping by page waits for site-scoped
-  approvals.
+  approximate.
 - New approvals raise a browser notification (Notification API) once the user allows it.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
