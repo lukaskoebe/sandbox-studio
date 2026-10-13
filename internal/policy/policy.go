@@ -79,6 +79,9 @@ type Request struct {
 	// Allowed is set for a system sandbox (SystemHosts): the hosts it may reach without anyone
 	// being asked. Other hosts are refused, after the rules had their say.
 	Allowed []string
+	// Preapproved is set for a template build's VM (BuildHosts): hosts it may reach on ports 80
+	// and 443 without anyone being asked. Other hosts are decided as for any sandbox.
+	Preapproved []string
 	// HTTP is the request, for a request on a terminated connection; nil for a connection.
 	HTTP *HTTPRequest
 }
@@ -179,6 +182,9 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, nil
 		}
 		return store.Rule{}, ErrUndecided
+	}
+	if host := Normalize(req.Host); (req.Port == 80 || req.Port == 443) && slices.Contains(req.Preapproved, host) {
+		return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, nil
 	}
 	if req.RulesOnly {
 		return store.Rule{}, ErrUndecided

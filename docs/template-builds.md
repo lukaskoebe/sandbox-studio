@@ -200,6 +200,11 @@ commands run in order:
    A new sandbox's home disk is seeded from that copy on its first boot. Setup's files in
    the home therefore reach new sandboxes, and nothing else from the build does.
 
+The apt, mise and Nix stages reach their download hosts without approvals (see
+[system VMs](network.md#system-vms)); the `setup` script's other hosts are asked for. mise
+waits 90 s for a download, longer than an unanswered connection is held, so a host approved in
+time goes through. Python always comes precompiled (`MISE_PYTHON_COMPILE=0`).
+
 With `tools: nix`, two stages run between mise and the setup script (see
 [Nix](#nix-as-a-tool)): `nix` as `root` prepares `/nix` and the system Nix config, and
 `nix-install` as `agent` installs the pinned release.

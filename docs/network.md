@@ -123,6 +123,12 @@ The VMs of subscription logins (`claude-login`, `codex-login`, `claude-utility` 
 their kind needs, listed in `internal/policy/system.go`. The rules still decide first, so a deny
 rule the user set holds. Any other host is refused without a hold and without an approval card.
 
+A template build's VM (`build-<job>`) reaches the hosts its own steps download from on ports 80
+and 443 without anyone being asked, at every security level: the Debian archives and Docker's
+apt repository, mise's version lists, Node.js, Go, the precompiled Python builds on GitHub and the
+Nix releases (`BuildHosts` in `internal/policy/system.go`). A deny rule still wins. Any other host,
+such as one a spec's `setup` script fetches from, is held and asked as for any sandbox.
+
 ## The Network page
 
 The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route. The private

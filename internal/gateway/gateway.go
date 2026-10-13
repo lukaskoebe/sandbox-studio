@@ -198,6 +198,8 @@ func (g *Gateway) handle(c net.Conn) {
 		Browser: sb.Kind == store.SandboxKindBrowser, Deferred: browserTLS,
 		// A system VM reaches only the hosts its kind needs, and nobody is asked (store/system.go).
 		Allowed: policy.SystemHosts(sb.Kind),
+		// A template build's VM reaches what its own steps download without asking.
+		Preapproved: policy.BuildHosts(sb),
 	})
 	ruleID = rule.ID
 	// Without a rule, a browser VM's HTTPS is not held here: its requests are decided one by one

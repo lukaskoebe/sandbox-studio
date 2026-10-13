@@ -178,6 +178,13 @@ func agentEnvironment() map[string]string {
 	env["MISE_INSTALLS_DIR"] = miseDir + "/installs"
 	env["MISE_SHIMS_DIR"] = miseDir + "/shims"
 	env["MISE_YES"] = "1"
+	// A host no rule covers is held for up to a minute while the user is asked (policy.Engine.Hold):
+	// mise waits longer than that, so an approval in time lets the download go through.
+	env["MISE_HTTP_TIMEOUT"] = "90s"
+	env["MISE_FETCH_REMOTE_VERSIONS_TIMEOUT"] = "90s"
+	// Python comes precompiled from GitHub (policy.BuildHosts); compiling it needs hosts and
+	// headers a build doesn't have.
+	env["MISE_PYTHON_COMPILE"] = "0"
 	return env
 }
 
