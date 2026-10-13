@@ -176,8 +176,8 @@ A full (memory) snapshot plus stop would need restore, so it waits on #1736 too.
 
 ## Base image
 
-`images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, mise,
-Node, build tools and Python, plus pinned OpenCode, Claude Code, Codex and their ACP
+`images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, Node,
+build tools and Python, plus pinned mise, OpenCode, Claude Code, Codex and their ACP
 adapters (versions in the Dockerfile and [harnesses](harnesses.md#versions)). User `agent`
 (uid 1000, sudo, docker). It creates `/opt/mise` for template toolchains and keeps the
 agent's home as the skeleton that home disks are seeded from. No init system. Releases
