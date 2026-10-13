@@ -19,6 +19,11 @@ func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
 	return []integrations.ApprovalKind{{Kind: ApprovalKind, Decide: s.decide}, {Kind: ConflictApprovalKind, Decide: s.decideConflict}}
 }
 
+// Tools and Jobs: memory's tools are answered by HandleCall, which the hub routes to by
+// method name, and it runs no integration job.
+func (s *Service) Tools() []integrations.Tool { return nil }
+func (s *Service) Jobs() []integrations.Job   { return nil }
+
 // decide settles a memory.share request: DecideShare marks it decided together with the
 // write, so a failed write leaves it pending and a second click can't write it twice.
 func (s *Service) decide(ctx context.Context, a store.Approval, d integrations.Decision) error {

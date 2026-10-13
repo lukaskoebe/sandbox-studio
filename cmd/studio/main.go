@@ -285,7 +285,8 @@ func run(addr, image string, log *slog.Logger) error {
 		Bus:       bus,
 	}
 	hub.OnConnect = mgr.Configure
-	hub.OnCall = routeCalls(brw, agentMem.HandleCall)
+	// Every integration that serves MCP tools is in integs by now; the chat service serves none.
+	hub.OnCall = routeCalls(st, integs, brw, log, agentMem.HandleCall)
 	brw.Runner, brw.VMs = hub, mgr
 	go brw.Run(ctx)
 	go mgr.FollowEnvironments(ctx, bus)
@@ -300,6 +301,7 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 	defer chats.Close()
 	integs = append(integs, chats) // settles chat.permission approvals; it serves no hosts
+	go integs.RunJobs(ctx, log)
 	if err := gitRemote.Sweep(ctx); err != nil {
 		log.Warn("git staging cleanup", "err", err)
 	}

@@ -409,6 +409,27 @@ func (s *Store) PendingGitPushes(ctx context.Context, envID, sandboxID, forgeID,
 		AND state = 'pending'`, envID, sandboxID, forgeID, owner, repo, ref)
 }
 
+// SandboxGitPushes lists a sandbox's pushes, newest first. ref, when set, keeps only the
+// pushes to that branch (refs/heads/...).
+func (s *Store) SandboxGitPushes(ctx context.Context, envID, sandboxID, ref string, limit int) ([]GitPush, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT "+pushCols+` FROM git_pushes
+		WHERE environment_id = ? AND sandbox_id = ? AND (? = '' OR ref = ?)
+		ORDER BY created_at DESC, rowid DESC LIMIT ?`, envID, sandboxID, ref, ref, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []GitPush{}
+	for rows.Next() {
+		p, err := scanPush(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // UndeliveredGitPushes lists the rejected or failed pushes of one sandbox to one
 // repository that the sandbox has not been told about yet.
 func (s *Store) UndeliveredGitPushes(ctx context.Context, envID, sandboxID, forgeID, owner, repo string) ([]GitPush, error) {

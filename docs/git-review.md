@@ -195,11 +195,32 @@ type Integration interface {
     ID() string
     Routes() []gateway.VirtualHost
     ApprovalKinds() []ApprovalKind // kind + Decide func
+    Tools() []Tool                 // MCP tools: definition + Handle on the host
+    Jobs() []Job                   // periodic background work: Every + Run
 }
 ```
 
-Git review is the only integration. MCP tools and jobs are added to the interface when an
-integration needs them.
+- **MCP tools.** A tool's definition (name, description, JSON schema) lives in
+  `agentcall.Tools`, the list `studio-agent mcp` serves in every sandbox. A call from the
+  agent comes back over the sandbox's channel, the same way memory calls do, and the hub
+  routes it by method name to the integration whose `Tools` names it. The handler gets the
+  calling sandbox, from the channel, and never a sandbox or teammate from the arguments.
+  Handlers decode their arguments strictly, so an unknown one is refused. An error the
+  handler wraps with `ToolError` is shown to the agent; any other error is logged and the
+  agent gets "<tool> failed".
+- **Jobs.** `Set.RunJobs` runs each job every `Every` until Studio stops; a failed run is
+  logged. No integration has a job yet.
+
+Git review serves two tools, both answered from Studio's records of the calling sandbox's
+pushes and never from a forge:
+
+- `git_push_status(limit?)`: the sandbox's recent pushes, newest first, with their state
+  (`pending`, `pushed`, `rejected`, `failed`, `superseded`), the forge's result and the
+  reviewer's note.
+- `git_pull_request_status(branch, forge?, repository?)`: the branch's latest push and its
+  pull request: `none`, `awaiting approval`, `opened` (with its URL), `not opened` or
+  `failed` (with the reason). `forge` and `repository` pick one when the branch went to
+  more than one repository.
 
 ## Limits and open points
 

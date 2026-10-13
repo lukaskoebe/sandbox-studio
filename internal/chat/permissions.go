@@ -83,6 +83,10 @@ func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
 	return []integrations.ApprovalKind{{Kind: ApprovalKind, Decide: s.decide}}
 }
 
+// Tools and Jobs: the chat service serves no MCP tools and runs no integration job.
+func (s *Service) Tools() []integrations.Tool { return nil }
+func (s *Service) Jobs() []integrations.Job   { return nil }
+
 func (s *Service) notifyApprovals(envID string) {
 	if s.Bus != nil {
 		s.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: envID})

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
@@ -37,9 +39,27 @@ func browserImage(base string) string {
 	return strings.Replace(base, "sandbox-studio-base", "sandbox-studio-browser", 1)
 }
 
-// routeCalls sends a guest's browser tool calls to the broker and the rest to next.
-func routeCalls(brw *browser.Service, next func(ctx context.Context, id, method string, params json.RawMessage) (any, error)) func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
+// routeCalls sends a guest's call to the integration that serves the MCP tool it names, its
+// browser tools to the broker, and the rest to next (memory). Every call comes from a
+// sandbox the channel names; a browser VM or a template build makes none.
+func routeCalls(st *store.Store, integs integrations.Set, brw *browser.Service, log *slog.Logger,
+	next func(ctx context.Context, id, method string, params json.RawMessage) (any, error)) func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
 	return func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
+		if t, ok := integs.Tool(method); ok {
+			sb, err := st.LookupSandbox(ctx, id)
+			if err != nil {
+				return nil, errors.New("unknown sandbox")
+			}
+			if sb.Kind != "" || sb.BuildJobID != "" {
+				return nil, errors.New("only agent sandboxes make tool calls")
+			}
+			res, err := t.Handle(ctx, sb, params)
+			if err != nil && !integrations.IsToolError(err) {
+				log.Warn("tool failed", "tool", method, "sandbox", id, "err", err)
+				return nil, errors.New(method + " failed")
+			}
+			return res, err
+		}
 		if strings.HasPrefix(method, agentproto.BrowserMethodPrefix) {
 			return brw.HandleCall(ctx, id, method, params)
 		}

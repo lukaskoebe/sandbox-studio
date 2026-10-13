@@ -27,6 +27,10 @@ func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
 	}
 }
 
+// Tools and Jobs: the browser's tools are answered by HandleCall, and it runs no integration job.
+func (s *Service) Tools() []integrations.Tool { return nil }
+func (s *Service) Jobs() []integrations.Job   { return nil }
+
 func decisionStatus(d integrations.Decision) (string, error) {
 	status := map[string]string{integrations.Allow: store.StatusApproved, integrations.Deny: store.StatusDenied,
 		integrations.Dismiss: store.StatusDismissed}[d.Action]
