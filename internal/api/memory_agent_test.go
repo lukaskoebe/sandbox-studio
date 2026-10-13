@@ -165,4 +165,10 @@ func TestMemoryDreamAPI(t *testing.T) {
 	if left := decode[[]memory.Suggestion](t, do(h, "GET", base+"/suggestions?scope="+scope, "")); len(left) != 0 {
 		t.Fatalf("open after deciding: %+v", left)
 	}
+
+	// The quality numbers count what is stored.
+	qual := decode[agentmem.QualityView](t, do(h, "GET", base+"/quality", ""))
+	if qual.Facts["active"] == 0 || qual.Facts["disputed"] == 0 || qual.Conflicts["open"] != 1 || qual.LastRun == nil || qual.LastRun.Status != agentmem.DreamDone || len(qual.Suggestions) != 0 {
+		t.Fatalf("quality %+v", qual)
+	}
 }

@@ -61,4 +61,15 @@ func (s *Server) registerMemoryAgent(api huma.API) {
 		v, err := s.AgentMem.UsageReport(ctx, in.Env)
 		return &struct{ Body agentmem.UsageView }{v}, apiError(err)
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getMemoryQuality", Method: http.MethodGet, Path: base + "/quality", Tags: tags,
+		Description: "The memory's quality numbers: facts per status, judge verdicts, conflicts, open suggestions, the latest consolidation run and what sessions got in the last week.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body agentmem.QualityView }, error) {
+		if err := ready(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		v, err := s.AgentMem.Quality(ctx, in.Env)
+		return &struct{ Body agentmem.QualityView }{v}, apiError(err)
+	})
 }

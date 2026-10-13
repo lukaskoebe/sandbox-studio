@@ -113,6 +113,7 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 
 | `GET sessions?teammate=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
 | `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider, and `sharedJudge`: whose utility model consolidates shared memory |
+| `GET quality` | the quality numbers of the environment ([Quality](#quality)) |
 
 The Memory page in the environment sidebar shows shared memory: the extraction budget line
 and tabs for pages, facts, conflicts (with "Dream now", recent runs and a sheet that shows
@@ -156,6 +157,15 @@ decided one is never made again.
 
 Dreams open suggestions: after new facts, nightly, or on "Dream now". Each run also notes
 how many it opened (`suggested`).
+
+## Quality
+
+`GET quality` counts what is stored, for the whole environment: facts per status, the live
+facts that hold in a context, the cached judge verdicts per verdict, conflicts per status,
+open suggestions per kind, the latest consolidation run of any scope, and for the last seven
+days the agent sessions, the items put into them (context packs and recalls) and the facts
+they wrote. The memory page shows them as a compact section. The retrieval eval is a test, so
+its score is not in the numbers; run it with `go test ./internal/memory -run TestRetrievalEval`.
 
 ## In agent sessions
 
