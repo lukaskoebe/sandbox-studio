@@ -377,7 +377,6 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
 - Template build qualifications: release base, cold-cache pulls, live exec export with
   network installs, oversized captures →
   [template builds](docs/template-builds.md#current-qualification-boundary)
-- Nix as an optional extra in the base image
 - Signed and notarized releases (the workflow exists, never exercised) →
   [release](docs/release.md)
 
