@@ -42,6 +42,7 @@ export default defineConfig({
             'memory',
             'browser',
             'git-review',
+            'tui',
           ],
         },
         {

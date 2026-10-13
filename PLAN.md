@@ -1,6 +1,6 @@
 # Sandbox Studio — Plan
 
-Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 is built, with the v2 backlog below. C2 (terminal UI) is a concept awaiting D7 and D8.
+Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 is built, with the v2 backlog below. C2 (terminal UI) is built in parts: its order is below.
 
 The v2 plan is implemented (v0.1.0 and v0.1.1). How it works now is in the
 [developer documentation](docs/README.md). This plan covers the next round, driven by user
@@ -22,8 +22,8 @@ on before anything is built.
 | D4 | Default teammate | "Iris", generalist engineer: curious, careful and direct; short soul |
 | D5 | Network security levels (Concept C1) | Approved as written (2026-10-13); built in the order the concept gives, all four items done |
 | D6 | Host ssh-agent by default (reverses "never use the host agent") | Approved. When signing waits on a host confirmation (hardware key, password manager), show a dismissible hint to set up a dedicated Studio key |
-| D7 | Terminal UI library (Concept C2) | Open: Bubble Tea v2 + Lip Gloss + Bubbles recommended |
-| D8 | Should plain `studio` open the TUI when a server already runs? (Concept C2) | Open: no recommended, `studio tui` only |
+| D7 | Terminal UI library (Concept C2) | Approved: Bubble Tea v2 + Lip Gloss v2 + Bubbles v2 (2026-10-13) |
+| D8 | Should plain `studio` open the TUI when a server already runs? (Concept C2) | Decided as recommended: `studio tui` only; plain `studio` stays the server (2026-10-13) |
 
 ## N1 — Safety net: end-to-end tests
 
@@ -438,8 +438,8 @@ teammates' souls, the template editor, lineage, memory, the rules editor, the br
 - Docs: docs/tui.md, and a site page with a screenshot from the golden test.
 
 **Order once agreed.**
-1. Home, Approvals and auth: the part that saves a browser trip.
-2. Terminal attach.
+1. Home, Approvals and auth: the part that saves a browser trip. Done.
+2. Terminal attach. Done.
 3. Chat.
 4. Activity and git push diffs.
 
