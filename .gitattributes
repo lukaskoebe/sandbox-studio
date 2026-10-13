@@ -1,5 +1,6 @@
 /internal/harness/testdata/*.golden text eol=lf
 /internal/harness/testdata/hooks/*.golden text eol=lf
+/internal/harness/testdata/hooks/** text eol=lf
 /internal/chat/testdata/fold/* text eol=lf
 
 # Keep embedded runtime text and guest scripts byte-stable on autocrlf checkouts.

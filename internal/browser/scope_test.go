@@ -16,7 +16,7 @@ func TestTopLevelNamesThePageUsedLast(t *testing.T) {
 	}
 	st := s.state("env", "tm")
 	s.mu.Lock()
-	st.page.url, st.page.used = "https://docs.example.com/guides", time.Now().Add(-time.Minute)
+	st.url, st.used = "https://docs.example.com/guides", time.Now().Add(-time.Minute)
 	st.eph = map[string]*page{"eph-1": {id: "eph-1", url: "https://news.example.org/a", used: time.Now()}}
 	s.mu.Unlock()
 	if got := s.TopLevel(ctx, "env", "tm"); got != "example.org" {
@@ -48,7 +48,7 @@ func TestSiteApprovalsLastTheBrowserSession(t *testing.T) {
 	s.Approve(ctx, env, tm, "example.com")
 	st := s.state(env, tm)
 	s.mu.Lock()
-	st.page.url = "https://docs.example.com/guides"
+	st.url = "https://docs.example.com/guides"
 	st.eph = map[string]*page{"eph-1": {id: "eph-1", url: "about:blank"}}
 	s.mu.Unlock()
 	if !s.Allows(ctx, env, tm, navigation("example.com")) || s.Allows(ctx, env, tm, navigation("other.example")) {
