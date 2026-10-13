@@ -1,20 +1,37 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { useRef, useState } from "react"
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ArrowCircleUpIcon,
+  DownloadSimpleIcon,
   PowerIcon,
   TerminalWindowIcon,
+  UploadSimpleIcon,
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Spinner } from "@/components/ui/spinner"
 import { AgentViewToggle } from "@/components/agent-view"
 import { Ident } from "@/components/ident"
 import { PageHeader } from "@/components/page-header"
 import { SectionHeader } from "@/components/section-header"
-import { $api, errorMessage } from "@/lib/api/client"
+import {
+  $api,
+  errorMessage,
+  fetchClient,
+  type ImportedEnvironment,
+} from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings/general")({
@@ -23,6 +40,7 @@ export const Route = createFileRoute("/e/$env/settings/general")({
 
 // Settings apply to the whole installation, not to one environment.
 function GeneralPage() {
+  const { env } = Route.useParams()
   return (
     <>
       <PageHeader>
@@ -36,8 +54,188 @@ function GeneralPage() {
         <AgentsSection />
         <AutostartSection />
         <UpdatesSection />
+        <EnvironmentFilesSection env={env} />
       </ScrollArea>
     </>
+  )
+}
+
+/** Exports this environment's configuration as a file, and imports one as a new environment. */
+function EnvironmentFilesSection({ env }: { env: string }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const picker = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+  const [imported, setImported] = useState<ImportedEnvironment>()
+
+  const importFile = async (file: File) => {
+    setImporting(true)
+    try {
+      // The server checks the file again; parsing here only turns it into the request body.
+      const body = JSON.parse(await file.text())
+      const result = await fetchClient.POST("/api/environment-imports", {
+        body,
+      })
+      if (result.error) {
+        toast.error("Could not import the environment", {
+          description: errorMessage(result.error),
+        })
+        return
+      }
+      queryClient.invalidateQueries({ queryKey: ["get", "/api/environments"] })
+      setImported(result.data)
+    } catch (err) {
+      toast.error("Could not import the environment", {
+        description:
+          err instanceof SyntaxError
+            ? "The file is not JSON."
+            : errorMessage(err),
+      })
+    } finally {
+      setImporting(false)
+      if (picker.current) picker.current.value = ""
+    }
+  }
+
+  return (
+    <section className="grid max-w-3xl gap-2 text-xs">
+      <SectionHeader title="Environment files" icon={DownloadSimpleIcon} />
+      <p className="text-xs/relaxed text-muted-foreground">
+        A file of this environment's providers, teammates, rules, secret names
+        and template specs, without keys, secret values, sandboxes, memory or
+        approvals. Read it before you share it: template setup and soul text are
+        included.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          render={
+            <a
+              href={`/api/environments/${encodeURIComponent(env)}/export`}
+              download
+            />
+          }
+        >
+          <DownloadSimpleIcon />
+          Export environment
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={importing}
+          onClick={() => picker.current?.click()}
+        >
+          {importing ? <Spinner /> : <UploadSimpleIcon />}
+          Import environment
+        </Button>
+        <input
+          ref={picker}
+          type="file"
+          accept=".studio-environment,application/json"
+          className="hidden"
+          aria-label="Environment file"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void importFile(file)
+          }}
+        />
+      </div>
+      {imported && (
+        <ImportReport
+          result={imported}
+          onOpenChange={(open) => {
+            if (!open) setImported(undefined)
+          }}
+          onOpen={() => {
+            const id = imported.environment.id
+            setImported(undefined)
+            navigate({ to: "/e/$env", params: { env: id } })
+          }}
+        />
+      )}
+    </section>
+  )
+}
+
+/** What an import created, and what the file could not carry: keys, secret values and templates. */
+function ImportReport({
+  result,
+  onOpenChange,
+  onOpen,
+}: {
+  result: ImportedEnvironment
+  onOpenChange: (open: boolean) => void
+  onOpen: () => void
+}) {
+  const env = result.environment.id
+  const toAdd = result.toAdd ?? []
+  const templates = result.templates ?? []
+  const keys = toAdd.filter((item) => item.kind === "providerKey")
+  const secrets = toAdd.filter((item) => item.kind === "secret")
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{result.environment.name} is ready</DialogTitle>
+          <DialogDescription>
+            The file's providers, teammates, rules, secret names and template
+            specs are in place. Add what the file leaves out:
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="grid gap-2 text-xs">
+          {keys.map((item) => (
+            <li key={`key-${item.providerId}`}>
+              <Link
+                to="/e/$env/settings/providers"
+                params={{ env }}
+                className="underline underline-offset-4"
+              >
+                Add the API key of {item.name}
+              </Link>
+            </li>
+          ))}
+          {secrets.map((item) => (
+            <li key={`secret-${item.name}-${item.teammate ?? ""}`}>
+              <Link
+                to="/e/$env/secrets"
+                params={{ env }}
+                className="underline underline-offset-4"
+              >
+                Add the value of {item.name}
+              </Link>
+              <span className="text-muted-foreground">
+                {" "}
+                for {item.hosts?.join(", ")}
+                {item.teammate ? `, ${item.teammate}'s sandboxes` : ""}
+              </span>
+            </li>
+          ))}
+          {templates.length > 0 && (
+            <li>
+              <Link
+                to="/e/$env/builds"
+                params={{ env }}
+                className="underline underline-offset-4"
+              >
+                Build {templates.length} template
+                {templates.length === 1 ? "" : "s"}
+              </Link>
+              <span className="text-muted-foreground">
+                {" "}
+                from the specs in the file
+              </span>
+            </li>
+          )}
+          {toAdd.length === 0 && templates.length === 0 && (
+            <li className="text-muted-foreground">Nothing else is needed.</li>
+          )}
+        </ul>
+        <DialogFooter>
+          <Button onClick={onOpen}>Open {result.environment.name}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
