@@ -28,14 +28,14 @@ const (
 // TeammateEvent is one thing in a teammate's timeline: a chat turn, a fact it learned, a task,
 // or a terminal session as its summary tells it. Exactly the field of its kind is set.
 type TeammateEvent struct {
-	Kind        string           `json:"kind" enum:"turn,fact,task,session"`
-	At          time.Time        `json:"at"`
-	SandboxID   string           `json:"sandboxId,omitempty"`
-	SandboxName string           `json:"sandboxName,omitempty"`
-	Turn        *TeammateTurn    `json:"turn,omitempty"`
-	Fact        *TeammateFact    `json:"fact,omitempty"`
-	Task        *TeammateTaskEvent    `json:"task,omitempty"`
-	Session     *TeammateSession `json:"session,omitempty"`
+	Kind        string             `json:"kind" enum:"turn,fact,task,session"`
+	At          time.Time          `json:"at"`
+	SandboxID   string             `json:"sandboxId,omitempty"`
+	SandboxName string             `json:"sandboxName,omitempty"`
+	Turn        *TeammateTurn      `json:"turn,omitempty"`
+	Fact        *TeammateFact      `json:"fact,omitempty"`
+	Task        *TeammateTaskEvent `json:"task,omitempty"`
+	Session     *TeammateSession   `json:"session,omitempty"`
 }
 
 // TeammateTurn is a chat turn: what the user asked, what the teammate answered and which tools
