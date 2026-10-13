@@ -325,7 +325,7 @@ func (s *Server) checkEnvironmentFile(f EnvironmentFile) (importPlan, error) {
 	bad := func(format string, args ...any) error {
 		return huma.Error422UnprocessableEntity(fmt.Sprintf(format, args...))
 	}
-	plan := importPlan{name: f.Name}
+	plan := importPlan{name: f.Name, toAdd: []ToAdd{}, templates: []string{}}
 	if err := teammates.CheckName("environment", f.Name); err != nil {
 		return plan, apiError(err)
 	}
