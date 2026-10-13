@@ -76,13 +76,17 @@ type FileTeammate struct {
 // FileRule is a network rule. Teammate names a teammate of the file; empty means the whole
 // environment. Rules scoped to one sandbox are not exported.
 type FileRule struct {
-	Host      string            `json:"host" minLength:"1" maxLength:"253"`
-	Ports     []int             `json:"ports,omitempty" maxItems:"64"`
-	Action    string            `json:"action" enum:"allow,proxy,caddy,deny"`
-	Headers   map[string]string `json:"headers,omitempty" maxProperties:"32"`
-	Caddyfile string            `json:"caddyfile,omitempty" maxLength:"32768"`
-	Note      string            `json:"note,omitempty" maxLength:"500"`
-	Teammate  string            `json:"teammate,omitempty" maxLength:"64"`
+	Host       string            `json:"host" minLength:"1" maxLength:"253"`
+	Ports      []int             `json:"ports,omitempty" maxItems:"64"`
+	Action     string            `json:"action" enum:"allow,proxy,caddy,deny"`
+	Headers    map[string]string `json:"headers,omitempty" maxProperties:"32"`
+	Caddyfile  string            `json:"caddyfile,omitempty" maxLength:"32768"`
+	Upstream   string            `json:"upstream,omitempty" maxLength:"261"`
+	HostHeader string            `json:"hostHeader,omitempty" maxLength:"253"`
+	SNI        string            `json:"sni,omitempty" maxLength:"253"`
+	CA         string            `json:"ca,omitempty" maxLength:"65536"`
+	Note       string            `json:"note,omitempty" maxLength:"500"`
+	Teammate   string            `json:"teammate,omitempty" maxLength:"64"`
 }
 
 // FileSecret is a secret without its value: the name a sandbox sees, the hosts it may be sent
@@ -177,6 +181,7 @@ func (s *Server) buildEnvironmentFile(ctx context.Context, envID string) (Enviro
 		}
 		f.Rules = append(f.Rules, FileRule{
 			Host: r.Host, Ports: ports, Action: r.Action, Headers: r.Config.Headers, Caddyfile: r.Config.Caddyfile,
+			Upstream: r.Config.Upstream, HostHeader: r.Config.HostHeader, SNI: r.Config.SNI, CA: r.Config.CA,
 			Note: r.Note, Teammate: teammateName[r.TeammateID],
 		})
 	}
@@ -477,7 +482,8 @@ func (s *Server) checkEnvironmentFile(f EnvironmentFile) (importPlan, error) {
 				return plan, bad("rule for %s is scoped to teammate %q, which the file does not list", fr.Host, fr.Teammate)
 			}
 		}
-		if r.Config, err = s.checkRuleConfig(fr.Action, RuleConfigInput{Headers: fr.Headers, Caddyfile: fr.Caddyfile}, fileSecrets); err != nil {
+		in := RuleConfigInput{Headers: fr.Headers, Caddyfile: fr.Caddyfile, Upstream: fr.Upstream, HostHeader: fr.HostHeader, SNI: fr.SNI, CA: fr.CA}
+		if r.Config, err = s.checkRuleConfig(fr.Action, in, fileSecrets); err != nil {
 			return plan, err
 		}
 		plan.rules = append(plan.rules, r)

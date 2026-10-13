@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -41,19 +42,60 @@ import (
 
 // interception serves the requests of one intercepted connection.
 type interception struct {
-	host    string
-	tls     bool              // the sandbox spoke TLS; requests go upstream over TLS too
-	headers map[string]string // set on every request; values may reference {secret.NAME}
-	bound   []secrets.Binding // secrets that may be sent to host
-	unbound []secrets.Binding
-	masked  [][]byte // values to mask in responses
-	caddy   bool     // requests go through a caddy rule
-	broken  string   // why every request is refused
-	proxy   *httputil.ReverseProxy
-	log     *slog.Logger
+	host       string            // the host the sandbox asked for
+	upstream   string            // where requests go: host, unless the rule names another
+	tls        bool              // the sandbox spoke TLS; requests go upstream over TLS too
+	headers    map[string]string // set on every request; values may reference {secret.NAME}
+	hostHeader string            // replaces the Host header of requests, if set
+	bound      []secrets.Binding // secrets that may be sent to the upstream
+	unbound    []secrets.Binding
+	masked     [][]byte // values to mask in responses
+	caddy      bool     // requests go through a caddy rule
+	broken     string   // why every request is refused
+	proxy      *httputil.ReverseProxy
+	log        *slog.Logger
 
 	mu      sync.Mutex
 	problem string // the last refused request, for the connection log
+}
+
+// upstreamOf returns where the requests of a rule with upstream go: the upstream's host and port,
+// where the port defaults to the connection's. Without an upstream, that is the host itself.
+func upstreamOf(upstream, host string, port int) (string, int) {
+	if upstream == "" {
+		return host, port
+	}
+	h, p, err := net.SplitHostPort(upstream)
+	if err != nil {
+		return upstream, port // a host alone, which may be an IPv6 address
+	}
+	n, err := strconv.Atoi(p)
+	if err != nil {
+		return h, port
+	}
+	return h, n
+}
+
+// upstreamCAs returns the certificates trusted for an upstream: the system's, or the ones the
+// gateway is given, plus the PEM certificates of a rule's CA.
+func (g *Gateway) upstreamCAs(ca string) (*x509.CertPool, error) {
+	if ca == "" {
+		return g.upstreamRoots, nil
+	}
+	var pool *x509.CertPool
+	if g.upstreamRoots != nil {
+		pool = g.upstreamRoots.Clone()
+	} else {
+		system, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, err
+		}
+		pool = system
+	}
+	if !pool.AppendCertsFromPEM([]byte(ca)) {
+		return nil, errors.New("the rule's CA holds no certificates")
+	}
+	return pool, nil
 }
 
 // boundTo splits the secrets of a sandbox's environment by whether they may be sent to
@@ -100,22 +142,33 @@ func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (ma
 // intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
 // nil. It returns the bytes sent and received on c and the last refused request, if any.
 func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled) (sent, received int64, problem string) {
-	ic := &interception{host: host, tls: isTLS, headers: rule.Config.Headers, log: g.Log}
+	// Requests go to the rule's upstream, which is the host unless the rule names another. The
+	// secrets are bound to the upstream, since that is what receives them.
+	upstream, upPort := upstreamOf(rule.Config.Upstream, host, port)
+	ic := &interception{host: host, upstream: upstream, tls: isTLS, headers: rule.Config.Headers, hostHeader: rule.Config.HostHeader, log: g.Log}
 	var transport http.RoundTripper
 	if caddy == nil {
-		ic.bound, ic.unbound = boundTo(all, host)
+		ic.bound, ic.unbound = boundTo(all, upstream)
 		for _, b := range ic.bound {
 			if len(b.Value) > 0 {
 				ic.masked = append(ic.masked, b.Value)
 			}
 		}
+		roots, err := g.upstreamCAs(rule.Config.CA)
+		if err != nil {
+			ic.broken = fmt.Sprintf("Sandbox Studio cannot use the CA of the rule for %s: %v", host, err)
+		}
+		sni := upstream
+		if rule.Config.SNI != "" {
+			sni = rule.Config.SNI
+		}
 		dial := g.upstreamDialer(envID)
 		t := &http.Transport{
-			// Every request goes to host, whatever address the sandbox connected to.
+			// Every request goes to the upstream, whatever address the sandbox connected to.
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return dial(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+				return dial(ctx, "tcp", net.JoinHostPort(upstream, strconv.Itoa(upPort)))
 			},
-			TLSClientConfig:     &tls.Config{ServerName: host, RootCAs: g.upstreamRoots},
+			TLSClientConfig:     &tls.Config{ServerName: sni, RootCAs: roots},
 			ForceAttemptHTTP2:   true,
 			TLSHandshakeTimeout: 15 * time.Second,
 			IdleConnTimeout:     90 * time.Second,
@@ -141,7 +194,7 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 	}
 	ic.proxy = &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.Out.URL.Scheme, pr.Out.URL.Host = scheme, net.JoinHostPort(host, strconv.Itoa(port))
+			pr.Out.URL.Scheme, pr.Out.URL.Host = scheme, net.JoinHostPort(upstream, strconv.Itoa(upPort))
 		},
 		Transport:      transport,
 		FlushInterval:  -1, // streamed responses (server-sent events) pass through as they come
@@ -187,6 +240,9 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	out := r.Clone(r.Context())
 	if out.Host == "" {
 		out.Host = ic.host
+	}
+	if ic.hostHeader != "" {
+		out.Host = ic.hostHeader
 	}
 	if err := ic.rewrite(out); err != nil {
 		ic.refuse(w, http.StatusForbidden, err.Error())
@@ -264,7 +320,7 @@ func (ic *interception) substitute(s, where string, escape func(string) string) 
 		}
 		if strings.Contains(s, b.Placeholder) {
 			return "", fmt.Errorf("%s holds the placeholder of the secret %s, which Sandbox Studio only sends to %s, not to %s. Bind the secret to %s in Sandbox Studio if it belongs there.",
-				where, b.Name, strings.Join(b.Hosts, ", "), ic.host, ic.host)
+				where, b.Name, strings.Join(b.Hosts, ", "), ic.upstream, ic.upstream)
 		}
 	}
 	for _, b := range ic.bound {

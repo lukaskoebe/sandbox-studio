@@ -92,6 +92,14 @@ type RuleConfig struct {
 	Headers map[string]string `json:"headers,omitempty"`
 	// Caddyfile is the site block body used by caddy rules.
 	Caddyfile string `json:"caddyfile,omitempty"`
+	// Upstream, HostHeader, SNI and CA change where a proxy rule sends its requests. Upstream is
+	// a host or host:port to send them to instead of the rule's host; HostHeader and SNI replace
+	// the Host header and the TLS server name, which otherwise follow the request and the
+	// upstream; CA holds PEM certificates trusted for the upstream, besides the system's.
+	Upstream   string `json:"upstream,omitempty"`
+	HostHeader string `json:"hostHeader,omitempty"`
+	SNI        string `json:"sni,omitempty"`
+	CA         string `json:"ca,omitempty"`
 }
 
 const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, expires_at, hits, last_hit_at, created_at"
