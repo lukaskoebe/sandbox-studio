@@ -89,7 +89,7 @@ func load(t *testing.T, id, src string, values map[string]string) http.RoundTrip
 	if err != nil {
 		t.Fatal(err)
 	}
-	return testEngine.Transport(id, c, values, true)
+	return testEngine.Transport(id, c, values, true, nil)
 }
 
 // send makes a request the way the gateway's reverse proxy hands it over.
@@ -190,9 +190,9 @@ func TestEngineSecretChecks(t *testing.T) {
 	// The rule was changed to send the secret elsewhere after the connection was set up.
 	elsewhere := Compiled{Secrets: map[string][]string{"KEY": {"other.example.com"}}}
 	for name, tr := range map[string]http.RoundTripper{
-		"other host":    testEngine.Transport("secret-checks", elsewhere, map[string]string{"KEY": "value-of-key"}, true),
-		"no value":      testEngine.Transport("secret-checks", c, map[string]string{}, true),
-		"no rule state": testEngine.Transport("secret-checks", c, nil, true),
+		"other host":    testEngine.Transport("secret-checks", elsewhere, map[string]string{"KEY": "value-of-key"}, true, nil),
+		"no value":      testEngine.Transport("secret-checks", c, map[string]string{}, true, nil),
+		"no rule state": testEngine.Transport("secret-checks", c, nil, true, nil),
 	} {
 		if code, _ := send(t, tr, "GET", "/", nil); code != http.StatusBadGateway {
 			t.Errorf("%s: %d, want 502", name, code)

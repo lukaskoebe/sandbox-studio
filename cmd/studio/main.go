@@ -234,6 +234,7 @@ func run(addr, image string, log *slog.Logger) error {
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
 		Virtual: integs.Routes(), Dial: upstreamDial(),
+		PrivateHosts: st.PrivateHosts, Own: []string{addr, gatewayAddr, templateRegistryAddr},
 	}
 	gl, err := net.Listen("tcp", gatewayAddr)
 	if err != nil {

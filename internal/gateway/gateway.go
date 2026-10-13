@@ -22,7 +22,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
@@ -44,8 +43,13 @@ type Gateway struct {
 	Resolvers *Resolvers
 	Conns     *ConnLog
 	Log       *slog.Logger
-	// Dial connects upstream; nil uses a dialer that refuses non-public addresses.
+	// Dial connects upstream, replacing the dialer of upstreamDialer; nil uses that dialer, which
+	// refuses non-public addresses except for the names on the private hosts list.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
+	// PrivateHosts returns the private hosts of an environment (private.go); nil means none.
+	PrivateHosts func(ctx context.Context, envID string) ([]store.PrivateHost, error)
+	// Own are Studio's own listeners as host:port. No private host is dialed on their ports.
+	Own []string
 	// CA issues the certificates presented to sandboxes on intercepted connections.
 	CA interface {
 		Leaf(ctx context.Context, envID, host string) (*tls.Certificate, error)
@@ -66,6 +70,7 @@ type Gateway struct {
 
 	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
 	upstreamRoots *x509.CertPool               // replaces the system roots in tests
+	resolver      *net.Resolver                // resolves names for upstream dials; nil is the system's
 }
 
 // ErrNoNetwork is returned for sandboxes created before Studio routed their traffic.
@@ -246,12 +251,8 @@ func (g *Gateway) handle(c net.Conn) {
 
 	// Dial the name, not the address the sandbox picked: a sandbox can't get a connection
 	// to one host approved by naming another in its SNI or Host header.
-	dial := g.Dial
-	if dial == nil {
-		dial = publicDialer.DialContext
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	up, err := dial(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+	up, err := g.upstreamDialer(sb.EnvironmentID)(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 	cancel()
 	if err != nil {
 		problem = err.Error()
@@ -439,19 +440,7 @@ func readCredentials(br *bufio.Reader) (user, pass string, err error) {
 // publicDialer only connects to public addresses. Names are resolved on the host, so
 // without this a sandbox could reach the host's loopback services (Studio's own API) or
 // the LAN through any approved name that resolves there.
-var publicDialer = &net.Dialer{
-	Timeout: 15 * time.Second,
-	Control: func(network, address string, _ syscall.RawConn) error {
-		ap, err := netip.ParseAddrPort(address)
-		if err != nil {
-			return err
-		}
-		if !public(ap.Addr()) {
-			return fmt.Errorf("refusing to connect to non-public address %s", ap.Addr())
-		}
-		return nil
-	},
-}
+var publicDialer = &net.Dialer{Timeout: 15 * time.Second, Control: checkPublic}
 
 // DialPublic connects the way the gateway does, to public addresses only.
 func DialPublic(ctx context.Context, network, addr string) (net.Conn, error) {

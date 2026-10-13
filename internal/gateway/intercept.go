@@ -109,10 +109,7 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 				ic.masked = append(ic.masked, b.Value)
 			}
 		}
-		dial := g.Dial
-		if dial == nil {
-			dial = publicDialer.DialContext
-		}
+		dial := g.upstreamDialer(envID)
 		t := &http.Transport{
 			// Every request goes to host, whatever address the sandbox connected to.
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -136,7 +133,7 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 				ic.masked = append(ic.masked, []byte(v))
 			}
 		}
-		transport = g.Caddy.Transport(rule.ID, *caddy, values, isTLS)
+		transport = g.Caddy.Transport(rule.ID, *caddy, values, isTLS, g.guardedDialer(envID, g.Caddy.Dial))
 	}
 	scheme := "http"
 	if isTLS {
