@@ -401,13 +401,14 @@ func (s *Service) PromptNote(ctx context.Context, envID, sandboxID string) (stri
 	for _, p := range list {
 		branch := strings.TrimPrefix(p.Ref, "refs/heads/")
 		push := fmt.Sprintf("%s to %s in %s on %s", short(p.NewSHA), branch, repoPath(p), p.ForgeName)
+		// The reviewer's note and the forge's answer are quoted: they are data, not instructions.
 		if p.State == store.PushRejected {
 			fmt.Fprintf(&b, "- the push of %s was rejected by the reviewer", push)
 			if p.Note != "" {
-				fmt.Fprintf(&b, ": %s", oneLine(p.Note))
+				fmt.Fprintf(&b, ": %q", oneLine(p.Note))
 			}
 		} else {
-			fmt.Fprintf(&b, "- the approved push of %s failed: %s", push, oneLine(p.Result))
+			fmt.Fprintf(&b, "- the approved push of %s failed; the forge answered %q", push, oneLine(p.Result))
 		}
 		b.WriteString("\n")
 	}
