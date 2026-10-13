@@ -63,9 +63,9 @@ import { $api, errorMessage } from "@/lib/api/client"
 const groupLabel = "h-6 font-mono text-[0.625rem] tracking-wider uppercase"
 
 /**
- * The environment's navigation: Home, Chats, Network, Secrets, Memory and Settings, then the
- * teammates (each with its presence) and the sandboxes (each with its status and the approvals
- * waiting on it).
+ * The environment's navigation: Home, Chats, Network, Secrets and Memory, then the teammates
+ * (each with its presence) and the sandboxes (each with its status and the approvals waiting on
+ * it). Settings sit at the bottom, above the version and the theme toggle.
  */
 export function AppSidebar({ env }: { env: string }) {
   const [creating, setCreating] = useState(false)
@@ -184,28 +184,6 @@ export function AppSidebar({ env }: { env: string }) {
                 <span>Memory</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="sm"
-                tooltip="Settings"
-                isActive={
-                  !!matchRoute({
-                    to: "/e/$env/settings",
-                    params: { env },
-                    fuzzy: true,
-                  })
-                }
-                render={<Link to="/e/$env/settings" params={{ env }} />}
-              >
-                <GearIcon />
-                <span>Settings</span>
-                {updates.data?.available && (
-                  <span className="ml-auto text-[0.625rem] text-primary">
-                    Update available
-                  </span>
-                )}
-              </SidebarMenuButton>
-            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
         <SidebarGroup className="py-1">
@@ -318,7 +296,31 @@ export function AppSidebar({ env }: { env: string }) {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border p-2">
+      <SidebarFooter className="gap-1 border-t border-sidebar-border p-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="sm"
+              tooltip="Settings"
+              isActive={
+                !!matchRoute({
+                  to: "/e/$env/settings",
+                  params: { env },
+                  fuzzy: true,
+                })
+              }
+              render={<Link to="/e/$env/settings" params={{ env }} />}
+            >
+              <GearIcon />
+              <span>Settings</span>
+              {updates.data?.available && (
+                <span className="ml-auto text-[0.625rem] text-primary">
+                  Update available
+                </span>
+              )}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsible=icon]:hidden">
           <p className="min-w-0 truncate text-[0.625rem] text-muted-foreground">
             Sandbox Studio{" "}
