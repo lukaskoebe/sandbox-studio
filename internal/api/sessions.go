@@ -158,7 +158,7 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	hp := harness.Provider{Kind: prov.Kind, BaseURL: prov.BaseURL, Model: prov.Model, EnvVar: view.EnvVar, Placeholder: prov.Placeholder}
 	files, err := harness.Files(h,
 		harness.Teammate{Name: p.Name, Role: p.Role, Soul: p.Soul, Model: p.Model, GitName: p.GitName, GitEmail: p.GitEmail},
-		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites}, hp)
+		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites, Others: s.otherSandboxes(ctx, sb)}, hp)
 	if err != nil {
 		return sessionPlan{}, huma.Error409Conflict(err.Error())
 	}
@@ -241,4 +241,21 @@ func (s *Server) startSession(ctx context.Context, envID, id string) (agentproto
 		return agentproto.Session{}, apiError(fmt.Errorf("starting %s: %w", name, err))
 	}
 	return agentproto.Session{Name: name, Harness: req.Harness, Windows: 1}, nil
+}
+
+// otherSandboxes are the names of the owner's other sandboxes, for the agent's instructions.
+// A failed lookup leaves them out: the agent still learns that sandboxes are separate.
+func (s *Server) otherSandboxes(ctx context.Context, sb store.Sandbox) []string {
+	all, err := s.Store.Sandboxes(ctx, sb.EnvironmentID)
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, o := range all {
+		if o.ID != sb.ID && o.Kind == "" && o.TeammateID != "" && o.TeammateID == sb.TeammateID {
+			names = append(names, o.Name)
+		}
+	}
+	slices.Sort(names)
+	return names
 }

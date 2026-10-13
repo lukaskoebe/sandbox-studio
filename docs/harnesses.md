@@ -54,7 +54,10 @@ placeholder variable (`sandboxes.Manager.SetHarnessConfig`). A teammate that can
 without a provider or a sign-in, leaves the home as it is. The instructions files hold a managed block between
 `<!-- sandbox-studio:begin -->` and `<!-- sandbox-studio:end -->`: Studio replaces only the
 block, or puts it first, and keeps text outside it. The block has the teammate's name,
-role and soul and points to the memory tools.
+role and soul, says where it works (this sandbox, the names of its other sandboxes, and that
+files, unpushed commits, tools, images and servers stay in the sandbox that made them; a
+session can't reach or switch to another, so missing work goes through git or the user) and
+points to the memory tools.
 
 The soul reaches the agent only through this block, never through the session-start
 hook: the harness reads its instructions file in every session, including resumed ones and

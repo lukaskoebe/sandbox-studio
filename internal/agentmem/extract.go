@@ -181,6 +181,7 @@ func extractionPrompt(c caller, transcript string) (system, user string) {
 	schema, _ := json.Marshal(factsSchema)
 	system = `You extract durable memories from a coding agent's session for the agent's teammate "` + c.teammate.Name + `".
 Keep only what will still matter in a later session: the user's preferences, decisions and their reasons, facts about people, projects and systems, and procedures that worked. Skip chit-chat, transient state, things any engineer knows, anything already marked as memory, and secrets of any kind.
+The session ran in the sandbox "` + c.sandbox.Name + `", one of several separate machines the teammate works in. A fact about the state of this sandbox (its files, branches, installed tools, services or paths) names it, e.g. "In sandbox ` + c.sandbox.Name + `, …"; preferences, decisions and procedures hold everywhere and name no sandbox.
 Each fact is one short self-contained sentence. tier is "user" only when the user said it, otherwise "inferred". entities are short lowercase names (a project, person, service or tool). attribute is a short key such as "test_command" when the fact sets one property of an entity, else "". evidence is a verbatim quote of at most 300 characters from the transcript that supports the fact.
 Answer with JSON only, no prose, matching this schema: ` + string(schema) + `
 When nothing is worth keeping, answer {"facts": []}.`

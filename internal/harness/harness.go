@@ -47,6 +47,9 @@ type Provider struct {
 type Sandbox struct {
 	Name        string
 	GitRewrites []GitRewrite // the environment's forges, for the managed git config
+	// Others are the names of the teammate's other sandboxes when the block was written, so
+	// the agent knows its work may live in one it can't reach from here.
+	Others []string
 }
 
 // GitRewrite points real repository URLs at Studio's virtual git remote: git's
@@ -201,9 +204,7 @@ func instructions(p Teammate, s Sandbox) GuestFile {
 	if p.Role != "" {
 		fmt.Fprintf(&b, "Role: %s\n\n", p.Role)
 	}
-	fmt.Fprintf(&b, "You work in the Sandbox Studio sandbox %q. The project is in /workspace. "+
-		"Network access goes through Studio's gateway and its policy. API keys in your environment are "+
-		"placeholders that only work through the gateway; there is no need to look for real ones.\n", s.Name)
+	b.WriteString(whereInstructions(s))
 	if soul := strings.TrimSpace(p.Soul); soul != "" {
 		b.WriteString("\n## Your soul\n\n" + soul + "\n")
 	}
@@ -211,6 +212,27 @@ func instructions(p Teammate, s Sandbox) GuestFile {
 	b.WriteString(tasksInstructions)
 	b.WriteString(agentproto.BlockEnd + "\n")
 	return GuestFile{Content: defuseMarkers(b.String()), Mode: 0o644, Block: true}
+}
+
+// whereInstructions tells the agent which sandbox it is in, which others it has, and that
+// nothing on one sandbox's disks is on another's: a teammate works in several, but each
+// session runs in exactly one.
+func whereInstructions(s Sandbox) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Where you work\n\nYou are in the Sandbox Studio sandbox %q, a virtual machine of its own. The project is in /workspace. ", s.Name)
+	if len(s.Others) > 0 {
+		quoted := make([]string, len(s.Others))
+		for i, n := range s.Others {
+			quoted[i] = fmt.Sprintf("%q", n)
+		}
+		fmt.Fprintf(&b, "You also have these sandboxes: %s. ", strings.Join(quoted, ", "))
+	}
+	b.WriteString("Each sandbox has its own disks: files, git branches and commits that were not pushed, installed tools, Docker images and running servers exist only in the sandbox where they were made. " +
+		"This session runs in this sandbox only; you cannot reach or switch to another one. " +
+		"When something you remember doing (from memory, a task note or the user) is not here, it was probably done in another sandbox: say so, and either get it through git (push there, pull here) or ask the user to continue in that sandbox. Never claim a file or change exists without checking it here.\n\n")
+	b.WriteString("Network access goes through Studio's gateway and its policy. API keys in your environment are " +
+		"placeholders that only work through the gateway; there is no need to look for real ones.\n")
+	return b.String()
 }
 
 // tasksInstructions tells the agent about its task list, which the user sees in the Tasks tab.
@@ -224,7 +246,7 @@ The user sees your task list in the Tasks tab. The ` + "`studio`" + ` MCP server
 const memoryInstructions = `
 ## Memory
 
-Studio remembers for you across sessions and sandboxes. At session start you get your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The ` + "`studio`" + ` MCP server has tools for more:
+Studio remembers for you across sessions and sandboxes; a memory about files or tools may come from another sandbox, so check before relying on it. At session start you get your core memory and what changed in shared memory; with each prompt, memories relevant to it. When a session ends or compacts, Studio extracts lasting facts from the conversation on its own. The ` + "`studio`" + ` MCP server has tools for more:
 
 - ` + "`memory_search`" + ` and ` + "`memory_get`" + `: look things up when the injected memories aren't enough.
 - ` + "`remember`" + `: save something right away. Use it for preferences the user states (source ` + "`user`" + `) and for procedures you have verified by running them (source ` + "`verified`" + `, with the command and result as evidence).

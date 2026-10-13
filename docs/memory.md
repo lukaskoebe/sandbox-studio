@@ -272,7 +272,10 @@ which is never logged: `claude-haiku-4-5` for `anthropic_api`, `gpt-6-luna` for
 subscriptions (S8). The answer must be `{"facts": [...]}` with at most 20 facts of text,
 kind, tier (`user` or `inferred`), entities, attribute and an evidence quote found in the
 transcript; one bad fact, an unknown field or anything like a credential rejects the whole
-answer. `user` tier stays only if the quote is from a user line. Facts go to the teammate's
+answer. `user` tier stays only if the quote is from a user line. The prompt names the
+session's sandbox: a fact about that sandbox's state (files, branches, tools, services)
+says "In sandbox X, …", since the teammate's other sandboxes don't have it; preferences,
+decisions and procedures name none. Facts go to the teammate's
 scope; a fact with the same text, the same attribute and similarity ≥ 0.75, similarity
 ≥ 0.92 or word overlap ≥ 0.8 reinforces the existing one instead.
 

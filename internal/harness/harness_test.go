@@ -52,7 +52,7 @@ func TestGolden(t *testing.T) {
 				if kind != teammates.KindOpenAICompatible {
 					p.Model = "model-1"
 				}
-				files, err := Files(h, p, Sandbox{Name: "api"}, provider)
+				files, err := Files(h, p, Sandbox{Name: "api", Others: []string{"docs-site"}}, provider)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -251,5 +251,19 @@ func TestGitConfig(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("rewrites without an identity wrote no git config")
+	}
+}
+
+// The agent learns which sandbox it is in, which others it has, and that they don't share disks.
+func TestInstructionsNameTheSandboxes(t *testing.T) {
+	alone := whereInstructions(Sandbox{Name: "api"})
+	if !strings.Contains(alone, `sandbox "api"`) || strings.Contains(alone, "You also have") {
+		t.Fatalf("a single sandbox:\n%s", alone)
+	}
+	more := whereInstructions(Sandbox{Name: "api", Others: []string{"docs", "web"}})
+	for _, want := range []string{`You also have these sandboxes: "docs", "web".`, "cannot reach or switch", "exist only in the sandbox"} {
+		if !strings.Contains(more, want) {
+			t.Errorf("missing %q in:\n%s", want, more)
+		}
 	}
 }
