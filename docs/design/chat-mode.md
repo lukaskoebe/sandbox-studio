@@ -101,6 +101,9 @@ on 2026-10-11:
     including agents built on the Claude Agent SDK."
   - So chat mode supports **API-key Claude providers only**. `claude_subscription` teammates
     stay terminal-only, which also keeps S8 out of chat's critical path.
+  - Superseded: a Claude subscription's chats run `studio-agent claude-acp`, which runs
+    `claude -p` itself, and API-key chats keep `claude-agent-acp`. See
+    [harnesses](../harnesses.md#claude-subscription-chats).
   - The UI calls this agent "Claude" or "Claude Agent", never "Claude Code", per the same
     page's branding rules.
 
@@ -370,7 +373,7 @@ Paths under `/api/environments/{env}`:
 |---|---|---|
 | `GET /chats` | `listChats` | All chats of the environment, newest first |
 | `GET /sandboxes/{id}/chats` | `listSandboxChats` | |
-| `POST /sandboxes/{id}/chats` | `createChat` | Body `{prompt?}`. 409 for the same reasons as `startSession`, plus subscription providers |
+| `POST /sandboxes/{id}/chats` | `createChat` | Body `{prompt?}`. 409 for the same reasons as `startSession` |
 | `GET /chats/{chat}` | `getChat` | The chat, its turns and items |
 | `DELETE /chats/{chat}` | `deleteChat` | Also `session/delete` when live |
 | `POST /chats/{chat}/prompt` | `sendPrompt` | Body `{text, attachments[]}` (base64, at most 10 MiB in total). 202 with the turn. 409 while running |

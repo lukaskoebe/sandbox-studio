@@ -12,6 +12,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentcall"
 	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
+	"github.com/lukaskoebe/sandbox-studio/internal/claudeacp"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
@@ -125,8 +126,24 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: %v\n", err)
 			os.Exit(1)
 		}
+	case "claude-acp":
+		// The chat agent of a Claude subscription, which runs Claude Code itself: see claudeacp.Serve.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := claudeacp.Serve(ctx, os.Stdin, os.Stdout, claudeacp.Options{Log: os.Stderr}); err != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: claude-acp: %v\n", err)
+			os.Exit(1)
+		}
+	case "claude-permission":
+		// Claude Code's permission prompts for that agent, from its plugin: see claudeacp.ServePermission.
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := claudeacp.ServePermission(ctx, os.Stdin, os.Stdout, os.Getenv(claudeacp.SocketEnv)); err != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: claude-permission: %v\n", err)
+			os.Exit(1)
+		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }

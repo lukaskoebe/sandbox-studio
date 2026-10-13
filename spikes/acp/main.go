@@ -125,7 +125,7 @@ func check(ctx context.Context, agentPath, root, out string) (err error) {
 
 	// The adapters missing from the dev base are reported as such, not as a dead stream.
 	for _, h := range []harness.Harness{harness.Claude{}, harness.Codex{}} {
-		_, err := hub.OpenACP(ctx, sb.ID, agentproto.StartACP{Chat: "probe" + h.Name(), Harness: h.Name(), Command: h.ACPCommand(),
+		_, err := hub.OpenACP(ctx, sb.ID, agentproto.StartACP{Chat: "probe" + h.Name(), Harness: h.Name(), Command: h.ACPCommand(harness.Provider{}),
 			Env: harness.ACPEnvironment(h, harness.Provider{})})
 		var he agentchan.HarnessError
 		if !errors.As(err, &he) {
@@ -135,7 +135,7 @@ func check(ctx context.Context, agentPath, root, out string) (err error) {
 	}
 
 	oc := harness.OpenCode{}
-	rwc, err := hub.OpenACP(ctx, sb.ID, agentproto.StartACP{Chat: "probeopencode", Harness: oc.Name(), Command: oc.ACPCommand(),
+	rwc, err := hub.OpenACP(ctx, sb.ID, agentproto.StartACP{Chat: "probeopencode", Harness: oc.Name(), Command: oc.ACPCommand(harness.Provider{}),
 		Env: harness.ACPEnvironment(oc, harness.Provider{})})
 	if err != nil {
 		return fmt.Errorf("open opencode acp: %w", err)
@@ -167,7 +167,7 @@ func check(ctx context.Context, agentPath, root, out string) (err error) {
 	// Closing the stream must stop the agent: the slot frees, so the same chat starts again.
 	conn.Close()
 	time.Sleep(time.Second)
-	again, err := hub.OpenACP(ctx, sb.ID, agentproto.StartACP{Chat: "probeopencode", Harness: oc.Name(), Command: oc.ACPCommand()})
+	again, err := hub.OpenACP(ctx, sb.ID, agentproto.StartACP{Chat: "probeopencode", Harness: oc.Name(), Command: oc.ACPCommand(harness.Provider{})})
 	if err != nil {
 		return fmt.Errorf("restart after close: %w", err)
 	}

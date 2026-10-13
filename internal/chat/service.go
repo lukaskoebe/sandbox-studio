@@ -71,11 +71,12 @@ type Guest interface {
 }
 
 // Launch is how to start a chat's agent, planned like an agent session: the harness,
-// its config files, its ACP environment and, for the terminal, the TUI session's
-// environment (placeholders only).
+// its config files, its ACP command and environment and, for the terminal, the TUI
+// session's environment (placeholders only).
 type Launch struct {
 	Harness harness.Harness
 	Files   []agentproto.HomeFile
+	Command []string
 	Env     map[string]string
 	TUIEnv  map[string]string
 }
@@ -419,7 +420,7 @@ func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, r
 	if err := s.Guest.WriteHomeFiles(ctx, c.SandboxID, launch.Files); err != nil {
 		return nil, nil, fmt.Errorf("writing the harness config: %w", err)
 	}
-	rwc, err := s.Guest.OpenACP(ctx, c.SandboxID, agentproto.StartACP{Chat: c.ID, Harness: h.Name(), Command: h.ACPCommand(), Env: launch.Env})
+	rwc, err := s.Guest.OpenACP(ctx, c.SandboxID, agentproto.StartACP{Chat: c.ID, Harness: h.Name(), Command: launch.Command, Env: launch.Env})
 	var he agentchan.HarnessError
 	if errors.As(err, &he) {
 		return nil, nil, Conflict(he.Error())

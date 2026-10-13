@@ -87,8 +87,15 @@ func (Claude) RenderHookResponse(r HookResult) []byte {
 
 // ACPCommand is the Claude Agent adapter (@agentclientprotocol/claude-agent-acp), which
 // runs the Claude Code binary through the Claude Agent SDK. It reads the user settings, so
-// the managed settings.json (model, bypassPermissions, hooks) applies to chats too.
-func (Claude) ACPCommand() []string { return []string{"claude-agent-acp"} }
+// the managed settings.json (model, bypassPermissions, hooks) applies to chats too. A Claude
+// subscription runs `studio-agent claude-acp` instead, which runs `claude -p` itself
+// (docs/harnesses.md, "Chats (ACP)").
+func (Claude) ACPCommand(provider Provider) []string {
+	if provider.Kind == teammates.KindClaudeSubscription {
+		return []string{AgentPath, "claude-acp"}
+	}
+	return []string{"claude-agent-acp"}
+}
 
 // ACPEnv points the SDK at the image's Claude Code: the adapter is installed without the
 // SDK's own copy of the binary, so chat and TUI run the same pinned version.

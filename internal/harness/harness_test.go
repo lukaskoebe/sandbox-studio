@@ -63,7 +63,7 @@ func TestGolden(t *testing.T) {
 				acpEnv := ACPEnvironment(h, provider)
 				checkACPEnv(t, acpEnv)
 				got := dump(files, env, h.TUICommand(SessionOpts{Workdir: "/workspace"})) +
-					dumpACP(h.ACPCommand(), acpEnv, h.ACPMCPServers())
+					dumpACP(h.ACPCommand(provider), acpEnv, h.ACPMCPServers())
 				// No file carries a credential, not even the placeholder: the harness reads
 				// it from the environment.
 				for _, f := range files {

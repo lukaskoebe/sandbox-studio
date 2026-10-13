@@ -100,7 +100,7 @@ func (OpenCode) TUICommand(opts SessionOpts) []string {
 }
 
 // ACPCommand: https://opencode.ai/docs/acp/.
-func (OpenCode) ACPCommand() []string { return []string{"opencode", "acp"} }
+func (OpenCode) ACPCommand(Provider) []string { return []string{"opencode", "acp"} }
 
 // ACPEnv is empty: `opencode acp` reads the same config as the TUI.
 func (OpenCode) ACPEnv(Provider) map[string]string { return nil }

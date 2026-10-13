@@ -50,9 +50,10 @@ other sandboxes, no project, and network only to the hosts its kind needs
   holds the refresh token.
 - **Sessions and chats.** A Claude teammate gets `CLAUDE_CODE_OAUTH_TOKEN` set to the
   provider's placeholder in its terminal sessions, as an API key's placeholder is; the gateway
-  swaps the token in on `api.anthropic.com`. Chats refuse a Claude subscription: they run Claude
-  Code through `claude-agent-acp`, and Anthropic doesn't allow claude.ai logins in third-party
-  agents. A ChatGPT teammate gets `~/.codex/auth.json` with placeholders only. Its
+  swaps the token in on `api.anthropic.com`. A Claude subscription's chats run Claude Code itself,
+  through `studio-agent claude-acp` ([harnesses](harnesses.md#claude-subscription-chats)); API-key
+  chats still use `claude-agent-acp`. Whether the subscription's use in chats fits Anthropic's
+  terms is the owner's decision. A ChatGPT teammate gets `~/.codex/auth.json` with placeholders only. Its
   tokens keep their headers and payloads, so Codex reads the same claims and expiry, and their
   signatures are placeholders. The access token's placeholder is swapped on `chatgpt.com`. The
   refresh token and the id token's signature are placeholders that nothing swaps, so a refresh
@@ -129,7 +130,7 @@ teammate's last check-in of any outcome. A due check-in:
   or created sandbox is started, and a suspended one resumed, then the scheduler waits up to 90
   seconds for the agent to connect. The sandbox keeps running after the turn;
 - is skipped, and logged with the reason, when the teammate has no sandbox, has no provider or
-  its provider has no key (or is a Claude subscription, which chats can't use), approvals wait
+  its provider has no key, approvals wait
   in its sandbox, its sandbox has no VM (it needs to be created), its sandbox is not ready
   (creating, failed or draining), or its chat can't be planned or doesn't take the prompt;
 - is skipped quietly when a heartbeat chat of the teammate is still running (at most one at a

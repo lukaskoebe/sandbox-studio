@@ -47,6 +47,8 @@ msb exec instead (see [spikes](spikes.md#layer-transfer-and-capture-foundations)
 | `boot`, `shutdown`, `supervise` | Studio via msb exec | see [sandboxes](sandboxes.md#boot-and-shutdown) |
 | `hook <event> --harness <name>` | the harness | reads the hook JSON on stdin, calls Studio, prints the harness's response |
 | `mcp` | the harness | stdio MCP server with the memory and browser tools |
+| `claude-acp` | Studio's chat, for a Claude subscription | the chat's ACP agent: runs `claude -p` for its turns ([harnesses](harnesses.md#claude-subscription-chats)) |
+| `claude-permission` | Claude Code, from the chat's plugin | the permission prompt tool of that agent, which asks the shim |
 | `oci-runtime` | Docker, as `runc` | CA trust for containers (below) |
 | `export-layer`, `workspace-export`, `workspace-import`, `home-export`, `home-import` | Studio via msb exec | template builds, fork, rebase, export, import |
 | `version` | | |

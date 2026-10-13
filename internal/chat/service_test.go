@@ -238,7 +238,8 @@ func newFixture(t *testing.T, agent *acptest.Agent) *fixture {
 }
 
 func (f *fixture) launch() Launch {
-	return Launch{Harness: harness.OpenCode{}, Files: []agentproto.HomeFile{{Path: ".config/opencode/opencode.json"}}, Env: map[string]string{"OPENAI_API_KEY": "studio-x"}}
+	return Launch{Harness: harness.OpenCode{}, Files: []agentproto.HomeFile{{Path: ".config/opencode/opencode.json"}},
+		Command: harness.OpenCode{}.ACPCommand(harness.Provider{}), Env: map[string]string{"OPENAI_API_KEY": "studio-x"}}
 }
 
 func (f *fixture) send(t *testing.T, text string) store.ChatTurn {
