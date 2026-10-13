@@ -81,6 +81,8 @@ change it.
   the API has no group. The server records arrival to the second, so the window is
   approximate.
 - New approvals raise a browser notification (Notification API) once the user allows it.
+- The terminal UI ([terminal UI](tui.md)) lists the same approvals and decides network approvals
+  through the same endpoint, with the same choices. Its other kinds open in the browser.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
   side by side, chat permission options. Every card names its kind in a chip and marks the

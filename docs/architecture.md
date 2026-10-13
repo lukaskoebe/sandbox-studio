@@ -117,8 +117,8 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   binaries, open the catalog and vault, make sure an environment exists, start the
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
   reconcile sandboxes, recover chats and build jobs, then serve the API and UI.
-- Subcommands: `studio` (serve), `openapi`, `login-url`, `doctor`, `version`,
-  `autostart enable|disable|status`. The guest binary is `studio-agent` (see
+- Subcommands: `studio` (serve), `openapi`, `login-url`, `tui` (the [terminal UI](tui.md)),
+  `doctor`, `version`, `autostart enable|disable|status`. The guest binary is `studio-agent` (see
   [guest agent](guest-agent.md)).
 
 ## Data locations
@@ -166,6 +166,7 @@ internal/
   memory/ agentmem/                     memory store and its use in sessions
   browser/ gitreview/ integrations/     browser broker, git review
   preview/ webauth/ api/ events/ webui/ HTTP surface
+  tui/                                  terminal UI client (studio tui)
   store/                                SQLite catalog and migrations
   doctor/ autostart/ updates/ diskspace/ paths/ version/
   e2e/                                  fakes of the e2e build (-tags e2e only)

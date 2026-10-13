@@ -30,27 +30,15 @@ func requestLoginURL(ctx context.Context, addr string) (string, error) {
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		return "", errors.New("login-url requires a loopback server address")
 	}
-	p, err := paths.Default()
+	control, err := controlCredential(ctx)
 	if err != nil {
 		return "", err
-	}
-	st, err := store.Open(ctx, p.DB())
-	if err != nil {
-		return "", fmt.Errorf("open Studio's catalog (start Studio first): %w", err)
-	}
-	defer st.Close()
-	key, err := st.Setting(ctx, "web-auth-key")
-	if err != nil {
-		return "", fmt.Errorf("read Studio's authentication key (start Studio first): %w", err)
-	}
-	if len(key) != 32 {
-		return "", errors.New("invalid Studio authentication key")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://"+addr+"/api/auth/launch", nil)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+webauth.ControlToken(key))
+	req.Header.Set("Authorization", "Bearer "+control)
 	transport := &http.Transport{Proxy: nil}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{
@@ -72,4 +60,27 @@ func requestLoginURL(ctx context.Context, addr string) (string, error) {
 		return "", errors.New("Studio returned an invalid login link")
 	}
 	return loginURL(addr, result.Token), nil
+}
+
+// controlCredential is the control credential of this installation: the install key's
+// derivative that only a process able to read the catalog has. It is what `login-url` and
+// `tui` present to Studio as the local owner.
+func controlCredential(ctx context.Context) (string, error) {
+	p, err := paths.Default()
+	if err != nil {
+		return "", err
+	}
+	st, err := store.Open(ctx, p.DB())
+	if err != nil {
+		return "", fmt.Errorf("open Studio's catalog (start Studio first): %w", err)
+	}
+	defer st.Close()
+	key, err := st.Setting(ctx, "web-auth-key")
+	if err != nil {
+		return "", fmt.Errorf("read Studio's authentication key (start Studio first): %w", err)
+	}
+	if len(key) != 32 {
+		return "", errors.New("invalid Studio authentication key")
+	}
+	return webauth.ControlToken(key), nil
 }

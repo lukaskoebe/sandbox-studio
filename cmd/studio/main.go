@@ -3,6 +3,7 @@
 //	studio            run the server
 //	studio openapi    print the API description (used to generate the web client types)
 //	studio login-url  print a fresh one-time browser login link
+//	studio tui        open the terminal UI of the running Studio
 //	studio doctor     check that this host can run Studio
 //	studio version    print the version and the default base image
 //	studio autostart enable|disable|status
@@ -91,6 +92,13 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println(link)
+		return
+	}
+	if flag.Arg(0) == "tui" {
+		if err := runTUI(context.Background(), *addr); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		return
 	}
 

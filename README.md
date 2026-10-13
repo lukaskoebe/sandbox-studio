@@ -101,9 +101,11 @@ studio          # prints a one-time login link for http://127.0.0.1:7878
 On first start Studio installs the matching microsandbox runtime into `~/.microsandbox`, and
 it pulls the base image the first time a sandbox needs it, so it needs network access. Open
 the printed link; it expires after ten minutes and works once. Run `studio login-url` for a
-new one while Studio is running. Data lives in the user data directory
-(`~/.local/share/sandbox-studio` on Linux, `~/Library/Application Support/Sandbox Studio` or
-`%LOCALAPPDATA%\Sandbox Studio`); set `SANDBOX_STUDIO_HOME` to move it.
+new one while Studio is running. Or run `studio tui` in a terminal for a keyboard client of the
+running Studio: sandboxes, approvals and terminals ([docs/tui.md](docs/tui.md)). Data lives in
+the user data directory (`~/.local/share/sandbox-studio` on Linux,
+`~/Library/Application Support/Sandbox Studio` or `%LOCALAPPDATA%\Sandbox Studio`); set
+`SANDBOX_STUDIO_HOME` to move it.
 
 **Doctor.** `studio doctor` checks the microsandbox runtime and `msb doctor`, hardware
 virtualization, the base image, the data directory, free disk space (it warns below 5 GB) and

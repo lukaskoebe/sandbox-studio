@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+Keys
+  enter      open the sandbox
+  s          start, stop or resume the sandbox
+  d          delete the sandbox, after asking
+  t          the sandbox's terminal; Ctrl-] returns here
+  c          the sandbox's chats, in the browser
+  n          new sandbox, in the browser
+  e          switch environment
+  /          filter by name, teammate or template
+  a          approvals, from every environment
+  l          activity, in the browser
+  ↑/↓, j/k   move the cursor
+  esc        clear the filter, or go back
+  q          go back, or quit from the list
+  ?          this help
+
+Settings, providers, teammates, templates, rules, memory, the browser and
+Activity stay in the browser, at http://127.0.0.1:7878/.
+
+────────────────────────────────────────────────────────────────────────────────
+esc/q back

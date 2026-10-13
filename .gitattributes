@@ -3,6 +3,7 @@
 /internal/harness/testdata/hooks/** text eol=lf
 /internal/chat/testdata/fold/* text eol=lf
 /internal/claudeacp/testdata/* text eol=lf
+/internal/tui/testdata/*.golden text eol=lf
 
 # Keep embedded runtime text and guest scripts byte-stable on autocrlf checkouts.
 /internal/harness/opencode-plugin.js text eol=lf
