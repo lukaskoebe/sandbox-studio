@@ -57,6 +57,7 @@ import {
 import { ConflictSheet, DreamPanel } from "@/components/memory-conflict"
 import { MemorySessionsTab } from "@/components/memory-sessions"
 import { SuggestionsPanel } from "@/components/memory-suggestions"
+import { MemoryFileActions } from "@/components/memory-file"
 import { ruleClass } from "@/lib/accents"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { cn, formatAge } from "@/lib/utils"
@@ -73,6 +74,9 @@ export function MemoryTabs({ env, scope }: { env: string; scope: string }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <MemoryFileActions env={env} scope={scope} />
+      </div>
       <SuggestionsPanel env={env} scope={scope} />
       <Tabs defaultValue="pages">
         <TabsList>
