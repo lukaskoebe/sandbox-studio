@@ -91,7 +91,7 @@ function TeammatesPage() {
                   <TableRow key={p.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <TeammateAvatar name={p.name} />
+                        <TeammateAvatar name={p.name} avatar={p.avatar} />
                         <div className="min-w-0">
                           <Link
                             to="/e/$env/teammates/$id"

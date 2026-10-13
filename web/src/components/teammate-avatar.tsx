@@ -20,24 +20,62 @@ function hue(name: string) {
   return h
 }
 
-/** A teammate's initials on a color derived from its name. */
+/** The generated avatars: fixed shapes in a 24-unit square, drawn in white. */
+const shapePaths: Partial<Record<string, string[]>> = {
+  circle: ["M12 5a7 7 0 1 0 0 14 7 7 0 1 0 0-14Z"],
+  square: ["M5 5h14v14H5Z"],
+  diamond: ["M12 3 21 12 12 21 3 12Z"],
+  triangle: ["M12 4 21 19H3Z"],
+  pentagon: ["M12 4 19.6 9.5 16.7 18.5H7.3L4.4 9.5Z"],
+  hexagon: ["M20 12 16 18.9H8L4 12 8 5.1H16Z"],
+  star: [
+    "M12 3 14.4 8.8 20.6 9.2 15.8 13.2 17.3 19.3 12 16 6.7 19.3 8.2 13.2 3.4 9.2 9.7 8.8Z",
+  ],
+  cross: ["M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6Z"],
+}
+
+/**
+ * A teammate's avatar: its emoji or generated shape when it has one, else its initials on a
+ * color derived from its name, so the color stays the same everywhere.
+ */
 export function TeammateAvatar({
   name,
+  avatar,
   className,
 }: {
   name: string
+  /** One emoji, `shape:<name>` for a generated avatar, or empty for the initials. */
+  avatar?: string
   className?: string
 }) {
+  const shape = avatar?.startsWith("shape:")
+    ? avatar.slice("shape:".length)
+    : undefined
+  const emoji = avatar && !shape ? avatar : undefined
+  const paths = shape ? shapePaths[shape] : undefined
   return (
     <span
       aria-hidden
       className={cn(
-        "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-semibold text-white select-none",
+        "inline-flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-[0.625rem] font-semibold text-white select-none",
+        emoji && "bg-muted text-foreground",
         className
       )}
-      style={{ backgroundColor: `oklch(0.55 0.13 ${hue(name)})` }}
+      style={
+        emoji ? undefined : { backgroundColor: `oklch(0.55 0.13 ${hue(name)})` }
+      }
     >
-      {initials(name)}
+      {emoji ? (
+        <span className="text-[1.5em] leading-none">{emoji}</span>
+      ) : paths ? (
+        <svg viewBox="0 0 24 24" className="size-3/5" fill="currentColor">
+          {paths.map((d) => (
+            <path key={d} d={d} />
+          ))}
+        </svg>
+      ) : (
+        initials(name)
+      )}
     </span>
   )
 }
@@ -87,13 +125,18 @@ export function SandboxOwner({
     { enabled: !!teammateId }
   )
   if (!teammateId) return null
-  const name = teammates.data?.find((p) => p.id === teammateId)?.name ?? "…"
+  const owner = teammates.data?.find((p) => p.id === teammateId)
+  const name = owner?.name ?? "…"
   return (
     <span
       className={cn("inline-flex min-w-0 items-center gap-1.5", className)}
       title={`Owned by ${name}`}
     >
-      <TeammateAvatar name={name} className="size-5 text-[0.5625rem]" />
+      <TeammateAvatar
+        name={name}
+        avatar={owner?.avatar}
+        className="size-5 text-[0.5625rem]"
+      />
       <span className="truncate">{name}</span>
     </span>
   )

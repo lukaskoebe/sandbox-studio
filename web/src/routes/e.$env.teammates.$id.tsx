@@ -62,6 +62,7 @@ function TeammateLayout() {
       <PageHeader>
         <TeammateAvatar
           name={teammate.name}
+          avatar={teammate.avatar}
           className="size-5 text-[0.5625rem]"
         />
         <h1 className="truncate text-sm font-medium">{teammate.name}</h1>

@@ -49,7 +49,11 @@ export function TeammateField({
           <SelectItem value={none}>None</SelectItem>
           {list.map((p) => (
             <SelectItem key={p.id} value={p.id}>
-              <TeammateAvatar name={p.name} className="size-4 text-[0.5rem]" />
+              <TeammateAvatar
+                name={p.name}
+                avatar={p.avatar}
+                className="size-4 text-[0.5rem]"
+              />
               {p.name}
             </SelectItem>
           ))}
