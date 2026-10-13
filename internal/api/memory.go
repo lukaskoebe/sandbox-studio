@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -260,4 +262,48 @@ func (s *Server) registerMemory(api huma.API) {
 		}
 		return &struct{ Body memory.Conflict }{c}, memoryError(err)
 	})
+
+	type exportIn struct {
+		Env   string `path:"env" doc:"Environment ID"`
+		Scope string `query:"scope" doc:"shared or teammate:<id>"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "exportMemory", Method: http.MethodGet, Path: base + "/export", Tags: tags,
+		Description: "One scope as a markdown file: its pages and active facts, with front matter. Importing the file into a scope reads it back.",
+	}, func(ctx context.Context, in *exportIn) (*struct{ Body MemoryExportView }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		md, err := s.Memory.Export(ctx, in.Env, in.Scope, time.Now())
+		if err != nil {
+			return nil, memoryError(err)
+		}
+		name := "memory-" + strings.ReplaceAll(in.Scope, ":", "-") + "-" + time.Now().Format(time.DateOnly) + ".md"
+		return &struct{ Body MemoryExportView }{MemoryExportView{Filename: name, Markdown: md}}, nil
+	})
+
+	type importIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Scope    string `json:"scope" doc:"shared or teammate:<id>; the file must be for this scope"`
+			Markdown string `json:"markdown" maxLength:"2097152" doc:"A file made by export, at most 2 MiB"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "importMemory", Method: http.MethodPost, Path: base + "/import", Tags: tags,
+		MaxBodyBytes: 4 << 20,
+		Description:  "Imports a file made by export into a scope. The file is checked in full first. Pages and facts the scope has already are skipped; the rest is stored with tier document.",
+	}, func(ctx context.Context, in *importIn) (*struct{ Body memory.ImportResult }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		res, err := s.Memory.Import(ctx, in.Env, in.Body.Scope, in.Body.Markdown)
+		return &struct{ Body memory.ImportResult }{res}, memoryError(err)
+	})
+}
+
+// MemoryExportView is one scope exported as a markdown file.
+type MemoryExportView struct {
+	Filename string `json:"filename"`
+	Markdown string `json:"markdown"`
 }

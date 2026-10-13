@@ -114,6 +114,7 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET sessions?teammate=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
 | `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider, and `sharedJudge`: whose utility model consolidates shared memory |
 | `GET quality` | the quality numbers of the environment ([Quality](#quality)) |
+| `GET export?scope=`, `POST import` | a scope as one markdown file, and a file read back into a scope ([Export and import](#export-and-import)) |
 
 The Memory page in the environment sidebar shows shared memory: the extraction budget line
 and tabs for pages, facts, conflicts (with "Dream now", recent runs and a sheet that shows
@@ -157,6 +158,53 @@ decided one is never made again.
 
 Dreams open suggestions: after new facts, nightly, or on "Dream now". Each run also notes
 how many it opened (`suggested`).
+
+## Export and import
+
+A scope exports as one markdown file (`GET export?scope=`; the memory page downloads it).
+It begins with front matter (`studio-memory: 1`, the scope and the export time). Then comes
+a section per page, core pages first, and one per active fact. A section has front matter of
+its own, and its body is given by a byte count (`bytes`), so text inside a body can never
+pass for structure:
+
+    ---
+    studio-memory: 1
+    scope: shared
+    exported: 2026-10-13T09:00:00Z
+    ---
+
+    ## page project/api
+    ---
+    title: API
+    kind: project
+    core: true
+    tier: user
+    bytes: 26
+    ---
+    Deployed with make ship.
+
+    ## fact
+    ---
+    kind: decision
+    tier: user
+    observed: 2026-09-02
+    entities: ["project/api"]
+    attribute: deploy.command
+    context:
+    bytes: 26
+    ---
+    Ship with make ship
+
+Not exported: the timeline, superseded, retracted and disputed facts, and IDs.
+
+`POST import` reads a file back into a scope (the memory page has an Import button), at most
+2 MiB. The file must be for that scope. Everything is checked before anything is written: the
+format version, every key (an unknown one refuses the file), every value, the slugs, kinds,
+tiers, contexts and byte counts, and no text may follow a body that is not a section. What is
+written gets tier `document` and the evidence "imported from a memory export"; the file's own
+tiers are not trusted. A page the scope has under the same slug, or a fact whose text it has
+already (ignoring case and spacing), is skipped. A core page that the core budget refuses comes
+in as a plain page, and the result says so.
 
 ## Quality
 
