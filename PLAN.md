@@ -1,7 +1,7 @@
 # Sandbox Studio — Plan
 
-Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 (D5) is still a concept; the backlog
-below stays open.
+Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 is approved and in progress, with the
+v2 backlog below.
 
 The v2 plan is implemented (v0.1.0 and v0.1.1). How it works now is in the
 [developer documentation](docs/README.md). This plan covers the next round, driven by user
@@ -21,7 +21,7 @@ on before anything is built.
 | D2 | Resizable panels: shadcn `Resizable` or our own splitter | Our own splitter as a shared component, no new dependency |
 | D3 | Visual direction for the redesign (N4) | A, "Workbench" (2026-10-13), with the accent colors toned down slightly |
 | D4 | Default teammate | "Iris", generalist engineer: curious, careful and direct; short soul |
-| D5 | Network security levels (Concept C1) | Open: concept to review, not built yet |
+| D5 | Network security levels (Concept C1) | Approved as written (2026-10-13); built in the order the concept gives |
 | D6 | Host ssh-agent by default (reverses "never use the host agent") | Approved. When signing waits on a host confirmation (hardware key, password manager), show a dismissible hint to set up a dedicated Studio key |
 
 ## N1 — Safety net: end-to-end tests
@@ -306,7 +306,7 @@ Drawn as plain SVG, with no graph library.
 - **First step.** Verify agent-browser runs two sessions with different profiles in one
   VM; if it can't, fall back to an ephemeral browser VM per request.
 
-## C1 — Network rules and security levels (Concept)
+## C1 — Network rules and security levels
 
 **Problem.** Browsing raises one approval per third-party host: trackers, CDNs, consent
 banners and image hosts (seen in testing: googletagmanager, usercentrics, licdn and
