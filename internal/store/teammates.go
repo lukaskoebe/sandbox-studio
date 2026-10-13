@@ -222,7 +222,7 @@ type Teammate struct {
 	ApprovalPattern string    `json:"-"`
 	Soul            string    `json:"soul" doc:"Personality and working rules, as markdown"`
 	Harness         string    `json:"harness" enum:"opencode,claude,codex"`
-	ProviderID      string    `json:"providerId"`
+	ProviderID      string    `json:"providerId" doc:"Empty while a copied teammate has no provider of its kind in this environment"`
 	Model           string    `json:"model"`
 	GitName         string    `json:"gitName"`
 	GitEmail        string    `json:"gitEmail"`
@@ -230,7 +230,8 @@ type Teammate struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
-const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, provider_id, model, git_name, git_email, created_at, updated_at"
+// teammateCols selects a teammate; provider_id reads as "" for a teammate without a provider.
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
@@ -261,8 +262,9 @@ func (s *Store) CreateTeammate(ctx context.Context, p Teammate) (Teammate, error
 		p.ApprovalScope = "environment"
 	}
 	p.CreatedAt, p.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
-	_, err := s.db.ExecContext(ctx, "INSERT INTO teammates ("+teammateCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, t, t)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO teammates (id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness,
+		provider_id, model, git_name, git_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, t, t)
 	return p, teammateExists(err, p.Name)
 }
 
@@ -279,7 +281,7 @@ func (s *Store) UpdateTeammate(ctx context.Context, p Teammate) (Teammate, error
 	}
 	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET name = ?, role = ?, avatar = ?, approval_scope = ?, soul = ?, harness = ?, provider_id = ?, model = ?,
 		git_name = ?, git_email = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
-		p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, p.ProviderID, p.Model, p.GitName, p.GitEmail, now(), p.EnvironmentID, p.ID)
+		p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, now(), p.EnvironmentID, p.ID)
 	if err := teammateExists(err, p.Name); err != nil {
 		return p, err
 	}

@@ -40,6 +40,15 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
   sandboxes preselect for a new rule; the card still lets the user pick another. See
   [approvals](approvals.md#network-approval-cards).
 
+## Copying a teammate
+
+`POST /api/environments/{env}/teammates/{id}/copy` with `targetEnvironmentId` creates the
+teammate in another environment, with the same name (" 2", " 3", … if the name is taken in
+the target), role, avatar, soul, harness, model, git identity and approval scope. Its provider
+is the target's provider of the same kind, preferring one with the same name. With none, the
+copy has no provider (`providerId` is empty and sessions answer 409 until one is chosen).
+Sandboxes, chats, memory, secrets, provider keys and the remembered pattern level stay behind.
+
 ## Default teammate
 
 Adding a provider to an environment that has no teammates creates the default teammate on

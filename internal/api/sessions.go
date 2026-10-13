@@ -120,6 +120,9 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	if err != nil {
 		return sessionPlan{}, apiError(err)
 	}
+	if p.ProviderID == "" {
+		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("teammate %s has no provider; choose one in its settings first", p.Name))
+	}
 	prov, err := s.Store.Provider(ctx, sb.EnvironmentID, p.ProviderID)
 	if err != nil {
 		return sessionPlan{}, apiError(err)

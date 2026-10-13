@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -319,6 +322,108 @@ func (s *Server) registerTeammates(api huma.API) {
 		// Its rules are gone; held connections and cached rules must see that.
 		return nil, apiError(s.Policy.Settle(ctx, in.Env))
 	})
+
+	type copyTeammateIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Teammate ID"`
+		Body struct {
+			TargetEnvironmentID string `json:"targetEnvironmentId" minLength:"1" doc:"The environment to copy the teammate to; not the one it is in"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "copyTeammate", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/{id}/copy", Tags: []string{"teammates"},
+		DefaultStatus: http.StatusCreated,
+		Description: "Creates a copy of the teammate in another environment, with its name (a number is added if taken), role, avatar, soul, " +
+			"harness, model, git identity and approval scope. The copy uses the target environment's provider of the same kind, preferring one with the same name; " +
+			"without one it has no provider until one is chosen. Sandboxes, chats, memory, secrets and provider keys are not copied.",
+	}, func(ctx context.Context, in *copyTeammateIn) (*struct{ Body store.Teammate }, error) {
+		src, err := s.Store.Teammate(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		target := in.Body.TargetEnvironmentID
+		if target == in.Env {
+			return nil, huma.Error422UnprocessableEntity("the teammate is already in this environment")
+		}
+		if _, err := s.Store.Environment(ctx, target); errors.Is(err, store.ErrNotFound) {
+			return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("environment %s does not exist", target))
+		} else if err != nil {
+			return nil, apiError(err)
+		}
+		p := store.Teammate{
+			ID: store.NewID(), EnvironmentID: target, Role: src.Role, Avatar: src.Avatar, ApprovalScope: src.ApprovalScope,
+			Soul: src.Soul, Harness: src.Harness, Model: src.Model, GitName: src.GitName, GitEmail: src.GitEmail,
+		}
+		if p.ProviderID, err = s.matchingProvider(ctx, in.Env, target, src.ProviderID); err != nil {
+			return nil, err
+		}
+		existing, err := s.Store.Teammates(ctx, target)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		p.Name = copyName(src.Name, existing)
+		created, err := s.Store.CreateTeammate(ctx, p)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		s.publishTeammates(target)
+		return &struct{ Body store.Teammate }{created}, nil
+	})
+}
+
+// matchingProvider returns the provider of environment to that a teammate copied from
+// environment from, with provider fromID, is given: one of the same kind, preferring one with
+// the same name. It returns "" if there is none, and the teammate then has no provider.
+func (s *Server) matchingProvider(ctx context.Context, from, to, fromID string) (string, error) {
+	var kind, name string
+	if fromID != "" {
+		src, err := s.Store.Provider(ctx, from, fromID)
+		if err != nil {
+			return "", apiError(err)
+		}
+		kind, name = src.Kind, src.Name
+	}
+	if kind == "" {
+		return "", nil
+	}
+	list, err := s.Store.Providers(ctx, to)
+	if err != nil {
+		return "", apiError(err)
+	}
+	match := ""
+	for _, p := range list {
+		if p.Kind != kind {
+			continue
+		}
+		if p.Name == name {
+			return p.ID, nil
+		}
+		if match == "" {
+			match = p.ID
+		}
+	}
+	return match, nil
+}
+
+// copyName returns name, or name with the lowest number from 2 that no other teammate has,
+// shortening name so the result stays within the name limit.
+func copyName(name string, existing []store.Teammate) string {
+	taken := func(n string) bool {
+		return slices.ContainsFunc(existing, func(t store.Teammate) bool { return t.Name == n })
+	}
+	if !taken(name) {
+		return name
+	}
+	for n := 2; ; n++ {
+		suffix := " " + strconv.Itoa(n)
+		base := []rune(name)
+		if limit := teammates.MaxNameLen - utf8.RuneCountInString(suffix); len(base) > limit {
+			base = base[:limit]
+		}
+		if candidate := strings.TrimRight(string(base), " ") + suffix; !taken(candidate) {
+			return candidate
+		}
+	}
 }
 
 // teammateFrom validates in and returns the teammate it describes, with defaults filled in.

@@ -367,3 +367,63 @@ func TestMigrateSandboxLineage(t *testing.T) {
 		t.Fatalf("sandbox after migrating = %+v, %v", sb, err)
 	}
 }
+
+// Migration 026 adds the teammate settings and rebuilds teammates so a provider can be left
+// out. Teammates, their sandboxes, secrets and rules must come through with their triggers.
+func TestMigrateTeammateSettings(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 25); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Work', 1), ('other', 'Other', 1)`,
+		`INSERT INTO providers (id, environment_id, name, kind, created_at, updated_at) VALUES ('prov', 'env', 'Claude', 'claude_subscription', 1, 1)`,
+		`INSERT INTO teammates (id, environment_id, name, role, soul, harness, provider_id, model, git_name, git_email, created_at, updated_at)
+		 VALUES ('ada', 'env', 'Ada', 'reviewer', 'Be brief.', 'claude', 'prov', '', 'Ada', 'ada@example.com', 1, 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, teammate_id) VALUES ('sb1', 'env', 'api', 1, 512, 1024, 0, 1, 'ada')`,
+		`INSERT INTO secrets (id, environment_id, teammate_id, name, value, hosts, placeholder, created_at, updated_at) VALUES ('sec', 'env', 'ada', 'TOKEN', x'00', 'api.example.com', 'ph', 1, 1)`,
+		`INSERT INTO rules (id, environment_id, teammate_id, host, ports, action, created_at) VALUES ('r1', 'env', 'ada', 'example.com', '443', 'allow', 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	tm, err := s.Teammate(ctx, "env", "ada")
+	if err != nil || tm.ProviderID != "prov" || tm.Soul != "Be brief." || tm.Avatar != "" || tm.ApprovalScope != "environment" || tm.ApprovalPattern != "" {
+		t.Fatalf("migrated teammate %+v %v", tm, err)
+	}
+	if sb, err := s.Sandbox(ctx, "env", "sb1"); err != nil || sb.TeammateID != "ada" {
+		t.Fatalf("sandbox %+v %v", sb, err)
+	}
+	if sec, err := s.SecretByID(ctx, "env", "sec"); err != nil || sec.TeammateID != "ada" {
+		t.Fatalf("secret %+v %v", sec, err)
+	}
+	if rules, err := s.Rules(ctx, "env"); err != nil || len(rules) != 1 || rules[0].TeammateID != "ada" {
+		t.Fatalf("rules %+v %v", rules, err)
+	}
+
+	// The triggers still guard the new table: a sandbox can't take a teammate of another
+	// environment, and an approval scope outside its list is refused.
+	if _, err := db.ExecContext(ctx, `INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, teammate_id) VALUES ('sb2', 'other', 'x', 1, 512, 1024, 0, 1, 'ada')`); err == nil {
+		t.Error("a sandbox took a teammate of another environment")
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE teammates SET approval_scope = 'everywhere' WHERE id = 'ada'`); err == nil {
+		t.Error("an unknown approval scope was stored")
+	}
+	// A teammate without a provider is allowed; deleting its provider's key is not affected.
+	if _, err := db.ExecContext(ctx, `INSERT INTO teammates (id, environment_id, name, harness, git_name, git_email, created_at, updated_at)
+		VALUES ('none', 'env', 'Bob', 'claude', 'Bob', 'bob@example.com', 1, 1)`); err != nil {
+		t.Fatalf("teammate without a provider: %v", err)
+	}
+}
