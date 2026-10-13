@@ -2,6 +2,8 @@ package sandboxes
 
 import (
 	"context"
+	"maps"
+	"sync/atomic"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -11,9 +13,21 @@ import (
 
 const configureTimeout = 30 * time.Second
 
+// HarnessConfig is the owner teammate's harness setup for a sandbox: the config files for its
+// home and the environment its harness needs, placeholders only (api.Server.HarnessConfig).
+type HarnessConfig func(ctx context.Context, sb store.Sandbox) ([]agentproto.HomeFile, map[string]string, error)
+
+// harnessConfigs holds the Manager's HarnessConfig, set once the API exists.
+type harnessConfigs struct{ f atomic.Pointer[HarnessConfig] }
+
+// SetHarnessConfig makes Configure write the owner teammate's harness config into the home and
+// add its environment to new shells, so the harness also runs as configured in a plain terminal.
+func (m *Manager) SetHarnessConfig(f HarnessConfig) { m.harness.f.Store(&f) }
+
 // Configure sends a sandbox's guest agent its configuration: the CA the gateway intercepts
-// TLS with, and the placeholders of the secrets the sandbox sees. It runs whenever the agent
-// connects (see agentchan.Hub.OnConnect).
+// TLS with, and the placeholders of the secrets the sandbox sees. With a HarnessConfig it also
+// writes the owner teammate's harness config. It runs whenever the agent connects (see
+// agentchan.Hub.OnConnect), and when the environment's secrets or teammates change.
 func (m *Manager) Configure(sandboxID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), configureTimeout)
 	defer cancel()
@@ -87,7 +101,7 @@ func (m *Manager) follow(ctx context.Context, ch <-chan events.Event) {
 			if !ok {
 				return
 			}
-			if e.Topic == events.TopicSecrets && e.EnvironmentID != "" {
+			if (e.Topic == events.TopicSecrets || e.Topic == events.TopicTeammates) && e.EnvironmentID != "" {
 				m.configureAll(ctx, e)
 			}
 		}
@@ -128,6 +142,22 @@ func (m *Manager) config(ctx context.Context, sb store.Sandbox) (agentproto.Conf
 	env, err := m.Secrets.Env(ctx, sb)
 	if err != nil {
 		return agentproto.Config{}, err
+	}
+	if f := m.harness.f.Load(); f != nil && sb.TeammateID != "" && Public(sb) {
+		// A teammate that can't run yet (no provider, no sign-in) leaves the home as it is.
+		files, henv, err := (*f)(ctx, sb)
+		switch {
+		case err != nil:
+			m.Log.Debug("no harness config for the sandbox", "sandbox", sb.ID, "err", err)
+		case m.Hub.WriteHomeFiles(ctx, sb.ID, files) != nil:
+			m.Log.Info("writing the harness config", "sandbox", sb.ID)
+		default:
+			env = maps.Clone(env)
+			if env == nil {
+				env = map[string]string{}
+			}
+			maps.Copy(env, henv)
+		}
 	}
 	return agentproto.Config{CA: string(ca), Env: env}, nil
 }

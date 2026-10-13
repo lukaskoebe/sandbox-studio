@@ -1,7 +1,8 @@
 # Teammates and providers
 
 Both belong to one environment. Harness adapters turn a teammate into config files inside
-its sandboxes when an agent session starts (`docs/harnesses.md`).
+its sandboxes when an agent session starts and when the sandbox's guest connects
+(`docs/harnesses.md`).
 
 ## Providers
 

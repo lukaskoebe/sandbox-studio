@@ -46,8 +46,12 @@ placeholder and never see the secret. Config files name only the variable (`{env
 
 ## Files
 
-Files marked "managed" are rewritten on every session start, so edits made in the sandbox
-are lost. The instructions files hold a managed block between
+Files marked "managed" are rewritten on every session start, and whenever the sandbox's guest
+connects or its environment's secrets or teammates change, so edits made in the sandbox are
+lost. Writing them on connect sets the harness up in a plain terminal too: `opencode` or
+`claude` started by hand finds the owner's config, and new shells get the provider's
+placeholder variable (`sandboxes.Manager.SetHarnessConfig`). A teammate that can't run yet,
+without a provider or a sign-in, leaves the home as it is. The instructions files hold a managed block between
 `<!-- sandbox-studio:begin -->` and `<!-- sandbox-studio:end -->`: Studio replaces only the
 block, or puts it first, and keeps text outside it. The block has the teammate's name,
 role and soul and points to the memory tools.

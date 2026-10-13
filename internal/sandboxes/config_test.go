@@ -208,6 +208,7 @@ type configTestCall struct {
 type configTestGuest struct {
 	session *yamux.Session
 	calls   chan configTestCall
+	homes   chan []agentproto.HomeFile
 }
 
 func setupConfigTest(
@@ -240,7 +241,7 @@ func startConfigTestGuest(t *testing.T, f *checkpointFixture, id string) *config
 		_ = nc.Close()
 		t.Fatalf("start fake guest yamux: %v", err)
 	}
-	g := &configTestGuest{session: session, calls: make(chan configTestCall, 8)}
+	g := &configTestGuest{session: session, calls: make(chan configTestCall, 8), homes: make(chan []agentproto.HomeFile, 8)}
 	go g.accept()
 	t.Cleanup(func() { _ = session.Close(); hub.Close(id) })
 	stream, err := session.Open()
@@ -273,7 +274,15 @@ func (g *configTestGuest) handleConfig(stream net.Conn) {
 	br := bufio.NewReader(stream)
 	var header agentproto.Header
 	var cfg agentproto.Config
-	if agentproto.ReadJSONLine(br, &header) != nil || header.Kind != agentproto.KindConfig ||
+	if agentproto.ReadJSONLine(br, &header) == nil && header.Kind == agentproto.KindHomeFiles {
+		var req agentproto.HomeFiles
+		if agentproto.ReadJSONLine(br, &req) == nil {
+			g.homes <- req.Files
+			_ = agentproto.WriteJSONLine(stream, struct{}{})
+		}
+		return
+	}
+	if header.Kind != agentproto.KindConfig ||
 		agentproto.ReadJSONLine(br, &cfg) != nil {
 		return
 	}
@@ -354,5 +363,58 @@ func TestSecretEventsReconfigureOnlyTheirScope(t *testing.T) {
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: reconfigures %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// A sandbox with an owner gets the owner's harness config in its home and the harness's
+// environment in new shells, so the harness runs as configured in a plain terminal too. A
+// teammate that can't run yet leaves both as they are.
+func TestConfigureWritesTheOwnersHarnessConfig(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tm, err := f.store.CreateTeammate(f.ctx, store.Teammate{EnvironmentID: f.env.ID, Name: "Iris", Harness: "opencode"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sb, err := f.store.CreateSandbox(f.ctx, store.Sandbox{EnvironmentID: f.env.ID, Name: "owned", TeammateID: tm.ID, CPUs: 1, MemoryMiB: 512, WorkspaceMiB: 1024, DockerMiB: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.sandbox = sb
+	ready := true
+	f.manager.SetHarnessConfig(func(_ context.Context, got store.Sandbox) ([]agentproto.HomeFile, map[string]string, error) {
+		if got.ID != sb.ID {
+			t.Errorf("harness config for %s", got.ID)
+		}
+		if !ready {
+			return nil, nil, errors.New("provider needs a sign-in first")
+		}
+		return []agentproto.HomeFile{{Path: ".config/opencode/opencode.json", Content: "{}", Mode: 0o644}}, map[string]string{"PROVIDER_API_KEY": "placeholder-key"}, nil
+	})
+	guest, ctx := setupConfigTest(t, f, sb.ID, newConfigTestSecrets(map[string]string{"TOKEN": "placeholder"}, nil))
+
+	result := configureGuestAsync(f, ctx)
+	files := receive(t, ctx, guest.homes, configTestTimeout, "harness config")
+	if len(files) != 1 || files[0].Path != ".config/opencode/opencode.json" {
+		t.Fatalf("home files = %+v", files)
+	}
+	call := receive(t, ctx, guest.calls, configTestTimeout, "guest configuration")
+	if call.cfg.Env["TOKEN"] != "placeholder" || call.cfg.Env["PROVIDER_API_KEY"] != "placeholder-key" {
+		t.Fatalf("env = %v", call.cfg.Env)
+	}
+	call.reply <- configTestReply{}
+	if err := receive(t, ctx, result, configTestTimeout, "ConfigureGuest result"); err != nil {
+		t.Fatal(err)
+	}
+
+	ready = false
+	result = configureGuestAsync(f, ctx)
+	call = receive(t, ctx, guest.calls, configTestTimeout, "guest configuration without a harness config")
+	if _, ok := call.cfg.Env["PROVIDER_API_KEY"]; ok || call.cfg.Env["TOKEN"] != "placeholder" {
+		t.Fatalf("env = %v", call.cfg.Env)
+	}
+	assertQuiet(t, ctx, guest.homes, "home files without a harness config")
+	call.reply <- configTestReply{}
+	if err := receive(t, ctx, result, configTestTimeout, "ConfigureGuest result"); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -377,6 +377,7 @@ func run(addr, image string, log *slog.Logger) error {
 	// Heartbeats give teammates with open tasks their check-ins, until ctx ends (docs/teammates.md).
 	beats := &heartbeat.Service{Store: st, Sandboxes: mgr, Chats: chats, Plan: apiServer.ChatLaunch, Bus: bus, Log: log}
 	go beats.Run(ctx)
+	mgr.SetHarnessConfig(apiServer.HarnessConfig)
 	apiServer.Register(mux)
 	mux.Handle("/", webui.Handler())
 	registerControl(mux, st, engine)

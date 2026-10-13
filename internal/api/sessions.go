@@ -186,6 +186,17 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	return sessionPlan{harness: h, provider: hp, files: files, env: harness.Env(hp)}, nil
 }
 
+// HarnessConfig is the owner teammate's harness setup for sb as a session gets it: its config
+// files and its environment, placeholders only. The sandbox manager writes it whenever the
+// guest connects, so the harness is set up in a plain terminal too (sandboxes.HarnessConfig).
+func (s *Server) HarnessConfig(ctx context.Context, sb store.Sandbox) ([]agentproto.HomeFile, map[string]string, error) {
+	plan, err := s.planSession(ctx, sb)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan.files, plan.env, nil
+}
+
 // providerHost is the host a provider's key must be bound to.
 func providerHost(prov store.Provider) (string, error) {
 	if prov.Kind == teammates.KindOpenAICompatible {
