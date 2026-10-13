@@ -58,6 +58,8 @@ func (m *app) body(w, h int) []string {
 		return m.envsBody(w, h)
 	case screenHelp:
 		return m.helpBody()
+	case screenApprovals:
+		return m.approvalsBody(w, h)
 	}
 	return m.homeBody(w, h)
 }
@@ -87,7 +89,8 @@ func (m *app) noticeLine(w int) string {
 	return ""
 }
 
-// helpBody lists the keys, and says where the rest of Studio lives.
+// helpBody lists the keys of the screen help was opened from, and says where the rest of
+// Studio lives.
 func (m *app) helpBody() []string {
 	keys := [][2]string{
 		{"enter", "open the sandbox"},
@@ -97,12 +100,31 @@ func (m *app) helpBody() []string {
 		{"n", "new sandbox, in the browser"},
 		{"e", "switch environment"},
 		{"/", "filter by name, teammate or template"},
+		{"a", "approvals, from every environment"},
 		{"↑/↓, j/k", "move the cursor"},
 		{"esc", "clear the filter, or go back"},
 		{"q", "go back, or quit from the list"},
 		{"?", "this help"},
 	}
-	lines := []string{styleBold.Render("Keys")}
+	title := "Keys"
+	if m.back == screenApprovals {
+		title = "Approvals"
+		keys = [][2]string{
+			{"y / n", "allow or deny: a rule for the pattern and scope"},
+			{"o / O", "allow or deny this connection once, with no rule"},
+			{"1", "allow for 1 hour"},
+			{"i", "ignore: refuse this time, with no rule"},
+			{"p", "cycle the host pattern, then a browser request's method and path"},
+			{"s", "scope: the environment, the teammate's sandboxes or this sandbox"},
+			{"x", "any port, instead of the default ports"},
+			{"w", "allow the navigation's site for this browser session"},
+			{"A / D", "allow or deny every host of a group"},
+			{"r", "review a group's hosts one by one"},
+			{"enter", "open a git, browser, memory or chat approval in the browser"},
+			{"esc / q", "back"},
+		}
+	}
+	lines := []string{styleBold.Render(title)}
 	for _, k := range keys {
 		lines = append(lines, "  "+styleBold.Render(fit(k[0], 10))+" "+k[1])
 	}

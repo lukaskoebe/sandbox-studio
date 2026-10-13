@@ -10,11 +10,13 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -144,7 +146,7 @@ func startStudio(t *testing.T) *testStudio {
 		Store: st, Runtime: vms, Hub: agentchan.NewHub(log), Egress: fakeEgress{},
 		Paths: paths.Paths{Data: t.TempDir()}, Log: log, Bus: bus,
 	}
-	s := &api.Server{Store: st, Sandboxes: mgr, Bus: bus, Log: log}
+	s := &api.Server{Store: st, Sandboxes: mgr, Bus: bus, Log: log, Policy: &policy.Engine{Store: st, Bus: bus, Hold: time.Second}}
 	mux := http.NewServeMux()
 	s.Register(mux)
 	srv := httptest.NewServer(api.Guard(auth.Middleware(mux)))

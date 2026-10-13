@@ -79,3 +79,33 @@ func TestGoldenHelp(t *testing.T) {
 func TestGoldenBrowserHint(t *testing.T) {
 	golden(t, "browser_hint", press(sampleApp(), "c"))
 }
+
+func TestGoldenApprovals(t *testing.T) {
+	m := sampleApp()
+	sampleApprovals(m)
+	golden(t, "approvals", press(m, "a"))
+}
+
+func TestGoldenApprovalsGroup(t *testing.T) {
+	m := sampleApp()
+	sampleApprovals(m)
+	golden(t, "approvals_group", press(m, "a", "j"))
+}
+
+func TestGoldenApprovalsNone(t *testing.T) {
+	m := sampleApp()
+	m.approvals = nil
+	golden(t, "approvals_none", press(m, "a"))
+}
+
+func TestGoldenApprovalNetwork(t *testing.T) {
+	m := sampleApp()
+	sampleApprovals(m)
+	golden(t, "approvals_network", press(m, "a", "j", "j"))
+}
+
+func TestGoldenApprovalsHelp(t *testing.T) {
+	m := sampleApp()
+	sampleApprovals(m)
+	golden(t, "approvals_help", press(m, "a", "?"))
+}

@@ -22,6 +22,7 @@ const (
 	screenDetail
 	screenEnvs
 	screenHelp
+	screenApprovals
 )
 
 // notice is the one line under the key bar: what the last action did, or what went wrong.
@@ -61,15 +62,18 @@ type app struct {
 	stream     <-chan events.Event
 	refreshing bool // a debounced refresh is scheduled
 
-	screen    screen
-	back      screen          // where help returns to
-	cursor    int             // the selected sandbox, among the visible ones
-	picker    int             // the environment picker's cursor
-	filter    string          // the text the filter narrows the list by: a name, teammate or template
-	filtering bool            // the filter takes the keys
-	confirm   *sandboxes.View // the sandbox a delete waits for y or n about
-	notice    notice
-	keys      help.Model
+	screen         screen
+	back           screen             // where help returns to
+	cursor         int                // the selected sandbox, among the visible ones
+	approvalCursor int                // the selected card of the approvals screen
+	choices        map[string]*choice // the approvals' choices, by the ID of a card's first approval
+	split          map[string]bool    // the approvals reviewed one by one, out of their group
+	picker         int                // the environment picker's cursor
+	filter         string             // the text the filter narrows the list by: a name, teammate or template
+	filtering      bool               // the filter takes the keys
+	confirm        *sandboxes.View    // the sandbox a delete waits for y or n about
+	notice         notice
+	keys           help.Model
 }
 
 // newApp returns the model for a session with the Studio at addr. Its first screen loads on Init.
@@ -82,6 +86,8 @@ func newApp(ctx context.Context, client *Client, addr string) *app {
 		now:       time.Now(),
 		teammates: map[string]string{},
 		known:     map[string]bool{},
+		choices:   map[string]*choice{},
+		split:     map[string]bool{},
 		keys:      h,
 		width:     defaultWidth,
 		height:    defaultHeight,

@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                           ● 5 approvals
+────────────────────────────────────────────────────────────────────────────────
+Approvals
+  y / n      allow or deny: a rule for the pattern and scope
+  o / O      allow or deny this connection once, with no rule
+  1          allow for 1 hour
+  i          ignore: refuse this time, with no rule
+  p          cycle the host pattern, then a browser request's method and path
+  s          scope: the environment, the teammate's sandboxes or this sandbox
+  x          any port, instead of the default ports
+  w          allow the navigation's site for this browser session
+  A / D      allow or deny every host of a group
+  r          review a group's hosts one by one
+  enter      open a git, browser, memory or chat approval in the browser
+  esc / q    back
+
+Settings, providers, teammates, templates, rules, memory, the browser and
+Activity stay in the browser, at http://127.0.0.1:7878/.
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+esc/q back

@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                           ● 5 approvals
+────────────────────────────────────────────────────────────────────────────────
+Approvals from every environment, newest first
+
+  Git push  api-refactor · Default · 30s ago                                    
+    Push 2 commits to feature/login on GitHub/acme/web
+    enter opens it in the browser
+
+  api-refactor wants 3 hosts  Default · 1m ago                                  
+    pypi.org:443 · files.pythonhosted.org:443 · pypi.python.org:443
+    scope environment
+
+▸ Network access  blub · Default · 10m ago                                      
+    registry.npmjs.org:443
+    pattern *.npmjs.org   scope Iris's sandboxes   ports default
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+y allow  n deny  o allow once  1 allow 1 hour  p pattern  s scope  esc/q back

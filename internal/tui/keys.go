@@ -30,6 +30,20 @@ var (
 	keyYes       = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "delete"))
 	keyNo        = key.NewBinding(key.WithKeys("n", "esc"), key.WithHelp("n", "keep"))
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
+	keyApprovals = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "approvals"))
+	keyAllow     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow"))
+	keyDeny      = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "deny"))
+	keyOnce      = key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "allow once"))
+	keyOnceDeny  = key.NewBinding(key.WithKeys("O"), key.WithHelp("O", "deny once"))
+	keyHour      = key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "allow 1 hour"))
+	keyIgnore    = key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "ignore"))
+	keyPattern   = key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pattern"))
+	keyPort      = key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "any port"))
+	keyScope     = key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "scope"))
+	keySite      = key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "allow site"))
+	keyAllowAll  = key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "allow all"))
+	keyDenyAll   = key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "deny all"))
+	keySplit     = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "review one by one"))
 )
 
 // key routes a key press to the mode and screen the user is in.
@@ -50,6 +64,8 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.detailKey(msg)
 	case screenEnvs:
 		return m.envsKey(msg)
+	case screenApprovals:
+		return m.approvalsKey(msg)
 	default: // help: any key closes it
 		m.screen = m.back
 		return m, nil
@@ -80,6 +96,8 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.openEnvs()
 	case key.Matches(msg, keyFilter):
 		m.startFilter()
+	case key.Matches(msg, keyApprovals):
+		m.openApprovals()
 	case key.Matches(msg, keyEsc):
 		if m.filter != "" {
 			m.filter = ""
@@ -101,6 +119,8 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.askDelete(m.selected())
 	case key.Matches(msg, keyChat):
 		m.openChat(m.selected())
+	case key.Matches(msg, keyApprovals):
+		m.openApprovals()
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}
@@ -237,6 +257,24 @@ func (m *app) bindings() []key.Binding {
 		return []key.Binding{keyUp, keyChoose, keyCancel}
 	case screenHelp:
 		return []key.Binding{keyBack}
+	case screenApprovals:
+		return m.approvalBindings()
 	}
 	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyDelete, keyEnv, keyFilter, keyHelp, keyQuit}
+}
+
+// approvalBindings are the keys the key bar shows for the approvals card under the cursor.
+func (m *app) approvalBindings() []key.Binding {
+	cards := m.cards()
+	if m.approvalCursor >= len(cards) || len(cards) == 0 {
+		return []key.Binding{keyBack}
+	}
+	c := cards[m.approvalCursor]
+	switch {
+	case c.group:
+		return []key.Binding{keyAllowAll, keyDenyAll, keySplit, keyScope, keyBack}
+	case isNetwork(c.first()):
+		return []key.Binding{keyAllow, keyDeny, keyOnce, keyHour, keyPattern, keyScope, keyBack}
+	}
+	return []key.Binding{keyOpen, keyBack}
 }

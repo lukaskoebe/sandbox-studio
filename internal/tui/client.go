@@ -150,6 +150,13 @@ func (c *Client) DeleteSandbox(ctx context.Context, env, id string) error {
 	return err
 }
 
+// Decide answers an approval: a rule or one connection for a network request, or ignoring it.
+func (c *Client) Decide(ctx context.Context, env, id string, d Decision) (api.ApprovalView, error) {
+	var out api.ApprovalView
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/approvals/"+id+"/decide", nil, d, &out)
+	return out, err
+}
+
 // Subscribe opens the change notifications (/api/events). The channel closes when the stream
 // ends for any reason, and the caller then reconnects and refetches what it shows.
 func (c *Client) Subscribe(ctx context.Context) (<-chan events.Event, error) {
