@@ -27,7 +27,8 @@ import {
 import { $api, errorMessage } from "@/lib/api/client"
 import { formatAge, formatBytes } from "@/lib/utils"
 
-const downloadsPath = "/api/environments/{env}/teammates/{teammate}/browser/downloads"
+const downloadsPath =
+  "/api/environments/{env}/teammates/{teammate}/browser/downloads"
 const sendPath = `${downloadsPath}/send`
 
 /** The files the teammate's browser saved, each sendable to one of the teammate's sandboxes. */
@@ -86,7 +87,7 @@ export function BrowserDownloads({
     <div className="flex max-w-5xl flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Send to</span>
-        <Select value={target} onValueChange={setTarget}>
+        <Select value={target} onValueChange={(v) => setTarget(v ?? "")}>
           <SelectTrigger size="sm" aria-label="Sandbox to send to">
             <SelectValue placeholder="Choose a sandbox" />
           </SelectTrigger>
@@ -132,7 +133,11 @@ export function BrowserDownloads({
                   onClick={() =>
                     send.mutate({
                       params: { path },
-                      body: { session: f.session, name: f.name, sandboxId: target },
+                      body: {
+                        session: f.session,
+                        name: f.name,
+                        sandboxId: target,
+                      },
                     })
                   }
                 >
