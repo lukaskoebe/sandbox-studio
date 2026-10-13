@@ -76,9 +76,9 @@ type Harness interface {
 	Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, error)
 	// TUICommand is the command line of the interactive TUI, run in a login shell.
 	TUICommand(opts SessionOpts) []string
-	// ACPCommand is the command line of the harness's ACP agent for chats, run in a login
-	// shell like TUICommand (docs/design/chat-mode.md).
-	ACPCommand() []string
+	// ACPCommand is the command line of the harness's ACP agent for chats with provider, run
+	// in a login shell like TUICommand (docs/design/chat-mode.md).
+	ACPCommand(provider Provider) []string
 	// ACPEnv is what the ACP agent needs besides Env: fixed paths and modes, never a
 	// secret (see ACPEnvironment).
 	ACPEnv(provider Provider) map[string]string

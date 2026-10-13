@@ -16,7 +16,6 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
-	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 type chatPath struct {
@@ -78,7 +77,7 @@ func (s *Server) registerChats(api huma.API) {
 		OperationID: "createChat", Method: http.MethodPost, Path: "/api/environments/{env}/sandboxes/{id}/chats", Tags: []string{"chats"},
 		DefaultStatus: http.StatusCreated, MaxBodyBytes: maxPromptBytes,
 		Description: "Starts a chat with the sandbox's owner teammate, sending the prompt if there is one. " +
-			"409 for the same reasons as startSession, and for Claude subscription providers, which chats don't support.",
+			"409 for the same reasons as startSession.",
 	}, func(ctx context.Context, in *createIn) (*struct{ Body store.Chat }, error) {
 		chats, err := s.chats()
 		if err != nil {
@@ -304,22 +303,15 @@ func (s *Server) ChatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch,
 	return s.chatLaunch(ctx, sb)
 }
 
-// chatLaunch plans a chat's agent like an agent session. Claude subscriptions are
-// refused: Anthropic doesn't allow claude.ai login in third-party agents.
+// chatLaunch plans a chat's agent like an agent session. The command depends on the provider:
+// a Claude subscription's agent runs Claude Code itself (harness.Claude.ACPCommand).
 func (s *Server) chatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch, error) {
-	if sb.TeammateID != "" {
-		if p, err := s.Store.Teammate(ctx, sb.EnvironmentID, sb.TeammateID); err == nil {
-			if prov, err := s.Store.Provider(ctx, sb.EnvironmentID, p.ProviderID); err == nil && prov.Kind == teammates.KindClaudeSubscription {
-				return chat.Launch{}, huma.Error409Conflict(fmt.Sprintf("%s uses a Claude subscription, which chats can't use: "+
-					"give the teammate an Anthropic API key provider, or open a terminal session instead", p.Name))
-			}
-		}
-	}
 	plan, err := s.planSession(ctx, sb)
 	if err != nil {
 		return chat.Launch{}, err
 	}
-	return chat.Launch{Harness: plan.harness, Files: plan.files, Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env}, nil
+	return chat.Launch{Harness: plan.harness, Files: plan.files, Command: plan.harness.ACPCommand(plan.provider),
+		Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env}, nil
 }
 
 // chatLaunchFor plans the agent of an existing chat.

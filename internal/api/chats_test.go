@@ -19,6 +19,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 // chatGuest serves chats' ACP streams with a scripted agent.
@@ -132,7 +133,7 @@ func TestChats(t *testing.T) {
 		t.Fatalf("the key reached the guest: %s", sent)
 	}
 	if len(g.acp) != 1 || g.acp[0].Env["ANTHROPIC_API_KEY"] != prov.Placeholder || g.acp[0].Chat != c.ID ||
-		strings.Join(g.acp[0].Command, " ") != strings.Join(harness.Claude{}.ACPCommand(), " ") {
+		strings.Join(g.acp[0].Command, " ") != strings.Join(harness.Claude{}.ACPCommand(harness.Provider{Kind: teammates.KindAnthropicAPI}), " ") {
 		t.Fatalf("acp: %+v", g.acp)
 	}
 
@@ -318,21 +319,23 @@ func TestChatPermissionDecisionAPIValidation(t *testing.T) {
 	waitIdle(t, h, base)
 }
 
-// Claude subscriptions don't run chats, signed in or not: Anthropic doesn't allow claude.ai
-// logins in third-party agents. Terminal sessions run Claude Code itself.
-func TestChatsRefuseClaudeSubscription(t *testing.T) {
-	h, s, _, env := newChatServer(t, &acptest.Agent{})
+// A Claude subscription's chats run `studio-agent claude-acp`, which runs Claude Code itself.
+// Until the provider is signed in, a chat needs the sign-in first.
+func TestChatsClaudeSubscription(t *testing.T) {
+	h, s, g, env := newChatServer(t, &acptest.Agent{SessionID: "ses_1"})
 	ctx := context.Background()
 	prov, err := s.Store.CreateProvider(ctx, store.Provider{ID: store.NewID(), EnvironmentID: env.ID, Name: "Max", Kind: "claude_subscription"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
-	url := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID + "/chats"
-	if rec := do(h, "POST", url, ""); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Claude subscription") {
+	envBase := testOrigin + "/api/environments/" + env.ID
+	url := envBase + "/sandboxes/" + sb.ID + "/chats"
+	if rec := do(h, "POST", url, `{"text":"Hi"}`); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "needs a sign-in first") {
 		t.Fatalf("a chat before the sign-in: %d %s", rec.Code, rec.Body)
 	}
-	sec, err := s.Vault.Prepare(env.ID, "PROVIDER_MAX_KEY", "sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWx_-123456", []string{"api.anthropic.com"}, "")
+	const token = "sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWx_-123456"
+	sec, err := s.Vault.Prepare(env.ID, "PROVIDER_MAX_KEY", token, []string{"api.anthropic.com"}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,8 +343,20 @@ func TestChatsRefuseClaudeSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Vault.Changed(env.ID)
-	if rec := do(h, "POST", url, ""); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "Claude subscription") {
+	rec := do(h, "POST", url, `{"text":"Hi"}`)
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("a chat after the sign-in: %d %s", rec.Code, rec.Body)
+	}
+	waitIdle(t, h, envBase+"/chats/"+decode[store.Chat](t, rec).ID)
+
+	// The agent is the shim, and it gets the placeholder, never the token.
+	if len(g.acp) != 1 || strings.Join(g.acp[0].Command, " ") != harness.AgentPath+" claude-acp" ||
+		!strings.HasPrefix(g.acp[0].Env["CLAUDE_CODE_OAUTH_TOKEN"], "studio-") {
+		t.Fatalf("acp: %+v", g.acp)
+	}
+	sent, _ := json.Marshal(g.acp)
+	if strings.Contains(string(sent), token) {
+		t.Fatalf("the token reached the guest: %s", sent)
 	}
 }
 

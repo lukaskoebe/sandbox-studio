@@ -128,7 +128,7 @@ func (Codex) RenderHookResponse(r HookResult) []byte {
 
 // ACPCommand is the Codex adapter (@agentclientprotocol/codex-acp), which runs
 // `codex app-server` and translates; it reads ~/.codex/config.toml like the TUI.
-func (Codex) ACPCommand() []string { return []string{"codex-acp"} }
+func (Codex) ACPCommand(Provider) []string { return []string{"codex-acp"} }
 
 // ACPEnv points the adapter at the image's Codex (it is installed without its own copy),
 // hides the ChatGPT browser login and starts in full access, like the TUI's

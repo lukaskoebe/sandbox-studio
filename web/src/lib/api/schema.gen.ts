@@ -1174,7 +1174,7 @@ export interface paths {
         };
         get: operations["listSandboxChats"];
         put?: never;
-        /** @description Starts a chat with the sandbox's owner teammate, sending the prompt if there is one. 409 for the same reasons as startSession, and for Claude subscription providers, which chats don't support. */
+        /** @description Starts a chat with the sandbox's owner teammate, sending the prompt if there is one. 409 for the same reasons as startSession. */
         post: operations["createChat"];
         delete?: never;
         options?: never;
