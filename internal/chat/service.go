@@ -140,7 +140,16 @@ func (s *Service) Watch(chatID string) (<-chan struct{}, func()) {
 
 // Create adds an idle chat with the sandbox's owner teammate.
 func (s *Service) Create(ctx context.Context, sb store.Sandbox, harnessName string) (store.Chat, error) {
-	c, err := s.Store.CreateChat(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName})
+	return s.create(ctx, sb, harnessName, false)
+}
+
+// CreateHeartbeat adds an idle chat that a heartbeat opens, which the chat list marks as one.
+func (s *Service) CreateHeartbeat(ctx context.Context, sb store.Sandbox, harnessName string) (store.Chat, error) {
+	return s.create(ctx, sb, harnessName, true)
+}
+
+func (s *Service) create(ctx context.Context, sb store.Sandbox, harnessName string, heartbeat bool) (store.Chat, error) {
+	c, err := s.Store.CreateChat(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName, Heartbeat: heartbeat})
 	if err == nil {
 		s.changed(c.EnvironmentID, c.ID, true)
 	}
