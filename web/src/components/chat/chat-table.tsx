@@ -34,6 +34,8 @@ export function ChatTable({
   })
   const teammate = (id: string) =>
     teammates.data?.find((t) => t.id === id)?.name ?? "Teammate"
+  const avatar = (id: string) =>
+    teammates.data?.find((t) => t.id === id)?.avatar
   const sandbox = (id: string) =>
     sandboxes.data?.find((s) => s.id === id)?.name ?? "removed sandbox"
 
@@ -81,6 +83,7 @@ export function ChatTable({
                 <span className="flex items-center gap-1.5">
                   <TeammateAvatar
                     name={teammate(c.teammateId)}
+                    avatar={avatar(c.teammateId)}
                     className="size-4 text-[0.5rem]"
                   />
                   {teammate(c.teammateId)}
