@@ -75,7 +75,25 @@ Matching (`policy/match.go`):
 - Otherwise sandbox rules beat teammate rules, which beat environment rules. Teammate rules
   apply only to sandboxes the catalog says that teammate owns.
 - Within a scope: the most specific host pattern wins (`*.example.com` also matches
-  `example.com`), then rules that name ports, then `deny` over `allow`.
+  `example.com`), then rules that name ports, then rules that name a request, then `deny` over
+  `allow`.
+
+### Request rules
+
+An allow or deny rule can also name the requests it covers: `method` (`GET`, `HEAD`, `POST`,
+`PUT`, `PATCH`, `DELETE` or `OPTIONS`; empty is any) and `pathPrefix` (a path ending in `*`,
+such as `/repos/*`; empty is any path). Such a rule decides only requests on connections
+Studio terminates, and a connection is terminated when a rule names its host's requests: the
+browser VM's HTTPS always is, and so is a connection that a host rule allows when a request
+rule names its host. The other requests of the host are decided by its host rules as before.
+Connections are matched without request rules, so a connection is never decided by one.
+
+Paths are matched after cleaning (dot segments and doubled slashes resolved). An allow covers
+only a path that is already clean: `/repos/../x` isn't covered by `/repos/*`, since the upstream
+might read it as `/x`. A deny matches the cleaned path, so it can't be walked around.
+
+A browser request's approval offers the request's first directory as a rule, such as `GET
+/repos/*` (see [approvals](approvals.md#network-approval-cards)).
 
 ## Trackers
 

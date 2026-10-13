@@ -2207,7 +2207,11 @@ export interface components {
             expiresAt?: string;
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
+            /** @description allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it */
+            method?: string;
             note?: string;
+            /** @description allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path */
+            pathPrefix?: string;
             /** @description Empty or omitted means any port */
             ports?: number[] | null;
             /** @description Limits the rule to one sandbox of this environment */
@@ -2261,8 +2265,12 @@ export interface components {
             expiresAt?: string;
             /** @description Host pattern the rule covers; empty means the requested host */
             host?: string;
+            /** @description For network requests allowed or denied with a rule: the request method the rule covers; empty covers any */
+            method?: string;
             /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected */
             note?: string;
+            /** @description For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path */
+            pathPrefix?: string;
             /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
             ports?: number[] | null;
             /** @description For browser.action: allow (or deny) the action on the origin from now on */
@@ -2939,6 +2947,7 @@ export interface components {
             navigation?: boolean;
             /** @description The request path, without the query */
             path?: string;
+            pathPattern?: string;
             /** @description Suggested host patterns, most specific first */
             patterns: string[] | null;
             /** Format: int64 */
@@ -3225,12 +3234,16 @@ export interface components {
              * @description When the rule last decided a connection, as of the last write
              */
             lastHitAt?: string;
+            /** @description Allow and deny rules only: the request method the rule covers, such as GET; empty covers any method */
+            method?: string;
             note: string;
             /**
              * @description Where the rule came from. Read-only: set when the rule is created
              * @enum {string}
              */
             origin: "manual" | "approval" | "curated" | "reviewer";
+            /** @description Allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path */
+            pathPrefix?: string;
             /** @description Empty means any port */
             ports: number[] | null;
             sandboxId?: string;
@@ -3260,7 +3273,11 @@ export interface components {
             config?: components["schemas"]["RuleConfigInput"];
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;
+            /** @description allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it */
+            method?: string;
             note?: string;
+            /** @description allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path */
+            pathPrefix?: string;
             /** @description Empty or omitted means any port */
             ports?: number[] | null;
             /** @description Limits the rule to one sandbox of this environment */

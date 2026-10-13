@@ -40,6 +40,9 @@ type Gateway struct {
 	Key    []byte
 	Policy interface {
 		Decide(context.Context, policy.Request) (store.Rule, error)
+		// Terminates reports whether a rule names methods or paths for the connection's host, so
+		// its requests are checked one by one even where a host rule would splice it.
+		Terminates(context.Context, policy.Request) bool
 	}
 	Sandbox   func(ctx context.Context, id string) (store.Sandbox, error)
 	Resolvers *Resolvers
@@ -233,7 +236,11 @@ func (g *Gateway) handle(c net.Conn) {
 	}
 	web := proto == "tls" || proto == "http"
 	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy || browserTLS
-	if bound, _ := boundTo(all, host); handled || len(bound) > 0 && web {
+	// A request-level rule for an allowed host needs the requests, so the connection is terminated.
+	checked := rule.Action == store.ActionAllow && web && g.Policy.Terminates(context.Background(), policy.Request{
+		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, Host: host, Port: port,
+	})
+	if bound, _ := boundTo(all, host); handled || checked || len(bound) > 0 && web {
 		if !web {
 			problem = rule.Action + " rules only handle HTTP and TLS connections"
 			return
@@ -253,8 +260,11 @@ func (g *Gateway) handle(c net.Conn) {
 			caddy = &compiled
 		}
 		var gate func(*http.Request) string
-		if browserTLS {
+		switch {
+		case browserTLS:
 			gate = func(r *http.Request) string { return g.decideRequest(r, decider, host, port) }
+		case rule.Action == store.ActionProxy || checked:
+			gate = func(r *http.Request) string { return g.ruleRequest(r, decider, host, port) }
 		}
 		g.Conns.opened(entry, ruleID, true)
 		verdict = VerdictAllowed

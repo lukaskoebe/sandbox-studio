@@ -21,10 +21,18 @@ import (
 )
 
 type fakePolicy struct {
-	mu    sync.Mutex
-	asked []policy.Request
-	rules map[string]store.Rule // by host
-	errs  map[string]error      // by host: the connection's answer is this error
+	mu         sync.Mutex
+	asked      []policy.Request
+	rules      map[string]store.Rule // by host
+	errs       map[string]error      // by host: the connection's answer is this error
+	terminates map[string]bool       // by host: some rule names a method or path for it
+}
+
+// Terminates is true for the hosts in terminates.
+func (p *fakePolicy) Terminates(_ context.Context, req policy.Request) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.terminates[req.Host]
 }
 
 func (p *fakePolicy) Decide(_ context.Context, req policy.Request) (store.Rule, error) {

@@ -1410,8 +1410,17 @@
             "minLength": 1,
             "type": "string"
           },
+          "method": {
+            "description": "allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it",
+            "type": "string"
+          },
           "note": {
             "maxLength": 500,
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path",
+            "maxLength": 512,
             "type": "string"
           },
           "ports": {
@@ -1579,9 +1588,17 @@
             "description": "Host pattern the rule covers; empty means the requested host",
             "type": "string"
           },
+          "method": {
+            "description": "For network requests allowed or denied with a rule: the request method the rule covers; empty covers any",
+            "type": "string"
+          },
           "note": {
             "description": "For git approvals: a note passed on to the sandbox, such as why a push was rejected",
             "maxLength": 2000,
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path",
             "type": "string"
           },
           "ports": {
@@ -3616,6 +3633,9 @@
             "description": "The request path, without the query",
             "type": "string"
           },
+          "pathPattern": {
+            "type": "string"
+          },
           "patterns": {
             "description": "Suggested host patterns, most specific first",
             "items": {
@@ -4554,6 +4574,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "method": {
+            "description": "Allow and deny rules only: the request method the rule covers, such as GET; empty covers any method",
+            "type": "string"
+          },
           "note": {
             "type": "string"
           },
@@ -4565,6 +4589,10 @@
               "curated",
               "reviewer"
             ],
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "Allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path",
             "type": "string"
           },
           "ports": {
@@ -4655,8 +4683,17 @@
             "minLength": 1,
             "type": "string"
           },
+          "method": {
+            "description": "allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it",
+            "type": "string"
+          },
           "note": {
             "maxLength": 500,
+            "type": "string"
+          },
+          "pathPrefix": {
+            "description": "allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path",
+            "maxLength": 512,
             "type": "string"
           },
           "ports": {

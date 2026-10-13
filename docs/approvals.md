@@ -54,6 +54,9 @@ change it.
   own permission requests) leave those out of the stack. More than one card, or a narrow
   page, folds the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
+- A browser request's approval also offers its method and first directory, such as "GET
+  /repos/*". The decision then carries `method` and `pathPrefix`, and the rule covers only
+  those requests ([network](network.md#request-rules)).
 - A browser navigation to a new site offers "Allow site <site> for this browser session", which
   approves the site for the session without a rule (`allow_site`).
 - Network requests from one sandbox that arrive within 3 seconds of each other are one card,

@@ -16,12 +16,15 @@ import (
 // goes on if the policy allows it, which may take the user's answer; otherwise the message says
 // why it was refused, and is returned.
 func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host string, port int) string {
-	_, err := g.Policy.Decide(r.Context(), policy.Request{
+	info := requestInfo(r, host)
+	rule, err := g.Policy.Decide(r.Context(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name,
-		Host: host, Port: port, HTTP: requestInfo(r, host),
+		Host: host, Port: port, Browser: true, Deferred: true, HTTP: info,
 	})
 	where := fmt.Sprintf("%s:%d", host, port)
 	switch {
+	case err == nil && rule.Action == store.ActionDeny:
+		return fmt.Sprintf("A Sandbox Studio network rule blocks %s %s on %s.", info.Method, info.Path, where)
 	case err == nil:
 		return ""
 	case errors.Is(err, policy.ErrUndecided):
@@ -35,6 +38,24 @@ func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host str
 	}
 	g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
 	return fmt.Sprintf("Sandbox Studio could not decide the request to %s: %v", where, err)
+}
+
+// ruleRequest applies the request-level rules to a request on a connection that a proxy rule
+// allowed: a rule that denies the request refuses it. Nothing is asked about the others.
+func (g *Gateway) ruleRequest(r *http.Request, decider store.Sandbox, host string, port int) string {
+	info := requestInfo(r, host)
+	rule, err := g.Policy.Decide(r.Context(), policy.Request{
+		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name,
+		Host: host, Port: port, HTTP: info, RulesOnly: true,
+	})
+	switch {
+	case errors.Is(err, policy.ErrUndecided), err == nil && rule.Action != store.ActionDeny:
+		return ""
+	case err != nil:
+		g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
+		return fmt.Sprintf("Sandbox Studio could not check the request %s %s on %s: %v", info.Method, info.Path, host, err)
+	}
+	return fmt.Sprintf("A Sandbox Studio network rule blocks %s %s on %s.", info.Method, info.Path, host)
 }
 
 // requestInfo reads what a request says about itself, for its approval. Chromium sets the

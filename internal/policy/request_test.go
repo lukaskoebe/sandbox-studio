@@ -181,7 +181,7 @@ func TestSiteApprovalCoversTheNavigationAndItsPage(t *testing.T) {
 		held <- heldResult{r, err}
 	}
 	request := func(host string, http HTTPRequest) Request {
-		return Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: host, Port: 443, Deferred: true, HTTP: &http}
+		return Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: host, Port: 443, Browser: true, Deferred: true, HTTP: &http}
 	}
 
 	go hold(request("news.example", HTTPRequest{Method: "GET", Path: "/", Navigation: true, Site: "news.example"}))

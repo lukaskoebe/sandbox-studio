@@ -53,6 +53,8 @@ var (
 	// ErrTracker is returned for a request of a browser VM to a host on the tracker list, while
 	// the environment blocks trackers and no rule allows the host.
 	ErrTracker = errors.New("the host is on the tracker list")
+	// ErrNotRequest is returned for a method or path given for an approval of a connection.
+	ErrNotRequest = errors.New("a method or path can only be allowed for a browser request")
 )
 
 // Request is a connection attempt from a sandbox, or a request on a connection the gateway
@@ -68,6 +70,9 @@ type Request struct {
 	// Deferred is set for a connection the gateway terminates and decides request by request
 	// (a browser VM's HTTPS): with no rule for the connection it is not held.
 	Deferred bool
+	// RulesOnly decides by the rules alone: nothing is asked, and ErrUndecided means no rule
+	// covers the request.
+	RulesOnly bool
 	// HTTP is the request, for a request on a terminated connection; nil for a connection.
 	HTTP *HTTPRequest
 }
@@ -91,6 +96,8 @@ type NetworkRequest struct {
 	Patterns    []string `json:"patterns" doc:"Suggested host patterns, most specific first"`
 	// The request, for network.request approvals.
 	HTTPRequest
+	// PathPattern is the path prefix an allow for the request would name, such as /repos/*.
+	PathPattern string `json:"pathPattern,omitempty"`
 	// Tracker is set for a request of a browser denied because its host is on the tracker list.
 	Tracker bool `json:"tracker,omitempty"`
 }
@@ -150,6 +157,9 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	} else if ok {
 		return r, nil
 	}
+	if req.RulesOnly {
+		return store.Rule{}, ErrUndecided
+	}
 	if req.Deferred && req.HTTP == nil {
 		return store.Rule{}, ErrPerRequest
 	}
@@ -196,11 +206,39 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	}
 }
 
+// Terminates reports whether a rule names a method or a path for the host of req, among the
+// rules that cover req's sandbox. Such a host's connections are terminated, and their requests
+// are checked against the rules one by one.
+func (e *Engine) Terminates(ctx context.Context, req Request) bool {
+	teammate, err := e.teammate(ctx, req.EnvironmentID, req.SandboxID)
+	if err != nil {
+		return false
+	}
+	rules, _, err := e.snapshot(ctx, req.EnvironmentID)
+	if err != nil {
+		return false
+	}
+	host := Normalize(req.Host)
+	for _, r := range e.active(rules) {
+		if r.Method == "" && r.PathPrefix == "" {
+			continue
+		}
+		if r.SandboxID != "" && r.SandboxID != req.SandboxID || r.TeammateID != "" && r.TeammateID != teammate {
+			continue
+		}
+		if len(r.Ports) > 0 && !slices.Contains(r.Ports, req.Port) || hostSpecificity(r.Host, host) < 0 {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // check returns the rule that decides req now, if one does: a matching rule; else, for a
 // browser's request, ErrTracker when the request is to a tracker and the environment blocks
 // trackers; else the site the user approved for the browser session.
 func (e *Engine) check(ctx context.Context, rules []store.Rule, req Request, teammate string) (store.Rule, bool, error) {
-	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
+	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port, req.HTTP); ok {
 		return r, true, nil
 	}
 	if req.Browser && Tracker(req.Host) {
@@ -213,7 +251,7 @@ func (e *Engine) check(ctx context.Context, rules []store.Rule, req Request, tea
 			return store.Rule{}, false, ErrTracker
 		}
 	}
-	if req.HTTP != nil && e.Browsers != nil && e.Browsers.Allows(ctx, req.EnvironmentID, teammate, *req.HTTP) {
+	if req.Browser && req.HTTP != nil && e.Browsers != nil && e.Browsers.Allows(ctx, req.EnvironmentID, teammate, *req.HTTP) {
 		return store.Rule{EnvironmentID: req.EnvironmentID, Host: Normalize(req.Host), Action: store.ActionAllow}, true, nil
 	}
 	return store.Rule{}, false, nil
@@ -244,6 +282,7 @@ func (e *Engine) approvalOf(ctx context.Context, req Request, host, teammate str
 	kind, subject = KindNetwork, host+":"+strconv.Itoa(req.Port)
 	if req.HTTP != nil {
 		kind, n.HTTPRequest = KindRequest, *req.HTTP
+		n.PathPattern = PathSuggestion(req.HTTP.Path)
 		if !n.Navigation && e.Browsers != nil {
 			n.Site = e.Browsers.TopLevel(ctx, req.EnvironmentID, teammate)
 		}
@@ -277,6 +316,10 @@ type Decision struct {
 	Ports     []int     // nil means DefaultPorts of the requested port
 	Scope     string    // sandbox, teammate (the requesting sandbox's owner) or environment
 	ExpiresAt time.Time // when the rule stops matching; zero means it never expires
+	// Method and PathPrefix narrow the rule to the request of a network.request approval; empty
+	// means any method and any path.
+	Method     string
+	PathPrefix string
 }
 
 // Resolve answers a pending network approval, creating a rule unless it is dismissed.
@@ -316,6 +359,21 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if rule.Ports == nil {
 		rule.Ports = DefaultPorts(req.Port)
 	}
+	var http *HTTPRequest
+	if a.Kind == KindRequest {
+		http = &req.HTTPRequest
+	}
+	if d.Method != "" || d.PathPrefix != "" {
+		if http == nil {
+			return a, ErrNotRequest
+		}
+		if rule.Method, err = ValidMethod(d.Method); err != nil {
+			return a, err
+		}
+		if rule.PathPrefix, err = ValidPathPrefix(d.PathPrefix); err != nil {
+			return a, err
+		}
+	}
 	owner, err := e.teammate(ctx, envID, a.SandboxID)
 	if err != nil {
 		return a, err
@@ -332,7 +390,7 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if rule.Host, err = ValidPattern(rule.Host); err != nil {
 		return a, err
 	}
-	if !Covers(rule.Host, req.Host) || (len(rule.Ports) > 0 && !slices.Contains(rule.Ports, req.Port)) {
+	if !Covers(rule.Host, req.Host) || (len(rule.Ports) > 0 && !slices.Contains(rule.Ports, req.Port)) || !requestFits(rule, http) {
 		return a, ErrDoesNotCover
 	}
 	if !d.ExpiresAt.IsZero() {
@@ -432,7 +490,11 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 		if !IsNetworkKind(a.Kind) || json.Unmarshal(a.Payload, &req) != nil {
 			continue
 		}
-		r, ok := Match(e.active(rules), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port)
+		var http *HTTPRequest
+		if a.Kind == KindRequest {
+			http = &req.HTTPRequest
+		}
+		r, ok := matchRule(e.active(rules), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port, http)
 		if !ok {
 			continue
 		}
@@ -522,8 +584,8 @@ func (e *Engine) active(rules []store.Rule) []store.Rule {
 
 // match returns the rule that decides a connection now, and counts the connection as a hit of
 // that rule.
-func (e *Engine) match(rules []store.Rule, sandboxID, teammateID, host string, port int) (store.Rule, bool) {
-	r, ok := Match(e.active(rules), sandboxID, teammateID, host, port)
+func (e *Engine) match(rules []store.Rule, sandboxID, teammateID, host string, port int, http *HTTPRequest) (store.Rule, bool) {
+	r, ok := matchRule(e.active(rules), sandboxID, teammateID, host, port, http)
 	if ok {
 		e.hit(r.ID)
 	}

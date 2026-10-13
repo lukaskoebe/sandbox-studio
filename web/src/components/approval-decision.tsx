@@ -29,6 +29,9 @@ type Choice = Action | "allowHour" | "allowOnce" | "denyOnce" | "allowSite"
 
 const hour = 60 * 60 * 1000
 
+/** The host-pattern toggle's value for a rule that names a request's method and path. */
+const REQUEST_LEVEL = "request"
+
 /** The ports a request is decided for by default: HTTP and HTTPS together, else the requested port. */
 function defaultPorts(port: number) {
   return port === 80 || port === 443 ? "ports 80 and 443" : `port ${port}`
@@ -149,6 +152,12 @@ export function ApprovalDecision({
   const preferred =
     patterns.find((p) => patternLevel(p) === owner?.patternLevel) ?? patterns[0]
   const [pattern, setPattern] = useState(preferred)
+  // A browser request can also be allowed by its method and path, such as GET /repos/*.
+  const requestPattern =
+    net?.method && net.pathPattern
+      ? `${net.method} ${net.pathPattern}`
+      : undefined
+  const [requestLevel, setRequestLevel] = useState(false)
   const [anyPort, setAnyPort] = useState(false)
   // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
   const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
@@ -165,7 +174,14 @@ export function ApprovalDecision({
     const params = {
       params: { path: { env: approval.environmentId, id: approval.id } },
     }
-    const rule = { scope, host: pattern, ports: anyPort ? [] : undefined }
+    const rule = {
+      scope,
+      host: pattern,
+      ports: anyPort ? [] : undefined,
+      ...(requestLevel && net?.method && net.pathPattern
+        ? { method: net.method, pathPrefix: net.pathPattern }
+        : {}),
+    }
     switch (choice) {
       case "dismiss":
         return decide.mutate({ ...params, body: { action: choice, scope } })
@@ -213,13 +229,17 @@ export function ApprovalDecision({
           )}
         </div>
       )}
-      {patterns.length > 1 && (
+      {(patterns.length > 1 || requestPattern) && (
         <ToggleGroup
           aria-label="Host pattern"
           variant="outline"
-          value={[pattern]}
+          value={[requestLevel ? REQUEST_LEVEL : pattern]}
           onValueChange={(v) => {
-            if (v[0]) setPattern(v[0])
+            if (v[0] === REQUEST_LEVEL) setRequestLevel(true)
+            else if (v[0]) {
+              setPattern(v[0])
+              setRequestLevel(false)
+            }
           }}
           className="w-full"
         >
@@ -234,6 +254,16 @@ export function ApprovalDecision({
               <span className="truncate">{p}</span>
             </ToggleGroupItem>
           ))}
+          {requestPattern && (
+            <ToggleGroupItem
+              value={REQUEST_LEVEL}
+              size="sm"
+              title={`Only ${requestPattern} requests`}
+              className="min-w-0 flex-1 shrink font-mono"
+            >
+              <span className="truncate">{requestPattern}</span>
+            </ToggleGroupItem>
+          )}
         </ToggleGroup>
       )}
       {net?.navigation && net.site && (

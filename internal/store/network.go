@@ -80,6 +80,8 @@ type Rule struct {
 	Config        RuleConfig `json:"config"`
 	Note          string     `json:"note"`
 	Origin        string     `json:"origin" enum:"manual,approval,curated,reviewer" doc:"Where the rule came from. Read-only: set when the rule is created"`
+	Method        string     `json:"method,omitempty" doc:"Allow and deny rules only: the request method the rule covers, such as GET; empty covers any method"`
+	PathPrefix    string     `json:"pathPrefix,omitempty" doc:"Allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path"`
 	ExpiresAt     *time.Time `json:"expiresAt,omitempty" doc:"When the rule stops matching; empty means it never expires"`
 	Hits          int        `json:"hits" doc:"Connections the rule decided, as of the last write, which happens about once a minute"`
 	LastHitAt     *time.Time `json:"lastHitAt,omitempty" doc:"When the rule last decided a connection, as of the last write"`
@@ -94,14 +96,14 @@ type RuleConfig struct {
 	Caddyfile string `json:"caddyfile,omitempty"`
 }
 
-const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, expires_at, hits, last_hit_at, created_at"
+const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, expires_at, hits, last_hit_at, created_at, method, path_prefix"
 
 func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 	var r Rule
 	var ports, config string
 	var expires, lastHit sql.NullInt64
 	var created int64
-	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &expires, &r.Hits, &lastHit, &created); err != nil {
+	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &expires, &r.Hits, &lastHit, &created, &r.Method, &r.PathPrefix); err != nil {
 		return r, err
 	}
 	r.Ports = []int{}
@@ -163,8 +165,8 @@ func insertRule(ctx context.Context, q execer, r Rule) error {
 	if r.ExpiresAt != nil {
 		expires = r.ExpiresAt.Unix()
 	}
-	_, err = q.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, origin, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.Origin, expires, r.CreatedAt.Unix())
+	_, err = q.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, origin, expires_at, created_at, method, path_prefix) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.Origin, expires, r.CreatedAt.Unix(), r.Method, r.PathPrefix)
 	return err
 }
 
@@ -174,8 +176,8 @@ func (s *Store) UpdateRule(ctx context.Context, r Rule) (Rule, error) {
 	if err != nil {
 		return r, err
 	}
-	res, err := s.db.ExecContext(ctx, "UPDATE rules SET sandbox_id = ?, teammate_id = ?, host = ?, ports = ?, action = ?, config = ?, note = ? WHERE environment_id = ? AND id = ?",
-		nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.EnvironmentID, r.ID)
+	res, err := s.db.ExecContext(ctx, "UPDATE rules SET sandbox_id = ?, teammate_id = ?, host = ?, ports = ?, action = ?, config = ?, note = ?, method = ?, path_prefix = ? WHERE environment_id = ? AND id = ?",
+		nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.Method, r.PathPrefix, r.EnvironmentID, r.ID)
 	if err != nil {
 		return r, err
 	}

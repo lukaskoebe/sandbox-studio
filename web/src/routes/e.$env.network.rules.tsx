@@ -250,6 +250,11 @@ function RulesTab() {
                       <TableCell>
                         <span className="inline-flex max-w-full items-center gap-1.5">
                           <Ident>{r.host}</Ident>
+                          {(r.method || r.pathPrefix) && (
+                            <RuleChip>
+                              {`${r.method || "any method"} ${r.pathPrefix || "any path"}`}
+                            </RuleChip>
+                          )}
                           {isUnused(r, now) && <RuleChip>unused</RuleChip>}
                         </span>
                       </TableCell>
