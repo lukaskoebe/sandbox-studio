@@ -47,7 +47,7 @@ The sandbox page has a **History** section. It draws the sandbox's history as a 
 - Forks branch off to their child sandboxes, and a forked sandbox shows the one it came from. A deleted sandbox stays in the history, marked as deleted.
 - The end of the line is the sandbox as it is now. **Save checkpoint** there saves its current state.
 
-The Home page has a **Family** card. It lists each template with its sandboxes, and shows each fork under the sandbox it was made from. Green marks a running sandbox, amber one that is still starting or being created, and red one that failed.
+Once a sandbox was forked, the Home page has a **Family** card. It lists each template with its sandboxes, and shows each fork under the sandbox it was made from. Green marks a running sandbox, amber one that is still starting or being created, and red one that failed.
 
 ## Open a preview
 

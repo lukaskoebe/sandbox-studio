@@ -179,3 +179,28 @@ export function approvalSource(a: Approval): string | undefined {
     a.chatPermission?.sandboxName
   )
 }
+
+const decisionWords: Record<string, string> = {
+  approved: "Approved",
+  denied: "Denied",
+  dismissed: "Dismissed",
+}
+
+/**
+ * How a decided request is named: "Approved", or "Denied once" for one connection only, "Denied ·
+ * tracker", "Allowed · curated list", "Allowed · level Open", or the reviewer's decision.
+ */
+export function approvalDecision(a: Approval): string {
+  if (a.network?.tracker) return "Denied · tracker"
+  if (a.reverted) return "Reverted · reviewer"
+  switch (a.network?.decided) {
+    case "open":
+      return "Allowed · level Open"
+    case "curated":
+      return "Allowed · curated list"
+    case "reviewer":
+      return `${a.status === "denied" ? "Denied" : "Allowed"} · reviewer`
+  }
+  const word = decisionWords[a.status] ?? a.status
+  return a.once ? `${word} once` : word
+}

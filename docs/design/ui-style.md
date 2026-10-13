@@ -67,7 +67,9 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   `KindChip` with the kind's name, a details line (source, environment, age), a title sentence
   (hosts in `Ident`), and Deny / Allow. Grouped requests list their hosts and allow the
   whole site at once. Browser URLs are in mono.
-- **The approval stack.** It sits bottom right on every page and does not cover content unless
+- **The approval stack.** It sits bottom right on every page but Home, which answers its own
+  environment's approvals in place (the stack still shows other environments' there), and does
+  not cover content unless
   someone opens it. One approval shows its card at 640 px and wider; that card is the one
   exception, since it has to be answered. More than one approval, or a narrower page, folds the
   cards into an "N approvals" pill, a
@@ -92,11 +94,15 @@ Pitch: a tool you keep open all day. Dense, tabular, graphite neutrals, identifi
 - **Status bar.** Each sandbox has one slim bar along the bottom of its workspace: state, ID,
   template, ports, pending approvals, generation. CPU, memory and uptime wait for the API to
   report them.
-- **Home.** A stat strip (sandboxes running, approvals waiting, teammates working), the
-  sandbox table (name and ID, owner, template, status, ports, approvals waiting) with the
-  family tree under it, and the approvals and teammates on the right. Each number is one the
-  API already gives. Egress, host load and an activity feed wait for endpoints that do not
-  exist yet.
+- **Home.** Body text at 13px like the other pages. A stat strip (running of all sandboxes,
+  approvals waiting, working of all teammates). The main column: the sandbox table (name and
+  ID, owner, template, status with uptime, ports, approvals waiting; an empty cell stays empty
+  or shows a dash, never "None"), Activity (decided approvals and started chats, newest
+  eight, linking on to the Network page's Activity tab), and Family, only once a sandbox was
+  forked. The side column: the environment's approvals as answerable cards (up to four, the
+  same cards as the stack), the setup card, and the teammates with presence, role and the
+  sandboxes they own. Below the extra large breakpoint the approvals come first and hide when
+  none wait. Egress and host load wait for endpoints that do not exist yet.
 - **Presence.** Teammates use the status colors: working is running (pulsing), waiting for
   you is waiting, idle is stopped.
 - **Tokens** (`web/src/styles.css`). Background `oklch(0.993 0.001 255)` / `oklch(0.168 0.006
@@ -164,9 +170,9 @@ primitives above and keeps the e2e selectors it had.
 - **Done: sidebar.** Compact rows. Sandboxes show their name in mono, their status dot and the
   approvals waiting on them. Teammates show presence. Nav icons take their area's hue, and the
   theme toggle sits in the footer.
-- **Done: Home.** Stat strip, sandbox table (stacks below the large breakpoint), family tree,
-  approvals summary and teammates, with a `{/* setup */}` slot at the top of the main column.
-  Not shown: an activity feed (no data source yet), and egress or host load (no endpoint).
+- **Done: Home.** Stat strip, sandbox table (stacks below the large breakpoint), activity,
+  family tree once there are forks, approval cards, setup card and teammates.
+  Not shown: egress or host load (no endpoint).
   The template column shows the template's name (stack@version), or its ID for a template without one.
 - **Done: sandbox dashboard and workspace.** Header with the name and ID in mono, sections
   with headers and area tiles (connections and chats only), ports and connections as lists,

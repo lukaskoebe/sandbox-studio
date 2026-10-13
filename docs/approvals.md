@@ -62,7 +62,8 @@ change it.
 - The approval stack (`web/src/components/approval-stack.tsx`) shows on every page, for
   every environment, with the environment's name on cards from other environments. Pages
   that list a kind themselves (network requests on the network page's Requests tab, a chat's
-  own permission requests) leave those out of the stack. More than one card, or a narrow
+  own permission requests, Home its environment's approvals, which it shows as cards of its
+  own) leave those out of the stack. More than one card, or a narrow
   page, folds the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
 - A browser request's approval also offers its method and first directory, such as "GET

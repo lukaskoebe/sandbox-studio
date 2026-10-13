@@ -14,38 +14,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
-import { $api, errorMessage, type Approval } from "@/lib/api/client"
-import { isNetworkApproval } from "@/lib/approval-kinds"
+import { $api, errorMessage } from "@/lib/api/client"
+import { approvalDecision, isNetworkApproval } from "@/lib/approval-kinds"
 import { formatAge, hostPort } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/network/activity")({
   component: ActivityTab,
 })
-
-const decisionWords: Record<string, string> = {
-  approved: "Approved",
-  denied: "Denied",
-  dismissed: "Dismissed",
-}
-
-/**
- * How a decided request is named: "Approved", or "Denied once" for one connection only, "Denied ·
- * tracker", "Allowed · curated list", "Allowed · level Open", or the reviewer's decision.
- */
-function decisionOf(a: Approval) {
-  if (a.network?.tracker) return "Denied · tracker"
-  if (a.reverted) return "Reverted · reviewer"
-  switch (a.network?.decided) {
-    case "open":
-      return "Allowed · level Open"
-    case "curated":
-      return "Allowed · curated list"
-    case "reviewer":
-      return `${a.status === "denied" ? "Denied" : "Allowed"} · reviewer`
-  }
-  const word = decisionWords[a.status] ?? a.status
-  return a.once ? `${word} once` : word
-}
 
 /** Network requests already decided, newest first: allowed, denied or ignored. */
 function ActivityTab() {
@@ -109,7 +84,7 @@ function ActivityTab() {
                   <TableCell>{a.network?.sandboxName}</TableCell>
                   <TableCell>
                     <span className="inline-flex flex-wrap items-center gap-2">
-                      {decisionOf(a)}
+                      {approvalDecision(a)}
                       {a.network?.decided === "reviewer" && !a.reverted && (
                         <Button
                           variant="outline"

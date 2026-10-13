@@ -23,8 +23,15 @@ function overflowing(el: Locator) {
   })
 }
 
-for (const width of [390, 1440]) {
-  test(`a network approval with a long host fits its card at ${width}px`, async ({
+// Home answers its environment's approvals in a section of its own; every other page shows
+// them in the floating stack.
+for (const [width, path] of [
+  [390, ""],
+  [1440, ""],
+  [390, "/chats"],
+  [1440, "/chats"],
+] as const)
+  test(`a network approval with a long host fits its card at ${width}px on ${path || "Home"}`, async ({
     page,
     api,
     env,
@@ -38,9 +45,9 @@ for (const width of [390, 1440]) {
     const id = await api.createSandbox(sandbox)
     await api.connect(id, host)
 
-    await page.goto(`/e/${env}`)
+    await page.goto(`/e/${env}${path}`)
     // Below sm (640 px) the stack folds into its pill, which opens the card.
-    if (width < 640)
+    if (path && width < 640)
       await approvals(page)
         .getByRole("button", { name: "1 approval", exact: true })
         .click()
@@ -56,7 +63,6 @@ for (const width of [390, 1440]) {
 
     await api.dismissApprovals()
   })
-}
 
 test("the setup card on Home and the setup fit a phone", async ({
   page,

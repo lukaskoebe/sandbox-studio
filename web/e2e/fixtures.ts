@@ -173,7 +173,7 @@ export function sandboxName(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-/** The approval stack shown on every page. */
+/** The approvals: Home's section of them, or the stack on every other page. */
 export function approvals(page: Page) {
   return page.getByRole("region", { name: "Approvals" })
 }

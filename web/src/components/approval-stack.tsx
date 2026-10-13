@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react"
 import { ApprovalDecision } from "@/components/approval-decision"
@@ -66,8 +66,6 @@ export function ApprovalStack() {
   const envs = $api.useQuery("get", "/api/environments")
   const matchRoute = useMatchRoute()
   const notifications = useNotifications(pending.data)
-  const [reviewing, setReviewing] = useState<string>()
-  const [conflict, setConflict] = useState<Approval>()
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
   // Requests the user chose to review one by one, which then no longer group.
@@ -77,34 +75,21 @@ export function ApprovalStack() {
 
   // Pages that list these requests themselves: the network page's Requests tab lists its
   // environment's network requests, a chat lists its own permission requests.
+  // Home lists its environment's approvals as cards of its own.
   const onNetwork = matchRoute({ to: "/e/$env/network/requests" })
   const onChat = matchRoute({ to: "/e/$env/chats/$chat" })
+  const onHome = matchRoute({ to: "/e/$env" })
   const items = all.filter(
     (a) =>
       !(
         onNetwork &&
         isNetworkApproval(a) &&
         a.environmentId === onNetwork.env
-      ) && !(onChat && a.chatPermission?.chatId === onChat.chat)
+      ) &&
+      !(onChat && a.chatPermission?.chatId === onChat.chat) &&
+      !(onHome && a.environmentId === onHome.env)
   )
-  const review = all.find((a) => a.id === reviewing)
-  const sheet = (
-    <>
-      <GitReviewSheet
-        approval={review}
-        onOpenChange={(open) => {
-          if (!open) setReviewing(undefined)
-        }}
-      />
-      <ConflictSheet
-        env={conflict?.environmentId ?? ""}
-        conflictId={conflict?.memoryConflict?.conflictId}
-        onOpenChange={(open) => {
-          if (!open) setConflict(undefined)
-        }}
-      />
-    </>
-  )
+  const { sheet, review } = useApprovalReview(all)
   const cards = approvalCards(items, split)
   if (cards.length === 0) return sheet
   const envName = (a: Approval) =>
@@ -121,7 +106,7 @@ export function ApprovalStack() {
       <div
         id={panelId}
         className={cn(
-          "flex max-h-[60vh] w-80 max-w-full flex-col gap-2 overflow-y-auto",
+          "flex max-h-[60vh] w-80 max-w-full flex-col gap-2 overflow-y-auto *:data-[slot=card]:shadow-lg",
           !expanded && (single ? "max-sm:hidden" : "hidden")
         )}
       >
@@ -135,27 +120,17 @@ export function ApprovalStack() {
             Enable notifications
           </Button>
         )}
-        {cards.slice(0, maxCards).map((card) => (
-          <StackCard
-            key={cardApproval(card).id}
-            card={card}
-            envName={envName}
-            onReview={(a) =>
-              a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id)
-            }
-            onSplit={(ids) => {
-              setSplit((prev) => new Set([...prev, ...ids]))
-              // The hosts become cards of their own, which would fold the stack away.
-              setExpanded(true)
-            }}
-          />
-        ))}
-        {cards.length > maxCards && (
-          <MoreLink
-            approval={cardApproval(cards[maxCards])}
-            count={cards.length - maxCards}
-          />
-        )}
+        <ApprovalCardList
+          cards={cards}
+          max={maxCards}
+          envName={envName}
+          onReview={review}
+          onSplit={(ids) => {
+            setSplit((prev) => new Set([...prev, ...ids]))
+            // The hosts become cards of their own, which would fold the stack away.
+            setExpanded(true)
+          }}
+        />
       </div>
       <Button
         variant="outline"
@@ -171,6 +146,78 @@ export function ApprovalStack() {
       </Button>
       {sheet}
     </section>
+  )
+}
+
+/**
+ * The sheets that reviewing an approval opens: a git push's diff, a memory conflict. review opens
+ * the one an approval needs; sheet is rendered wherever its caller lists the cards.
+ */
+export function useApprovalReview(all: Approval[]): {
+  sheet: ReactNode
+  review: (a: Approval) => void
+} {
+  const [reviewing, setReviewing] = useState<string>()
+  const [conflict, setConflict] = useState<Approval>()
+  const sheet = (
+    <>
+      <GitReviewSheet
+        approval={all.find((a) => a.id === reviewing)}
+        onOpenChange={(open) => {
+          if (!open) setReviewing(undefined)
+        }}
+      />
+      <ConflictSheet
+        env={conflict?.environmentId ?? ""}
+        conflictId={conflict?.memoryConflict?.conflictId}
+        onOpenChange={(open) => {
+          if (!open) setConflict(undefined)
+        }}
+      />
+    </>
+  )
+  return {
+    sheet,
+    review: (a) =>
+      a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id),
+  }
+}
+
+/**
+ * Approval cards, up to max, then a link to the page that lists the rest. The stack shows them
+ * floating; Home lists its environment's in its column.
+ */
+export function ApprovalCardList({
+  cards,
+  max,
+  envName,
+  onReview,
+  onSplit,
+}: {
+  cards: ApprovalCard[]
+  max: number
+  envName: (a: Approval) => string | undefined
+  onReview: (a: Approval) => void
+  onSplit: (ids: string[]) => void
+}) {
+  return (
+    <>
+      {cards.slice(0, max).map((card) => (
+        <StackCard
+          key={cardApproval(card).id}
+          card={card}
+          envName={envName}
+          onReview={onReview}
+          onSplit={onSplit}
+        />
+      ))}
+      {cards.length > max && (
+        <MoreLink
+          approval={cardApproval(cards[max])}
+          count={cards.length - max}
+        />
+      )}
+    </>
   )
 }
 
@@ -242,7 +289,7 @@ function ApprovalCard({
   return (
     <Card
       size="sm"
-      className={cn("gap-2 border-l-[3px] shadow-lg", ruleClass(kind.area))}
+      className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
       data-testid="approval-card"
     >
       <CardHeader>

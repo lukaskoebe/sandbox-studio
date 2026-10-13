@@ -82,7 +82,7 @@ export function NetworkGroupCard({
   return (
     <Card
       size="sm"
-      className={cn("gap-2 border-l-[3px] shadow-lg", ruleClass(kind.area))}
+      className={cn("gap-2 border-l-[3px]", ruleClass(kind.area))}
       data-testid="approval-group"
     >
       <CardHeader>

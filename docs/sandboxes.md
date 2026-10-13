@@ -196,7 +196,7 @@ restore gate, see above, and the checkpoint being ready), and `checkpointRestore
 each fork under its source. A node's `status` is `running`, `waiting` (still starting, or a
 create or fork that runs), `failed`, `deleted`, or another runtime status.
 
-The web sandbox page draws the history as a timeline, and Home shows the family tree.
+The web sandbox page draws the history as a timeline, and Home shows the family tree once a sandbox was forked.
 
 ## Suspend and resume
 
