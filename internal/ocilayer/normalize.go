@@ -503,7 +503,7 @@ type entryInfo struct {
 
 func entryType(flag byte) (entryKind, error) {
 	switch flag {
-	case tar.TypeReg, tar.TypeRegA:
+	case tar.TypeReg, 0: // 0 is the regular file flag of old archives (tar.TypeRegA)
 		return kindRegular, nil
 	case tar.TypeDir:
 		return kindDirectory, nil
