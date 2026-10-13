@@ -26,6 +26,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -51,6 +52,7 @@ import {
   expiryText,
   filterRules,
   groupRules,
+  isUnused,
   ruleActions,
   ruleOrigins,
   ruleScopes,
@@ -65,6 +67,8 @@ export const Route = createFileRoute("/e/$env/network/rules")({
     scope: ruleScopes.find((v) => v === s.scope),
     action: ruleActions.find((v) => v === s.action),
     origin: ruleOrigins.find((v) => v === s.origin),
+    // The URL holds 1; JSON parsing reads it back as a number, so accept the string too.
+    unused: s.unused === 1 || s.unused === "1" ? 1 : undefined,
   }),
 })
 
@@ -90,8 +94,9 @@ function RulesTab() {
     (teammates.data ?? []).map((p) => [p.id, p.name])
   )
   const now = useNow()
-  const shown = filterRules(rules.data ?? [], filter)
+  const shown = filterRules(rules.data ?? [], filter, now)
   const groups = groupRules(shown)
+  const unused = shown.filter((r) => isUnused(r, now))
 
   // Filters live in the URL, so a filtered view can be bookmarked or shared.
   const setFilter = (patch: RuleFilter) =>
@@ -106,6 +111,7 @@ function RulesTab() {
       scope: undefined,
       action: undefined,
       origin: undefined,
+      unused: undefined,
     })
   }
 
@@ -177,6 +183,16 @@ function RulesTab() {
             setFilter({ origin: ruleOrigins.find((o) => o === v) })
           }
         />
+        <label className="flex items-center gap-2 text-xs">
+          <Checkbox
+            checked={filter.unused === 1}
+            onCheckedChange={(on) => setFilter({ unused: on ? 1 : undefined })}
+          />
+          Unused
+        </label>
+        {filter.unused === 1 && unused.length > 0 && (
+          <DeleteUnused env={env} rules={unused} />
+        )}
       </div>
 
       {rules.isPending ? (
@@ -231,7 +247,10 @@ function RulesTab() {
                   {group.rules.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <Ident>{r.host}</Ident>
+                        <span className="inline-flex max-w-full items-center gap-1.5">
+                          <Ident>{r.host}</Ident>
+                          {isUnused(r, now) && <RuleChip>unused</RuleChip>}
+                        </span>
                       </TableCell>
                       <TableCell>
                         {r.ports?.length ? (
@@ -388,6 +407,66 @@ function RuleAction({ rule }: { rule: Rule }) {
         </>
       )}
     </div>
+  )
+}
+
+/** Deletes the unused rules shown by the filters, after a confirmation. */
+function DeleteUnused({ env, rules }: { env: string; rules: Rule[] }) {
+  const queryClient = useQueryClient()
+  const remove = $api.useMutation(
+    "delete",
+    "/api/environments/{env}/rules/{id}"
+  )
+  const [working, setWorking] = useState(false)
+  const count = `${rules.length} unused ${rules.length === 1 ? "rule" : "rules"}`
+
+  const deleteAll = async () => {
+    setWorking(true)
+    let failed = 0
+    for (const r of rules) {
+      try {
+        await remove.mutateAsync({ params: { path: { env, id: r.id } } })
+      } catch {
+        failed++
+      }
+    }
+    setWorking(false)
+    void queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/rules"],
+    })
+    if (failed) {
+      toast.error(`Could not delete ${failed} of the ${count}`)
+    } else {
+      toast.success(`Deleted ${count}`)
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
+        <TrashIcon />
+        Delete unused
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {count}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Connections they cover wait for approval again.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={working}
+            onClick={() => void deleteAll()}
+          >
+            {working && <Spinner />}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

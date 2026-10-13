@@ -21,6 +21,20 @@ export type RuleFilter = {
   scope?: RuleScope
   action?: (typeof ruleActions)[number]
   origin?: RuleOrigin
+  /** 1 keeps only the unused rules (`unused=1` in the URL). */
+  unused?: 1
+}
+
+/** A rule is unused when it has decided no connection for this long, and is as old. */
+const unusedAfterMs = 30 * 24 * 60 * 60 * 1000
+
+/** Whether a rule is unused: created 30 days ago or more, and no connection in those 30 days. */
+export function isUnused(rule: Rule, now = Date.now()): boolean {
+  const cutoff = now - unusedAfterMs
+  return (
+    Date.parse(rule.createdAt) <= cutoff &&
+    (!rule.lastHitAt || Date.parse(rule.lastHitAt) <= cutoff)
+  )
 }
 
 /** Two-label public suffixes, under which a domain has three labels: example.co.uk. */
@@ -65,15 +79,20 @@ export function ruleScope(rule: Rule): RuleScope {
   return rule.teammateId ? "teammate" : "environment"
 }
 
-/** The rules that pass every filter. */
-export function filterRules(rules: Rule[], filter: RuleFilter): Rule[] {
+/** The rules that pass every filter, at the time now. */
+export function filterRules(
+  rules: Rule[],
+  filter: RuleFilter,
+  now = Date.now()
+): Rule[] {
   const q = filter.q?.trim().toLowerCase() ?? ""
   return rules.filter(
     (r) =>
       r.host.toLowerCase().includes(q) &&
       (!filter.scope || ruleScope(r) === filter.scope) &&
       (!filter.action || r.action === filter.action) &&
-      (!filter.origin || r.origin === filter.origin)
+      (!filter.origin || r.origin === filter.origin) &&
+      (!filter.unused || isUnused(r, now))
   )
 }
 
