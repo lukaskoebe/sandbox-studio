@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Source is where a piece of information came from.
@@ -28,6 +30,7 @@ type Fact struct {
 	EntityIDs      []string   `json:"entityIds"`
 	Attribute      string     `json:"attribute,omitempty"`
 	Text           string     `json:"text"`
+	Context        string     `json:"context,omitempty" doc:"The context the fact holds in: searches surface it only when they name all of its words"`
 	ObservedAt     time.Time  `json:"observedAt"`
 	ValidFrom      *time.Time `json:"validFrom,omitempty"`
 	ValidUntil     *time.Time `json:"validUntil,omitempty"`
@@ -49,6 +52,7 @@ type FactInput struct {
 	EntityIDs  []string   `json:"entityIds,omitempty" maxItems:"32"`
 	Attribute  string     `json:"attribute,omitempty" maxLength:"128" doc:"Normalized key, e.g. deploy.command"`
 	Text       string     `json:"text" minLength:"1" maxLength:"2000"`
+	Context    string     `json:"context,omitempty" maxLength:"200" doc:"A context the fact holds in, e.g. renart; empty when it holds everywhere"`
 	ObservedAt *time.Time `json:"observedAt,omitempty"`
 	ValidFrom  *time.Time `json:"validFrom,omitempty"`
 	ValidUntil *time.Time `json:"validUntil,omitempty"`
@@ -90,6 +94,12 @@ func (in *FactInput) validate() error {
 	if err := notEmpty("text", in.Text, 2000); err != nil {
 		return err
 	}
+	in.Context = strings.TrimSpace(in.Context)
+	if in.Context != "" {
+		if err := ValidateContext(in.Context); err != nil {
+			return err
+		}
+	}
 	if in.Confidence != nil && (*in.Confidence < 0 || *in.Confidence > 1) {
 		return fmt.Errorf("%w: confidence must be between 0 and 1", ErrInvalid)
 	}
@@ -102,8 +112,20 @@ func (in *FactInput) validate() error {
 	return nil
 }
 
+// ValidateContext checks a fact's context: at most 200 characters, and at least one word
+// that a query can name (see contextNamed).
+func ValidateContext(context string) error {
+	if utf8.RuneCountInString(context) > 200 {
+		return fmt.Errorf("%w: context is longer than 200 characters", ErrInvalid)
+	}
+	if len(contextWords(context)) == 0 {
+		return fmt.Errorf("%w: context %q needs a word of three letters or more", ErrInvalid, context)
+	}
+	return nil
+}
+
 const factCols = `id, scope, kind, entity_ids, attribute, text, observed_at, valid_from, valid_until, confidence, tier,
-	support_count, status, IFNULL(supersedes, ''), author_teammate, created_at, updated_at`
+	support_count, status, IFNULL(supersedes, ''), author_teammate, created_at, updated_at, context`
 
 func scanFact(row interface{ Scan(...any) error }) (Fact, error) {
 	var f Fact
@@ -111,7 +133,7 @@ func scanFact(row interface{ Scan(...any) error }) (Fact, error) {
 	var observed, created, updated int64
 	var from, until sql.NullInt64
 	err := row.Scan(&f.ID, &f.Scope, &f.Kind, &entities, &f.Attribute, &f.Text, &observed, &from, &until, &f.Confidence,
-		&f.Tier, &f.SupportCount, &f.Status, &f.Supersedes, &f.AuthorTeammate, &created, &updated)
+		&f.Tier, &f.SupportCount, &f.Status, &f.Supersedes, &f.AuthorTeammate, &created, &updated, &f.Context)
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, ErrNotFound
 	}
@@ -194,10 +216,10 @@ func (s *Service) CreateFactWith(ctx context.Context, envID string, in FactInput
 	entities, _ := json.Marshal(in.EntityIDs)
 	id := newID()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO memory_facts (id, environment_id, scope, kind, entity_ids, attribute, text, observed_at,
-		valid_from, valid_until, confidence, tier, status, supersedes, author_teammate, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)`,
+		valid_from, valid_until, confidence, tier, status, supersedes, author_teammate, created_at, updated_at, context)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
 		id, envID, in.Scope, in.Kind, string(entities), in.Attribute, in.Text, observed, nullTime(in.ValidFrom), nullTime(in.ValidUntil),
-		confidence, o.Tier, nullString(in.Supersedes), o.AuthorTeammate, now, now); err != nil {
+		confidence, o.Tier, nullString(in.Supersedes), o.AuthorTeammate, now, now, in.Context); err != nil {
 		return Fact{}, err
 	}
 	if _, err := tx.ExecContext(ctx, "INSERT INTO memory_fact_sources (fact_id, source_id) VALUES (?, ?)", id, sourceID); err != nil {
@@ -252,9 +274,9 @@ func (s *Service) UpdateFact(ctx context.Context, envID, id string, in FactInput
 	}
 	entities, _ := json.Marshal(in.EntityIDs)
 	if _, err := tx.ExecContext(ctx, `UPDATE memory_facts SET kind = ?, entity_ids = ?, attribute = ?, text = ?, observed_at = ?,
-		valid_from = ?, valid_until = ?, confidence = ?, tier = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
+		valid_from = ?, valid_until = ?, confidence = ?, tier = ?, context = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
 		in.Kind, string(entities), in.Attribute, in.Text, observed, nullTime(in.ValidFrom), nullTime(in.ValidUntil), confidence, o.Tier,
-		s.unix(), envID, id); err != nil {
+		in.Context, s.unix(), envID, id); err != nil {
 		return Fact{}, err
 	}
 	sourceID, err := s.insertSource(ctx, tx, envID, old.Scope, o)

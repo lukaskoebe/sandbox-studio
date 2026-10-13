@@ -159,6 +159,13 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	if err != nil {
 		return sessionPlan{}, huma.Error409Conflict(err.Error())
 	}
+	if s.AgentMem != nil {
+		copies, err := s.AgentMem.BrowseFiles(ctx, sb.EnvironmentID, sb.TeammateID)
+		if err != nil {
+			return sessionPlan{}, apiError(err)
+		}
+		files = append(files, copies...)
+	}
 	return sessionPlan{harness: h, provider: hp, files: files, env: harness.Env(hp)}, nil
 }
 

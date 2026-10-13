@@ -667,3 +667,117 @@ func TestSplitChunks(t *testing.T) {
 		t.Fatal("blank")
 	}
 }
+
+// A fact with a context surfaces only in searches that name every word of it, and stays out
+// of session-start changes and compiled truth, which reach sessions without a query.
+func TestContextFactsSurfaceOnlyWhereNamed(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	general := f.fact(f.env, SharedScope, KindFact, "Deploy the api with make ship", UserOrigin, func(in *FactInput) { in.EntityIDs = []string{"api"} })
+	staging := f.fact(f.env, SharedScope, KindFact, "The api database listens on port 5433", UserOrigin, func(in *FactInput) {
+		in.EntityIDs = []string{"api"}
+		in.Context = "staging"
+	})
+	if got := f.fact(f.env, SharedScope, KindFact, "x", UserOrigin); got.Context != "" {
+		t.Fatalf("a fact without a context has %q", got.Context)
+	}
+
+	if hits := f.search(f.env, SearchRequest{Query: "api database port"}); contains(hits, staging.ID) {
+		t.Fatalf("staging fact surfaced without naming its context: %v", ids(hits))
+	}
+	if hits := f.search(f.env, SearchRequest{Query: "staging api database port"}); !contains(hits, staging.ID) {
+		t.Fatalf("staging fact not found when its context is named: %v", ids(hits))
+	}
+	if hits := f.search(f.env, SearchRequest{Query: "deploy api make ship"}); !contains(hits, general.ID) {
+		t.Fatalf("general fact missing: %v", ids(hits))
+	}
+
+	changed, err := f.svc.FactsChangedSince(ctx, f.env, SharedScope, time.Unix(0, 0), "someone", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range changed {
+		if c.ID == staging.ID {
+			t.Fatal("a fact with a context is in the session-start changes")
+		}
+	}
+
+	// Attaching a context: once only, the page loses the fact from its compiled truth, and
+	// the timeline names the context but not the fact's text.
+	api := f.fact(f.env, SharedScope, KindFact, "The api runs on Go 1.26", UserOrigin, func(in *FactInput) { in.EntityIDs = []string{"api"} })
+	if ok, err := f.svc.AttachContext(ctx, f.env, api.ID, "renart"); err != nil || !ok {
+		t.Fatalf("attach: %v %v", ok, err)
+	}
+	if ok, err := f.svc.AttachContext(ctx, f.env, api.ID, "elsewhere"); err != nil || ok {
+		t.Fatalf("second attach: %v %v", ok, err)
+	}
+	if got, _ := f.svc.Fact(ctx, f.env, api.ID); got.Context != "renart" {
+		t.Fatalf("context %q", got.Context)
+	}
+	if _, err := f.svc.CompileEntityPage(ctx, f.env, SharedScope, "api"); err != nil {
+		t.Fatal(err)
+	}
+	pages, err := f.svc.Pages(ctx, f.env, SharedScope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var page Page
+	for _, p := range pages {
+		if p.Slug == "topic/api" {
+			page, err = f.svc.Page(ctx, f.env, p.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if strings.Contains(page.Compiled, "Go 1.26") || strings.Contains(page.Compiled, "port 5433") || !strings.Contains(page.Compiled, "make ship") {
+		t.Fatalf("compiled truth %q", page.Compiled)
+	}
+	if len(page.Timeline) != 1 || !strings.Contains(page.Timeline[0].Text, `"renart"`) || strings.Contains(page.Timeline[0].Text, "Go 1.26") {
+		t.Fatalf("timeline %+v", page.Timeline)
+	}
+}
+
+func TestContextNaming(t *testing.T) {
+	for _, c := range []struct {
+		context, query string
+		named          bool
+	}{
+		{"renart", "fix the renart build", true},
+		{"renart", "fix the build", false},
+		{"the renart repo", "renart build", false},
+		{"the renart repo", "renart repo build", true},
+		{"ui", "ui", false},
+	} {
+		if got := contextNamed(c.context, c.query); got != c.named {
+			t.Errorf("contextNamed(%q, %q) = %v", c.context, c.query, got)
+		}
+	}
+	for _, bad := range []string{"the", "ui", strings.Repeat("a", 201)} {
+		if err := ValidateContext(bad); !errors.Is(err, ErrInvalid) {
+			t.Errorf("ValidateContext(%q) = %v", bad, err)
+		}
+	}
+	if err := ValidateContext("staging"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A shared fact that holds in a context only does not win an open conflict: it would surface
+// outside its context.
+func TestContextFactsDoNotWinConflicts(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	mine := f.fact(f.env, "teammate:a", KindFact, "Deploy with make ship", Origin{Tier: TierInferred, AuthorTeammate: "a"})
+	shared := f.fact(f.env, SharedScope, KindFact, "Deploy with make release", UserOrigin, func(in *FactInput) { in.Context = "renart" })
+	if _, err := f.svc.CreateConflict(ctx, f.env, shared.ID, mine.ID, "contradiction", "two deploy commands"); err != nil {
+		t.Fatal(err)
+	}
+	winners, err := f.svc.OpenConflictsWithShared(ctx, f.env, "teammate:a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := winners[mine.ID]; ok {
+		t.Fatalf("a shared fact with a context wins: %v", winners)
+	}
+}

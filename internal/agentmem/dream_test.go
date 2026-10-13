@@ -658,3 +658,242 @@ func TestSharedJudgeIsTheOldestTeammateWithAUtilityModel(t *testing.T) {
 		t.Fatalf("judge %s with no utility model", got)
 	}
 }
+
+// Two facts that hold in different contexts are kept, each with the context it holds in: no
+// conflict, and only searches that name a context surface the fact.
+func TestContextDependentKeepsBothInTheirContexts(t *testing.T) {
+	f := newFixture(t)
+	ada := memory.TeammateScope(f.ada.ID)
+	npm := f.mk(ada, "Install packages with npm", memory.TierUser, "", "tooling", "install.tool", day(1))
+	pnpm := f.mk(ada, "Install packages with pnpm", memory.TierUser, "", "tooling", "install.tool", day(2))
+	f.llm.respond = func(r Request) (string, error) {
+		if strings.Contains(r.User, "npm") && strings.Contains(r.User, "pnpm") {
+			return `{"verdict": "context_dependent", "reason": "each tool belongs to its own repo", "contextA": "renart", "contextB": "sandbox studio"}`, nil
+		}
+		return `{"verdict": "no_conflict", "reason": "unrelated"}`, nil
+	}
+
+	r := f.dream(ada)
+	if r.Status != DreamDone || r.Stats.Contextual != 2 || r.Stats.Conflicts != 0 || r.Stats.Superseded != 0 {
+		t.Fatalf("run %+v", r)
+	}
+	if a := f.get(npm.ID); a.Status != memory.StatusActive || a.Context != "renart" {
+		t.Fatalf("npm %+v", a)
+	}
+	if b := f.get(pnpm.ID); b.Status != memory.StatusActive || b.Context != "sandbox studio" {
+		t.Fatalf("pnpm %+v", b)
+	}
+	if list, _ := f.mem.Conflicts(f.ctx, f.env, ada); len(list) != 0 {
+		t.Fatalf("conflicts %+v", list)
+	}
+
+	// Recall names the context: the fact surfaces only for prompts that name it.
+	recalled := func(query string) []string {
+		hits, err := f.mem.Search(f.ctx, f.env, memory.SearchRequest{Query: query, Teammate: f.ada.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, h := range factHits(hits) {
+			out = append(out, h.ID)
+		}
+		return out
+	}
+	if got := recalled("how do I install packages"); len(got) != 0 {
+		t.Fatalf("recalled outside the contexts: %v", got)
+	}
+	if got := recalled("install packages in renart"); len(got) != 1 || got[0] != npm.ID {
+		t.Fatalf("renart recall %v", got)
+	}
+	if got := recalled("install packages sandbox studio"); len(got) != 1 || got[0] != pnpm.ID {
+		t.Fatalf("sandbox studio recall %v", got)
+	}
+
+	// The cache key holds the contexts the judge saw, so the run after they were attached asks
+	// once more; the run after that is answered from the cache.
+	f.dream(ada)
+	calls := f.llm.n()
+	if r := f.dream(ada); r.Status != DreamDone || r.Stats.Contextual != 0 || r.Stats.Cached != 1 || f.llm.n() != calls {
+		t.Fatalf("cached run %+v, %d calls", r, f.llm.n()-calls)
+	}
+	if a := f.get(npm.ID); a.Context != "renart" {
+		t.Fatalf("context lost: %+v", a)
+	}
+}
+
+// A context-dependent verdict must name a context for at least one fact, and only then.
+func TestContextVerdictParsing(t *testing.T) {
+	a := memory.Fact{ObservedAt: day(1)}
+	b := memory.Fact{ObservedAt: day(2)}
+	ok := []string{
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "renart"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "", "contextB": "staging"}`,
+		`{"verdict": "no_conflict", "reason": "x", "contextA": ""}`,
+	}
+	for _, s := range ok {
+		if _, err := parseVerdict(s, a, b); err != nil {
+			t.Errorf("%q: %v", s, err)
+		}
+	}
+	bad := []string{
+		`{"verdict": "context_dependent", "reason": "x"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": ""}`,
+		`{"verdict": "contradiction", "reason": "x", "contextA": "renart"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "the"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": 7}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "key sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789"}`,
+		`{"verdict": "context_dependent", "reason": "x", "contextA": "` + strings.Repeat("a", 201) + `"}`,
+	}
+	for _, s := range bad {
+		if v, err := parseVerdict(s, a, b); err == nil {
+			t.Errorf("%q accepted as %+v", s, v)
+		}
+	}
+}
+
+func TestNearDuplicatesKeepTheirContexts(t *testing.T) {
+	plain := memory.Fact{Kind: memory.KindFact, Text: "Deploy with make ship"}
+	inContext := plain
+	inContext.Context = "renart"
+	if nearDuplicate(plain, inContext) || !nearDuplicate(plain, plain) {
+		t.Fatal("facts of different contexts count as duplicates")
+	}
+}
+
+// recalled records that a fact was injected into sessions sessions, as recall logs it.
+func (f *fixture) recalled(factID string, sessions int) {
+	f.t.Helper()
+	for i := range sessions {
+		sid := fmt.Sprintf("recall-%d-%s", i, factID)
+		if _, err := f.st.DB().ExecContext(f.ctx, `INSERT INTO memory_agent_sessions (id, environment_id, teammate_id, sandbox_id, harness, session_ref, started_at, last_event_at)
+			VALUES (?, ?, ?, ?, 'claude', ?, ?, ?)`, sid, f.env, f.ada.ID, f.sbAda.ID, sid, f.now.Unix(), f.now.Unix()); err != nil {
+			f.t.Fatal(err)
+		}
+		if _, err := f.st.DB().ExecContext(f.ctx, `INSERT INTO memory_session_log (environment_id, session_id, teammate_id, sandbox_id, at, kind, item_type, item_id, summary)
+			VALUES (?, ?, ?, ?, ?, 'recall', 'fact', ?, 'test')`, f.env, sid, f.ada.ID, f.sbAda.ID, f.now.Unix(), factID); err != nil {
+			f.t.Fatal(err)
+		}
+	}
+}
+
+// A fact the sessions keep recalling suggests its page as a core page; the user accepts or
+// dismisses it, and a decided suggestion is never made again.
+func TestCoreSuggestionIsAcceptedOrDismissed(t *testing.T) {
+	f := newFixture(t)
+	shared := memory.SharedScope
+	api, err := f.mem.CreatePage(f.ctx, f.env, memory.PageInput{Scope: shared, Slug: "topic/api", Title: "api", Kind: "topic"}, memory.UserOrigin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	billing, err := f.mem.CreatePage(f.ctx, f.env, memory.PageInput{Scope: shared, Slug: "topic/billing", Title: "billing", Kind: "topic"}, memory.UserOrigin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := f.mk(shared, "The api listens on port 8080", memory.TierUser, "", "api", "api.port", day(1))
+	f.mk(shared, "The api logs to stdout", memory.TierUser, "", "api", "", day(2))
+	invoices := f.mk(shared, "Invoices go out on the first day of the month", memory.TierUser, "", "billing", "", day(3))
+	f.recalled(port.ID, 5)
+	f.recalled(invoices.ID, 5)
+	f.recalled(f.mk(shared, "Nobody reads this", memory.TierUser, "", "api", "", day(4)).ID, 4)
+
+	if r := f.dream(shared); r.Status != DreamDone || r.Stats.Suggested != 2 {
+		t.Fatalf("run %+v", r.Stats)
+	}
+	list, err := f.mem.Suggestions(f.ctx, f.env, shared)
+	byFact := map[string]memory.Suggestion{}
+	for _, sg := range list {
+		byFact[sg.Fact.ID] = sg
+	}
+	if err != nil || len(list) != 2 || byFact[port.ID].Kind != memory.SuggestCore || byFact[port.ID].Status != memory.SuggestOpen {
+		t.Fatalf("suggestions %+v %v", list, err)
+	}
+	if r := f.dream(shared); r.Stats.Suggested != 0 {
+		t.Fatalf("suggested again: %+v", r.Stats)
+	}
+
+	// Accepting makes the fact's page a core page; the other suggestion is dismissed.
+	if _, err := f.svc.DecideSuggestion(f.ctx, f.env, byFact[port.ID].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := f.mem.Page(f.ctx, f.env, api.ID); !p.AlwaysLoad {
+		t.Fatal("accepted page is not a core page")
+	}
+	if _, err := f.svc.DecideSuggestion(f.ctx, f.env, byFact[invoices.ID].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := f.mem.Page(f.ctx, f.env, billing.ID); p.AlwaysLoad {
+		t.Fatal("dismissed page became a core page")
+	}
+	if left, _ := f.mem.Suggestions(f.ctx, f.env, shared); len(left) != 0 {
+		t.Fatalf("open suggestions left: %+v", left)
+	}
+	if _, err := f.svc.DecideSuggestion(f.ctx, f.env, byFact[invoices.ID].ID, true); err == nil {
+		t.Fatal("a decided suggestion was decided again")
+	}
+	if r := f.dream(shared); r.Stats.Suggested != 0 {
+		t.Fatalf("decided suggestions came back: %+v", r.Stats)
+	}
+}
+
+// A teammate fact that recurs is suggested for shared memory, but nothing is proposed until the
+// user accepts, and accepting only opens the memory.share approval.
+func TestPromoteSuggestionNeverAppliesItself(t *testing.T) {
+	f := newFixture(t)
+	ada := memory.TeammateScope(f.ada.ID)
+	bob := memory.TeammateScope(f.bob.ID)
+	reinforce := func(id string, n int) {
+		t.Helper()
+		for range n {
+			if _, err := f.mem.Reinforce(f.ctx, f.env, id, memory.Origin{Tier: memory.TierInferred, AuthorTeammate: f.ada.ID, Evidence: "again"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	build := f.mk(ada, "Build with make all", memory.TierInferred, f.ada.ID, "", "", day(1))
+	reinforce(build.ID, 2) // learned three times
+	once := f.mk(ada, "Lint with make lint", memory.TierInferred, f.ada.ID, "", "", day(2))
+	f.mk(memory.SharedScope, "Test with make test", memory.TierUser, "", "", "", day(1))
+	tested := f.mk(ada, "Test with make test", memory.TierInferred, f.ada.ID, "", "", day(3))
+	reinforce(tested.ID, 2) // recurs, but shared memory has it
+	f.mk(ada, "Ship with make release", memory.TierInferred, f.ada.ID, "release", "", day(4))
+	f.mk(bob, "Ship with make release", memory.TierInferred, f.bob.ID, "release", "", day(4)) // bob has it too
+
+	if r := f.dream(ada); r.Status != DreamDone || r.Stats.Suggested != 2 {
+		t.Fatalf("run %+v", r.Stats)
+	}
+	list, err := f.mem.Suggestions(f.ctx, f.env, ada)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("suggestions %+v %v", list, err)
+	}
+	for _, sg := range list {
+		if sg.Kind != memory.SuggestPromote || sg.Fact.ID == once.ID || sg.Fact.ID == tested.ID {
+			t.Fatalf("suggested %+v", sg)
+		}
+	}
+	if got := f.pending(ApprovalKind); len(got) != 0 {
+		t.Fatalf("a suggestion proposed something by itself: %+v", got)
+	}
+	if facts, _ := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.SharedScope}); len(facts) != 1 {
+		t.Fatalf("shared facts changed: %+v", facts)
+	}
+
+	// Accepting proposes the fact through the inbox, as Promote does.
+	var accepted memory.Suggestion
+	for _, sg := range list {
+		if sg.Fact.ID == build.ID {
+			accepted = sg
+		}
+	}
+	if sg, err := f.svc.DecideSuggestion(f.ctx, f.env, accepted.ID, true); err != nil || sg.Status != memory.SuggestAccepted {
+		t.Fatalf("accept %+v %v", sg, err)
+	}
+	if got := f.pending(ApprovalKind); len(got) != 1 {
+		t.Fatalf("approvals %+v", got)
+	}
+	if facts, _ := f.mem.Facts(f.ctx, f.env, memory.FactFilter{Scope: memory.SharedScope}); len(facts) != 1 {
+		t.Fatalf("accepting wrote shared memory before the inbox approved it")
+	}
+	if r := f.dream(ada); r.Stats.Suggested != 0 {
+		t.Fatalf("accepted suggestion came back: %+v", r.Stats)
+	}
+}

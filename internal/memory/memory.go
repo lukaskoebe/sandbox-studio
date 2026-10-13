@@ -38,6 +38,10 @@ const CoreBudget = 4000
 
 var teammateIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
+// CredentialLike matches API keys and Studio's placeholders. Memory keeps none: extraction and
+// imports refuse text that has one, and the copies in sandboxes redact it.
+var CredentialLike = regexp.MustCompile(`\b(sk-[A-Za-z0-9_-]{16,}|studio-[0-9a-f]{32}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})`)
+
 // ValidateScope checks a scope: "shared" or "teammate:<id>".
 func ValidateScope(scope string) error {
 	if scope == SharedScope {

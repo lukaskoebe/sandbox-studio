@@ -482,3 +482,42 @@ func TestMigrateTeammateSettings(t *testing.T) {
 		t.Error("a subscription took a key")
 	}
 }
+
+// Migration 029 accepts the context_dependent verdict and keeps the verdicts cached before it.
+func TestMigrateMemoryConsolidation(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 26); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Default', 1)`,
+		`INSERT INTO memory_judgments (environment_id, pair_hash, model, prompt_version, verdict, reason, created_at)
+		 VALUES ('env', 'h1', 'm', 1, 'contradiction', 'why', 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	var verdict, contextA string
+	if err := db.QueryRowContext(ctx, "SELECT verdict, context_a FROM memory_judgments WHERE pair_hash = 'h1'").Scan(&verdict, &contextA); err != nil || verdict != "contradiction" || contextA != "" {
+		t.Fatalf("cached verdict %q %q: %v", verdict, contextA, err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO memory_judgments (environment_id, pair_hash, model, prompt_version, verdict, reason, context_a, created_at)
+		VALUES ('env', 'h2', 'm', 2, 'context_dependent', '', 'renart', 1)`); err != nil {
+		t.Fatalf("context verdict refused: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO memory_judgments (environment_id, pair_hash, model, prompt_version, verdict, reason, created_at)
+		VALUES ('env', 'h3', 'm', 2, 'bogus', '', 1)`); err == nil {
+		t.Fatal("unknown verdict accepted")
+	}
+}

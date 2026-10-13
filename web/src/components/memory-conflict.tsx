@@ -490,6 +490,8 @@ function runSummary(r: DreamRun) {
     s.superseded && `${s.superseded} superseded`,
     s.conflicts && `${s.conflicts} conflicts`,
     s.pages && `${s.pages} pages`,
+    s.contextual && `${s.contextual} with a context`,
+    s.suggested && `${s.suggested} suggested`,
     s.costMicros && `$${(s.costMicros / 1e6).toFixed(4)}`,
   ]
   return parts.filter(Boolean).join(" · ")

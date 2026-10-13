@@ -1786,6 +1786,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "contextual": {
+            "description": "Facts that got a context: they stay, and surface only where it is named",
+            "format": "int64",
+            "type": "integer"
+          },
           "costMicros": {
             "format": "int64",
             "type": "integer"
@@ -1831,6 +1836,11 @@
             "format": "int64",
             "type": "integer"
           },
+          "suggested": {
+            "description": "Suggestions opened: a teammate fact to promote, or a core page",
+            "format": "int64",
+            "type": "integer"
+          },
           "superseded": {
             "format": "int64",
             "type": "integer"
@@ -1848,6 +1858,8 @@
           "rejected",
           "merged",
           "superseded",
+          "contextual",
+          "suggested",
           "conflicts",
           "pages",
           "inputTokens",
@@ -2058,6 +2070,10 @@
             "format": "double",
             "type": "number"
           },
+          "context": {
+            "description": "The context the fact holds in: searches surface it only when they name all of its words",
+            "type": "string"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -2171,6 +2187,11 @@
             "maximum": 1,
             "minimum": 0,
             "type": "number"
+          },
+          "context": {
+            "description": "A context the fact holds in, e.g. renart; empty when it holds everywhere",
+            "maxLength": 200,
+            "type": "string"
           },
           "entityIds": {
             "items": {
@@ -3084,6 +3105,61 @@
         ],
         "type": "object"
       },
+      "ImportInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "markdown": {
+            "description": "A file made by export, at most 2 MiB",
+            "maxLength": 2097152,
+            "type": "string"
+          },
+          "scope": {
+            "description": "shared or teammate:\u003cid\u003e; the file must be for this scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "markdown"
+        ],
+        "type": "object"
+      },
+      "ImportResult": {
+        "additionalProperties": false,
+        "properties": {
+          "facts": {
+            "description": "Facts created",
+            "format": "int64",
+            "type": "integer"
+          },
+          "notes": {
+            "description": "What differed from the file, e.g. a core page imported as a plain page because the core budget is full",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "pages": {
+            "description": "Pages created",
+            "format": "int64",
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "Pages with a slug the scope has already, and facts whose text it has already",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pages",
+          "facts",
+          "skipped"
+        ],
+        "type": "object"
+      },
       "ImportedEnvironment": {
         "additionalProperties": false,
         "properties": {
@@ -3606,6 +3682,22 @@
         "required": [
           "kind",
           "text"
+        ],
+        "type": "object"
+      },
+      "MemoryExportView": {
+        "additionalProperties": false,
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "markdown": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "markdown"
         ],
         "type": "object"
       },
@@ -4446,6 +4538,78 @@
           "deletions",
           "diff",
           "diffTruncated"
+        ],
+        "type": "object"
+      },
+      "QualityView": {
+        "additionalProperties": false,
+        "properties": {
+          "conflicts": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "description": "Conflicts per status: open, resolved",
+            "type": "object"
+          },
+          "contextual": {
+            "description": "Live facts that hold in a context only",
+            "format": "int64",
+            "type": "integer"
+          },
+          "facts": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "description": "Facts per status: active, superseded, disputed, retracted",
+            "type": "object"
+          },
+          "injected": {
+            "description": "Items put into sessions in the last seven days: context packs and recalls",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastRun": {
+            "$ref": "#/components/schemas/DreamRun",
+            "description": "The latest consolidation run of the environment, of any scope"
+          },
+          "sessions": {
+            "description": "Agent sessions with activity in the last seven days",
+            "format": "int64",
+            "type": "integer"
+          },
+          "suggestions": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "description": "Open suggestions per kind: promote, core",
+            "type": "object"
+          },
+          "verdicts": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "description": "Cached judge verdicts, per verdict",
+            "type": "object"
+          },
+          "writes": {
+            "description": "Facts written from sessions in the last seven days",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "facts",
+          "contextual",
+          "verdicts",
+          "conflicts",
+          "suggestions",
+          "sessions",
+          "injected",
+          "writes"
         ],
         "type": "object"
       },
@@ -5321,6 +5485,49 @@
         },
         "required": [
           "source"
+        ],
+        "type": "object"
+      },
+      "Suggestion": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fact": {
+            "$ref": "#/components/schemas/Fact"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "promote",
+              "core"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why it is suggested",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "accepted",
+              "dismissed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "reason",
+          "fact",
+          "createdAt"
         ],
         "type": "object"
       },
@@ -8521,6 +8728,59 @@
         ]
       }
     },
+    "/api/environments/{env}/memory/export": {
+      "get": {
+        "description": "One scope as a markdown file: its pages and active facts, with front matter. Importing the file into a scope reads it back.",
+        "operationId": "exportMemory",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "shared or teammate:\u003cid\u003e",
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "description": "shared or teammate:\u003cid\u003e",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryExportView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
     "/api/environments/{env}/memory/facts": {
       "get": {
         "operationId": "listMemoryFacts",
@@ -8891,6 +9151,59 @@
         ]
       }
     },
+    "/api/environments/{env}/memory/import": {
+      "post": {
+        "description": "Imports a file made by export into a scope. The file is checked in full first. Pages and facts the scope has already are skipped; the rest is stored with tier document.",
+        "operationId": "importMemory",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
     "/api/environments/{env}/memory/pages": {
       "get": {
         "description": "Pages without their timelines; core (always-load) pages first.",
@@ -9213,6 +9526,49 @@
         ]
       }
     },
+    "/api/environments/{env}/memory/quality": {
+      "get": {
+        "description": "The memory's quality numbers: facts per status, judge verdicts, conflicts, open suggestions, the latest consolidation run and what sessions got in the last week.",
+        "operationId": "getMemoryQuality",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QualityView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
     "/api/environments/{env}/memory/scopes": {
       "get": {
         "description": "The shared scope, always first, and every teammate scope that holds facts or pages.",
@@ -9463,6 +9819,167 @@
                     "array",
                     "null"
                   ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/environments/{env}/memory/suggestions": {
+      "get": {
+        "description": "Open suggestions about a scope's facts: a teammate fact to propose for shared memory, or a fact whose page should be a core page. Nothing is applied until accepted.",
+        "operationId": "listMemorySuggestions",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "shared or teammate:\u003cid\u003e: the scope whose facts the suggestions are about",
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "description": "shared or teammate:\u003cid\u003e: the scope whose facts the suggestions are about",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Suggestion"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/environments/{env}/memory/suggestions/{id}/accept": {
+      "post": {
+        "description": "Accepts a suggestion. A promotion proposes the fact for shared memory through a memory.share approval, which the user decides in the inbox; a core page becomes a core page if the scope's core budget has room.",
+        "operationId": "acceptMemorySuggestion",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Suggestion"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/environments/{env}/memory/suggestions/{id}/dismiss": {
+      "post": {
+        "description": "Dismisses a suggestion. It is not made again.",
+        "operationId": "dismissMemorySuggestion",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Suggestion"
                 }
               }
             },

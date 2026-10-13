@@ -49,6 +49,9 @@ func EntitySlug(entity string) string {
 	return e
 }
 
+// FactPageSlug is the slug of the page that records a fact's changes, "" when it has none.
+func FactPageSlug(f Fact) string { return EntitySlug(pageEntity(f)) }
+
 func slugKind(slug string) string {
 	prefix, _, _ := strings.Cut(slug, "/")
 	switch prefix {
@@ -254,6 +257,41 @@ func (s *Service) FactsCreatedBetween(ctx context.Context, envID, scope string, 
 		ORDER BY created_at, id`, envID, scope, from.Unix(), to.Unix())
 }
 
+// AttachContext makes a fact hold in a context only (where, see FactInput.Context): the fact
+// stays, and searches surface it only when they name the context. A fact keeps a context it
+// has. The change goes on the fact's entity page without the fact's text, which would surface
+// the fact outside its context. changed is false when the fact already had a context.
+func (s *Service) AttachContext(ctx context.Context, envID, factID, where string) (changed bool, err error) {
+	if err := ValidateContext(where); err != nil {
+		return false, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	f, err := factTx(ctx, tx, envID, factID)
+	if err != nil {
+		return false, err
+	}
+	if f.Context != "" {
+		return false, nil
+	}
+	now := s.unix()
+	if _, err := tx.ExecContext(ctx, "UPDATE memory_facts SET context = ?, updated_at = ? WHERE id = ?", where, now, factID); err != nil {
+		return false, err
+	}
+	chunks, err := s.noteOnPage(ctx, tx, envID, f, f, time.Unix(now, 0), fmt.Sprintf("Holds in the context %q only; searches surface it only where that is named.", where))
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	s.enqueue(chunks...)
+	return true, nil
+}
+
 // CountFactsSince counts the facts of a scope created after since (by the second).
 func (s *Service) CountFactsSince(ctx context.Context, envID, scope string, since time.Time) (int, error) {
 	var n int
@@ -394,6 +432,9 @@ func (s *Service) CompileEntityPage(ctx context.Context, envID, scope, entity st
 	if err != nil {
 		return CompileResult{}, err
 	}
+	// The compiled truth reaches every session that loads the page, so facts that hold in a
+	// context only stay out of it.
+	facts = slices.DeleteFunc(facts, func(f Fact) bool { return f.Context != "" })
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return CompileResult{}, err
@@ -462,11 +503,13 @@ func (s *Service) CompileEntityPage(ctx context.Context, envID, scope, entity st
 }
 
 // OpenConflictsWithShared maps each fact of scope that has an open conflict with a shared
-// fact to that shared fact's ID. Shared facts that are superseded or retracted don't win.
+// fact to that shared fact's ID. Shared facts that are superseded or retracted don't win, and
+// neither do facts that hold in a context only: they surface only where the context is named.
 func (s *Service) OpenConflictsWithShared(ctx context.Context, envID, scope string) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT fa.id, fa.scope, fb.id, fb.scope FROM memory_conflicts c
 		JOIN memory_facts fa ON fa.id = c.fact_a JOIN memory_facts fb ON fb.id = c.fact_b
 		WHERE c.environment_id = ? AND c.status = 'open'
+		AND fa.context = '' AND fb.context = ''
 		AND ((fa.scope = ? AND fb.scope = 'shared' AND fb.status IN ('active', 'disputed'))
 		  OR (fb.scope = ? AND fa.scope = 'shared' AND fa.status IN ('active', 'disputed')))
 		ORDER BY c.created_at, c.id`, envID, scope, scope)

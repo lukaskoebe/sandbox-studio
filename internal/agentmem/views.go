@@ -125,3 +125,74 @@ func (s *Service) UsageReport(ctx context.Context, env string) (UsageView, error
 	}
 	return v, nil
 }
+
+// QualityView is the memory's quality at a glance: what the facts are, how the judge decided,
+// what consolidation did last and what the sessions got.
+type QualityView struct {
+	Facts       map[string]int `json:"facts" doc:"Facts per status: active, superseded, disputed, retracted"`
+	Contextual  int            `json:"contextual" doc:"Live facts that hold in a context only"`
+	Verdicts    map[string]int `json:"verdicts" doc:"Cached judge verdicts, per verdict"`
+	Conflicts   map[string]int `json:"conflicts" doc:"Conflicts per status: open, resolved"`
+	Suggestions map[string]int `json:"suggestions" doc:"Open suggestions per kind: promote, core"`
+	LastRun     *DreamRun      `json:"lastRun,omitempty" doc:"The latest consolidation run of the environment, of any scope"`
+	Sessions    int            `json:"sessions" doc:"Agent sessions with activity in the last seven days"`
+	Injected    int            `json:"injected" doc:"Items put into sessions in the last seven days: context packs and recalls"`
+	Writes      int            `json:"writes" doc:"Facts written from sessions in the last seven days"`
+}
+
+// Quality reports the quality numbers of an environment's memory. They are counted from what is
+// stored; the retrieval eval runs as a test and is not part of them.
+func (s *Service) Quality(ctx context.Context, env string) (QualityView, error) {
+	v := QualityView{Facts: map[string]int{}, Verdicts: map[string]int{}, Conflicts: map[string]int{}, Suggestions: map[string]int{}}
+	for _, c := range []struct {
+		into  map[string]int
+		query string
+	}{
+		{v.Facts, `SELECT status, COUNT(*) FROM memory_facts WHERE environment_id = ? GROUP BY status`},
+		{v.Verdicts, `SELECT verdict, COUNT(*) FROM memory_judgments WHERE environment_id = ? GROUP BY verdict`},
+		{v.Conflicts, `SELECT status, COUNT(*) FROM memory_conflicts WHERE environment_id = ? GROUP BY status`},
+		{v.Suggestions, `SELECT kind, COUNT(*) FROM memory_suggestions WHERE environment_id = ? AND status = 'open' GROUP BY kind`},
+	} {
+		rows, err := s.db.QueryContext(ctx, c.query, env)
+		if err != nil {
+			return v, err
+		}
+		for rows.Next() {
+			var k string
+			var n int
+			if err := rows.Scan(&k, &n); err != nil {
+				rows.Close()
+				return v, err
+			}
+			c.into[k] = n
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return v, err
+		}
+		rows.Close()
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_facts WHERE environment_id = ? AND context != '' AND status IN ('active', 'disputed')`,
+		env).Scan(&v.Contextual); err != nil {
+		return v, err
+	}
+	runs, err := s.DreamRuns(ctx, env, "", 1)
+	if err != nil {
+		return v, err
+	}
+	if len(runs) > 0 {
+		v.LastRun = &runs[0]
+	}
+	week := s.now().Add(-7 * 24 * time.Hour).Unix()
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_agent_sessions WHERE environment_id = ? AND last_event_at >= ?`,
+		env, week).Scan(&v.Sessions); err != nil {
+		return v, err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_session_log WHERE environment_id = ? AND at >= ? AND kind IN ('context', 'recall')`,
+		env, week).Scan(&v.Injected); err != nil {
+		return v, err
+	}
+	err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM memory_session_log WHERE environment_id = ? AND at >= ? AND kind = 'write' AND item_type = 'fact'`,
+		env, week).Scan(&v.Writes)
+	return v, err
+}

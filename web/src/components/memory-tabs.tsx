@@ -56,6 +56,8 @@ import {
 } from "@/components/memory-dialogs"
 import { ConflictSheet, DreamPanel } from "@/components/memory-conflict"
 import { MemorySessionsTab } from "@/components/memory-sessions"
+import { SuggestionsPanel } from "@/components/memory-suggestions"
+import { MemoryFileActions } from "@/components/memory-file"
 import { ruleClass } from "@/lib/accents"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { cn, formatAge } from "@/lib/utils"
@@ -71,36 +73,44 @@ export function MemoryTabs({ env, scope }: { env: string; scope: string }) {
   const names = new Map(teammates.data?.map((p) => [p.id, p.name]))
 
   return (
-    <Tabs defaultValue="pages">
-      <TabsList>
-        <TabsTrigger value="pages">Pages</TabsTrigger>
-        <TabsTrigger value="facts">Facts</TabsTrigger>
-        <TabsTrigger value="conflicts">Conflicts</TabsTrigger>
-        <TabsTrigger value="search">Search</TabsTrigger>
-        <TabsTrigger value="sessions">Sessions</TabsTrigger>
-      </TabsList>
-      <TabsContent value="pages">
-        <PagesTab key={scope} env={env} scope={scope} />
-      </TabsContent>
-      <TabsContent value="facts">
-        <FactsTab env={env} scope={scope} />
-      </TabsContent>
-      <TabsContent value="conflicts">
-        <ConflictsTab env={env} scope={scope} />
-      </TabsContent>
-      <TabsContent value="search">
-        <SearchTab env={env} scope={scope} />
-      </TabsContent>
-      <TabsContent value="sessions">
-        <MemorySessionsTab
-          env={env}
-          teammate={
-            scope === sharedScope ? undefined : scope.slice("teammate:".length)
-          }
-          names={names}
-        />
-      </TabsContent>
-    </Tabs>
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <MemoryFileActions env={env} scope={scope} />
+      </div>
+      <SuggestionsPanel env={env} scope={scope} />
+      <Tabs defaultValue="pages">
+        <TabsList>
+          <TabsTrigger value="pages">Pages</TabsTrigger>
+          <TabsTrigger value="facts">Facts</TabsTrigger>
+          <TabsTrigger value="conflicts">Conflicts</TabsTrigger>
+          <TabsTrigger value="search">Search</TabsTrigger>
+          <TabsTrigger value="sessions">Sessions</TabsTrigger>
+        </TabsList>
+        <TabsContent value="pages">
+          <PagesTab key={scope} env={env} scope={scope} />
+        </TabsContent>
+        <TabsContent value="facts">
+          <FactsTab env={env} scope={scope} />
+        </TabsContent>
+        <TabsContent value="conflicts">
+          <ConflictsTab env={env} scope={scope} />
+        </TabsContent>
+        <TabsContent value="search">
+          <SearchTab env={env} scope={scope} />
+        </TabsContent>
+        <TabsContent value="sessions">
+          <MemorySessionsTab
+            env={env}
+            teammate={
+              scope === sharedScope
+                ? undefined
+                : scope.slice("teammate:".length)
+            }
+            names={names}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }
 
@@ -435,6 +445,11 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={f.status} />
+                    {f.context && (
+                      <Badge variant="outline" className="ml-1">
+                        in {f.context}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatAge(f.observedAt)}

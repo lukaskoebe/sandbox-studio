@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { PageHeader } from "@/components/page-header"
 import { MemoryTabs, sharedScope } from "@/components/memory-tabs"
 import { MemoryUsage } from "@/components/memory-sessions"
+import { MemoryQuality } from "@/components/memory-quality"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { $api } from "@/lib/api/client"
 
@@ -44,6 +45,7 @@ function MemoryPage() {
           </p>
         )}
         <MemoryUsage env={env} shared />
+        <MemoryQuality env={env} />
         <MemoryTabs env={env} scope={sharedScope} />
       </ScrollArea>
     </>
