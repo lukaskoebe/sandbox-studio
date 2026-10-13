@@ -14,6 +14,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
@@ -40,9 +41,10 @@ func browserImage(base string) string {
 }
 
 // routeCalls sends a guest's call to the integration that serves the MCP tool it names, its
-// browser tools to the broker, and the rest to next (memory). Every call comes from a
-// sandbox the channel names; a browser VM or a template build makes none.
-func routeCalls(st *store.Store, integs integrations.Set, brw *browser.Service, log *slog.Logger,
+// browser tools to the broker, its task tools to the task service, and the rest to next
+// (memory). Every call comes from a sandbox the channel names; a browser VM or a template build
+// makes none.
+func routeCalls(st *store.Store, integs integrations.Set, brw *browser.Service, tsk *tasks.Service, log *slog.Logger,
 	next func(ctx context.Context, id, method string, params json.RawMessage) (any, error)) func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
 	return func(ctx context.Context, id, method string, params json.RawMessage) (any, error) {
 		if t, ok := integs.Tool(method); ok {
@@ -62,6 +64,9 @@ func routeCalls(st *store.Store, integs integrations.Set, brw *browser.Service, 
 		}
 		if strings.HasPrefix(method, agentproto.BrowserMethodPrefix) {
 			return brw.HandleCall(ctx, id, method, params)
+		}
+		if strings.HasPrefix(method, agentproto.TaskMethodPrefix) {
+			return tsk.HandleCall(ctx, id, method, params)
 		}
 		return next(ctx, id, method, params)
 	}

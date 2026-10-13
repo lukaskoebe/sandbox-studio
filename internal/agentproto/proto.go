@@ -131,8 +131,8 @@ type StartSession struct {
 	Chat string `json:"chat,omitempty"`
 }
 
-// Call methods. MethodHook carries a harness.HookEvent; the memory methods carry their
-// tool arguments.
+// Call methods. MethodHook carries a harness.HookEvent; the memory and task methods carry
+// their tool arguments.
 const (
 	MethodHook         = "hook"
 	MethodMemorySearch = "memory_search"
@@ -144,7 +144,15 @@ const (
 	// MethodGitPushStatus and MethodGitPullRequestStatus are the git tools (docs/git-review.md).
 	MethodGitPushStatus        = "git_push_status"
 	MethodGitPullRequestStatus = "git_pull_request_status"
+
+	MethodTasksList        = "tasks_list"
+	MethodTaskCreate       = "task_create"
+	MethodTaskUpdateStatus = "task_update_status"
+	MethodTaskAddNote      = "task_add_note"
 )
+
+// TaskMethodPrefix starts every task method, as BrowserMethodPrefix does for browser ones.
+const TaskMethodPrefix = "task"
 
 // MaxCallLine bounds a Call or CallReply line, escapes included.
 const MaxCallLine = 1 << 20

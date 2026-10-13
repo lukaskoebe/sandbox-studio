@@ -7,7 +7,7 @@ A teammate is an agent identity in one environment. It has a name, role, optiona
 
 ![The Teammates page listing agent names, harnesses, providers, models, and Git identities](../../assets/screenshots/teammates.jpg)
 
-Each teammate has a page of its own, reached from **Teammates** in the sidebar: its overview, chats, private memory, browser, and settings, where you edit it or delete it.
+Each teammate has a page of its own, reached from **Teammates** in the sidebar: its overview, tasks, chats, private memory, browser, and settings, where you edit it or delete it.
 
 ## Choose a provider
 
@@ -43,6 +43,14 @@ To work with the teammate in a chat instead, see [Chat mode](../chat/).
 The provider key must be bound to the correct API host, and the sandbox must be running. A sandbox without a teammate still has a terminal, but it cannot start an agent session or use teammate memory/browser tools.
 
 Studio sets up the harness inside the sandbox. The teammate's name, role, and soul appear in its managed instruction file. The harness configuration uses the provider placeholder; it does not contain the real key. Changes to the teammate instructions take effect on the next session start.
+
+## Tasks and check-ins
+
+The **Tasks** tab lists the work a teammate should do. A task has a title, optional details in Markdown, and an optional due day. You add, edit, and mark tasks done; the teammate can add tasks to its own list while it works in a sandbox.
+
+Check-ins are off until you turn them on under the teammate's **Settings**. With check-ins on, Studio gives the teammate a chat turn every few hours, during the hours you pick, whenever it has open tasks. The turn runs in the teammate's most recent sandbox, and the chat is marked as a heartbeat in the chat list. If that sandbox is stopped, Studio starts it for the check-in, and it keeps running afterwards.
+
+A check-in that can't run is listed under **Activity** on the Tasks tab with the reason: the teammate has no sandbox, its provider has no key, approvals are waiting in its sandbox, or its sandbox isn't ready.
 
 ## Ownership and deletion
 

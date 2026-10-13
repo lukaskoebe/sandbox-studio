@@ -25,6 +25,7 @@
 | 2026-10-11 | Chats: harnesses driven over ACP alongside the terminal TUI ([design](design/chat-mode.md)) |
 | 2026-10-13 | Network security levels (C1): locked, guarded (default for new environments), assisted and open decide what no rule covers, per environment with a teammate override; existing environments migrate to locked |
 | 2026-10-13 | The curated list of development infrastructure ships as data and is allowed by guarded and up; assisted asks an AI reviewer on the environment's utility model, whose allows and denies expire after a day and can be reverted |
+| 2026-10-13 | Teammate tasks and check-ins: one schedule per teammate, which starts a chat only with open tasks, in the latest sandbox, starting it if it's stopped ([teammates](teammates.md#check-ins-heartbeats)) |
 
 ## From v1
 

@@ -298,6 +298,43 @@
         ],
         "type": "object"
       },
+      "Beat": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chatId": {
+            "description": "The heartbeat chat it started",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "started",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the check-in was skipped",
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "teammateId",
+          "at",
+          "outcome"
+        ],
+        "type": "object"
+      },
       "BrowserAction": {
         "additionalProperties": false,
         "properties": {
@@ -789,6 +826,9 @@
           "harness": {
             "type": "string"
           },
+          "heartbeat": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },
@@ -830,7 +870,8 @@
           "state",
           "rev",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "heartbeat"
         ],
         "type": "object"
       },
@@ -3163,6 +3204,38 @@
         "required": [
           "status",
           "version"
+        ],
+        "type": "object"
+      },
+      "Heartbeat": {
+        "additionalProperties": false,
+        "properties": {
+          "everyHours": {
+            "description": "Hours between check-ins",
+            "format": "int64",
+            "maximum": 24,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "fromHour": {
+            "description": "The first local hour a check-in may start in",
+            "format": "int64",
+            "maximum": 23,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "toHour": {
+            "description": "The local hour the check-ins stop before",
+            "format": "int64",
+            "maximum": 24,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "everyHours",
+          "fromHour",
+          "toHour"
         ],
         "type": "object"
       },
@@ -5938,6 +6011,93 @@
         ],
         "type": "object"
       },
+      "Task": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "description": "teammate: the teammate created it for itself",
+            "enum": [
+              "user",
+              "teammate"
+            ],
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "due": {
+            "description": "A day, YYYY-MM-DD",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "in_progress",
+              "done"
+            ],
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "teammateId",
+          "title",
+          "status",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TaskInput": {
+        "additionalProperties": false,
+        "properties": {
+          "details": {
+            "description": "Markdown, at most 8 KiB",
+            "maxLength": 8192,
+            "type": "string"
+          },
+          "due": {
+            "description": "A day, YYYY-MM-DD",
+            "maxLength": 10,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "in_progress",
+              "done"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
       "Teammate": {
         "additionalProperties": false,
         "properties": {
@@ -5974,6 +6134,9 @@
               "codex"
             ],
             "type": "string"
+          },
+          "heartbeat": {
+            "$ref": "#/components/schemas/Heartbeat"
           },
           "id": {
             "type": "string"
@@ -13704,6 +13867,172 @@
         ]
       }
     },
+    "/api/environments/{env}/teammates/{id}/heartbeat": {
+      "delete": {
+        "description": "Turns the teammate's check-ins off. The schedule's window is kept for the next time.",
+        "operationId": "clearTeammateHeartbeat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      },
+      "put": {
+        "description": "Turns the teammate's check-ins on, or changes their schedule: every everyHours hours while the local hour is in [fromHour, toHour). A check-in gives the teammate a chat turn in its latest sandbox when it has open tasks.",
+        "operationId": "setTeammateHeartbeat",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Heartbeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/heartbeats": {
+      "get": {
+        "description": "The teammate's logged check-ins, newest first: the heartbeat chats they started, and the ones skipped with why.",
+        "operationId": "listHeartbeats",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Beat"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
     "/api/environments/{env}/teammates/{id}/security-level": {
       "put": {
         "description": "Overrides the environment's security level for one teammate's sandboxes, or clears the override.",
@@ -13764,6 +14093,199 @@
         },
         "tags": [
           "network"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/tasks": {
+      "get": {
+        "description": "The teammate's tasks: the ones not done first, then oldest first.",
+        "operationId": "listTeammateTasks",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Task"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      },
+      "post": {
+        "description": "Adds a task to the teammate's list, created by the user. A new task is open; its status is not read.",
+        "operationId": "createTeammateTask",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/tasks/{task}": {
+      "put": {
+        "description": "Replaces the task's title, details, due day and status. Status done marks it finished.",
+        "operationId": "updateTeammateTask",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Task ID",
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "description": "Task ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
         ]
       }
     },

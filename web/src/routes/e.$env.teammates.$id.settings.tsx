@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { TeammateForm } from "@/components/teammate-form"
+import { TeammateHeartbeat } from "@/components/teammate-heartbeat"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/teammates/$id/settings")({
@@ -45,6 +46,9 @@ function TeammateSettings() {
         providers={providers.data}
         onSaved={() => toast.success("Teammate saved")}
       />
+      <div className="border-t pt-6">
+        <TeammateHeartbeat env={env} teammate={teammate} />
+      </div>
       <section className="space-y-3 border-t pt-6">
         <SectionHeader
           title="Network security level"

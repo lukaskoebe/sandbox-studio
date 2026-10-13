@@ -87,6 +87,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerMemoryAgent(api)
 	s.registerMemoryDream(api)
 	s.registerTeammates(api)
+	s.registerTasks(api)
 	s.registerSessions(api)
 	s.registerForges(api)
 	s.registerSystem(api)

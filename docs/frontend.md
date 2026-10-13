@@ -40,6 +40,7 @@ to an environment.
 | `/e/$env/memory` | shared memory: pages, facts, conflicts, search, sessions |
 | `/e/$env/teammates` | teammates |
 | `/e/$env/teammates/$id` | one teammate's overview: agent, identity, soul, sandboxes, scoped secrets |
+| `/e/$env/teammates/$id/tasks` | the teammate's task list, and the log of its check-ins |
 | `/e/$env/teammates/$id/chats` | the teammate's chats |
 | `/e/$env/teammates/$id/memory` | the teammate's private memory, with the tabs of shared memory |
 | `/e/$env/teammates/$id/browser` | the teammate's browser: live view, history, rules |

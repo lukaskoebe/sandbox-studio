@@ -39,6 +39,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/heartbeat"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/netreview"
@@ -49,6 +50,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatebuild"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateregistry"
 	"github.com/lukaskoebe/sandbox-studio/internal/updates"
@@ -287,7 +289,8 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 	hub.OnConnect = mgr.Configure
 	// Every integration that serves MCP tools is in integs by now; the chat service serves none.
-	hub.OnCall = routeCalls(st, integs, brw, log, agentMem.HandleCall)
+	tsk := &tasks.Service{Store: st, Bus: bus, Log: log}
+	hub.OnCall = routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)
 	brw.Runner, brw.VMs = hub, mgr
 	go brw.Run(ctx)
 	go mgr.FollowEnvironments(ctx, bus)
@@ -343,8 +346,12 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 
 	mux := http.NewServeMux()
-	(&api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
-		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats}).Register(mux)
+	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
+		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats}
+	// Heartbeats give teammates with open tasks their check-ins, until ctx ends (docs/teammates.md).
+	beats := &heartbeat.Service{Store: st, Sandboxes: mgr, Chats: chats, Plan: apiServer.ChatLaunch, Bus: bus, Log: log}
+	go beats.Run(ctx)
+	apiServer.Register(mux)
 	mux.Handle("/", webui.Handler())
 	registerControl(mux, st, engine)
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))

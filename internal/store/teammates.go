@@ -273,16 +273,25 @@ type Teammate struct {
 	// SecurityLevel overrides the environment's network security level for this teammate's
 	// sandboxes; empty means the environment's.
 	SecurityLevel string `json:"securityLevel" enum:",locked,guarded,assisted,open" doc:"The network security level of this teammate's sandboxes; empty means the environment's"`
+	// Heartbeat is the check-in schedule; nil while it is off.
+	Heartbeat *Heartbeat `json:"heartbeat,omitempty"`
+	// HeartbeatAt is the last check-in of any outcome, which the schedule counts from.
+	HeartbeatAt time.Time `json:"-"`
 }
 
 // teammateCols selects a teammate; provider_id reads as "" for a teammate without a provider.
-const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level"
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
-	var created, updated int64
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel)
+	var created, updated, beat int64
+	var every, from, to int
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat)
+	if every > 0 {
+		p.Heartbeat = &Heartbeat{EveryHours: every, FromHour: from, ToHour: to}
+	}
 	p.CreatedAt, p.UpdatedAt = time.Unix(created, 0), time.Unix(updated, 0)
+	p.HeartbeatAt = time.Unix(beat, 0)
 	return p, err
 }
 
@@ -365,7 +374,16 @@ func (s *Store) Teammate(ctx context.Context, envID, id string) (Teammate, error
 
 // Teammates lists the teammates of an environment by name.
 func (s *Store) Teammates(ctx context.Context, envID string) ([]Teammate, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT "+teammateCols+" FROM teammates WHERE environment_id = ? ORDER BY name", envID)
+	return s.teammates(ctx, "SELECT "+teammateCols+" FROM teammates WHERE environment_id = ? ORDER BY name", envID)
+}
+
+// HeartbeatTeammates lists the teammates of every environment whose check-in schedule is on.
+func (s *Store) HeartbeatTeammates(ctx context.Context) ([]Teammate, error) {
+	return s.teammates(ctx, "SELECT "+teammateCols+" FROM teammates WHERE heartbeat_every > 0 ORDER BY environment_id, name")
+}
+
+func (s *Store) teammates(ctx context.Context, query string, args ...any) ([]Teammate, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

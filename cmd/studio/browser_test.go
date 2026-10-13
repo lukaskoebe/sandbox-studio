@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
@@ -28,5 +32,30 @@ func TestBrowserImagePinned(t *testing.T) {
 	}
 	if got := browserImage("sandbox-studio-base:dev"); got != "sandbox-studio-browser:dev" {
 		t.Errorf("other base: got %q", got)
+	}
+}
+
+// Task tools go to the task service and the other tools to the memory service.
+func TestRouteCallsSendsTaskToolsToTheTaskService(t *testing.T) {
+	st, err := store.Open(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	tsk := &tasks.Service{Store: st}
+	var next []string
+	route := routeCalls(nil, tsk, func(_ context.Context, _, method string, _ json.RawMessage) (any, error) {
+		next = append(next, method)
+		return nil, nil
+	})
+	// The sandbox is unknown, so the task service answers with its own refusal.
+	if _, err := route(context.Background(), "no-such-sandbox", "task_create", json.RawMessage(`{"title":"x"}`)); err == nil {
+		t.Fatal("a task call from an unknown sandbox was accepted")
+	}
+	if _, err := route(context.Background(), "no-such-sandbox", "remember", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if len(next) != 1 || next[0] != "remember" {
+		t.Fatalf("the memory service got %v", next)
 	}
 }
