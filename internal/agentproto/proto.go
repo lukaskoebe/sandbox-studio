@@ -97,6 +97,9 @@ const (
 	MaxHomeFiles     = 16
 	MaxHomeFileBytes = 256 << 10
 	MaxHomeFilesLine = 4 << 20 // the JSON line, escapes included
+	// MaxKeysFileBytes caps a file Keys are merged into: harnesses keep history in such
+	// files, so they can be larger than the files Studio writes whole.
+	MaxKeysFileBytes = 8 << 20
 )
 
 // The markers around a managed block. A HomeFile with Block set replaces the text from
@@ -115,6 +118,12 @@ type HomeFile struct {
 	// Block marks Content as a managed block: it starts with BlockBegin and ends with
 	// BlockEnd, and replaces only the existing block of the file (or is prepended).
 	Block bool `json:"block,omitempty"`
+	// Keys marks Content as a JSON object to merge into the file's JSON object: objects
+	// are merged key by key, any other value replaces the file's, and keys Content doesn't
+	// name are kept. It is for files the harness owns and Studio only sets a few keys in.
+	// A guest older than the host would ignore it and replace the file, so the host sends
+	// such files only to a guest of its own version (agentchan.Hub.WriteHomeFiles).
+	Keys bool `json:"keys,omitempty"`
 }
 
 // HomeFiles is the body of a KindHomeFiles stream.

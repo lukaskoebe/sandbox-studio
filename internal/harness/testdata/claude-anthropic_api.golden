@@ -82,6 +82,20 @@
     }
   }
 }
+== .claude.json mode=600 block=false
+{
+  "customApiKeyResponses": {
+    "approved": [
+      "cdef0123456789abcdef"
+    ]
+  },
+  "hasCompletedOnboarding": true,
+  "projects": {
+    "/workspace": {
+      "hasTrustDialogAccepted": true
+    }
+  }
+}
 == .claude/CLAUDE.md mode=644 block=true
 <!-- sandbox-studio:begin -->
 <!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the teammate in Studio instead; text outside the block is kept. -->

@@ -41,9 +41,6 @@ func (Claude) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, err
 		// Memory: every hook forwards to Studio through the guest agent.
 		"hooks": claudeStyleHooks(teammates.HarnessClaude),
 	}
-	// verify (S7): the first start with ANTHROPIC_API_KEY set may ask once whether to use
-	// the key, and a fresh home shows the onboarding screens. Both are answered in the TUI
-	// and remembered in ~/.claude.json, which Claude Code owns and Studio doesn't write.
 	if m := model(p, provider); m != "" {
 		settings["model"] = m
 	}
@@ -57,13 +54,38 @@ func (Claude) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, err
 	if err != nil {
 		return nil, err
 	}
+	state, err := marshalJSON(claudeState(provider))
+	if err != nil {
+		return nil, err
+	}
 	memory := instructions(p, s)
 	memory.Path = ".claude/CLAUDE.md"
 	return []GuestFile{
 		{Path: ".claude/settings.json", Content: b, Mode: 0o644},
 		{Path: claudeMCPConfig, Content: mcp, Mode: 0o644},
+		{Path: ".claude.json", Content: state, Mode: 0o600, Keys: true},
 		memory,
 	}, nil
+}
+
+// claudeState are the keys Studio sets in ~/.claude.json, which Claude Code owns. Without
+// them a fresh home starts with the onboarding screens, which ask to sign in with a Claude
+// account or a Console account although the provider's variable is set, and with
+// ANTHROPIC_API_KEY Claude Code asks once whether to use the key. Objects merge key by key, so
+// the other projects' state stays. verify (S7): Claude Code
+// remembers an approved key by its last 20 characters, here the placeholder's.
+func claudeState(provider Provider) map[string]any {
+	state := map[string]any{
+		"hasCompletedOnboarding": true,
+		// The workspace is trusted, like Codex's: the VM is the sandbox.
+		"projects": map[string]any{"/workspace": map[string]any{"hasTrustDialogAccepted": true}},
+	}
+	if provider.Kind == teammates.KindAnthropicAPI && len(provider.Placeholder) >= 20 {
+		state["customApiKeyResponses"] = map[string]any{
+			"approved": []string{provider.Placeholder[len(provider.Placeholder)-20:]},
+		}
+	}
+	return state
 }
 
 // TUICommand loads Studio's MCP server from its own file. verify (S7): servers passed with

@@ -79,6 +79,15 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 						agentproto.WriteJSONLine(st, agentproto.BrowserDownload{Name: req.Name, Size: 3})
 						st.Write([]byte("abc"))
 					}
+				case agentproto.KindHomeFiles:
+					// Answers with the paths it got, as an error the test can read.
+					var req agentproto.HomeFiles
+					agentproto.ReadJSONLine(br, &req)
+					var paths []string
+					for _, f := range req.Files {
+						paths = append(paths, f.Path)
+					}
+					agentproto.WriteJSONLine(st, agentproto.Error{Error: "got " + strings.Join(paths, ",")})
 				case agentproto.KindConfig:
 					var cfg agentproto.Config
 					agentproto.ReadJSONLine(br, &cfg)
@@ -177,6 +186,16 @@ func TestHub(t *testing.T) {
 	}
 	if err := h.Configure(ctx, "sb1", agentproto.Config{CA: "bad"}); err == nil || err.Error() != "bad CA" {
 		t.Fatalf("want guest error, got %v", err)
+	}
+
+	// The guest is of another version than the host, so it gets no Keys files.
+	keys := agentproto.HomeFile{Path: ".claude.json", Content: "{}", Mode: 0o600, Keys: true}
+	if err := h.WriteHomeFiles(ctx, "sb1", []agentproto.HomeFile{keys}); err != nil {
+		t.Fatalf("sent a lone Keys file: %v", err)
+	}
+	plain := agentproto.HomeFile{Path: "a.md", Content: "a", Mode: 0o644}
+	if err := h.WriteHomeFiles(ctx, "sb1", []agentproto.HomeFile{keys, plain}); err == nil || err.Error() != "got a.md" {
+		t.Fatalf("want only the plain file sent, got %v", err)
 	}
 
 	p, err := h.OpenPTY(ctx, "sb1", "main", 80, 24)

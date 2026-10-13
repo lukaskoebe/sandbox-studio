@@ -145,6 +145,38 @@ func TestHomeFilesManagedBlock(t *testing.T) {
 	}
 }
 
+// Keys are merged into the harness's own JSON file: its other keys, nested ones included,
+// stay as they are.
+func TestHomeFilesKeys(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".claude.json")
+	keys := agentproto.HomeFile{Path: ".claude.json", Content: `{"hasCompletedOnboarding":true,"customApiKeyResponses":{"approved":["abc"]}}`, Mode: 0o600, Keys: true}
+	must(t, writeAsMe(home, keys))
+	if b, _ := os.ReadFile(path); !strings.Contains(string(b), `"hasCompletedOnboarding": true`) {
+		t.Fatalf("fresh: %q", b)
+	}
+	must(t, os.WriteFile(path, []byte(`{"numStartups":7,"hasCompletedOnboarding":false,"customApiKeyResponses":{"rejected":["old"]},"projects":{"/workspace":{"x":1}}}`), 0o600))
+	must(t, writeAsMe(home, keys))
+	b, _ := os.ReadFile(path)
+	for _, want := range []string{`"numStartups": 7`, `"hasCompletedOnboarding": true`, `"rejected": [`, `"approved": [`, `"x": 1`} {
+		if !strings.Contains(string(b), want) {
+			t.Fatalf("merged lacks %s: %s", want, b)
+		}
+	}
+	// A file that isn't a JSON object is left alone.
+	must(t, os.WriteFile(path, []byte("[1]"), 0o600))
+	if err := writeAsMe(home, keys); err == nil {
+		t.Fatal("merged into a JSON list")
+	}
+	if b, _ := os.ReadFile(path); string(b) != "[1]" {
+		t.Fatalf("changed: %q", b)
+	}
+	// Keys must be an object.
+	if err := writeAsMe(home, agentproto.HomeFile{Path: "x.json", Content: "[]", Mode: 0o600, Keys: true}); err == nil {
+		t.Fatal("accepted a list of keys")
+	}
+}
+
 func TestReadBodyBounded(t *testing.T) {
 	var v agentproto.HomeFiles
 	long := `{"files":[{"path":"` + strings.Repeat("x", 100) + `"}]}` + "\n"

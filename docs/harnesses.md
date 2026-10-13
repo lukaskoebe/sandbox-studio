@@ -57,7 +57,9 @@ block, or puts it first, and keeps text outside it. The block has the teammate's
 role and soul, says where it works (this sandbox, the names of its other sandboxes, and that
 files, unpushed commits, tools, images and servers stay in the sandbox that made them; a
 session can't reach or switch to another, so missing work goes through git or the user) and
-points to the memory tools.
+points to the memory tools. Files the harness owns, like Claude Code's `~/.claude.json`, get
+only a few keys merged in; the rest of the file is kept. A guest agent older than Studio
+gets no such file, since it would replace the whole file.
 
 The soul reaches the agent only through this block, never through the session-start
 hook: the harness reads its instructions file in every session, including resumed ones and
@@ -70,7 +72,7 @@ takes effect with the next session start, which rewrites the block.
 | Instructions (block) | `~/.config/opencode/AGENTS.md` | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` |
 | Provider | `provider.anthropic`/`openai` with `apiKey: "{env:VAR}"`; compatible: provider `studio` via `@ai-sdk/openai-compatible` with `baseURL` | key from `ANTHROPIC_API_KEY` | `[model_providers.studio]` with `base_url`, `env_key`, `wire_api = "responses"` |
 | Model | `model = "<provider>/<model>"` | `model` | `model` |
-| Auto-approve | `"permission": "allow"` | `permissions.defaultMode = "bypassPermissions"`, `skipDangerousModePermissionPrompt` | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `/workspace` trusted |
+| Auto-approve | `"permission": "allow"` | `permissions.defaultMode = "bypassPermissions"`, `skipDangerousModePermissionPrompt`, `/workspace` trusted in `~/.claude.json` | `approval_policy = "never"`, `sandbox_mode = "danger-full-access"`, `/workspace` trusted |
 | Updates off | `"autoupdate": false` | `env.DISABLE_AUTOUPDATER = "1"` | `check_for_update_on_startup = false` |
 | Env | `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` | `ANTHROPIC_API_KEY` | `OPENAI_API_KEY` |
 | Hooks | plugin `~/.config/opencode/plugins/studio-memory.js` | `hooks` in settings.json | `~/.codex/hooks.json` |
@@ -261,9 +263,13 @@ Pending S7 (`// verify (S7)` in the code):
 - Hook payloads as the pinned versions send them: the fixtures under
   `internal/harness/testdata/hooks/` are documentation-derived, not recordings.
 
-- Claude Code may ask once whether to use `ANTHROPIC_API_KEY`, and a fresh home shows its
-  onboarding. Both are answered in the TUI and remembered in `~/.claude.json`, which Studio
-  doesn't write.
+- Claude Code keeps its onboarding state in `~/.claude.json`, which it owns. Without
+  `hasCompletedOnboarding` a fresh home asks to sign in with a Claude or a Console account
+  although the provider's variable is set. Studio merges that key, and the workspace's
+  `hasTrustDialogAccepted`, into the file (a home file
+  with `keys`: the rest of the file is kept), and for an API key also approves the key by the
+  last 20 characters of its placeholder in `customApiKeyResponses`. That Claude Code matches
+  approved keys this way is unverified.
 - Whether Codex's custom provider with `env_key` needs no `codex login`.
 - The OpenCode global rules path.
 - Whether each auto-approve setting takes effect without a prompt.

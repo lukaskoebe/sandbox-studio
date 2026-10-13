@@ -5,6 +5,7 @@ package guest
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -58,6 +59,12 @@ func checkHomeFiles(files []agentproto.HomeFile) error {
 			strings.Count(f.Content, agentproto.BlockBegin) != 1 || strings.Count(f.Content, agentproto.BlockEnd) != 1) {
 			return fmt.Errorf("%s: a managed block must start and end with its markers", f.Path)
 		}
+		if f.Keys {
+			var keys map[string]any
+			if f.Block || json.Unmarshal([]byte(f.Content), &keys) != nil || keys == nil {
+				return fmt.Errorf("%s: keys must be a JSON object, and not a managed block", f.Path)
+			}
+		}
 	}
 	return nil
 }
@@ -94,8 +101,20 @@ func writeHomeFile(root, uid, gid int, f agentproto.HomeFile) error {
 	base := parts[len(parts)-1]
 
 	content := f.Content
+	if f.Keys {
+		existing, err := readExisting(dir, base, agentproto.MaxKeysFileBytes)
+		if err != nil {
+			return err
+		}
+		if content, err = mergeKeys(existing, f.Content); err != nil {
+			return err
+		}
+		if len(content) > agentproto.MaxKeysFileBytes {
+			return errors.New("the file would grow too large")
+		}
+	}
 	if f.Block {
-		existing, err := readExisting(dir, base)
+		existing, err := readExisting(dir, base, agentproto.MaxHomeFileBytes)
 		if err != nil {
 			return err
 		}
@@ -141,7 +160,7 @@ func writeHomeFile(root, uid, gid int, f agentproto.HomeFile) error {
 
 // readExisting returns the content of a regular file base in dir, or "" if there is none.
 // A symlink, directory or other special file is refused.
-func readExisting(dir int, base string) (string, error) {
+func readExisting(dir int, base string, limit int) (string, error) {
 	fd, err := unix.Openat2(dir, base, &unix.OpenHow{
 		Flags:   unix.O_RDONLY | unix.O_NOFOLLOW | unix.O_NONBLOCK | unix.O_CLOEXEC,
 		Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_MAGICLINKS,
@@ -161,12 +180,12 @@ func readExisting(dir int, base string) (string, error) {
 	if st.Mode&unix.S_IFMT != unix.S_IFREG {
 		return "", errors.New("the existing file is not a regular file")
 	}
-	b, err := io.ReadAll(io.LimitReader(file, agentproto.MaxHomeFileBytes+1))
+	b, err := io.ReadAll(io.LimitReader(file, int64(limit)+1))
 	if err != nil {
 		return "", err
 	}
-	if len(b) > agentproto.MaxHomeFileBytes {
-		return "", fmt.Errorf("the existing file is larger than %d KiB", agentproto.MaxHomeFileBytes>>10)
+	if len(b) > limit {
+		return "", fmt.Errorf("the existing file is larger than %d KiB", limit>>10)
 	}
 	return string(b), nil
 }
@@ -194,4 +213,38 @@ func mergeBlock(existing, block string) (string, error) {
 		end++
 	}
 	return existing[:begin] + block + existing[end:], nil
+}
+
+// mergeKeys merges the JSON object keys into the JSON object existing (agentproto.HomeFile
+// Keys). A missing or blank file counts as an empty object; one that isn't a JSON object is
+// left alone with an error rather than replaced.
+func mergeKeys(existing, keys string) (string, error) {
+	file := map[string]any{}
+	if strings.TrimSpace(existing) != "" {
+		if err := json.Unmarshal([]byte(existing), &file); err != nil || file == nil {
+			return "", errors.New("the existing file is not a JSON object")
+		}
+	}
+	var add map[string]any
+	if err := json.Unmarshal([]byte(keys), &add); err != nil {
+		return "", err
+	}
+	mergeObject(file, add)
+	b, err := json.MarshalIndent(file, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b) + "\n", nil
+}
+
+func mergeObject(dst, src map[string]any) {
+	for k, v := range src {
+		sub, isObject := v.(map[string]any)
+		have, hasObject := dst[k].(map[string]any)
+		if isObject && hasObject {
+			mergeObject(have, sub)
+			continue
+		}
+		dst[k] = v
+	}
 }

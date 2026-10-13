@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/yamux"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/version"
 )
 
 // ErrNotConnected means the sandbox's guest agent has no live session.
@@ -453,6 +454,19 @@ func (h *Hub) Upload(ctx context.Context, id string, req agentproto.UploadReques
 
 // WriteHomeFiles writes harness config files into the terminal user's home in the guest.
 func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.HomeFile) error {
+	// An older guest would write a Keys file whole over the harness's own, so it gets none.
+	if hello, _ := h.Connected(id); hello.Version != version.Version {
+		kept := files[:0:0]
+		for _, f := range files {
+			if !f.Keys {
+				kept = append(kept, f)
+			}
+		}
+		if len(kept) == 0 {
+			return nil
+		}
+		files = kept
+	}
 	var ok struct{}
 	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeFiles}, agentproto.HomeFiles{Files: files}, &ok)
 }
