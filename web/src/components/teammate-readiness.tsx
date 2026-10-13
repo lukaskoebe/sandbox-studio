@@ -13,7 +13,22 @@ export function Readiness({
   teammate: Teammate
   provider?: Provider
 }) {
-  if (!provider) return null
+  if (!provider) {
+    // A teammate whose provider was not copied along has none; before the providers load it has one.
+    return teammate.providerId ? null : (
+      <Badge variant="outline">No provider</Badge>
+    )
+  }
+  if (provider.state === "key_required") {
+    return (
+      <Badge
+        variant="outline"
+        title={`${provider.name} needs its API key, added on the Providers page`}
+      >
+        Key required
+      </Badge>
+    )
+  }
   if (provider.state === "login_required") {
     return (
       <Badge
