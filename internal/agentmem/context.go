@@ -216,7 +216,9 @@ func (s *Service) openConflicts(ctx context.Context, c caller, changes []memory.
 	}
 	var out []memory.Conflict
 	for _, cf := range all {
-		if cf.Status != "open" || !readable(cf.FactA) || !readable(cf.FactB) || (!touches(cf.FactA) && !touches(cf.FactB)) {
+		// Facts that hold in a context only stay out of the pack, conflicts included.
+		if cf.Status != "open" || !readable(cf.FactA) || !readable(cf.FactB) || (!touches(cf.FactA) && !touches(cf.FactB)) ||
+			cf.FactA.Context != "" || cf.FactB.Context != "" {
 			continue
 		}
 		out = append(out, cf)

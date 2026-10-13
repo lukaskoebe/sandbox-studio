@@ -503,11 +503,13 @@ func (s *Service) CompileEntityPage(ctx context.Context, envID, scope, entity st
 }
 
 // OpenConflictsWithShared maps each fact of scope that has an open conflict with a shared
-// fact to that shared fact's ID. Shared facts that are superseded or retracted don't win.
+// fact to that shared fact's ID. Shared facts that are superseded or retracted don't win, and
+// neither do facts that hold in a context only: they surface only where the context is named.
 func (s *Service) OpenConflictsWithShared(ctx context.Context, envID, scope string) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT fa.id, fa.scope, fb.id, fb.scope FROM memory_conflicts c
 		JOIN memory_facts fa ON fa.id = c.fact_a JOIN memory_facts fb ON fb.id = c.fact_b
 		WHERE c.environment_id = ? AND c.status = 'open'
+		AND fa.context = '' AND fb.context = ''
 		AND ((fa.scope = ? AND fb.scope = 'shared' AND fb.status IN ('active', 'disputed'))
 		  OR (fb.scope = ? AND fa.scope = 'shared' AND fa.status IN ('active', 'disputed')))
 		ORDER BY c.created_at, c.id`, envID, scope, scope)

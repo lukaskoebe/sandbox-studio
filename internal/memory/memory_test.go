@@ -762,3 +762,22 @@ func TestContextNaming(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A shared fact that holds in a context only does not win an open conflict: it would surface
+// outside its context.
+func TestContextFactsDoNotWinConflicts(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	mine := f.fact(f.env, "teammate:a", KindFact, "Deploy with make ship", Origin{Tier: TierInferred, AuthorTeammate: "a"})
+	shared := f.fact(f.env, SharedScope, KindFact, "Deploy with make release", UserOrigin, func(in *FactInput) { in.Context = "renart" })
+	if _, err := f.svc.CreateConflict(ctx, f.env, shared.ID, mine.ID, "contradiction", "two deploy commands"); err != nil {
+		t.Fatal(err)
+	}
+	winners, err := f.svc.OpenConflictsWithShared(ctx, f.env, "teammate:a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := winners[mine.ID]; ok {
+		t.Fatalf("a shared fact with a context wins: %v", winners)
+	}
+}
