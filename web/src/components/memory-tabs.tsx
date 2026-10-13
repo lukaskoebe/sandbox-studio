@@ -435,6 +435,11 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={f.status} />
+                    {f.context && (
+                      <Badge variant="outline" className="ml-1">
+                        in {f.context}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatAge(f.observedAt)}

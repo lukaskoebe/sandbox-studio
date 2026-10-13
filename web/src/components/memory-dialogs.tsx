@@ -137,6 +137,7 @@ function FactForm({
   const [kind, setKind] = useState<MemoryFact["kind"]>(fact?.kind ?? "fact")
   const [text, setText] = useState(fact?.text ?? "")
   const [attribute, setAttribute] = useState(fact?.attribute ?? "")
+  const [context, setContext] = useState(fact?.context ?? "")
   const [error, setError] = useState<string>()
   const [saving, setSaving] = useState(false)
 
@@ -149,6 +150,7 @@ function FactForm({
       kind,
       text: text.trim(),
       attribute: attribute.trim() || undefined,
+      context: context.trim() || undefined,
     }
     try {
       const result = fact
@@ -214,6 +216,20 @@ function FactForm({
         />
         <FieldDescription>
           Optional key that newer facts about the same thing share.
+        </FieldDescription>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="fact-context">Context</FieldLabel>
+        <Input
+          id="fact-context"
+          maxLength={200}
+          placeholder="renart"
+          value={context}
+          onChange={(e) => setContext(e.target.value)}
+        />
+        <FieldDescription>
+          Optional. The fact holds only in this context, so search surfaces it
+          only for queries that name every word of it.
         </FieldDescription>
       </Field>
       {error && <FieldError>{error}</FieldError>}
