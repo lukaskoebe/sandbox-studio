@@ -28,13 +28,24 @@ export const toneDot: Record<Tone, string> = {
   neutral: "bg-(--st-stopped)",
 }
 
-/** "Template 1a2b3c4d", or "No template" for a sandbox without one. */
-export function templateLabel(templateId: string | undefined): string {
+/**
+ * A template's display name, such as node-22+python-3.13@2. Without one, "Template" and the
+ * first 8 characters of its ID; "No template" for a sandbox without a template.
+ */
+export function templateLabel(
+  templateId: string | undefined,
+  name?: string
+): string {
+  if (name) return name
   return templateId ? `Template ${templateId.slice(0, 8)}` : "No template"
 }
 
-/** The first 8 characters of a template, for an arrow; "none" without one. */
-export function shortTemplate(templateId: string | undefined): string {
+/** The template's name for an arrow; without one, the first 8 characters of its ID, or "none". */
+export function shortTemplate(
+  templateId: string | undefined,
+  name?: string
+): string {
+  if (name) return name
   return templateId ? templateId.slice(0, 8) : "none"
 }
 
@@ -47,13 +58,25 @@ export function isSet(time: string): boolean {
 type StepBase = { id: number; generation: number }
 
 export type Step =
-  | (StepBase & { kind: "origin"; templateId: string; parent?: LineageNode })
+  | (StepBase & {
+      kind: "origin"
+      templateId: string
+      templateName?: string
+      parent?: LineageNode
+    })
   | (StepBase & {
       kind: "rebase"
       fromTemplateId: string
+      fromTemplateName?: string
       templateId: string
+      templateName?: string
     })
-  | (StepBase & { kind: "restore"; name: string; templateId: string })
+  | (StepBase & {
+      kind: "restore"
+      name: string
+      templateId: string
+      templateName?: string
+    })
   | (StepBase & {
       kind: "checkpoint"
       name: string
@@ -83,6 +106,7 @@ export function buildTimeline(lineage: Lineage): Timeline {
           ...base,
           kind: "origin",
           templateId: event.templateId ?? "",
+          templateName: event.templateName,
         })
         break
       case "fork":
@@ -91,6 +115,7 @@ export function buildTimeline(lineage: Lineage): Timeline {
             ...base,
             kind: "origin",
             templateId: event.templateId ?? "",
+            templateName: event.templateName,
             parent: lineage.parent,
           })
         } else {
@@ -105,7 +130,9 @@ export function buildTimeline(lineage: Lineage): Timeline {
           ...base,
           kind: "rebase",
           fromTemplateId: event.fromTemplateId ?? "",
+          fromTemplateName: event.fromTemplateName,
           templateId: event.templateId ?? "",
+          templateName: event.templateName,
         })
         break
       case "restore": {
@@ -117,6 +144,7 @@ export function buildTimeline(lineage: Lineage): Timeline {
           kind: "restore",
           name: checkpoint?.name ?? event.checkpointName ?? "",
           templateId: event.templateId ?? "",
+          templateName: event.templateName,
         })
         break
       }
@@ -163,10 +191,10 @@ export function summarize(step: Step): string {
       return [
         step.parent ? `Forked from ${step.parent.name}` : "Created",
         generation,
-        templateLabel(step.templateId),
+        templateLabel(step.templateId, step.templateName),
       ].join(", ")
     case "rebase":
-      return `Rebased from ${shortTemplate(step.fromTemplateId)} to ${shortTemplate(step.templateId)}, ${generation}`
+      return `Rebased from ${shortTemplate(step.fromTemplateId, step.fromTemplateName)} to ${shortTemplate(step.templateId, step.templateName)}, ${generation}`
     case "restore":
       return `Restored checkpoint ${step.name}, ${generation}`
     case "checkpoint":

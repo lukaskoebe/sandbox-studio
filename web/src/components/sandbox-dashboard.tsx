@@ -149,7 +149,7 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
           )}
         </Fact>
         <Fact label="Template">
-          <span className="font-mono">
+          <span className="font-mono" title={sb.templateId || undefined}>
             {sb.templateName ?? sb.templateId ?? "None"}
           </span>
         </Fact>

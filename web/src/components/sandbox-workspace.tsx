@@ -476,8 +476,11 @@ function StatusBar({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
         <StatusDot {...phaseDot(phase(sb))} />
       </span>
       <span className={cn(seg, "max-sm:hidden")}>{sb.id}</span>
-      <span className={cn(seg, "max-md:hidden")}>
-        {shortTemplate(sb.templateId)}
+      <span
+        className={cn(seg, "max-md:hidden")}
+        title={sb.templateId || undefined}
+      >
+        {shortTemplate(sb.templateId, sb.templateName)}
       </span>
       <span className={cn(seg, "max-md:hidden")}>
         ports {list.length ? list.map((p) => `:${p.port}`).join(" ") : "none"}

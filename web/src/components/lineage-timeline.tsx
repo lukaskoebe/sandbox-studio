@@ -121,7 +121,7 @@ export function LineageTimeline({
   const count = timeline.steps.length + 1
   const x = (index: number) => PAD + COLUMN / 2 + index * STEP
   const width = x(count - 1) + COLUMN / 2 + PAD
-  const now = `Now: generation ${data.generation}, ${templateLabel(data.templateId)}${status ? `, ${status}` : ""}`
+  const now = `Now: generation ${data.generation}, ${templateLabel(data.templateId, data.templateName)}${status ? `, ${status}` : ""}`
   const close = () => setAction(null)
 
   return (
@@ -193,7 +193,12 @@ export function LineageTimeline({
               />
             }
             meta={`gen ${data.generation}${status ? ` · ${status}` : ""}`}
-            template={templateLabel(data.templateId)}
+            template={
+              <TemplateName
+                templateId={data.templateId}
+                name={data.templateName}
+              />
+            }
             action={
               <Button
                 size="sm"
@@ -256,6 +261,21 @@ export function LineageTimeline({
   )
 }
 
+/** A template's name under a point, with its ID as the tooltip. */
+function TemplateName({
+  templateId,
+  name,
+}: {
+  templateId?: string
+  name?: string
+}) {
+  return (
+    <span title={templateId || undefined}>
+      {templateLabel(templateId, name)}
+    </span>
+  )
+}
+
 /** A point's column: its label above the line, its dot on it, and what sits below. */
 function Marker({
   left,
@@ -271,7 +291,7 @@ function Marker({
   label: ReactNode
   dot: ReactNode
   meta: ReactNode
-  template?: string
+  template?: ReactNode
   action?: ReactNode
 }) {
   return (
@@ -338,7 +358,12 @@ function StepMarker({
           }
           dot={<span className="size-2.5 rounded-full bg-muted-foreground" />}
           meta={generation}
-          template={templateLabel(step.templateId)}
+          template={
+            <TemplateName
+              templateId={step.templateId}
+              name={step.templateName}
+            />
+          }
         />
       )
     case "rebase":
@@ -346,10 +371,15 @@ function StepMarker({
         <Marker
           left={left}
           title={title}
-          label={`${shortTemplate(step.fromTemplateId)} → ${shortTemplate(step.templateId)}`}
+          label={`${shortTemplate(step.fromTemplateId, step.fromTemplateName)} → ${shortTemplate(step.templateId, step.templateName)}`}
           dot={<span className="size-2 rotate-45 bg-muted-foreground" />}
           meta={generation}
-          template={templateLabel(step.templateId)}
+          template={
+            <TemplateName
+              templateId={step.templateId}
+              name={step.templateName}
+            />
+          }
         />
       )
     case "restore":
@@ -364,7 +394,12 @@ function StepMarker({
             </span>
           }
           meta={generation}
-          template={templateLabel(step.templateId)}
+          template={
+            <TemplateName
+              templateId={step.templateId}
+              name={step.templateName}
+            />
+          }
         />
       )
     case "checkpoint":

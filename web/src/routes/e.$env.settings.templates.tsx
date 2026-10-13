@@ -142,7 +142,18 @@ function BuildsWorkspace({ env }: { env: string }) {
                         return (
                           <TableRow key={job.id}>
                             <TableCell>
-                              Build <Ident>{shortId(job.id)}</Ident>
+                              {job.templateName ? (
+                                <>
+                                  <span className="font-medium">
+                                    {job.templateName}
+                                  </span>{" "}
+                                  <Ident>{shortId(job.id)}</Ident>
+                                </>
+                              ) : (
+                                <>
+                                  Build <Ident>{shortId(job.id)}</Ident>
+                                </>
+                              )}
                             </TableCell>
                             <TableCell>
                               <BuildStatusBadge status={job.status} />
