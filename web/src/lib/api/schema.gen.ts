@@ -2914,11 +2914,20 @@ export interface components {
         };
         NetworkRequest: {
             host: string;
+            /** @description Origin of the Referer header, as the browser sent it; shown, never trusted */
+            initiator?: string;
+            method?: string;
+            /** @description A top-level navigation: the page moves to another site */
+            navigation?: boolean;
+            /** @description The request path, without the query */
+            path?: string;
             /** @description Suggested host patterns, most specific first */
             patterns: string[] | null;
             /** Format: int64 */
             port: number;
             sandboxName: string;
+            /** @description The top-level site the request belongs to: the navigation's own, or the browser's page */
+            site?: string;
         };
         Page: {
             /** @description A core page, loaded into every session of the scope */

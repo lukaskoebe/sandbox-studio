@@ -37,6 +37,9 @@ func (p *fakePolicy) Decide(_ context.Context, req policy.Request) (store.Rule, 
 	if r, ok := p.rules[req.Host]; ok {
 		return r, nil
 	}
+	if req.Deferred && req.HTTP == nil {
+		return store.Rule{}, policy.ErrPerRequest
+	}
 	return store.Rule{}, policy.ErrUndecided
 }
 

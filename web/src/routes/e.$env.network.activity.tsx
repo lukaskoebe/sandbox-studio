@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, type Approval } from "@/lib/api/client"
+import { isNetworkApproval } from "@/lib/approval-kinds"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/network/activity")({
@@ -37,7 +38,7 @@ function ActivityTab() {
     params: { path: { env }, query: { status: "all" } },
   })
   const decided = (approvals.data ?? [])
-    .filter((a) => a.kind === "network" && a.status !== "pending")
+    .filter((a) => isNetworkApproval(a) && a.status !== "pending")
     .slice(0, 50)
 
   if (approvals.isPending) return <Spinner className="mx-auto block" />

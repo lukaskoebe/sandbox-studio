@@ -18,6 +18,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"strconv"
@@ -181,10 +182,19 @@ func (g *Gateway) handle(c net.Conn) {
 			decider = d
 		}
 	}
+	// A browser VM's HTTPS is always terminated, whatever rule allows it: the browser trusts the
+	// environment's CA, and its requests are checked one by one (docs/network.md).
+	browserTLS := sb.Kind == store.SandboxKindBrowser && proto == "tls"
 	rule, err := g.Policy.Decide(context.Background(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name, Host: host, Port: port,
+		Deferred: browserTLS,
 	})
 	ruleID = rule.ID
+	// Without a rule, a browser VM's HTTPS is not held here: its requests are decided one by one
+	// once the connection is terminated (decideRequest).
+	if browserTLS && errors.Is(err, policy.ErrPerRequest) {
+		err = nil
+	}
 	switch {
 	case errors.Is(err, policy.ErrUndecided):
 		verdict = VerdictUndecided
@@ -218,9 +228,6 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 	web := proto == "tls" || proto == "http"
-	// A browser VM's HTTPS is always terminated, whatever rule allows it: the browser trusts the
-	// environment's CA, and its requests are checked one by one (docs/network.md).
-	browserTLS := sb.Kind == store.SandboxKindBrowser && proto == "tls"
 	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy || browserTLS
 	if bound, _ := boundTo(all, host); handled || len(bound) > 0 && web {
 		if !web {
@@ -241,9 +248,13 @@ func (g *Gateway) handle(c net.Conn) {
 			}
 			caddy = &compiled
 		}
+		var gate func(*http.Request) string
+		if browserTLS {
+			gate = func(r *http.Request) string { return g.decideRequest(r, decider, host, port) }
+		}
 		g.Conns.opened(entry, ruleID, true)
 		verdict = VerdictAllowed
-		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy)
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate)
 		return
 	}
 

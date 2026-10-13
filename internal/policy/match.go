@@ -162,6 +162,19 @@ func Suggestions(host string) []string {
 	return out
 }
 
+// Site is the registrable domain of host, the unit a browser's site approvals use. An IP
+// address, or a name with no known public suffix, is its own site.
+func Site(host string) string {
+	host = Normalize(host)
+	if net.ParseIP(host) != nil {
+		return host
+	}
+	if domain, err := publicsuffix.EffectiveTLDPlusOne(host); err == nil {
+		return domain
+	}
+	return host
+}
+
 // The levels of host pattern a teammate's approvals remember: the requested host itself, or
 // the wildcard of its registrable domain.
 const (

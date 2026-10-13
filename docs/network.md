@@ -87,7 +87,7 @@ The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route:
   chip. Delete unused removes the unused rules the filters show, after a confirmation. Rules are grouped
   by registrable domain: the last two labels, or three under a short list of two-label
   suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
-- **Requests** lists the pending network approvals; Allow, Deny and Ignore work as on the
+- **Requests** lists the pending network approvals (connections and browser requests); Allow, Deny and Ignore work as on the
   approval card.
 - **Activity** lists decided network approvals, newest first, up to 50.
 
@@ -115,6 +115,14 @@ approval stack, with Allow all, Review individually and Deny all (see
 [approvals](approvals.md#realtime-and-ui)). Requests carry no information about the page that
 made them yet, so the grouping is by sandbox and arrival time; grouping by page comes with
 site-scoped approvals.
+
+A browser VM's HTTPS is held differently. Its connections are terminated first, with no hold
+(see [interception](#interception-and-secrets)), and each request that no rule covers is held
+as a `network.request` approval. That approval names the request: method and path (never the
+query), the top-level site it belongs to, and the Referer the browser sent, which is shown and
+never trusted. A navigation's site is its own host; a subresource belongs to the page the
+browser drove last (`browser.TopLevel`). Approvals are keyed by host and site, so a page's
+requests to one host share one card.
 
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.

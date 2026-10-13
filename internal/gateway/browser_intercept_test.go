@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/proxy"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -119,5 +120,53 @@ func TestBrowserVMUpgradesWebSockets(t *testing.T) {
 	buf := make([]byte, 4)
 	if _, err := io.ReadFull(br, buf); err != nil || string(buf) != "ping" {
 		t.Fatalf("echo %q %v", buf, err)
+	}
+}
+
+// A browser's connection that no rule covers is not held: each request is asked for with what
+// the browser said about it, and is refused until the user decides. The query stays out of it.
+func TestBrowserRequestsAreAskedOneByOne(t *testing.T) {
+	h := newBrowserHarness(t)
+	c := h.clientAs(t, "vm1", h.envCA)
+	req, _ := http.NewRequest("GET", "https://ask.example/guides/a?token=abc", nil)
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.Header.Set("Referer", "https://docs.example.com/index?q=1")
+	resp, body := do(t, c, req)
+	if resp.StatusCode != http.StatusForbidden || resp.Header.Get("X-Sandbox-Studio") != "refused" || !strings.Contains(body, "waiting for approval") {
+		t.Fatalf("status %d: %s", resp.StatusCode, body)
+	}
+	// A subresource on the same connection is asked for as well.
+	resp, body = get(t, c, "https://ask.example/static/app.js")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("subresource status %d: %s", resp.StatusCode, body)
+	}
+	if n := h.requests(); n != 0 {
+		t.Fatalf("%d refused requests reached the upstream", n)
+	}
+
+	h.policy.mu.Lock()
+	defer h.policy.mu.Unlock()
+	var asked []*policy.HTTPRequest
+	for _, r := range h.policy.asked {
+		if r.HTTP != nil {
+			asked = append(asked, r.HTTP)
+		}
+		if r.HTTP == nil && (!r.Deferred || r.Host != "ask.example") {
+			t.Errorf("connection asked for as %+v", r)
+		}
+	}
+	if len(asked) != 2 {
+		t.Fatalf("requests asked for: %+v", asked)
+	}
+	nav := asked[0]
+	if nav.Method != "GET" || nav.Path != "/guides/a" || !nav.Navigation || nav.Site != "ask.example" || nav.Initiator != "https://docs.example.com" {
+		t.Errorf("navigation %+v", nav)
+	}
+	if strings.Contains(nav.Path+nav.Initiator, "token") || strings.Contains(nav.Path+nav.Initiator, "q=1") {
+		t.Errorf("the query reached the approval: %+v", nav)
+	}
+	if sub := asked[1]; sub.Navigation || sub.Path != "/static/app.js" || sub.Site != "" {
+		t.Errorf("subresource %+v", sub)
 	}
 }

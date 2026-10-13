@@ -1,4 +1,5 @@
 import type { Approval } from "@/lib/api/client"
+import { isNetworkApproval } from "@/lib/approval-kinds"
 
 /** Network requests from one sandbox that arrive this close together share a card. */
 export const groupWindowSeconds = 3
@@ -32,7 +33,7 @@ export function approvalCards(
   split: ReadonlySet<string> = new Set()
 ): ApprovalCard[] {
   const arrivals = list
-    .filter((a) => a.kind === "network" && !split.has(a.id))
+    .filter((a) => isNetworkApproval(a) && !split.has(a.id))
     .sort((a, b) => arrived(a) - arrived(b) || a.id.localeCompare(b.id))
   const members = new Map<string, Approval[]>() // by approval ID: the list its group is in
   const open = new Map<string, { last: number; list: Approval[] }>()

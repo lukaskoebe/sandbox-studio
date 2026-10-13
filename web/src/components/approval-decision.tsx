@@ -196,6 +196,18 @@ export function ApprovalDecision({
 
   return (
     <div className="grid grid-cols-1 gap-2">
+      {net?.method && (
+        <div className="grid gap-0.5 text-xs">
+          <p className="truncate font-mono" title={`${net.method} ${net.path}`}>
+            {net.method} {net.path}
+          </p>
+          {net.initiator && (
+            <p className="truncate text-muted-foreground" title={net.initiator}>
+              From {net.initiator}
+            </p>
+          )}
+        </div>
+      )}
       {patterns.length > 1 && (
         <ToggleGroup
           aria-label="Host pattern"

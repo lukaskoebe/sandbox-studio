@@ -230,6 +230,7 @@ func run(addr, image string, log *slog.Logger) error {
 	integs := integrations.Set{gitRemote}
 	brw := newBrowser(st, vault, bus, p.Data, image, log) // settles browser.action and browser.credential approvals
 	integs = append(integs, brw)
+	engine.Browsers = brw // a browser's requests are attributed to its page
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,

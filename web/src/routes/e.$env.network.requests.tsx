@@ -5,6 +5,7 @@ import { Ident } from "@/components/ident"
 import { SectionHeader } from "@/components/section-header"
 import { Spinner } from "@/components/ui/spinner"
 import { $api } from "@/lib/api/client"
+import { isNetworkApproval } from "@/lib/approval-kinds"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/network/requests")({
@@ -18,7 +19,7 @@ function RequestsTab() {
     params: { path: { env }, query: { status: "pending" } },
   })
   // Git approvals are reviewed on the Git page.
-  const list = (requests.data ?? []).filter((a) => a.kind === "network")
+  const list = (requests.data ?? []).filter(isNetworkApproval)
 
   if (requests.isPending) return <Spinner className="mx-auto block" />
   return (

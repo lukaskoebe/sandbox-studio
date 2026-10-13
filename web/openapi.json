@@ -3596,6 +3596,21 @@
           "host": {
             "type": "string"
           },
+          "initiator": {
+            "description": "Origin of the Referer header, as the browser sent it; shown, never trusted",
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "navigation": {
+            "description": "A top-level navigation: the page moves to another site",
+            "type": "boolean"
+          },
+          "path": {
+            "description": "The request path, without the query",
+            "type": "string"
+          },
           "patterns": {
             "description": "Suggested host patterns, most specific first",
             "items": {
@@ -3611,6 +3626,10 @@
             "type": "integer"
           },
           "sandboxName": {
+            "type": "string"
+          },
+          "site": {
+            "description": "The top-level site the request belongs to: the navigation's own, or the browser's page",
             "type": "string"
           }
         },

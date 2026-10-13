@@ -38,6 +38,14 @@ export type ApprovalKind = {
     | "/e/$env/chats"
 }
 
+/**
+ * Whether an approval is a network request: a connection (network) or a request on a connection
+ * the gateway terminates (network.request). Both show on the Network page and the stack.
+ */
+export function isNetworkApproval(a: Approval): boolean {
+  return a.kind === "network" || a.kind === "network.request"
+}
+
 /** What a git approval asks for. */
 export function gitSummary(a: Approval): string {
   const git = a.git
@@ -140,6 +148,8 @@ const kinds: Record<string, ApprovalKind> = {
     page: "/e/$env/chats",
   },
 }
+
+kinds["network.request"] = kinds.network
 
 /** A kind this UI does not know yet: the server's subject line describes it. */
 const unknownKind: ApprovalKind = {

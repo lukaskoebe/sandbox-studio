@@ -17,8 +17,16 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// KindNetwork is the approval kind for connections to a host no rule covers.
-const KindNetwork = "network"
+// Approval kinds of network requests. KindNetwork is a connection to a host no rule covers.
+// KindRequest is a request on a connection the gateway terminates (the browser VM's HTTPS): it
+// names the request, and its subject is the host and the top-level site it belongs to.
+const (
+	KindNetwork = "network"
+	KindRequest = "network.request"
+)
+
+// IsNetworkKind reports whether an approval kind is a network request.
+func IsNetworkKind(kind string) bool { return kind == KindNetwork || kind == KindRequest }
 
 // Network decisions beyond allow, deny and dismiss (store.ActionAllow and ActionDeny, and
 // dismiss). The "once" ones answer the held connections of one request, without a rule.
@@ -36,15 +44,35 @@ var (
 	ErrDoesNotCover = errors.New("the rule must cover the requested host and port")
 	ErrNoTeammate   = errors.New("the sandbox has no teammate")
 	ErrExpired      = errors.New("a rule must expire in the future")
+	// ErrPerRequest is what Decide returns for a deferred connection that no rule covers: the
+	// connection is not held, and its requests are decided one at a time (HTTP set).
+	ErrPerRequest = errors.New("the browser's requests are decided one at a time")
 )
 
-// Request is a connection attempt from a sandbox.
+// Request is a connection attempt from a sandbox, or a request on a connection the gateway
+// terminated.
 type Request struct {
 	EnvironmentID string
 	SandboxID     string
 	SandboxName   string
 	Host          string // DNS name, or an IP address when no name is known
 	Port          int
+	// Deferred is set for a connection the gateway terminates and decides request by request
+	// (a browser VM's HTTPS): with no rule for the connection it is not held.
+	Deferred bool
+	// HTTP is the request, for a request on a terminated connection; nil for a connection.
+	HTTP *HTTPRequest
+}
+
+// HTTPRequest is a request as the gateway reads it on a terminated connection. The headers
+// describe the request and never decide it: Chromium's Sec-Fetch headers tell a top-level
+// navigation from a subresource, and the Referer is only shown.
+type HTTPRequest struct {
+	Method     string `json:"method,omitempty"`
+	Path       string `json:"path,omitempty" doc:"The request path, without the query"`
+	Navigation bool   `json:"navigation,omitempty" doc:"A top-level navigation: the page moves to another site"`
+	Site       string `json:"site,omitempty" doc:"The top-level site the request belongs to: the navigation's own, or the browser's page"`
+	Initiator  string `json:"initiator,omitempty" doc:"Origin of the Referer header, as the browser sent it; shown, never trusted"`
 }
 
 // NetworkRequest is the payload of a network approval.
@@ -53,6 +81,15 @@ type NetworkRequest struct {
 	Port        int      `json:"port"`
 	SandboxName string   `json:"sandboxName"`
 	Patterns    []string `json:"patterns" doc:"Suggested host patterns, most specific first"`
+	// The request, for network.request approvals.
+	HTTPRequest
+}
+
+// Browsers is what the policy asks of teammates' browsers (internal/browser).
+type Browsers interface {
+	// TopLevel returns the site of the page the browser of teammateID drove last, which the
+	// requests of the browser are attributed to, or "" if it has no page open.
+	TopLevel(ctx context.Context, envID, teammateID string) string
 }
 
 // Engine decides connections. Every change to rules or approvals must go through it (or
@@ -63,6 +100,9 @@ type Engine struct {
 	Hold  time.Duration    // how long an unanswered connection is held
 	Now   func() time.Time // the clock rules expire by; nil uses time.Now
 	Log   *slog.Logger     // for housekeeping errors; nil uses slog.Default
+
+	// Browsers, if set, tells which page a browser's requests belong to.
+	Browsers Browsers
 
 	mu    sync.Mutex
 	rules map[string][]store.Rule  // per environment, loaded on demand
@@ -78,7 +118,8 @@ type ruleHits struct {
 
 // Decide returns the rule for req, asking the user and waiting up to Hold if no rule
 // matches. It returns ErrUndecided when time runs out and ErrDismissed when the user
-// dismissed the request without a rule.
+// dismissed the request without a rule. A deferred connection that no rule covers returns
+// ErrPerRequest instead: its requests are asked for one at a time.
 func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	teammate, err := e.teammate(ctx, req.EnvironmentID, req.SandboxID)
 	if err != nil {
@@ -91,13 +132,16 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
 		return r, nil
 	}
+	if req.Deferred && req.HTTP == nil {
+		return store.Rule{}, ErrPerRequest
+	}
 	host := Normalize(req.Host)
-	payload, _ := json.Marshal(NetworkRequest{Host: host, Port: req.Port, SandboxName: req.SandboxName, Patterns: Suggestions(host)})
+	kind, subject, payload := e.approvalOf(ctx, req, host, teammate)
 	a, _, err := e.Store.RequestApproval(ctx, store.Approval{
 		EnvironmentID: req.EnvironmentID,
 		SandboxID:     req.SandboxID,
-		Kind:          KindNetwork,
-		Subject:       host + ":" + strconv.Itoa(req.Port),
+		Kind:          kind,
+		Subject:       subject,
 		Payload:       payload,
 	})
 	if err != nil {
@@ -126,6 +170,25 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 			return onceAnswer(cur, err, host, req.Port)
 		}
 	}
+}
+
+// approvalOf describes the approval for a request that no rule covers: its kind, its subject
+// (which repeated attempts share) and its payload. A request on a terminated connection is
+// about its top-level site: a navigation's own site, else the site of the browser's page.
+func (e *Engine) approvalOf(ctx context.Context, req Request, host, teammate string) (kind, subject string, payload []byte) {
+	n := NetworkRequest{Host: host, Port: req.Port, SandboxName: req.SandboxName, Patterns: Suggestions(host)}
+	kind, subject = KindNetwork, host+":"+strconv.Itoa(req.Port)
+	if req.HTTP != nil {
+		kind, n.HTTPRequest = KindRequest, *req.HTTP
+		if !n.Navigation && e.Browsers != nil {
+			n.Site = e.Browsers.TopLevel(ctx, req.EnvironmentID, teammate)
+		}
+		if n.Site != "" {
+			subject += " " + n.Site
+		}
+	}
+	payload, _ = json.Marshal(n)
+	return kind, subject, payload
 }
 
 // onceAnswer is what a held connection gets when its request is no longer pending without a
@@ -260,7 +323,7 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 	}
 	for _, a := range pending {
 		var req NetworkRequest
-		if a.Kind != KindNetwork || json.Unmarshal(a.Payload, &req) != nil {
+		if !IsNetworkKind(a.Kind) || json.Unmarshal(a.Payload, &req) != nil {
 			continue
 		}
 		r, ok := Match(e.active(rules), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port)

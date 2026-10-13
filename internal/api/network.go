@@ -55,7 +55,7 @@ type ApprovalView struct {
 func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalView {
 	v := ApprovalView{Approval: a}
 	switch a.Kind {
-	case policy.KindNetwork:
+	case policy.KindNetwork, policy.KindRequest:
 		var req policy.NetworkRequest
 		if json.Unmarshal(a.Payload, &req) == nil {
 			v.Network = &req
@@ -90,7 +90,7 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 			v.MemoryConflict = &p
 		}
 	}
-	if a.Kind == policy.KindNetwork {
+	if policy.IsNetworkKind(a.Kind) {
 		v.Teammate = s.approvalOwner(ctx, a)
 	}
 	return v
