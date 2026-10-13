@@ -211,10 +211,6 @@ func validateAck(ack acknowledgement, wantStatus, mode string, size uint64, dige
 	return nil
 }
 
-func sendPayload(w io.Writer) (uint64, string, error) {
-	return sendPayloadSized(w, payloadSize)
-}
-
 func sendPayloadSized(w io.Writer, size uint64) (uint64, string, error) {
 	h := sha256.New()
 	buf := make([]byte, readBufferSize)
