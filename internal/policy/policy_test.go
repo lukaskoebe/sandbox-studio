@@ -371,3 +371,83 @@ func TestOnceDecisions(t *testing.T) {
 		t.Fatalf("once decisions in the activity: %+v", all)
 	}
 }
+
+// Connections count as hits of their rule in memory and reach the store in batches; a shutdown
+// writes what is left.
+func TestRuleHitsAreBatched(t *testing.T) {
+	ctx := context.Background()
+	e, env, sb := newEngine(t)
+	clock := &testClock{t: time.Unix(1_800_000_000, 0)}
+	e.Now = clock.now
+	rule, err := e.Store.CreateRule(ctx, store.Rule{EnvironmentID: env.ID, Host: "*.example.org", Action: store.ActionAllow, Origin: store.OriginManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "a.example.org", Port: 443}
+	for range 3 {
+		if _, err := e.Decide(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored, _ := e.Store.Rule(ctx, env.ID, rule.ID)
+	if stored.Hits != 0 || stored.LastHitAt != nil {
+		t.Fatalf("connections wrote to the store: %+v", stored)
+	}
+	if err := e.flushHits(ctx); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = e.Store.Rule(ctx, env.ID, rule.ID)
+	if stored.Hits != 3 || stored.LastHitAt == nil || stored.LastHitAt.Unix() != clock.now().Unix() {
+		t.Fatalf("after the flush: %+v", stored)
+	}
+
+	clock.advance(time.Minute)
+	if _, err := e.Decide(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.flushHits(ctx); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = e.Store.Rule(ctx, env.ID, rule.ID)
+	if stored.Hits != 4 || stored.LastHitAt.Unix() != clock.now().Unix() {
+		t.Fatalf("after the second flush: %+v", stored)
+	}
+
+	// A rule deleted before its hits are written drops them.
+	if _, err := e.Decide(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Store.DeleteRule(ctx, env.ID, rule.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.flushHits(ctx); err != nil || len(e.hits) != 0 {
+		t.Fatalf("flush after a delete: %v, pending %v", err, e.hits)
+	}
+}
+
+func TestRunWritesHitsOnShutdown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	e, env, sb := newEngine(t)
+	rule, err := e.Store.CreateRule(ctx, store.Rule{EnvironmentID: env.ID, Host: "example.org", Action: store.ActionAllow, Origin: store.OriginManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "example.org", Port: 443}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		e.Run(ctx)
+		close(done)
+	}()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run did not return after shutdown")
+	}
+	if stored, _ := e.Store.Rule(context.Background(), env.ID, rule.ID); stored.Hits != 1 {
+		t.Fatalf("the shutdown did not write the hit: %+v", stored)
+	}
+}

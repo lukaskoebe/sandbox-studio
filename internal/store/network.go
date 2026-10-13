@@ -81,6 +81,8 @@ type Rule struct {
 	Note          string     `json:"note"`
 	Origin        string     `json:"origin" enum:"manual,approval,curated,reviewer" doc:"Where the rule came from. Read-only: set when the rule is created"`
 	ExpiresAt     *time.Time `json:"expiresAt,omitempty" doc:"When the rule stops matching; empty means it never expires"`
+	Hits          int        `json:"hits" doc:"Connections the rule decided, as of the last write, which happens about once a minute"`
+	LastHitAt     *time.Time `json:"lastHitAt,omitempty" doc:"When the rule last decided a connection, as of the last write"`
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
@@ -92,14 +94,14 @@ type RuleConfig struct {
 	Caddyfile string `json:"caddyfile,omitempty"`
 }
 
-const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, expires_at, created_at"
+const ruleCols = "id, environment_id, IFNULL(sandbox_id, ''), IFNULL(teammate_id, ''), host, ports, action, config, note, origin, expires_at, hits, last_hit_at, created_at"
 
 func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 	var r Rule
 	var ports, config string
-	var expires sql.NullInt64
+	var expires, lastHit sql.NullInt64
 	var created int64
-	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &expires, &created); err != nil {
+	if err := row.Scan(&r.ID, &r.EnvironmentID, &r.SandboxID, &r.TeammateID, &r.Host, &ports, &r.Action, &config, &r.Note, &r.Origin, &expires, &r.Hits, &lastHit, &created); err != nil {
 		return r, err
 	}
 	r.Ports = []int{}
@@ -111,6 +113,10 @@ func scanRule(row interface{ Scan(...any) error }) (Rule, error) {
 	if expires.Valid {
 		t := time.Unix(expires.Int64, 0)
 		r.ExpiresAt = &t
+	}
+	if lastHit.Valid {
+		t := time.Unix(lastHit.Int64, 0)
+		r.LastHitAt = &t
 	}
 	r.CreatedAt = time.Unix(created, 0)
 	return r, json.Unmarshal([]byte(config), &r.Config)
@@ -228,6 +234,29 @@ func (s *Store) DeleteExpiredRules(ctx context.Context, now time.Time) ([]string
 		}
 	}
 	return envs, rows.Err()
+}
+
+// RuleHit is the connections a rule decided since the policy last wrote its hits.
+type RuleHit struct {
+	ID    string
+	Count int
+	Last  time.Time // when the last of them was decided
+}
+
+// AddRuleHits adds batched hits to their rules, in one transaction. Hits for rules deleted
+// in the meantime are dropped.
+func (s *Store) AddRuleHits(ctx context.Context, hits []RuleHit) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, h := range hits {
+		if _, err := tx.ExecContext(ctx, "UPDATE rules SET hits = hits + ?, last_hit_at = MAX(IFNULL(last_hit_at, 0), ?) WHERE id = ?", h.Count, h.Last.Unix(), h.ID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // --- approvals ------------------------------------------------------------------------
