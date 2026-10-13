@@ -174,7 +174,13 @@ commits, and a unified diff bounded at 512 KiB. Binary files, submodules and fil
 - **Reject** (optionally with a note) or **ignore:** the push becomes `rejected`.
 - A rejected or failed push is delivered to the sandbox on its next fetch of that
   repository: that fetch fails once with the reason and note, and the next one works.
-  Not built: also notifying the agent over MCP.
+- The agent hears about it in its chat too. The next prompt of any chat in that sandbox
+  starts with a `[Studio] Some of your pushes did not go upstream` note that lists its
+  rejected and failed pushes no prompt has carried yet, and each is listed once. The note
+  rides on the prompt (the same way as the note after an undo). A chat takes a new prompt
+  only when it is idle, and an MCP notification never reaches the model, so a running turn
+  hears about it at its next prompt. The chat sends the note only once the prompt went out, so a
+  failed prompt leaves it for the next one.
 - **Pull request** (Forgejo, GitHub): after an approved push to a branch other than the
   repository's default branch, Studio raises a `git.pr` approval proposing
   `<branch> → <default>` with a title and body from the commits. Approving it calls

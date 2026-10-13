@@ -1155,3 +1155,34 @@ func TestRewrites(t *testing.T) {
 		t.Fatalf("rewrites =\n%+v\nwant\n%+v", got, want)
 	}
 }
+
+func TestPromptNoteTellsTheAgentOnce(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	other := h.guest(t, h.env.ID, "two")
+	repo := g.clone(t)
+	commitFile(t, repo, "x.txt", "x\n", "Add x")
+	if err := push(repo, "refs/heads/main:refs/heads/main", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	if note, _, err := h.svc.PromptNote(h.ctx, h.env.ID, g.sb.ID); err != nil || note != "" {
+		t.Fatalf("note while the push waits = %q, %v", note, err)
+	}
+	h.decide(t, h.approvals(t, KindPush, store.StatusPending)[0], integrations.Deny, "please add tests")
+	note, done, err := h.svc.PromptNote(h.ctx, h.env.ID, g.sb.ID)
+	if err != nil || !strings.Contains(note, "[Studio] Some of your pushes did not go upstream:") ||
+		!strings.Contains(note, "in owner/repo on forge was rejected by the reviewer: please add tests") {
+		t.Fatalf("note after rejection = %q, %v", note, err)
+	}
+	if note, _, _ := h.svc.PromptNote(h.ctx, h.env.ID, other.sb.ID); note != "" {
+		t.Fatalf("another sandbox was told: %q", note)
+	}
+	// Given only once the prompt went out, then never again.
+	if note, _, _ := h.svc.PromptNote(h.ctx, h.env.ID, g.sb.ID); note == "" {
+		t.Fatal("the note was given before its prompt went out")
+	}
+	done()
+	if note, _, _ := h.svc.PromptNote(h.ctx, h.env.ID, g.sb.ID); note != "" {
+		t.Fatalf("the note was given twice: %q", note)
+	}
+}

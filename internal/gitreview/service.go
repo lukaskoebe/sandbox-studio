@@ -383,8 +383,44 @@ func (s *Service) undelivered(ctx context.Context, t target) string {
 		}
 	}
 	b.WriteString("This message is shown once; fetch again to continue.")
-	// TODO(M5): also notify the agent through its MCP channel when the hooks exist.
 	return b.String()
+}
+
+// PromptNote is the note a chat prompt of a sandbox starts with: its rejected or failed pushes
+// that no prompt has carried yet (docs/git-review.md). The note is empty when there is nothing
+// to tell. done records that the prompt went out with it, so the note is given once; the
+// chat calls it only then.
+func (s *Service) PromptNote(ctx context.Context, envID, sandboxID string) (string, func(), error) {
+	s.httpClient()
+	list, err := s.Store.UnnotifiedGitPushes(ctx, envID, sandboxID)
+	if err != nil || len(list) == 0 {
+		return "", func() {}, err
+	}
+	var b strings.Builder
+	b.WriteString("[Studio] Some of your pushes did not go upstream:\n")
+	for _, p := range list {
+		branch := strings.TrimPrefix(p.Ref, "refs/heads/")
+		push := fmt.Sprintf("%s to %s in %s on %s", short(p.NewSHA), branch, repoPath(p), p.ForgeName)
+		if p.State == store.PushRejected {
+			fmt.Fprintf(&b, "- the push of %s was rejected by the reviewer", push)
+			if p.Note != "" {
+				fmt.Fprintf(&b, ": %s", oneLine(p.Note))
+			}
+		} else {
+			fmt.Fprintf(&b, "- the approved push of %s failed: %s", push, oneLine(p.Result))
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("git_push_status lists your pushes and their reviewer's notes.")
+	done := func() {
+		ctx := context.WithoutCancel(ctx)
+		for _, p := range list {
+			if err := s.Store.MarkGitPushNotified(ctx, envID, p.ID); err != nil {
+				s.Log.Error("git remote: mark notified", "push", p.ID, "err", err)
+			}
+		}
+	}
+	return b.String(), done, nil
 }
 
 func short(sha string) string {

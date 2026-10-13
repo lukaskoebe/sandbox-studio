@@ -475,6 +475,20 @@ func (s *Store) MarkGitPushDelivered(ctx context.Context, envID, id string) erro
 	return err
 }
 
+// UnnotifiedGitPushes lists the rejected or failed pushes of one sandbox that no chat prompt
+// has carried yet.
+func (s *Store) UnnotifiedGitPushes(ctx context.Context, envID, sandboxID string) ([]GitPush, error) {
+	return s.gitPushes(ctx, `environment_id = ? AND sandbox_id = ? AND state IN ('rejected', 'failed')
+		AND notified_at IS NULL`, envID, sandboxID)
+}
+
+// MarkGitPushNotified records that a chat prompt carried the note of a rejected or failed push.
+func (s *Store) MarkGitPushNotified(ctx context.Context, envID, id string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE git_pushes SET notified_at = ? WHERE environment_id = ? AND id = ? AND notified_at IS NULL",
+		now(), envID, id)
+	return err
+}
+
 // SetGitPushPR records the pull request proposal of a push and, later, its outcome.
 func (s *Store) SetGitPushPR(ctx context.Context, envID, id, approvalID, url, result string) error {
 	_, err := s.db.ExecContext(ctx, "UPDATE git_pushes SET pr_approval_id = ?, pr_url = ?, pr_result = ?, updated_at = ? WHERE environment_id = ? AND id = ?",

@@ -514,3 +514,24 @@ func TestChatDelete(t *testing.T) {
 		t.Fatalf("calls %v", f.agent.Called())
 	}
 }
+
+// An integration's note starts the next prompt only, and is marked given once that prompt went out.
+func TestPromptNoteGoesWithTheNextPromptOnce(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	pending, told := 1, 0
+	f.s.PromptNote = func(_ context.Context, envID, sandboxID string) (string, func(), error) {
+		if envID != f.sb.EnvironmentID || sandboxID != f.sb.ID {
+			t.Errorf("the note was asked for %s/%s", envID, sandboxID)
+		}
+		if pending == 0 {
+			return "", nil, nil
+		}
+		return "[Studio] your push was rejected", func() { pending--; told++ }, nil
+	}
+	f.wait(t, f.send(t, "one").ID)
+	f.wait(t, f.send(t, "two").ID)
+	prompts, _, _ := f.agent.Snapshot()
+	if !strings.Contains(string(prompts[0]), "[Studio] your push was rejected") || strings.Contains(string(prompts[1]), "[Studio]") || told != 1 {
+		t.Fatalf("prompts %s / %s, told %d", prompts[0], prompts[1], told)
+	}
+}
