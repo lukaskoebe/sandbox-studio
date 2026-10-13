@@ -1739,6 +1739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The teammate's last two weeks in one thread, oldest first: its chat turns with their prompts, answers and tool titles, the facts it learned, its tasks, and its terminal sessions as their memory summaries tell them. */
+        get: operations["teammateTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser": {
         parameters: {
             query?: never;
@@ -4193,6 +4210,25 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        TeammateEvent: {
+            /** Format: date-time */
+            at: string;
+            fact?: components["schemas"]["TeammateFact"];
+            /** @enum {string} */
+            kind: "turn" | "fact" | "task" | "session";
+            sandboxId?: string;
+            sandboxName?: string;
+            session?: components["schemas"]["TeammateSession"];
+            task?: components["schemas"]["TeammateTaskEvent"];
+            turn?: components["schemas"]["TeammateTurn"];
+        };
+        TeammateFact: {
+            id: string;
+            kind: string;
+            status: string;
+            text: string;
+            tier: string;
+        };
         TeammateInput: {
             /**
              * @description The scope the approval cards for this teammate's sandboxes preselect for new rules
@@ -4216,6 +4252,42 @@ export interface components {
             role?: string;
             /** @description Personality and working rules, as markdown */
             soul?: string;
+        };
+        TeammateSession: {
+            harness: string;
+            id: string;
+            summary: string;
+        };
+        TeammateTaskEvent: {
+            createdBy: string;
+            /** @enum {string} */
+            event: "added" | "done";
+            id: string;
+            title: string;
+        };
+        TeammateTool: {
+            kind?: string;
+            status?: string;
+            title: string;
+        };
+        TeammateTurn: {
+            answer: string;
+            chatId: string;
+            chatTitle: string;
+            /** Format: date-time */
+            endedAt?: string;
+            /** @description A check-in the teammate started on its own */
+            heartbeat: boolean;
+            /** @description How the turn ended when not normally: stopped, interrupted, error, limit */
+            marker?: string;
+            markerText?: string;
+            /** @enum {string} */
+            origin: "chat" | "terminal";
+            prompt: string;
+            /** Format: int64 */
+            toolCount: number;
+            tools: components["schemas"]["TeammateTool"][] | null;
+            turnId: string;
         };
         TemplateView: {
             /** Format: date-time */
@@ -9157,6 +9229,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    teammateTimeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeammateEvent"][] | null;
                 };
             };
             /** @description Error */

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -521,4 +522,98 @@ func (s *Store) LastUserPrompt(ctx context.Context, envID, sandboxID string) (st
 		return "", err
 	}
 	return prompt.Text, nil
+}
+
+// TurnDigest is a turn as a teammate's timeline shows it: the prompt, the answer and the
+// tool calls by title, without their content.
+type TurnDigest struct {
+	ChatID     string
+	ChatTitle  string
+	SandboxID  string
+	Heartbeat  bool
+	TurnID     string
+	Origin     string
+	StartedAt  time.Time
+	EndedAt    *time.Time
+	Prompt     string
+	Answer     []string
+	Tools      []ToolDigest
+	Marker     string
+	MarkerText string
+}
+
+// ToolDigest is a tool call of a turn: its title, kind and status.
+type ToolDigest struct {
+	Title  string
+	Kind   string
+	Status string
+}
+
+// TeammateTurns digests the latest turns of a teammate's chats since since, newest first, at
+// most limit; turns undone are left out. Bodies are read only for the fields shown.
+func (s *Store) TeammateTurns(ctx context.Context, envID, teammateID string, since time.Time, limit int) ([]TurnDigest, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id, t.chat_id, c.title, c.sandbox_id, c.heartbeat, t.origin, t.started_at, t.ended_at
+		FROM chat_turns t JOIN chats c ON c.id = t.chat_id
+		WHERE c.environment_id = ? AND c.teammate_id = ? AND t.started_at >= ? AND t.undone_at IS NULL
+		ORDER BY t.started_at DESC, t.seq DESC LIMIT ?`, envID, teammateID, since.Unix(), limit)
+	if err != nil {
+		return nil, err
+	}
+	var out []TurnDigest
+	index := map[string]int{}
+	for rows.Next() {
+		var d TurnDigest
+		var started int64
+		var ended sql.NullInt64
+		if err := rows.Scan(&d.TurnID, &d.ChatID, &d.ChatTitle, &d.SandboxID, &d.Heartbeat, &d.Origin, &started, &ended); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		d.StartedAt = time.Unix(started, 0)
+		if ended.Valid {
+			at := time.Unix(ended.Int64, 0)
+			d.EndedAt = &at
+		}
+		index[d.TurnID] = len(out)
+		out = append(out, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil || len(out) == 0 {
+		return out, err
+	}
+	ids := make([]any, 0, len(out))
+	for _, d := range out {
+		ids = append(ids, d.TurnID)
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?, ", len(ids)), ", ")
+	items, err := s.db.QueryContext(ctx, `SELECT turn_id, kind,
+		IFNULL(json_extract(CAST(body AS TEXT), '$.text'), ''), IFNULL(json_extract(CAST(body AS TEXT), '$.title'), ''),
+		IFNULL(json_extract(CAST(body AS TEXT), '$.kind'), ''), IFNULL(json_extract(CAST(body AS TEXT), '$.status'), status)
+		FROM chat_items WHERE turn_id IN (`+marks+`) AND kind IN ('user', 'agent', 'tool', 'marker') ORDER BY seq`, ids...)
+	if err != nil {
+		return nil, err
+	}
+	defer items.Close()
+	for items.Next() {
+		var turn, kind, text, title, sub, status string
+		if err := items.Scan(&turn, &kind, &text, &title, &sub, &status); err != nil {
+			return nil, err
+		}
+		d := &out[index[turn]]
+		switch kind {
+		case "user":
+			if d.Prompt == "" {
+				d.Prompt = text
+			}
+		case "agent":
+			if strings.TrimSpace(text) != "" {
+				d.Answer = append(d.Answer, text)
+			}
+		case "tool":
+			d.Tools = append(d.Tools, ToolDigest{Title: title, Kind: sub, Status: status})
+		case "marker":
+			d.Marker, d.MarkerText = sub, text
+		}
+	}
+	return out, items.Err()
 }

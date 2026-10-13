@@ -92,6 +92,29 @@ What is built and what is verified is in [harnesses](harnesses.md#subscription-l
   sandboxes preselect for a new rule; the card still lets the user pick another. See
   [approvals](approvals.md#network-approval-cards).
 
+## The conversation
+
+A teammate's page opens on one conversation with it (`teammate-conversation.tsx`), built from
+`GET teammates/{id}/timeline` (`internal/api/timeline.go`): the last 14 days, oldest first, of
+
+- its chat turns (at most 80): the prompt, the agent's text, and the tool calls by title (the
+  last 6, with the count), read from the item bodies with `json_extract`, never their output;
+  thoughts are left out, and so are undone turns;
+- the facts in its own scope (at most 60; superseded ones left out, retracted ones shown as
+  forgotten);
+- its tasks, when added and when done;
+- its terminal sessions with a memory summary (docs/memory.md, "Session summaries"); chat
+  sessions are already there as turns.
+
+The page marks each change of sandbox, since each is its own machine. The turn underway
+comes from the chat's own stream, so it updates live; the pending approvals for the teammate
+close the thread, and the floating approval stack leaves them out on this page. The composer
+has three modes: **Message** continues the teammate's latest idle or running chat in the
+chosen sandbox, or starts one ("New chat" forces that); **Task** adds a task (the first line is
+the title) and starts a chat that asks the teammate to work on it; **Teach** writes a fact to
+its memory as the user, without a chat. A rail beside the thread shows what it does now, what
+it knows, its check-ins, its sandboxes and its profile.
+
 ## Tasks
 
 A teammate has a task list. A task has a title (one line, at most 200 characters), details

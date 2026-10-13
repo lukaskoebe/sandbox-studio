@@ -6252,6 +6252,75 @@
         ],
         "type": "object"
       },
+      "TeammateEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fact": {
+            "$ref": "#/components/schemas/TeammateFact"
+          },
+          "kind": {
+            "enum": [
+              "turn",
+              "fact",
+              "task",
+              "session"
+            ],
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/TeammateSession"
+          },
+          "task": {
+            "$ref": "#/components/schemas/TeammateTaskEvent"
+          },
+          "turn": {
+            "$ref": "#/components/schemas/TeammateTurn"
+          }
+        },
+        "required": [
+          "kind",
+          "at"
+        ],
+        "type": "object"
+      },
+      "TeammateFact": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "kind",
+          "tier",
+          "status"
+        ],
+        "type": "object"
+      },
       "TeammateInput": {
         "additionalProperties": false,
         "properties": {
@@ -6317,6 +6386,139 @@
           "name",
           "harness",
           "providerId"
+        ],
+        "type": "object"
+      },
+      "TeammateSession": {
+        "additionalProperties": false,
+        "properties": {
+          "harness": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "harness",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "TeammateTaskEvent": {
+        "additionalProperties": false,
+        "properties": {
+          "createdBy": {
+            "type": "string"
+          },
+          "event": {
+            "enum": [
+              "added",
+              "done"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "event",
+          "createdBy"
+        ],
+        "type": "object"
+      },
+      "TeammateTool": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "TeammateTurn": {
+        "additionalProperties": false,
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "chatId": {
+            "type": "string"
+          },
+          "chatTitle": {
+            "type": "string"
+          },
+          "endedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "heartbeat": {
+            "description": "A check-in the teammate started on its own",
+            "type": "boolean"
+          },
+          "marker": {
+            "description": "How the turn ended when not normally: stopped, interrupted, error, limit",
+            "type": "string"
+          },
+          "markerText": {
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "chat",
+              "terminal"
+            ],
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "toolCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/TeammateTool"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "turnId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chatId",
+          "chatTitle",
+          "turnId",
+          "origin",
+          "heartbeat",
+          "prompt",
+          "answer",
+          "tools",
+          "toolCount"
         ],
         "type": "object"
       },
@@ -14538,6 +14740,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/timeline": {
+      "get": {
+        "description": "The teammate's last two weeks in one thread, oldest first: its chat turns with their prompts, answers and tool titles, the facts it learned, its tasks, and its terminal sessions as their memory summaries tell them.",
+        "operationId": "teammateTimeline",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeammateEvent"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
                 }
               }
             },

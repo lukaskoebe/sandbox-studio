@@ -26,7 +26,11 @@ export const Route = createFileRoute("/e/$env/teammates/$id")({
 })
 
 const tabs = [
-  { value: "overview", label: "Overview", to: "/e/$env/teammates/$id" },
+  {
+    value: "conversation",
+    label: "Conversation",
+    to: "/e/$env/teammates/$id",
+  },
   { value: "tasks", label: "Tasks", to: "/e/$env/teammates/$id/tasks" },
   { value: "chats", label: "Chats", to: "/e/$env/teammates/$id/chats" },
   {
@@ -46,7 +50,10 @@ const tabs = [
   },
 ] as const
 
-/** One teammate: its header and tabs above the tab's page. Tabs scroll sideways on phones. */
+/**
+ * One teammate: its header and tabs above the tab's page. Tabs scroll sideways on phones. The
+ * conversation scrolls itself, with its composer at the bottom; the other tabs scroll as pages.
+ */
 function TeammateLayout() {
   const { env, id } = Route.useParams()
   const matchRoute = useMatchRoute()
@@ -77,7 +84,7 @@ function TeammateLayout() {
         </div>
       </PageHeader>
       <div className="overflow-x-auto border-b px-3 py-2">
-        <Tabs value={active?.value ?? "overview"}>
+        <Tabs value={active?.value ?? "conversation"}>
           <TabsList>
             {tabs.map((t) => (
               <TabsTrigger
@@ -91,9 +98,13 @@ function TeammateLayout() {
           </TabsList>
         </Tabs>
       </div>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
+      {(active?.value ?? "conversation") === "conversation" ? (
         <Outlet />
-      </ScrollArea>
+      ) : (
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
+          <Outlet />
+        </ScrollArea>
+      )}
     </>
   )
 }

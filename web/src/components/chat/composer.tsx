@@ -3,6 +3,7 @@ import {
   useState,
   type ClipboardEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react"
 import {
   ArrowUpIcon,
@@ -47,6 +48,10 @@ export function Composer({
   placeholder = "Ask for something…",
   autoFocus,
   error,
+  toolbar,
+  hint,
+  attachments: canAttach = true,
+  className,
 }: {
   /** Sends the prompt; resolves true when it went through, so the draft clears. */
   onSend: (p: Prompt) => Promise<boolean>
@@ -57,6 +62,13 @@ export function Composer({
   placeholder?: string
   autoFocus?: boolean
   error?: string
+  /** A row above the text, inside the box: the teammate page's modes and sandbox. */
+  toolbar?: ReactNode
+  /** A short note beside the buttons. */
+  hint?: ReactNode
+  /** Whether files can be attached; without, the paperclip is gone and pasted files ignored. */
+  attachments?: boolean
+  className?: string
 }) {
   const [text, setText] = useState("")
   const [files, setFiles] = useState<File[]>([])
@@ -128,7 +140,7 @@ export function Composer({
   }
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = [...e.clipboardData.files]
-    if (pasted.length === 0) return
+    if (pasted.length === 0 || !canAttach) return
     e.preventDefault()
     add(pasted)
   }
@@ -147,9 +159,11 @@ export function Composer({
       <div
         className={cn(
           "grid gap-2 rounded-lg border bg-background p-2 shadow-xs focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30",
-          shown && "border-destructive/60"
+          shown && "border-destructive/60",
+          className
         )}
       >
+        {toolbar}
         {files.length > 0 && (
           <AttachmentGroup>
             {files.map((f, i) => (
@@ -199,15 +213,22 @@ export function Composer({
               e.target.value = ""
             }}
           />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Attach files"
-            title="Attach files"
-            onClick={() => input.current?.click()}
-          >
-            <PaperclipIcon />
-          </Button>
+          {canAttach && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Attach files"
+              title="Attach files"
+              onClick={() => input.current?.click()}
+            >
+              <PaperclipIcon />
+            </Button>
+          )}
+          {hint && (
+            <span className="min-w-0 truncate px-1 text-xs text-muted-foreground">
+              {hint}
+            </span>
+          )}
           {size > 0 && (
             <span className="text-xs text-muted-foreground tabular-nums">
               {formatBytes(size)} of {formatBytes(maxAttachmentBytes)}

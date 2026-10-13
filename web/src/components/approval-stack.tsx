@@ -76,10 +76,12 @@ export function ApprovalStack() {
 
   // Pages that list these requests themselves: the network page's Requests tab lists its
   // environment's network requests, a chat lists its own permission requests.
-  // Home lists its environment's approvals as cards of its own.
+  // Home lists its environment's approvals as cards of its own, a teammate's conversation the
+  // teammate's.
   const onNetwork = matchRoute({ to: "/e/$env/network/requests" })
   const onChat = matchRoute({ to: "/e/$env/chats/$chat" })
   const onHome = matchRoute({ to: "/e/$env" })
+  const onTeammate = matchRoute({ to: "/e/$env/teammates/$id" })
   const items = all.filter(
     (a) =>
       !(
@@ -88,7 +90,12 @@ export function ApprovalStack() {
         a.environmentId === onNetwork.env
       ) &&
       !(onChat && a.chatPermission?.chatId === onChat.chat) &&
-      !(onHome && a.environmentId === onHome.env)
+      !(onHome && a.environmentId === onHome.env) &&
+      !(
+        onTeammate &&
+        a.environmentId === onTeammate.env &&
+        approvalOf(a) === onTeammate.id
+      )
   )
   const { sheet, review } = useApprovalReview(all)
   const cards = approvalCards(items, split)
@@ -148,6 +155,16 @@ export function ApprovalStack() {
       </Button>
       {sheet}
     </section>
+  )
+}
+
+/** The teammate an approval waits on, as the teammate's conversation lists it. */
+function approvalOf(a: Approval) {
+  return (
+    a.teammate?.id ??
+    a.memoryShare?.teammateId ??
+    a.browserAction?.teammateId ??
+    a.browserCredential?.teammateId
   )
 }
 

@@ -7,7 +7,7 @@ A teammate is an agent identity in one environment. It has a name, role, optiona
 
 ![The Teammates page listing agent names, harnesses, providers, models, and Git identities](../../assets/screenshots/teammates.jpg)
 
-Each teammate has a page of its own, reached from **Teammates** in the sidebar: its overview, tasks, chats, private memory, browser, and settings, where you edit it or delete it.
+Each teammate has a page of its own, reached from **Teammates** in the sidebar. It opens on your conversation with the teammate: its recent chats in brief, what it learned, its tasks and the approvals it waits for, in one thread. Below it, send a message, hand over a task that it starts on right away, or teach it something to remember. The other tabs hold its tasks, chats, private memory, browser, and settings, where you edit it or delete it.
 
 ## Choose a provider
 
