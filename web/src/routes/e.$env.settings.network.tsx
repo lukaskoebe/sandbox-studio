@@ -2,7 +2,12 @@ import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { PlusIcon, TrashIcon, WarningIcon } from "@phosphor-icons/react"
+import {
+  BuildingsIcon,
+  PlusIcon,
+  TrashIcon,
+  WarningIcon,
+} from "@phosphor-icons/react"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
@@ -34,7 +39,10 @@ function NetworkPage() {
         <h1 className="text-sm font-medium">Network</h1>
         <EnvironmentLabel env={env} />
       </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-5 p-4">
+      <ScrollArea
+        className="min-h-0 flex-1"
+        viewportClassName="space-y-5 p-3 md:p-4"
+      >
         <PrivateHostsSection key={env} env={env} />
       </ScrollArea>
     </>
@@ -102,11 +110,16 @@ function PrivateHostsSection({ env }: { env: string }) {
   }
 
   return (
-    <section className="grid max-w-2xl gap-4">
-      <SectionHeader title="Private hosts" />
+    <section className="grid max-w-3xl gap-3">
+      <SectionHeader
+        title="Private hosts"
+        icon={BuildingsIcon}
+        area="network"
+        count={hosts.length || undefined}
+      />
       <div
         role="note"
-        className="flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs/relaxed"
+        className="flex gap-2 rounded-(--radius) border border-amber-500/40 bg-amber-500/10 p-3 text-xs/relaxed"
       >
         <WarningIcon className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
         <p>
@@ -126,102 +139,106 @@ function PrivateHostsSection({ env }: { env: string }) {
         </p>
       </div>
 
-      {list.isPending ? (
-        <Spinner className="mx-auto block" />
-      ) : list.isError && !list.data ? (
-        <p role="alert" className="text-xs text-destructive">
-          Could not load the private hosts: {errorMessage(list.error)}
-        </p>
-      ) : hosts.length === 0 ? (
-        <p className="text-xs/relaxed text-muted-foreground">
-          No private hosts. Sandboxes reach public addresses only.
-        </p>
-      ) : (
-        <ul className="grid gap-2" aria-label="Private hosts">
-          {hosts.map((h) => (
-            <li
-              key={h.host}
-              className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
-            >
-              <span className="min-w-0 flex-1 truncate font-mono">
-                {h.host}
-              </span>
-              <span className="shrink-0 text-xs text-muted-foreground">
-                {h.ports?.length
-                  ? `Ports ${h.ports.join(", ")}`
-                  : "Ports 80, 443"}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                title="Remove"
-                aria-label={`Remove ${h.host}`}
-                disabled={save.isPending}
-                onClick={() => write(hosts.filter((x) => x.host !== h.host))}
+      {/* One card: the hosts as rows, then the form to add one as its last row. */}
+      <div className="divide-y overflow-hidden rounded-(--radius) border bg-card text-xs">
+        {list.isPending ? (
+          <div className="grid h-(--wb-row) place-items-center">
+            <Spinner />
+          </div>
+        ) : list.isError && !list.data ? (
+          <p role="alert" className="px-3 py-2.5 text-destructive">
+            Could not load the private hosts: {errorMessage(list.error)}
+          </p>
+        ) : hosts.length === 0 ? (
+          <p className="px-3 py-2.5 text-muted-foreground">
+            No private hosts. Sandboxes reach public addresses only.
+          </p>
+        ) : (
+          <ul className="divide-y" aria-label="Private hosts">
+            {hosts.map((h) => (
+              <li
+                key={h.host}
+                className="flex h-(--wb-row) items-center gap-3 px-3"
               >
-                <TrashIcon />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+                <span className="min-w-0 flex-1 truncate font-mono">
+                  {h.host}
+                </span>
+                <span className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground">
+                  {h.ports?.length
+                    ? `Ports ${h.ports.join(", ")}`
+                    : "Ports 80, 443"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Remove"
+                  aria-label={`Remove ${h.host}`}
+                  disabled={save.isPending}
+                  onClick={() => write(hosts.filter((x) => x.host !== h.host))}
+                >
+                  <TrashIcon />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      <form
-        className="grid gap-3"
-        onSubmit={(e) => {
-          e.preventDefault()
-          add()
-        }}
-      >
-        <Field>
-          <FieldLabel htmlFor="private-host">Host</FieldLabel>
-          <Input
-            id="private-host"
-            autoComplete="off"
-            placeholder="git.company.local or *.company.local"
-            value={host}
-            onChange={(e) => {
-              setHost(e.target.value)
-              setFormError(undefined)
-            }}
-          />
-        </Field>
-        <Field data-invalid={portList === null || undefined}>
-          <FieldLabel htmlFor="private-host-ports">Ports</FieldLabel>
-          <Input
-            id="private-host-ports"
-            autoComplete="off"
-            placeholder="80, 443 by default"
-            value={ports}
-            aria-invalid={portList === null}
-            onChange={(e) => {
-              setPorts(e.target.value)
-              setFormError(undefined)
-            }}
-          />
-          {portList === null ? (
-            <FieldError>
-              Use port numbers from 1 to 65535, separated by commas.
-            </FieldError>
-          ) : (
-            <FieldDescription>
-              Other ports than 80 and 443 must be listed, such as 22 for SSH.
-            </FieldDescription>
-          )}
-        </Field>
-        {formError && <FieldError>{formError}</FieldError>}
-        <div>
+        <form
+          className="grid gap-3 bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto] sm:items-start"
+          onSubmit={(e) => {
+            e.preventDefault()
+            add()
+          }}
+        >
+          <Field>
+            <FieldLabel htmlFor="private-host">Host</FieldLabel>
+            <Input
+              id="private-host"
+              autoComplete="off"
+              placeholder="git.company.local or *.company.local"
+              value={host}
+              onChange={(e) => {
+                setHost(e.target.value)
+                setFormError(undefined)
+              }}
+            />
+            {formError && <FieldError>{formError}</FieldError>}
+          </Field>
+          <Field data-invalid={portList === null || undefined}>
+            <FieldLabel htmlFor="private-host-ports">Ports</FieldLabel>
+            <Input
+              id="private-host-ports"
+              autoComplete="off"
+              placeholder="80, 443"
+              value={ports}
+              aria-invalid={portList === null}
+              onChange={(e) => {
+                setPorts(e.target.value)
+                setFormError(undefined)
+              }}
+            />
+            {portList === null ? (
+              <FieldError>
+                Port numbers from 1 to 65535, with commas.
+              </FieldError>
+            ) : (
+              <FieldDescription>
+                List others than 80 and 443, such as 22 for SSH.
+              </FieldDescription>
+            )}
+          </Field>
           <Button
             type="submit"
             variant="outline"
+            className="sm:mt-[1.375rem]"
             disabled={!host.trim() || portList === null || save.isPending}
           >
             {save.isPending ? <Spinner /> : <PlusIcon />}
             Add private host
           </Button>
-        </div>
-      </form>
+        </form>
+      </div>
     </section>
   )
 }

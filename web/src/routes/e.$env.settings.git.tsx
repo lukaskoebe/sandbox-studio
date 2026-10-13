@@ -33,13 +33,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -111,7 +104,10 @@ function GitPage() {
           Add forge
         </Button>
       </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
+      <ScrollArea
+        className="min-h-0 flex-1"
+        viewportClassName="space-y-6 p-3 md:p-4"
+      >
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           Sandboxes reach your forges through Studio, which keeps their
           credentials and holds their pushes for your review.{" "}
@@ -130,7 +126,7 @@ function GitPage() {
             title="Forges"
             icon={CloudIcon}
             area="git"
-            count={forges.data?.length}
+            count={forges.data?.length || undefined}
           />
           {forges.isPending ? (
             <Spinner className="mx-auto block" />
@@ -160,22 +156,21 @@ function GitPage() {
               </Table>
             </div>
           ) : (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>No forges yet</EmptyTitle>
-                <EmptyDescription>
-                  Add GitHub, a Forgejo instance such as Codeberg, or any git
-                  host over HTTPS or SSH. Sandboxes can then use it through
-                  Studio.
-                </EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button onClick={() => setAdding(true)}>
-                  <PlusIcon />
-                  Add forge
-                </Button>
-              </EmptyContent>
-            </Empty>
+            <div className="flex flex-wrap items-center gap-3 rounded-(--radius) border border-dashed px-3 py-2.5 text-xs">
+              <p className="min-w-0 flex-1 text-muted-foreground">
+                No forges yet. Add GitHub, a Forgejo instance such as Codeberg,
+                or any git host over HTTPS or SSH; sandboxes then use it through
+                Studio.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setAdding(true)}
+              >
+                <PlusIcon />
+                Add forge
+              </Button>
+            </div>
           )}
         </section>
 
@@ -184,7 +179,7 @@ function GitPage() {
             title="Pushes"
             icon={GitBranchIcon}
             area="git"
-            count={approvals.data && pushes.length}
+            count={pushes.length || undefined}
           />
           {approvals.isPending ? (
             <Spinner className="mx-auto block" />

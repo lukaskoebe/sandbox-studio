@@ -94,14 +94,15 @@ function ProvidersPage() {
                     <TableCell>
                       <div>{kindLabels[p.kind]}</div>
                       {p.baseUrl && (
-                        // Cells are nowrap by default; identifiers here wrap instead.
-                        <div className="max-w-56 whitespace-normal text-muted-foreground">
-                          <Ident>{p.baseUrl}</Ident>
+                        // A long URL is cut, not wrapped mid-word; the title has all of it.
+                        <div className="grid max-w-72 font-mono text-[0.6875rem] text-muted-foreground">
+                          <span className="truncate" title={p.baseUrl}>
+                            {p.baseUrl}
+                          </span>
                           {p.model && (
-                            <>
-                              {" · "}
-                              <Ident>{p.model}</Ident>
-                            </>
+                            <span className="truncate" title={p.model}>
+                              {p.model}
+                            </span>
                           )}
                         </div>
                       )}

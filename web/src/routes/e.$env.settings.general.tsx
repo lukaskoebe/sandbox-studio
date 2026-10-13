@@ -12,7 +12,6 @@ import {
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -25,8 +24,9 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { AgentViewToggle } from "@/components/agent-view"
 import { Ident } from "@/components/ident"
-import { PageHeader } from "@/components/page-header"
-import { SectionHeader } from "@/components/section-header"
+import { EnvironmentLabel, PageHeader } from "@/components/page-header"
+import { SettingRow, SettingsGroup } from "@/components/setting-row"
+import { Switch } from "@/components/ui/switch"
 import { setupOver, useSetup } from "@/lib/setup"
 import {
   $api,
@@ -40,7 +40,7 @@ export const Route = createFileRoute("/e/$env/settings/general")({
   component: GeneralPage,
 })
 
-// Settings apply to the whole installation, not to one environment.
+// Most settings apply to the whole installation; the environment file is this environment's.
 function GeneralPage() {
   const { env } = Route.useParams()
   return (
@@ -48,16 +48,22 @@ function GeneralPage() {
       <PageHeader>
         <h1 className="text-sm font-medium">General</h1>
       </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          These settings apply to this Studio installation and every
-          environment.
-        </p>
-        <AgentsSection />
-        <AutostartSection />
-        <UpdatesSection />
-        <SetupSection />
-        <EnvironmentFilesSection env={env} />
+      <ScrollArea
+        className="min-h-0 flex-1"
+        viewportClassName="grid max-w-4xl content-start gap-6 p-3 md:p-4"
+      >
+        <SettingsGroup label="Studio">
+          <AgentsSection />
+          <AutostartSection />
+          <UpdatesSection />
+          <SetupSection />
+        </SettingsGroup>
+        <SettingsGroup
+          label="This environment"
+          aside={<EnvironmentLabel env={env} />}
+        >
+          <EnvironmentFilesSection env={env} />
+        </SettingsGroup>
       </ScrollArea>
     </>
   )
@@ -101,49 +107,48 @@ function EnvironmentFilesSection({ env }: { env: string }) {
   }
 
   return (
-    <section className="grid max-w-3xl gap-2 text-xs">
-      <SectionHeader title="Environment files" icon={DownloadSimpleIcon} />
-      <p className="text-xs/relaxed text-muted-foreground">
-        A file of this environment's providers, teammates, rules, secret names
-        and template specs, without keys, secret values, sandboxes, memory or
-        approvals. Read it before you share it: template setup and soul text are
-        included.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          render={
-            <a
-              href={`/api/environments/${encodeURIComponent(env)}/export`}
-              download
-            />
-          }
-        >
-          <DownloadSimpleIcon />
-          Export environment
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={importing}
-          onClick={() => picker.current?.click()}
-        >
-          {importing ? <Spinner /> : <UploadSimpleIcon />}
-          Import environment
-        </Button>
-        <input
-          ref={picker}
-          type="file"
-          accept=".studio-environment,application/json"
-          className="hidden"
-          aria-label="Environment file"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) void importFile(file)
-          }}
-        />
-      </div>
+    <SettingRow
+      icon={DownloadSimpleIcon}
+      title="Environment file"
+      description="A file of this environment's providers, teammates, rules, secret names and template specs, without keys, secret values, sandboxes, memory or approvals. Read it before you share it: template setup and soul text are included."
+      control={
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            render={
+              <a
+                href={`/api/environments/${encodeURIComponent(env)}/export`}
+                download
+              />
+            }
+          >
+            <DownloadSimpleIcon />
+            Export environment
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={importing}
+            onClick={() => picker.current?.click()}
+          >
+            {importing ? <Spinner /> : <UploadSimpleIcon />}
+            Import environment
+          </Button>
+          <input
+            ref={picker}
+            type="file"
+            accept=".studio-environment,application/json"
+            className="hidden"
+            aria-label="Environment file"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void importFile(file)
+            }}
+          />
+        </>
+      }
+    >
       {imported && (
         <ImportReport
           result={imported}
@@ -157,7 +162,7 @@ function EnvironmentFilesSection({ env }: { env: string }) {
           }}
         />
       )}
-    </section>
+    </SettingRow>
   )
 }
 
@@ -244,15 +249,12 @@ function ImportReport({
 
 function AgentsSection() {
   return (
-    <section className="grid max-w-3xl gap-2">
-      <SectionHeader title="Work mode" icon={TerminalWindowIcon} />
-      <p className="text-xs/relaxed text-muted-foreground">
-        How you work with your teammates' agents by default: chatting, or in the
-        agent's own terminal app. The other way stays one click away on each
-        sandbox.
-      </p>
-      <AgentViewToggle />
-    </section>
+    <SettingRow
+      icon={TerminalWindowIcon}
+      title="Work mode"
+      description="How you work with your teammates' agents by default: chatting, or in the agent's own terminal app. The other way stays one click away on each sandbox."
+      control={<AgentViewToggle />}
+    />
   )
 }
 
@@ -269,24 +271,25 @@ function AutostartSection() {
   })
   const st = status.data
   return (
-    <section className="grid max-w-3xl gap-2 text-xs">
-      <SectionHeader title="Start at login" icon={PowerIcon} />
-      <p className="text-xs/relaxed text-muted-foreground">
-        Starts Studio when you log in, using a user-level systemd unit,
-        LaunchAgent or Run registry entry. It takes effect at your next login.
-      </p>
-      {st && !st.supported ? (
-        <p className="text-muted-foreground">Not supported on this platform.</p>
-      ) : (
-        <label className="flex items-center gap-2">
-          <Checkbox
+    <SettingRow
+      icon={PowerIcon}
+      title="Start at login"
+      description="Starts Studio when you log in, using a user-level systemd unit, LaunchAgent or Run registry entry. It takes effect at your next login."
+      control={
+        st && !st.supported ? (
+          <span className="text-xs text-muted-foreground">
+            Not supported on this platform
+          </span>
+        ) : (
+          <Switch
+            aria-label="Start Sandbox Studio at login"
             checked={!!st?.enabled}
             disabled={!st || set.isPending}
             onCheckedChange={(enabled) => set.mutate({ body: { enabled } })}
           />
-          Start Sandbox Studio at login
-        </label>
-      )}
+        )
+      }
+    >
       {st?.enabled && st.path && (
         <p className="text-muted-foreground">
           Entry: <Ident>{st.path}</Ident>
@@ -296,7 +299,7 @@ function AutostartSection() {
         <p className="flex items-center gap-2">
           The entry starts a different Studio binary.
           <Button
-            size="sm"
+            size="xs"
             variant="outline"
             onClick={() => set.mutate({ body: { enabled: true } })}
           >
@@ -304,7 +307,7 @@ function AutostartSection() {
           </Button>
         </p>
       )}
-    </section>
+    </SettingRow>
   )
 }
 
@@ -321,23 +324,22 @@ function UpdatesSection() {
   })
   const st = state.data
   return (
-    <section className="grid max-w-3xl gap-2 text-xs">
-      <SectionHeader title="Updates" icon={ArrowCircleUpIcon} />
-      <p className="text-xs/relaxed text-muted-foreground">
-        Checks GitHub for a newer release at most once a day. Studio never
-        downloads or installs anything by itself.
-      </p>
-      <label className="flex items-center gap-2">
-        <Checkbox
+    <SettingRow
+      icon={ArrowCircleUpIcon}
+      title="Updates"
+      description="Checks GitHub for a newer release at most once a day. Studio never downloads or installs anything by itself."
+      control={
+        <Switch
+          aria-label="Check for updates"
           checked={!!st?.enabled}
           disabled={!st || set.isPending}
           onCheckedChange={(enabled) => set.mutate({ body: { enabled } })}
         />
-        Check for updates
-      </label>
+      }
+    >
       {st && (
         <p className="text-muted-foreground">
-          Running {st.current}
+          Running <span className="font-mono">{st.current}</span>
           {st.enabled && st.checkedAt && (
             <> · checked {formatAge(st.checkedAt)}</>
           )}
@@ -363,7 +365,7 @@ function UpdatesSection() {
           )}
         </p>
       )}
-    </section>
+    </SettingRow>
   )
 }
 
@@ -373,17 +375,15 @@ function SetupSection() {
   const { setup } = useSetup(env)
   if (!setup || !setupOver(setup)) return null
   return (
-    <section className="grid max-w-3xl gap-2 text-xs">
-      <SectionHeader title="Guided setup" icon={ListChecksIcon} />
-      <p className="text-xs/relaxed text-muted-foreground">
-        The setup card on Home is hidden. The guided setup walks through the
-        same steps whenever you open it.
-      </p>
-      <p>
+    <SettingRow
+      icon={ListChecksIcon}
+      title="Guided setup"
+      description="The setup card on Home is hidden. The guided setup walks through the same steps whenever you open it."
+      control={
         <Button size="sm" variant="outline" render={<Link to="/setup" />}>
           Open setup
         </Button>
-      </p>
-    </section>
+      }
+    />
   )
 }

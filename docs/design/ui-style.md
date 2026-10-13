@@ -186,8 +186,12 @@ primitives above and keeps the e2e selectors it had.
 - **Done: teammates.** List, overview, chats, browser and settings tabs; the teammate form.
 - **Done: chat.** The chat page header and the new chat notice.
 - **Done: git.** Settings (forges, pushes and forge dialogs) and the git review sheet.
-- **Done: settings.** General, providers, templates and runtime; the build log and template
-  spec sheets; template resources.
+- **Done: settings.** General, providers, git, network, templates and runtime; the build log
+  and template spec sheets; template resources. The side column's title row is as tall as
+  the page header, and its links carry icons. Toggles and one-off actions are `SettingRow`s
+  (icon tile, title, description, control on the right) in a `SettingsGroup` card; General
+  groups them as Studio and This environment. Empty lists are one dashed row with their
+  action, not a centred empty state.
 
 ## Open points
 
