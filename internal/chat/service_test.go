@@ -106,6 +106,10 @@ func (g *fakeGuest) Snapshot(_ context.Context, _ string, req agentproto.Snapsho
 	return agentproto.SnapshotReply{}, errors.New("bad op")
 }
 
+func (g *fakeGuest) Upload(_ context.Context, _ string, _ agentproto.UploadRequest, _ io.Reader) (agentproto.UploadReply, error) {
+	return agentproto.UploadReply{}, errors.New("uploads are not faked")
+}
+
 func (g *fakeGuest) Files(_ context.Context, _ string, req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -67,6 +67,7 @@ type Guest interface {
 	KillSession(ctx context.Context, id, name string) error
 	Snapshot(ctx context.Context, id string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error)
 	Files(ctx context.Context, id string, req agentproto.FilesRequest) (agentproto.FilesReply, error)
+	Upload(ctx context.Context, id string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error)
 }
 
 // Launch is how to start a chat's agent, planned like an agent session: the harness,
