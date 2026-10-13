@@ -166,7 +166,7 @@ function useFolderUploads({
       const id = ids[i]
       update(id, { state: "uploading" })
       try {
-        await uploadWorkspaceFile(
+        const saved = await uploadWorkspaceFile(
           env,
           sandboxId,
           dir,
@@ -174,7 +174,8 @@ function useFolderUploads({
           conflict,
           (percent) => update(id, { percent })
         )
-        update(id, { state: "done", percent: 100 })
+        // Keep both saves the file under another name, which the list then shows.
+        update(id, { state: "done", percent: 100, name: saved.name })
       } catch (err) {
         update(id, { state: "failed", error: errorMessage(err) })
       }
