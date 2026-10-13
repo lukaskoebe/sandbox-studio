@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   ArrowRightIcon,
   ChatCircleDotsIcon,
@@ -135,7 +136,10 @@ function Overview() {
           New sandbox
         </Button>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto text-[0.8125rem]">
+      <ScrollArea
+        className="min-h-0 flex-1"
+        viewportClassName="text-[0.8125rem]"
+      >
         <Stats
           sandboxes={list.length}
           running={list.filter(isReady).length}
@@ -175,7 +179,7 @@ function Overview() {
             />
           </div>
         </div>
-      </div>
+      </ScrollArea>
       <CreateSandboxDialog
         env={env}
         open={creating}

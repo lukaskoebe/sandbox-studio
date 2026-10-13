@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
 import {
   ArrowSquareOutIcon,
@@ -266,7 +267,10 @@ export function SandboxBrowserPanel({
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+      <ScrollArea
+        className="min-h-0 min-w-0 flex-1"
+        viewportClassName="flex flex-col gap-2 p-2"
+      >
         {status.isRefetchError && !statusMissing && (
           <div
             role="status"
@@ -400,7 +404,7 @@ export function SandboxBrowserPanel({
             </EmptyHeader>
           </Empty>
         ) : null}
-      </div>
+      </ScrollArea>
     </SidePanel>
   )
 }

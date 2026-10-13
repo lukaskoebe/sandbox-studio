@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -99,13 +100,15 @@ export function NetworkGroupCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="grid gap-2">
-        <ul className="flex max-h-28 flex-wrap gap-1 overflow-y-auto text-xs">
-          {hosts.map((host, i) => (
-            <li key={`${host}-${i}`} className="max-w-full">
-              <Ident>{host}</Ident>
-            </li>
-          ))}
-        </ul>
+        <ScrollArea viewportClassName="max-h-28">
+          <ul className="flex flex-wrap gap-1 text-xs">
+            {hosts.map((host, i) => (
+              <li key={`${host}-${i}`} className="max-w-full">
+                <Ident>{host}</Ident>
+              </li>
+            ))}
+          </ul>
+        </ScrollArea>
         {optionsOpen && (
           <ScopeToggle
             value={scope}

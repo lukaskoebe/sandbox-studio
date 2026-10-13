@@ -185,4 +185,22 @@
   html {
     @apply font-sans;
   }
+  /* Scrollers that can't be a ScrollArea (tab strips, code blocks, editors, terminals) get
+     the same thin bar in the border color, so every scrollbar in Studio looks alike. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background: var(--border) padding-box;
+  }
 }

@@ -22,6 +22,7 @@ import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
 import { WaitingCount } from "@/components/waiting-count"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Card,
   CardContent,
@@ -103,12 +104,13 @@ export function ApprovalStack() {
       aria-label="Approvals"
       className="fixed right-4 bottom-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2"
     >
-      <div
+      <ScrollArea
         id={panelId}
         className={cn(
-          "flex max-h-[60vh] w-80 max-w-full flex-col gap-2 overflow-y-auto *:data-[slot=card]:shadow-lg",
+          "w-80 max-w-full",
           !expanded && (single ? "max-sm:hidden" : "hidden")
         )}
+        viewportClassName="flex max-h-[60vh] flex-col gap-2 *:data-[slot=card]:shadow-lg"
       >
         {notifications.canAsk && (
           <Button
@@ -131,7 +133,7 @@ export function ApprovalStack() {
             setExpanded(true)
           }}
         />
-      </div>
+      </ScrollArea>
       <Button
         variant="outline"
         size="sm"

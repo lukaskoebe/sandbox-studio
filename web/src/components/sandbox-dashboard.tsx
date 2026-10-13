@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   ArrowSquareOutIcon,
   BroadcastIcon,
@@ -42,7 +43,7 @@ export function SandboxDashboard() {
   // A create or fork has no guest until it succeeds; a failed one is cleared by deleting it.
   const building = sb.status === "creating" || sb.status === "failed"
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto text-[0.8125rem]">
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="text-[0.8125rem]">
       <Overview env={env} sandbox={sb} />
       <div className="grid content-start gap-6 p-3 md:p-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="grid min-w-0 content-start gap-6">
@@ -117,7 +118,7 @@ export function SandboxDashboard() {
           </Section>
         </div>
       </div>
-    </div>
+    </ScrollArea>
   )
 }
 
