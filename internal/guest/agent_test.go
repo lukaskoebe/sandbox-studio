@@ -112,7 +112,7 @@ func TestChannelWritesStayBounded(t *testing.T) {
 	}
 	defer host.Close()
 
-	// A reply of about 740 KiB: a stream window (256 KiB) is less than a third of it.
+	// A reply of about 740 KiB: a stream window (256 KiB) is about a third of it.
 	reply := bytes.Repeat([]byte("a reply line of a browser screenshot\n"), 20<<10)
 	go func() {
 		if st, err := guest.Open(); err == nil {
