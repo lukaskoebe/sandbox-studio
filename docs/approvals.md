@@ -39,6 +39,13 @@ its approval kinds with a decide function, and the API hands the decision to the
   that list a kind themselves (network requests on the network page's Requests tab, a chat's
   own permission requests) leave those out of the stack. The pending count goes into the
   page title.
+- Network requests from one sandbox that arrive within 3 seconds of each other are one card,
+  "<sandbox> wants N hosts", with the hosts listed, Allow all, Deny all, and Review individually
+  (which turns them into the per-host cards). Allow all and Deny all decide each host with a
+  rule of its own, with the scope chosen under Options. The grouping is client-side
+  (`web/src/lib/approval-groups.ts`), so the API has no group. The server records arrival to the
+  second, so the window is approximate; requests carry no page yet, so grouping by page waits
+  for site-scoped approvals.
 - New approvals raise a browser notification (Notification API) once the user allows it.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts

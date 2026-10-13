@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 import { ApprovalDecision } from "@/components/approval-decision"
+import { NetworkGroupCard } from "@/components/approval-group"
 import {
   BrowserActionDecision,
   BrowserCredentialDecision,
@@ -29,6 +30,11 @@ import {
 import { $api, type Approval } from "@/lib/api/client"
 import { ruleClass } from "@/lib/accents"
 import {
+  approvalCards,
+  cardApproval,
+  type ApprovalCard,
+} from "@/lib/approval-groups"
+import {
   approvalKind,
   approvalSource,
   approvalTeammateId,
@@ -55,6 +61,8 @@ export function ApprovalStack() {
   const notifications = useNotifications(pending.data)
   const [reviewing, setReviewing] = useState<string>()
   const [conflict, setConflict] = useState<Approval>()
+  // Requests the user chose to review one by one, which then no longer group.
+  const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   const all = pending.data ?? []
   useTitleCount(all.length)
 
@@ -88,7 +96,10 @@ export function ApprovalStack() {
       />
     </>
   )
-  if (items.length === 0) return sheet
+  const cards = approvalCards(items, split)
+  if (cards.length === 0) return sheet
+  const envName = (a: Approval) =>
+    envs.data?.find((e) => e.id === a.environmentId)?.name
 
   return (
     <section
@@ -109,33 +120,67 @@ export function ApprovalStack() {
           </Button>
         )}
       </div>
-      {items.slice(0, maxCards).map((a, i) => (
-        <div key={a.id} className={cn(i > 0 && "hidden sm:block")}>
-          <ApprovalCard
-            approval={a}
-            envName={envs.data?.find((e) => e.id === a.environmentId)?.name}
-            onReview={() =>
+      {cards.slice(0, maxCards).map((card, i) => (
+        <div
+          key={cardApproval(card).id}
+          className={cn(i > 0 && "hidden sm:block")}
+        >
+          <StackCard
+            card={card}
+            envName={envName}
+            onReview={(a) =>
               a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id)
             }
+            onSplit={(ids) => setSplit((prev) => new Set([...prev, ...ids]))}
           />
         </div>
       ))}
-      {items.length > 1 && (
+      {cards.length > 1 && (
         <MoreLink
-          approval={items[1]}
-          count={items.length - 1}
+          approval={cardApproval(cards[1])}
+          count={cards.length - 1}
           className="sm:hidden"
         />
       )}
-      {items.length > maxCards && (
+      {cards.length > maxCards && (
         <MoreLink
-          approval={items[maxCards]}
-          count={items.length - maxCards}
+          approval={cardApproval(cards[maxCards])}
+          count={cards.length - maxCards}
           className="hidden sm:block"
         />
       )}
       {sheet}
     </section>
+  )
+}
+
+/** One card of the stack: a single approval, or the network requests of one sandbox together. */
+function StackCard({
+  card,
+  envName,
+  onReview,
+  onSplit,
+}: {
+  card: ApprovalCard
+  envName: (a: Approval) => string | undefined
+  onReview: (a: Approval) => void
+  onSplit: (ids: string[]) => void
+}) {
+  if (card.kind === "single") {
+    return (
+      <ApprovalCard
+        approval={card.approval}
+        envName={envName(card.approval)}
+        onReview={() => onReview(card.approval)}
+      />
+    )
+  }
+  return (
+    <NetworkGroupCard
+      approvals={card.approvals}
+      envName={envName(card.approvals[0])}
+      onReview={() => onSplit(card.approvals.map((a) => a.id))}
+    />
   )
 }
 

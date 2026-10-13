@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { CaretDownIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
@@ -34,6 +34,17 @@ function defaultPorts(port: number) {
   return port === 80 || port === 443 ? "ports 80 and 443" : `port ${port}`
 }
 
+/** Refetches what a decision changes: the approvals, and the rules a decision may create. */
+export function refreshDecisions(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
+  queryClient.invalidateQueries({
+    queryKey: ["get", "/api/environments/{env}/approvals"],
+  })
+  queryClient.invalidateQueries({
+    queryKey: ["get", "/api/environments/{env}/rules"],
+  })
+}
+
 /** Allow, deny or dismiss an approval; refreshes the lists the decision changes. */
 export function useDecideApproval() {
   const queryClient = useQueryClient()
@@ -41,15 +52,7 @@ export function useDecideApproval() {
     "post",
     "/api/environments/{env}/approvals/{id}/decide",
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/approvals"],
-        })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/rules"],
-        })
-      },
+      onSettled: () => refreshDecisions(queryClient),
       onError: (err, vars) => {
         // 409: the approval was already decided; the refetch shows that.
         if (errorStatus(err) === 409) return
@@ -58,6 +61,48 @@ export function useDecideApproval() {
         })
       },
     }
+  )
+}
+
+/** Who a rule covers: the whole environment, or only the sandbox that asked. */
+export type DecisionScope = "environment" | "sandbox"
+
+/** The scope choice of a network decision, as two toggles. */
+export function ScopeToggle({
+  value,
+  onChange,
+  sandboxName,
+}: {
+  value: DecisionScope
+  onChange: (scope: DecisionScope) => void
+  sandboxName?: string
+}) {
+  return (
+    <ToggleGroup
+      aria-label="Scope"
+      variant="outline"
+      value={[value]}
+      onValueChange={(v) => {
+        if (v[0]) onChange(v[0] === "sandbox" ? "sandbox" : "environment")
+      }}
+      className="w-full"
+    >
+      <ToggleGroupItem
+        value="environment"
+        size="sm"
+        className="min-w-0 flex-1 shrink"
+      >
+        Environment
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="sandbox"
+        size="sm"
+        title={`Only ${sandboxName ?? "this sandbox"}`}
+        className="min-w-0 flex-1 shrink"
+      >
+        <span className="truncate">Only {sandboxName ?? "this sandbox"}</span>
+      </ToggleGroupItem>
+    </ToggleGroup>
   )
 }
 
@@ -79,7 +124,7 @@ export function ApprovalDecision({
   const patterns = net?.patterns?.length ? net.patterns : net ? [net.host] : []
   const [pattern, setPattern] = useState(patterns[0] ?? "")
   const [anyPort, setAnyPort] = useState(false)
-  const [scope, setScope] = useState<"environment" | "sandbox">("environment")
+  const [scope, setScope] = useState<DecisionScope>("environment")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
   const [chosen, setChosen] = useState<Choice>()
@@ -157,33 +202,11 @@ export function ApprovalDecision({
               </span>
             )}
           </label>
-          <ToggleGroup
-            aria-label="Scope"
-            variant="outline"
-            value={[scope]}
-            onValueChange={(v) => {
-              if (v[0]) setScope(v[0] === "sandbox" ? "sandbox" : "environment")
-            }}
-            className="w-full"
-          >
-            <ToggleGroupItem
-              value="environment"
-              size="sm"
-              className="min-w-0 flex-1 shrink"
-            >
-              Environment
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="sandbox"
-              size="sm"
-              title={`Only ${net?.sandboxName ?? "this sandbox"}`}
-              className="min-w-0 flex-1 shrink"
-            >
-              <span className="truncate">
-                Only {net?.sandboxName ?? "this sandbox"}
-              </span>
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <ScopeToggle
+            value={scope}
+            onChange={setScope}
+            sandboxName={net?.sandboxName}
+          />
           <div className="flex flex-wrap justify-end gap-1.5">
             <Button
               variant="outline"
