@@ -220,8 +220,9 @@ data.
 | `POST` | `/api/environments/{env}/templates/{id}/sandboxes` | Create from a ready same-environment template; body: `{ "name": "my-project" }`; HTTP 201 |
 
 A template has no name in its spec or build, so Studio derives a display name, `name` on
-template views, `templateName` on sandboxes and `name` on the lineage tree's template
-groups. It is the spec's tool pins, such as
+template views, `templateName` on sandboxes, builds, lineage nodes and lineage events (with
+`fromTemplateName` for a rebase's source), and `name` on the lineage tree's template groups.
+The web shows the name and keeps the ID in a tooltip. It is the spec's tool pins, such as
 `node-22+python-3.13` (`base` when the spec pins no tools), then `@` and the template's
 1-based position among the environment's templates with that stack, in creation order:
 `node-22+python-3.13@2` is the second such template. Deleting an older template renumbers

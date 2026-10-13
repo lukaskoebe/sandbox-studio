@@ -250,7 +250,8 @@ function RebaseForm({
   )
 }
 
-/** Templates have no names, so the short ID and age tell them apart. */
+/** The template's name, such as node-22+python-3.13@2, and when it was built. */
 function templateLabel(template: Template) {
-  return `Template ${template.id.slice(0, 8)}, created ${formatAge(template.createdAt)}`
+  const name = template.name || `Template ${template.id.slice(0, 8)}`
+  return `${name}, created ${formatAge(template.createdAt)}`
 }

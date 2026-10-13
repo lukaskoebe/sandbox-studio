@@ -1864,6 +1864,8 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "preparing" | "setting_up" | "exporting" | "ready" | "failed" | "cancelled";
             templateId?: string;
+            /** @description The display name of the template a ready build made, such as node-22+python-3.13@2 */
+            templateName?: string;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -1879,6 +1881,8 @@ export interface components {
             /** @enum {string} */
             status: "queued" | "preparing" | "setting_up" | "exporting" | "ready" | "failed" | "cancelled";
             templateId?: string;
+            /** @description The display name of the template a ready build made, such as node-22+python-3.13@2 */
+            templateName?: string;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -2605,7 +2609,7 @@ export interface components {
             checkpointRestoreSupported: boolean;
             checkpoints: components["schemas"]["LineageCheckpoint"][] | null;
             children: components["schemas"]["LineageNode"][] | null;
-            events: components["schemas"]["SandboxEvent"][] | null;
+            events: components["schemas"]["LineageEvent"][] | null;
             /** Format: int64 */
             generation: number;
             /** @description The sandbox this one was forked from */
@@ -2613,6 +2617,8 @@ export interface components {
             sandboxId: string;
             /** @description The template of the current generation; empty for none */
             templateId?: string;
+            /** @description The display name of that template; empty for none, or once the template is gone */
+            templateName?: string;
         };
         LineageCheckpoint: {
             /** Format: date-time */
@@ -2625,6 +2631,35 @@ export interface components {
             /** @enum {string} */
             state: "creating" | "ready" | "deleting";
         };
+        LineageEvent: {
+            checkpointId?: string;
+            checkpointName?: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            /** @description For a rebase, the template it moved from */
+            fromTemplateId?: string;
+            /** @description For a rebase, the display name of the template it moved from */
+            fromTemplateName?: string;
+            /**
+             * Format: int64
+             * @description The sandbox's generation after the event
+             */
+            generation: number;
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete";
+            /** @description The sandbox's name at the time */
+            name: string;
+            /** @description For a fork, the other sandbox. On a delete event, the source the sandbox was forked from */
+            otherSandboxId?: string;
+            sandboxId: string;
+            /** @description The template of the generation; empty for none */
+            templateId?: string;
+            /** @description The display name of the template of the generation; empty for none, or once the template is gone */
+            templateName?: string;
+        };
         LineageNode: {
             deleted: boolean;
             /** Format: int64 */
@@ -2635,6 +2670,8 @@ export interface components {
             status: string;
             /** @description The template the sandbox runs; empty for none */
             templateId?: string;
+            /** @description The display name of that template; empty for none, or once the template is gone */
+            templateName?: string;
         };
         LineageTemplate: {
             /**
@@ -2661,6 +2698,8 @@ export interface components {
             status: string;
             /** @description The template the sandbox runs; empty for none */
             templateId?: string;
+            /** @description The display name of that template; empty for none, or once the template is gone */
+            templateName?: string;
         };
         Log: {
             chat: components["schemas"]["Chat"];
@@ -3002,31 +3041,6 @@ export interface components {
             sandboxId?: string;
             /** @description Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId */
             teammateId?: string;
-        };
-        SandboxEvent: {
-            checkpointId?: string;
-            checkpointName?: string;
-            /** Format: date-time */
-            createdAt: string;
-            environmentId: string;
-            /** @description For a rebase, the template it moved from */
-            fromTemplateId?: string;
-            /**
-             * Format: int64
-             * @description The sandbox's generation after the event
-             */
-            generation: number;
-            /** Format: int64 */
-            id: number;
-            /** @enum {string} */
-            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete";
-            /** @description The sandbox's name at the time */
-            name: string;
-            /** @description For a fork, the other sandbox. On a delete event, the source the sandbox was forked from */
-            otherSandboxId?: string;
-            sandboxId: string;
-            /** @description The template of the generation; empty for none */
-            templateId?: string;
         };
         SandboxImport: {
             buildJobId?: string;

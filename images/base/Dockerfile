@@ -24,13 +24,23 @@ RUN apt-get update \
     && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# mise manages per-sandbox language toolchains declared in the sandbox spec. The installer is
-# saved before it runs: piped into sh, a failed download would still succeed, because RUN's
-# /bin/sh has no pipefail.
-RUN curl -fsSL https://mise.run -o /tmp/mise-install.sh \
-    && MISE_INSTALL_PATH=/usr/local/bin/mise sh /tmp/mise-install.sh \
-    && rm /tmp/mise-install.sh \
-    && /usr/local/bin/mise --version
+# mise manages per-sandbox language toolchains declared in the sandbox spec. Its release tarball
+# is checked against the sha256 below before it is unpacked, the same way Node is pinned.
+ARG MISE_VERSION=2026.10.4
+ARG MISE_SHA256_AMD64=2fc793020b442d08163603400236b2c693f8cede810c7e432fc77220e6c9e8a1
+ARG MISE_SHA256_ARM64=8760841cdbf964ecf9902a50c94716c77185a99af7f8eb55c9c51ec73ecd8880
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in \
+        amd64) arch=x64; sum="$MISE_SHA256_AMD64" ;; \
+        arm64) arch=arm64; sum="$MISE_SHA256_ARM64" ;; \
+        *) echo "unsupported architecture" >&2; exit 1 ;; \
+    esac; \
+    tarball="mise-v${MISE_VERSION}-linux-${arch}.tar.gz"; \
+    curl -fsSLo "/tmp/$tarball" "https://github.com/jdx/mise/releases/download/v${MISE_VERSION}/$tarball"; \
+    echo "$sum  /tmp/$tarball" | sha256sum -c -; \
+    tar -xzf "/tmp/$tarball" -C /usr/local/bin --strip-components=2 --no-same-owner mise/bin/mise; \
+    rm "/tmp/$tarball"; \
+    /usr/local/bin/mise --version
 
 # Node LTS from the official tarball, checked against its published sha256, and the agent
 # harnesses pinned to exact versions (docs/harnesses.md). They live in /usr/local, owned by

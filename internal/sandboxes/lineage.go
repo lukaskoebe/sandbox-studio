@@ -44,11 +44,12 @@ func (m *Manager) recordFork(ctx context.Context, source, fork store.Sandbox) {
 
 // LineageNode is a sandbox in a lineage: a live one, or the tombstone of a deleted one.
 type LineageNode struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	TemplateID string `json:"templateId,omitempty" doc:"The template the sandbox runs; empty for none"`
-	Status     string `json:"status" doc:"running, waiting (still starting, or a create or fork that runs), failed, deleted, or another runtime status"`
-	Deleted    bool   `json:"deleted"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	TemplateID   string `json:"templateId,omitempty" doc:"The template the sandbox runs; empty for none"`
+	TemplateName string `json:"templateName,omitempty" doc:"The display name of that template; empty for none, or once the template is gone"`
+	Status       string `json:"status" doc:"running, waiting (still starting, or a create or fork that runs), failed, deleted, or another runtime status"`
+	Deleted      bool   `json:"deleted"`
 	// ForkGeneration is the generation of the source the fork was made from.
 	ForkGeneration int `json:"forkGeneration,omitempty"`
 }
@@ -65,17 +66,26 @@ type LineageCheckpoint struct {
 	RestoreAllowed bool `json:"restoreAllowed"`
 }
 
+// LineageEvent is a point in a sandbox's history, with the display names of the templates it
+// refers to.
+type LineageEvent struct {
+	store.SandboxEvent
+	TemplateName     string `json:"templateName,omitempty" doc:"The display name of the template of the generation; empty for none, or once the template is gone"`
+	FromTemplateName string `json:"fromTemplateName,omitempty" doc:"For a rebase, the display name of the template it moved from"`
+}
+
 // Lineage is the history of one sandbox: its events in order, the sandbox it was forked from,
 // the forks made from it and its checkpoints.
 type Lineage struct {
-	SandboxID                  string               `json:"sandboxId"`
-	Generation                 int                  `json:"generation"`
-	TemplateID                 string               `json:"templateId,omitempty" doc:"The template of the current generation; empty for none"`
-	Events                     []store.SandboxEvent `json:"events"`
-	Parent                     *LineageNode         `json:"parent,omitempty" doc:"The sandbox this one was forked from"`
-	Children                   []LineageNode        `json:"children"`
-	Checkpoints                []LineageCheckpoint  `json:"checkpoints"`
-	CheckpointRestoreSupported bool                 `json:"checkpointRestoreSupported"`
+	SandboxID                  string              `json:"sandboxId"`
+	Generation                 int                 `json:"generation"`
+	TemplateID                 string              `json:"templateId,omitempty" doc:"The template of the current generation; empty for none"`
+	TemplateName               string              `json:"templateName,omitempty" doc:"The display name of that template; empty for none, or once the template is gone"`
+	Events                     []LineageEvent      `json:"events"`
+	Parent                     *LineageNode        `json:"parent,omitempty" doc:"The sandbox this one was forked from"`
+	Children                   []LineageNode       `json:"children"`
+	Checkpoints                []LineageCheckpoint `json:"checkpoints"`
+	CheckpointRestoreSupported bool                `json:"checkpointRestoreSupported"`
 }
 
 // LineageTree is an environment's family tree: its sandboxes grouped by template, with the
@@ -111,11 +121,22 @@ func lineageStatus(v View) string {
 }
 
 func liveNode(v View) LineageNode {
-	return LineageNode{ID: v.ID, Name: v.Name, TemplateID: v.TemplateID, Status: lineageStatus(v)}
+	return LineageNode{ID: v.ID, Name: v.Name, TemplateID: v.TemplateID, TemplateName: v.TemplateName, Status: lineageStatus(v)}
 }
 
-func deletedNode(ev store.SandboxEvent) LineageNode {
-	return LineageNode{ID: ev.SandboxID, Name: ev.Name, TemplateID: ev.TemplateID, Status: StatusDeleted, Deleted: true}
+// deletedNode is the tombstone of a deleted sandbox. names are the display names of the
+// environment's templates.
+func deletedNode(ev store.SandboxEvent, names map[string]string) LineageNode {
+	return LineageNode{ID: ev.SandboxID, Name: ev.Name, TemplateID: ev.TemplateID, TemplateName: names[ev.TemplateID], Status: StatusDeleted, Deleted: true}
+}
+
+// lineageEvents gives a sandbox's events the display names of the templates they refer to.
+func lineageEvents(events []store.SandboxEvent, names map[string]string) []LineageEvent {
+	out := make([]LineageEvent, 0, len(events))
+	for _, ev := range events {
+		out = append(out, LineageEvent{SandboxEvent: ev, TemplateName: names[ev.TemplateID], FromTemplateName: names[ev.FromTemplateID]})
+	}
+	return out
 }
 
 // Lineage returns the history of a sandbox. Its parent and forks stay visible after they are
@@ -146,10 +167,14 @@ func (m *Manager) Lineage(ctx context.Context, envID, id string) (Lineage, error
 	if err != nil {
 		return Lineage{}, err
 	}
+	names, err := m.Store.TemplateNames(ctx, envID)
+	if err != nil {
+		return Lineage{}, err
+	}
 
 	out := Lineage{
-		SandboxID: id, Generation: self.Generation, TemplateID: self.TemplateID, Events: events,
-		Children: []LineageNode{}, Checkpoints: []LineageCheckpoint{},
+		SandboxID: id, Generation: self.Generation, TemplateID: self.TemplateID, TemplateName: names[self.TemplateID],
+		Events: lineageEvents(events, names), Children: []LineageNode{}, Checkpoints: []LineageCheckpoint{},
 		CheckpointRestoreSupported: m.Runtime.CheckpointRestoreSupported(),
 	}
 	if self.ForkedFromID != "" {
@@ -161,7 +186,7 @@ func (m *Manager) Lineage(ctx context.Context, envID, id string) (Lineage, error
 		}
 		for _, ev := range tombstones {
 			if ev.SandboxID == self.ForkedFromID {
-				parent = deletedNode(ev)
+				parent = deletedNode(ev, names)
 			}
 		}
 		parent.ForkGeneration = self.ForkedFromGeneration
@@ -178,7 +203,7 @@ func (m *Manager) Lineage(ctx context.Context, envID, id string) (Lineage, error
 		if ev.OtherSandboxID != id {
 			continue
 		}
-		child := deletedNode(ev)
+		child := deletedNode(ev, names)
 		for _, branch := range events {
 			if branch.Kind == store.EventFork && branch.OtherSandboxID == ev.SandboxID {
 				child.ForkGeneration = branch.Generation
@@ -228,7 +253,7 @@ func (m *Manager) LineageTree(ctx context.Context, envID string) (LineageTree, e
 		known[v.ID] = true
 	}
 	for _, ev := range tombstones {
-		entries = append(entries, entry{node: deletedNode(ev), source: ev.OtherSandboxID, template: ev.TemplateID})
+		entries = append(entries, entry{node: deletedNode(ev, names), source: ev.OtherSandboxID, template: ev.TemplateID})
 		known[ev.SandboxID] = true
 	}
 	forks := map[string][]int{} // source ID → indexes of its forks

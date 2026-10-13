@@ -67,6 +67,15 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   `KindChip` with the kind's name, a details line (source, environment, age), a title sentence
   (hosts in `Ident`), and Deny / Allow. Grouped requests list their hosts and allow the
   whole site at once. Browser URLs are in mono.
+- **The approval stack.** It sits bottom right on every page and does not cover content unless
+  someone opens it. One approval shows its card at 640 px and wider; that card is the one
+  exception, since it has to be answered. More than one approval, or a narrower page, folds the
+  cards into an "N approvals" pill, a
+  small outline button with the count chip (`WaitingCount`) and a caret. The pill opens the
+  list above it on click, up to three cards and a "+N more" link, and closes on the next click.
+  Click alone opens it: a hover would open it over content as the pointer passes. The pill is a
+  disclosure button (`aria-expanded`, `aria-controls`), so keyboard and screen-reader users get
+  the same states. Enable notifications sits at the top of the open list.
 
 ## Direction A: the app theme
 

@@ -6,7 +6,7 @@ hero:
   tagline: Persistent Linux sandboxes with network controls, protected credentials, and review before configured Git pushes reach a forge.
   image:
     file: ../../assets/screenshots/hero-dark.jpg
-    alt: A terminal open inside a Sandbox Studio workspace
+    alt: A sandbox's dashboard in Sandbox Studio's dark theme
   actions:
     - text: Get started
       link: /sandbox-studio/getting-started/
@@ -25,7 +25,7 @@ Sandbox Studio runs OpenCode, Claude Code, or Codex inside a microVM on your mac
 - **Secrets stay on the host.** Sandboxes receive placeholders; Studio substitutes secret values only for approved, host-bound HTTPS traffic.
 - **You review configured Git pushes.** Forges added under **Settings → Git** receive pushes only after you approve the staged change.
 
-![Sandbox Studio showing the overview with two running sandboxes](../../assets/screenshots/overview.jpg)
+![Sandbox Studio's Home page with two running sandboxes](../../assets/screenshots/overview.jpg)
 
 ## Choose a guide
 

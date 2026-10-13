@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ArrowCircleUpIcon,
+  ListChecksIcon,
   PowerIcon,
   TerminalWindowIcon,
 } from "@phosphor-icons/react"
@@ -14,6 +15,7 @@ import { AgentViewToggle } from "@/components/agent-view"
 import { Ident } from "@/components/ident"
 import { PageHeader } from "@/components/page-header"
 import { SectionHeader } from "@/components/section-header"
+import { setupOver, useSetup } from "@/lib/setup"
 import { $api, errorMessage } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
@@ -36,6 +38,7 @@ function GeneralPage() {
         <AgentsSection />
         <AutostartSection />
         <UpdatesSection />
+        <SetupSection />
       </ScrollArea>
     </>
   )
@@ -162,6 +165,27 @@ function UpdatesSection() {
           )}
         </p>
       )}
+    </section>
+  )
+}
+
+/** The way back to the guided setup once Home's card for it is gone (dismissed or complete). */
+function SetupSection() {
+  const { env } = Route.useParams()
+  const { setup } = useSetup(env)
+  if (!setup || !setupOver(setup)) return null
+  return (
+    <section className="grid max-w-3xl gap-2 text-xs">
+      <SectionHeader title="Guided setup" icon={ListChecksIcon} />
+      <p className="text-xs/relaxed text-muted-foreground">
+        The setup card on Home is hidden. The guided setup walks through the
+        same steps whenever you open it.
+      </p>
+      <p>
+        <Button size="sm" variant="outline" render={<Link to="/setup" />}>
+          Open setup
+        </Button>
+      </p>
     </section>
   )
 }

@@ -39,6 +39,11 @@ for (const width of [390, 1440]) {
     await api.connect(id, host)
 
     await page.goto(`/e/${env}`)
+    // Below sm (640 px) the stack folds into its pill, which opens the card.
+    if (width < 640)
+      await approvals(page)
+        .getByRole("button", { name: "1 approval", exact: true })
+        .click()
     const card = approvals(page)
       .getByTestId("approval-card")
       .filter({ hasText: host })
