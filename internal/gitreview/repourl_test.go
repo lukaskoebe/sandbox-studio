@@ -9,15 +9,17 @@ import (
 
 func TestParseRepoURL(t *testing.T) {
 	for in, want := range map[string]RepoURL{
-		"git@github.com:owner/repo.git":             {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent"},
-		"git@github.com:owner/repo":                 {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent"},
-		"ssh://git@git.example.org:2222/team/x.git": {Kind: KindSSH, BaseURL: "ssh://git@git.example.org:2222", Name: "example", Path: "team/x", Auth: "agent"},
-		"ssh://gitolite@Box.Example.co.uk/repo":     {Kind: KindSSH, BaseURL: "ssh://gitolite@box.example.co.uk", Name: "example", Path: "repo", Auth: "agent"},
-		"https://github.com/owner/repo":             {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
-		"https://github.com/owner/repo.git":         {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
-		"https://github.com/owner/repo/tree/main":   {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
-		"  https://codeberg.org/o/r.git ":           {Kind: KindForgejo, BaseURL: "https://codeberg.org", Name: "codeberg", Path: "o/r"},
-		"https://gitlab.com/group/sub/project.git":  {Kind: KindHTTPS, BaseURL: "https://gitlab.com", Name: "gitlab", Path: "group/sub/project"},
+		"git@github.com:owner/repo.git":                    {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent"},
+		"git@github.com:owner/repo":                        {Kind: KindSSH, BaseURL: "ssh://git@github.com", Name: "github", Path: "owner/repo", Auth: "agent"},
+		"ssh://git@git.example.org:2222/team/x.git":        {Kind: KindSSH, BaseURL: "ssh://git@git.example.org:2222", Name: "example", Path: "team/x", Auth: "agent"},
+		"ssh://gitolite@Box.Example.co.uk/repo":            {Kind: KindSSH, BaseURL: "ssh://gitolite@box.example.co.uk", Name: "example", Path: "repo", Auth: "agent"},
+		"https://github.com/owner/repo":                    {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
+		"https://github.com/owner/repo.git":                {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
+		"https://github.com/owner/repo/tree/main":          {Kind: KindGitHub, BaseURL: "https://github.com", Name: "github", Path: "owner/repo"},
+		"  https://codeberg.org/o/r.git ":                  {Kind: KindForgejo, BaseURL: "https://codeberg.org", Name: "codeberg", Path: "o/r"},
+		"https://gitlab.com/group/sub/project.git":         {Kind: KindGitLab, BaseURL: "https://gitlab.com", Name: "gitlab", Path: "group/sub/project"},
+		"https://gitlab.com/group/sub/project/-/tree/main": {Kind: KindGitLab, BaseURL: "https://gitlab.com", Name: "gitlab", Path: "group/sub/project"},
+		"https://git.example.org/group/project.git":        {Kind: KindHTTPS, BaseURL: "https://git.example.org", Name: "example", Path: "group/project"},
 	} {
 		got, err := ParseRepoURL(in)
 		if err != nil || got != want {

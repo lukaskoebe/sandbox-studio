@@ -13,7 +13,7 @@ import (
 // RepoURL is a forge described by one of its repositories' URLs, as pasted into the Add
 // forge dialog.
 type RepoURL struct {
-	Kind    string `json:"kind" enum:"forgejo,github,https,ssh"`
+	Kind    string `json:"kind" enum:"forgejo,github,gitlab,https,ssh"`
 	BaseURL string `json:"baseUrl" doc:"The forge's base URL, or SSH address for kind ssh"`
 	Name    string `json:"name" doc:"A short name for the forge, not yet taken in the environment"`
 	Path    string `json:"path" doc:"The repository's path on the forge, without .git"`
@@ -21,7 +21,7 @@ type RepoURL struct {
 }
 
 // apiHosts are hosts with an API Studio speaks, so their HTTPS URLs get that kind.
-var apiHosts = map[string]string{"github.com": KindGitHub, "codeberg.org": KindForgejo}
+var apiHosts = map[string]string{"github.com": KindGitHub, "codeberg.org": KindForgejo, "gitlab.com": KindGitLab}
 
 // ParseRepoURL reads a repository URL: git@host:owner/repo.git, ssh://git@host:port/owner/repo.git
 // or https://host/owner/repo(.git). SSH URLs make an ssh forge signing with the agent, also
@@ -50,9 +50,13 @@ func ParseRepoURL(raw string) (RepoURL, error) {
 		}
 		r.Kind, r.BaseURL, path = KindHTTPS, base, u.Path
 		if k, ok := apiHosts[host]; ok {
-			// Browser URLs such as /owner/repo/tree/main name the repository too.
 			r.Kind = k
-			if parts := strings.Split(strings.Trim(path, "/"), "/"); len(parts) > 2 {
+			if k == KindGitLab {
+				// GitLab paths may have subgroups; "/-/" starts the project's own pages, such as
+				// /-/tree/main or /-/merge_requests.
+				path, _, _ = strings.Cut(u.Path, "/-/")
+			} else if parts := strings.Split(strings.Trim(path, "/"), "/"); len(parts) > 2 {
+				// Browser URLs such as /owner/repo/tree/main name the repository too.
 				path = parts[0] + "/" + parts[1]
 			}
 		}
@@ -92,7 +96,7 @@ func ParseRepoURL(raw string) (RepoURL, error) {
 	if owner != "" {
 		r.Path = owner + "/" + repo
 	}
-	if hasAPI(r.Kind) && (owner == "" || strings.Contains(owner, "/")) {
+	if badOwner(r.Kind, owner) {
 		return bad("repositories on this host are owner/repo")
 	}
 	host := r.BaseURL

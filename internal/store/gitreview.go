@@ -21,7 +21,7 @@ type Forge struct {
 	ID                 string     `json:"id"`
 	EnvironmentID      string     `json:"environmentId"`
 	Name               string     `json:"name" doc:"The URL segment: https://git.studio.internal/<name>/<path>.git"`
-	Kind               string     `json:"kind" enum:"forgejo,github,https,ssh"`
+	Kind               string     `json:"kind" enum:"forgejo,github,gitlab,https,ssh"`
 	BaseURL            string     `json:"baseUrl" doc:"https://host[/path], or ssh://user@host[:port] for kind ssh"`
 	Username           string     `json:"username,omitempty" doc:"The basic-auth user (https) or SSH user (ssh)"`
 	Auth               string     `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: sign with the host's SSH agent, or with a key Studio generated"`

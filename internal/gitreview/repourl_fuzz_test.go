@@ -45,7 +45,7 @@ func FuzzParseRepoURL(f *testing.F) {
 			return
 		}
 		switch r.Kind {
-		case KindForgejo, KindGitHub, KindHTTPS, KindSSH:
+		case KindForgejo, KindGitHub, KindGitLab, KindHTTPS, KindSSH:
 		default:
 			t.Fatalf("kind %q", r.Kind)
 		}
@@ -61,7 +61,8 @@ func FuzzParseRepoURL(f *testing.F) {
 				t.Errorf("path %q has segment %q", r.Path, seg)
 			}
 		}
-		if len(segs) > MaxPathSegments || hasAPI(r.Kind) && len(segs) != 2 {
+		// Forgejo and GitHub take owner/repo; GitLab's owners may be subgroups.
+		if len(segs) > MaxPathSegments || (r.Kind == KindForgejo || r.Kind == KindGitHub) && len(segs) != 2 {
 			t.Errorf("path %q for kind %s", r.Path, r.Kind)
 		}
 		if !shortNameForm.MatchString(r.Name) {

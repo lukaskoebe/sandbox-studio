@@ -235,7 +235,7 @@ func (s *Service) parse(r *http.Request, sb store.Sandbox) (target, int, string)
 		return t, http.StatusInternalServerError, "Sandbox Studio could not look up the forge."
 	}
 	t.forge = f
-	if hasAPI(f.Kind) && (owner == "" || strings.Contains(owner, "/")) {
+	if badOwner(f.Kind, owner) {
 		return t, http.StatusNotFound, fmt.Sprintf("Repositories on %s are <owner>/<repo>: use https://%s/%s/<owner>/<repo>.git", f.Name, Host, f.Name)
 	}
 	return t, 0, ""

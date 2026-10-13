@@ -264,7 +264,7 @@ func (s *Service) TestForge(ctx context.Context, f store.Forge, repo string) (Ch
 		return c, nil
 	}
 	owner, name, ok := splitPath(strings.Trim(repo, "/"))
-	if !ok || hasAPI(f.Kind) && (owner == "" || strings.Contains(owner, "/")) {
+	if !ok || badOwner(f.Kind, owner) {
 		return c, fmt.Errorf("%w: %q is not a repository path on this forge", ErrInvalid, repo)
 	}
 	t := target{forge: f, owner: owner, repo: name}

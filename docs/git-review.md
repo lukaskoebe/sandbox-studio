@@ -9,9 +9,8 @@ https://git.studio.internal/<forge>/<path>.git
 
 `<forge>` is the name of a forge added under **Settings → Git**. `<path>` has 1 to 8
 segments (each `^[A-Za-z0-9_][A-Za-z0-9._-]{0,99}$`, no `..`), so gitolite's `repo`,
-GitHub's `owner/repo` and GitLab's `group/sub/repo` all work; on forges with an API
-(Forgejo, GitHub) it must be exactly `owner/repo`. The store keeps everything before the
-last segment in `owner`. The host resolves only
+GitHub's `owner/repo` and GitLab's `group/sub/repo` all work; on Forgejo and GitHub it must
+be exactly `owner/repo`. The store keeps everything before the last segment in `owner`. The host resolves only
 inside sandboxes (dnsproxy) and is served with the environment CA, like any intercepted
 host. Code: `internal/gitreview`, the API in `internal/api/git.go`, the UI in
 `web/src/routes/e.$env.git.tsx` and `web/src/components/git-review.tsx`.
@@ -36,9 +35,13 @@ the transport (HTTPS or SSH) and whether there is an API for pull requests.
     write**, **Pull requests: read and write** and **Metadata: read**. A fine-grained token
     can't push where you are only an outside collaborator; a classic token with `repo`
     works there too.
-  - `https` (GitLab, Bitbucket, any smart-HTTP host): git over HTTPS as
-    `<username>:<token>`; the username defaults to `git` (Bitbucket wants `x-token-auth`,
-    GitLab takes any). No API: no pull requests, and the default branch isn't needed.
+  - `gitlab` (gitlab.com, self-hosted GitLab): git over HTTPS as `oauth2:<token>`, API
+    `<base>/api/v4` with `Authorization: Bearer`. Use a personal or project access token with
+    the **api** and **write_repository** scopes. Repositories may be nested (`group/sub/repo`).
+    Pasting `https://gitlab.com/…` fills in this kind.
+  - `https` (Bitbucket, any smart-HTTP host): git over HTTPS as `<username>:<token>`; the
+    username defaults to `git` (Bitbucket wants `x-token-auth`). No API: no pull requests,
+    and the default branch isn't needed.
   - `ssh` (gitolite, a VPS, any host serving git over SSH): see [SSH forges](#ssh-forges).
 - Private, loopback, link-local and CGNAT hosts are refused, for HTTPS and SSH alike, and
   every upstream connection goes through `gateway.DialPublic`, so DNS can't rebind past the
@@ -181,11 +184,12 @@ commits, and a unified diff bounded at 512 KiB. Binary files, submodules and fil
   only when it is idle, and an MCP notification never reaches the model, so a running turn
   hears about it at its next prompt. The chat sends the note only once the prompt went out, so a
   failed prompt leaves it for the next one.
-- **Pull request** (Forgejo, GitHub): after an approved push to a branch other than the
+- **Pull request** (Forgejo, GitHub, GitLab): after an approved push to a branch other than the
   repository's default branch, Studio raises a `git.pr` approval proposing
   `<branch> → <default>` with a title and body from the commits. Approving it calls
-  `POST /api/v1/repos/<owner>/<repo>/pulls` (Forgejo, `Authorization: token <token>`) or
-  `POST /repos/<owner>/<repo>/pulls` (GitHub) and records the PR URL, or
+  `POST /api/v1/repos/<owner>/<repo>/pulls` (Forgejo, `Authorization: token <token>`),
+  `POST /repos/<owner>/<repo>/pulls` (GitHub) or `POST /api/v4/projects/<owner>%2F<repo>/merge_requests`
+  (GitLab, with the project path URL-encoded) and records the PR URL, or
   "failed: <reason>" (for example when a PR for the branch already exists). Rejecting it
   records "not opened". `https` and `ssh` forges have no API and get no PR proposal.
 
@@ -233,4 +237,4 @@ pushes and never from a forge:
 - Only branches; tags and deletes are refused.
 - The approve push runs inside the decide request (up to five minutes).
 - Computing a review walks the new commits (`revlist`); very large first pushes are slow.
-- No GitLab merge requests yet (GitLab works as kind `https`), no GitHub App sign-in.
+- No GitHub App sign-in.

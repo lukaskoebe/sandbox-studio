@@ -70,7 +70,7 @@ func (s *Server) forgeKey(env, name, host string) (string, store.Secret, error) 
 // ForgeInput describes a forge to add.
 type ForgeInput struct {
 	Name     string `json:"name" pattern:"^[a-z0-9][a-z0-9-]{0,31}$" doc:"Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git"`
-	Kind     string `json:"kind" enum:"forgejo,github,https,ssh"`
+	Kind     string `json:"kind" enum:"forgejo,github,gitlab,https,ssh"`
 	BaseURL  string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222"`
 	Username string `json:"username,omitempty" maxLength:"64" doc:"Kind https: the user git authenticates as with the token; git if empty"`
 	Token    string `json:"token,omitempty" maxLength:"4096" doc:"Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`

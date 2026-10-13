@@ -190,6 +190,7 @@ export function PublicKeyNotice({
 const defaultBaseURLs: Record<Kind, string> = {
   forgejo: "https://codeberg.org",
   github: "https://github.com",
+  gitlab: "https://gitlab.com",
   https: "",
   ssh: "",
 }
@@ -197,7 +198,8 @@ const defaultBaseURLs: Record<Kind, string> = {
 const namePlaceholders: Record<Kind, string> = {
   forgejo: "codeberg",
   github: "github",
-  https: "gitlab",
+  gitlab: "gitlab",
+  https: "other",
   ssh: "myhost",
 }
 
@@ -330,8 +332,10 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
         <FieldDescription>
           {kind === "forgejo" && "Forgejo or Gitea, such as Codeberg."}
           {kind === "github" && "github.com or GitHub Enterprise Server."}
+          {kind === "gitlab" &&
+            "gitlab.com or a self-hosted GitLab. Approved pushes to other branches get a merge request."}
           {kind === "https" &&
-            "Any host serving git over HTTPS with a token, such as GitLab or Bitbucket. No pull requests."}
+            "Any host serving git over HTTPS with a token, such as Bitbucket. No pull requests."}
           {ssh && "Any host serving git over SSH. No pull requests."}
         </FieldDescription>
       </Field>
@@ -384,8 +388,8 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
             onChange={(e) => setUsername(e.target.value)}
           />
           <FieldDescription>
-            The user git sends with the token. Bitbucket wants x-token-auth,
-            GitLab takes any.
+            The user git sends with the token. Bitbucket wants x-token-auth;
+            most hosts take any.
           </FieldDescription>
         </Field>
       )}
@@ -455,6 +459,8 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
               </>
             ) : kind === "forgejo" ? (
               "Needs read and write access to the repositories, and to issues for pull requests."
+            ) : kind === "gitlab" ? (
+              "A personal or project access token with the api and write_repository scopes."
             ) : (
               "Needs read and write access to the repositories."
             )}{" "}
