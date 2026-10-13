@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
+import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react"
 import { ApprovalDecision } from "@/components/approval-decision"
 import {
   BrowserActionDecision,
@@ -18,6 +19,7 @@ import { MemoryShareDecision } from "@/components/memory-sessions"
 import { PermissionDecision } from "@/components/chat/permission-card"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
+import { WaitingCount } from "@/components/waiting-count"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -35,13 +37,17 @@ import {
 } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
 
-/** Cards shown at sm and wider; below that only the newest one is. */
+/** Cards the open stack lists; the rest are one link away. */
 const maxCards = 3
 
 /**
  * Pending approvals, shown on every page: a held connection waits on the answer, a staged
  * git push waits for review. The network page's Requests tab lists its environment's network
  * requests itself, so the stack leaves them out there.
+ *
+ * One approval shows its card at sm and wider. More than one, or a phone, folds the cards
+ * into an "N approvals" pill that opens them on click, so the stack covers the page only when
+ * someone asks for it (docs/design/ui-style.md).
  */
 export function ApprovalStack() {
   const pending = $api.useQuery(
@@ -55,6 +61,8 @@ export function ApprovalStack() {
   const notifications = useNotifications(pending.data)
   const [reviewing, setReviewing] = useState<string>()
   const [conflict, setConflict] = useState<Approval>()
+  const [expanded, setExpanded] = useState(false)
+  const panelId = useId()
   const all = pending.data ?? []
   useTitleCount(all.length)
 
@@ -90,65 +98,67 @@ export function ApprovalStack() {
   )
   if (items.length === 0) return sheet
 
+  // One card needs no pill on a wide page, so it shows there; below sm the CSS hides it until the
+  // pill opens it. Several cards start folded.
+  const single = items.length === 1
   return (
     <section
       aria-label="Approvals"
-      className="fixed right-4 bottom-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+      className="fixed right-4 bottom-4 z-40 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2"
     >
-      <div className="flex items-center gap-2 px-1 text-xs">
-        <span className="font-medium">Approvals</span>
-        <span className="text-muted-foreground">{items.length}</span>
+      <div
+        id={panelId}
+        className={cn(
+          "flex max-h-[60vh] w-80 max-w-full flex-col gap-2 overflow-y-auto",
+          !expanded && (single ? "max-sm:hidden" : "hidden")
+        )}
+      >
         {notifications.canAsk && (
           <Button
             variant="link"
             size="xs"
-            className="ml-auto"
+            className="self-end"
             onClick={notifications.request}
           >
             Enable notifications
           </Button>
         )}
-      </div>
-      {items.slice(0, maxCards).map((a, i) => (
-        <div key={a.id} className={cn(i > 0 && "hidden sm:block")}>
+        {items.slice(0, maxCards).map((a) => (
           <ApprovalCard
+            key={a.id}
             approval={a}
             envName={envs.data?.find((e) => e.id === a.environmentId)?.name}
             onReview={() =>
               a.kind === "memory.conflict" ? setConflict(a) : setReviewing(a.id)
             }
           />
-        </div>
-      ))}
-      {items.length > 1 && (
-        <MoreLink
-          approval={items[1]}
-          count={items.length - 1}
-          className="sm:hidden"
-        />
-      )}
-      {items.length > maxCards && (
-        <MoreLink
-          approval={items[maxCards]}
-          count={items.length - maxCards}
-          className="hidden sm:block"
-        />
-      )}
+        ))}
+        {items.length > maxCards && (
+          <MoreLink
+            approval={items[maxCards]}
+            count={items.length - maxCards}
+          />
+        )}
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        onClick={() => setExpanded((o) => !o)}
+        className={cn("rounded-full bg-card shadow-lg", single && "sm:hidden")}
+      >
+        <WaitingCount count={items.length} />
+        {single ? "approval" : "approvals"}
+        {expanded ? <CaretDownIcon aria-hidden /> : <CaretUpIcon aria-hidden />}
+      </Button>
       {sheet}
     </section>
   )
 }
 
 /** Links to the environment page that lists the next hidden approval's kind. */
-function MoreLink({
-  approval,
-  count,
-  className,
-}: {
-  approval: Approval
-  count: number
-  className?: string
-}) {
+function MoreLink({ approval, count }: { approval: Approval; count: number }) {
   return (
     <Link
       to={approvalKind(approval).page}
@@ -156,10 +166,7 @@ function MoreLink({
         env: approval.environmentId,
         id: approvalTeammateId(approval) ?? "",
       }}
-      className={cn(
-        "px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline",
-        className
-      )}
+      className="px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
     >
       +{count} more
     </Link>
