@@ -56,7 +56,9 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await open("Git")
     await expect(page.getByText(/SSH agent/).first()).toBeVisible()
     await page.getByRole("link", { name: "Finish later" }).click()
-    await expect(page.getByRole("heading", { name: "Sandboxes" })).toBeVisible()
+    await expect(
+      page.getByRole("heading", { name: "Home", level: 1 })
+    ).toBeVisible()
     const card = page.getByRole("region", { name: "Finish setup" })
     await expect(card).toContainText("/7")
     await card.getByRole("link", { name: "Continue" }).click()
@@ -80,13 +82,16 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
 
     // Every step is done or skipped now, so the setup is complete and Home has no card.
     await page.goto("/")
-    await expect(page.getByRole("heading", { name: "Sandboxes" })).toBeVisible()
+    await expect(
+      page.getByRole("heading", { name: "Home", level: 1 })
+    ).toBeVisible()
     await expect(
       page.getByRole("region", { name: "Finish setup" })
     ).toBeHidden()
-    await expect(page.getByTitle("microsandbox status: running")).toHaveText(
-      "Running"
-    )
+    // The sandbox table's row: its name, ID, owner, template, status and ports.
+    await expect(
+      page.getByRole("link", { name: /^first \S+ Iris .*Running/ })
+    ).toBeVisible()
   } finally {
     await context.close()
     await studio.stop()
