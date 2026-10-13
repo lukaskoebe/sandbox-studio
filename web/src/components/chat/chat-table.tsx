@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { ChatStateBadge } from "@/components/chat/chat-items"
 import { TeammateAvatar } from "@/components/teammate-avatar"
+import { Badge } from "@/components/ui/badge"
 import {
   Table,
   TableBody,
@@ -59,14 +60,21 @@ export function ChatTable({
               })
             }
           >
-            <TableCell className="max-w-80 truncate font-medium">
-              <Link
-                to="/e/$env/chats/$chat"
-                params={{ env, chat: c.id }}
-                className="outline-none focus-visible:underline"
-              >
-                {chatTitle(c)}
-              </Link>
+            <TableCell className="max-w-80 font-medium">
+              <span className="flex min-w-0 items-center gap-2">
+                <Link
+                  to="/e/$env/chats/$chat"
+                  params={{ env, chat: c.id }}
+                  className="truncate outline-none focus-visible:underline"
+                >
+                  {chatTitle(c)}
+                </Link>
+                {c.heartbeat && (
+                  <Badge variant="secondary" className="shrink-0">
+                    Heartbeat
+                  </Badge>
+                )}
+              </span>
             </TableCell>
             {showTeammate && (
               <TableCell>

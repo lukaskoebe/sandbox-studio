@@ -17,6 +17,7 @@ import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { TeammateForm } from "@/components/teammate-form"
+import { TeammateHeartbeat } from "@/components/teammate-heartbeat"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/teammates/$id/settings")({
@@ -43,6 +44,9 @@ function TeammateSettings() {
         providers={providers.data}
         onSaved={() => toast.success("Teammate saved")}
       />
+      <div className="border-t pt-6">
+        <TeammateHeartbeat env={env} teammate={teammate} />
+      </div>
       <section className="space-y-3 border-t pt-6">
         <SectionHeader title={`Delete ${teammate.name}`} icon={TrashIcon} />
         <p className="text-xs text-muted-foreground">
