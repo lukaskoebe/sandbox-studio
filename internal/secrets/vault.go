@@ -227,15 +227,19 @@ func (v *Vault) Create(ctx context.Context, sec store.Secret, value string) (sto
 	if err != nil {
 		return store.Secret{}, err
 	}
-	hosts, err := normalizeHosts(sec.Hosts)
-	if err != nil {
-		return store.Secret{}, err
+	// A studio-only secret never reaches a sandbox, so it is bound to no host.
+	hosts := []string{}
+	if !sec.StudioOnly {
+		if hosts, err = normalizeHosts(sec.Hosts); err != nil {
+			return store.Secret{}, err
+		}
 	}
 	// The ID is the AAD of the sealed value, so it is chosen before the row is inserted.
 	id := store.NewID()
 	sec = store.Secret{
 		ID: id, EnvironmentID: sec.EnvironmentID, TeammateID: sec.TeammateID, SandboxID: sec.SandboxID,
 		Name: sec.Name, Sealed: v.Seal([]byte(value), []byte(id)), Hosts: hosts, Placeholder: newPlaceholder(), Note: sec.Note,
+		StudioOnly: sec.StudioOnly,
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -247,8 +251,14 @@ func (v *Vault) Create(ctx context.Context, sec store.Secret, value string) (sto
 // Update changes the hosts and note of a secret. A nil value keeps the stored one. The name
 // never changes.
 func (v *Vault) Update(ctx context.Context, envID, id string, value *string, hosts []string, note string) (store.Secret, error) {
-	hosts, err := normalizeHosts(hosts)
+	cur, err := v.st.SecretByID(ctx, envID, id)
 	if err != nil {
+		return store.Secret{}, err
+	}
+	// A studio-only secret is bound to no host, so it has none to check.
+	if cur.StudioOnly {
+		hosts = nil
+	} else if hosts, err = normalizeHosts(hosts); err != nil {
 		return store.Secret{}, err
 	}
 	sec := store.Secret{ID: id, EnvironmentID: envID, Hosts: hosts, Note: note}

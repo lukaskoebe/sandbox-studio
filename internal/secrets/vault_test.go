@@ -522,3 +522,31 @@ func TestScopedBindingsAndEnv(t *testing.T) {
 		t.Fatalf("after delete: %+v", b)
 	}
 }
+
+// A studio-only secret is bound to no host, is never bound into a sandbox's requests or its
+// environment, and Studio reads it back.
+func TestStudioOnlySecret(t *testing.T) {
+	ctx := context.Background()
+	st := newStore(t)
+	env := newEnv(t, st, "work")
+	v := newVault(t, st)
+	sec, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "PROVIDER_WORK_LOGIN", StudioOnly: true}, "{\"refresh_token\":\"r\"}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sec.StudioOnly || len(sec.Hosts) != 0 {
+		t.Fatalf("studio-only secret %+v", sec)
+	}
+	if got, err := v.Value(ctx, env, sec.ID); err != nil || got != "{\"refresh_token\":\"r\"}" {
+		t.Fatalf("value %q, %v", got, err)
+	}
+	if b, err := v.Bindings(ctx, store.Sandbox{EnvironmentID: env}); err != nil || len(b) != 0 {
+		t.Fatalf("bindings %+v, %v; want none: the gateway never sees a studio-only secret", b, err)
+	}
+	if env, err := v.Env(ctx, store.Sandbox{EnvironmentID: env}); err != nil || len(env) != 0 {
+		t.Fatalf("environment %v, %v; want no variable for it", env, err)
+	}
+	if _, err := v.Create(ctx, store.Secret{EnvironmentID: env, Name: "KEY"}, "v"); err == nil {
+		t.Fatal("an ordinary secret without hosts was accepted")
+	}
+}
