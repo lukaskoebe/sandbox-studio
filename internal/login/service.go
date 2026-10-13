@@ -97,6 +97,7 @@ type Service struct {
 	TokenURL string
 
 	mu       sync.Mutex
+	callMu   sync.Mutex      // one CLI call at a time: calls start and stop the utility VMs
 	bg       context.Context // lives as long as Run; sign-ins outlive their requests
 	attempts map[string]*attempt
 	idle     map[string]utilityUse // utility VMs by provider ID, for the idle stop

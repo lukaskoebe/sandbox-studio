@@ -13,6 +13,7 @@ import (
 // verify (S8): the field names and shapes of the pinned Codex version.
 type codexAuth struct {
 	OpenAIAPIKey *string    `json:"OPENAI_API_KEY"`
+	AuthMode     string     `json:"auth_mode,omitempty"`
 	Tokens       codexToken `json:"tokens"`
 	LastRefresh  string     `json:"last_refresh,omitempty"`
 }
@@ -30,6 +31,7 @@ type codexToken struct {
 // the real tokens, so it never reaches a sandbox.
 type codexLogin struct {
 	codexToken
+	AuthMode    string `json:"auth_mode,omitempty"`
 	LastRefresh string `json:"last_refresh,omitempty"`
 }
 
@@ -40,7 +42,7 @@ func parseCodexAuth(data []byte) (codexLogin, error) {
 	if err := json.Unmarshal(data, &a); err != nil {
 		return codexLogin{}, fmt.Errorf("the Codex login file is not JSON: %w", err)
 	}
-	l := codexLogin{codexToken: a.Tokens, LastRefresh: a.LastRefresh}
+	l := codexLogin{codexToken: a.Tokens, AuthMode: a.AuthMode, LastRefresh: a.LastRefresh}
 	if err := checkCodexLogin(l); err != nil {
 		return codexLogin{}, err
 	}
@@ -104,6 +106,7 @@ func codexGuestAuth(l codexLogin, accessPlaceholder, studioPlaceholder string) (
 	accessHead, accessBody, _, _ := jwtParts(l.AccessToken)
 	idHead, idBody, _, _ := jwtParts(l.IDToken)
 	return json.MarshalIndent(codexAuth{
+		AuthMode: l.AuthMode,
 		Tokens: codexToken{
 			IDToken:      idHead + "." + idBody + "." + studioPlaceholder,
 			AccessToken:  accessHead + "." + accessBody + "." + accessPlaceholder,

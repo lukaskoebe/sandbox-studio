@@ -87,6 +87,9 @@ func (s *Service) complete(ctx context.Context, p store.Provider, model string, 
 	if p.SecretID == "" || p.Placeholder == "" {
 		return agentmem.Response{}, ErrNoLogin
 	}
+	// Dream and extraction may ask at once; the utility VM is started and run one call at a time.
+	s.callMu.Lock()
+	defer s.callMu.Unlock()
 	sb, err := s.VMs.EnsureSystem(ctx, p.EnvironmentID, utilityKind(p), utilityVM(p))
 	if err != nil {
 		return agentmem.Response{}, fmt.Errorf("the utility VM didn't start: %w", err)

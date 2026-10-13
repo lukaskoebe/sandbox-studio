@@ -73,6 +73,7 @@ func TestJWTExpiry(t *testing.T) {
 // placeholders where the secrets are.
 func TestGuestCodexAuthHoldsNoSecret(t *testing.T) {
 	l := testLogin(t, time.Unix(1900000000, 0))
+	l.AuthMode = "chatgpt"
 	data, err := codexGuestAuth(l, "studio-accessplaceholder", "studio-otherplaceholder")
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestGuestCodexAuthHoldsNoSecret(t *testing.T) {
 	if got.Tokens.AccessToken != accessHead+"."+accessBody+".studio-accessplaceholder" {
 		t.Fatalf("access token %q", got.Tokens.AccessToken)
 	}
-	if got.Tokens.RefreshToken != "studio-otherplaceholder" || got.Tokens.AccountID != "acct-1" || got.LastRefresh != l.LastRefresh {
+	if got.AuthMode != "chatgpt" || got.Tokens.RefreshToken != "studio-otherplaceholder" || got.Tokens.AccountID != "acct-1" || got.LastRefresh != l.LastRefresh {
 		t.Fatalf("guest auth %+v", got)
 	}
 	if exp, err := jwtExpiry(got.Tokens.AccessToken); err != nil || !exp.Equal(time.Unix(1900000000, 0)) {
