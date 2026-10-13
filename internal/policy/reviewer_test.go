@@ -224,6 +224,16 @@ func TestReviewerSeesBrowserRequestsWithTheirPage(t *testing.T) {
 	if in.Method != "GET" || in.Path != "/assets/app.js" || in.Site != "docs.example.org" || in.Port != 443 {
 		t.Errorf("the question: %+v", in)
 	}
+
+	// A navigation is about its own site, not the page the browser was on.
+	_, err = e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "shop.example.net", Port: 443, Browser: true, Deferred: true,
+		HTTP: &HTTPRequest{Method: "GET", Path: "/", Navigation: true, Site: "shop.example.net"}})
+	if !errors.Is(err, ErrUndecided) || rv.calls() != 2 {
+		t.Fatalf("the navigation: %v, %d questions", err, rv.calls())
+	}
+	if in := rv.asked[1]; in.Site != "shop.example.net" || in.Path != "/" {
+		t.Errorf("the navigation's question: %+v", in)
+	}
 }
 
 // fakeBrowsers says which page a browser's requests belong to.

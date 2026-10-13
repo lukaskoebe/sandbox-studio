@@ -203,7 +203,9 @@ No level does these things:
 
 - allow a request that carries a placeholder of a secret its host isn't bound to: the request is
   asked about, and the gateway refuses to send the placeholder's value anywhere else. The AI
-  reviewer never sees such a request;
+  reviewer never sees such a request. A connection the gateway doesn't terminate isn't read, so its
+  bytes pass as before: a placeholder there is only a random name that no host can turn into a
+  secret;
 - allow a private or otherwise non-public address, such as loopback, RFC 1918, carrier-grade NAT or
   link-local. The dialer refuses them anyway, unless a [private host](#private-hosts-company-vpn)
   names them;

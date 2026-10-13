@@ -145,7 +145,8 @@ func (e *Engine) askReviewer(ctx context.Context, req Request, teammate, host, t
 	}
 	in := ReviewInput{Host: host, Port: req.Port, Task: clip(task, reviewTaskRunes)}
 	if req.HTTP != nil {
-		in.Method, in.Path = req.HTTP.Method, req.HTTP.Path
+		// As approvalOf names it: a navigation's own site, else the site of the browser's page.
+		in.Method, in.Path, in.Site = req.HTTP.Method, req.HTTP.Path, req.HTTP.Site
 		if !req.HTTP.Navigation && e.Browsers != nil {
 			in.Site = e.Browsers.TopLevel(ctx, req.EnvironmentID, teammate)
 		}
