@@ -129,3 +129,44 @@ WHEN (NEW.teammate_id IS NOT NULL
 BEGIN
     SELECT RAISE(ABORT, 'secret teammate or sandbox must belong to the same environment');
 END;
+
+-- A subscription provider holds a secret too: a login keeps its Claude Code token, or its
+-- ChatGPT access token's signature, there (docs/teammates.md, subscription logins). Migration 026
+-- refused that with a CHECK, so providers is rebuilt without it, the same way as sandboxes above.
+-- Its owner triggers are created again; teammates' composite key on providers stays valid.
+CREATE TABLE providers_new (
+    id             TEXT PRIMARY KEY,
+    environment_id TEXT NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
+    name           TEXT NOT NULL,
+    kind           TEXT NOT NULL CHECK (kind IN ('anthropic_api', 'openai_api', 'openai_compatible', 'claude_subscription', 'chatgpt_subscription')),
+    base_url       TEXT NOT NULL DEFAULT '',   -- openai_compatible only
+    model          TEXT NOT NULL DEFAULT '',   -- openai_compatible only: its single model
+    secret_id      TEXT UNIQUE REFERENCES secrets(id),
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    UNIQUE (environment_id, name),
+    UNIQUE (environment_id, id),
+    CHECK ((kind = 'openai_compatible') = (base_url <> '' AND model <> ''))
+);
+INSERT INTO providers_new (id, environment_id, name, kind, base_url, model, secret_id, created_at, updated_at)
+    SELECT id, environment_id, name, kind, base_url, model, secret_id, created_at, updated_at FROM providers;
+DROP TABLE providers;
+ALTER TABLE providers_new RENAME TO providers;
+
+CREATE TRIGGER providers_secret_owner_insert
+BEFORE INSERT ON providers
+WHEN NEW.secret_id IS NOT NULL
+ AND NOT EXISTS (SELECT 1 FROM secrets WHERE id = NEW.secret_id AND environment_id = NEW.environment_id
+                 AND teammate_id IS NULL AND sandbox_id IS NULL)
+BEGIN
+    SELECT RAISE(ABORT, 'provider secret must be an environment secret of the same environment');
+END;
+
+CREATE TRIGGER providers_secret_owner_update
+BEFORE UPDATE OF secret_id, environment_id ON providers
+WHEN NEW.secret_id IS NOT NULL
+ AND NOT EXISTS (SELECT 1 FROM secrets WHERE id = NEW.secret_id AND environment_id = NEW.environment_id
+                 AND teammate_id IS NULL AND sandbox_id IS NULL)
+BEGIN
+    SELECT RAISE(ABORT, 'provider secret must be an environment secret of the same environment');
+END;

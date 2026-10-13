@@ -481,8 +481,9 @@ func TestMigrateTeammateSettings(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at) VALUES ('sub-key', 'env', 'S', x'00', 'x.example.com', 'ph-sub', 1, 1)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE providers SET secret_id = 'sub-key' WHERE id = 'prov'`); err == nil {
-		t.Error("a subscription took a key")
+	// Migration 033 lets a subscription hold its login's key (docs/teammates.md).
+	if _, err := db.ExecContext(ctx, `UPDATE providers SET secret_id = 'sub-key' WHERE id = 'prov'`); err != nil {
+		t.Errorf("a subscription login could not keep its key: %v", err)
 	}
 }
 
@@ -577,6 +578,21 @@ func TestMigrateSystemSandboxKinds(t *testing.T) {
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, kind) VALUES ('bad', 'env', 'x', 1, 512, 1024, 0, 1, 'other')`); err == nil {
 		t.Fatal("an unknown sandbox kind was accepted")
+	}
+	// A subscription provider can hold its login's secret now; the OpenAI-compatible rule still holds.
+	for _, q := range []string{
+		`INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, note, created_at, updated_at) VALUES ('tok', 'env', 'PROVIDER_MAX_KEY', x'00', 'api.anthropic.com', 'studio-tok', '', 1, 1)`,
+		`INSERT INTO providers (id, environment_id, name, kind, secret_id, created_at, updated_at) VALUES ('max', 'env', 'Max', 'claude_subscription', 'tok', 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO providers (id, environment_id, name, kind, created_at, updated_at) VALUES ('compat', 'env', 'Local', 'openai_compatible', 1, 1)`); err == nil {
+		t.Fatal("an OpenAI-compatible provider without a base URL was accepted")
+	}
+	if prov, err := s.Provider(ctx, "env", "max"); err != nil || prov.SecretID != "tok" {
+		t.Fatalf("the subscription provider after the rebuild: %+v, %v", prov, err)
 	}
 	// The owner triggers still hold: a teammate of another environment is refused.
 	if _, err := db.ExecContext(ctx, `INSERT INTO environments (id, name, created_at) VALUES ('other', 'Other', 1)`); err != nil {
