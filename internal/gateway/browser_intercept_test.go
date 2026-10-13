@@ -170,3 +170,23 @@ func TestBrowserRequestsAreAskedOneByOne(t *testing.T) {
 		t.Errorf("subresource %+v", sub)
 	}
 }
+
+// A host on the tracker list is refused to the browser, before anything reaches it, and the
+// connection log says why.
+func TestBrowserVMTrackersAreRefused(t *testing.T) {
+	h := newBrowserHarness(t)
+	h.policy.mu.Lock()
+	h.policy.errs = map[string]error{"www.google-analytics.com": policy.ErrTracker}
+	h.policy.mu.Unlock()
+	resp, body := get(t, h.clientAs(t, "vm1", h.envCA), "https://www.google-analytics.com/collect")
+	if resp.StatusCode != http.StatusForbidden || !strings.Contains(body, "tracker list") {
+		t.Fatalf("status %d: %s", resp.StatusCode, body)
+	}
+	if n := h.requests(); n != 0 {
+		t.Fatalf("%d requests reached the upstream", n)
+	}
+	waitFor(t, func() bool {
+		log := h.gw.Conns.List("vm1")
+		return len(log) == 1 && log[0].Verdict == VerdictDenied && log[0].Error == "tracker"
+	}, func() string { return fmt.Sprintf("%+v", h.gw.Conns.List("vm1")) })
+}

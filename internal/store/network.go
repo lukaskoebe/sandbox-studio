@@ -498,3 +498,36 @@ func DecideApprovalTx(ctx context.Context, tx interface {
 	}
 	return nil
 }
+
+// --- tracker blocking -----------------------------------------------------------------
+
+// SetBlockTrackers sets whether the environment's browser VMs are denied the tracker list.
+func (s *Store) SetBlockTrackers(ctx context.Context, envID string, on bool) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE environments SET block_trackers = ? WHERE id = ?", on, envID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RecordDenied records a request refused without asking as a decided approval, so the Activity
+// list shows it. A record of the same subject, decided the same way, counts the attempt again
+// instead of adding a row.
+func (s *Store) RecordDenied(ctx context.Context, a Approval) error {
+	t := now()
+	res, err := s.db.ExecContext(ctx, `UPDATE approvals SET attempts = attempts + 1, updated_at = ?, decided_at = ?
+		WHERE environment_id = ? AND IFNULL(sandbox_id, '') = ? AND kind = ? AND subject = ? AND status = 'denied' AND once = 0`,
+		t, t, a.EnvironmentID, a.SandboxID, a.Kind, a.Subject)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	_, err = s.db.ExecContext(ctx, "INSERT INTO approvals (id, environment_id, sandbox_id, kind, subject, payload, status, created_at, updated_at, decided_at) VALUES (?, ?, ?, ?, ?, ?, 'denied', ?, ?, ?)",
+		NewID(), a.EnvironmentID, nullable(a.SandboxID), a.Kind, a.Subject, string(a.Payload), t, t, t)
+	return err
+}

@@ -246,3 +246,46 @@ func TestSiteApprovalCoversTheNavigationAndItsPage(t *testing.T) {
 		t.Errorf("a subresource was allowed as a site: %v", err)
 	}
 }
+
+// The tracker list denies a browser's requests to tracker hosts without asking, and an allow rule
+// for the host wins. Each denial is recorded for Activity; the environment can turn the list off.
+func TestBrowserTrackersAreDenied(t *testing.T) {
+	ctx := context.Background()
+	e, env, sb := newEngine(t)
+	tracker := Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "www.google-analytics.com", Port: 443, Browser: true, Deferred: true}
+	for range 2 {
+		if _, err := e.Decide(ctx, tracker); !errors.Is(err, ErrTracker) {
+			t.Fatalf("got %v, want ErrTracker", err)
+		}
+	}
+	if pending, _ := e.Store.Approvals(ctx, env.ID, store.StatusPending, 10); len(pending) != 0 {
+		t.Fatalf("a tracker asked: %+v", pending)
+	}
+	denied, _ := e.Store.Approvals(ctx, env.ID, store.StatusDenied, 10)
+	if len(denied) != 1 || denied[0].Subject != "tracker www.google-analytics.com:443" || denied[0].Attempts != 2 || denied[0].Kind != KindNetwork {
+		t.Fatalf("activity: %+v", denied)
+	}
+	var req NetworkRequest
+	if err := json.Unmarshal(denied[0].Payload, &req); err != nil || !req.Tracker {
+		t.Errorf("payload %+v %v", req, err)
+	}
+
+	if _, err := e.Store.CreateRule(ctx, store.Rule{EnvironmentID: env.ID, Host: "www.google-analytics.com", Ports: []int{443}, Action: store.ActionAllow}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Settle(ctx, env.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := e.Decide(ctx, tracker); err != nil || r.Action != store.ActionAllow {
+		t.Fatalf("an allow rule did not win over the list: %+v %v", r, err)
+	}
+
+	if err := e.Store.SetBlockTrackers(ctx, env.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	other := tracker
+	other.Host = "stats.g.doubleclick.net"
+	if _, err := e.Decide(ctx, other); !errors.Is(err, ErrPerRequest) {
+		t.Fatalf("with trackers allowed, got %v, want the browser's requests decided one at a time", err)
+	}
+}

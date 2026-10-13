@@ -50,6 +50,9 @@ var (
 	// connection is not held, and its requests are decided one at a time (HTTP set).
 	ErrPerRequest = errors.New("the browser's requests are decided one at a time")
 	ErrNotSite    = errors.New("only a browser navigation to a new site can be allowed for its site")
+	// ErrTracker is returned for a request of a browser VM to a host on the tracker list, while
+	// the environment blocks trackers and no rule allows the host.
+	ErrTracker = errors.New("the host is on the tracker list")
 )
 
 // Request is a connection attempt from a sandbox, or a request on a connection the gateway
@@ -60,6 +63,8 @@ type Request struct {
 	SandboxName   string
 	Host          string // DNS name, or an IP address when no name is known
 	Port          int
+	// Browser is set for connections of a browser VM: the tracker list applies to them.
+	Browser bool
 	// Deferred is set for a connection the gateway terminates and decides request by request
 	// (a browser VM's HTTPS): with no rule for the connection it is not held.
 	Deferred bool
@@ -86,6 +91,8 @@ type NetworkRequest struct {
 	Patterns    []string `json:"patterns" doc:"Suggested host patterns, most specific first"`
 	// The request, for network.request approvals.
 	HTTPRequest
+	// Tracker is set for a request of a browser denied because its host is on the tracker list.
+	Tracker bool `json:"tracker,omitempty"`
 }
 
 // Browsers is what the policy asks of teammates' browsers (internal/browser).
@@ -138,7 +145,9 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	if err != nil {
 		return store.Rule{}, err
 	}
-	if r, ok := e.covered(ctx, rules, req, teammate); ok {
+	if r, ok, err := e.check(ctx, rules, req, teammate); err != nil {
+		return store.Rule{}, err
+	} else if ok {
 		return r, nil
 	}
 	if req.Deferred && req.HTTP == nil {
@@ -171,7 +180,9 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		if rules, wake, err = e.snapshot(ctx, req.EnvironmentID); err != nil {
 			return store.Rule{}, err
 		}
-		if r, ok := e.covered(ctx, rules, req, teammate); ok {
+		if r, ok, err := e.check(ctx, rules, req, teammate); err != nil {
+			return store.Rule{}, err
+		} else if ok {
 			return r, nil
 		}
 		cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID)
@@ -185,16 +196,44 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	}
 }
 
-// covered returns the rule that decides req now: a matching rule, or else the site the user
-// approved for the browser session, which decides with no rule behind it.
-func (e *Engine) covered(ctx context.Context, rules []store.Rule, req Request, teammate string) (store.Rule, bool) {
+// check returns the rule that decides req now, if one does: a matching rule; else, for a
+// browser's request, ErrTracker when the request is to a tracker and the environment blocks
+// trackers; else the site the user approved for the browser session.
+func (e *Engine) check(ctx context.Context, rules []store.Rule, req Request, teammate string) (store.Rule, bool, error) {
 	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port); ok {
-		return r, true
+		return r, true, nil
+	}
+	if req.Browser && Tracker(req.Host) {
+		env, err := e.Store.Environment(ctx, req.EnvironmentID)
+		if err != nil {
+			return store.Rule{}, false, err
+		}
+		if env.BlockTrackers {
+			e.recordTracker(ctx, req)
+			return store.Rule{}, false, ErrTracker
+		}
 	}
 	if req.HTTP != nil && e.Browsers != nil && e.Browsers.Allows(ctx, req.EnvironmentID, teammate, *req.HTTP) {
-		return store.Rule{EnvironmentID: req.EnvironmentID, Host: Normalize(req.Host), Action: store.ActionAllow}, true
+		return store.Rule{EnvironmentID: req.EnvironmentID, Host: Normalize(req.Host), Action: store.ActionAllow}, true, nil
 	}
-	return store.Rule{}, false
+	return store.Rule{}, false, nil
+}
+
+// recordTracker logs a browser request denied for its tracker host in the Activity list.
+func (e *Engine) recordTracker(ctx context.Context, req Request) {
+	host := Normalize(req.Host)
+	payload, _ := json.Marshal(NetworkRequest{Host: host, Port: req.Port, SandboxName: req.SandboxName, Patterns: Suggestions(host), Tracker: true})
+	err := e.Store.RecordDenied(ctx, store.Approval{
+		EnvironmentID: req.EnvironmentID,
+		SandboxID:     req.SandboxID,
+		Kind:          KindNetwork,
+		Subject:       "tracker " + host + ":" + strconv.Itoa(req.Port),
+		Payload:       payload,
+	})
+	if err != nil {
+		e.log().Error("network rules: record a tracker", "err", err)
+	}
+	e.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: req.EnvironmentID})
 }
 
 // approvalOf describes the approval for a request that no rule covers: its kind, its subject

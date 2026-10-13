@@ -420,6 +420,33 @@ func (s *Server) registerNetwork(api huma.API) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "getTrackers", Method: http.MethodGet, Path: "/api/environments/{env}/trackers", Tags: []string{"network"},
+		Description: "The built-in tracker list and whether the environment's browsers are denied it.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body trackersView }, error) {
+		v, err := s.trackers(ctx, in.Env)
+		return &struct{ Body trackersView }{v}, err
+	})
+
+	type setTrackersIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Body struct {
+			Block bool `json:"block" doc:"Deny the listed domains to the environment's browsers unless a rule allows them"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setTrackers", Method: http.MethodPut, Path: "/api/environments/{env}/trackers", Tags: []string{"network"},
+	}, func(ctx context.Context, in *setTrackersIn) (*struct{ Body trackersView }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		if err := s.Store.SetBlockTrackers(ctx, in.Env, in.Body.Block); err != nil {
+			return nil, apiError(err)
+		}
+		v, err := s.trackers(ctx, in.Env)
+		return &struct{ Body trackersView }{v}, err
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "listConnections", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/connections", Tags: []string{"network"},
 		Description: "The sandbox's most recent connections, newest first. The log is kept in memory only.",
 	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body []gateway.Conn }, error) {
@@ -428,6 +455,22 @@ func (s *Server) registerNetwork(api huma.API) {
 		}
 		return &struct{ Body []gateway.Conn }{s.Conns.List(in.ID)}, nil
 	})
+}
+
+// trackersView is the built-in tracker list and the environment's switch for it.
+type trackersView struct {
+	Version string   `json:"version" doc:"The version of the built-in tracker list"`
+	Block   bool     `json:"block" doc:"Whether the environment's browsers are denied the listed domains"`
+	Domains []string `json:"domains" doc:"The listed domains, sorted; an entry also covers its subdomains"`
+}
+
+func (s *Server) trackers(ctx context.Context, env string) (trackersView, error) {
+	e, err := s.Store.Environment(ctx, env)
+	if err != nil {
+		return trackersView{}, apiError(err)
+	}
+	version, domains := policy.TrackerList()
+	return trackersView{Version: version, Block: e.BlockTrackers, Domains: domains}, nil
 }
 
 // streamEvents sends change notifications as server-sent events; clients refetch what changed.

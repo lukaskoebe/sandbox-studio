@@ -77,11 +77,21 @@ Matching (`policy/match.go`):
 - Within a scope: the most specific host pattern wins (`*.example.com` also matches
   `example.com`), then rules that name ports, then `deny` over `allow`.
 
+## Trackers
+
+A browser VM is denied the built-in tracker list without being asked: `internal/policy/trackers.txt`,
+shipped with Studio and versioned. Its domains are measurement, audience, session-replay and
+ad-delivery services, in the spirit of EasyPrivacy; an entry also covers its subdomains. The
+check comes after an explicit rule (an allow rule for the host wins, a deny rule denies) and
+before any approval or site approval. The environment switch "Block trackers in the browser"
+(`environments.block_trackers`, on by default) turns the list off. Each denial shows in Activity
+as "Denied · tracker", one row per host with its attempts.
+
 ## The Network page
 
 The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route:
 
-- **Rules** lists the environment's rules. Its search and scope, action, origin and unused
+- **Rules** lists the environment's rules, and below them the tracker list with its switch. Its search and scope, action, origin and unused
   filters are URL search params (`q`, `scope`, `action`, `origin`, `unused=1`), so a filtered
   view can be shared. Each rule shows its origin as a chip, and an unused rule an "unused"
   chip. Delete unused removes the unused rules the filters show, after a confirmation. Rules are grouped

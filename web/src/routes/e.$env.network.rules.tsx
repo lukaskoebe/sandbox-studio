@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
 import { RuleDialog } from "@/components/rule-dialog"
+import { TrackerBlocking } from "@/components/tracker-blocking"
 import { SectionHeader } from "@/components/section-header"
 import { $api, errorMessage, type Rule } from "@/lib/api/client"
 import {
@@ -302,6 +303,7 @@ function RulesTab() {
           </Table>
         </div>
       )}
+      <TrackerBlocking env={env} />
       <RuleDialog
         env={env}
         rule={dialog?.rule}

@@ -1566,6 +1566,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/trackers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The built-in tracker list and whether the environment's browsers are denied it. */
+        get: operations["getTrackers"];
+        put: operations["setTrackers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -2364,6 +2381,7 @@ export interface components {
             teammate?: string;
         };
         Environment: {
+            blockTrackers: boolean;
             /** Format: date-time */
             createdAt: string;
             id: string;
@@ -2928,6 +2946,7 @@ export interface components {
             sandboxName: string;
             /** @description The top-level site the request belongs to: the navigation's own, or the browser's page */
             site?: string;
+            tracker?: boolean;
         };
         Page: {
             /** @description A core page, loaded into every session of the scope */
@@ -3329,6 +3348,10 @@ export interface components {
             /** Format: int64 */
             writes: number;
         };
+        SetTrackersInBody: {
+            /** @description Deny the listed domains to the environment's browsers unless a rule allows them */
+            block: boolean;
+        };
         Setup: {
             /**
              * Format: date-time
@@ -3554,6 +3577,14 @@ export interface components {
             status?: string;
             title?: string;
             toolCallId: string;
+        };
+        TrackersView: {
+            /** @description Whether the environment's browsers are denied the listed domains */
+            block: boolean;
+            /** @description The listed domains, sorted; an entry also covers its subdomains */
+            domains: string[] | null;
+            /** @description The version of the built-in tracker list */
+            version: string;
         };
         Turn: {
             /** @description The files the turn changed, once it ended */
@@ -7904,6 +7935,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTrackers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackersView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setTrackers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTrackersInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackersView"];
                 };
             };
             /** @description Error */

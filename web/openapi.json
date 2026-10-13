@@ -1841,6 +1841,9 @@
       "Environment": {
         "additionalProperties": false,
         "properties": {
+          "blockTrackers": {
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -1855,7 +1858,8 @@
         "required": [
           "id",
           "name",
-          "createdAt"
+          "createdAt",
+          "blockTrackers"
         ],
         "type": "object"
       },
@@ -3632,6 +3636,9 @@
           "site": {
             "description": "The top-level site the request belongs to: the navigation's own, or the browser's page",
             "type": "string"
+          },
+          "tracker": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -4917,6 +4924,19 @@
         ],
         "type": "object"
       },
+      "SetTrackersInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "description": "Deny the listed domains to the environment's browsers unless a rule allows them",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "block"
+        ],
+        "type": "object"
+      },
       "Setup": {
         "additionalProperties": false,
         "properties": {
@@ -5604,6 +5624,35 @@
         },
         "required": [
           "toolCallId"
+        ],
+        "type": "object"
+      },
+      "TrackersView": {
+        "additionalProperties": false,
+        "properties": {
+          "block": {
+            "description": "Whether the environment's browsers are denied the listed domains",
+            "type": "boolean"
+          },
+          "domains": {
+            "description": "The listed domains, sorted; an entry also covers its subdomains",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "version": {
+            "description": "The version of the built-in tracker list",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "block",
+          "domains"
         ],
         "type": "object"
       },
@@ -12752,6 +12801,99 @@
         "tags": [
           "templates",
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/trackers": {
+      "get": {
+        "description": "The built-in tracker list and whether the environment's browsers are denied it.",
+        "operationId": "getTrackers",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackersView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "put": {
+        "operationId": "setTrackers",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetTrackersInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackersView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
         ]
       }
     },

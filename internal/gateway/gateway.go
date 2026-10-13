@@ -187,7 +187,7 @@ func (g *Gateway) handle(c net.Conn) {
 	browserTLS := sb.Kind == store.SandboxKindBrowser && proto == "tls"
 	rule, err := g.Policy.Decide(context.Background(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name, Host: host, Port: port,
-		Deferred: browserTLS,
+		Browser: sb.Kind == store.SandboxKindBrowser, Deferred: browserTLS,
 	})
 	ruleID = rule.ID
 	// Without a rule, a browser VM's HTTPS is not held here: its requests are decided one by one
@@ -207,6 +207,10 @@ func (g *Gateway) handle(c net.Conn) {
 	case errors.Is(err, policy.ErrDenied):
 		verdict = VerdictDenied
 		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("The user denied the request to connect to %s:%d.", host, port))
+		return
+	case errors.Is(err, policy.ErrTracker):
+		verdict, problem = VerdictDenied, "tracker"
+		g.refuse(c, br, sb.EnvironmentID, host, proto, fmt.Sprintf("%s is on the tracker list that Sandbox Studio blocks in browsers. A network rule that allows it lets the browser through.", host))
 		return
 	case err != nil:
 		problem = err.Error()
