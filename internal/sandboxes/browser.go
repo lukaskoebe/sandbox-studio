@@ -35,23 +35,26 @@ func (m *Manager) EnsureBrowser(ctx context.Context, envID, teammateID, image st
 	if err != nil {
 		return store.Sandbox{}, err
 	}
-	if _, ok := m.Hub.Connected(rec.ID); !ok {
-		if err := m.ensureBrowserRunning(ctx, rec); err != nil {
-			return store.Sandbox{}, err
-		}
-	}
-	if err := m.WaitReady(ctx, rec.ID, browserReady); err != nil {
-		return rec, err
-	}
-	if err := m.ConfigureGuest(ctx, envID, rec.ID); err != nil {
-		return rec, err
-	}
-	return rec, nil
+	return rec, m.ready(ctx, rec, browserReady)
 }
 
-// ensureBrowserRunning prepares networking and starts or resumes a disconnected browser VM.
-// The lifecycle lock is released before EnsureBrowser waits for guest configuration.
-func (m *Manager) ensureBrowserRunning(ctx context.Context, rec store.Sandbox) error {
+// ready starts a VM that isn't connected, and waits until its guest agent is connected and
+// configured. The lifecycle lock is released before it waits for the guest.
+func (m *Manager) ready(ctx context.Context, rec store.Sandbox, timeout time.Duration) error {
+	if _, ok := m.Hub.Connected(rec.ID); !ok {
+		if err := m.ensureVMRunning(ctx, rec); err != nil {
+			return err
+		}
+	}
+	if err := m.WaitReady(ctx, rec.ID, timeout); err != nil {
+		return err
+	}
+	return m.ConfigureGuest(ctx, rec.EnvironmentID, rec.ID)
+}
+
+// ensureVMRunning prepares networking and starts or resumes a disconnected VM of a browser or
+// a system sandbox.
+func (m *Manager) ensureVMRunning(ctx context.Context, rec store.Sandbox) error {
 	unlock, err := m.tryMutation(rec.ID)
 	if err != nil {
 		return err
@@ -91,21 +94,31 @@ func (m *Manager) createBrowser(ctx context.Context, envID, teammateID, image st
 	if err != nil {
 		return store.Sandbox{}, err
 	}
+	if err := m.provision(ctx, rec, r, image); err != nil {
+		return store.Sandbox{}, err
+	}
+	return rec, nil
+}
+
+// provision creates the VM of a new sandbox row rec from image (the default image when empty),
+// and removes the row again if that fails.
+func (m *Manager) provision(ctx context.Context, rec store.Sandbox, r resources.Resources, image string) error {
+	envID := rec.EnvironmentID
 	unlock, err := m.tryMutation(rec.ID)
 	if err != nil {
-		return store.Sandbox{}, err
+		return err
 	}
 	defer unlock()
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
 		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
-		return store.Sandbox{}, err
+		return err
 	}
 	sock := m.Paths.AgentSocket(rec.ID)
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		m.Egress.Detach(rec.ID)
 		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
-		return store.Sandbox{}, err
+		return err
 	}
 	spec := runtime.Spec{
 		CPUs: uint8(r.CPUs), MemoryMiB: uint32(r.MemoryMiB), MaxMemoryMiB: uint32(r.MaxMemoryMiB),
@@ -117,9 +130,9 @@ func (m *Manager) createBrowser(ctx context.Context, envID, teammateID, image st
 		m.Egress.Detach(rec.ID)
 		m.Runtime.Remove(context.WithoutCancel(ctx), VMName(rec))
 		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
-		return store.Sandbox{}, err
+		return err
 	}
-	return rec, nil
+	return nil
 }
 
 // BrowserStatus returns the teammate's browser VM and its state; the VM may not exist.
