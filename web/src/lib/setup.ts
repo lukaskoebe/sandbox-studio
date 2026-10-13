@@ -9,7 +9,7 @@ export const setupSteps = [
   { key: "provider", title: "AI provider" },
   { key: "teammate", title: "Teammate" },
   { key: "git", title: "Git" },
-  { key: "network", title: "Network" },
+  { key: "network", title: "Network level" },
   { key: "sandbox", title: "First sandbox" },
 ] as const
 

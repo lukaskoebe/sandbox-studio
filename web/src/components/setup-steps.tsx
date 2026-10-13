@@ -13,6 +13,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { ForgeDialog } from "@/components/forge-dialog"
+import {
+  SecurityLevelPicker,
+  useEnvironmentLevel,
+} from "@/components/security-level"
 import { HostChecks } from "@/components/runtime-card"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { SandboxProgress } from "@/components/sandbox-progress"
@@ -55,27 +59,7 @@ export function SetupStepBody({ step, env }: { step: SetupKey; env: string }) {
     case "git":
       return <GitStep env={env} />
     case "network":
-      return (
-        <Column>
-          <Hint>
-            Sandboxes reach the internet through Studio. A host that no rule
-            covers waits in the approval inbox until you allow or deny it, once
-            or for good.
-          </Hint>
-          <Hint>
-            Rules can cover a host, a wildcard domain or one sandbox, and the
-            Network page lists them with the requests that wait.
-          </Hint>
-          <a
-            href="https://lukaskoebe.github.io/sandbox-studio/network/"
-            target="_blank"
-            rel="noreferrer"
-            className="w-fit text-xs underline underline-offset-4"
-          >
-            Learn more
-          </a>
-        </Column>
-      )
+      return <NetworkLevelStep env={env} />
     case "sandbox":
       return <SandboxStep env={env} />
   }
@@ -87,6 +71,35 @@ function Column({ children }: { children: ReactNode }) {
 
 function Hint({ children }: { children: ReactNode }) {
   return <p className="text-xs/relaxed text-muted-foreground">{children}</p>
+}
+
+/**
+ * The network level step: the environment's level, which new environments start at guarded. It
+ * can be changed later on the Network page, so going through the step is the step.
+ */
+function NetworkLevelStep({ env }: { env: string }) {
+  const { level, saving, setLevel } = useEnvironmentLevel(env)
+  return (
+    <Column>
+      <Hint>
+        Sandboxes reach the internet through Studio. This sets how many hosts
+        may connect without asking. Change it later in Network.
+      </Hint>
+      <SecurityLevelPicker
+        value={level}
+        onChange={setLevel}
+        disabled={saving}
+      />
+      <a
+        href="https://lukaskoebe.github.io/sandbox-studio/network/"
+        target="_blank"
+        rel="noreferrer"
+        className="w-fit text-xs underline underline-offset-4"
+      >
+        Learn more
+      </a>
+    </Column>
+  )
 }
 
 function ProviderStep({ env }: { env: string }) {
