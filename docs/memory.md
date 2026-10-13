@@ -116,9 +116,12 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET quality` | the quality numbers of the environment ([Quality](#quality)) |
 | `GET export?scope=`, `POST import` | a scope as one markdown file, and a file read back into a scope ([Export and import](#export-and-import)) |
 
-The Memory page in the environment sidebar shows shared memory: the extraction budget line
-and tabs for pages, facts, conflicts (with "Dream now", recent runs and a sheet that shows
-both facts side by side with sources, tiers and timeline, and resolves), search and sessions.
+The Memory page in the environment sidebar shows shared memory: the extraction budget line,
+the [quality](#quality) numbers, and tabs for pages, facts, conflicts (with "Dream now", recent
+runs and a sheet that shows both facts side by side with sources, tiers and timeline, and
+resolves), search and sessions. Above the tabs are the Export and Import buttons
+([Export and import](#export-and-import)) and the open [suggestions](#suggestions), each with
+Promote or Accept, and Dismiss. A facts' context shows as a badge, and the fact form takes one.
 A teammate's private memory has the same tabs on its teammate page, where its facts can be
 proposed for shared memory ("promote to shared"). `memory.conflict` approvals show in the
 approval stack with the same sheet.
