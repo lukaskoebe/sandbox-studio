@@ -13,6 +13,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
+	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
@@ -127,10 +128,12 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	if err != nil {
 		return sessionPlan{}, apiError(err)
 	}
-	view := providerView(prov)
+	view := s.providerViewOf(ctx, prov)
 	switch view.State {
 	case teammates.StateLoginRequired:
-		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a login first", prov.Name))
+		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a sign-in first", prov.Name))
+	case teammates.StateExpired:
+		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("the sign-in of provider %s has expired; sign in again", prov.Name))
 	case teammates.StateKeyRequired:
 		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs its API key first", prov.Name))
 	}
@@ -158,6 +161,20 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites}, hp)
 	if err != nil {
 		return sessionPlan{}, huma.Error409Conflict(err.Error())
+	}
+	if prov.Kind == teammates.KindChatGPTSubscription {
+		// The ChatGPT login's auth file: placeholders only, the login package keeps the rest.
+		if s.Login == nil {
+			return sessionPlan{}, huma.Error503ServiceUnavailable("subscription logins are not available")
+		}
+		auth, err := s.Login.GuestFiles(ctx, prov)
+		if errors.Is(err, login.ErrNoLogin) {
+			return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a sign-in first", prov.Name))
+		}
+		if err != nil {
+			return sessionPlan{}, apiError(err)
+		}
+		files = append(files, auth...)
 	}
 	if s.AgentMem != nil {
 		copies, err := s.AgentMem.BrowseFiles(ctx, sb.EnvironmentID, sb.TeammateID)

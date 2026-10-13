@@ -27,7 +27,7 @@ type ProviderKind struct {
 // ProviderView is a provider with what its kind implies. It never carries the key.
 type ProviderView struct {
 	store.Provider
-	State     string   `json:"state" enum:"ready,login_required,key_required" doc:"login_required until a subscription login is stored; key_required until an API key is added"`
+	State     string   `json:"state" enum:"ready,login_required,key_required,expired" doc:"login_required until a subscription login is stored; expired when a ChatGPT login lapsed and could not be refreshed; key_required until an API key is added"`
 	EnvVar    string   `json:"envVar,omitempty" doc:"The variable guests get the placeholder in"`
 	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses teammates using this provider can run"`
 }
@@ -36,12 +36,32 @@ func providerView(p store.Provider) ProviderView {
 	k, _ := teammates.LookupKind(p.Kind)
 	v := ProviderView{Provider: p, EnvVar: k.EnvVar, Harnesses: k.Harnesses, State: teammates.StateReady}
 	switch {
-	case !k.APIKey:
-		// TODO(M4): run `claude setup-token` / `codex login` in a system sandbox and store the
-		// result as the provider's secret; until then subscription providers can't log in.
+	case k.Login && p.SecretID == "":
+		// A subscription has a login once its sign-in stored what it yields (docs/teammates.md).
 		v.State = teammates.StateLoginRequired
-	case p.SecretID == "":
+	case k.APIKey && p.SecretID == "":
 		v.State = teammates.StateKeyRequired
+	}
+	return v
+}
+
+// providerViewOf is providerView with the sign-in's expiry: a ChatGPT login whose access token
+// lapsed and could not be refreshed is expired.
+func (s *Server) providerViewOf(ctx context.Context, p store.Provider) ProviderView {
+	v := providerView(p)
+	if v.State != teammates.StateReady || s.Login == nil {
+		return v
+	}
+	if k, _ := teammates.LookupKind(p.Kind); !k.Login {
+		return v
+	}
+	expired, err := s.Login.Expired(ctx, p)
+	if err != nil {
+		s.Log.Warn("checking a sign-in", "provider", p.ID, "err", err)
+		return v
+	}
+	if expired {
+		v.State = teammates.StateExpired
 	}
 	return v
 }
@@ -95,7 +115,7 @@ func (s *Server) registerTeammates(api huma.API) {
 		}
 		out := make([]ProviderView, len(list))
 		for i, p := range list {
-			out[i] = providerView(p)
+			out[i] = s.providerViewOf(ctx, p)
 		}
 		return &struct{ Body []ProviderView }{out}, nil
 	})
@@ -168,7 +188,7 @@ func (s *Server) registerTeammates(api huma.API) {
 			s.Log.Warn("default teammate", "environment", in.Env, "err", err)
 		}
 		s.publishTeammates(in.Env)
-		return &struct{ Body ProviderView }{providerView(created)}, nil
+		return &struct{ Body ProviderView }{s.providerViewOf(ctx, created)}, nil
 	})
 
 	type updateProviderIn struct {
@@ -245,7 +265,7 @@ func (s *Server) registerTeammates(api huma.API) {
 			s.publishSecrets(in.Env)
 		}
 		s.publishTeammates(in.Env)
-		return &struct{ Body ProviderView }{providerView(updated)}, nil
+		return &struct{ Body ProviderView }{s.providerViewOf(ctx, updated)}, nil
 	})
 
 	huma.Register(api, huma.Operation{

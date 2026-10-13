@@ -24,6 +24,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
+	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -58,6 +59,8 @@ type Server struct {
 	Browser      *browser.Service // the browser broker; its endpoints answer 503 without it
 	System       System
 	Chats        *chat.Service // its endpoints answer 503 without it
+	// Login runs the subscription sign-ins; their endpoints answer 503 without it.
+	Login *login.Service
 }
 
 // BuildService is the optional durable template-build backend. Keeping this
@@ -87,6 +90,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerMemoryAgent(api)
 	s.registerMemoryDream(api)
 	s.registerTeammates(api)
+	s.registerLogins(api)
 	s.registerSessions(api)
 	s.registerForges(api)
 	s.registerSystem(api)
@@ -97,6 +101,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/chats/{chat}/stream", s.streamChat)
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
+	mux.HandleFunc("GET /api/environments/{env}/providers/{id}/login/terminal", s.attachLoginTerminal)
 	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/live", s.browserLive)
 	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/actions/{id}/screenshot", s.browserScreenshot)
 	return api

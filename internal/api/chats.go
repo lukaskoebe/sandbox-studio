@@ -16,7 +16,6 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
-	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
 type chatPath struct {
@@ -299,17 +298,8 @@ func (s *Server) chats() (*chat.Service, error) {
 	return s.Chats, nil
 }
 
-// chatLaunch plans a chat's agent like an agent session. Claude subscriptions are
-// refused: Anthropic doesn't allow claude.ai login in third-party agents.
+// chatLaunch plans a chat's agent like an agent session, with the same files and environment.
 func (s *Server) chatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch, error) {
-	if sb.TeammateID != "" {
-		if p, err := s.Store.Teammate(ctx, sb.EnvironmentID, sb.TeammateID); err == nil {
-			if prov, err := s.Store.Provider(ctx, sb.EnvironmentID, p.ProviderID); err == nil && prov.Kind == teammates.KindClaudeSubscription {
-				return chat.Launch{}, huma.Error409Conflict(fmt.Sprintf("%s uses a Claude subscription, which chats can't use: "+
-					"give the teammate an Anthropic API key provider, or open a terminal session instead", p.Name))
-			}
-		}
-	}
 	plan, err := s.planSession(ctx, sb)
 	if err != nil {
 		return chat.Launch{}, err
