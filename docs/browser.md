@@ -280,7 +280,10 @@ Two agent-browser sessions in one VM have not run live yet; see
 - ephemeral sessions: the lifecycle, the limit, idle expiry on a fake clock, close, the VM
   stop, ownership, takeover, tool arguments, approval and history marks, and the live view
   port of each session;
-- the guest's slots: argv, environment, stream port and session checks (`internal/guest`).
+- the guest's slots: argv, environment, stream port and session checks (`internal/guest`);
+- the browser VM's HTTPS: termination, per-request holds with the request's method, path and
+  site, site approvals for the session, the tracker list and request rules (`internal/gateway`,
+  `internal/policy`, `internal/browser`), and the site card in e2e through the request hook.
 
 **Verified live on Linux amd64 (2026-10-11):**
 
@@ -296,6 +299,10 @@ Two agent-browser sessions in one VM have not run live yet; see
 
 **Pending a live run:**
 
+- The browser VM's HTTPS through the gateway's terminated connections: Chromium's pages load
+  with the environment CA only, and its requests carry the `Sec-Fetch-*` headers the request
+  decisions read (see [network](network.md#hold-and-ask)). The site approvals and tracker
+  denials were checked with fakes and a fake runtime, not in a page.
 - The browser image and agent-browser's native binary on arm64.
 - Input message fields and frame metadata (`deviceWidth`/`deviceHeight`) for click mapping.
 - Snapshot details from a live Chromium:
@@ -332,6 +339,9 @@ Two agent-browser sessions in one VM have not run live yet; see
   timeout.
 - An ephemeral session is another Chromium in the same VM, so heavy use competes with the
   persistent profile for memory.
+- A browser's requests are attributed to the page the broker drove last (its top-level site),
+  which is exact while one page is open. A site approval covers a subresource only while every
+  web page the browser has open is on an approved site.
 - Ephemeral sessions do not end with the agent's chat or session, which PLAN N11 also
   proposed: the broker gets no signal from the agent's MCP server. They end as described
   above.
