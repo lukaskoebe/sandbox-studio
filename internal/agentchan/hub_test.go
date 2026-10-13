@@ -51,6 +51,10 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 					agentproto.WriteJSONLine(st, []agentproto.Session{{Name: "main", Windows: 1}})
 				case agentproto.KindPorts:
 					agentproto.WriteJSONLine(st, agentproto.Error{Error: "boom"})
+				case agentproto.KindRun:
+					var req agentproto.RunRequest
+					agentproto.ReadJSONLine(br, &req)
+					agentproto.WriteJSONLine(st, agentproto.RunResult{Stdout: strings.Join(req.Args, " ") + " " + req.Env["TOKEN"], ExitCode: 3})
 				case agentproto.KindUpload:
 					var req agentproto.UploadRequest
 					agentproto.ReadJSONLine(br, &req)

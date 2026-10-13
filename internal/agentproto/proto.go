@@ -17,6 +17,8 @@
 //     channel, so a Call never names a sandbox, teammate or environment.
 //   - KindACP (host → guest): the host writes a StartACP line; after the guest's {} the
 //     stream carries an ACP agent's stdin and stdout (see acp.go).
+//   - KindRun (host → guest, system VMs): the host writes a RunRequest line; the guest replies
+//     with one RunResult line (see run.go).
 package agentproto
 
 import (
