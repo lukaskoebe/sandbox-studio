@@ -281,3 +281,48 @@ func chatGPTAuthFile(t *testing.T, expires time.Time, refresh, sig string) strin
 	}
 	return string(b)
 }
+
+// A Claude subscription's session gets its token's placeholder in CLAUDE_CODE_OAUTH_TOKEN, and the
+// token itself appears in nothing the guest is sent.
+func TestClaudeSessionGetsThePlaceholderOnly(t *testing.T) {
+	h, s, lg, env := newLoginServer(t)
+	g := &fakeGuest{sessions: []agentproto.Session{{Name: "main", Windows: 1}}}
+	s.Guest = g
+	prov := createProvider(t, h, env, `{"name":"Claude Max","kind":"claude_subscription"}`)
+	lg.set("Open https://claude.ai/oauth/authorize?x=1 to finish.", false)
+	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/providers/"+prov.ID+"/login", ""); rec.Code != http.StatusAccepted {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body)
+	}
+	lg.set("Your OAuth token (valid for 1 year):\n\n"+loginTokenText+"\n", true)
+	if v := awaitLogin(t, h, env, prov.ID); v.State != login.StateDone {
+		t.Fatalf("the sign-in ended %+v", v)
+	}
+	var placeholder string
+	for _, p := range decode[[]ProviderView](t, do(h, "GET", testOrigin+"/api/environments/"+env.ID+"/providers", "")) {
+		if p.ID == prov.ID {
+			placeholder = p.Placeholder
+		}
+	}
+	if placeholder == "" {
+		t.Fatal("the provider has no placeholder")
+	}
+
+	ada := createTeammateFor(t, h, env, "claude", prov.ID)
+	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec := do(h, "POST", testOrigin+"/api/environments/"+env.ID+"/sandboxes/"+sb.ID+"/sessions", ""); rec.Code != http.StatusCreated {
+		t.Fatalf("session: %d %s", rec.Code, rec.Body)
+	}
+	if len(g.started) != 1 || len(g.started[0].Env) != 1 || g.started[0].Env["CLAUDE_CODE_OAUTH_TOKEN"] != placeholder {
+		t.Fatalf("the session's environment: %+v", g.started)
+	}
+	sent, _ := json.Marshal(struct {
+		F []agentproto.HomeFile
+		S []agentproto.StartSession
+	}{g.files, g.started})
+	if strings.Contains(string(sent), loginTokenText) || strings.Contains(string(sent), "sk-ant-oat") {
+		t.Fatalf("the token reached the guest: %s", sent)
+	}
+}
