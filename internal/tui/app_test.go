@@ -179,6 +179,10 @@ func TestBrowserHintsPrintTheURL(t *testing.T) {
 	if want := "open in browser: http://127.0.0.1:7878/e/env1"; m.notice.text != want {
 		t.Fatalf("new hint %q", m.notice.text)
 	}
+	m = press(m, "l")
+	if want := "open in browser: http://127.0.0.1:7878/e/env1/network/activity"; m.notice.text != want {
+		t.Fatalf("activity hint %q", m.notice.text)
+	}
 }
 
 func TestEnvironmentPickerSwitchesAndLoads(t *testing.T) {

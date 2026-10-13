@@ -102,6 +102,7 @@ func (m *app) helpBody() []string {
 		{"e", "switch environment"},
 		{"/", "filter by name, teammate or template"},
 		{"a", "approvals, from every environment"},
+		{"l", "activity, in the browser"},
 		{"↑/↓, j/k", "move the cursor"},
 		{"esc", "clear the filter, or go back"},
 		{"q", "go back, or quit from the list"},

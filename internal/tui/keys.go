@@ -32,6 +32,7 @@ var (
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
 	keyApprovals = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "approvals"))
 	keyTerminal  = key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "terminal"))
+	keyActivity  = key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "activity"))
 	keyAllow     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "allow"))
 	keyDeny      = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "deny"))
 	keyOnce      = key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "allow once"))
@@ -101,6 +102,8 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.openApprovals()
 	case key.Matches(msg, keyTerminal):
 		return m, m.attachTo(m.selected())
+	case key.Matches(msg, keyActivity):
+		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/network/activity"), false)
 	case key.Matches(msg, keyEsc):
 		if m.filter != "" {
 			m.filter = ""
