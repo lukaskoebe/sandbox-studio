@@ -1,4 +1,4 @@
-import type { Harness, ProviderKind } from "@/lib/api/client"
+import type { Harness, ProviderKind, Teammate } from "@/lib/api/client"
 
 /** Provider kinds in the order the provider dialog offers them. */
 export const providerKinds: ProviderKind[] = [
@@ -21,6 +21,19 @@ export const harnessLabels: Record<Harness, string> = {
   opencode: "OpenCode",
   claude: "Claude Code",
   codex: "Codex",
+}
+
+/** The scopes a teammate's approval cards can start with, in the order the form offers them. */
+export const approvalScopes: Teammate["approvalScope"][] = [
+  "sandbox",
+  "teammate",
+  "environment",
+]
+
+export const approvalScopeLabels: Record<Teammate["approvalScope"], string> = {
+  sandbox: "This sandbox",
+  teammate: "This teammate",
+  environment: "The environment",
 }
 
 /** Whether a kind is a subscription login rather than an API key. */
