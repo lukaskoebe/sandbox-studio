@@ -37,6 +37,8 @@ type Chat struct {
 	Rev          int64     `json:"rev" doc:"The chat's change counter: every change to the chat, its turns or its items raises it"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
+	// Heartbeat marks a chat a heartbeat opened (heartbeats.go).
+	Heartbeat bool `json:"heartbeat"`
 }
 
 // ChatTurn is one prompt and everything the agent did for it.
@@ -70,12 +72,12 @@ type ChatItem struct {
 	Rev        int64           `json:"rev"`
 }
 
-const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at"
+const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at, heartbeat"
 
 func scanChat(row interface{ Scan(...any) error }) (Chat, error) {
 	var c Chat
 	var created, updated int64
-	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated)
+	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated, &c.Heartbeat)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -160,8 +162,8 @@ func (s *Store) CreateChat(ctx context.Context, c Chat) (Chat, error) {
 		c.ID = NewID()
 	}
 	t := now()
-	_, err := s.db.ExecContext(ctx, "INSERT INTO chats (id, environment_id, sandbox_id, teammate_id, harness, title, state, rev, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'idle', 1, ?, ?)",
-		c.ID, c.EnvironmentID, c.SandboxID, c.TeammateID, c.Harness, c.Title, t, t)
+	_, err := s.db.ExecContext(ctx, "INSERT INTO chats (id, environment_id, sandbox_id, teammate_id, harness, title, state, rev, created_at, updated_at, heartbeat) VALUES (?, ?, ?, ?, ?, ?, 'idle', 1, ?, ?, ?)",
+		c.ID, c.EnvironmentID, c.SandboxID, c.TeammateID, c.Harness, c.Title, t, t, c.Heartbeat)
 	if err != nil {
 		return c, err
 	}

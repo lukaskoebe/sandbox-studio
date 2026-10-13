@@ -15,6 +15,8 @@ const (
 	// TopicSandboxes: a sandbox changed (its create or fork, lifecycle, checkpoints, rebases,
 	// history or deletion), so its lineage and the lineage tree are stale.
 	TopicSandboxes = "sandboxes"
+	// TopicTasks: a teammate's task list or heartbeat log changed, by the user or the teammate.
+	TopicTasks = "tasks"
 )
 
 // Event is one change notification.
