@@ -22,7 +22,7 @@ import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import { SandboxProgress } from "@/components/sandbox-progress"
 import { SectionHeader } from "@/components/section-header"
-import { phase } from "@/components/status-badge"
+import { phase, StatusBadge } from "@/components/status-badge"
 import { SandboxOwner } from "@/components/teammate-avatar"
 import { Button } from "@/components/ui/button"
 import type { Area } from "@/lib/accents"
@@ -33,59 +33,29 @@ import { onStudioMachine, openPreviewTab } from "@/lib/previews"
 import { formatAge, formatUptime } from "@/lib/utils"
 
 /**
- * A sandbox at a glance: its facts, then its ports, connections, history, checkpoints, chats
- * and terminals as lists. Each list opens its item in the workspace.
+ * A sandbox at a glance, laid out like Home: a band of facts with the lifecycle actions, then
+ * its chats, terminals, history and checkpoints, with ports and connections at the side. Each
+ * list opens its item in the workspace.
  */
 export function SandboxDashboard() {
   const { env, sandbox: sb } = useSandboxPage()
   // A create or fork has no guest until it succeeds; a failed one is cleared by deleting it.
   const building = sb.status === "creating" || sb.status === "failed"
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="grid w-full content-start gap-6 p-3 md:p-4">
-        {building && (
-          <SandboxProgress
-            sandbox={sb}
-            action={
-              sb.status === "failed" ? (
-                <DeleteSandboxButton env={env} sandbox={sb} />
-              ) : undefined
-            }
-          />
-        )}
-        <Overview env={env} sandbox={sb} />
-        <div className="grid gap-6 xl:grid-cols-2">
-          <Section title="Ports" icon={BroadcastIcon}>
-            <Ports env={env} sandbox={sb} />
-          </Section>
-          <Section
-            title="Recent connections"
-            icon={PlugsConnectedIcon}
-            area="network"
-            actions={
-              <Button
-                variant="ghost"
-                size="xs"
-                render={
-                  <Link
-                    to="/e/$env/sandboxes/$id/work"
-                    params={{ env, id: sb.id }}
-                    search={{ panel: "connections" }}
-                  />
-                }
-              >
-                All connections
-              </Button>
-            }
-          >
-            <RecentConnections env={env} id={sb.id} />
-          </Section>
-        </div>
-        <Section title="History" icon={GitForkIcon}>
-          <LineageTimeline environmentId={env} sandboxId={sb.id} />
-        </Section>
-        {!building && <CheckpointsSection env={env} sandbox={sb} />}
-        <div className="grid gap-6 xl:grid-cols-2">
+    <div className="min-h-0 flex-1 overflow-y-auto text-[0.8125rem]">
+      <Overview env={env} sandbox={sb} />
+      <div className="grid content-start gap-6 p-3 md:p-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid min-w-0 content-start gap-6">
+          {building && (
+            <SandboxProgress
+              sandbox={sb}
+              action={
+                sb.status === "failed" ? (
+                  <DeleteSandboxButton env={env} sandbox={sb} />
+                ) : undefined
+              }
+            />
+          )}
           {sb.teammateId && (
             <Section
               title="Chats"
@@ -114,13 +84,47 @@ export function SandboxDashboard() {
           <Section title="Terminals" icon={TerminalWindowIcon}>
             <Terminals env={env} sandbox={sb} />
           </Section>
+          <Section title="History" icon={GitForkIcon}>
+            <LineageTimeline environmentId={env} sandboxId={sb.id} />
+          </Section>
+          {!building && <CheckpointsSection env={env} sandbox={sb} />}
+        </div>
+        <div className="grid min-w-0 content-start gap-6">
+          <Section title="Ports" icon={BroadcastIcon}>
+            <Ports env={env} sandbox={sb} />
+          </Section>
+          <Section
+            title="Recent connections"
+            icon={PlugsConnectedIcon}
+            area="network"
+            actions={
+              <Button
+                variant="ghost"
+                size="xs"
+                render={
+                  <Link
+                    to="/e/$env/sandboxes/$id/work"
+                    params={{ env, id: sb.id }}
+                    search={{ panel: "connections" }}
+                  />
+                }
+              >
+                All
+              </Button>
+            }
+          >
+            <RecentConnections env={env} id={sb.id} />
+          </Section>
         </div>
       </div>
     </div>
   )
 }
 
-/** The status, owner, template, resources, age and ID of a sandbox, with its start and stop. */
+/**
+ * The band under the header: status, owner, template, resources and age on Home's grid paper,
+ * with start, stop, resize and the workspace at its end. The ID is in the header.
+ */
 function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const p = phase(sb)
   // Uptime is relative to now, so the clock is read again every minute.
@@ -137,98 +141,111 @@ function Overview({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
         ? "Suspended: resume it to continue where it left off."
         : p === "failed"
           ? "The sandbox stopped unexpectedly. Your workspace is kept. Start it again to continue."
-          : undefined
+          : p === "ready" && sb.startedAt
+            ? formatUptime(sb.startedAt, now)
+            : undefined
   return (
-    <section aria-labelledby="overview-heading" className="grid gap-3">
+    <section
+      aria-labelledby="overview-heading"
+      className="flex flex-wrap items-stretch border-b bg-[linear-gradient(var(--wb-grid)_1px,transparent_1px),linear-gradient(90deg,var(--wb-grid)_1px,transparent_1px)] bg-size-[12px_12px]"
+    >
       <h2 id="overview-heading" className="sr-only">
         Overview
       </h2>
-      <dl className="grid grid-cols-2 border-y sm:grid-cols-3 xl:grid-cols-5">
-        <Fact label="Owner">
-          {sb.teammateId ? (
-            <SandboxOwner env={env} teammateId={sb.teammateId} />
-          ) : (
-            "Unowned"
-          )}
-        </Fact>
-        <Fact label="Template">
-          <span className="font-mono" title={sb.templateId || undefined}>
-            {sb.templateName ?? sb.templateId ?? "None"}
-          </span>
-        </Fact>
-        <Fact label="Resources">
-          <span
+      {/* Every fact draws its right and bottom rule; the list hides the ones at its edges. */}
+      <div className="min-w-0 flex-[1_1_36rem] overflow-hidden">
+        <dl className="-mr-px -mb-px grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          <Fact label="Status" note={note}>
+            <StatusBadge sandbox={sb} />
+          </Fact>
+          <Fact label="Owner">
+            {sb.teammateId ? (
+              <SandboxOwner env={env} teammateId={sb.teammateId} />
+            ) : (
+              <span className="text-muted-foreground">Unowned</span>
+            )}
+          </Fact>
+          <Fact label="Template" title={sb.templateId || undefined}>
+            <span className="font-mono">
+              {sb.templateName ?? sb.templateId ?? "None"}
+            </span>
+          </Fact>
+          <Fact
+            label="Resources"
             title={`${sb.cpus} CPUs, ${formatMiB(sb.memoryMiB)} memory, ${formatMiB(sb.workspaceMiB)} workspace`}
           >
-            {sb.cpus} CPUs · {formatMiB(sb.memoryMiB)} ·{" "}
-            {formatMiB(sb.workspaceMiB)} workspace
-          </span>
-        </Fact>
-        {p === "ready" && sb.startedAt && (
-          <Fact label="Status">{formatUptime(sb.startedAt, now)}</Fact>
+            <span>
+              {sb.cpus} CPU · {formatMiB(sb.memoryMiB)} ·{" "}
+              {formatMiB(sb.workspaceMiB)}
+            </span>
+          </Fact>
+          <Fact label="Created" title={new Date(sb.createdAt).toLocaleString()}>
+            <time dateTime={sb.createdAt}>{formatAge(sb.createdAt)}</time>
+          </Fact>
+        </dl>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 max-md:w-full max-md:border-t md:border-l">
+        {(p === "stopped" || p === "failed") && (
+          <StartButton env={env} sandbox={sb} />
         )}
-        <Fact label="Created">
-          <time
-            dateTime={sb.createdAt}
-            title={new Date(sb.createdAt).toLocaleString()}
+        {(p === "ready" || p === "booting" || p === "suspended") && (
+          <StopButton env={env} sandbox={sb} />
+        )}
+        {(p === "ready" || p === "stopped" || p === "suspended") && (
+          <Button variant="outline" onClick={() => setResizing(true)}>
+            <CpuIcon />
+            Resources
+          </Button>
+        )}
+        <ResizeSandboxDialog
+          env={env}
+          sandbox={sb}
+          open={resizing}
+          onOpenChange={setResizing}
+        />
+        {p !== "creating" && (
+          <Button
+            render={
+              <Link
+                to="/e/$env/sandboxes/$id/work"
+                params={{ env, id: sb.id }}
+              />
+            }
           >
-            {formatAge(sb.createdAt)}
-          </time>
-        </Fact>
-        <Fact label="ID">
-          <Ident copy>{sb.id}</Ident>
-        </Fact>
-      </dl>
-      <div className="flex flex-wrap items-center gap-2">
-        {note && (
-          <p className="min-w-0 flex-1 text-xs text-muted-foreground">{note}</p>
+            <TerminalWindowIcon />
+            Open workspace
+          </Button>
         )}
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {(p === "stopped" || p === "failed") && (
-            <StartButton env={env} sandbox={sb} />
-          )}
-          {(p === "ready" || p === "booting" || p === "suspended") && (
-            <StopButton env={env} sandbox={sb} />
-          )}
-          {(p === "ready" || p === "stopped" || p === "suspended") && (
-            <Button variant="outline" onClick={() => setResizing(true)}>
-              <CpuIcon />
-              Resources
-            </Button>
-          )}
-          <ResizeSandboxDialog
-            env={env}
-            sandbox={sb}
-            open={resizing}
-            onOpenChange={setResizing}
-          />
-          {p !== "creating" && (
-            <Button
-              variant="outline"
-              render={
-                <Link
-                  to="/e/$env/sandboxes/$id/work"
-                  params={{ env, id: sb.id }}
-                />
-              }
-            >
-              <TerminalWindowIcon />
-              Open workspace
-            </Button>
-          )}
-        </div>
       </div>
     </section>
   )
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
+/** One fact: a mono label, its value, and an optional muted note under it. */
+function Fact({
+  label,
+  title,
+  note,
+  children,
+}: {
+  label: string
+  title?: string
+  note?: string
+  children: ReactNode
+}) {
   return (
-    <div className="min-w-0 border-r px-4 py-2.5 last:border-r-0">
+    <div className="min-w-0 border-r border-b px-4 py-2.5" title={title}>
       <dt className="font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase">
         {label}
       </dt>
-      <dd className="mt-1 min-w-0 truncate">{children}</dd>
+      <dd className="mt-1 flex h-5 min-w-0 items-center truncate font-medium">
+        {children}
+      </dd>
+      {note && (
+        <dd className="truncate text-xs text-muted-foreground" title={note}>
+          {note}
+        </dd>
+      )}
     </div>
   )
 }
@@ -415,5 +432,7 @@ function Terminals({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
 }
 
 function formatMiB(mib: number) {
-  return mib >= 1024 ? `${(mib / 1024).toFixed(1)} GiB` : `${mib} MiB`
+  return mib >= 1024
+    ? `${(mib / 1024).toFixed(1).replace(/\.0$/, "")} GiB`
+    : `${mib} MiB`
 }

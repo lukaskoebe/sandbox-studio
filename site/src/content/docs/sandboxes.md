@@ -18,7 +18,7 @@ You can create a blank sandbox or choose a ready template from **Settings → Te
 
 ## Work in a terminal
 
-Open a sandbox from the sidebar to see its dashboard: its status, ports, recent connections, checkpoints, chats, and terminals. Choose **Workspace** in its header to work in it. Terminals run inside the sandbox at `/workspace`. Use **+** in the tab strip to open an additional terminal, run a shell yourself, or start the selected teammate's agent session with **Start session**. The sandbox's chats open in the same strip. Docker runs inside the sandbox and uses its persistent Docker disk.
+Open a sandbox from the sidebar to see its dashboard: a band with its status, owner, template, resources and age, then its chats, terminals, history and checkpoints, with ports and recent connections at the side. Choose **Workspace** in its header to work in it. Terminals run inside the sandbox at `/workspace`. Use **+** in the tab strip to open an additional terminal, run a shell yourself, or start the selected teammate's agent session with **Start session**. The sandbox's chats open in the same strip. Docker runs inside the sandbox and uses its persistent Docker disk.
 
 ![A terminal open at /workspace in a running sandbox](../../assets/screenshots/sandbox-terminal.jpg)
 
@@ -45,7 +45,7 @@ The sandbox page has a **History** section. It draws the sandbox's history as a 
 - Each generation of the sandbox is labelled with its template. A rebase shows as a change of template, and a restore shows as a jump back to a checkpoint.
 - Checkpoints are the points on the line. Select one for its menu: **Restore** when the runtime allows it, **Fork from here**, **Rename** and **Delete**.
 - Forks branch off to their child sandboxes, and a forked sandbox shows the one it came from. A deleted sandbox stays in the history, marked as deleted.
-- The end of the line is the sandbox as it is now. **Save checkpoint** there saves its current state.
+- The end of the line is the sandbox as it is now. **Save checkpoint** in the **Checkpoints** section below saves its current state.
 
 Once a sandbox was forked, the Home page has a **Family** card. It lists each template with its sandboxes, and shows each fork under the sandbox it was made from. Green marks a running sandbox, amber one that is still starting or being created, and red one that failed.
 

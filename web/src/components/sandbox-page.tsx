@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react"
 import { Link, useMatchRoute } from "@tanstack/react-router"
 import { SquaresFourIcon, TerminalWindowIcon } from "@phosphor-icons/react"
+import { Ident } from "@/components/ident"
 import { PageHeader } from "@/components/page-header"
 import { SandboxOptionsMenu } from "@/components/sandbox-options-menu"
 import { StatusBadge } from "@/components/status-badge"
@@ -34,8 +35,8 @@ export function useSandboxPage() {
 }
 
 /**
- * The header of both sandbox pages: the name and ID in monospace, the status, the switch
- * between the dashboard and the workspace, and the options menu.
+ * The header of both sandbox pages: the name and ID in monospace, the status and owner on the
+ * workspace, the switch between the dashboard and the workspace, and the options menu.
  */
 export function SandboxHeader({ env, sandbox: sb }: SandboxPage) {
   const matchRoute = useMatchRoute()
@@ -46,18 +47,26 @@ export function SandboxHeader({ env, sandbox: sb }: SandboxPage) {
         <h1 className="min-w-0 truncate font-mono text-sm font-medium">
           {sb.name}
         </h1>
-        <span className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground max-sm:hidden">
+        <Ident
+          copy
+          className="shrink-0 text-[0.6875rem] text-muted-foreground max-sm:hidden"
+        >
           {sb.id}
-        </span>
+        </Ident>
       </div>
-      <span className="shrink-0">
-        <StatusBadge sandbox={sb} />
-      </span>
-      <SandboxOwner
-        env={env}
-        teammateId={sb.teammateId}
-        className="hidden min-w-0 shrink-0 items-center text-xs text-muted-foreground md:inline-flex"
-      />
+      {/* The dashboard's own band shows the status and owner. */}
+      {onWorkspace && (
+        <>
+          <span className="shrink-0 text-xs">
+            <StatusBadge sandbox={sb} />
+          </span>
+          <SandboxOwner
+            env={env}
+            teammateId={sb.teammateId}
+            className="hidden min-w-0 shrink-0 items-center text-xs text-muted-foreground md:inline-flex"
+          />
+        </>
+      )}
       <nav
         aria-label="Sandbox pages"
         className="flex h-6 shrink-0 items-center rounded-[4px] bg-muted p-0.5 text-xs"

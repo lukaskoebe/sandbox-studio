@@ -11,7 +11,7 @@ You can save a checkpoint while a sandbox is running or stopped. If it is runnin
 
 ## Save and delete
 
-The **Checkpoints** section of the sandbox's dashboard lists them. Enter a name and select **Save**. Studio records checkpoints in order; a later checkpoint can depend on an earlier one. Delete newer checkpoints before their parents.
+The **Checkpoints** section of the sandbox's dashboard lists them. Select **Save checkpoint**, enter a name and select **Save**. Studio records checkpoints in order; a later checkpoint can depend on an earlier one. Delete newer checkpoints before their parents.
 
 Deleting a checkpoint removes only that snapshot. It does not change the sandbox.
 

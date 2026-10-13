@@ -314,7 +314,8 @@ export function SandboxWorkspace({
         aria-label="Workspace tabs and tools"
         className="flex h-9 min-w-0 shrink-0 items-center overflow-x-auto border-b bg-muted/40 px-1"
       >
-        <div className="flex w-max shrink-0 items-center gap-1">
+        {/* Tabs on the left, tools on the right; the row scrolls when both don't fit. */}
+        <div className="flex w-max min-w-full shrink-0 items-center gap-1">
           <div className="flex items-center gap-0.5">
             {tabs.map((t) => {
               const on = current !== null && keyOf(t) === keyOf(current)
@@ -369,7 +370,7 @@ export function SandboxWorkspace({
               <PlusIcon />
             </Button>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1 pl-2">
             {!building && sb.teammateId && (
               <SandboxChats env={env} id={sb.id} onOpen={openChat} />
             )}

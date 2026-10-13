@@ -4,12 +4,10 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ArrowCounterClockwiseIcon,
-  FloppyDiskIcon,
   GitForkIcon,
   PencilSimpleIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
-import { suggestedName } from "@/components/checkpoints-section"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +22,6 @@ import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -65,11 +62,10 @@ const COLUMN = 120 // a point's width; labels truncate to it
 const PAD = 8
 const LABEL_H = 20
 const LINE_Y = 34
-const CANVAS_H = 108
+const CANVAS_H = 84
 
-/** What a checkpoint action or the Save button asks for. */
+/** What a checkpoint's menu asks for. */
 type Action =
-  | { kind: "save" }
   | { kind: "rename"; checkpoint: LineageCheckpoint }
   | { kind: "restore"; checkpoint: LineageCheckpoint }
   | { kind: "delete"; checkpoint: LineageCheckpoint }
@@ -77,7 +73,7 @@ type Action =
 /**
  * A sandbox's history as a line: one point per event, oldest first, evenly spaced. A
  * generation starts at its create, rebase or restore. Checkpoints are nodes with a menu, and
- * the line ends at the live sandbox, which can be saved as a checkpoint.
+ * the line ends at the live sandbox.
  */
 export function LineageTimeline({
   environmentId,
@@ -115,8 +111,6 @@ export function LineageTimeline({
   }
 
   const status = sandbox.data?.status
-  const canSave = status === "running" || status === "stopped"
-  const checkpoints = data.checkpoints ?? []
   // The live sandbox is the point after the last step.
   const count = timeline.steps.length + 1
   const x = (index: number) => PAD + COLUMN / 2 + index * STEP
@@ -199,22 +193,6 @@ export function LineageTimeline({
                 name={data.templateName}
               />
             }
-            action={
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!canSave}
-                title={
-                  canSave
-                    ? undefined
-                    : "Save checkpoints while the sandbox is running or stopped"
-                }
-                onClick={() => setAction({ kind: "save" })}
-              >
-                <FloppyDiskIcon />
-                Save checkpoint
-              </Button>
-            }
           />
         </div>
       </div>
@@ -225,14 +203,6 @@ export function LineageTimeline({
         <li>{now}</li>
       </ol>
 
-      {action?.kind === "save" && (
-        <SaveCheckpointDialog
-          environmentId={environmentId}
-          sandboxId={sandboxId}
-          taken={checkpoints.map((checkpoint) => checkpoint.name)}
-          onClose={close}
-        />
-      )}
       {action?.kind === "rename" && (
         <RenameCheckpointDialog
           environmentId={environmentId}
@@ -618,93 +588,6 @@ function refreshCheckpoints(queryClient: QueryClient) {
     ].map((queryKey) =>
       queryClient.invalidateQueries({ queryKey: ["get", queryKey] })
     )
-  )
-}
-
-function SaveCheckpointDialog({
-  environmentId,
-  sandboxId,
-  taken,
-  onClose,
-}: {
-  environmentId: string
-  sandboxId: string
-  taken: string[]
-  onClose: () => void
-}) {
-  const queryClient = useQueryClient()
-  const [name, setName] = useState(() => suggestedName(taken))
-  const save = $api.useMutation(
-    "post",
-    "/api/environments/{env}/sandboxes/{id}/checkpoints",
-    {
-      onSuccess: () => {
-        toast.success("Checkpoint saved")
-        onClose()
-      },
-      onSettled: () => refreshCheckpoints(queryClient),
-      onError: (err) =>
-        toast.error("Could not save checkpoint", {
-          description: errorMessage(err),
-        }),
-    }
-  )
-  const trimmed = name.trim()
-
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open && !save.isPending) onClose()
-      }}
-    >
-      <DialogContent showCloseButton={!save.isPending}>
-        <form
-          className="contents"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!trimmed || save.isPending) return
-            save.mutate({
-              params: { path: { env: environmentId, id: sandboxId } },
-              body: { name: trimmed },
-            })
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Save checkpoint</DialogTitle>
-            <DialogDescription>
-              Saves the disk, not running processes. Stop applications first for
-              consistent data.
-            </DialogDescription>
-          </DialogHeader>
-          <Field>
-            <FieldLabel htmlFor="lineage-checkpoint-name">Name</FieldLabel>
-            <Input
-              id="lineage-checkpoint-name"
-              autoFocus
-              maxLength={80}
-              value={name}
-              disabled={save.isPending}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </Field>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={save.isPending}
-              onClick={onClose}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!trimmed || save.isPending}>
-              {save.isPending && <Spinner />}
-              Save
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   )
 }
 

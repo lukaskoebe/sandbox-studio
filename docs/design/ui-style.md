@@ -174,10 +174,12 @@ primitives above and keeps the e2e selectors it had.
   family tree once there are forks, approval cards, setup card and teammates.
   Not shown: egress or host load (no endpoint).
   The template column shows the template's name (stack@version), or its ID for a template without one.
-- **Done: sandbox dashboard and workspace.** Header with the name and ID in mono, sections
-  with headers and area tiles (connections and chats only), ports and connections as lists,
-  and a status line on the workspace. CPU, memory and uptime are not shown until the API
-  reports them.
+- **Done: sandbox dashboard and workspace.** Header with the name and copyable ID in mono
+  (status and owner only on the workspace; the dashboard's band shows them). The dashboard
+  follows Home: a facts band on the grid paper with the lifecycle buttons at its end, the
+  sandbox's own lists in the main column, ports and connections in the 22rem side column.
+  Checkpoints are rows like the others, saved from a dialog in the section header. The
+  workspace's tab strip keeps tabs left and tools right, and has a status line below.
 - **Done: network.** Rules (grouped by domain, filters in the URL), requests and activity tabs.
 - **Done: secrets.**
 - **Done: memory.** Pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.

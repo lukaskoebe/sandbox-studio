@@ -1,9 +1,10 @@
-import { type FormEvent, useState } from "react"
-import { useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
+import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ArrowCounterClockwiseIcon,
   FloppyDiskIcon,
+  PlusIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
@@ -19,18 +20,24 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { SectionHeader } from "@/components/section-header"
-import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
+import { formatAge } from "@/lib/utils"
 
-/** Disk checkpoints of one sandbox, on its dashboard; they work while it is stopped. */
+/**
+ * Disk checkpoints of one sandbox, on its dashboard, as a list with a save action. They work
+ * while it is stopped. The history above shows the same checkpoints on the line.
+ */
 export function CheckpointsSection({
   env,
   sandbox,
@@ -38,24 +45,8 @@ export function CheckpointsSection({
   env: string
   sandbox: Sandbox
 }) {
-  return (
-    <section
-      aria-label="Checkpoints"
-      className="grid min-w-0 content-start gap-2"
-    >
-      <SectionHeader title="Checkpoints" icon={FloppyDiskIcon} />
-      <p className="text-xs text-muted-foreground">
-        Checkpoints save disks, not running processes. Stop applications before
-        stopping the sandbox for consistent data.
-      </p>
-      <CheckpointPanel env={env} sandbox={sandbox} />
-    </section>
-  )
-}
-
-function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
   const queryClient = useQueryClient()
-  const [name, setName] = useState(() => suggestedName())
+  const [saving, setSaving] = useState(false)
   const path = { params: { path: { env, id: sandbox.id } } }
   const checkpoints = $api.useQuery(
     "get",
@@ -64,44 +55,11 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
   )
   const list = checkpoints.data ?? []
 
-  async function invalidate() {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: ["get", "/api/environments/{env}/sandboxes/{id}/checkpoints"],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ["get", "/api/environments/{env}/sandboxes/{id}"],
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ["get", "/api/environments/{env}/sandboxes"],
-      }),
-    ])
-  }
-
-  const create = $api.useMutation(
-    "post",
-    "/api/environments/{env}/sandboxes/{id}/checkpoints",
-    {
-      onSuccess: () => {
-        const existingNames = [
-          ...list.map((checkpoint) => checkpoint.name),
-          name.trim(),
-        ]
-        setName(suggestedName(existingNames))
-        toast.success("Checkpoint created")
-      },
-      onSettled: invalidate,
-      onError: (err) =>
-        toast.error("Could not create checkpoint", {
-          description: errorMessage(err),
-        }),
-    }
-  )
   const remove = $api.useMutation(
     "delete",
     "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}",
     {
-      onSettled: invalidate,
+      onSettled: () => refresh(queryClient),
       onError: (err) =>
         toast.error("Could not delete checkpoint", {
           description: errorMessage(err),
@@ -113,7 +71,7 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
     "/api/environments/{env}/sandboxes/{id}/checkpoints/{checkpoint}/restore",
     {
       onSuccess: () => toast.success("Sandbox restored"),
-      onSettled: invalidate,
+      onSettled: () => refresh(queryClient),
       onError: (err) =>
         toast.error("Could not restore checkpoint", {
           description: errorMessage(err),
@@ -121,204 +79,120 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
     }
   )
 
-  const mutationPending =
-    create.isPending || remove.isPending || restore.isPending
-  const canCreateCheckpoint =
-    sandbox.status === "running" || sandbox.status === "stopped"
+  const pending = remove.isPending || restore.isPending
+  const canSave = sandbox.status === "running" || sandbox.status === "stopped"
   const canRestoreSandbox =
     sandbox.checkpointRestoreSupported && sandbox.status === "stopped"
-
-  function createCheckpoint(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const checkpointName = name.trim()
-    if (
-      checkpointName.length === 0 ||
-      mutationPending ||
-      !canCreateCheckpoint
-    ) {
-      return
-    }
-    create.mutate({ ...path, body: { name: checkpointName } })
-  }
+  const hint = !sandbox.checkpointRestoreSupported
+    ? "Restoring needs a newer runtime."
+    : sandbox.status !== "stopped" && list.length > 0
+      ? "Stop the sandbox to restore one."
+      : undefined
 
   return (
-    <div>
-      <form className="grid gap-2 border-b pb-4" onSubmit={createCheckpoint}>
-        <Label htmlFor="checkpoint-name">Checkpoint name</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="checkpoint-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            disabled={mutationPending}
-            maxLength={80}
-            placeholder="Checkpoint name"
-          />
+    <section
+      aria-label="Checkpoints"
+      className="grid min-w-0 content-start gap-2"
+    >
+      <SectionHeader
+        title="Checkpoints"
+        icon={FloppyDiskIcon}
+        count={list.length || undefined}
+        actions={
           <Button
-            type="submit"
-            disabled={
-              mutationPending ||
-              !canCreateCheckpoint ||
-              name.trim().length === 0
+            variant="ghost"
+            size="xs"
+            disabled={!canSave}
+            title={
+              canSave
+                ? undefined
+                : "Save checkpoints while the sandbox is running or stopped"
             }
+            onClick={() => setSaving(true)}
           >
-            {create.isPending ? <Spinner /> : <FloppyDiskIcon />}
-            Save
+            <PlusIcon />
+            Save checkpoint
           </Button>
-        </div>
-      </form>
-
-      {!sandbox.checkpointRestoreSupported && (
-        <p className="pt-4 text-xs text-muted-foreground">
-          Restoring checkpoints is unavailable with this runtime version.
-        </p>
-      )}
-
-      {!canCreateCheckpoint ? (
-        <p className="pt-4 text-xs text-muted-foreground">
-          Save checkpoints while the sandbox is running or stopped.
-        </p>
-      ) : sandbox.checkpointRestoreSupported && !canRestoreSandbox ? (
-        <p className="pt-4 text-xs text-muted-foreground">
-          Stop the sandbox to restore a checkpoint.
-        </p>
-      ) : null}
-
-      {!checkpoints.isPending && !checkpoints.isError && list.length > 0 && (
-        <p className="pt-4 text-xs text-muted-foreground">
-          Delete newer checkpoints before the checkpoints they depend on.
-        </p>
-      )}
-
+        }
+      />
+      <p className="text-xs text-muted-foreground">
+        A checkpoint saves the disks, not running processes.{" "}
+        {hint ?? (list.length > 1 && "Delete newer ones before older ones.")}
+      </p>
       {checkpoints.isPending ? (
-        <div className="grid min-h-24 place-items-center">
+        <div className="grid h-(--wb-row) place-items-center">
           <Spinner />
         </div>
       ) : checkpoints.isError ? (
-        <p className="pt-4 text-xs text-destructive">
+        <p className="text-xs text-destructive">
           {errorMessage(checkpoints.error)}
         </p>
-      ) : list.length === 0 ? (
-        <Empty className="mt-4">
-          <EmptyHeader>
-            <EmptyTitle>No checkpoints yet</EmptyTitle>
-            <EmptyDescription>
-              Save a checkpoint to capture this sandbox&apos;s current disk
-              state.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <ul className="divide-y">
+      ) : list.length > 0 ? (
+        <ul className="overflow-hidden rounded-(--radius) border bg-card">
           {list.map((checkpoint) => {
             const canRestore = canRestoreSandbox && checkpoint.state === "ready"
             return (
               <li
                 key={checkpoint.id}
-                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                className="flex h-(--wb-row) items-center gap-2 border-b px-3 text-xs last:border-b-0"
               >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{checkpoint.name}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    <time dateTime={checkpoint.createdAt}>
-                      {new Date(checkpoint.createdAt).toLocaleString()}
-                    </time>
-                    <span className="px-1.5">·</span>
-                    <span className="capitalize">{checkpoint.state}</span>
-                  </p>
-                  {checkpoint.state === "deleting" ? (
-                    <p className="mt-1 text-muted-foreground">
-                      Removal did not finish. Select Delete to retry.
-                    </p>
-                  ) : canRestoreSandbox && checkpoint.state !== "ready" ? (
-                    <p className="mt-1 text-muted-foreground">
-                      Restore is available when this checkpoint is ready.
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-1">
-                  {sandbox.checkpointRestoreSupported && (
-                    <AlertDialog>
-                      <AlertDialogTrigger
-                        render={
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={mutationPending || !canRestore}
-                          />
-                        }
-                      >
-                        <ArrowCounterClockwiseIcon />
-                        Restore
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Restore {checkpoint.name}?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This replaces the sandbox&apos;s root filesystem,
-                            workspace, home directory, and Docker state with the
-                            saved checkpoint. Any work done since this
-                            checkpoint will be lost.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            variant="destructive"
-                            disabled={mutationPending || !canRestore}
-                            onClick={() => {
-                              if (mutationPending || !canRestore) return
-                              restore.mutate({
-                                params: {
-                                  path: {
-                                    env,
-                                    id: sandbox.id,
-                                    checkpoint: checkpoint.id,
-                                  },
-                                },
-                              })
-                            }}
-                          >
-                            {restore.isPending && <Spinner />}
-                            Restore
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+                <FloppyDiskIcon className="shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">
+                  {checkpoint.name}
+                </span>
+                {checkpoint.state !== "ready" && (
+                  <span
+                    className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground"
+                    title={
+                      checkpoint.state === "deleting"
+                        ? "Removal did not finish. Delete it again to retry."
+                        : undefined
+                    }
+                  >
+                    {checkpoint.state}
+                  </span>
+                )}
+                <time
+                  dateTime={checkpoint.createdAt}
+                  title={new Date(checkpoint.createdAt).toLocaleString()}
+                  className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground"
+                >
+                  {formatAge(checkpoint.createdAt)}
+                </time>
+                {sandbox.checkpointRestoreSupported && (
                   <AlertDialog>
                     <AlertDialogTrigger
                       render={
                         <Button
                           variant="ghost"
-                          size="icon-sm"
-                          title="Delete checkpoint"
-                          aria-label="Delete checkpoint"
-                          disabled={mutationPending}
+                          size="xs"
+                          disabled={pending || !canRestore}
                         />
                       }
                     >
-                      <TrashIcon />
+                      <ArrowCounterClockwiseIcon />
+                      Restore
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>
-                          Delete {checkpoint.name}?
+                          Restore {checkpoint.name}?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                          This permanently deletes this disk checkpoint. The
-                          sandbox itself is not changed.
+                          This replaces the sandbox&apos;s root filesystem,
+                          workspace, home directory, and Docker state with the
+                          saved checkpoint. Any work done since this checkpoint
+                          will be lost.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           variant="destructive"
-                          disabled={mutationPending}
-                          onClick={() =>
-                            remove.mutate({
+                          disabled={pending || !canRestore}
+                          onClick={() => {
+                            if (pending || !canRestore) return
+                            restore.mutate({
                               params: {
                                 path: {
                                   env,
@@ -327,21 +201,178 @@ function CheckpointPanel({ env, sandbox }: { env: string; sandbox: Sandbox }) {
                                 },
                               },
                             })
-                          }
+                          }}
                         >
-                          {remove.isPending && <Spinner />}
-                          Delete
+                          {restore.isPending && <Spinner />}
+                          Restore
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                </div>
+                )}
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        title="Delete checkpoint"
+                        aria-label="Delete checkpoint"
+                        disabled={pending}
+                      />
+                    }
+                  >
+                    <TrashIcon />
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Delete {checkpoint.name}?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This permanently deletes this disk checkpoint. The
+                        sandbox itself is not changed.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        variant="destructive"
+                        disabled={pending}
+                        onClick={() =>
+                          remove.mutate({
+                            params: {
+                              path: {
+                                env,
+                                id: sandbox.id,
+                                checkpoint: checkpoint.id,
+                              },
+                            },
+                          })
+                        }
+                      >
+                        {remove.isPending && <Spinner />}
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </li>
             )
           })}
         </ul>
+      ) : (
+        <p className="text-xs text-muted-foreground">No checkpoints yet.</p>
       )}
-    </div>
+      {saving && (
+        <SaveCheckpointDialog
+          environmentId={env}
+          sandboxId={sandbox.id}
+          taken={list.map((checkpoint) => checkpoint.name)}
+          onClose={() => setSaving(false)}
+        />
+      )}
+    </section>
+  )
+}
+
+/** Checkpoints show in the list, the history and the sandbox, so all three are refetched. */
+function refresh(queryClient: QueryClient) {
+  return Promise.all(
+    [
+      "/api/environments/{env}/sandboxes/{id}/checkpoints",
+      "/api/environments/{env}/sandboxes/{id}/lineage",
+      "/api/environments/{env}/sandboxes/{id}",
+      "/api/environments/{env}/sandboxes",
+    ].map((url) => queryClient.invalidateQueries({ queryKey: ["get", url] }))
+  )
+}
+
+/** Names and saves a checkpoint of the sandbox as it is now. */
+function SaveCheckpointDialog({
+  environmentId,
+  sandboxId,
+  taken,
+  onClose,
+}: {
+  environmentId: string
+  sandboxId: string
+  taken: string[]
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [name, setName] = useState(() => suggestedName(taken))
+  const save = $api.useMutation(
+    "post",
+    "/api/environments/{env}/sandboxes/{id}/checkpoints",
+    {
+      onSuccess: () => {
+        toast.success("Checkpoint saved")
+        onClose()
+      },
+      onSettled: () => refresh(queryClient),
+      onError: (err) =>
+        toast.error("Could not save checkpoint", {
+          description: errorMessage(err),
+        }),
+    }
+  )
+  const trimmed = name.trim()
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !save.isPending) onClose()
+      }}
+    >
+      <DialogContent showCloseButton={!save.isPending}>
+        <form
+          className="contents"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!trimmed || save.isPending) return
+            save.mutate({
+              params: { path: { env: environmentId, id: sandboxId } },
+              body: { name: trimmed },
+            })
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Save checkpoint</DialogTitle>
+            <DialogDescription>
+              Saves the disk, not running processes. Stop applications first for
+              consistent data.
+            </DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="checkpoint-name">Name</FieldLabel>
+            <Input
+              id="checkpoint-name"
+              autoFocus
+              maxLength={80}
+              value={name}
+              disabled={save.isPending}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Field>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={save.isPending}
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!trimmed || save.isPending}>
+              {save.isPending && <Spinner />}
+              Save
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
