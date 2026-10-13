@@ -421,9 +421,26 @@ func TestMigrateTeammateSettings(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `UPDATE teammates SET approval_scope = 'everywhere' WHERE id = 'ada'`); err == nil {
 		t.Error("an unknown approval scope was stored")
 	}
-	// A teammate without a provider is allowed; deleting its provider's key is not affected.
+	// A teammate without a provider is allowed.
 	if _, err := db.ExecContext(ctx, `INSERT INTO teammates (id, environment_id, name, harness, git_name, git_email, created_at, updated_at)
 		VALUES ('none', 'env', 'Bob', 'claude', 'Bob', 'bob@example.com', 1, 1)`); err != nil {
 		t.Fatalf("teammate without a provider: %v", err)
+	}
+	// An API-key provider may wait for its key, but a key of another environment is refused,
+	// and a subscription never holds one.
+	if _, err := db.ExecContext(ctx, `INSERT INTO providers (id, environment_id, name, kind, created_at, updated_at) VALUES ('keyless', 'env', 'Anthropic', 'anthropic_api', 1, 1)`); err != nil {
+		t.Fatalf("API provider without a key: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at) VALUES ('other-key', 'other', 'K', x'00', 'api.anthropic.com', 'ph-other', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE providers SET secret_id = 'other-key' WHERE id = 'keyless'`); err == nil {
+		t.Error("a provider took a key of another environment")
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO secrets (id, environment_id, name, value, hosts, placeholder, created_at, updated_at) VALUES ('sub-key', 'env', 'S', x'00', 'x.example.com', 'ph-sub', 1, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE providers SET secret_id = 'sub-key' WHERE id = 'prov'`); err == nil {
+		t.Error("a subscription took a key")
 	}
 }

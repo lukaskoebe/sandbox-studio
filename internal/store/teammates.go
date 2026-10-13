@@ -63,28 +63,70 @@ func (s *Store) CreateProvider(ctx context.Context, p Provider, sec *Secret) (Pr
 	t := now()
 	p.SecretID = ""
 	if sec != nil {
-		_, err := tx.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			sec.ID, p.EnvironmentID, sec.Name, sec.Sealed, strings.Join(sec.Hosts, ","), sec.Placeholder, sec.Note, t, t)
-		if err != nil && strings.Contains(err.Error(), "UNIQUE") {
-			return p, fmt.Errorf("a secret named %q: %w", sec.Name, ErrExists)
-		}
-		if err != nil {
+		if err := insertSecret(ctx, tx, p.EnvironmentID, *sec, t); err != nil {
 			return p, err
 		}
 		p.SecretID = sec.ID
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO providers (id, environment_id, name, kind, base_url, model, secret_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		p.ID, p.EnvironmentID, p.Name, p.Kind, p.BaseURL, p.Model, nullable(p.SecretID), t, t)
-	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
-		return p, fmt.Errorf("a provider named %q: %w", p.Name, ErrExists)
-	}
-	if err != nil {
+	if err := insertProvider(ctx, tx, p, t); err != nil {
 		return p, err
 	}
 	if err := tx.Commit(); err != nil {
 		return p, err
 	}
 	return s.Provider(ctx, p.EnvironmentID, p.ID)
+}
+
+// insertSecret writes a sealed secret of environment envID.
+func insertSecret(ctx context.Context, q execer, envID string, sec Secret, t int64) error {
+	_, err := q.ExecContext(ctx, "INSERT INTO secrets ("+secretCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		sec.ID, envID, sec.Name, sec.Sealed, strings.Join(sec.Hosts, ","), sec.Placeholder, sec.Note, t, t)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+		return fmt.Errorf("a secret named %q: %w", sec.Name, ErrExists)
+	}
+	return err
+}
+
+// insertProvider writes a provider row; its key, if any, must already be in the table.
+func insertProvider(ctx context.Context, q execer, p Provider, t int64) error {
+	_, err := q.ExecContext(ctx, "INSERT INTO providers (id, environment_id, name, kind, base_url, model, secret_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		p.ID, p.EnvironmentID, p.Name, p.Kind, p.BaseURL, p.Model, nullable(p.SecretID), t, t)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
+		return fmt.Errorf("a provider named %q: %w", p.Name, ErrExists)
+	}
+	return err
+}
+
+// AttachProviderSecret gives an API-key provider that has no key yet its key, in one
+// transaction. A provider that has one is refused with ErrConflict: it is rotated instead.
+func (s *Store) AttachProviderSecret(ctx context.Context, envID, id string, sec Secret) (Provider, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Provider{}, err
+	}
+	defer tx.Rollback()
+	var secretID string
+	err = tx.QueryRowContext(ctx, "SELECT IFNULL(secret_id, '') FROM providers WHERE environment_id = ? AND id = ?", envID, id).Scan(&secretID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Provider{}, ErrNotFound
+	}
+	if err != nil {
+		return Provider{}, err
+	}
+	if secretID != "" {
+		return Provider{}, fmt.Errorf("the provider already has a key: %w", ErrConflict)
+	}
+	t := now()
+	if err := insertSecret(ctx, tx, envID, sec, t); err != nil {
+		return Provider{}, err
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE providers SET secret_id = ?, updated_at = ? WHERE environment_id = ? AND id = ?", sec.ID, t, envID, id); err != nil {
+		return Provider{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Provider{}, err
+	}
+	return s.Provider(ctx, envID, id)
 }
 
 // ProviderUpdate changes a provider. Nil fields keep their values.
@@ -262,10 +304,15 @@ func (s *Store) CreateTeammate(ctx context.Context, p Teammate) (Teammate, error
 		p.ApprovalScope = "environment"
 	}
 	p.CreatedAt, p.UpdatedAt = time.Unix(t, 0), time.Unix(t, 0)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO teammates (id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness,
+	return p, teammateExists(insertTeammate(ctx, s.db, p, t), p.Name)
+}
+
+// insertTeammate writes a teammate row, with a NULL provider when it has none.
+func insertTeammate(ctx context.Context, q execer, p Teammate, t int64) error {
+	_, err := q.ExecContext(ctx, `INSERT INTO teammates (id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness,
 		provider_id, model, git_name, git_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, t, t)
-	return p, teammateExists(err, p.Name)
+	return err
 }
 
 // SetApprovalPattern remembers the host pattern level a teammate's approval was decided with.

@@ -36,10 +36,11 @@ const (
 	KindChatGPTSubscription = "chatgpt_subscription"
 )
 
-// Provider states.
+// Provider states. An API-key provider is key_required until its key is added.
 const (
 	StateReady         = "ready"
 	StateLoginRequired = "login_required"
+	StateKeyRequired   = "key_required"
 )
 
 // Scopes of new rules from approvals of a teammate's sandboxes: the sandbox, the teammate's

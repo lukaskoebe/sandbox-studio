@@ -163,18 +163,24 @@ var headersNotSet = []string{
 
 // ruleConfigFrom validates the config of a rule with action in environment env.
 func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in RuleConfigInput) (store.RuleConfig, error) {
+	secrets, err := s.ruleSecrets(ctx, env)
+	if err != nil {
+		return store.RuleConfig{}, apiError(err)
+	}
+	return s.checkRuleConfig(action, in, secrets)
+}
+
+// checkRuleConfig validates the config of a rule with action. The secrets are the ones its
+// references may name; they are read from the environment, or from an import file.
+func (s *Server) checkRuleConfig(action string, in RuleConfigInput, secrets []store.Secret) (store.RuleConfig, error) {
 	if action == store.ActionCaddy || in.Caddyfile != "" {
-		return s.caddyConfigFrom(ctx, env, action, in)
+		return s.caddyConfigFrom(action, in, secrets)
 	}
 	if len(in.Headers) == 0 {
 		return store.RuleConfig{}, nil
 	}
 	if action != store.ActionProxy {
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules set headers")
-	}
-	secrets, err := s.ruleSecrets(ctx, env)
-	if err != nil {
-		return store.RuleConfig{}, apiError(err)
 	}
 	headers := make(map[string]string, len(in.Headers))
 	for name, value := range in.Headers {
@@ -203,8 +209,8 @@ func (s *Server) ruleConfigFrom(ctx context.Context, env, action string, in Rule
 
 // ruleFrom validates in and returns the rule it describes in environment env.
 // caddyConfigFrom validates the config of a caddy rule: a Caddyfile that Caddy accepts and
-// only sends secrets of the environment to hosts they are bound to.
-func (s *Server) caddyConfigFrom(ctx context.Context, env, action string, in RuleConfigInput) (store.RuleConfig, error) {
+// only sends secrets to hosts they are bound to.
+func (s *Server) caddyConfigFrom(action string, in RuleConfigInput, secrets []store.Secret) (store.RuleConfig, error) {
 	switch {
 	case action != store.ActionCaddy:
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only caddy rules have a Caddyfile")
@@ -218,10 +224,6 @@ func (s *Server) caddyConfigFrom(ctx context.Context, env, action string, in Rul
 	compiled, err := s.Caddy.Check(in.Caddyfile)
 	if err != nil {
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("Caddyfile: " + err.Error())
-	}
-	secrets, err := s.ruleSecrets(ctx, env)
-	if err != nil {
-		return store.RuleConfig{}, apiError(err)
 	}
 	for _, name := range slices.Sorted(maps.Keys(compiled.Secrets)) {
 		named := slices.DeleteFunc(slices.Clone(secrets), func(s store.Secret) bool { return s.Name != name })

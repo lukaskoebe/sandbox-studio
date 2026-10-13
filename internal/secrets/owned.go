@@ -58,3 +58,6 @@ func (v *Vault) Value(ctx context.Context, envID, id string) (string, error) {
 	b, err := v.Unseal(sec.Sealed, []byte(sec.ID))
 	return string(b), err
 }
+
+// CheckName validates the name of a secret: the variable a sandbox sees it as.
+func CheckName(name string) error { return checkName(name) }

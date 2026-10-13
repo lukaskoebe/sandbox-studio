@@ -38,3 +38,45 @@ SELECT id, environment_id, name, role, soul, harness, provider_id, model, git_na
 FROM teammates_old;
 DROP TABLE teammates_old;
 CREATE INDEX teammates_provider ON teammates (provider_id);
+
+-- An API-key provider may exist without its key, until one is added: importing an environment
+-- creates providers from the file, which has no keys. Subscription providers never have one.
+-- Rebuilt as above; the triggers that check its key's scope are created again.
+CREATE TABLE providers_old AS SELECT * FROM providers;
+DROP TABLE providers;
+CREATE TABLE providers (
+    id             TEXT PRIMARY KEY,
+    environment_id TEXT NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
+    name           TEXT NOT NULL,
+    kind           TEXT NOT NULL CHECK (kind IN ('anthropic_api', 'openai_api', 'openai_compatible', 'claude_subscription', 'chatgpt_subscription')),
+    base_url       TEXT NOT NULL DEFAULT '',   -- openai_compatible only
+    model          TEXT NOT NULL DEFAULT '',   -- openai_compatible only: its single model
+    secret_id      TEXT UNIQUE REFERENCES secrets(id),
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    UNIQUE (environment_id, name),
+    UNIQUE (environment_id, id),
+    CHECK (secret_id IS NULL OR kind NOT IN ('claude_subscription', 'chatgpt_subscription')),
+    CHECK ((kind = 'openai_compatible') = (base_url <> '' AND model <> ''))
+);
+INSERT INTO providers (id, environment_id, name, kind, base_url, model, secret_id, created_at, updated_at)
+SELECT id, environment_id, name, kind, base_url, model, secret_id, created_at, updated_at FROM providers_old;
+DROP TABLE providers_old;
+
+CREATE TRIGGER providers_secret_owner_insert
+BEFORE INSERT ON providers
+WHEN NEW.secret_id IS NOT NULL
+ AND NOT EXISTS (SELECT 1 FROM secrets WHERE id = NEW.secret_id AND environment_id = NEW.environment_id
+                 AND teammate_id IS NULL AND sandbox_id IS NULL)
+BEGIN
+    SELECT RAISE(ABORT, 'provider secret must be an environment secret of the same environment');
+END;
+
+CREATE TRIGGER providers_secret_owner_update
+BEFORE UPDATE OF secret_id, environment_id ON providers
+WHEN NEW.secret_id IS NOT NULL
+ AND NOT EXISTS (SELECT 1 FROM secrets WHERE id = NEW.secret_id AND environment_id = NEW.environment_id
+                 AND teammate_id IS NULL AND sandbox_id IS NULL)
+BEGIN
+    SELECT RAISE(ABORT, 'provider secret must be an environment secret of the same environment');
+END;

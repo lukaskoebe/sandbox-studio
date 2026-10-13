@@ -409,7 +409,7 @@ func TestCopyTeammate(t *testing.T) {
 	}
 }
 
-func TestCopyName(t *testing.T) {
+func TestUniqueName(t *testing.T) {
 	long := strings.Repeat("a", teammates.MaxNameLen)
 	for _, tc := range []struct {
 		name, want string
@@ -420,12 +420,9 @@ func TestCopyName(t *testing.T) {
 		{"Ada", "Ada 3", []string{"Ada", "Ada 2"}},
 		{long, strings.Repeat("a", teammates.MaxNameLen-2) + " 2", []string{long}},
 	} {
-		var existing []store.Teammate
-		for _, n := range tc.taken {
-			existing = append(existing, store.Teammate{Name: n})
-		}
-		if got := copyName(tc.name, existing); got != tc.want || len([]rune(got)) > teammates.MaxNameLen {
-			t.Errorf("copyName(%q, %v) = %q, want %q", tc.name, tc.taken, got, tc.want)
+		got := uniqueName(tc.name, func(n string) bool { return slices.Contains(tc.taken, n) })
+		if got != tc.want || len([]rune(got)) > teammates.MaxNameLen {
+			t.Errorf("uniqueName(%q, %v) = %q, want %q", tc.name, tc.taken, got, tc.want)
 		}
 	}
 }

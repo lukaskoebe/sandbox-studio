@@ -28,6 +28,9 @@ const exportMediaType = "application/octet-stream"
 func (s *Server) registerExports(api huma.API, mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/export", s.exportSandbox)
 	mux.HandleFunc("POST /api/environments/{env}/sandbox-imports", s.importSandbox)
+	mux.HandleFunc("GET /api/environments/{env}/export", s.exportEnvironment)
+	mux.HandleFunc("POST /api/environment-imports", s.importEnvironment)
+	registerEnvironmentFiles(api)
 
 	binary := map[string]*huma.MediaType{exportMediaType: {Schema: &huma.Schema{Type: "string", Format: "binary"}}}
 	problem := func(description string) *huma.Response {
@@ -87,6 +90,42 @@ func (s *Server) registerExports(api huma.API, mux *http.ServeMux) {
 	}, func(ctx context.Context, in *importIn) (*importOut, error) {
 		imp, err := s.Sandboxes.CancelImport(ctx, in.Env, in.ID)
 		return &importOut{imp}, apiError(err)
+	})
+}
+
+// The environment file is small and read in full, so its handlers are plain too; the
+// documentation of both is added here.
+func registerEnvironmentFiles(api huma.API) {
+	jsonBody := func(t reflect.Type) map[string]*huma.MediaType {
+		return map[string]*huma.MediaType{"application/json": {Schema: api.OpenAPI().Components.Schemas.Schema(t, true, "")}}
+	}
+	api.OpenAPI().AddOperation(&huma.Operation{
+		OperationID: "exportEnvironment", Method: http.MethodGet,
+		Path: "/api/environments/{env}/export", Tags: []string{"environments"},
+		Summary: "Download an environment as a .studio-environment file",
+		Description: "The providers without their keys, teammates, network rules, secret names with the hosts they bind to, and template specs. " +
+			"Sandboxes, memory, approvals, chats, sandbox-scoped rules, keys and secret values are not included.",
+		Parameters: []*huma.Param{{Name: "env", In: "path", Required: true, Description: "Environment ID", Schema: &huma.Schema{Type: "string"}}},
+		Responses: map[string]*huma.Response{
+			"200": {Description: "The environment file", Content: jsonBody(reflect.TypeOf(EnvironmentFile{}))},
+			"default": {Description: "Error", Content: map[string]*huma.MediaType{
+				"application/problem+json": {Schema: &huma.Schema{Ref: "#/components/schemas/ErrorModel"}},
+			}},
+		},
+	})
+	api.OpenAPI().AddOperation(&huma.Operation{
+		OperationID: "importEnvironment", Method: http.MethodPost,
+		Path: "/api/environment-imports", Tags: []string{"environments"},
+		Summary: "Create an environment from a .studio-environment file",
+		Description: "Creates the environment, its providers, teammates, rules and secret names in one transaction; a name already in use gets a number. " +
+			"The reply lists the provider keys and secret values to add, and the template specs to build. The file is at most 2 MiB; unknown fields are refused.",
+		RequestBody: &huma.RequestBody{Required: true, Content: jsonBody(reflect.TypeOf(EnvironmentFile{}))},
+		Responses: map[string]*huma.Response{
+			"201": {Description: "The new environment and what is still to add", Content: jsonBody(reflect.TypeOf(ImportedEnvironment{}))},
+			"default": {Description: "Error", Content: map[string]*huma.MediaType{
+				"application/problem+json": {Schema: &huma.Schema{Ref: "#/components/schemas/ErrorModel"}},
+			}},
+		},
 	})
 }
 

@@ -121,13 +121,18 @@ func (s *Store) CreateRule(ctx context.Context, r Rule) (Rule, error) {
 	if r.Ports == nil {
 		r.Ports = []int{}
 	}
+	return r, insertRule(ctx, s.db, r)
+}
+
+// insertRule writes a rule with the ID and creation time it has.
+func insertRule(ctx context.Context, q execer, r Rule) error {
 	config, err := json.Marshal(r.Config)
 	if err != nil {
-		return r, err
+		return err
 	}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err = q.ExecContext(ctx, "INSERT INTO rules (id, environment_id, sandbox_id, teammate_id, host, ports, action, config, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		r.ID, r.EnvironmentID, nullable(r.SandboxID), nullable(r.TeammateID), r.Host, joinPorts(r.Ports), r.Action, string(config), r.Note, r.CreatedAt.Unix())
-	return r, err
+	return err
 }
 
 // UpdateRule replaces the editable fields of a rule.

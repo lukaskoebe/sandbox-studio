@@ -128,8 +128,11 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 		return sessionPlan{}, apiError(err)
 	}
 	view := providerView(prov)
-	if view.State != teammates.StateReady {
+	switch view.State {
+	case teammates.StateLoginRequired:
 		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs a login first", prov.Name))
+	case teammates.StateKeyRequired:
+		return sessionPlan{}, huma.Error409Conflict(fmt.Sprintf("provider %s needs its API key first", prov.Name))
 	}
 	h, ok := harness.Lookup(p.Harness)
 	if !ok || !teammates.Supports(prov.Kind, p.Harness) {

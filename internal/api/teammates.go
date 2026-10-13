@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
-	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -29,7 +27,7 @@ type ProviderKind struct {
 // ProviderView is a provider with what its kind implies. It never carries the key.
 type ProviderView struct {
 	store.Provider
-	State     string   `json:"state" enum:"ready,login_required" doc:"login_required until a subscription login is stored"`
+	State     string   `json:"state" enum:"ready,login_required,key_required" doc:"login_required until a subscription login is stored; key_required until an API key is added"`
 	EnvVar    string   `json:"envVar,omitempty" doc:"The variable guests get the placeholder in"`
 	Harnesses []string `json:"harnesses" enum:"opencode,claude,codex" doc:"Harnesses teammates using this provider can run"`
 }
@@ -37,10 +35,13 @@ type ProviderView struct {
 func providerView(p store.Provider) ProviderView {
 	k, _ := teammates.LookupKind(p.Kind)
 	v := ProviderView{Provider: p, EnvVar: k.EnvVar, Harnesses: k.Harnesses, State: teammates.StateReady}
-	if !k.APIKey {
+	switch {
+	case !k.APIKey:
 		// TODO(M4): run `claude setup-token` / `codex login` in a system sandbox and store the
 		// result as the provider's secret; until then subscription providers can't log in.
 		v.State = teammates.StateLoginRequired
+	case p.SecretID == "":
+		v.State = teammates.StateKeyRequired
 	}
 	return v
 }
@@ -206,19 +207,40 @@ func (s *Server) registerTeammates(api huma.API) {
 		} else if b.BaseURL != nil || b.Model != nil {
 			return nil, huma.Error422UnprocessableEntity("only OpenAI-compatible providers have a base URL and model")
 		}
+		// A provider whose key was never added (an import) gets its first key here; the rest of
+		// the update is applied before it, so the key is bound to the host the update names.
+		addKey := false
 		if b.APIKey != nil {
-			if p.SecretID == "" {
+			k, _ := teammates.LookupKind(p.Kind)
+			switch {
+			case !k.APIKey:
 				return nil, huma.Error422UnprocessableEntity("subscription providers log in instead of taking an API key")
-			}
-			if u.Sealed, err = s.Vault.SealValue(p.SecretID, *b.APIKey); err != nil {
-				return nil, apiError(err)
+			case p.SecretID == "":
+				addKey = true
+			default:
+				if u.Sealed, err = s.Vault.SealValue(p.SecretID, *b.APIKey); err != nil {
+					return nil, apiError(err)
+				}
 			}
 		}
 		updated, err := s.Store.UpdateProvider(ctx, in.Env, in.ID, u)
 		if err != nil {
 			return nil, apiError(err)
 		}
-		if u.Sealed != nil || u.Hosts != nil {
+		if addKey {
+			host, err := providerHost(updated)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			sec, err := s.Vault.Prepare(in.Env, teammates.SecretName(updated.Name, updated.ID), *b.APIKey, []string{host}, "Key of provider "+updated.Name)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			if updated, err = s.Store.AttachProviderSecret(ctx, in.Env, in.ID, sec); err != nil {
+				return nil, apiError(err)
+			}
+		}
+		if u.Sealed != nil || u.Hosts != nil || addKey {
 			s.Vault.Changed(in.Env)
 			s.publishSecrets(in.Env)
 		}
@@ -361,7 +383,9 @@ func (s *Server) registerTeammates(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		p.Name = copyName(src.Name, existing)
+		p.Name = uniqueName(src.Name, func(n string) bool {
+			return slices.ContainsFunc(existing, func(t store.Teammate) bool { return t.Name == n })
+		})
 		created, err := s.Store.CreateTeammate(ctx, p)
 		if err != nil {
 			return nil, apiError(err)
@@ -403,27 +427,6 @@ func (s *Server) matchingProvider(ctx context.Context, from, to, fromID string) 
 		}
 	}
 	return match, nil
-}
-
-// copyName returns name, or name with the lowest number from 2 that no other teammate has,
-// shortening name so the result stays within the name limit.
-func copyName(name string, existing []store.Teammate) string {
-	taken := func(n string) bool {
-		return slices.ContainsFunc(existing, func(t store.Teammate) bool { return t.Name == n })
-	}
-	if !taken(name) {
-		return name
-	}
-	for n := 2; ; n++ {
-		suffix := " " + strconv.Itoa(n)
-		base := []rune(name)
-		if limit := teammates.MaxNameLen - utf8.RuneCountInString(suffix); len(base) > limit {
-			base = base[:limit]
-		}
-		if candidate := strings.TrimRight(string(base), " ") + suffix; !taken(candidate) {
-			return candidate
-		}
-	}
 }
 
 // teammateFrom validates in and returns the teammate it describes, with defaults filled in.
