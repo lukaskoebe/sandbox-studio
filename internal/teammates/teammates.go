@@ -185,6 +185,89 @@ func checkLine(what, s string) error {
 	return nil
 }
 
+// Avatars. A teammate's avatar is one emoji, one of the generated avatars, or empty to show
+// its initials. Generated avatars are fixed shapes the web UI draws in the teammate's color,
+// so nothing is uploaded.
+const avatarShapePrefix = "shape:"
+
+// AvatarShapes are the generated avatars, stored as "shape:<name>".
+var AvatarShapes = []string{"circle", "square", "diamond", "triangle", "pentagon", "hexagon", "star", "cross"}
+
+// MaxAvatarRunes bounds an emoji sequence: the longest family emoji is 7 code points.
+const MaxAvatarRunes = 16
+
+// CheckAvatar validates a teammate's avatar: empty, a generated avatar or a single emoji.
+func CheckAvatar(avatar string) error {
+	if avatar == "" {
+		return nil
+	}
+	if shape, ok := strings.CutPrefix(avatar, avatarShapePrefix); ok {
+		if !slices.Contains(AvatarShapes, shape) {
+			return fmt.Errorf("%w: %q is not a generated avatar", ErrInvalid, avatar)
+		}
+		return nil
+	}
+	if !isEmoji(avatar) {
+		return fmt.Errorf("%w: the avatar must be one emoji or a generated avatar (shape:<name>)", ErrInvalid)
+	}
+	return nil
+}
+
+// isEmoji reports whether s is one emoji: a pictograph with its variation selector and skin
+// tone, pictographs joined by zero-width joiners, a flag (two regional indicators) or a
+// keycap. It recognises the forms emoji pickers produce; it is not a grapheme segmentation.
+func isEmoji(s string) bool {
+	rs := []rune(s)
+	switch {
+	case len(rs) == 0 || len(rs) > MaxAvatarRunes:
+		return false
+	case len(rs) == 2 && isRegional(rs[0]) && isRegional(rs[1]):
+		return true
+	case strings.ContainsRune("0123456789#*", rs[0]) && rs[len(rs)-1] == 0x20E3:
+		return len(rs) == 2 || len(rs) == 3 && rs[1] == 0xFE0F
+	}
+	for i := 0; ; {
+		if i >= len(rs) || !isPictograph(rs[i]) {
+			return false
+		}
+		i++
+		if i < len(rs) && rs[i] == 0xFE0F {
+			i++
+		}
+		if i < len(rs) && isSkinTone(rs[i]) {
+			i++
+		}
+		if i == len(rs) {
+			return true
+		}
+		if rs[i] != 0x200D {
+			return false
+		}
+		i++
+	}
+}
+
+func isPictograph(r rune) bool {
+	switch {
+	case isSkinTone(r), isRegional(r):
+		return false
+	case r == 0xA9, r == 0xAE, r == 0x203C, r == 0x2049, r == 0x2122, r == 0x2139, r == 0x24C2,
+		r == 0x25B6, r == 0x25C0, r == 0x2328, r == 0x23CF, r == 0x2B50, r == 0x2B55, r == 0x3030,
+		r == 0x303D, r == 0x3297, r == 0x3299:
+		return true
+	case r >= 0x2194 && r <= 0x2199, r >= 0x21A9 && r <= 0x21AA, r >= 0x231A && r <= 0x231B,
+		r >= 0x23E9 && r <= 0x23F3, r >= 0x23F8 && r <= 0x23FA, r >= 0x25AA && r <= 0x25AB,
+		r >= 0x25FB && r <= 0x25FE, r >= 0x2600 && r <= 0x27BF, r >= 0x2934 && r <= 0x2935,
+		r >= 0x2B05 && r <= 0x2B07, r >= 0x2B1B && r <= 0x2B1C, r >= 0x1F000 && r <= 0x1FAFF:
+		return true
+	}
+	return false
+}
+
+func isSkinTone(r rune) bool { return r >= 0x1F3FB && r <= 0x1F3FF }
+
+func isRegional(r rune) bool { return r >= 0x1F1E6 && r <= 0x1F1FF }
+
 // Slug is name lower-cased with runs of other characters turned into single dashes, e.g.
 // "Ada Lovelace" → "ada-lovelace". It is empty if name has no ASCII letters or digits.
 func Slug(name string) string {

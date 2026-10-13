@@ -56,6 +56,7 @@ type teammatePath struct {
 type TeammateInput struct {
 	Name       string `json:"name" minLength:"1" maxLength:"64"`
 	Role       string `json:"role,omitempty" maxLength:"200" doc:"A short description of what the teammate does"`
+	Avatar     string `json:"avatar,omitempty" maxLength:"64" doc:"One emoji, or shape:<name> for a generated avatar; omitted shows the initials"`
 	Soul       string `json:"soul,omitempty" maxLength:"16384" doc:"Personality and working rules, as markdown"`
 	Harness    string `json:"harness" enum:"opencode,claude,codex"`
 	ProviderID string `json:"providerId" minLength:"1"`
@@ -322,7 +323,7 @@ func (s *Server) registerTeammates(api huma.API) {
 // teammateFrom validates in and returns the teammate it describes, with defaults filled in.
 func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateInput) (store.Teammate, error) {
 	p := store.Teammate{
-		ID: id, EnvironmentID: env, Name: in.Name, Role: strings.TrimSpace(in.Role), Soul: in.Soul,
+		ID: id, EnvironmentID: env, Name: in.Name, Role: strings.TrimSpace(in.Role), Avatar: in.Avatar, Soul: in.Soul,
 		Harness: in.Harness, ProviderID: in.ProviderID, Model: strings.TrimSpace(in.Model),
 		GitName: strings.TrimSpace(in.GitName), GitEmail: strings.TrimSpace(in.GitEmail),
 	}
@@ -333,8 +334,8 @@ func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateIn
 		p.GitEmail = teammates.DefaultGitEmail(p.Name, id)
 	}
 	for _, err := range []error{
-		teammates.CheckName("teammate", p.Name), teammates.CheckRole(p.Role), teammates.CheckSoul(p.Soul),
-		teammates.CheckGitName(p.GitName), teammates.CheckGitEmail(p.GitEmail),
+		teammates.CheckName("teammate", p.Name), teammates.CheckRole(p.Role), teammates.CheckAvatar(p.Avatar),
+		teammates.CheckSoul(p.Soul), teammates.CheckGitName(p.GitName), teammates.CheckGitEmail(p.GitEmail),
 	} {
 		if err != nil {
 			return p, apiError(err)

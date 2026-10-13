@@ -259,6 +259,38 @@ func TestTeammatesCRUD(t *testing.T) {
 	}
 }
 
+func TestTeammateAvatar(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	base := testOrigin + "/api/environments/" + env.ID + "/teammates"
+	anthropic := createProvider(t, h, env, `{"name":"anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	body := func(avatar string) string {
+		return `{"name":"Ada","harness":"claude","providerId":"` + anthropic.ID + `","model":"m","avatar":"` + avatar + `"}`
+	}
+
+	rec := do(h, "POST", base, body("🧑🏽‍💻"))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create with emoji: %d %s", rec.Code, rec.Body)
+	}
+	ada := decode[store.Teammate](t, rec)
+	if ada.Avatar != "🧑🏽‍💻" {
+		t.Fatalf("avatar %q", ada.Avatar)
+	}
+	rec = do(h, "PUT", base+"/"+ada.ID, body("shape:hexagon"))
+	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.Avatar != "shape:hexagon" {
+		t.Fatalf("generated avatar: %d %+v", rec.Code, got)
+	}
+	rec = do(h, "PUT", base+"/"+ada.ID, body(""))
+	if got := decode[store.Teammate](t, rec); rec.Code != http.StatusOK || got.Avatar != "" {
+		t.Fatalf("back to initials: %d %+v", rec.Code, got)
+	}
+	for _, avatar := range []string{"shape:blob", "🦊🦊", "Ada", "<img src=x>", "data:image/png;base64,AAAA"} {
+		if rec := do(h, "PUT", base+"/"+ada.ID, body(avatar)); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("avatar %q: got %d (%s)", avatar, rec.Code, rec.Body)
+		}
+	}
+}
+
 func TestSandboxTeammateValidation(t *testing.T) {
 	h, s := newTestServer(t)
 	env := newEnvironment(t, s, "work")

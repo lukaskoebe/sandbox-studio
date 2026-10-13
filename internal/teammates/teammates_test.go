@@ -67,3 +67,19 @@ func TestHarnessTable(t *testing.T) {
 		t.Errorf("secret name %q", SecretName("My Provider!", "x"))
 	}
 }
+
+func TestCheckAvatar(t *testing.T) {
+	for _, ok := range []string{"", "shape:hexagon", "🦊", "❤️", "👍🏽", "🧑🏽‍💻", "👨‍👩‍👧", "🇩🇪", "1️⃣", "©"} {
+		if err := CheckAvatar(ok); err != nil {
+			t.Errorf("%q refused: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{
+		"shape:blob", "shape:", "Ada", "1", "#", "🦊🦊", "🦊 ", " 🦊", "🦊\n", "<b>🦊</b>", "🇩", "🦊‍",
+		"👍🏽🏽", "🏽", "\x00", "🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊🦊", "\xff",
+	} {
+		if err := CheckAvatar(bad); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

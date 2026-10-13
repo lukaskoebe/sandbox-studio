@@ -24,8 +24,11 @@ its sandboxes when an agent session starts (`docs/harnesses.md`).
 
 ## Teammates
 
-- Name (unique in the environment), role, soul (markdown, at most 16 KiB), harness,
+- Name (unique in the environment), role, avatar, soul (markdown, at most 16 KiB), harness,
   provider, model, git name and email.
+- The avatar is one emoji or one of the generated avatars, stored as `shape:<name>` (`circle`,
+  `square`, `diamond`, `triangle`, `pentagon`, `hexagon`, `star`, `cross`), which the UI draws
+  in the teammate's color. Empty shows the initials. Nothing is uploaded.
 - The harness must be supported by the provider's kind. API-key providers need a model;
   `openai_compatible` defaults to the provider's model.
 - Git name defaults to the name, git email to `<slug>@agents.invalid`. Both are one line
