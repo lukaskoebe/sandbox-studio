@@ -21,6 +21,11 @@ import { cn } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
 
+/** The buttons: an action, or an allow whose rule expires after an hour. */
+type Choice = Action | "allowHour"
+
+const hour = 60 * 60 * 1000
+
 /** The ports a request is decided for by default: HTTP and HTTPS together, else the requested port. */
 function defaultPorts(port: number) {
   return port === 80 || port === 443 ? "ports 80 and 443" : `port ${port}`
@@ -74,19 +79,28 @@ export function ApprovalDecision({
   const [scope, setScope] = useState<"environment" | "sandbox">("environment")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
-  const busy = (action: Action) =>
-    decide.isPending && decide.variables.body.action === action
+  const [chosen, setChosen] = useState<Choice>()
+  const busy = (choice: Choice) => decide.isPending && chosen === choice
   // A folded choice that differs from the default still shows on the Options button.
   const changed = anyPort || scope === "sandbox"
 
-  const act = (action: Action) =>
+  const act = (choice: Choice) => {
+    setChosen(choice)
+    const rule = { scope, host: pattern, ports: anyPort ? [] : undefined }
     decide.mutate({
       params: { path: { env: approval.environmentId, id: approval.id } },
       body:
-        action === "dismiss"
-          ? { action, scope }
-          : { action, scope, host: pattern, ports: anyPort ? [] : undefined },
+        choice === "dismiss"
+          ? { action: choice, scope }
+          : choice === "allowHour"
+            ? {
+                ...rule,
+                action: "allow",
+                expiresAt: new Date(Date.now() + hour).toISOString(),
+              }
+            : { ...rule, action: choice },
     })
+  }
 
   return (
     <div className="grid grid-cols-1 gap-2">
@@ -151,6 +165,17 @@ export function ApprovalDecision({
               </span>
             </ToggleGroupItem>
           </ToggleGroup>
+          <div className="flex flex-wrap justify-end gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={decide.isPending}
+              onClick={() => act("allowHour")}
+            >
+              {busy("allowHour") && <Spinner />}
+              Allow for 1 hour
+            </Button>
+          </div>
         </>
       )}
       <div className="flex items-center gap-1.5">

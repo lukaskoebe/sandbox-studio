@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from "react"
+import { Fragment, useEffect, useState, type ReactNode } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -48,6 +48,7 @@ import { RuleDialog } from "@/components/rule-dialog"
 import { SectionHeader } from "@/components/section-header"
 import { $api, errorMessage, type Rule } from "@/lib/api/client"
 import {
+  expiryText,
   filterRules,
   groupRules,
   ruleActions,
@@ -88,6 +89,7 @@ function RulesTab() {
   const teammateNames = new Map(
     (teammates.data ?? []).map((p) => [p.id, p.name])
   )
+  const now = useNow()
   const shown = filterRules(rules.data ?? [], filter)
   const groups = groupRules(shown)
 
@@ -258,6 +260,7 @@ function RulesTab() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatAge(r.createdAt)}
+                        <ExpiryNote rule={r} now={now} />
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-0.5">
@@ -327,6 +330,22 @@ function FilterSelect({
       </SelectContent>
     </Select>
   )
+}
+
+/** The current time, refreshed every minute, for text that counts down. */
+function useNow(intervalMs = 60_000) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs)
+    return () => clearInterval(id)
+  }, [intervalMs])
+  return now
+}
+
+/** When a rule stops matching, counted down; nothing for a rule that never expires. */
+function ExpiryNote({ rule, now }: { rule: Rule; now: number }) {
+  const text = expiryText(rule, now)
+  return text ? <span className="block">{text}</span> : null
 }
 
 /** A small monospace label on a rule: its action, origin or a flag. */

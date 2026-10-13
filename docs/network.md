@@ -57,6 +57,11 @@ API, `approval` for rules created by approving or denying a request. `curated` (
 list) and `reviewer` (the AI reviewer) are reserved for later. The origin is read-only and
 set when the rule is created; rules from before origins existed are `manual`.
 
+A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
+within a minute. The approval card's Options offers "Allow for 1 hour"; the API takes
+`expiresAt` when a rule is created and on an allow or deny decision (it must be in the
+future). The Rules tab counts down the time left.
+
 Matching (`policy/match.go`):
 
 - An environment-wide `deny` always wins, so it works as a fence.
