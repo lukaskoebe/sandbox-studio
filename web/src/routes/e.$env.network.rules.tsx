@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react"
+import { Fragment, useState, type ReactNode } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -51,6 +51,7 @@ import {
   filterRules,
   groupRules,
   ruleActions,
+  ruleOrigins,
   ruleScopes,
   type RuleFilter,
 } from "@/lib/network-rules"
@@ -62,6 +63,7 @@ export const Route = createFileRoute("/e/$env/network/rules")({
     q: typeof s.q === "string" && s.q !== "" ? s.q : undefined,
     scope: ruleScopes.find((v) => v === s.scope),
     action: ruleActions.find((v) => v === s.action),
+    origin: ruleOrigins.find((v) => v === s.origin),
   }),
 })
 
@@ -97,7 +99,12 @@ function RulesTab() {
     })
   const clearFilters = () => {
     setQuery("")
-    setFilter({ q: undefined, scope: undefined, action: undefined })
+    setFilter({
+      q: undefined,
+      scope: undefined,
+      action: undefined,
+      origin: undefined,
+    })
   }
 
   return (
@@ -154,6 +161,20 @@ function RulesTab() {
             setFilter({ action: ruleActions.find((a) => a === v) })
           }
         />
+        <FilterSelect
+          label="Origin"
+          value={filter.origin ?? "any"}
+          options={{
+            any: "Any origin",
+            manual: "Manual",
+            approval: "Approval",
+            curated: "Curated",
+            reviewer: "Reviewer",
+          }}
+          onChange={(v) =>
+            setFilter({ origin: ruleOrigins.find((o) => o === v) })
+          }
+        />
       </div>
 
       {rules.isPending ? (
@@ -183,6 +204,7 @@ function RulesTab() {
                 <TableHead>Host</TableHead>
                 <TableHead>Ports</TableHead>
                 <TableHead>Action</TableHead>
+                <TableHead>Origin</TableHead>
                 <TableHead>Scope</TableHead>
                 <TableHead>Note</TableHead>
                 <TableHead>Added</TableHead>
@@ -195,7 +217,7 @@ function RulesTab() {
               {groups.map((group) => (
                 <Fragment key={group.domain}>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={8}>
                       <span className="inline-flex items-center gap-2">
                         <Ident className="font-medium">{group.domain}</Ident>
                         <span className="font-mono text-muted-foreground">
@@ -218,6 +240,9 @@ function RulesTab() {
                       </TableCell>
                       <TableCell>
                         <RuleAction rule={r} />
+                      </TableCell>
+                      <TableCell>
+                        <RuleChip>{r.origin}</RuleChip>
                       </TableCell>
                       <TableCell>
                         {r.sandboxId
@@ -304,6 +329,15 @@ function FilterSelect({
   )
 }
 
+/** A small monospace label on a rule: its action, origin or a flag. */
+function RuleChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset">
+      {children}
+    </span>
+  )
+}
+
 /** A rule's action, then its proxy headers or Caddyfile summary; secret values stay hidden. */
 function RuleAction({ rule }: { rule: Rule }) {
   const names =
@@ -318,9 +352,7 @@ function RuleAction({ rule }: { rule: Rule }) {
   const caddyLineCount = caddyfile ? caddyfile.split(/\r?\n/).length : 0
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset">
-        {rule.action}
-      </span>
+      <RuleChip>{rule.action}</RuleChip>
       {names && (
         <span className="block max-w-40 truncate" title={names}>
           <Ident>{names}</Ident>

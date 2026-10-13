@@ -52,6 +52,11 @@ A rule (`store.Rule`) has a host pattern, ports (empty = any port), an action (`
 `proxy`, `caddy`, `deny`), a scope (sandbox, teammate or environment) and, for `proxy`,
 headers to set (values may use `{secret.NAME}`); for `caddy`, a Caddyfile snippet.
 
+A rule also records its origin: `manual` for rules written on the Rules page or through the
+API, `approval` for rules created by approving or denying a request. `curated` (the shipped
+list) and `reviewer` (the AI reviewer) are reserved for later. The origin is read-only and
+set when the rule is created; rules from before origins existed are `manual`.
+
 Matching (`policy/match.go`):
 
 - An environment-wide `deny` always wins, so it works as a fence.
@@ -64,8 +69,9 @@ Matching (`policy/match.go`):
 
 The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route:
 
-- **Rules** lists the environment's rules. Its search and scope and action filters are URL
-  search params (`q`, `scope`, `action`), so a filtered view can be shared. Rules are grouped
+- **Rules** lists the environment's rules. Its search and scope, action and origin filters are
+  URL search params (`q`, `scope`, `action`, `origin`), so a filtered view can be shared. Each
+  rule shows its origin as a chip. Rules are grouped
   by registrable domain: the last two labels, or three under a short list of two-label
   suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
 - **Requests** lists the pending network approvals; Allow, Deny and Ignore work as on the

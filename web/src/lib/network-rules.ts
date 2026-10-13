@@ -5,12 +5,22 @@ export type RuleScope = (typeof ruleScopes)[number]
 
 export const ruleActions = ["allow", "proxy", "caddy", "deny"] as const
 
+/** Where a rule came from: written by hand, approved from a request, or by a curated list or the reviewer. */
+export const ruleOrigins = [
+  "manual",
+  "approval",
+  "curated",
+  "reviewer",
+] as const
+export type RuleOrigin = (typeof ruleOrigins)[number]
+
 /** The Rules tab's filters, kept in the URL; an unset one matches everything. */
 export type RuleFilter = {
   /** Text the host must contain. */
   q?: string
   scope?: RuleScope
   action?: (typeof ruleActions)[number]
+  origin?: RuleOrigin
 }
 
 /** Two-label public suffixes, under which a domain has three labels: example.co.uk. */
@@ -62,7 +72,8 @@ export function filterRules(rules: Rule[], filter: RuleFilter): Rule[] {
     (r) =>
       r.host.toLowerCase().includes(q) &&
       (!filter.scope || ruleScope(r) === filter.scope) &&
-      (!filter.action || r.action === filter.action)
+      (!filter.action || r.action === filter.action) &&
+      (!filter.origin || r.origin === filter.origin)
   )
 }
 
