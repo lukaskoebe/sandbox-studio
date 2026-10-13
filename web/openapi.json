@@ -122,6 +122,40 @@
         ],
         "type": "object"
       },
+      "ApprovalTeammate": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalScope": {
+            "description": "The scope the card preselects",
+            "enum": [
+              "sandbox",
+              "teammate",
+              "environment"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "patternLevel": {
+            "description": "The host pattern level the teammate last chose, which the card preselects; empty if none",
+            "enum": [
+              "exact",
+              "wildcard"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "approvalScope"
+        ],
+        "type": "object"
+      },
       "ApprovalView": {
         "additionalProperties": false,
         "properties": {
@@ -186,6 +220,9 @@
           },
           "subject": {
             "type": "string"
+          },
+          "teammate": {
+            "$ref": "#/components/schemas/ApprovalTeammate"
           },
           "updatedAt": {
             "format": "date-time",
@@ -1216,6 +1253,20 @@
         ],
         "type": "object"
       },
+      "CopyTeammateInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "targetEnvironmentId": {
+            "description": "The environment to copy the teammate to; not the one it is in",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetEnvironmentId"
+        ],
+        "type": "object"
+      },
       "CreateCheckpointInBody": {
         "additionalProperties": false,
         "properties": {
@@ -1730,6 +1781,98 @@
         ],
         "type": "object"
       },
+      "EnvironmentFile": {
+        "additionalProperties": false,
+        "properties": {
+          "exportedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "studio-environment"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "The environment's name; an import gets a number if it is taken",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "providers": {
+            "description": "LLM providers, without their keys",
+            "items": {
+              "$ref": "#/components/schemas/FileProvider"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "rules": {
+            "description": "Network rules of the environment and of its teammates",
+            "items": {
+              "$ref": "#/components/schemas/FileRule"
+            },
+            "maxItems": 500,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "secrets": {
+            "description": "Secret names and the hosts they bind to, without values",
+            "items": {
+              "$ref": "#/components/schemas/FileSecret"
+            },
+            "maxItems": 500,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "teammates": {
+            "items": {
+              "$ref": "#/components/schemas/FileTeammate"
+            },
+            "maxItems": 64,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "templates": {
+            "items": {
+              "$ref": "#/components/schemas/FileTemplate"
+            },
+            "maxItems": 32,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "version": {
+            "enum": [
+              1
+            ],
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "format",
+          "version",
+          "name",
+          "exportedAt",
+          "providers",
+          "teammates",
+          "rules",
+          "secrets",
+          "templates"
+        ],
+        "type": "object"
+      },
       "ErrorDetail": {
         "additionalProperties": false,
         "properties": {
@@ -2111,6 +2254,203 @@
         },
         "required": [
           "entries"
+        ],
+        "type": "object"
+      },
+      "FileProvider": {
+        "additionalProperties": false,
+        "properties": {
+          "baseUrl": {
+            "description": "openai_compatible only",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "anthropic_api",
+              "openai_api",
+              "openai_compatible",
+              "claude_subscription",
+              "chatgpt_subscription"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "description": "openai_compatible only: the endpoint's single model",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "FileRule": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "allow",
+              "proxy",
+              "caddy",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "caddyfile": {
+            "maxLength": 32768,
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 32,
+            "type": "object"
+          },
+          "host": {
+            "maxLength": 253,
+            "minLength": 1,
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "ports": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "teammate": {
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "action"
+        ],
+        "type": "object"
+      },
+      "FileSecret": {
+        "additionalProperties": false,
+        "properties": {
+          "hosts": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 500,
+            "type": "string"
+          },
+          "teammate": {
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "hosts"
+        ],
+        "type": "object"
+      },
+      "FileTeammate": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalScope": {
+            "enum": [
+              "sandbox",
+              "teammate",
+              "environment"
+            ],
+            "type": "string"
+          },
+          "avatar": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "gitEmail": {
+            "maxLength": 254,
+            "type": "string"
+          },
+          "gitName": {
+            "maxLength": 100,
+            "type": "string"
+          },
+          "harness": {
+            "enum": [
+              "opencode",
+              "claude",
+              "codex"
+            ],
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "provider": {
+            "description": "The name of a provider of this file; empty if the teammate has none",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "role": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "soul": {
+            "maxLength": 16384,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "harness"
+        ],
+        "type": "object"
+      },
+      "FileTemplate": {
+        "additionalProperties": false,
+        "properties": {
+          "spec": {
+            "maxLength": 65536,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "spec"
         ],
         "type": "object"
       },
@@ -2625,6 +2965,40 @@
           "name",
           "status",
           "message"
+        ],
+        "type": "object"
+      },
+      "ImportedEnvironment": {
+        "additionalProperties": false,
+        "properties": {
+          "environment": {
+            "$ref": "#/components/schemas/Environment"
+          },
+          "templates": {
+            "description": "Template specifications of the file, in YAML, to build",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "toAdd": {
+            "description": "Provider keys and secret values to add",
+            "items": {
+              "$ref": "#/components/schemas/ToAdd"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "environment",
+          "toAdd",
+          "templates"
         ],
         "type": "object"
       },
@@ -3627,10 +4001,11 @@
             "type": "string"
           },
           "state": {
-            "description": "login_required until a subscription login is stored",
+            "description": "login_required until a subscription login is stored; key_required until an API key is added",
             "enum": [
               "ready",
-              "login_required"
+              "login_required",
+              "key_required"
             ],
             "type": "string"
           },
@@ -4648,6 +5023,19 @@
       "Teammate": {
         "additionalProperties": false,
         "properties": {
+          "approvalScope": {
+            "description": "The scope the approval cards for this teammate's sandboxes preselect for new rules",
+            "enum": [
+              "sandbox",
+              "teammate",
+              "environment"
+            ],
+            "type": "string"
+          },
+          "avatar": {
+            "description": "One emoji, shape:\u003cname\u003e for a generated avatar, or empty to show the initials",
+            "type": "string"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -4679,6 +5067,7 @@
             "type": "string"
           },
           "providerId": {
+            "description": "Empty while a copied teammate has no provider of its kind in this environment",
             "type": "string"
           },
           "role": {
@@ -4698,6 +5087,8 @@
           "environmentId",
           "name",
           "role",
+          "avatar",
+          "approvalScope",
           "soul",
           "harness",
           "providerId",
@@ -4712,6 +5103,21 @@
       "TeammateInput": {
         "additionalProperties": false,
         "properties": {
+          "approvalScope": {
+            "default": "environment",
+            "description": "The scope the approval cards for this teammate's sandboxes preselect for new rules",
+            "enum": [
+              "sandbox",
+              "teammate",
+              "environment"
+            ],
+            "type": "string"
+          },
+          "avatar": {
+            "description": "One emoji, or shape:\u003cname\u003e for a generated avatar; omitted shows the initials",
+            "maxLength": 64,
+            "type": "string"
+          },
           "gitEmail": {
             "description": "Defaults to \u003cslug\u003e@agents.invalid",
             "maxLength": 254,
@@ -4872,6 +5278,44 @@
         },
         "required": [
           "text"
+        ],
+        "type": "object"
+      },
+      "ToAdd": {
+        "additionalProperties": false,
+        "properties": {
+          "hosts": {
+            "description": "For secret: the hosts the value may be sent to",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "providerKey",
+              "secret"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "providerId": {
+            "description": "For providerKey: the provider to add the key to",
+            "type": "string"
+          },
+          "teammate": {
+            "description": "For secret: the teammate it is scoped to",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
         ],
         "type": "object"
       },
@@ -5666,6 +6110,48 @@
         },
         "tags": [
           "approvals"
+        ]
+      }
+    },
+    "/api/environment-imports": {
+      "post": {
+        "description": "Creates the environment, its providers, teammates, rules and secret names in one transaction; a name already in use gets a number. The reply lists the provider keys and secret values to add, and the template specs to build. The file is at most 2 MiB; unknown fields are refused.",
+        "operationId": "importEnvironment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentFile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportedEnvironment"
+                }
+              }
+            },
+            "description": "The new environment and what is still to add"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create an environment from a .studio-environment file",
+        "tags": [
+          "environments"
         ]
       }
     },
@@ -6727,6 +7213,49 @@
         },
         "tags": [
           "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/export": {
+      "get": {
+        "description": "The providers without their keys, teammates, network rules, secret names with the hosts they bind to, and template specs. Sandboxes, memory, approvals, chats, sandbox-scoped rules, keys and secret values are not included.",
+        "operationId": "exportEnvironment",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentFile"
+                }
+              }
+            },
+            "description": "The environment file"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download an environment as a .studio-environment file",
+        "tags": [
+          "environments"
         ]
       }
     },
@@ -11298,6 +11827,69 @@
               }
             },
             "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/copy": {
+      "post": {
+        "description": "Creates a copy of the teammate in another environment, with its name (a number is added if taken), role, avatar, soul, harness, model, git identity and approval scope. The copy uses the target environment's provider of the same kind, preferring one with the same name; without one it has no provider until one is chosen. Sandboxes, chats, memory, secrets and provider keys are not copied.",
+        "operationId": "copyTeammate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyTeammateInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "Created"
           },
           "default": {
             "content": {
