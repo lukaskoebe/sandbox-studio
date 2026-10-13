@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	msb "github.com/superradcompany/microsandbox/sdk/go"
@@ -71,7 +70,7 @@ func (r *Runtime) Resize(ctx context.Context, name string, size Size) (Resized, 
 		return Resized{}, fmt.Errorf("plan resize: %w", err)
 	}
 	if len(plan.Conflicts) > 0 {
-		return Resized{}, fmt.Errorf("plan resize: %w", errors.New(plan.Conflicts[0].Message))
+		return Resized{}, fmt.Errorf("plan resize: %s", plan.Conflicts[0].Message)
 	}
 	cpus, memory := readResizePlan(plan.Changes)
 	var out Resized
