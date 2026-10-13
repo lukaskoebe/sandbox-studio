@@ -45,6 +45,10 @@ func TestHubUpload(t *testing.T) {
 	if _, err := h.Upload(ctx, "sb1", agentproto.UploadRequest{Name: "big", Size: agentproto.MaxUploadBytes + 1}, strings.NewReader("")); err == nil {
 		t.Fatal("an oversized file was accepted")
 	}
+	// A request line the guest could not read is refused before anything is sent.
+	if _, err := h.Upload(ctx, "sb1", agentproto.UploadRequest{Dir: strings.Repeat("d/", agentproto.MaxUploadDir), Name: "a", Size: 1}, strings.NewReader("x")); err == nil {
+		t.Fatal("a folder path over the limit was sent")
+	}
 	if _, err := h.Upload(ctx, "nope", agentproto.UploadRequest{Name: "a", Size: 1}, strings.NewReader("x")); !errors.Is(err, ErrNotConnected) {
 		t.Fatalf("unknown sandbox: %v", err)
 	}

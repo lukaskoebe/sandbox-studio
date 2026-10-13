@@ -394,6 +394,9 @@ func (h *Hub) Upload(ctx context.Context, id string, req agentproto.UploadReques
 	if req.Size < 0 || req.Size > agentproto.MaxUploadBytes {
 		return out, fmt.Errorf("a file is at most %d MiB", agentproto.MaxUploadBytes>>20)
 	}
+	if len(req.Dir) > agentproto.MaxUploadDir || len(req.Name) > agentproto.MaxUploadName {
+		return out, errors.New("the folder or the file name is too long")
+	}
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}

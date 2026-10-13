@@ -13,8 +13,14 @@ const (
 	ConflictKeep    = "keep" // write the file as the next free "name (2).ext"
 )
 
-// MaxUploadBytes bounds one uploaded file.
-const MaxUploadBytes = 100 << 20
+// MaxUploadBytes bounds one uploaded file. MaxUploadDir and MaxUploadName bound the folder and
+// the name in bytes; they keep the request line far below the guest's limit for it, so the
+// host can always send a request the guest reads, and the body after it.
+const (
+	MaxUploadBytes = 100 << 20
+	MaxUploadDir   = 4096
+	MaxUploadName  = 255 // NAME_MAX: the longest name a directory entry can have
+)
 
 // CodeExists marks an Error for an upload whose name is taken under ConflictFail.
 const CodeExists = "exists"

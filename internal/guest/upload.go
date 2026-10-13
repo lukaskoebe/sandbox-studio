@@ -24,9 +24,6 @@ import (
 // half a file and two uploads can't both take a name. The folder is resolved beneath the
 // workspace without following any symlink, like the browser's reads.
 
-// maxUploadName is NAME_MAX: the longest name a directory entry can have.
-const maxUploadName = 255
-
 // keepTries bounds the "name (n).ext" candidates that ConflictKeep tries.
 const keepTries = 1000
 
@@ -143,7 +140,7 @@ func storeUpload(workspace string, owner [2]int, req agentproto.UploadRequest, b
 // checkUploadName refuses anything but one file name: a separator, a NUL byte, "." and "..",
 // and names longer than a directory entry can be.
 func checkUploadName(name string) error {
-	if name == "" || name == "." || name == ".." || len(name) > maxUploadName || strings.ContainsAny(name, "/\x00") {
+	if name == "" || name == "." || name == ".." || len(name) > agentproto.MaxUploadName || strings.ContainsAny(name, "/\x00") {
 		return fmt.Errorf("invalid file name %q", name)
 	}
 	return nil
@@ -171,7 +168,7 @@ func placeUpload(dir int, tmp, name, conflict string) (string, error) {
 			if i > 1 {
 				candidate = fmt.Sprintf("%s (%d)%s", stem, i, ext)
 			}
-			if len(candidate) > maxUploadName {
+			if len(candidate) > agentproto.MaxUploadName {
 				break
 			}
 			switch err := linkUpload(dir, tmp, candidate); {
