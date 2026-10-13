@@ -2,13 +2,17 @@ package api
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"maps"
+	"net"
 	"net/http"
 	"net/textproto"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,8 +156,12 @@ type RuleInput struct {
 
 // RuleConfigInput is the editable part of a rule's config.
 type RuleConfigInput struct {
-	Headers   map[string]string `json:"headers,omitempty" maxProperties:"32" doc:"proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to."`
-	Caddyfile string            `json:"caddyfile,omitempty" maxLength:"32768" doc:"caddy rules only: the routes of a Caddy site, in Caddyfile syntax, that handle the requests. reverse_proxy may send secrets upstream in header_up as {secret.NAME}, over HTTPS to hosts the secret is bound to."`
+	Headers    map[string]string `json:"headers,omitempty" maxProperties:"32" doc:"proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to."`
+	Caddyfile  string            `json:"caddyfile,omitempty" maxLength:"32768" doc:"caddy rules only: the routes of a Caddy site, in Caddyfile syntax, that handle the requests. reverse_proxy may send secrets upstream in header_up as {secret.NAME}, over HTTPS to hosts the secret is bound to."`
+	Upstream   string            `json:"upstream,omitempty" maxLength:"261" doc:"proxy rules only: a host or host:port to send the requests to instead of the rule's host. The port defaults to the connection's. Secrets go only to the upstream they are bound to."`
+	HostHeader string            `json:"hostHeader,omitempty" maxLength:"253" doc:"proxy rules only: the Host header sent upstream, instead of the host the sandbox asked for"`
+	SNI        string            `json:"sni,omitempty" maxLength:"253" doc:"proxy rules only: the TLS server name sent upstream and checked against its certificate. Defaults to the upstream host"`
+	CA         string            `json:"ca,omitempty" maxLength:"65536" doc:"proxy rules only: PEM certificates trusted for the upstream, in addition to the system's, for upstreams with a private CA"`
 }
 
 // headersNotSet are managed by the HTTP machinery or describe the connection, not the
@@ -178,8 +186,12 @@ func (s *Server) checkRuleConfig(action string, in RuleConfigInput, secrets []st
 	if action == store.ActionCaddy || in.Caddyfile != "" {
 		return s.caddyConfigFrom(action, in, secrets)
 	}
+	config, err := overridesFrom(action, in)
+	if err != nil {
+		return store.RuleConfig{}, err
+	}
 	if len(in.Headers) == 0 {
-		return store.RuleConfig{}, nil
+		return config, nil
 	}
 	if action != store.ActionProxy {
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules set headers")
@@ -206,7 +218,105 @@ func (s *Server) checkRuleConfig(action string, in RuleConfigInput, secrets []st
 		}
 		headers[canonical] = value
 	}
-	return store.RuleConfig{Headers: headers}, nil
+	config.Headers = headers
+	return config, nil
+}
+
+// maxCAs bounds the certificates a proxy rule trusts for its upstream.
+const maxCAs = 8
+
+// overridesFrom checks where a proxy rule sends its requests: the upstream, the Host header, the
+// TLS server name and the CA. Only proxy rules have them.
+func overridesFrom(action string, in RuleConfigInput) (store.RuleConfig, error) {
+	var c store.RuleConfig
+	if in.Upstream == "" && in.HostHeader == "" && in.SNI == "" && in.CA == "" {
+		return c, nil
+	}
+	if action != store.ActionProxy {
+		return c, huma.Error422UnprocessableEntity("only proxy rules can send requests to another upstream, host or CA")
+	}
+	var err error
+	if in.Upstream != "" {
+		if c.Upstream, err = upstreamFrom(in.Upstream); err != nil {
+			return c, err
+		}
+	}
+	if in.HostHeader != "" {
+		if c.HostHeader, err = hostNameFrom("hostHeader", in.HostHeader); err != nil {
+			return c, err
+		}
+	}
+	if in.SNI != "" {
+		if c.SNI, err = hostNameFrom("sni", in.SNI); err != nil {
+			return c, err
+		}
+	}
+	if in.CA != "" {
+		if err := checkCAs(in.CA); err != nil {
+			return c, err
+		}
+		c.CA = in.CA
+	}
+	return c, nil
+}
+
+// upstreamFrom checks an upstream, a host or host:port, and returns it normalized.
+func upstreamFrom(in string) (string, error) {
+	host, port := strings.TrimSpace(in), ""
+	if h, p, err := net.SplitHostPort(host); err == nil {
+		host, port = h, p
+	} else {
+		host = strings.Trim(host, "[]")
+	}
+	name, err := hostNameFrom("upstream", host)
+	if err != nil {
+		return "", err
+	}
+	if port == "" {
+		return name, nil
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return "", huma.Error422UnprocessableEntity(fmt.Sprintf("upstream %s has port %q; ports are 1 to 65535", in, port))
+	}
+	return net.JoinHostPort(name, strconv.Itoa(n)), nil
+}
+
+// hostNameFrom checks a host name or IP address, with no wildcard, and returns it normalized.
+func hostNameFrom(field, in string) (string, error) {
+	host, err := policy.ValidPattern(in)
+	if err != nil || strings.Contains(host, "*") {
+		return "", huma.Error422UnprocessableEntity(fmt.Sprintf("%s %q is not a host name or IP address", field, in))
+	}
+	return host, nil
+}
+
+// checkCAs checks that text holds PEM certificates, and nothing else: a private key has no
+// business in a rule.
+func checkCAs(text string) error {
+	rest := []byte(text)
+	n := 0
+	for {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			return huma.Error422UnprocessableEntity(fmt.Sprintf("the CA holds a %s block; only CERTIFICATE blocks belong there", block.Type))
+		}
+		if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+			return huma.Error422UnprocessableEntity("the CA holds an invalid certificate: " + err.Error())
+		}
+		n++
+	}
+	switch {
+	case n == 0:
+		return huma.Error422UnprocessableEntity("the CA is not PEM-encoded certificates")
+	case n > maxCAs:
+		return huma.Error422UnprocessableEntity(fmt.Sprintf("the CA holds %d certificates; at most %d", n, maxCAs))
+	}
+	return nil
 }
 
 // ruleFrom validates in and returns the rule it describes in environment env.
@@ -218,6 +328,8 @@ func (s *Server) caddyConfigFrom(action string, in RuleConfigInput, secrets []st
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only caddy rules have a Caddyfile")
 	case len(in.Headers) > 0:
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules set headers; a Caddyfile sets them with header_up")
+	case in.Upstream != "" || in.HostHeader != "" || in.SNI != "" || in.CA != "":
+		return store.RuleConfig{}, huma.Error422UnprocessableEntity("only proxy rules can send requests to another upstream, host or CA")
 	case strings.TrimSpace(in.Caddyfile) == "":
 		return store.RuleConfig{}, huma.Error422UnprocessableEntity("caddy rules need a Caddyfile")
 	case s.Caddy == nil:

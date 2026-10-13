@@ -26,6 +26,7 @@ type fakePolicy struct {
 	rules      map[string]store.Rule // by host
 	errs       map[string]error      // by host: the connection's answer is this error
 	terminates map[string]bool       // by host: some rule names a method or path for it
+	refused    map[string]store.Rule // by host: lookups of the host are refused by this deny rule
 }
 
 // Terminates is true for the hosts in terminates.
@@ -49,6 +50,12 @@ func (p *fakePolicy) Decide(_ context.Context, req policy.Request) (store.Rule, 
 		return store.Rule{}, policy.ErrPerRequest
 	}
 	return store.Rule{}, policy.ErrUndecided
+}
+
+// Refused is the deny rule the fake gives a lookup, by host; nothing else is refused.
+func (p *fakePolicy) Refused(_ context.Context, _, _, host string) (store.Rule, bool, error) {
+	r, ok := p.refused[host]
+	return r, ok, nil
 }
 
 type fakeNames map[netip.Addr]string

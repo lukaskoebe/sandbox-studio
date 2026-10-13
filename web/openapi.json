@@ -1174,6 +1174,7 @@
             "type": "boolean"
           },
           "port": {
+            "description": "0 for a name refused at lookup, before any connection",
             "format": "int64",
             "type": "integer"
           },
@@ -2403,6 +2404,10 @@
             ],
             "type": "string"
           },
+          "ca": {
+            "maxLength": 65536,
+            "type": "string"
+          },
           "caddyfile": {
             "maxLength": 32768,
             "type": "string"
@@ -2417,6 +2422,10 @@
           "host": {
             "maxLength": 253,
             "minLength": 1,
+            "type": "string"
+          },
+          "hostHeader": {
+            "maxLength": 253,
             "type": "string"
           },
           "note": {
@@ -2434,8 +2443,16 @@
               "null"
             ]
           },
+          "sni": {
+            "maxLength": 253,
+            "type": "string"
+          },
           "teammate": {
             "maxLength": 64,
+            "type": "string"
+          },
+          "upstream": {
+            "maxLength": 261,
             "type": "string"
           }
         },
@@ -3977,6 +3994,58 @@
         ],
         "type": "object"
       },
+      "PrivateHost": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "A host name or a wildcard, as in rules: git.company.local or *.company.local",
+            "type": "string"
+          },
+          "ports": {
+            "description": "Ports the host may be reached on. Empty means 80 and 443",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "host",
+          "ports"
+        ],
+        "type": "object"
+      },
+      "PrivateHostInput": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "A host name or a wildcard, such as git.company.local or *.company.local",
+            "maxLength": 253,
+            "minLength": 1,
+            "type": "string"
+          },
+          "ports": {
+            "description": "Ports the host may be reached on. Empty or omitted means 80 and 443",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
       "Progress": {
         "additionalProperties": false,
         "properties": {
@@ -4631,6 +4700,9 @@
       "RuleConfig": {
         "additionalProperties": false,
         "properties": {
+          "ca": {
+            "type": "string"
+          },
           "caddyfile": {
             "type": "string"
           },
@@ -4639,6 +4711,15 @@
               "type": "string"
             },
             "type": "object"
+          },
+          "hostHeader": {
+            "type": "string"
+          },
+          "sni": {
+            "type": "string"
+          },
+          "upstream": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -4646,6 +4727,11 @@
       "RuleConfigInput": {
         "additionalProperties": false,
         "properties": {
+          "ca": {
+            "description": "proxy rules only: PEM certificates trusted for the upstream, in addition to the system's, for upstreams with a private CA",
+            "maxLength": 65536,
+            "type": "string"
+          },
           "caddyfile": {
             "description": "caddy rules only: the routes of a Caddy site, in Caddyfile syntax, that handle the requests. reverse_proxy may send secrets upstream in header_up as {secret.NAME}, over HTTPS to hosts the secret is bound to.",
             "maxLength": 32768,
@@ -4658,6 +4744,21 @@
             "description": "proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to.",
             "maxProperties": 32,
             "type": "object"
+          },
+          "hostHeader": {
+            "description": "proxy rules only: the Host header sent upstream, instead of the host the sandbox asked for",
+            "maxLength": 253,
+            "type": "string"
+          },
+          "sni": {
+            "description": "proxy rules only: the TLS server name sent upstream and checked against its certificate. Defaults to the upstream host",
+            "maxLength": 253,
+            "type": "string"
+          },
+          "upstream": {
+            "description": "proxy rules only: a host or host:port to send the requests to instead of the rule's host. The port defaults to the connection's. Secrets go only to the upstream they are bound to.",
+            "maxLength": 261,
+            "type": "string"
           }
         },
         "type": "object"
@@ -4958,6 +5059,26 @@
           "lastEventAt",
           "injections",
           "writes"
+        ],
+        "type": "object"
+      },
+      "SetPrivateHostsInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "hosts": {
+            "description": "The whole list, which replaces the current one",
+            "items": {
+              "$ref": "#/components/schemas/PrivateHostInput"
+            },
+            "maxItems": 64,
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "hosts"
         ],
         "type": "object"
       },
@@ -9403,6 +9524,112 @@
         },
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/environments/{env}/private-hosts": {
+      "get": {
+        "description": "The names whose connections may reach private addresses, such as company hosts behind a VPN.",
+        "operationId": "listPrivateHosts",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrivateHost"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "put": {
+        "description": "Replaces the private hosts list. Only the owner changes it, in Network settings.",
+        "operationId": "setPrivateHosts",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPrivateHostsInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrivateHost"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
         ]
       }
     },

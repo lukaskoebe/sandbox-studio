@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { KeyIcon, PlusIcon, XIcon } from "@phosphor-icons/react"
+import { CaretRightIcon, KeyIcon, PlusIcon, XIcon } from "@phosphor-icons/react"
 import { CaddyfileEditor } from "./caddyfile-editor"
 import {
   AlertDialog,
@@ -14,6 +14,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 import {
   Dialog,
   DialogContent,
@@ -46,6 +51,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   $api,
@@ -177,6 +183,13 @@ function RuleForm({
   )
   const [headers, setHeaders] = useState(() => initialHeaders(rule))
   const [caddyfile, setCaddyfile] = useState(rule?.config.caddyfile ?? "")
+  const [upstream, setUpstream] = useState(rule?.config.upstream ?? "")
+  const [hostHeader, setHostHeader] = useState(rule?.config.hostHeader ?? "")
+  const [sni, setSni] = useState(rule?.config.sni ?? "")
+  const [ca, setCa] = useState(rule?.config.ca ?? "")
+  const [advancedOpen, setAdvancedOpen] = useState(
+    () => !!(upstream || hostHeader || sni || ca)
+  )
   // "environment", a sandbox ID, or "teammate:" and a teammate ID.
   const [scope, setScope] = useState(
     rule?.sandboxId ??
@@ -234,6 +247,20 @@ function RuleForm({
       return
     setFormError(undefined)
     const headerValues = action === "proxy" ? headerPayload(headers) : undefined
+    // Where a proxy rule sends its requests; an empty field keeps the default.
+    const overrides =
+      action === "proxy"
+        ? {
+            upstream: upstream.trim() || undefined,
+            hostHeader: hostHeader.trim() || undefined,
+            sni: sni.trim() || undefined,
+            ca: ca.trim() || undefined,
+          }
+        : {}
+    const config = {
+      ...(action === "caddy" ? { caddyfile } : { headers: headerValues }),
+      ...overrides,
+    }
     const body = {
       host: host.trim(),
       ports: portList,
@@ -246,12 +273,9 @@ function RuleForm({
         ? scope.slice("teammate:".length)
         : undefined,
       note: note.trim() || undefined,
-      config:
-        action === "caddy"
-          ? { caddyfile }
-          : headerValues
-            ? { headers: headerValues }
-            : undefined,
+      config: Object.values(config).some((v) => v !== undefined)
+        ? config
+        : undefined,
     }
     if (rule) update.mutate({ params: { path: { env, id: rule.id } }, body })
     else create.mutate({ params: { path: { env } }, body })
@@ -357,6 +381,84 @@ function RuleForm({
             clearFormError()
           }}
         />
+      )}
+      {action === "proxy" && (
+        <Collapsible
+          open={advancedOpen}
+          onOpenChange={setAdvancedOpen}
+          className="group/advanced grid gap-3"
+        >
+          <CollapsibleTrigger className="flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30">
+            <CaretRightIcon className="size-3 transition-transform group-data-[open]/advanced:rotate-90" />
+            Advanced
+          </CollapsibleTrigger>
+          <CollapsibleContent className="grid gap-3">
+            <Field>
+              <FieldLabel htmlFor="rule-upstream">Upstream</FieldLabel>
+              <Input
+                id="rule-upstream"
+                autoComplete="off"
+                placeholder="The host"
+                value={upstream}
+                onChange={(e) => {
+                  setUpstream(e.target.value)
+                  clearFormError()
+                }}
+              />
+              <FieldDescription>
+                Send the requests to this host or host:port instead. Secrets go
+                only to the upstream they are bound to.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="rule-host-header">Host header</FieldLabel>
+              <Input
+                id="rule-host-header"
+                autoComplete="off"
+                placeholder="The host the sandbox asked for"
+                value={hostHeader}
+                onChange={(e) => {
+                  setHostHeader(e.target.value)
+                  clearFormError()
+                }}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="rule-sni">SNI</FieldLabel>
+              <Input
+                id="rule-sni"
+                autoComplete="off"
+                placeholder="The upstream"
+                value={sni}
+                onChange={(e) => {
+                  setSni(e.target.value)
+                  clearFormError()
+                }}
+              />
+              <FieldDescription>
+                The TLS server name, which the upstream's certificate must
+                match.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="rule-ca">CA</FieldLabel>
+              <Textarea
+                id="rule-ca"
+                className="font-mono text-xs"
+                placeholder="-----BEGIN CERTIFICATE-----"
+                value={ca}
+                onChange={(e) => {
+                  setCa(e.target.value)
+                  clearFormError()
+                }}
+              />
+              <FieldDescription>
+                PEM certificates trusted for the upstream, besides the system's,
+                for a private CA.
+              </FieldDescription>
+            </Field>
+          </CollapsibleContent>
+        </Collapsible>
       )}
       {action === "caddy" && (
         <CaddyField

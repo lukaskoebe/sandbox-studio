@@ -81,6 +81,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerUploads(api, mux)
 	s.registerPreviews(api)
 	s.registerNetwork(api)
+	s.registerPrivateHosts(api)
 	s.registerSecrets(api)
 	s.registerMemory(api)
 	s.registerMemoryAgent(api)

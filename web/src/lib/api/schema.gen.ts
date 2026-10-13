@@ -800,6 +800,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/private-hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The names whose connections may reach private addresses, such as company hosts behind a VPN. */
+        get: operations["listPrivateHosts"];
+        /** @description Replaces the private hosts list. Only the owner changes it, in Network settings. */
+        put: operations["setPrivateHosts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/providers": {
         parameters: {
             query?: never;
@@ -2125,7 +2143,10 @@ export interface components {
             id: number;
             /** @description Studio handled the HTTP requests (proxy rules and hosts with secrets) */
             intercepted?: boolean;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 0 for a name refused at lookup, before any connection
+             */
             port: number;
             /**
              * Format: int64
@@ -2574,14 +2595,18 @@ export interface components {
         FileRule: {
             /** @enum {string} */
             action: "allow" | "proxy" | "caddy" | "deny";
+            ca?: string;
             caddyfile?: string;
             headers?: {
                 [key: string]: string;
             };
             host: string;
+            hostHeader?: string;
             note?: string;
             ports?: number[] | null;
+            sni?: string;
             teammate?: string;
+            upstream?: string;
         };
         FileSecret: {
             hosts: string[] | null;
@@ -3035,6 +3060,18 @@ export interface components {
             port: number;
             url: string;
         };
+        PrivateHost: {
+            /** @description A host name or a wildcard, as in rules: git.company.local or *.company.local */
+            host: string;
+            /** @description Ports the host may be reached on. Empty means 80 and 443 */
+            ports: number[] | null;
+        };
+        PrivateHostInput: {
+            /** @description A host name or a wildcard, such as git.company.local or *.company.local */
+            host: string;
+            /** @description Ports the host may be reached on. Empty or omitted means 80 and 443 */
+            ports?: number[] | null;
+        };
         Progress: {
             /** @description Why the step failed */
             error?: string;
@@ -3255,18 +3292,30 @@ export interface components {
             teammateId?: string;
         };
         RuleConfig: {
+            ca?: string;
             caddyfile?: string;
             headers?: {
                 [key: string]: string;
             };
+            hostHeader?: string;
+            sni?: string;
+            upstream?: string;
         };
         RuleConfigInput: {
+            /** @description proxy rules only: PEM certificates trusted for the upstream, in addition to the system's, for upstreams with a private CA */
+            ca?: string;
             /** @description caddy rules only: the routes of a Caddy site, in Caddyfile syntax, that handle the requests. reverse_proxy may send secrets upstream in header_up as {secret.NAME}, over HTTPS to hosts the secret is bound to. */
             caddyfile?: string;
             /** @description proxy rules only: headers set on every request, replacing the sandbox's. Values may reference secrets as {secret.NAME}, which are only sent over HTTPS to hosts the secret is bound to. */
             headers?: {
                 [key: string]: string;
             };
+            /** @description proxy rules only: the Host header sent upstream, instead of the host the sandbox asked for */
+            hostHeader?: string;
+            /** @description proxy rules only: the TLS server name sent upstream and checked against its certificate. Defaults to the upstream host */
+            sni?: string;
+            /** @description proxy rules only: a host or host:port to send the requests to instead of the rule's host. The port defaults to the connection's. Secrets go only to the upstream they are bound to. */
+            upstream?: string;
         };
         RuleInput: {
             /**
@@ -3368,6 +3417,10 @@ export interface components {
             teammateId: string;
             /** Format: int64 */
             writes: number;
+        };
+        SetPrivateHostsInBody: {
+            /** @description The whole list, which replaces the current one */
+            hosts: components["schemas"]["PrivateHostInput"][] | null;
         };
         SetTrackersInBody: {
             /** @description Deny the listed domains to the environment's browsers unless a rule allows them */
@@ -5793,6 +5846,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listPrivateHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivateHost"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setPrivateHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPrivateHostsInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivateHost"][] | null;
                 };
             };
             /** @description Error */

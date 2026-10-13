@@ -21,7 +21,7 @@ type Conn struct {
 	Started time.Time  `json:"started"`
 	Ended   *time.Time `json:"ended,omitempty"`
 	Host    string     `json:"host"`
-	Port    int        `json:"port"`
+	Port    int        `json:"port" doc:"0 for a name refused at lookup, before any connection"`
 	Address string     `json:"address" doc:"The destination as the sandbox asked for it"`
 	Source  string     `json:"source" enum:"tls,http,dns,socks,ip" doc:"Where the host name came from"`
 	Verdict string     `json:"verdict" enum:"pending,open,allowed,denied,undecided,failed"`

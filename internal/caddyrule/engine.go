@@ -36,8 +36,9 @@ import (
 // Caddy's state is global, so a process has one Engine.
 type Engine struct {
 	Dir string // Caddy's storage, which Caddy needs even without certificates to manage
-	// Dial connects to upstreams. It must refuse what the gateway refuses.
-	Dial    func(ctx context.Context, network, addr string) (net.Conn, error)
+	// Dial connects to upstreams that the requests' own dialer doesn't cover. It must refuse
+	// what the gateway refuses.
+	Dial    Dialer
 	RootCAs *x509.CertPool // verifies upstreams; nil uses the system's roots
 
 	mu      sync.Mutex
@@ -159,14 +160,31 @@ func (e *Engine) server(ruleID string) *caddyhttp.Server {
 	return nil
 }
 
+// A Dialer connects to an upstream.
+type Dialer func(ctx context.Context, network, addr string) (net.Conn, error)
+
 // Transport sends requests through a loaded rule. values holds the values of the secrets
 // the rule references, by name; each is only sent to the hosts c.Secrets lists for it, even
-// if the rule changes in between. isTLS tells the rule the sandbox spoke TLS.
-func (e *Engine) Transport(ruleID string, c Compiled, values map[string]string, isTLS bool) http.RoundTripper {
-	return &transport{engine: e, ruleID: ruleID, secrets: &ruleSecrets{values: values, hosts: c.Secrets}, tls: isTLS}
+// if the rule changes in between. isTLS tells the rule the sandbox spoke TLS. dial connects
+// the rule's upstreams for the sandbox's connection; nil uses Engine.Dial.
+func (e *Engine) Transport(ruleID string, c Compiled, values map[string]string, isTLS bool, dial Dialer) http.RoundTripper {
+	return &transport{engine: e, ruleID: ruleID, secrets: &ruleSecrets{values: values, hosts: c.Secrets}, tls: isTLS, dial: dial}
 }
 
 type secretsKey struct{}
+
+// dialKey carries the Dialer of a request's connection through Caddy to its transport.
+type dialKey struct{}
+
+// contextDialer dials with the Dialer the request carries, or with fallback if it carries none.
+func contextDialer(fallback Dialer) Dialer {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if dial, ok := ctx.Value(dialKey{}).(Dialer); ok {
+			return dial(ctx, network, addr)
+		}
+		return fallback(ctx, network, addr)
+	}
+}
 
 // ruleSecrets travels with a request through Caddy to the transport, which is the only
 // place secrets are filled in.
@@ -196,6 +214,7 @@ type transport struct {
 	ruleID  string
 	secrets *ruleSecrets
 	tls     bool
+	dial    Dialer // nil uses Engine.Dial
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -203,7 +222,11 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if srv == nil {
 		return nil, errors.New("the Caddy rule is not loaded")
 	}
-	in := req.Clone(context.WithValue(req.Context(), secretsKey{}, t.secrets))
+	ctx := context.WithValue(req.Context(), secretsKey{}, t.secrets)
+	if t.dial != nil {
+		ctx = context.WithValue(ctx, dialKey{}, t.dial)
+	}
+	in := req.Clone(ctx)
 	in.URL.Scheme, in.URL.Host = "", ""
 	in.RequestURI = in.URL.RequestURI()
 	in.RemoteAddr = "0.0.0.0:0"
@@ -329,7 +352,7 @@ func (t *guardedTransport) Provision(ctx caddy.Context) error {
 		return err
 	}
 	t.Transport.Proxy = nil
-	t.Transport.DialContext = e.Dial
+	t.Transport.DialContext = contextDialer(e.Dial)
 	t.Transport.DialTLSContext = nil
 	if t.Transport.TLSClientConfig != nil && e.RootCAs != nil {
 		t.Transport.TLSClientConfig.RootCAs = e.RootCAs

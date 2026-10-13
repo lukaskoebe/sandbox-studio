@@ -19,17 +19,19 @@ type Resolvers struct {
 	servers map[string]*dnsproxy.Server
 }
 
-// Start runs the resolver of a sandbox unless it is already running.
-func (r *Resolvers) Start(sandboxID string, port int) error {
+// Start runs the resolver of a sandbox unless it is already running, and sets its hooks.
+func (r *Resolvers) Start(sandboxID string, port int, hooks dnsproxy.Hooks) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.servers[sandboxID]; ok {
+	if s, ok := r.servers[sandboxID]; ok {
+		s.SetHooks(hooks)
 		return nil
 	}
 	s, err := dnsproxy.Listen(net.JoinHostPort("127.0.0.1", strconv.Itoa(port)), r.Upstreams, r.Log)
 	if err != nil {
 		return err
 	}
+	s.SetHooks(hooks)
 	if r.servers == nil {
 		r.servers = map[string]*dnsproxy.Server{}
 	}
