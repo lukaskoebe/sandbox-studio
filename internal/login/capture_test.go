@@ -48,3 +48,24 @@ func TestDeviceLoginAndFirstURL(t *testing.T) {
 		t.Fatalf("first URL %q", got)
 	}
 }
+
+// Claude Code breaks a long URL or token over lines itself; the lines that continue it are
+// joined, and the text after it is not.
+func TestUnwrapsBrokenLines(t *testing.T) {
+	text := "Open the page below on your computer and sign in.\n\n" +
+		"https://claude.com/cai/oauth/authorize?cod  \n" +
+		"  e=true&client_id=9d1c&response_type=code\n" +
+		"&state=abc\n\nPaste code here if prompted >\n"
+	if got := FirstURL(text); got != "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c&response_type=code&state=abc" {
+		t.Fatalf("URL %q", got)
+	}
+	half := len(tokenText) / 2
+	text = "Your OAuth token (valid for 1 year):\n\n" + tokenText[:half] + "\n" + tokenText[half:] + "\n\nStore this token securely.\n"
+	if tok, ok := ClaudeToken(text); !ok || tok != tokenText {
+		t.Fatalf("token %q, %v", tok, ok)
+	}
+	// A URL followed by words on the next line stays as it is.
+	if got := FirstURL("Visit https://claude.ai/x\nand sign in"); got != "https://claude.ai/x" {
+		t.Fatalf("URL %q", got)
+	}
+}

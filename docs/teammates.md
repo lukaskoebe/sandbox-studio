@@ -37,7 +37,7 @@ other sandboxes, no project, and network only to the hosts its kind needs
 `saving`, `done`, `failed`, or `idle`).
 
 - **Claude Pro/Max (`claude_subscription`).** `claude setup-token` runs in a tmux session named
-  `login` in the login VM, which reaches `console.anthropic.com` and `api.anthropic.com`. The
+  `login` in the login VM, which reaches `platform.claude.com` (where the code is exchanged) and `api.anthropic.com`. The
   user opens the page it prints, signs in, and pastes the code into the terminal the dialog
   shows. Studio reads the long-lived token from the pane, stores it as the provider's secret
   bound to `api.anthropic.com`, and removes the VM. If it can't read the token, the dialog
