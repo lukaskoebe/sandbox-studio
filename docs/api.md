@@ -11,10 +11,11 @@
   `/api/approvals`, `/api/events`, `/api/health`, `/api/provider-kinds`, `/api/settings/ui`,
   `/api/setup` (the guided setup, for the environment named in `?env=`) and `/api/system/*`
   (doctor, autostart, updates).
-- Streaming endpoints are plain handlers outside huma (`api.go`, `exports.go`): SSE at
+- Streaming endpoints are plain handlers outside huma (`api.go`, `exports.go`, `uploads.go`): SSE at
   `/api/events` for change notices (see [approvals](approvals.md#realtime-and-ui)) and at
   `…/chats/{chat}/stream` for a chat; WebSockets (`coder/websocket`) for terminal attach and
-  the browser live view; sandbox export download and import upload.
+  the browser live view; sandbox export download and import upload; a file upload into a
+  sandbox's workspace (`uploads.go`, see [guest agent](guest-agent.md#uploads)).
 - The handler chain is `api.Guard(auth.Middleware(preview.Route(…, mux)))`; the embedded UI
   (`internal/webui`) is served at `/`.
 - The e2e build (`-tags e2e`) adds a control API under `/api/e2e/` for the fake runtime. It
