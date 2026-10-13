@@ -417,7 +417,7 @@ function TurnRow({
                   {turn.prompt}
                 </BubbleContent>
               </Bubble>
-              <span className="font-mono text-[0.625rem] text-muted-foreground">
+              <span className="self-end font-mono text-[0.625rem] text-muted-foreground">
                 {turn.origin === "terminal" && "in the terminal · "}
                 {time(at)}
               </span>
@@ -425,13 +425,11 @@ function TurnRow({
           </Message>
         )
       )}
-      {turn.toolCount > 0 && <Tools turn={turn} link={open} />}
+      {turn.toolCount > 0 && (
+        <Tools turn={turn} link={turn.answer ? undefined : open} />
+      )}
       {turn.answer && (
-        <Answer
-          teammate={teammate}
-          text={turn.answer}
-          link={turn.toolCount > 0 ? undefined : open}
-        />
+        <Answer teammate={teammate} text={turn.answer} link={open} />
       )}
       {turn.marker && (
         <Marker variant="separator" className="text-destructive">
@@ -486,7 +484,7 @@ function Answer({
 }
 
 /** The tools of a turn on one line; it opens to their titles. */
-function Tools({ turn, link }: { turn: Turn; link: ReactNode }) {
+function Tools({ turn, link }: { turn: Turn; link?: ReactNode }) {
   const tools = turn.tools ?? []
   const last = tools.at(-1)
   const failed = tools.filter((t) => t.status === "failed").length

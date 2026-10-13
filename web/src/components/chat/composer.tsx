@@ -155,10 +155,10 @@ export function Composer({
 
   const shown = problem ?? error
   return (
-    <div className="grid gap-1.5">
+    <div className="grid grid-cols-1 gap-1.5">
       <div
         className={cn(
-          "grid gap-2 rounded-lg border bg-background p-2 shadow-xs focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30",
+          "grid grid-cols-1 gap-2 rounded-lg border bg-background p-2 shadow-xs focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30",
           shown && "border-destructive/60",
           className
         )}
