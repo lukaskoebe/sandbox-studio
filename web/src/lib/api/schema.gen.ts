@@ -955,6 +955,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/providers/{id}/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The sign-in of a subscription provider as the dialog shows it: idle when none is running. */
+        get: operations["getProviderLogin"];
+        put?: never;
+        /** @description Starts the sign-in of a subscription provider. Its CLI runs in a system VM, the user finishes in their browser, and Studio stores the result as the provider's login. Poll the status, or attach the terminal, which the dialog shows. */
+        post: operations["startProviderLogin"];
+        /** @description Ends a running sign-in and removes its system VM. Without one it does nothing. */
+        delete: operations["cancelProviderLogin"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/providers/{id}/login/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stores a Claude Code token the user copied from the terminal, when Studio couldn't read it there. It ends a running sign-in. */
+        post: operations["pasteProviderLoginToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/rules": {
         parameters: {
             query?: never;
@@ -3097,6 +3133,16 @@ export interface components {
             /** @description Why it happened: the search explanation, threshold or extraction details */
             why?: unknown;
         };
+        LoginView: {
+            /** @description The one-time code of ChatGPT's device sign-in */
+            code?: string;
+            message?: string;
+            paste: boolean;
+            /** @enum {string} */
+            state: "idle" | "starting" | "waiting" | "saving" | "done" | "failed";
+            /** @description The page the user opens to finish the sign-in */
+            url?: string;
+        };
         MarkerBody: {
             /** @enum {string} */
             kind: "stopped" | "interrupted" | "error" | "limit" | "notice" | "compaction" | "terminal" | "undo";
@@ -3165,6 +3211,10 @@ export interface components {
         };
         ParseForgeURLRequest: {
             url: string;
+        };
+        PasteTokenInBody: {
+            /** @description The long-lived token from claude setup-token, as the terminal printed it */
+            token: string;
         };
         PermissionBody: {
             options: components["schemas"]["PermissionOption"][] | null;
@@ -3282,10 +3332,10 @@ export interface components {
             secretId?: string;
             secretName?: string;
             /**
-             * @description login_required until a subscription login is stored; key_required until an API key is added
+             * @description login_required until a subscription login is stored; expired when a ChatGPT login lapsed and could not be refreshed; key_required until an API key is added
              * @enum {string}
              */
-            state: "ready" | "login_required" | "key_required";
+            state: "ready" | "login_required" | "key_required" | "expired";
             /** Format: date-time */
             updatedAt: string;
         };
@@ -6454,6 +6504,144 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getProviderLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Provider ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    startProviderLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Provider ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cancelProviderLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Provider ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    pasteProviderLoginToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Provider ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasteTokenInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderView"];
+                };
             };
             /** @description Error */
             default: {
