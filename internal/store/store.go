@@ -225,8 +225,9 @@ type Sandbox struct {
 	DockerMiB     int       `json:"dockerMiB"`
 	CreatedAt     time.Time `json:"createdAt"`
 	DNSPort       int       `json:"-"` // loopback port of the sandbox's Studio resolver
-	// Kind is empty for ordinary sandboxes and SandboxKindBrowser for a teammate's browser
-	// VM, which Studio drives and never shows as a sandbox.
+	// Kind is empty for ordinary sandboxes, SandboxKindBrowser for a teammate's browser VM and
+	// a system kind (system.go) for the VMs of subscription logins. Studio drives those and
+	// never shows them as sandboxes.
 	Kind string `json:"-"`
 	// ForkedFromID is the sandbox this one was forked from, at ForkedFromGeneration, at
 	// ForkedAt; empty for sandboxes that weren't forked. There is no foreign key: the source
