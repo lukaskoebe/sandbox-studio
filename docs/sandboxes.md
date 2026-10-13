@@ -104,7 +104,31 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
 
 Defaults: 2 CPUs, 4 GiB memory, 20 GiB workspace, 20 GiB Docker disk. The 4 GiB home disk is
 fixed. `max_memory` defaults to the initial memory and is passed as the VM's memory ceiling.
-A template's spec fixes the resources of sandboxes created from it. There is no live resize.
+A template's spec fixes the resources of sandboxes created from it, and a rebase builds the
+new generation from the template, so it resets the CPUs and memory as well.
+
+`PUT /api/environments/{env}/sandboxes/{id}/resources` with `{"cpus", "memoryMiB"}` sets the
+CPUs (1–64) and the memory size (at least 512 MiB). The sandbox dashboard's Resources dialog
+calls it. Studio asks msb's `modify` for a dry run and applies each changed resource as the
+plan says:
+
+- **live**: a running sandbox's VM takes the change now. msb allows this up to the VM's
+  boot-time capacity: its memory ceiling, and its CPU maximum, which Studio sets to the CPU
+  count the VM boots with.
+- **nextStart**: the change is saved in the sandbox's config and used at its next start, and
+  the running VM is left alone. Stopped and suspended sandboxes always get this, and so does a
+  running sandbox's change above its boot-time capacity.
+
+The response's `applied` says how each resource changed: `live`, `nextStart` or `unchanged`.
+Live changes are made one resource per call, and the rest in one call with msb's no-restart
+policy, so a resize never restarts a running VM. A memory size above the ceiling raises the
+ceiling to match, as msb requires. If a step fails, the steps before it stay in effect, and the
+catalog records what took effect.
+
+Verified vs. pending: the Studio side is covered by fake-runtime and API tests. Nothing has run
+against a live VM yet. A live run should check that a CPU decrease and a memory decrease apply
+to the running VM without a restart, and that a growth above the boot-time capacity reports
+`nextStart` and takes effect at the next start.
 
 ## Checkpoints
 
@@ -165,6 +189,8 @@ An in-place pause (msb pause/resume): vCPUs stop, memory stays with the VM proce
 resume continues every process, TUIs and tmux included. It frees no memory and doesn't
 survive a host reboot. The agent session is dropped on suspend and reconnects on resume.
 Fork, rebase and checkpoints refuse a suspended sandbox; Stop and Delete resume it first.
+A resize of a suspended sandbox is saved for its next start (see [resources](#resources)).
+
 A full (memory) snapshot plus stop would need restore, so it waits on #1736 too.
 
 ## Fork, rebase, export and import
