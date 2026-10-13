@@ -73,7 +73,7 @@ func str(desc string, extra ...any) map[string]any {
 
 var kinds = []string{"preference", "decision", "fact", "procedure", "event"}
 
-// Tools are the memory tools; their arguments go to Studio unchanged.
+// Tools are the memory and task tools; their arguments go to Studio unchanged.
 var Tools = []Tool{
 	{agentproto.MethodMemorySearch, "Search your memory and the shared memory (facts and pages), ranked by relevance. Each hit says why it matched.",
 		obj([]string{"query"}, map[string]any{
@@ -109,6 +109,26 @@ var Tools = []Tool{
 	{agentproto.MethodForget, "Retract one of your own facts that turned out wrong.",
 		obj([]string{"fact_id"}, map[string]any{
 			"fact_id": str("The fact to retract"),
+		})},
+	{agentproto.MethodTasksList, "List your tasks: the ones not done, or all of them with include_done.",
+		obj(nil, map[string]any{
+			"include_done": map[string]any{"type": "boolean", "description": "Include the done tasks too; default false"},
+		})},
+	{agentproto.MethodTaskCreate, "Add a task to your own list, for work to come back to. The user sees it in the Tasks tab.",
+		obj([]string{"title"}, map[string]any{
+			"title":   str("What to do, in one line", "maxLength", 200),
+			"details": str("Markdown: context, steps, what done means", "maxLength", 8192),
+			"due":     str("A day, YYYY-MM-DD", "maxLength", 10),
+		})},
+	{agentproto.MethodTaskUpdateStatus, "Set the status of one of your tasks.",
+		obj([]string{"task_id", "status"}, map[string]any{
+			"task_id": str("A task ID from tasks_list"),
+			"status":  str("open, in_progress or done", "enum", []string{"open", "in_progress", "done"}),
+		})},
+	{agentproto.MethodTaskAddNote, "Append a note to one of your tasks' details, such as what you did or found.",
+		obj([]string{"task_id", "note"}, map[string]any{
+			"task_id": str("A task ID from tasks_list"),
+			"note":    str("Markdown, added after the details", "maxLength", 8192),
 		})},
 }
 
