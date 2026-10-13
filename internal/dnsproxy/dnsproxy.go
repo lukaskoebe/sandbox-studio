@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -104,6 +105,14 @@ func (n *Names) evict(t time.Time) {
 	delete(n.m, victim)
 }
 
+// Hooks decide how a server answers the names its sandbox asks for. A nil hook changes nothing.
+type Hooks struct {
+	// Virtualize reports whether the name's addresses are answered with virtual ones: microsandbox
+	// drops private answers before they reach a sandbox, so each A record becomes an address from
+	// the virtual range that the gateway maps back to the name, and AAAA records are left out.
+	Virtualize func(name string) bool
+}
+
 // Server answers DNS queries on one loopback address over UDP and TCP by forwarding them.
 type Server struct {
 	// Names is set by Listen; read-only.
@@ -117,11 +126,16 @@ type Server struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
+	hooks     atomic.Pointer[Hooks]
+	virtual   virtualAddrs
 
 	mu     sync.Mutex
 	closed bool
 	conns  map[net.Conn]struct{}
 }
+
+// SetHooks sets the hooks. Queries being resolved keep the hooks they started with.
+func (s *Server) SetHooks(h Hooks) { s.hooks.Store(&h) }
 
 // Listen starts a resolver on addr (e.g. "127.0.0.1:17100"), UDP and TCP on the same port,
 // forwarding to upstreams ("ip:port") in order. log may be nil (use slog.New(slog.DiscardHandler)).
@@ -303,6 +317,9 @@ func (s *Server) resolve(network string, q query) []byte {
 	if resp, ok := s.local(q); ok {
 		return resp
 	}
+	name := strings.TrimSuffix(strings.ToLower(q.question.Name.String()), ".")
+	hooks := s.hooks.Load()
+	virtualize := hooks != nil && hooks.Virtualize != nil && hooks.Virtualize(name)
 	for _, up := range s.upstreams {
 		resp, err := s.exchange(network, q.raw, up)
 		if err == nil && !answers(resp, q) {
@@ -312,10 +329,126 @@ func (s *Server) resolve(network string, q query) []byte {
 			s.log.Debug("upstream failed", "upstream", up, "network", network, "err", err)
 			continue
 		}
+		if virtualize {
+			if resp = s.virtualize(resp, q); resp == nil {
+				return servfail(q)
+			}
+		}
 		s.record(resp)
 		return resp
 	}
 	return servfail(q)
+}
+
+// virtualRange is where virtual addresses come from: 198.18.0.0/15, which is never public. The
+// first two are Studio's own services (VirtualAddr) and are never handed out.
+var virtualRange = netip.MustParseAddr("198.18.0.0").As4()
+
+const virtualCount = 1 << 17
+
+// virtualAddrs hands out one virtual address per name and address it answers for, so that a
+// connection to the address names the host to the gateway. It is safe for concurrent use.
+type virtualAddrs struct {
+	mu   sync.Mutex
+	by   map[string]netip.Addr
+	next uint32
+}
+
+func (v *virtualAddrs) addr(name string, real netip.Addr) netip.Addr {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	key := name + " " + real.String()
+	if a, ok := v.by[key]; ok {
+		return a
+	}
+	if v.by == nil {
+		v.by = map[string]netip.Addr{}
+	}
+	// Wraps around after virtualCount addresses, which only a long-lived sandbox reaches.
+	v.next = 2 + v.next%(virtualCount-2)
+	n := binary.BigEndian.Uint32(virtualRange[:]) + v.next
+	a := netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)})
+	v.by[key] = a
+	return a
+}
+
+// virtualize rebuilds resp, the upstream's answer to q, with virtual addresses for its A records
+// (see Hooks.Virtualize). The records keep the name q asks for and their TTLs. An AAAA question
+// gets no answers, and other records are left out. It returns resp unchanged if q isn't an
+// address question or resp has no address records, and nil if the reply can't be built.
+func (s *Server) virtualize(resp []byte, q query) []byte {
+	if q.question.Type != dnsmessage.TypeA && q.question.Type != dnsmessage.TypeAAAA {
+		return resp
+	}
+	var p dnsmessage.Parser
+	h, err := p.Start(resp)
+	if err != nil {
+		return nil
+	}
+	if err := p.SkipAllQuestions(); err != nil {
+		return nil
+	}
+	type record struct {
+		ttl  uint32
+		addr netip.Addr
+	}
+	var as []record
+	addresses := false
+	for {
+		rh, err := p.AnswerHeader()
+		if errors.Is(err, dnsmessage.ErrSectionDone) {
+			break
+		}
+		if err != nil {
+			return nil
+		}
+		switch rh.Type {
+		case dnsmessage.TypeA:
+			r, err := p.AResource()
+			if err != nil {
+				return nil
+			}
+			addresses = true
+			if q.question.Type == dnsmessage.TypeA {
+				as = append(as, record{rh.TTL, netip.AddrFrom4(r.A)})
+			}
+		case dnsmessage.TypeAAAA:
+			addresses = true
+			if err := p.SkipAnswer(); err != nil {
+				return nil
+			}
+		default:
+			if err := p.SkipAnswer(); err != nil {
+				return nil
+			}
+		}
+	}
+	if !addresses {
+		return resp
+	}
+	name := strings.TrimSuffix(strings.ToLower(q.question.Name.String()), ".")
+	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{
+		ID:                 h.ID,
+		Response:           true,
+		RecursionDesired:   h.RecursionDesired,
+		RecursionAvailable: true,
+		RCode:              h.RCode,
+	})
+	if b.StartQuestions() != nil || b.Question(q.question) != nil || b.StartAnswers() != nil {
+		return nil
+	}
+	for _, r := range as {
+		hdr := dnsmessage.ResourceHeader{Name: q.question.Name, Class: dnsmessage.ClassINET, TTL: r.ttl}
+		virtual := s.virtual.addr(name, r.addr)
+		if b.AResource(hdr, dnsmessage.AResource{A: virtual.As4()}) != nil {
+			return nil
+		}
+	}
+	msg, err := b.Finish()
+	if err != nil {
+		return nil
+	}
+	return msg
 }
 
 // exchange sends q to one upstream and returns its reply. It gives up after upstreamTimeout,

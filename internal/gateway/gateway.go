@@ -82,7 +82,7 @@ func (g *Gateway) Attach(sb store.Sandbox) (runtime.Egress, error) {
 	if sb.DNSPort == 0 {
 		return runtime.Egress{}, ErrNoNetwork
 	}
-	if err := g.Resolvers.Start(sb.ID, sb.DNSPort); err != nil {
+	if err := g.Resolvers.Start(sb.ID, sb.DNSPort, g.dnsHooks(sb)); err != nil {
 		return runtime.Egress{}, fmt.Errorf("sandbox resolver: %w", err)
 	}
 	env := PasswordEnv(sb.ID)

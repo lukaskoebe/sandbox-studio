@@ -79,6 +79,15 @@ func ValidPrivateHost(h store.PrivateHost) (store.PrivateHost, error) {
 	return store.PrivateHost{Host: pattern, Ports: ports}, nil
 }
 
+// listedName reports whether the private hosts list covers host on some port.
+func listedName(list []store.PrivateHost, host string) bool {
+	host = policy.Normalize(host)
+	if net.ParseIP(host) != nil {
+		return false
+	}
+	return slices.ContainsFunc(list, func(h store.PrivateHost) bool { return policy.Covers(h.Host, host) })
+}
+
 // listed reports whether the private hosts list covers a connection to host:port. Only names
 // can be listed: an IP address is never a private host, so a sandbox can't reach private
 // addresses by naming them.
