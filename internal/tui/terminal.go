@@ -208,6 +208,12 @@ func (c *Client) Attach(ctx context.Context, env, id, name string, cols, rows ui
 	return conn, nil
 }
 
+// AttachTerminal shows a running sandbox's main terminal in this one, as the TUI does, until the
+// user detaches with Ctrl-] or the sandbox ends the terminal.
+func AttachTerminal(ctx context.Context, c *Client, env, sandbox string) error {
+	return (&attachment{ctx: ctx, client: c, env: env, sandbox: sandbox, in: os.Stdin, out: os.Stdout}).Run()
+}
+
 // attachTo shows a sandbox's terminal. Only a running sandbox has one; the others say what to do.
 func (m *app) attachTo(sb *sandboxes.View) tea.Cmd {
 	if sb == nil {

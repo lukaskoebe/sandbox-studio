@@ -18,6 +18,7 @@ data locations, repository layout, security model, testing and conventions.
 | [API, auth and storage](api.md) | huma/OpenAPI, streaming, login and preview auth, SQLite and migrations | `internal/api`, `internal/webauth`, `internal/store` |
 | [Frontend](frontend.md) | stack, routes, development | `web/` |
 | [Terminal UI](tui.md) | `studio tui`: screens, keys, sign-in, terminal attach | `internal/tui` |
+| [Command line](cli.md) | `studio ls`, `ask`, `approve` and the other commands: design, exit statuses, completion | `internal/cli` |
 | [Template builds](template-builds.md) | specs, build worker, registry, instances | `internal/templatebuild`, `internal/templateregistry` |
 | [Rebase and fork](rebase.md) | workspace and home copy between VMs | `internal/sandboxes` |
 | [Export and import](export-import.md) | `.studio-sandbox` files | `internal/sandboxes` |

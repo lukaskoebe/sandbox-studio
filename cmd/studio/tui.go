@@ -22,3 +22,12 @@ func runTUI(ctx context.Context, addr string) error {
 	}
 	return tui.Run(ctx, tui.Options{Addr: addr, Control: control})
 }
+
+// connectCLI signs the command line in to the Studio at addr as the local owner, as the TUI does.
+func connectCLI(ctx context.Context, addr string) (*tui.Client, error) {
+	control, err := controlCredential(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return tui.Connect(ctx, addr, control)
+}

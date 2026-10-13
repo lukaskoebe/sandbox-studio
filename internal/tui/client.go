@@ -55,7 +55,7 @@ func Connect(ctx context.Context, addr, control string) (*Client, error) {
 		return nil, err
 	}
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-		return nil, errors.New("the terminal UI connects to a loopback address only")
+		return nil, errors.New("Studio's clients connect to a loopback address only")
 	}
 	c := &Client{
 		addr: addr,
@@ -65,7 +65,7 @@ func Connect(ctx context.Context, addr, control string) (*Client, error) {
 		},
 	}
 	if !c.running(ctx) {
-		return nil, fmt.Errorf("%w at %s. Start it with `studio`, then run `studio tui` again", ErrNotRunning, addr)
+		return nil, fmt.Errorf("%w at %s. Start it with `studio`, then try again", ErrNotRunning, addr)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -73,11 +73,11 @@ func Connect(ctx context.Context, addr, control string) (*Client, error) {
 		Token string `json:"token"`
 	}
 	if _, err := c.send(ctx, http.MethodPost, "/api/auth/launch", http.Header{"Authorization": {"Bearer " + control}}, nil, &ticket); err != nil {
-		return nil, fmt.Errorf("Studio refused the terminal UI's sign-in (run it as the user Studio runs as): %w", err)
+		return nil, fmt.Errorf("Studio refused the sign-in (run it as the user Studio runs as): %w", err)
 	}
 	resp, err := c.send(ctx, http.MethodPost, "/api/auth/exchange", nil, map[string]string{"token": ticket.Token}, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Studio refused the terminal UI's session: %w", err)
+		return nil, fmt.Errorf("Studio refused the session: %w", err)
 	}
 	for _, cookie := range resp.Cookies() {
 		if cookie.Name == webauth.SessionCookie {
@@ -85,7 +85,7 @@ func Connect(ctx context.Context, addr, control string) (*Client, error) {
 		}
 	}
 	if c.session == "" {
-		return nil, errors.New("Studio did not start a session for the terminal UI")
+		return nil, errors.New("Studio did not start a session")
 	}
 	return c, nil
 }
@@ -155,6 +155,13 @@ func (c *Client) Decide(ctx context.Context, env, id string, d Decision) (api.Ap
 	var out api.ApprovalView
 	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/approvals/"+id+"/decide", nil, d, &out)
 	return out, err
+}
+
+// Do makes one API call for clients other than the TUI, such as the command line: in, when not
+// nil, is sent as JSON, and a success answer is decoded into out when out is not nil.
+func (c *Client) Do(ctx context.Context, method, path string, in, out any) error {
+	_, err := c.send(ctx, method, path, nil, in, out)
+	return err
 }
 
 // Subscribe opens the change notifications (/api/events). The channel closes when the stream

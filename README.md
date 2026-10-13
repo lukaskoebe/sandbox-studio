@@ -102,7 +102,9 @@ On first start Studio installs the matching microsandbox runtime into `~/.micros
 it pulls the base image the first time a sandbox needs it, so it needs network access. Open
 the printed link; it expires after ten minutes and works once. Run `studio login-url` for a
 new one while Studio is running. Or run `studio tui` in a terminal for a keyboard client of the
-running Studio: sandboxes, approvals and terminals ([docs/tui.md](docs/tui.md)). Data lives in
+running Studio: sandboxes, approvals and terminals ([docs/tui.md](docs/tui.md)), or commands
+such as `studio ls`, `studio ask <sandbox> "<prompt>"` and `studio approve <id>` for scripts
+([docs/cli.md](docs/cli.md)). Data lives in
 the user data directory (`~/.local/share/sandbox-studio` on Linux,
 `~/Library/Application Support/Sandbox Studio` or `%LOCALAPPDATA%\Sandbox Studio`); set
 `SANDBOX_STUDIO_HOME` to move it.

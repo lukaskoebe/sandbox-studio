@@ -35,6 +35,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/ca"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
+	"github.com/lukaskoebe/sandbox-studio/internal/cli"
 	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
@@ -93,6 +94,12 @@ func main() {
 		}
 		fmt.Println(link)
 		return
+	}
+	if cli.Commands(flag.Arg(0)) {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		status := cli.Run(ctx, cli.DefaultOptions(*addr, connectCLI), flag.Args())
+		stop()
+		os.Exit(status)
 	}
 	if flag.Arg(0) == "tui" {
 		if err := runTUI(context.Background(), *addr); err != nil {
