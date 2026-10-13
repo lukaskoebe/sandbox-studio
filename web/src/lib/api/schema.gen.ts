@@ -597,6 +597,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/memory/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description One scope as a markdown file: its pages and active facts, with front matter. Importing the file into a scope reads it back. */
+        get: operations["exportMemory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/memory/facts": {
         parameters: {
             query?: never;
@@ -664,6 +681,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/memory/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Imports a file made by export into a scope. The file is checked in full first. Pages and facts the scope has already are skipped; the rest is stored with tier document. */
+        post: operations["importMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/memory/pages": {
         parameters: {
             query?: never;
@@ -709,6 +743,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["appendMemoryTimeline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The memory's quality numbers: facts per status, judge verdicts, conflicts, open suggestions, the latest consolidation run and what sessions got in the last week. */
+        get: operations["getMemoryQuality"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -777,6 +828,57 @@ export interface paths {
         get: operations["getMemorySessionLog"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Open suggestions about a scope's facts: a teammate fact to propose for shared memory, or a fact whose page should be a core page. Nothing is applied until accepted. */
+        get: operations["listMemorySuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/suggestions/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Accepts a suggestion. A promotion proposes the fact for shared memory through a memory.share approval, which the user decides in the inbox; a core page becomes a core page if the scope's core budget has room. */
+        post: operations["acceptMemorySuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/suggestions/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Dismisses a suggestion. It is not made again. */
+        post: operations["dismissMemorySuggestion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2321,6 +2423,11 @@ export interface components {
              * @description Conflicts opened for the user
              */
             conflicts: number;
+            /**
+             * Format: int64
+             * @description Facts that got a context: they stay, and surface only where it is named
+             */
+            contextual: number;
             /** Format: int64 */
             costMicros: number;
             /**
@@ -2358,6 +2465,11 @@ export interface components {
              * @description Judge answers rejected as malformed; nothing was changed for them
              */
             rejected: number;
+            /**
+             * Format: int64
+             * @description Suggestions opened: a teammate fact to promote, or a core page
+             */
+            suggested: number;
             /** Format: int64 */
             superseded: number;
             /** @description ID of the teammate whose provider's utility model judged */
@@ -2436,6 +2548,8 @@ export interface components {
             authorTeammate?: string;
             /** Format: double */
             confidence: number;
+            /** @description The context the fact holds in: searches surface it only when they name all of its words */
+            context?: string;
             /** Format: date-time */
             createdAt: string;
             entityIds: string[] | null;
@@ -2466,6 +2580,8 @@ export interface components {
             attribute?: string;
             /** Format: double */
             confidence?: number;
+            /** @description A context the fact holds in, e.g. renart; empty when it holds everywhere */
+            context?: string;
             entityIds?: string[] | null;
             /** @enum {string} */
             kind: "preference" | "decision" | "fact" | "procedure" | "event";
@@ -2754,6 +2870,31 @@ export interface components {
             /** @enum {string} */
             status: "ok" | "warn" | "fail";
         };
+        ImportInBody: {
+            /** @description A file made by export, at most 2 MiB */
+            markdown: string;
+            /** @description shared or teammate:<id>; the file must be for this scope */
+            scope: string;
+        };
+        ImportResult: {
+            /**
+             * Format: int64
+             * @description Facts created
+             */
+            facts: number;
+            /** @description What differed from the file, e.g. a core page imported as a plain page because the core budget is full */
+            notes?: string[] | null;
+            /**
+             * Format: int64
+             * @description Pages created
+             */
+            pages: number;
+            /**
+             * Format: int64
+             * @description Pages with a slug the scope has already, and facts whose text it has already
+             */
+            skipped: number;
+        };
         ImportedEnvironment: {
             environment: components["schemas"]["Environment"];
             /** @description Template specifications of the file, in YAML, to build */
@@ -2905,6 +3046,10 @@ export interface components {
             /** @enum {string} */
             kind: "stopped" | "interrupted" | "error" | "limit" | "notice" | "compaction" | "terminal" | "undo";
             text: string;
+        };
+        MemoryExportView: {
+            filename: string;
+            markdown: string;
         };
         NavigateBrowserInBody: {
             /** @description An ephemeral session's ID; empty for the persistent profile */
@@ -3118,6 +3263,46 @@ export interface components {
             teammate?: string;
             /** @description How Studio pushes once approved, such as over SSH to ssh://git@host/repo with the pinned host key */
             upstream?: string;
+        };
+        QualityView: {
+            /** @description Conflicts per status: open, resolved */
+            conflicts: {
+                [key: string]: number;
+            };
+            /**
+             * Format: int64
+             * @description Live facts that hold in a context only
+             */
+            contextual: number;
+            /** @description Facts per status: active, superseded, disputed, retracted */
+            facts: {
+                [key: string]: number;
+            };
+            /**
+             * Format: int64
+             * @description Items put into sessions in the last seven days: context packs and recalls
+             */
+            injected: number;
+            /** @description The latest consolidation run of the environment, of any scope */
+            lastRun?: components["schemas"]["DreamRun"];
+            /**
+             * Format: int64
+             * @description Agent sessions with activity in the last seven days
+             */
+            sessions: number;
+            /** @description Open suggestions per kind: promote, core */
+            suggestions: {
+                [key: string]: number;
+            };
+            /** @description Cached judge verdicts, per verdict */
+            verdicts: {
+                [key: string]: number;
+            };
+            /**
+             * Format: int64
+             * @description Facts written from sessions in the last seven days
+             */
+            writes: number;
         };
         QuestionAnswer: {
             /** @enum {string} */
@@ -3405,6 +3590,18 @@ export interface components {
         SubmitInBody: {
             /** @description Template specification in YAML */
             source: string;
+        };
+        Suggestion: {
+            /** Format: date-time */
+            createdAt: string;
+            fact: components["schemas"]["Fact"];
+            id: string;
+            /** @enum {string} */
+            kind: "promote" | "core";
+            /** @description Why it is suggested */
+            reason: string;
+            /** @enum {string} */
+            status: "open" | "accepted" | "dismissed";
         };
         TakeoverInBody: {
             /** @description true: the user drives and agent calls to the session pause; false: hand back to the agents */
@@ -5113,6 +5310,41 @@ export interface operations {
             };
         };
     };
+    exportMemory: {
+        parameters: {
+            query?: {
+                /** @description shared or teammate:<id> */
+                scope?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryExportView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listMemoryFacts: {
         parameters: {
             query?: {
@@ -5353,6 +5585,42 @@ export interface operations {
             };
         };
     };
+    importMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listMemoryPages: {
         parameters: {
             query?: {
@@ -5563,6 +5831,38 @@ export interface operations {
             };
         };
     };
+    getMemoryQuality: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listMemoryScopes: {
         parameters: {
             query?: never;
@@ -5692,6 +5992,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LogEntry"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMemorySuggestions: {
+        parameters: {
+            query?: {
+                /** @description shared or teammate:<id>: the scope whose facts the suggestions are about */
+                scope?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suggestion"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    acceptMemorySuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suggestion"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    dismissMemorySuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suggestion"];
                 };
             };
             /** @description Error */
