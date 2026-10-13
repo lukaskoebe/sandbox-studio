@@ -21,8 +21,9 @@ var systemHosts = map[string][]string{
 var buildHosts = []string{
 	// apt: the Debian archives and the base image's Docker repository.
 	"deb.debian.org", "security.debian.org", "download.docker.com",
-	// mise: its version lists, Node.js, Go, and the precompiled Python builds on GitHub.
-	"mise-versions.jdx.dev", "nodejs.org", "go.dev", "dl.google.com",
+	// mise: its version lists, Node.js, Go, Python's version index, and the precompiled Python
+	// builds on GitHub.
+	"mise-versions.jdx.dev", "nodejs.org", "go.dev", "dl.google.com", "downloads.python.org",
 	"github.com", "api.github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com",
 	// The pinned Nix release.
 	"releases.nixos.org",
