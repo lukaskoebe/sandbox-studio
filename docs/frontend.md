@@ -45,7 +45,7 @@ to an environment.
 | `/e/$env/teammates/$id/browser` | the teammate's browser: live view, history, rules |
 | `/e/$env/teammates/$id/settings` | edit the teammate, or delete it |
 | `/e/$env/settings` | redirects to `general` |
-| `/e/$env/settings/general` | work mode, start at login, updates (the whole installation) |
+| `/e/$env/settings/general` | work mode, start at login, updates (the whole installation), and "Open setup" (`/setup`) once Home's setup card is gone |
 | `/e/$env/settings/providers` | AI providers of the environment |
 | `/e/$env/settings/git` | forges and git push review of the environment |
 | `/e/$env/settings/templates` | template builds and templates of the environment |
