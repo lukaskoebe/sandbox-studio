@@ -47,6 +47,8 @@ import {
 import { Ident } from "@/components/ident"
 import { RuleDialog } from "@/components/rule-dialog"
 import { TrackerBlocking } from "@/components/tracker-blocking"
+import { CuratedList } from "@/components/curated-list"
+import { LevelSection } from "@/components/security-level"
 import { SectionHeader } from "@/components/section-header"
 import { $api, errorMessage, type Rule } from "@/lib/api/client"
 import {
@@ -118,6 +120,7 @@ function RulesTab() {
 
   return (
     <div className="space-y-3">
+      <LevelSection env={env} />
       <SectionHeader
         title="Rules"
         icon={ShieldCheckIcon}
@@ -308,6 +311,7 @@ function RulesTab() {
           </Table>
         </div>
       )}
+      <CuratedList env={env} />
       <TrackerBlocking env={env} />
       <RuleDialog
         env={env}

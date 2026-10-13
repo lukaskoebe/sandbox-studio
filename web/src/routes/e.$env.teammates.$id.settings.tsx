@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { TrashIcon } from "@phosphor-icons/react"
+import { ShieldCheckIcon, TrashIcon } from "@phosphor-icons/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +14,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { SectionHeader } from "@/components/section-header"
+import { TeammateLevelSelect } from "@/components/security-level"
 import { Button } from "@/components/ui/button"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { TeammateForm } from "@/components/teammate-form"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
@@ -43,6 +45,21 @@ function TeammateSettings() {
         providers={providers.data}
         onSaved={() => toast.success("Teammate saved")}
       />
+      <section className="space-y-3 border-t pt-6">
+        <SectionHeader
+          title="Network security level"
+          icon={ShieldCheckIcon}
+          area="network"
+        />
+        <Field>
+          <FieldLabel htmlFor="teammate-security-level">Level</FieldLabel>
+          <TeammateLevelSelect env={env} teammate={teammate} />
+          <FieldDescription>
+            The level of this teammate's sandboxes. Environment default follows
+            the environment's level, set under Network.
+          </FieldDescription>
+        </Field>
+      </section>
       <section className="space-y-3 border-t pt-6">
         <SectionHeader title={`Delete ${teammate.name}`} icon={TrashIcon} />
         <p className="text-xs text-muted-foreground">
