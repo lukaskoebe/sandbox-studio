@@ -32,7 +32,8 @@ import (
 // instead (dns.go), which the gateway maps back to the name. Every address the dialer connects
 // to is checked against the name it was dialed for. Loopback, link-local (the cloud metadata
 // address among them), unspecified and multicast addresses, Studio's virtual services
-// (198.18.0.0/15), and Studio's own listening ports stay refused for every name.
+// (198.18.0.0/15), the host's own private addresses and Studio's own listening ports stay
+// refused for every name.
 
 // privateRanges are the private addresses a listed name may resolve to: RFC 1918, carrier-grade
 // NAT (100.64.0.0/10, which VPNs such as Tailscale use) and IPv6 unique local addresses.
@@ -148,8 +149,32 @@ func checkPrivate(reserved []uint16) func(network, address string, _ syscall.Raw
 		if !privateAddr(ap.Addr()) {
 			return fmt.Errorf("refusing to connect to %s: not a public or private address", ap.Addr())
 		}
+		if !public(ap.Addr()) && hostAddr(ap.Addr()) {
+			return fmt.Errorf("refusing to connect to %s: an address of this computer", ap.Addr())
+		}
 		return nil
 	}
+}
+
+// interfaceAddrs lists the host's own addresses; tests replace it.
+var interfaceAddrs = net.InterfaceAddrs
+
+// hostAddr reports whether ip is one of the host's own addresses, whose services (a dev server
+// on 0.0.0.0, say) a private host must not reach. It fails closed.
+func hostAddr(ip netip.Addr) bool {
+	addrs, err := interfaceAddrs()
+	if err != nil {
+		return true
+	}
+	ip = ip.Unmap()
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok {
+			if own, ok := netip.AddrFromSlice(n.IP); ok && own.Unmap() == ip {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // reservedPorts are the ports of Studio's own listeners, which no private host is dialed on.

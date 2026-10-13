@@ -147,7 +147,8 @@ environment's private hosts list (Settings → Network) is the opt-in for such h
   carrier-grade NAT (100.64/10, which Tailscale uses). Public addresses stay reachable as before.
 - Stays refused for every name: loopback, link-local (including the cloud metadata address
   169.254.169.254), unspecified and multicast addresses, `198.18.0.0/15` (Studio's virtual
-  services) and Studio's own ports.
+  services), the host's own private addresses (so a dev server on `0.0.0.0` stays out of
+  reach) and Studio's own ports.
 - A name not on the list stays refused private addresses, whatever DNS says, so a name that
   rebinds to a private address is still blocked. An IP address is never a private host: a
   sandbox can't reach a private address by naming it.
@@ -160,7 +161,9 @@ environment's private hosts list (Settings → Network) is the opt-in for such h
   Ports default to 80 and 443; other ports, such as 22 for SSH, must be listed.
 
 **Names.** The sandbox asks its own resolver, which asks the host's resolvers, so the VPN's
-split DNS applies (on Linux, through systemd-resolved's routing domains). microsandbox drops private answers before they reach a sandbox,
+split DNS applies (on Linux, through systemd-resolved's routing domains). Listed names never
+go to the public fallback resolvers (1.1.1.1, 9.9.9.9), so internal names don't leak when the
+host's resolver is down. microsandbox drops private answers before they reach a sandbox,
 so for a listed name the resolver answers with a virtual address from `198.18.0.0/15`, which
 the gateway maps back to the name, as it does for `*.studio.internal`. Lookups of listed names
 get IPv4 addresses only. When the sandbox connects, the gateway dials the name, not the

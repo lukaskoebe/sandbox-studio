@@ -245,3 +245,18 @@ func TestDialGuardResolvesNames(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckPrivateRefusesHostAddresses(t *testing.T) {
+	saved := interfaceAddrs
+	interfaceAddrs = func() ([]net.Addr, error) {
+		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.1.5"), Mask: net.CIDRMask(24, 32)}}, nil
+	}
+	t.Cleanup(func() { interfaceAddrs = saved })
+	check := checkPrivate(nil)
+	if err := check("tcp", "192.168.1.5:3000", nil); err == nil {
+		t.Fatal("a private host reached the host's own address")
+	}
+	if err := check("tcp", "192.168.1.6:443", nil); err != nil {
+		t.Fatalf("another private address: %v", err)
+	}
+}

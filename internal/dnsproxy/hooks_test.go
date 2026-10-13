@@ -135,3 +135,20 @@ func TestVirtualAddressesArePerNameAndAddress(t *testing.T) {
 		seen[a] = true
 	}
 }
+
+func TestVirtualizedNamesSkipFallbacks(t *testing.T) {
+	up := startUpstream(t, fakeAnswer)
+	saved := fallbackUpstreams
+	fallbackUpstreams = []string{up.addr}
+	t.Cleanup(func() { fallbackUpstreams = saved })
+	srv := listen(t, up.addr)
+	srv.SetHooks(Hooks{Virtualize: func(name string) bool { return name == "www.example.test" }})
+
+	h, _ := parseReply(t, udpExchange(t, srv.Addr(), buildQuery(0x4567, wwwName, dnsmessage.TypeA)))
+	if h.RCode != dnsmessage.RCodeServerFailure {
+		t.Fatalf("private host through a fallback: %+v", h)
+	}
+	if n := len(up.queries()); n != 0 {
+		t.Fatalf("a private host was sent to a fallback resolver %d times", n)
+	}
+}

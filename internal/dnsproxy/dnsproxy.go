@@ -327,6 +327,11 @@ func (s *Server) resolve(network string, q query) []byte {
 	}
 	virtualize := hooks != nil && hooks.Virtualize != nil && hooks.Virtualize(name)
 	for _, up := range s.upstreams {
+		// A virtualized name is a private host: the public fallbacks can't answer it and must
+		// not learn the company's internal names.
+		if virtualize && slices.Contains(fallbackUpstreams, up) {
+			continue
+		}
 		resp, err := s.exchange(network, q.raw, up)
 		if err == nil && !answers(resp, q) {
 			err = errMismatch
