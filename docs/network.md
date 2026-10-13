@@ -37,10 +37,10 @@ Per connection (`gateway.go`):
 5. Act:
    - `allow`: dial the **name** (not the IP the sandbox picked) through a public-only dialer
      and splice the bytes.
-   - `proxy` and `caddy` rules, and any web connection to a host a secret is bound to, are
-     intercepted: TLS is terminated with a certificate from the environment's CA, then each
-     HTTP request is checked, rewritten and sent on over a new connection to the same host.
-     Non-web traffic under such a rule fails.
+   - `proxy` and `caddy` rules, any web connection to a host a secret is bound to, and every
+     HTTPS connection of a browser VM are intercepted: TLS is terminated with a certificate from
+     the environment's CA, then each HTTP request is checked, rewritten and sent on over a new
+     connection to the same host. Non-web traffic under such a rule fails.
    - `deny`, a dismissed approval, or no answer in time: HTTP and intercepted TLS get a
      readable 403 (`X-Sandbox-Studio: refused`) telling the agent what happened and whether
      to retry; other protocols are closed.

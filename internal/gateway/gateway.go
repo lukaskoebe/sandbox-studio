@@ -218,7 +218,10 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 	web := proto == "tls" || proto == "http"
-	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy
+	// A browser VM's HTTPS is always terminated, whatever rule allows it: the browser trusts the
+	// environment's CA, and its requests are checked one by one (docs/network.md).
+	browserTLS := sb.Kind == store.SandboxKindBrowser && proto == "tls"
+	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy || browserTLS
 	if bound, _ := boundTo(all, host); handled || len(bound) > 0 && web {
 		if !web {
 			problem = rule.Action + " rules only handle HTTP and TLS connections"

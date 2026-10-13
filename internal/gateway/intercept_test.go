@@ -79,6 +79,7 @@ type seen struct {
 
 type interceptHarness struct {
 	*harness
+	envID string
 	envCA *x509.CertPool // what sandboxes of the environment trust
 	upCA  *x509.CertPool // what the upstream servers' certificates chain to
 
@@ -105,7 +106,7 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 		t.Fatal(err)
 	}
 	authority := &ca.Authority{Store: st, Sealer: plainSealer{}}
-	h := &interceptHarness{envCA: caPool(t, authority, env.ID), upCA: caPool(t, authority, upEnv.ID)}
+	h := &interceptHarness{envID: env.ID, envCA: caPool(t, authority, env.ID), upCA: caPool(t, authority, upEnv.ID)}
 
 	echo := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h.mu.Lock()
@@ -238,7 +239,13 @@ func caPool(t *testing.T, a *ca.Authority, envID string) *x509.CertPool {
 // roots.
 func (h *interceptHarness) client(t *testing.T, roots *x509.CertPool) *http.Client {
 	t.Helper()
-	d, err := proxy.SOCKS5("tcp", h.addr, &proxy.Auth{User: "sb1", Password: Password([]byte("key"), "sb1")}, proxy.Direct)
+	return h.clientAs(t, "sb1", roots)
+}
+
+// clientAs is client for the sandbox with the given ID.
+func (h *interceptHarness) clientAs(t *testing.T, sandboxID string, roots *x509.CertPool) *http.Client {
+	t.Helper()
+	d, err := proxy.SOCKS5("tcp", h.addr, &proxy.Auth{User: sandboxID, Password: Password([]byte("key"), sandboxID)}, proxy.Direct)
 	if err != nil {
 		t.Fatal(err)
 	}

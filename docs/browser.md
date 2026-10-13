@@ -61,7 +61,9 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     host were confused.
   - `close` passes only as the whole command on an ephemeral slot, where it ends the session.
     It never reaches the persistent profile.
-- **Egress goes through the same gateway, MITM CA and rules.**
+- **Egress goes through the same gateway, MITM CA and rules.** The VM's HTTPS is always
+  terminated with the environment's CA (agent sandboxes' connections are spliced unless a rule
+  or a secret needs them checked), so its requests can be checked one by one.
   - While an agent drives, the gateway's `Driver` hook evaluates the browser VM's
     connections with the driving sandbox's rules. Domain approvals name that sandbox.
   - While the user drives (takeover), the browser VM's own rules apply: its teammate's rules
