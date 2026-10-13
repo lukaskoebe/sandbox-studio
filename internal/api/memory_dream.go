@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
+	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 )
 
 // registerMemoryDream adds consolidation: starting a dream, its runs, a conflict with its
@@ -89,4 +90,37 @@ func (s *Server) registerMemoryDream(api huma.API) {
 		}
 		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 	})
+
+	type suggestionsIn struct {
+		Env   string `path:"env" doc:"Environment ID"`
+		Scope string `query:"scope" doc:"shared or teammate:<id>: the scope whose facts the suggestions are about"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "listMemorySuggestions", Method: http.MethodGet, Path: base + "/suggestions", Tags: tags,
+		Description: "Open suggestions about a scope's facts: a teammate fact to propose for shared memory, or a fact whose page should be a core page. Nothing is applied until accepted.",
+	}, func(ctx context.Context, in *suggestionsIn) (*struct{ Body []memory.Suggestion }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		list, err := s.Memory.Suggestions(ctx, in.Env, in.Scope)
+		return &struct{ Body []memory.Suggestion }{list}, memoryError(err)
+	})
+
+	decide := func(accept bool) func(context.Context, *memoryPath) (*struct{ Body memory.Suggestion }, error) {
+		return func(ctx context.Context, in *memoryPath) (*struct{ Body memory.Suggestion }, error) {
+			if err := ready(ctx, in.Env); err != nil {
+				return nil, err
+			}
+			sg, err := s.AgentMem.DecideSuggestion(ctx, in.Env, in.ID, accept)
+			return &struct{ Body memory.Suggestion }{sg}, dreamError(err)
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "acceptMemorySuggestion", Method: http.MethodPost, Path: base + "/suggestions/{id}/accept", Tags: tags,
+		Description: "Accepts a suggestion. A promotion proposes the fact for shared memory through a memory.share approval, which the user decides in the inbox; a core page becomes a core page if the scope's core budget has room.",
+	}, decide(true))
+	huma.Register(api, huma.Operation{
+		OperationID: "dismissMemorySuggestion", Method: http.MethodPost, Path: base + "/suggestions/{id}/dismiss", Tags: tags,
+		Description: "Dismisses a suggestion. It is not made again.",
+	}, decide(false))
 }

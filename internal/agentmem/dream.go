@@ -32,11 +32,14 @@ const (
 	DreamHour = 3
 
 	judgePromptVersion = 2
-	judgeMaxTokens     = 300
-	maxJudgedPairs     = 100 // per run; the rest waits for the next run
-	maxRelated         = 8   // facts each new fact is compared with
-	autoDreamGap       = time.Hour
-	dreamTick          = time.Minute
+	// PromoteSupport is how many times a teammate's fact must have been learned to be
+	// suggested for shared memory (a fact another teammate has too is suggested as well).
+	PromoteSupport = 3
+	judgeMaxTokens = 300
+	maxJudgedPairs = 100 // per run; the rest waits for the next run
+	maxRelated     = 8   // facts each new fact is compared with
+	autoDreamGap   = time.Hour
+	dreamTick      = time.Minute
 )
 
 // Dream triggers and statuses.
@@ -73,6 +76,7 @@ type DreamStats struct {
 	Merged       int    `json:"merged" doc:"Near-duplicates merged"`
 	Superseded   int    `json:"superseded"`
 	Contextual   int    `json:"contextual" doc:"Facts that got a context: they stay, and surface only where it is named"`
+	Suggested    int    `json:"suggested" doc:"Suggestions opened: a teammate fact to promote, or a core page"`
 	Conflicts    int    `json:"conflicts" doc:"Conflicts opened for the user"`
 	Pages        int    `json:"pages" doc:"Entity pages created or regenerated"`
 	InputTokens  int    `json:"inputTokens"`
@@ -399,8 +403,95 @@ func (d *dreamer) run(ctx context.Context) error {
 		d.r.Note = strings.TrimSpace(d.r.Note + " Pairs not judged: " + d.noJudge + ".")
 	}
 
-	// 3. Regenerate entity pages.
+	// 3. Suggestions for the user, then regenerate entity pages.
+	if err := d.suggest(ctx, fresh); err != nil {
+		return err
+	}
 	return d.compile(ctx, nil)
+}
+
+// suggest opens the scope's suggestions: a core page for a fact the sessions keep recalling,
+// and in a teammate's scope a promotion to shared memory for a fact that recurs. Nothing is
+// applied; the user accepts or dismisses each one.
+func (d *dreamer) suggest(ctx context.Context, fresh []memory.Fact) error {
+	s := d.s
+	cands, err := s.Memory.CoreCandidates(ctx, d.env, d.r.Scope, s.now())
+	if err != nil {
+		return err
+	}
+	for _, c := range cands {
+		added, err := s.Memory.AddSuggestion(ctx, d.env, c.Fact.ID, memory.SuggestCore, memory.CoreReason(c))
+		if err != nil {
+			return err
+		}
+		if added {
+			d.r.Stats.Suggested++
+		}
+	}
+	if d.r.Scope == memory.SharedScope {
+		return nil
+	}
+
+	facts, err := s.Memory.Facts(ctx, d.env, memory.FactFilter{Scope: d.r.Scope, Status: memory.StatusActive})
+	if err != nil {
+		return err
+	}
+	// Near-duplicates are compared with every active fact of shared memory and of the other
+	// teammates, not only the related ones: a fact without entity or attribute has none.
+	var shared, elsewhere []memory.Fact
+	teammates, err := s.Store.Teammates(ctx, d.env)
+	if err != nil {
+		return err
+	}
+	for _, sc := range append([]string{memory.SharedScope}, otherScopes(teammates, d.r.Scope)...) {
+		list, err := s.Memory.Facts(ctx, d.env, memory.FactFilter{Scope: sc, Status: memory.StatusActive})
+		if err != nil {
+			return err
+		}
+		if sc == memory.SharedScope {
+			shared = list
+		} else {
+			elsewhere = append(elsewhere, list...)
+		}
+	}
+	isFresh := map[string]bool{}
+	for _, f := range fresh {
+		isFresh[f.ID] = true
+	}
+	hasNearDuplicate := func(f memory.Fact, list []memory.Fact) bool {
+		return slices.ContainsFunc(list, func(o memory.Fact) bool { return nearDuplicate(f, o) })
+	}
+	for _, f := range facts {
+		reason := fmt.Sprintf("Learned %d times; it may hold for the whole environment.", f.SupportCount)
+		if f.SupportCount < PromoteSupport {
+			if !isFresh[f.ID] || !hasNearDuplicate(f, elsewhere) {
+				continue
+			}
+			reason = "Another teammate's memory has the same fact; it may hold for the whole environment."
+		}
+		if hasNearDuplicate(f, shared) {
+			continue // shared memory has it already
+		}
+		added, err := s.Memory.AddSuggestion(ctx, d.env, f.ID, memory.SuggestPromote, reason)
+		if err != nil {
+			return err
+		}
+		if added {
+			d.r.Stats.Suggested++
+		}
+	}
+	return nil
+}
+
+// otherScopes are the teammate scopes of the environment except scope.
+func otherScopes(teammates []store.Teammate, scope string) []string {
+	var out []string
+	for _, p := range teammates {
+		if sc := memory.TeammateScope(p.ID); sc != scope {
+			out = append(out, sc)
+		}
+	}
+	return out
 }
 
 // compile regenerates the pages of the entities the run touched, then returns then.
@@ -1097,5 +1188,29 @@ func (s *Service) RunDreams(ctx context.Context) {
 			return
 		case <-t.C:
 		}
+	}
+}
+
+// --- suggestions -------------------------------------------------------------------------
+
+// DecideSuggestion accepts or dismisses a suggestion. Accepting a promotion proposes the fact
+// for shared memory through the memory.share approval that Promote creates, so the user
+// still decides in the inbox; accepting a core page makes the fact's page a core page within
+// the budget. Dismissing only records the decision.
+func (s *Service) DecideSuggestion(ctx context.Context, env, id string, accept bool) (memory.Suggestion, error) {
+	sg, err := s.Memory.Suggestion(ctx, env, id)
+	if err != nil {
+		return sg, err
+	}
+	switch {
+	case !accept:
+		return s.Memory.DecideSuggestion(ctx, env, id, memory.SuggestDismissed)
+	case sg.Kind == memory.SuggestCore:
+		return s.Memory.AcceptCore(ctx, env, id)
+	default:
+		if _, err := s.Promote(ctx, env, sg.Fact.ID); err != nil {
+			return sg, err
+		}
+		return s.Memory.DecideSuggestion(ctx, env, id, memory.SuggestAccepted)
 	}
 }

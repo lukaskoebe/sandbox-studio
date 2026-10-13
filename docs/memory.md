@@ -109,6 +109,7 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET conflicts`, `GET conflicts/{id}`, `POST conflicts/{id}/resolve` | conflicts, open first; the detail adds both facts' sources and timeline |
 | `POST dream`, `GET dreams?scope=` | start consolidating a scope (202, 409 while one runs); runs with stats |
 | `POST facts/{id}/promote` | propose a teammate fact for shared memory (`memory.share` approval) |
+| `GET suggestions?scope=`, `POST suggestions/{id}/accept`, `POST suggestions/{id}/dismiss` | open suggestions of a scope; accept or dismiss one ([Suggestions](#suggestions)) |
 
 | `GET sessions?teammate=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
 | `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider, and `sharedJudge`: whose utility model consolidates shared memory |
@@ -119,6 +120,27 @@ both facts side by side with sources, tiers and timeline, and resolves), search 
 A teammate's private memory has the same tabs on its teammate page, where its facts can be
 proposed for shared memory ("promote to shared"). `memory.conflict` approvals show in the
 approval stack with the same sheet.
+
+## Suggestions
+
+Consolidation proposes two things and never applies them. They are rows of `suggestions`
+(`029_memory_consolidation.sql`), listed on the memory page of the scope they are about, and
+the user accepts or dismisses each one. A fact has at most one suggestion of each kind, so a
+decided one is never made again.
+
+- **Promote** (teammate scopes only). A teammate fact that recurs: learned at least 3 times
+  (`support_count`), or, when a dream first sees it, a near-duplicate in another teammate's
+  scope. Not suggested when shared memory has a near-duplicate. Accepting proposes the fact
+  through the `memory.share` approval of `POST facts/{id}/promote`, so the inbox still decides.
+  The data model has no sandbox scope, so there is no sandbox-to-teammate suggestion.
+- **Core page** (any scope). A fact that sessions had injected (a recall) in at least 5
+  different sessions within 30 days, whose entity page exists and is not a core page yet.
+  Accepting makes that page a core page if the scope's core budget has room; if not, the
+  suggestion stays open and the response says why. Counts come from the session log, so
+  they are what sessions actually received.
+
+Dreams open suggestions: after new facts, nightly, or on "Dream now". Each run also notes
+how many it opened (`suggested`).
 
 ## In agent sessions
 
@@ -223,7 +245,8 @@ ends included); a teammate's run also takes new shared facts.
    memory page. `context_dependent` opens nothing: both facts stay active, and each fact
    that holds in a context only gets that context (`context`, a timeline entry that names it
    but not the fact's text). A fact keeps a context it already has.
-5. Compiled truth: the touched entities' pages (`<entity>` or `topic/<entity>`, created at
+5. Suggestions: see [Suggestions](#suggestions).
+6. Compiled truth: the touched entities' pages (`<entity>` or `topic/<entity>`, created at
    two facts) get a regenerated block between `<!-- studio:compiled -->` markers; text the
    user wrote outside it stays. A core page that would exceed the core budget keeps its old
    text and the run notes it.

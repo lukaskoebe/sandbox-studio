@@ -137,4 +137,32 @@ func TestMemoryDreamAPI(t *testing.T) {
 	if rec := do(h, "POST", base+"/facts/"+b.ID+"/promote", ""); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("promote shared: %d %s", rec.Code, rec.Body)
 	}
+
+	// Suggestions: listed per scope, accepted or dismissed once.
+	q, _ := s.Memory.CreateFact(ctx, env.ID, memory.FactInput{Scope: scope, Kind: memory.KindFact, Text: "Lint with make lint"}, memory.Origin{Tier: memory.TierInferred, AuthorTeammate: dev.ID})
+	r, _ := s.Memory.CreateFact(ctx, env.ID, memory.FactInput{Scope: scope, Kind: memory.KindFact, Text: "Test with make test"}, memory.Origin{Tier: memory.TierInferred, AuthorTeammate: dev.ID})
+	for _, id := range []string{q.ID, r.ID} {
+		if added, err := s.Memory.AddSuggestion(ctx, env.ID, id, memory.SuggestPromote, "Learned 3 times."); err != nil || !added {
+			t.Fatalf("suggest %s: %v %v", id, added, err)
+		}
+	}
+	list := decode[[]memory.Suggestion](t, do(h, "GET", base+"/suggestions?scope="+scope, ""))
+	if len(list) != 2 || list[0].Kind != memory.SuggestPromote || list[0].Status != memory.SuggestOpen {
+		t.Fatalf("suggestions %+v", list)
+	}
+	if rec := do(h, "POST", base+"/suggestions/"+list[0].ID+"/accept", ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"accepted"`) {
+		t.Fatalf("accept: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/suggestions/"+list[1].ID+"/dismiss", ""); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"status":"dismissed"`) {
+		t.Fatalf("dismiss: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/suggestions/"+list[1].ID+"/accept", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("decided twice: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base+"/suggestions/nope/dismiss", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown: %d %s", rec.Code, rec.Body)
+	}
+	if left := decode[[]memory.Suggestion](t, do(h, "GET", base+"/suggestions?scope="+scope, "")); len(left) != 0 {
+		t.Fatalf("open after deciding: %+v", left)
+	}
 }
