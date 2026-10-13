@@ -79,6 +79,12 @@ var kinds = []Kind{
 	{Kind: KindChatGPTSubscription, Harnesses: []string{HarnessCodex}, Login: true, Host: "chatgpt.com"},
 }
 
+// HostOf returns the host a provider kind's key or login is bound to, or "" for a kind without one.
+func HostOf(kind string) string {
+	k, _ := LookupKind(kind)
+	return k.Host
+}
+
 // LookupKind returns the description of a provider kind.
 func LookupKind(kind string) (Kind, bool) {
 	i := slices.IndexFunc(kinds, func(k Kind) bool { return k.Kind == kind })
@@ -304,6 +310,13 @@ func Slug(name string) string {
 		}
 	}
 	return strings.TrimRight(b.String(), "-")
+}
+
+// LoginSecretName is the vault name of what a provider's subscription login keeps for Studio
+// alone (ChatGPT's refresh token and claims): PROVIDER_<NAME>_LOGIN, next to SecretName's
+// PROVIDER_<NAME>_KEY.
+func LoginSecretName(name, fallback string) string {
+	return strings.TrimSuffix(SecretName(name, fallback), "_KEY") + "_LOGIN"
 }
 
 // DefaultGitEmail is <slug>@agents.invalid; the .invalid TLD never resolves, so commits
