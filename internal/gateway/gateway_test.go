@@ -21,10 +21,11 @@ import (
 )
 
 type fakePolicy struct {
-	mu    sync.Mutex
-	asked []policy.Request
-	rules map[string]store.Rule // by host
-	errs  map[string]error      // by host: the connection's answer is this error
+	mu      sync.Mutex
+	asked   []policy.Request
+	rules   map[string]store.Rule // by host
+	errs    map[string]error      // by host: the connection's answer is this error
+	refused map[string]store.Rule // by host: lookups of the host are refused by this deny rule
 }
 
 func (p *fakePolicy) Decide(_ context.Context, req policy.Request) (store.Rule, error) {
@@ -38,6 +39,12 @@ func (p *fakePolicy) Decide(_ context.Context, req policy.Request) (store.Rule, 
 		return r, nil
 	}
 	return store.Rule{}, policy.ErrUndecided
+}
+
+// Refused is the deny rule the fake gives a lookup, by host; nothing else is refused.
+func (p *fakePolicy) Refused(_ context.Context, _, _, host string) (store.Rule, bool, error) {
+	r, ok := p.refused[host]
+	return r, ok, nil
 }
 
 type fakeNames map[netip.Addr]string

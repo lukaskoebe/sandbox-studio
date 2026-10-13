@@ -49,6 +49,25 @@ func parseReply(t *testing.T, msg []byte) (dnsmessage.Header, []answer) {
 	}
 }
 
+func TestDenyAnswersNXDOMAIN(t *testing.T) {
+	up := startUpstream(t, fakeAnswer)
+	srv := listen(t, up.addr)
+	srv.SetHooks(Hooks{Deny: func(name string) bool { return name == "www.example.test" }})
+
+	h, answers := parseReply(t, udpExchange(t, srv.Addr(), buildQuery(0x2345, wwwName, dnsmessage.TypeA)))
+	if h.ID != 0x2345 || h.RCode != dnsmessage.RCodeNameError || len(answers) != 0 {
+		t.Fatalf("denied name: %+v %v", h, answers)
+	}
+	if n := len(up.queries()); n != 0 {
+		t.Fatalf("a denied name was forwarded %d times", n)
+	}
+	// Names that aren't denied are still forwarded.
+	udpExchange(t, srv.Addr(), buildQuery(0x2346, "other.test.", dnsmessage.TypeA))
+	if n := len(up.queries()); n != 1 {
+		t.Fatalf("other names: %d forwarded queries, want 1", n)
+	}
+}
+
 func TestVirtualizeAnswersWithVirtualAddresses(t *testing.T) {
 	up := startUpstream(t, fakeAnswer)
 	srv := listen(t, up.addr)

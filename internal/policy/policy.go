@@ -279,6 +279,34 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 	return nil
 }
 
+// Refused returns the deny rule that refuses every connection of sandboxID to host on any port,
+// if there is one. The sandbox's lookups of host can then fail at once (see docs/network.md).
+// A rule that names ports doesn't count, since it may allow host on other ports, and neither does
+// a rule that names another sandbox or teammate, or one that some rule with ports overrides.
+func (e *Engine) Refused(ctx context.Context, envID, sandboxID, host string) (store.Rule, bool, error) {
+	teammate, err := e.teammate(ctx, envID, sandboxID)
+	if err != nil {
+		return store.Rule{}, false, err
+	}
+	rules, _, err := e.snapshot(ctx, envID)
+	if err != nil {
+		return store.Rule{}, false, err
+	}
+	host = Normalize(host)
+	live := e.active(rules)
+	for _, r := range live {
+		if len(r.Ports) > 0 && appliesTo(r, sandboxID, teammate) && hostSpecificity(r.Host, host) >= 0 {
+			return store.Rule{}, false, nil
+		}
+	}
+	r, ok := Match(live, sandboxID, teammate, host, 0)
+	if !ok || r.Action != store.ActionDeny {
+		return store.Rule{}, false, nil
+	}
+	e.hit(r.ID)
+	return r, true, nil
+}
+
 // teammate returns the teammate owning a sandbox, or "" for an unowned or unknown one. It is
 // read from the catalog, not from the caller, so a teammate rule can only reach that
 // teammate's sandboxes.

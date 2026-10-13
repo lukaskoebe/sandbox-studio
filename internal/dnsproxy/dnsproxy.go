@@ -107,6 +107,9 @@ func (n *Names) evict(t time.Time) {
 
 // Hooks decide how a server answers the names its sandbox asks for. A nil hook changes nothing.
 type Hooks struct {
+	// Deny reports whether the name may not be connected to at all. Its lookups get NXDOMAIN, so
+	// tools fail at once instead of waiting on a held connection.
+	Deny func(name string) bool
 	// Virtualize reports whether the name's addresses are answered with virtual ones: microsandbox
 	// drops private answers before they reach a sandbox, so each A record becomes an address from
 	// the virtual range that the gateway maps back to the name, and AAAA records are left out.
@@ -319,6 +322,9 @@ func (s *Server) resolve(network string, q query) []byte {
 	}
 	name := strings.TrimSuffix(strings.ToLower(q.question.Name.String()), ".")
 	hooks := s.hooks.Load()
+	if hooks != nil && hooks.Deny != nil && hooks.Deny(name) {
+		return reply(q, dnsmessage.RCodeNameError)
+	}
 	virtualize := hooks != nil && hooks.Virtualize != nil && hooks.Virtualize(name)
 	for _, up := range s.upstreams {
 		resp, err := s.exchange(network, q.raw, up)
@@ -614,13 +620,16 @@ func answers(resp []byte, q query) bool {
 }
 
 // servfail builds a SERVFAIL reply to q, or returns nil if the reply can't be built.
-func servfail(q query) []byte {
+func servfail(q query) []byte { return reply(q, dnsmessage.RCodeServerFailure) }
+
+// reply builds a reply to q with rcode and no answers, or returns nil if it can't be built.
+func reply(q query, rcode dnsmessage.RCode) []byte {
 	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{
 		ID:                 q.header.ID,
 		Response:           true,
 		RecursionDesired:   q.header.RecursionDesired,
 		RecursionAvailable: true,
-		RCode:              dnsmessage.RCodeServerFailure,
+		RCode:              rcode,
 	})
 	if err := b.StartQuestions(); err != nil {
 		return nil

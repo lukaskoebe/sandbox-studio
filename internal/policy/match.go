@@ -28,10 +28,7 @@ func Match(rules []store.Rule, sandboxID, teammateID, host string, port int) (st
 	var bestRank rank
 	found := false
 	for _, r := range rules {
-		if r.SandboxID != "" && r.SandboxID != sandboxID {
-			continue
-		}
-		if r.TeammateID != "" && r.TeammateID != teammateID {
+		if !appliesTo(r, sandboxID, teammateID) {
 			continue
 		}
 		if len(r.Ports) > 0 && !slices.Contains(r.Ports, port) {
@@ -53,6 +50,11 @@ func Match(rules []store.Rule, sandboxID, teammateID, host string, port int) (st
 		}
 	}
 	return best, found
+}
+
+// appliesTo reports whether rule r covers the sandbox sandboxID, owned by teammateID (if any).
+func appliesTo(r store.Rule, sandboxID, teammateID string) bool {
+	return (r.SandboxID == "" || r.SandboxID == sandboxID) && (r.TeammateID == "" || r.TeammateID == teammateID)
 }
 
 type rank struct {

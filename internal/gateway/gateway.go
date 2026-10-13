@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
@@ -38,6 +39,7 @@ type Gateway struct {
 	Key    []byte
 	Policy interface {
 		Decide(context.Context, policy.Request) (store.Rule, error)
+		Refused(ctx context.Context, envID, sandboxID, host string) (store.Rule, bool, error)
 	}
 	Sandbox   func(ctx context.Context, id string) (store.Sandbox, error)
 	Resolvers *Resolvers
@@ -71,6 +73,9 @@ type Gateway struct {
 	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
 	upstreamRoots *x509.CertPool               // replaces the system roots in tests
 	resolver      *net.Resolver                // resolves names for upstream dials; nil is the system's
+
+	refusedMu  sync.Mutex
+	refusedLog map[string]time.Time // when a refused lookup was last logged, by sandbox and name
 }
 
 // ErrNoNetwork is returned for sandboxes created before Studio routed their traffic.
@@ -180,12 +185,7 @@ func (g *Gateway) handle(c net.Conn) {
 		return
 	}
 
-	decider := sb
-	if g.Driver != nil {
-		if d := g.Driver(context.Background(), sb); d.EnvironmentID == sb.EnvironmentID {
-			decider = d
-		}
-	}
+	decider := g.decider(sb)
 	rule, err := g.Policy.Decide(context.Background(), policy.Request{
 		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, SandboxName: decider.Name, Host: host, Port: port,
 	})
@@ -262,6 +262,17 @@ func (g *Gateway) handle(c net.Conn) {
 	g.Conns.opened(entry, ruleID, false)
 	verdict = VerdictAllowed
 	sent, received = splice(c, br, up)
+}
+
+// decider returns the sandbox whose rules decide sb's connections: sb itself, unless the
+// Driver names another sandbox of the same environment.
+func (g *Gateway) decider(sb store.Sandbox) store.Sandbox {
+	if g.Driver != nil {
+		if d := g.Driver(context.Background(), sb); d.EnvironmentID == sb.EnvironmentID {
+			return d
+		}
+	}
+	return sb
 }
 
 // Names maps addresses a sandbox resolved back to the names it asked for.
