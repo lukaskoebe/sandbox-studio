@@ -138,7 +138,7 @@ One data directory (`internal/paths`):
 | `studio.db` | SQLite catalog: everything per environment, including memory, encrypted secrets and CA keys |
 | `vault.key` | master key file, only when no OS keychain is available |
 | `guest/bin/` | the `studio-agent` binary, mounted read-only into every sandbox |
-| `run/<id>.sock` | per-sandbox agent channel sockets |
+| `run/<id>.sock` | per-sandbox agent channel sockets (named pipes on Windows, see [guest-agent](guest-agent.md)) |
 | `templates/` | template registry artifacts |
 | `imports/` | sandbox import uploads |
 | `git-staging/` | git review staging repos |

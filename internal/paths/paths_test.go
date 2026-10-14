@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -27,5 +28,20 @@ func TestEnsureGuestTraversable(t *testing.T) {
 		if got := fi.Mode().Perm(); got != want {
 			t.Errorf("%s: mode %o, want %o", dir, got, want)
 		}
+	}
+}
+
+func TestAgentSocketIsANamedPipeOnWindows(t *testing.T) {
+	a := Paths{Data: `C:\Users\a\AppData\Local\Sandbox Studio`}.AgentSocket("sb1")
+	b := Paths{Data: `D:\studio`}.AgentSocket("sb1")
+	if runtime.GOOS != "windows" {
+		if filepath.Base(a) != "sb1.sock" {
+			t.Fatalf("socket %q", a)
+		}
+		return
+	}
+	// msb accepts only \\.\pipe\<name> with no empty, "." or ".." parts.
+	if !strings.HasPrefix(a, `\\.\pipe\sandbox-studio-`) || !strings.HasSuffix(a, "-sb1") || strings.ContainsAny(a[len(`\\.\pipe\`):], `\/ `) || a == b {
+		t.Fatalf("pipes %q and %q", a, b)
 	}
 }

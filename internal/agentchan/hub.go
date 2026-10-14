@@ -11,7 +11,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -71,8 +70,7 @@ func (h *Hub) Listen(id, path string) error {
 	if _, ok := h.listeners[id]; ok {
 		return nil
 	}
-	_ = os.Remove(path)
-	ln, err := net.Listen("unix", path)
+	ln, err := listen(path)
 	if err != nil {
 		return err
 	}

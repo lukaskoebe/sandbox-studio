@@ -128,7 +128,7 @@ func newControlTestHarness(t *testing.T) *controlTestHarness {
 		t.Fatalf("listen for fake guest: %v", err)
 	}
 	t.Cleanup(func() { hub.Close(id) })
-	nc, err := net.Dial("unix", socket)
+	nc, err := Dial(context.Background(), socket)
 	if err != nil {
 		t.Fatalf("dial fake guest socket: %v", err)
 	}

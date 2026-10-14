@@ -7,7 +7,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +22,7 @@ import (
 // receives go to configs.
 func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yamux.Session {
 	t.Helper()
-	nc, err := net.Dial("unix", path)
+	nc, err := Dial(context.Background(), path)
 	if err != nil {
 		t.Fatal(err)
 	}

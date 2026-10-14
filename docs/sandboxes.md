@@ -48,8 +48,8 @@ Fixed at creation (`runtime.Create`):
 - egress: DNS to the sandbox's own resolver, TCP to public addresses only; everything else is
   denied (UDP and ICMP would bypass the gateway; QUIC falls back to TCP);
 - TCP goes to the gateway as SOCKS5, user = sandbox ID, password from an env var;
-- a vsock route from the host socket `<data>/run/<id>.sock` to guest port 5000 for the
-  [agent channel](guest-agent.md).
+- a vsock route from the host socket `<data>/run/<id>.sock` (a named pipe on Windows) to
+  guest port 5000 for the [agent channel](guest-agent.md).
 
 See [network](network.md) for what happens at the gateway.
 

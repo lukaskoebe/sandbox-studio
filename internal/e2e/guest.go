@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/hashicorp/yamux"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
@@ -114,7 +116,9 @@ func (g *Guest) run(socket string, stop chan struct{}) {
 }
 
 func (g *Guest) serveOnce(socket string, stop chan struct{}) error {
-	conn, err := net.DialTimeout("unix", socket, 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	conn, err := agentchan.Dial(ctx, socket)
+	cancel()
 	if err != nil {
 		return err
 	}

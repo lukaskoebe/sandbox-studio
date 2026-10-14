@@ -10,6 +10,7 @@ import (
 
 	"github.com/hashicorp/yamux"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -19,7 +20,7 @@ import (
 // answerGuest connects a guest agent to socket, as a booted VM's agent does, and answers the
 // requests a creation makes: the session list and the configuration.
 func answerGuest(socket string) error {
-	nc, err := net.Dial("unix", socket)
+	nc, err := agentchan.Dial(context.Background(), socket)
 	if err != nil {
 		return err
 	}

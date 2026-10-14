@@ -2,6 +2,8 @@
 package paths
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -46,8 +48,14 @@ func (p Paths) DB() string { return filepath.Join(p.Data, "studio.db") }
 func (p Paths) Guest() string { return filepath.Join(p.Data, "guest") }
 
 // AgentSocket is the host end of a sandbox's agent channel. Unix socket paths are
-// limited to about 104 bytes, so callers must keep sandbox IDs short.
+// limited to about 104 bytes, so callers must keep sandbox IDs short. On Windows it is a
+// named pipe, which is all msb routes vsock to there; its name carries a hash of the data
+// directory, so two Studios on one machine don't share pipes.
 func (p Paths) AgentSocket(sandboxID string) string {
+	if runtime.GOOS == "windows" {
+		sum := sha256.Sum256([]byte(filepath.Clean(p.Data)))
+		return `\\.\pipe\sandbox-studio-` + hex.EncodeToString(sum[:6]) + "-" + sandboxID
+	}
 	return filepath.Join(p.Data, "run", sandboxID+".sock")
 }
 

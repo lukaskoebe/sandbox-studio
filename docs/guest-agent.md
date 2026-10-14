@@ -8,7 +8,9 @@ so updating Studio updates every guest.
 ## Channel
 
 - The agent dials the host over vsock port 5000. microsandbox routes that to a host socket
-  per sandbox (`<data>/run/<id>.sock`).
+  per sandbox (`<data>/run/<id>.sock`). On Windows, where msb routes vsock only to named
+  pipes, it is the pipe `\\.\pipe\sandbox-studio-<hash of the data directory>-<id>`, whose
+  DACL admits only the user Studio runs as.
 - One yamux session per guest; either side opens streams. Every stream starts with a JSON
   header line naming its kind (`internal/agentproto`).
 - The host side is `internal/agentchan`. The identity of a guest is the socket its

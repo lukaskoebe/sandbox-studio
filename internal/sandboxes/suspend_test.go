@@ -3,12 +3,12 @@ package sandboxes
 import (
 	"context"
 	"errors"
-	"net"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/yamux"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 )
@@ -25,7 +25,7 @@ func dialGuest(t *testing.T, f *checkpointFixture) *yamux.Session {
 }
 
 func connectGuest(path string) (*yamux.Session, error) {
-	nc, err := net.Dial("unix", path)
+	nc, err := agentchan.Dial(context.Background(), path)
 	if err != nil {
 		return nil, err
 	}

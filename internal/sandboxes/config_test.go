@@ -13,6 +13,7 @@ import (
 
 	"github.com/hashicorp/yamux"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -232,7 +233,7 @@ func startConfigTestGuest(t *testing.T, f *checkpointFixture, id string) *config
 	if err := hub.Listen(id, socket); err != nil {
 		t.Fatalf("listen for fake guest: %v", err)
 	}
-	nc, err := net.Dial("unix", socket)
+	nc, err := agentchan.Dial(context.Background(), socket)
 	if err != nil {
 		t.Fatalf("dial fake guest socket: %v", err)
 	}
