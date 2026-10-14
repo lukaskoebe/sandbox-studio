@@ -111,7 +111,7 @@ func TestRebaseLegacySandboxOntoCurrentTemplateCopiesRootHome(t *testing.T) {
 	tf.setHome(VMName(source.Sandbox), "root home")
 	current := rebaseTemplate(t, f, rebaseResources)
 
-	view, err := f.manager.Rebase(f.ctx, f.env.ID, source.ID, current.ID)
+	view, err := rebaseNow(f, source.ID, current.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestRebaseLegacySandboxOntoLegacyTemplateKeepsItsShape(t *testing.T) {
 	tf.setHome(VMName(source.Sandbox), "root home")
 	other := legacyTemplate(t, f, resources.Resources{CPUs: 1, MemoryMiB: 1024, MaxMemoryMiB: 1024, WorkspaceMiB: 4096, DockerMiB: 2048})
 
-	view, err := f.manager.Rebase(f.ctx, f.env.ID, source.ID, other.ID)
+	view, err := rebaseNow(f, source.ID, other.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4435,7 +4435,8 @@
           "operation": {
             "enum": [
               "create",
-              "fork"
+              "fork",
+              "rebase"
             ],
             "type": "string"
           },
@@ -4444,6 +4445,7 @@
             "description": "The image pull, once it reports sizes"
           },
           "state": {
+            "description": "A failed create or fork leaves the sandbox failed; a failed rebase leaves it on its old template, in its status",
             "enum": [
               "running",
               "failed"
@@ -4453,6 +4455,7 @@
           "step": {
             "description": "The step that runs, or the one that failed",
             "enum": [
+              "prepare",
               "pull",
               "vm",
               "copy",
@@ -4467,6 +4470,7 @@
             "description": "The operation's steps, in order",
             "items": {
               "enum": [
+                "prepare",
                 "pull",
                 "vm",
                 "copy",
@@ -13149,9 +13153,56 @@
         ]
       }
     },
+    "/api/environments/{env}/sandboxes/{id}/progress": {
+      "delete": {
+        "description": "Clears the report of the sandbox's failed rebase from its progress. A running operation, or a failed create or fork, can't be dismissed: delete the sandbox instead.",
+        "operationId": "dismissSandboxProgress",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Dismiss a failed rebase",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/api/environments/{env}/sandboxes/{id}/rebase": {
       "post": {
-        "description": "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox stays on its old template in the state it was in.",
+        "description": "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.",
         "operationId": "rebaseSandbox",
         "parameters": [
           {
@@ -13172,6 +13223,16 @@
             "schema": {
               "description": "Sandbox ID",
               "type": "string"
+            }
+          },
+          {
+            "description": "Answer once the rebase has ended, with the rebased sandbox or why it failed, instead of at once",
+            "explode": false,
+            "in": "query",
+            "name": "wait",
+            "schema": {
+              "description": "Answer once the rebase has ended, with the rebased sandbox or why it failed, instead of at once",
+              "type": "boolean"
             }
           }
         ],

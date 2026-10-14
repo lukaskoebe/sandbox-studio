@@ -20,7 +20,10 @@ import { SandboxBrowserPanel } from "@/components/sandbox-browser-panel"
 import { StartButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
-import { SandboxProgress } from "@/components/sandbox-progress"
+import {
+  RebaseFailedAlert,
+  SandboxProgress,
+} from "@/components/sandbox-progress"
 import { SidePanel } from "@/components/side-panel"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
@@ -263,6 +266,7 @@ export function SandboxWorkspace({
   } else {
     main = (
       <>
+        <RebaseFailedAlert env={env} sandbox={sb} />
         <div
           className={cn("flex min-h-0 flex-1 flex-col", chatActive && "hidden")}
         >

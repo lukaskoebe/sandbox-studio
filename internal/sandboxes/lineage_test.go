@@ -111,7 +111,7 @@ func TestRebaseAndCheckpointRecordTheirEvents(t *testing.T) {
 	}
 
 	tf.fail("export:"+source, errors.New("injected"))
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID); err == nil {
+	if _, err := rebaseNow(f, f.sandbox.ID, template.ID); err == nil {
 		t.Fatal("rebase succeeded")
 	}
 	if n := len(historyOf(t, f, f.sandbox.ID)); n != 1 {
@@ -119,7 +119,7 @@ func TestRebaseAndCheckpointRecordTheirEvents(t *testing.T) {
 	}
 
 	tf.clearFailure("export:" + source)
-	view, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	view, err := rebaseNow(f, f.sandbox.ID, template.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

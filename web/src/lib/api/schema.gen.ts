@@ -1378,6 +1378,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Dismiss a failed rebase
+         * @description Clears the report of the sandbox's failed rebase from its progress. A running operation, or a failed create or fork, can't be dismissed: delete the sandbox instead.
+         */
+        delete: operations["dismissSandboxProgress"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/rebase": {
         parameters: {
             query?: never;
@@ -1389,7 +1409,7 @@ export interface paths {
         put?: never;
         /**
          * Move a sandbox onto another template
-         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. If the rebase fails, the sandbox stays on its old template in the state it was in.
+         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.
          */
         post: operations["rebaseSandbox"];
         delete?: never;
@@ -3575,18 +3595,21 @@ export interface components {
             /** @description Why the step failed */
             error?: string;
             /** @enum {string} */
-            operation: "create" | "fork";
+            operation: "create" | "fork" | "rebase";
             /** @description The image pull, once it reports sizes */
             pull?: components["schemas"]["PullProgress"];
-            /** @enum {string} */
+            /**
+             * @description A failed create or fork leaves the sandbox failed; a failed rebase leaves it on its old template, in its status
+             * @enum {string}
+             */
             state: "running" | "failed";
             /**
              * @description The step that runs, or the one that failed
              * @enum {string}
              */
-            step: "pull" | "vm" | "copy" | "boot" | "services" | "agent" | "configure";
+            step: "prepare" | "pull" | "vm" | "copy" | "boot" | "services" | "agent" | "configure";
             /** @description The operation's steps, in order */
-            steps: ("pull" | "vm" | "copy" | "boot" | "services" | "agent" | "configure")[] | null;
+            steps: ("prepare" | "pull" | "vm" | "copy" | "boot" | "services" | "agent" | "configure")[] | null;
         };
         PromptFile: {
             /** @description The file, base64-encoded */
@@ -8224,9 +8247,44 @@ export interface operations {
             };
         };
     };
-    rebaseSandbox: {
+    dismissSandboxProgress: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    rebaseSandbox: {
+        parameters: {
+            query?: {
+                /** @description Answer once the rebase has ended, with the rebased sandbox or why it failed, instead of at once */
+                wait?: boolean;
+            };
             header?: never;
             path: {
                 /** @description Environment ID */

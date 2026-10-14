@@ -14,11 +14,12 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// A create or fork runs in the background: the API answers at once with the sandbox in
-// state creating, and its view shows the steps (docs/sandboxes.md#creation-progress).
+// A create, fork or rebase runs in the background: the API answers at once with the sandbox
+// in state creating, and its view shows the steps (docs/sandboxes.md#creation-progress).
 
 // Steps, in the order they run.
 const (
+	StepPrepare   = "prepare"   // stopping the sandbox and starting it for the copy (rebase)
 	StepPull      = "pull"      // pulling the image
 	StepVM        = "vm"        // starting the VM
 	StepCopy      = "copy"      // copying the workspace (fork)
@@ -32,6 +33,9 @@ const (
 const (
 	OperationCreate = "create" // also a create from a template
 	OperationFork   = "fork"
+	// A rebase isn't saved: its own record recovers it (rebase.go). A failed one leaves the
+	// sandbox as it was, so its status stays and only the progress tells of the failure.
+	OperationRebase = "rebase"
 )
 
 // Progress states.
@@ -50,6 +54,9 @@ const (
 var (
 	createSteps = []string{StepPull, StepVM, StepBoot, StepServices, StepAgent, StepConfigure}
 	forkSteps   = []string{StepPull, StepVM, StepCopy, StepBoot, StepServices, StepAgent, StepConfigure}
+	// A rebased sandbox's agent connects and is configured as after any start.
+	rebaseRunningSteps = []string{StepPrepare, StepPull, StepVM, StepCopy, StepBoot}
+	rebaseStoppedSteps = []string{StepPrepare, StepPull, StepVM, StepCopy}
 )
 
 const (
@@ -65,12 +72,12 @@ const (
 	progressKeyPrefix = "sandbox.progress."
 )
 
-// Progress is where a sandbox's create or fork stands.
+// Progress is where a sandbox's create, fork or rebase stands.
 type Progress struct {
-	Operation string        `json:"operation" enum:"create,fork"`
-	State     string        `json:"state" enum:"running,failed"`
-	Steps     []string      `json:"steps" enum:"pull,vm,copy,boot,services,agent,configure" doc:"The operation's steps, in order"`
-	Step      string        `json:"step" enum:"pull,vm,copy,boot,services,agent,configure" doc:"The step that runs, or the one that failed"`
+	Operation string        `json:"operation" enum:"create,fork,rebase"`
+	State     string        `json:"state" enum:"running,failed" doc:"A failed create or fork leaves the sandbox failed; a failed rebase leaves it on its old template, in its status"`
+	Steps     []string      `json:"steps" enum:"prepare,pull,vm,copy,boot,services,agent,configure" doc:"The operation's steps, in order"`
+	Step      string        `json:"step" enum:"prepare,pull,vm,copy,boot,services,agent,configure" doc:"The step that runs, or the one that failed"`
 	Error     string        `json:"error,omitempty" doc:"Why the step failed"`
 	Pull      *PullProgress `json:"pull,omitempty" doc:"The image pull, once it reports sizes"`
 }
@@ -98,12 +105,17 @@ type savedProgress struct {
 	Progress      Progress `json:"progress"`
 }
 
-// begin records that a create or fork of rec started, at its first step. The progress is
-// saved, so a restart can tell that it was running.
+// saved reports whether an operation's progress is saved, so a restart can tell that it
+// was running. A rebase has its own durable record instead.
+func saved(p Progress) bool { return p.Operation != OperationRebase }
+
+// begin records that a create, fork or rebase of rec started, at its first step.
 func (m *Manager) begin(ctx context.Context, rec store.Sandbox, kind string, steps []string) error {
 	p := Progress{Operation: kind, State: ProgressRunning, Steps: slices.Clone(steps), Step: steps[0]}
-	if err := m.saveProgress(ctx, rec.ID, rec.EnvironmentID, p); err != nil {
-		return err
+	if saved(p) {
+		if err := m.saveProgress(ctx, rec.ID, rec.EnvironmentID, p); err != nil {
+			return err
+		}
 	}
 	m.opsMu.Lock()
 	if m.ops == nil {
@@ -127,10 +139,12 @@ func (m *Manager) advance(id, step string) {
 	op.progress.Step = step
 	p, envID := op.progress, op.envID
 	m.opsMu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := m.saveProgress(ctx, id, envID, p); err != nil {
-		m.Log.Warn("sandbox progress", "sandbox", id, "err", err)
+	if saved(p) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := m.saveProgress(ctx, id, envID, p); err != nil {
+			m.Log.Warn("sandbox progress", "sandbox", id, "err", err)
+		}
 	}
 	m.publish(envID, id)
 }
@@ -209,6 +223,9 @@ func (m *Manager) settle(rec store.Sandbox, err error) *operation {
 	}
 	p := op.progress
 	m.opsMu.Unlock()
+	if !saved(p) {
+		return op
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var saveErr error
@@ -245,7 +262,29 @@ func (m *Manager) failedCreation(id string) bool {
 	m.opsMu.Lock()
 	defer m.opsMu.Unlock()
 	op := m.ops[id]
-	return op != nil && op.progress.State == ProgressFailed
+	return op != nil && op.progress.State == ProgressFailed && op.progress.Operation != OperationRebase
+}
+
+// ClearProgress dismisses the report of a sandbox's failed rebase. A running operation and
+// a failed create or fork stay: those end only with the operation or the sandbox.
+func (m *Manager) ClearProgress(ctx context.Context, envID, id string) error {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return err
+	}
+	m.opsMu.Lock()
+	op := m.ops[id]
+	if op == nil {
+		m.opsMu.Unlock()
+		return nil
+	}
+	if op.progress.State != ProgressFailed || op.progress.Operation != OperationRebase {
+		m.opsMu.Unlock()
+		return lifecycleError("only a failed rebase can be dismissed")
+	}
+	delete(m.ops, id)
+	m.opsMu.Unlock()
+	m.publish(envID, id)
+	return nil
 }
 
 // forgetProgress drops what is known of a deleted sandbox's create or fork.
@@ -274,6 +313,9 @@ func (m *Manager) withProgress(v View) View {
 	}
 	m.opsMu.Unlock()
 	v.Progress = &p
+	if p.Operation == OperationRebase && p.State == ProgressFailed {
+		return v // rolled back: the sandbox is as it was
+	}
 	v.Status, v.Agent = StatusCreating, nil
 	if p.State == ProgressFailed {
 		v.Status = StatusFailed

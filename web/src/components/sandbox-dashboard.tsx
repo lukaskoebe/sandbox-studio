@@ -21,7 +21,11 @@ import { ResizeSandboxDialog } from "@/components/resize-sandbox-dialog"
 import { StartButton, StopButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
-import { SandboxProgress } from "@/components/sandbox-progress"
+import {
+  DismissRebaseButton,
+  rebaseFailed,
+  SandboxProgress,
+} from "@/components/sandbox-progress"
 import { SectionHeader } from "@/components/section-header"
 import { phase, StatusBadge } from "@/components/status-badge"
 import { SandboxOwner } from "@/components/teammate-avatar"
@@ -40,19 +44,22 @@ import { formatAge, formatUptime } from "@/lib/utils"
  */
 export function SandboxDashboard() {
   const { env, sandbox: sb } = useSandboxPage()
-  // A create or fork has no guest until it succeeds; a failed one is cleared by deleting it.
+  // A create, fork or rebase has no guest until it succeeds; a failed create or fork is
+  // cleared by deleting it. A failed rebase rolled back, so its report sits beside the rest.
   const building = sb.status === "creating" || sb.status === "failed"
   return (
     <ScrollArea className="min-h-0 flex-1" viewportClassName="text-[0.8125rem]">
       <Overview env={env} sandbox={sb} />
       <div className="grid content-start gap-6 p-3 md:p-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="grid min-w-0 content-start gap-6">
-          {building && (
+          {(building || rebaseFailed(sb)) && (
             <SandboxProgress
               sandbox={sb}
               action={
                 sb.status === "failed" ? (
                   <DeleteSandboxButton env={env} sandbox={sb} />
+                ) : rebaseFailed(sb) ? (
+                  <DismissRebaseButton env={env} sandbox={sb} />
                 ) : undefined
               }
             />
