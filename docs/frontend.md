@@ -36,7 +36,7 @@ to an environment.
 | `/e/$env/sandboxes/$id/work` | its workspace: terminal tabs and chats in one strip, the picked one in full, and one side panel. `?terminal=` and `?chat=` pick a tab; `?panel=` names the open panel (browser, connections or files) |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
 | `/e/$env/network/rules`, `/requests`, `/activity` | network rules (filters in the URL: search, scope, action, origin, unused; grouped by registrable domain), requests waiting for a decision, decided requests; `/e/$env/network` opens requests when any wait, else rules |
-| `/e/$env/secrets` | secrets |
+| `/e/$env/secrets` | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
 | `/e/$env/memory` | shared memory: pages, facts, conflicts, search, sessions |
 | `/e/$env/teammates` | teammates |
 | `/e/$env/teammates/$id` | one teammate's overview: agent, identity, soul, sandboxes, scoped secrets |
@@ -44,7 +44,7 @@ to an environment.
 | `/e/$env/teammates/$id/chats` | the teammate's chats |
 | `/e/$env/teammates/$id/memory` | the teammate's private memory, with the tabs of shared memory |
 | `/e/$env/teammates/$id/browser` | the teammate's browser: live view, history, rules |
-| `/e/$env/teammates/$id/settings` | edit the teammate, or delete it |
+| `/e/$env/teammates/$id/settings` | edit the teammate, its check-ins, network level and secrets (its own, its sandboxes' and the environment's it inherits, with which replaces which; Add secret preselects the teammate's scope), or delete it |
 | `/e/$env/settings` | redirects to `general` |
 | `/e/$env/settings/general` | work mode, start at login, updates (the whole installation), and "Open setup" (`/setup`) once Home's setup card is gone |
 | `/e/$env/settings/providers` | AI providers of the environment |

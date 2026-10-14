@@ -181,7 +181,7 @@ primitives above and keeps the e2e selectors it had.
   Checkpoints are rows like the others, saved from a dialog in the section header. The
   workspace's tab strip keeps tabs left and tools right, and has a status line below.
 - **Done: network.** Rules (grouped by domain, filters in the URL), requests and activity tabs.
-- **Done: secrets.**
+- **Done: secrets.** A section per scope (environment, each teammate, each sandbox) with a `SectionHeader` and a table; the columns line up from one section to the next.
 - **Done: memory.** Pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.
 - **Done: teammates.** List, overview, chats, browser and settings tabs; the teammate form.
 - **Done: chat.** The chat page header and the new chat notice.

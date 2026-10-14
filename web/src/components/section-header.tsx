@@ -16,7 +16,7 @@ export function SectionHeader({
   actions,
   className,
 }: {
-  title: string
+  title: ReactNode
   icon?: Icon
   area?: Area
   count?: ReactNode
