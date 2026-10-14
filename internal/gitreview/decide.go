@@ -142,6 +142,9 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *P
 		return "", nil, fmt.Errorf("staging repository: %w", err)
 	}
 	result, err := rm.pushUpstream(ctx, repo, p)
+	// Pushed or refused, the forge's branches may now be past every sandbox's mirror of the
+	// repository, so the next push to it fetches again however recently the mirror did.
+	s.fetches.forget(mirrorKey(t))
 	if err != nil {
 		return "", nil, errors.New(mask(err.Error(), token))
 	}

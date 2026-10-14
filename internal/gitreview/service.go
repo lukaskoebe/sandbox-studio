@@ -76,6 +76,8 @@ type Service struct {
 	once   sync.Once
 	client *http.Client
 	locks  sync.Map // staging path -> *sync.Mutex
+	// fetches rate-limits the staging mirrors' fetches from the forge.
+	fetches fetchLimiter
 }
 
 func (s *Service) httpClient() *http.Client {
@@ -437,6 +439,11 @@ func oneLine(s string) string {
 		s = s[:500] + "..."
 	}
 	return s
+}
+
+// mirrorKey names the repository a staging mirror mirrors, the same for every sandbox.
+func mirrorKey(t target) string {
+	return t.sb.EnvironmentID + "/" + t.forge.ID + "/" + t.path()
 }
 
 // stagingPath is the bare repository holding one sandbox's pushes to one repository.

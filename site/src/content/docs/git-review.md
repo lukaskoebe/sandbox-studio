@@ -15,7 +15,7 @@ Studio supports GitHub, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, and SSH G
 - For another HTTPS host, provide its username and token.
 - For SSH, Studio signs with the keys in your SSH agent, the same ones `ssh` uses. Compare the scanned host-key fingerprint with the fingerprint published by the host, then confirm it. To keep a key for Studio alone, choose a Studio key instead: Studio creates it and shows its public key for you to add to the host.
 
-Forge tokens and Studio's SSH keys stay in Studio's host-side vault. Your SSH agent is only used on the host. Neither reaches a sandbox. **Settings → Git** can test a forge connection and replace an expiring token.
+Forge tokens and Studio's SSH keys stay in Studio's host-side vault. Your SSH agent is only used on the host. Neither reaches a sandbox. If your agent asks you to confirm each signature, as hardware keys and password managers do, Studio's own fetch before a push runs at most once every 30 seconds per sandbox and repository, so a burst of pushes asks once. **Settings → Git** can test a forge connection and replace an expiring token.
 
 The forge row shows its Studio remote URL, in the form `https://git.studio.internal/<forge>/<path>.git`. Copy that URL when cloning from a plain terminal. When an agent session starts, Studio also writes managed Git URL rules so common URLs for configured forges can route through Studio.
 

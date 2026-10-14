@@ -41,6 +41,28 @@ func (s *Service) receivePack(w http.ResponseWriter, r *http.Request, t target) 
 		return
 	}
 	path := s.stagingPath(t)
+	if t.op == "info/refs" {
+		// Rate-limited per mirror (fetchLimiter): a fresh mirror is advertised as it is.
+		err := s.fetches.fetch(ctx, path, mirrorKey(t), func(ctx context.Context) error {
+			unlock := s.lock(path)
+			defer unlock()
+			repo, err := openStaging(path)
+			if err != nil {
+				return &stagingError{err}
+			}
+			return rm.fetchMirror(ctx, repo)
+		})
+		var se *stagingError
+		switch {
+		case errors.As(err, &se):
+			s.Log.Error("git remote: staging", "path", path, "err", se.err)
+			refuse(w, http.StatusInternalServerError, "Sandbox Studio could not open its staging repository.")
+			return
+		case err != nil:
+			refuse(w, http.StatusBadGateway, "Sandbox Studio could not fetch the repository from the forge: "+mask(err.Error(), token))
+			return
+		}
+	}
 	unlock := s.lock(path)
 	defer unlock()
 	repo, err := openStaging(path)
@@ -50,15 +72,17 @@ func (s *Service) receivePack(w http.ResponseWriter, r *http.Request, t target) 
 		return
 	}
 	if t.op == "info/refs" {
-		if err := rm.fetchMirror(ctx, repo); err != nil {
-			refuse(w, http.StatusBadGateway, "Sandbox Studio could not fetch the repository from the forge: "+mask(err.Error(), token))
-			return
-		}
 		s.advertise(w, repo)
 		return
 	}
 	s.stage(w, r, t, repo)
 }
+
+// stagingError is a mirror fetch that failed because the staging repository didn't open.
+type stagingError struct{ err error }
+
+func (e *stagingError) Error() string { return "staging repository: " + e.err.Error() }
+func (e *stagingError) Unwrap() error { return e.err }
 
 // noThin asks git not to send thin packs; go-git has no constant for it.
 const noThin = capability.Capability("no-thin")

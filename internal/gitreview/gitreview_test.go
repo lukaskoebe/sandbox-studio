@@ -48,6 +48,7 @@ type fakeForge struct {
 
 	mu     sync.Mutex
 	auths  []string
+	upload int // upload-pack advertisements served: fetches, the mirror's included
 	pulls  []PullRequest
 	merges []mergeRequest // GitLab merge requests
 }
@@ -118,6 +119,9 @@ func (f *fakeForge) serve(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	switch {
 	case rest == "info/refs" && r.URL.Query().Get("service") == "git-upload-pack":
+		f.mu.Lock()
+		f.upload++
+		f.mu.Unlock()
 		sess, _ := tr.NewUploadPackSession(ep, nil)
 		ar, err := sess.AdvertisedReferencesContext(ctx)
 		f.advertise(w, "git-upload-pack", ar, err)

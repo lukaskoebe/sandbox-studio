@@ -92,7 +92,8 @@ The config holds only these internal URLs, never a token or key.
   `ssh-add -l` lists your key, or set `SSH_AUTH_SOCK` for autostart. Studio offers the first
   six keys. Only Studio's own fetches and approved pushes use the agent; the socket is never
   forwarded into a sandbox, and sandboxes still go through review. A hardware key or a
-  password manager may ask you to confirm each signature. When a signature takes more than two
+  password manager may ask you to confirm each signature; Studio fetches each staging mirror
+  at most once every 30 seconds ([Push](#push)). When a signature takes more than two
   seconds, the forge row suggests a dedicated Studio key, which you can dismiss. If the agent
   can't be reached, the forge says "SSH agent not available", and `studio doctor` warns.
 - **Studio key:** choose "A Studio key" in the dialog, or switch the forge to it. Studio
@@ -147,6 +148,14 @@ body is limited to 16 MiB.
    (`<data>/git-staging/<env-id>/<sandbox-id>/<forge-id>/<path>.git`) and advertises them.
    Each sandbox has its own staging repo, so sandboxes and environments never see each
    other's pushes.
+   The mirror fetch is rate-limited per staging repo, since a fetch signed by the SSH agent
+   may ask you to confirm it: a mirror that fetched within the last 30 seconds
+   (`MirrorFetchInterval`) is advertised as it is, and pushes that arrive while a fetch of
+   the same mirror runs wait for it and share its result. A failed fetch isn't remembered,
+   so the next push tries again. An approved push, whether it went through or the forge
+   refused it, makes every sandbox's mirror of that repository fetch again on its next push.
+   A branch moved on the forge by something other than Studio within the window shows up
+   at approval as "moved on the forge"; the push after that fetches again.
    Deleting a sandbox deletes its staging repos (`<data>/git-staging/<env-id>/<sandbox-id>`);
    a failure there is logged and doesn't fail the delete. At startup Studio sweeps the
    staging root and removes, with a log line each, the directories of sandboxes no longer in
