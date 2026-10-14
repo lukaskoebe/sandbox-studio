@@ -30,11 +30,14 @@ pnpm e2e                                      # needs bin/studio-e2e: make e2e-b
 
 The `nobadger,nomysql,nopgx` build tags leave out the storage backends of Caddy's PKI app,
 which Studio doesn't use; release builds use them too. Tests use fakes and never start VMs.
-The tests that boot the real base image need the `integration` tag, a microsandbox-capable
-host, `make image` and `make agent`:
+Real VMs are booted by the smoke workflow (`.github/workflows/smoke.yml`), nightly and on
+demand: it builds Studio on Linux, macOS and Windows, starts it, and creates and deletes a
+sandbox with the `studio` commands. On a microsandbox-capable host, the same by hand:
 
 ```sh
-go test -tags integration -run TestSandboxLifecycle -v ./internal/sandboxes
+make build image
+bin/studio &
+bin/studio create smoke && bin/studio rm smoke --yes
 ```
 
 The parsers of untrusted input have fuzz targets: `FuzzSniffTLS` and `FuzzSniffHTTP`
@@ -61,8 +64,7 @@ PW_CHROMIUM=/usr/bin/chromium make e2e
 ```
 
 The fakes and the scenarios are described in [frontend](docs/frontend.md#end-to-end-tests).
-CI runs the suite on every push. The integration test runs nightly on a KVM runner
-(`.github/workflows/nightly.yml`).
+CI runs the suite on every push.
 
 ## Conventions
 

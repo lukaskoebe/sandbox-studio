@@ -192,8 +192,6 @@ docs/                 developer documentation
 ## Testing and CI
 
 - Go unit tests per package, all with fakes: no VMs, no real LLM APIs, no keychain.
-- `internal/sandboxes/integration_test.go` (`-tags integration`) boots the real base image.
-  It needs a microsandbox-capable host with KVM; `nightly.yml` runs it on a KVM runner.
 - End-to-end tests: the Playwright suite in `web/e2e` runs against Studio built with `-tags e2e`,
   where `internal/e2e` replaces the VM runtime and the guest agent with fakes. See
   [frontend](frontend.md#end-to-end-tests).
@@ -204,8 +202,11 @@ docs/                 developer documentation
   `install.sh` tests and shellcheck. The web job checks the generated API types, then runs
   typecheck, ESLint, Prettier and the build. The e2e job runs `make e2e` on Linux with
   Playwright's Chromium. `docs.yml` builds the site.
-- Nightly (`.github/workflows/nightly.yml`): the integration test on a KVM runner, after
-  Studio has installed microsandbox on its first start.
+- Smoke (`.github/workflows/smoke.yml`, nightly and on demand): on Linux, macOS and Windows,
+  build Studio, start it (it installs microsandbox), create a sandbox with `studio create`
+  and delete it. Linux boots the base image built from the commit, the others the latest
+  release's. GitHub's macOS runners have no nested virtualization, so the boot is skipped
+  there with a warning.
 - Releases: see [release](release.md).
 
 ## Conventions

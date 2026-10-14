@@ -234,7 +234,7 @@ func checkHVF(p Probes) Check {
 	case err != nil:
 		return c.with(Warn, "Hypervisor.framework support is unknown: "+err.Error(), "")
 	case !ok:
-		return c.with(Fail, "Hypervisor.framework is not available (kern.hv_support is 0).",
+		return c.with(Fail, "Hypervisor.framework is not available on this Mac.",
 			"Run Studio on the Mac itself rather than in a VM without nested virtualization.")
 	}
 	return c.with(OK, "Hypervisor.framework is available.", "")

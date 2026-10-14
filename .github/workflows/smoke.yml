@@ -1,9 +1,9 @@
 name: smoke
 
 # Sets Studio up as a user does, on each host OS: build it, start it (it installs msb on the
-# first start), create a sandbox from the latest released base image, wait until its guest
-# agent connects, and delete it. Hosted runners may lack nested virtualization; the job then
-# fails at the VM start and the log says so.
+# first start), create a sandbox, wait until its guest agent connects, and delete it. Linux
+# boots the base image built from this commit; macOS and Windows, which can't build it, boot
+# the latest released one. A runner without a hypervisor skips the boot with a warning.
 
 on:
   schedule:
@@ -84,9 +84,13 @@ jobs:
           CGO_ENABLED: "1"
         run: go build -trimpath -tags "$GO_TAGS" -o "$EXE" ./cmd/studio
       - name: Latest released base image
+        if: runner.os != 'Linux'
         env:
           GH_TOKEN: ${{ github.token }}
         run: echo "IMAGE=ghcr.io/lukaskoebe/sandbox-studio-base:$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)" >> "$GITHUB_ENV"
+      - name: The base image of this commit
+        if: runner.os == 'Linux'
+        run: echo "IMAGE=sandbox-studio-base:dev" >> "$GITHUB_ENV"
       - name: Start Studio
         run: |
           # A data directory of its own; the commands below find Studio through it.
@@ -102,15 +106,31 @@ jobs:
           done
           cat "$RUNNER_TEMP/studio.log"
           exit 1
+      - name: Build the base image
+        if: runner.os == 'Linux'
+        run: PATH="$HOME/.microsandbox/bin:$PATH" make image
       - name: Host checks
-        run: ./"$EXE" doctor || true
+        id: doctor
+        run: |
+          ./"$EXE" -image "$IMAGE" doctor || true
+          if [ "$RUNNER_OS" = macOS ] && [ "$(sysctl -n kern.hv_support 2>/dev/null)" != 1 ]; then
+            echo "::warning::This runner has no Hypervisor.framework (no nested virtualization); the sandbox boot is skipped."
+            echo "boot=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Create a sandbox and wait until its agent connects
+        if: steps.doctor.outputs.boot != 'false'
         timeout-minutes: 25
         run: |
           ./"$EXE" create smoke --cpus 2 --memory 2
           ./"$EXE" show smoke
       - name: Delete the sandbox
+        if: steps.doctor.outputs.boot != 'false'
         run: ./"$EXE" rm smoke --yes
-      - name: Studio log
+      - name: Logs
         if: always()
-        run: cat "$RUNNER_TEMP/studio.log" || true
+        run: |
+          cat "$RUNNER_TEMP/studio.log" || true
+          for f in "$HOME"/.microsandbox/sandboxes/*/logs/*.log; do
+            [ -f "$f" ] && { echo "== $f"; tail -n 80 "$f"; }
+          done
+          true
