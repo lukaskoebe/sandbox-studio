@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.3.1 — 2026-10-14
+
+Fixes creating sandboxes on Windows.
+
+- **Windows:** Studio serves each sandbox's agent channel on a named pipe that only your user
+  can open. v0.3.0 used a socket file there, which microsandbox rejects on Windows, so every
+  sandbox failed to create with "vsock host path must be a local Windows named pipe".
+- **Doctor:** on Windows, `studio doctor` fails when Studio runs in a job object that keeps
+  sandboxes from starting detached (they would fail with "Access is denied"). On a Mac
+  without Hypervisor.framework it says so instead of reporting an error.
+- **Smoke tests:** a nightly workflow builds Studio on Linux, macOS and Windows, starts it,
+  and creates and deletes a sandbox. It replaces the old nightly integration test.
+
 ## v0.3.0 — 2026-10-14
 
 Teammates you talk to in one place, a command line, subscription sign-ins, and network
