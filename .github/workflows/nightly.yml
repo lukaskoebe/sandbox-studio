@@ -22,9 +22,12 @@ jobs:
           go-version-file: go.mod
       - name: Give the runner user access to /dev/kvm
         run: |
+          ls -l /dev/kvm
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle
+          sudo chmod 0666 /dev/kvm
           test -r /dev/kvm -a -w /dev/kvm
       - name: Build Studio and the guest agent
         run: make build
