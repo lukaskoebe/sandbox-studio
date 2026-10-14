@@ -281,8 +281,8 @@ func (p *ptyStream) exit() {
 
 const prompt = "agent@sandbox:/workspace$ "
 
-// servePTY runs a line-based fake shell: it echoes input, and answers echo, printenv and
-// exit. Secret placeholders from the last config are its environment, as with the real
+// servePTY runs a line-based fake shell: it echoes input, and answers echo, printf, printenv
+// and exit. Secret placeholders from the last config are its environment, as with the real
 // agent's profile hook.
 func (g *Guest) servePTY(st net.Conn, br *bufio.Reader, name string) error {
 	if name == "" {
@@ -352,6 +352,10 @@ func (g *Guest) shell(line string) (out string, exit bool) {
 			}
 		}
 		return strings.Join(args, " ") + "\r\n", false
+	case "printf":
+		// The escapes a terminal test needs, such as an OSC 52 copy: printf '\e]52;;aGk=\a'.
+		arg := strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "printf")), "'\"")
+		return strings.NewReplacer(`\e`, "\x1b", `\a`, "\a", `\n`, "\r\n").Replace(arg), false
 	case "printenv":
 		if len(fields) > 1 {
 			if v, ok := env[fields[1]]; ok {

@@ -17,7 +17,10 @@ binary embeds (`//go:embed`) and serves at `/`.
   sandbox start, stop, suspend, resume, rebase, checkpoint change and history change
   publishes on the `sandboxes` topic. A VM that stops on its own publishes nothing, so its
   lineage status updates at the next change or reload.
-- Terminals: xterm.js. Editors: CodeMirror (YAML specs, Caddyfiles). Toasts: sonner.
+- Terminals: xterm.js, attached to tmux in the guest (mouse on). A drag selects in tmux, which
+  copies with OSC 52; the terminal writes any OSC 52 clipboard to the browser's and refuses
+  reads. Right-click opens Studio's Copy/Paste menu and never reaches tmux.
+- Editors: CodeMirror (YAML specs, Caddyfiles). Toasts: sonner.
 - Theme: the design tokens are in `src/styles.css` (the Workbench theme, see
   [design/ui-style.md](design/ui-style.md)). `src/lib/theme.ts` applies the system, light or
   dark choice, stored in the browser as `studio.theme`. Shared pieces such as `SectionHeader`,

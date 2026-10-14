@@ -42,3 +42,38 @@ test("sandbox lifecycle: create, terminal, stop, start, delete", async ({
   )
   expect(left!.map((s) => s.id)).not.toContain(id)
 })
+
+test("terminal: a tmux copy reaches the clipboard, and right-click opens Copy and Paste", async ({
+  page,
+  context,
+  api,
+  env,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"])
+  const id = await api.createSandbox(sandboxName("copy"))
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  const term = terminal(page)
+  // tmux copies a mouse selection with OSC 52 and an empty clipboard name.
+  await term.run(`printf '\\e]52;;Y29waWVkIGZyb20gdG11eA==\\a'`)
+  await expect(
+    page.getByRole("status").filter({ hasText: "Copied" })
+  ).toBeVisible()
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "copied from tmux"
+  )
+  // A program in the sandbox can't read the clipboard: the answer comes back empty.
+  await page.evaluate(() => navigator.clipboard.writeText("host secret"))
+  await term.run(`printf '\\e]52;c;?\\a'`)
+  await expect(term.rows).toContainText("]52;c;")
+  await expect(term.rows).not.toContainText("host secret")
+  await page.keyboard.press("Control+C")
+  await page
+    .locator(".xterm")
+    .filter({ visible: true })
+    .click({ button: "right" })
+  await expect(page.getByRole("menuitem", { name: /Copy/ })).toBeDisabled()
+  await page.evaluate(() => navigator.clipboard.writeText("echo pasted"))
+  await page.getByRole("menuitem", { name: /Paste/ }).click()
+  await page.keyboard.press("Enter")
+  await expect(term.line("pasted")).toHaveCount(1)
+})

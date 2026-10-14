@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import { ClipboardTextIcon, CopyIcon } from "@phosphor-icons/react"
 import { Terminal as XTerm } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
@@ -6,6 +8,14 @@ import { ClipboardAddon, type IClipboardProvider } from "@xterm/addon-clipboard"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import { TerminalControls } from "@/components/terminal-controls"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { copyText } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
 
@@ -70,25 +80,23 @@ function applyControlKey(data: string): string | null {
   return data
 }
 
-const terminalClipboard: IClipboardProvider = {
-  async readText(selection) {
-    if (String(selection) !== "c" || typeof navigator === "undefined") {
-      return ""
-    }
-    try {
-      const clipboard = (navigator as Partial<Navigator>).clipboard
-      if (!clipboard || typeof clipboard.readText !== "function") return ""
-      return await clipboard.readText()
-    } catch {
-      return ""
-    }
-  },
-  writeText(selection, text) {
-    if (String(selection) !== "c") return undefined
-    // OSC 52 clipboard writes are best-effort terminal protocol requests. The
-    // addon must not surface a denied browser clipboard write as an input error.
-    return copyText(text).catch(() => undefined)
-  },
+const isMac =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+
+/**
+ * The terminal's side of OSC 52. tmux copies a mouse selection with an empty clipboard name
+ * ("52;;…"), which xterm treats as the clipboard, so every name copies. Reads are refused: a
+ * program in the sandbox must not read the host's clipboard.
+ */
+function terminalClipboard(onCopied: () => void): IClipboardProvider {
+  return {
+    readText: () => "",
+    writeText(_selection, text) {
+      if (!text) return undefined
+      // Best effort: a denied browser clipboard write must not surface as a terminal error.
+      return copyText(text).then(onCopied, () => undefined)
+    },
+  }
 }
 
 /**
@@ -122,6 +130,46 @@ export function Terminal({
   onExitRef.current = onExit
   const suspendedRef = useRef(suspended)
   const parkRef = useRef<(suspended: boolean) => void>(null)
+  // What the right-click menu acts on: xterm's own selection when it opened (Shift-drag, or
+  // Option-drag on a Mac; a plain drag selects in tmux, which copies on release).
+  const [menuSelection, setMenuSelection] = useState("")
+  const [copied, setCopied] = useState(false)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const showCopied = useCallback(() => {
+    setCopied(true)
+    clearTimeout(copiedTimer.current)
+    copiedTimer.current = setTimeout(() => setCopied(false), 1500)
+  }, [])
+  useEffect(() => () => clearTimeout(copiedTimer.current), [])
+
+  const copySelection = useCallback(() => {
+    const text = termRef.current?.getSelection() ?? ""
+    if (!text) return false
+    copyText(text).then(showCopied, () =>
+      toast.error("Could not copy", {
+        description: "The browser did not allow access to the clipboard.",
+      })
+    )
+    return true
+  }, [showCopied])
+
+  const pasteClipboard = useCallback(async () => {
+    const term = termRef.current
+    if (!term || !connectedRef.current || suspendedRef.current) return
+    try {
+      const clipboard = (navigator as Partial<Navigator>).clipboard
+      if (typeof clipboard?.readText !== "function") throw new Error()
+      const text = await clipboard.readText()
+      if (text) term.paste(text)
+      term.focus()
+    } catch {
+      // Reading the clipboard needs permission and a secure page; the paste key always works.
+      toast("Paste with the keyboard", {
+        description: `The browser did not allow reading the clipboard here. Press ${isMac ? "⌘V" : "Ctrl+V"} in the terminal instead.`,
+      })
+      term.focus()
+    }
+  }, [])
 
   const consumeCtrl = useCallback((data: string) => {
     if (!ctrlArmedRef.current || pasteEventPendingRef.current) return data
@@ -175,7 +223,23 @@ export function Terminal({
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.loadAddon(new WebLinksAddon())
-    term.loadAddon(new ClipboardAddon(undefined, terminalClipboard))
+    term.loadAddon(new ClipboardAddon(undefined, terminalClipboard(showCopied)))
+    // Ctrl+Shift+C copies xterm's selection, as in desktop terminals; Ctrl+C stays the
+    // interrupt. On a Mac, ⌘C copies through the browser's copy event, which xterm handles.
+    term.attachCustomKeyEventHandler((e) => {
+      if (
+        e.type === "keydown" &&
+        !isMac &&
+        e.ctrlKey &&
+        e.shiftKey &&
+        e.code === "KeyC"
+      ) {
+        e.preventDefault()
+        copySelection()
+        return false
+      }
+      return true
+    })
     term.open(el)
     try {
       term.loadAddon(new WebglAddon())
@@ -261,6 +325,13 @@ export function Terminal({
       })
     }
     document.addEventListener("paste", markTerminalPaste, true)
+    // The right button opens Studio's menu, not tmux's: tmux would draw a menu of its own
+    // under the browser's.
+    const keepRightButton = (event: MouseEvent) => {
+      if (event.button === 2) event.stopPropagation()
+    }
+    el.addEventListener("mousedown", keepRightButton, true)
+    el.addEventListener("mouseup", keepRightButton, true)
     // Attach once the terminal is visible and sized: the shell starts at the size we send,
     // and tabs that are never shown never connect.
     let started = false
@@ -291,12 +362,14 @@ export function Terminal({
       clearTimeout(retry)
       observer.disconnect()
       document.removeEventListener("paste", markTerminalPaste, true)
+      el.removeEventListener("mousedown", keepRightButton, true)
+      el.removeEventListener("mouseup", keepRightButton, true)
       pasteEventPendingRef.current = false
       subs.forEach((s) => s.dispose())
       ws?.close()
       term.dispose()
     }
-  }, [consumeCtrl, url])
+  }, [consumeCtrl, copySelection, showCopied, url])
 
   useEffect(() => {
     suspendedRef.current = suspended
@@ -321,12 +394,50 @@ export function Terminal({
     // No ScrollArea: xterm.js scrolls its own scrollback.
     <div
       className={cn(
-        "flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#1c1917] p-2",
+        "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#1c1917] p-2",
         !active && "hidden",
         className
       )}
     >
-      <div ref={container} className="min-h-0 min-w-0 flex-1" />
+      <ContextMenu
+        onOpenChange={(open) => {
+          if (open) setMenuSelection(termRef.current?.getSelection() ?? "")
+          else termRef.current?.focus()
+        }}
+      >
+        <ContextMenuTrigger
+          ref={container}
+          className="relative min-h-0 min-w-0 flex-1"
+          aria-label="Terminal"
+        />
+        <ContextMenuContent>
+          <ContextMenuItem disabled={!menuSelection} onClick={copySelection}>
+            <CopyIcon />
+            Copy
+            {!isMac && <ContextMenuShortcut>Ctrl+Shift+C</ContextMenuShortcut>}
+          </ContextMenuItem>
+          <ContextMenuItem
+            disabled={!connected || suspended}
+            onClick={() => void pasteClipboard()}
+          >
+            <ClipboardTextIcon />
+            Paste
+            <ContextMenuShortcut>{isMac ? "⌘V" : "Ctrl+V"}</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <p className="max-w-56 px-2 py-1 text-[0.6875rem] text-muted-foreground">
+            Drag to select: it is copied when you let go.
+          </p>
+        </ContextMenuContent>
+      </ContextMenu>
+      {copied && (
+        <span
+          role="status"
+          className="pointer-events-none absolute top-3 right-4 rounded-md bg-stone-700 px-2 py-0.5 text-xs text-stone-100 shadow"
+        >
+          Copied
+        </span>
+      )}
       <TerminalControls
         disabled={!connected || suspended}
         ctrlArmed={ctrlArmed}

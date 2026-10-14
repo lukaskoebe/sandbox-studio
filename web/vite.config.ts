@@ -5,7 +5,8 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 
-const studio = "http://127.0.0.1:7878"
+// STUDIO_URL points the dev server at another Studio, such as an e2e build on its own port.
+const studio = process.env.STUDIO_URL ?? "http://127.0.0.1:7878"
 
 // Studio only accepts loopback hosts and same-origin writes. The dev proxy presents
 // requests from this dev page as Studio's own origin, and leaves any other origin intact

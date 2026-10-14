@@ -22,6 +22,8 @@ Open a sandbox from the sidebar to see its dashboard: a band with its status, ow
 
 ![A terminal open at /workspace in a running sandbox](../../assets/screenshots/sandbox-terminal.jpg)
 
+To copy from a terminal, drag across the text: it is copied when you let go. Right-click opens **Copy** and **Paste**. With the keyboard, Ctrl+Shift+C copies a selection made with Shift-drag (⌘C on a Mac, with Option-drag), and Ctrl+V or ⌘V pastes. Programs in the sandbox can put text on your clipboard but can't read it.
+
 ## Stop, suspend, and resume
 
 Start and stop are on the dashboard. The options menu (**⋯**, on both pages) has these actions:
