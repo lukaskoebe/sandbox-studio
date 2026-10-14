@@ -14,6 +14,7 @@ import { Route as MockupsRouteImport } from './routes/mockups'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as EEnvRouteImport } from './routes/e.$env'
 import { Route as MockupsIndexRouteImport } from './routes/mockups.index'
+import { Route as MockupsBrowserRouteImport } from './routes/mockups.browser'
 import { Route as EEnvIndexRouteImport } from './routes/e.$env.index'
 import { Route as EEnvBrowserRouteImport } from './routes/e.$env.browser'
 import { Route as EEnvBuildsRouteImport } from './routes/e.$env.builds'
@@ -74,6 +75,11 @@ const EEnvRoute = EEnvRouteImport.update({
 const MockupsIndexRoute = MockupsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => MockupsRoute,
+} as any)
+const MockupsBrowserRoute = MockupsBrowserRouteImport.update({
+  id: '/browser',
+  path: '/browser',
   getParentRoute: () => MockupsRoute,
 } as any)
 const EEnvIndexRoute = EEnvIndexRouteImport.update({
@@ -262,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/mockups': typeof MockupsRouteWithChildren
   '/setup': typeof SetupRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/mockups/browser': typeof MockupsBrowserRoute
   '/mockups/': typeof MockupsIndexRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
@@ -303,6 +310,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/setup': typeof SetupRoute
+  '/mockups/browser': typeof MockupsBrowserRoute
   '/mockups': typeof MockupsIndexRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
@@ -343,6 +351,7 @@ export interface FileRoutesById {
   '/mockups': typeof MockupsRouteWithChildren
   '/setup': typeof SetupRoute
   '/e/$env': typeof EEnvRouteWithChildren
+  '/mockups/browser': typeof MockupsBrowserRoute
   '/mockups/': typeof MockupsIndexRoute
   '/e/$env/browser': typeof EEnvBrowserRoute
   '/e/$env/builds': typeof EEnvBuildsRoute
@@ -388,6 +397,7 @@ export interface FileRouteTypes {
     | '/mockups'
     | '/setup'
     | '/e/$env'
+    | '/mockups/browser'
     | '/mockups/'
     | '/e/$env/browser'
     | '/e/$env/builds'
@@ -429,6 +439,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/setup'
+    | '/mockups/browser'
     | '/mockups'
     | '/e/$env/browser'
     | '/e/$env/builds'
@@ -468,6 +479,7 @@ export interface FileRouteTypes {
     | '/mockups'
     | '/setup'
     | '/e/$env'
+    | '/mockups/browser'
     | '/mockups/'
     | '/e/$env/browser'
     | '/e/$env/builds'
@@ -549,6 +561,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/mockups/'
       preLoaderRoute: typeof MockupsIndexRouteImport
+      parentRoute: typeof MockupsRoute
+    }
+    '/mockups/browser': {
+      id: '/mockups/browser'
+      path: '/browser'
+      fullPath: '/mockups/browser'
+      preLoaderRoute: typeof MockupsBrowserRouteImport
       parentRoute: typeof MockupsRoute
     }
     '/e/$env/': {
@@ -807,12 +826,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface MockupsRouteChildren {
+  MockupsBrowserRoute: typeof MockupsBrowserRoute
   MockupsIndexRoute: typeof MockupsIndexRoute
   MockupsDirectionScreenRoute: typeof MockupsDirectionScreenRoute
   MockupsTeammateConceptRoute: typeof MockupsTeammateConceptRoute
 }
 
 const MockupsRouteChildren: MockupsRouteChildren = {
+  MockupsBrowserRoute: MockupsBrowserRoute,
   MockupsIndexRoute: MockupsIndexRoute,
   MockupsDirectionScreenRoute: MockupsDirectionScreenRoute,
   MockupsTeammateConceptRoute: MockupsTeammateConceptRoute,

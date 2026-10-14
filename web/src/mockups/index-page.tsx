@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { screenTitles, screens, type Direction } from "./shared"
+import { browserPitch } from "./browser/page"
 import { conceptInfo, concepts } from "./teammate/frame"
 
 const directions: { id: Direction; name: string; pitch: string }[] = [
@@ -72,6 +73,21 @@ export function MockupIndex() {
           </Link>
         ))}
       </div>
+      <h2 className="mt-12 text-lg font-semibold tracking-tight">
+        Browser revamp
+      </h2>
+      <p className="mt-1 text-muted-foreground">
+        Interactive, with static data and a simulated agent. The pill at the
+        bottom switches where the browser sits, the state it starts from and the
+        theme.
+      </p>
+      <Link
+        to="/mockups/browser"
+        className="mt-4 block rounded-lg border p-5 hover:bg-muted"
+      >
+        <h3 className="font-semibold">Browser window</h3>
+        <p className="mt-1 text-muted-foreground">{browserPitch}</p>
+      </Link>
     </main>
   )
 }
