@@ -111,7 +111,16 @@ func (h *Hub) accept(id string, ln net.Listener) {
 	for {
 		nc, err := ln.Accept()
 		if err != nil {
-			return
+			// A client that hangs up while it is accepted fails Accept on Windows; only a
+			// closed listener ends the loop.
+			h.mu.Lock()
+			open := h.listeners[id] == ln
+			h.mu.Unlock()
+			if !open || errors.Is(err, net.ErrClosed) {
+				return
+			}
+			time.Sleep(50 * time.Millisecond)
+			continue
 		}
 		go h.serve(id, nc)
 	}

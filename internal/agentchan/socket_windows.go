@@ -2,10 +2,13 @@ package agentchan
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Microsoft/go-winio"
 	"golang.org/x/sys/windows"
@@ -25,11 +28,52 @@ func listen(path string) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	return winio.ListenPipe(path, &winio.PipeConfig{
+	ln, err := winio.ListenPipe(path, &winio.PipeConfig{
 		SecurityDescriptor: sddl,
 		InputBufferSize:    64 << 10,
 		OutputBufferSize:   64 << 10,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &pipeListener{Listener: ln, done: make(chan struct{})}, nil
+}
+
+// pipeListener works around a lost close in go-winio: when a client hangs up just as the
+// listener closes, the accept in flight can take the close signal and fail with the client's
+// error instead, and Close then waits forever. Another Close reaches the listener, so Close
+// repeats until the listener is done.
+type pipeListener struct {
+	net.Listener
+	once sync.Once
+	done chan struct{}
+}
+
+func (l *pipeListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if errors.Is(err, winio.ErrPipeListenerClosed) {
+		err = net.ErrClosed
+	}
+	return c, err
+}
+
+func (l *pipeListener) Close() error {
+	l.once.Do(func() {
+		go func() {
+			_ = l.Listener.Close()
+			close(l.done)
+		}()
+	})
+	retry := time.NewTicker(50 * time.Millisecond)
+	defer retry.Stop()
+	for {
+		select {
+		case <-l.done:
+			return nil
+		case <-retry.C:
+			go func() { _ = l.Listener.Close() }() // returns once the listener is done
+		}
+	}
 }
 
 // Dial connects to a sandbox's agent channel, as msb does for the guest.
