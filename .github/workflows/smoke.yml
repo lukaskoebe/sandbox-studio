@@ -126,9 +126,17 @@ jobs:
       - name: Delete the sandbox
         if: steps.doctor.outputs.boot != 'false'
         run: ./"$EXE" rm smoke --yes
+      - name: msb on its own
+        # Tells a Studio problem from a host one when the sandbox didn't boot.
+        if: failure() && steps.doctor.outcome == 'success'
+        run: |
+          export PATH="$HOME/.microsandbox/bin:$PATH"
+          msb pull "$IMAGE" || true
+          msb run alpine -- echo booted || true
       - name: Logs
         if: always()
         run: |
+          ./"$EXE" show smoke --json || true
           cat "$RUNNER_TEMP/studio.log" || true
           for f in "$HOME"/.microsandbox/sandboxes/*/logs/*.log; do
             [ -f "$f" ] && { echo "== $f"; tail -n 80 "$f"; }
