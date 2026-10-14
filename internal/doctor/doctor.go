@@ -82,6 +82,9 @@ type Probes struct {
 	HVF func() (bool, error)
 	// WHP reports whether the Windows Hypervisor Platform is enabled (Windows).
 	WHP func() (bool, error)
+	// JobBlocksBreakaway reports whether Studio runs in a Windows job object that doesn't
+	// let its child processes leave it (Windows).
+	JobBlocksBreakaway func() (bool, error)
 
 	// ImageCached reports whether msb already has the image.
 	ImageCached func(ctx context.Context, ref string) (bool, error)
@@ -184,7 +187,7 @@ func checkVirtualization(p Probes) []Check {
 	case "darwin":
 		return []Check{checkHVF(p)}
 	case "windows":
-		return []Check{checkWHP(p)}
+		return []Check{checkWHP(p), checkJob(p)}
 	}
 	return []Check{{ID: "virtualization", Name: "Virtualization", Status: Fail,
 		Message: p.GOOS + " is not supported; Studio runs on Linux, macOS and Windows."}}
@@ -253,6 +256,27 @@ func checkWHP(p Probes) Check {
 		return c.with(Fail, "The Windows Hypervisor Platform is not enabled.", whpFix)
 	}
 	return c.with(OK, "The Windows Hypervisor Platform is enabled.", "")
+}
+
+// checkJob looks for a job object that keeps sandboxes from starting: msb starts each VM
+// detached, breaking away from Studio's job, and Windows refuses that with "Access is denied"
+// when the job doesn't allow it. CI runners and some service managers start programs in one.
+func checkJob(p Probes) Check {
+	c := Check{ID: "job", Name: "Detached sandboxes"}
+	if p.JobBlocksBreakaway == nil {
+		return c.with(Warn, "Studio's job object was not checked.", "")
+	}
+	blocked, err := p.JobBlocksBreakaway()
+	switch {
+	case err != nil:
+		return c.with(Warn, "Studio's job object could not be checked: "+err.Error(), "")
+	case blocked:
+		return c.with(Fail, "Studio runs in a Windows job object that doesn't let sandboxes start detached from it; "+
+			"creating or starting one fails with \"Access is denied\".",
+			"Start Studio from a normal terminal or the Start menu rather than from the program that started it now "+
+				"(a CI runner, a service manager or a tool that confines its children).")
+	}
+	return c.with(OK, "Sandboxes can start detached from Studio.", "")
 }
 
 const whpFix = "Turn on \"Windows Hypervisor Platform\" in Windows Features (optionalfeatures.exe), or run " +

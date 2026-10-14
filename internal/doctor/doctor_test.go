@@ -112,6 +112,14 @@ func TestMacAndWindows(t *testing.T) {
 	if c := find(t, Run(context.Background(), p, opts), "whp"); c.Status != OK {
 		t.Fatalf("whp on: %+v", c)
 	}
+	p.JobBlocksBreakaway = func() (bool, error) { return true, nil }
+	if c := find(t, Run(context.Background(), p, opts), "job"); c.Status != Fail || !strings.Contains(c.Message, "Access is denied") {
+		t.Fatalf("job blocks breakaway: %+v", c)
+	}
+	p.JobBlocksBreakaway = func() (bool, error) { return false, nil }
+	if c := find(t, Run(context.Background(), p, opts), "job"); c.Status != OK {
+		t.Fatalf("job allows breakaway: %+v", c)
+	}
 }
 
 func TestMSB(t *testing.T) {

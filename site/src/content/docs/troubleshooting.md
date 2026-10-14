@@ -7,6 +7,8 @@ description: Fix common setup, network, provider, Git, and checkpoint issues.
 
 Run `studio doctor` or open **Settings → Runtime**. Check that hardware virtualization is available and that the host has enough free disk space. On Linux, verify your user can read and write `/dev/kvm`; on Windows, enable Windows Hypervisor Platform and reboot. See [Getting started](../getting-started/).
 
+On Windows, if creating a sandbox fails with "Access is denied", Studio was started inside a job object that keeps it from starting VMs detached, as CI runners and some service managers do. Start Studio from a normal terminal or the Start menu instead.
+
 On first start, Studio may need to download the runtime and base image. Check the host's network connection and available disk space. The app listens on loopback at `127.0.0.1:7878` by default.
 
 ## An agent cannot start

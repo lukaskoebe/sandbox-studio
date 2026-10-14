@@ -206,7 +206,8 @@ docs/                 developer documentation
   build Studio, start it (it installs microsandbox), create a sandbox with `studio create`
   and delete it. Linux boots the base image built from the commit, the others the latest
   release's. GitHub's macOS runners have no nested virtualization, so the boot is skipped
-  there with a warning.
+  there with a warning. On Windows, Studio is started through WMI: the runner's job object
+  doesn't allow breakaway, and msb starts each VM detached from its job.
 - Releases: see [release](release.md).
 
 ## Conventions
