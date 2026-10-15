@@ -48,6 +48,10 @@ type fakeBrowser struct {
 	// uploads are the copies that reached sandboxes, and uploadErr makes the next one fail.
 	uploads   []fakeUpload
 	uploadErr error
+	// ports are what each fake sandbox listens on, and forwards the ports each VM was
+	// last told to forward.
+	ports    map[string][]int
+	forwards map[string][]int
 }
 
 // fakeUpload is a file the fake sandboxes received.
@@ -204,6 +208,26 @@ func (f *fakeBrowser) DialTCP(_ context.Context, _ string, port int) (net.Conn, 
 		return nil, fmt.Errorf("no stream")
 	}
 	return f.dial(port)
+}
+
+func (f *fakeBrowser) Ports(_ context.Context, sandboxID string) ([]agentproto.Port, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []agentproto.Port
+	for _, p := range f.ports[sandboxID] {
+		out = append(out, agentproto.Port{Port: p})
+	}
+	return out, nil
+}
+
+func (f *fakeBrowser) Forwards(_ context.Context, vm string, ports []int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.forwards == nil {
+		f.forwards = map[string][]int{}
+	}
+	f.forwards[vm] = append([]int(nil), ports...)
+	return nil
 }
 
 // saveDownload makes a file appear in a session's downloads folder of the fake VM.

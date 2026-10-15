@@ -31,7 +31,7 @@ func ref() map[string]any {
 func init() {
 	mcpInstructions += browserInstructions
 	tools := []Tool{
-		{agentproto.MethodBrowserOpen, "Open a URL in your browser. The result is text: read the page with browser_snapshot. With ephemeral true it starts a new throwaway session and returns its ID.",
+		{agentproto.MethodBrowserOpen, "Open a URL in your browser. The result is text: read the page with browser_snapshot. localhost and 127.0.0.1 are this sandbox: a server you run here on any port opens in the browser. With ephemeral true it starts a new throwaway session and returns its ID.",
 			obj([]string{"url"}, map[string]any{
 				"url": str("An http or https URL", "maxLength", 4000),
 				"ephemeral": map[string]any{"type": "boolean", "description": "Open in a new ephemeral session: an empty profile whose cookies and storage are deleted on browser_close, " +

@@ -47,6 +47,8 @@ func (noRunner) BrowserDownloads(context.Context, string, agentproto.BrowserDown
 func (noRunner) BrowserDownload(context.Context, string, agentproto.BrowserDownloadsRequest, func(agentproto.BrowserDownload, io.Reader) error) error {
 	return net.ErrClosed
 }
+func (noRunner) Ports(context.Context, string) ([]agentproto.Port, error) { return nil, net.ErrClosed }
+func (noRunner) Forwards(context.Context, string, []int) error            { return net.ErrClosed }
 func (noRunner) Upload(context.Context, string, agentproto.UploadRequest, io.Reader) (agentproto.UploadReply, error) {
 	return agentproto.UploadReply{}, net.ErrClosed
 }

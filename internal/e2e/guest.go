@@ -53,6 +53,7 @@ type Guest struct {
 	home     []string
 	sessions map[string]*session
 	ports    []int
+	forwards []int // a browser VM's forwarded ports
 	conns    []*Connection
 	calls    []*Call
 	browser  *browserVM // the browser of this boot, once Studio sent a browser stream
@@ -224,6 +225,8 @@ func (g *Guest) handle(st net.Conn) {
 		err = g.serveBrowser(st, br)
 	case agentproto.KindBrowserDownloads:
 		err = g.serveBrowserDownloads(st, br)
+	case agentproto.KindForwards:
+		err = g.serveForwards(st, br)
 	case agentproto.KindACP:
 		err = g.serveACP(st, br)
 	default:

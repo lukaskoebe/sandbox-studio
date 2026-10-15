@@ -19,6 +19,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -68,6 +70,8 @@ type browserVM struct {
 	mu     sync.Mutex
 	tabs   [agentproto.MaxBrowserEphemeral + 1]*tab // nil until the slot's session started
 	inputs []json.RawMessage
+	// fetch loads a localhost page through the VM's forwarded ports, as Chromium would.
+	fetch func(u *url.URL) (string, bool)
 }
 
 // tab is one agent-browser session: its history, the values typed into the page, and the
@@ -78,6 +82,9 @@ type tab struct {
 	values   map[string]string // ref → value
 	focus    string            // the ref the live view's user clicked into
 	watchers map[chan struct{}]struct{}
+	// served are the localhost pages that loaded, by URL; fetch loads one.
+	served map[string]string
+	fetch  func(u *url.URL) (string, bool)
 }
 
 func newTab() *tab {
@@ -102,6 +109,14 @@ func (t *tab) title() string {
 	if err != nil || u.Host == "" {
 		return ""
 	}
+	if localhost(u) {
+		// A forwarded page's title is its first line; one nothing serves fails, as in Chromium.
+		if body, ok := t.served[t.url()]; ok {
+			first, _, _ := strings.Cut(body, "\n")
+			return first
+		}
+		return u.Host + " refused to connect"
+	}
 	if u.Path == "/welcome" {
 		return "Welcome · " + u.Hostname()
 	}
@@ -122,6 +137,23 @@ func (t *tab) open(u string) {
 	t.history = append(t.history[:t.at+1], u)
 	t.at = len(t.history) - 1
 	t.values, t.focus = map[string]string{}, ""
+	if pu, err := url.Parse(u); err == nil && localhost(pu) && t.fetch != nil {
+		if body, ok := t.fetch(pu); ok {
+			if t.served == nil {
+				t.served = map[string]string{}
+			}
+			t.served[u] = body
+		}
+	}
+}
+
+// localhost reports whether u is on the browser VM's loopback.
+func localhost(u *url.URL) bool {
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
 }
 
 // move goes back or forward in the history, if there is somewhere to go.
@@ -385,12 +417,14 @@ func (b *browserVM) command(req agentproto.BrowserCommand) (agentproto.BrowserRe
 			t.end()
 		}
 		t = newTab()
+		t.fetch = b.fetch
 		b.tabs[req.Ephemeral] = t
 	case t == nil && req.Ephemeral > 0:
 		return res, errors.New(agentproto.ErrBrowserEphemeralGone)
 	case t == nil:
 		// The first command starts the profile's daemon, and with it the live view.
 		t = newTab()
+		t.fetch = b.fetch
 		b.tabs[0] = t
 	}
 	changed := false
@@ -464,9 +498,61 @@ func (g *Guest) browserVM() *browserVM {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.browser == nil {
-		g.browser = &browserVM{}
+		g.browser = &browserVM{fetch: g.fetchForwarded}
 	}
 	return g.browser
+}
+
+// serveForwards answers a forwards stream: the fake VM listens nowhere, it only remembers
+// the ports, and its pages on them load through fetchForwarded.
+func (g *Guest) serveForwards(st net.Conn, br *bufio.Reader) error {
+	var req agentproto.Forwards
+	if err := agentproto.ReadJSONLineLimit(br, &req, 64<<10); err != nil {
+		return agentproto.WriteJSONLine(st, agentproto.Error{Error: err.Error()})
+	}
+	g.mu.Lock()
+	g.forwards = slices.Clone(req.Ports)
+	g.mu.Unlock()
+	return agentproto.WriteJSONLine(st, struct{}{})
+}
+
+// fetchForwarded GETs u over a forward stream, as the real guest relays a connection to a
+// forwarded port. ok is false when the port isn't forwarded or the host refuses it.
+func (g *Guest) fetchForwarded(u *url.URL) (string, bool) {
+	port, err := strconv.Atoi(u.Port())
+	if u.Port() == "" {
+		port, err = 80, nil
+	}
+	g.mu.Lock()
+	sess, forwarded := g.sess, slices.Contains(g.forwards, port)
+	g.mu.Unlock()
+	if err != nil || !forwarded || sess == nil {
+		return "", false
+	}
+	st, err := sess.Open()
+	if err != nil {
+		return "", false
+	}
+	defer st.Close()
+	st.SetDeadline(time.Now().Add(10 * time.Second))
+	if agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindForward, Port: port}) != nil {
+		return "", false
+	}
+	br := bufio.NewReader(st)
+	var e agentproto.Error
+	if agentproto.ReadJSONLineLimit(br, &e, 4096) != nil || e.Error != "" {
+		return "", false
+	}
+	if _, err := fmt.Fprintf(st, "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", u.RequestURI(), u.Host); err != nil {
+		return "", false
+	}
+	res, err := http.ReadResponse(br, nil)
+	if err != nil {
+		return "", false
+	}
+	defer res.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(res.Body, 64<<10))
+	return string(body), err == nil
 }
 
 // screencastTab returns the started session that streams on port, if any.

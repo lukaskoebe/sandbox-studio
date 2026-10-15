@@ -114,3 +114,29 @@ type BrowserDownload struct {
 type BrowserDownloadList struct {
 	Files []BrowserDownload `json:"files"`
 }
+
+// KindForwards (host → guest, browser VMs only): the host writes a Forwards line; the guest
+// listens on loopback at exactly those ports, closing the listeners of ports no longer named,
+// and replies {} or an Error. Each connection to one of them becomes a KindForward stream.
+// This is how localhost in the browser reaches the sandbox that drives it
+// (docs/browser.md#localhost).
+const KindForwards = "forwards"
+
+// KindForward (guest → host, browser VMs only): a connection to a forwarded loopback port,
+// named in Header.Port. The host replies with one line, {} or an Error; after {} the stream
+// carries the connection's bytes to the same port in the driving sandbox.
+const KindForward = "forward"
+
+// MaxForwards bounds the ports one Forwards names.
+const MaxForwards = 64
+
+// Forwards is the body of a KindForwards stream.
+type Forwards struct {
+	Ports []int `json:"ports"`
+}
+
+// BrowserReservedPort reports whether port is one a browser VM uses itself, which a forward
+// never takes: agent-browser's live-view WebSockets and Chromium's DevTools.
+func BrowserReservedPort(port int) bool {
+	return port >= BrowserStreamPort-1 && port <= BrowserStreamPort+MaxBrowserEphemeral
+}

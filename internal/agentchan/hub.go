@@ -36,6 +36,10 @@ type Hub struct {
 	// (agentproto.KindCall): memory hooks and tools. id is the sandbox whose socket the
 	// call came in on, the only identity Studio trusts.
 	OnCall func(ctx context.Context, id, method string, params json.RawMessage) (any, error)
+	// OnForward, if set before the first Listen, connects a browser VM's forwarded loopback
+	// port (agentproto.KindForward) to where it leads. id is the VM whose socket the stream
+	// came in on.
+	OnForward func(ctx context.Context, id string, port int) (net.Conn, error)
 
 	log *slog.Logger
 
@@ -191,11 +195,15 @@ const maxGuestCalls = 8
 // callTimeout bounds one call; hooks give up well before it (agentcall.HookDeadline).
 const callTimeout = 2 * time.Minute
 
+// maxGuestForwards bounds the forwarded connections one guest has open; more are refused.
+const maxGuestForwards = 64
+
 // acceptCalls serves the streams the guest opens after its hello until the session ends.
 func (h *Hub) acceptCalls(id string, sess *yamux.Session) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	slots := make(chan struct{}, maxGuestCalls)
+	forwards := make(chan struct{}, maxGuestForwards)
 	for {
 		st, err := sess.AcceptStream()
 		if err != nil {
@@ -208,22 +216,51 @@ func (h *Hub) acceptCalls(id string, sess *yamux.Session) {
 			return
 		}
 		go func() {
-			defer func() { <-slots }()
-			h.serveCall(ctx, id, st)
+			held := true
+			release := func() {
+				if held {
+					held = false
+					<-slots
+				}
+			}
+			defer release()
+			h.serveStream(ctx, id, st, release, forwards)
 		}()
 	}
 }
 
-func (h *Hub) serveCall(ctx context.Context, id string, st net.Conn) {
+// serveStream reads the header of a stream the guest opened and serves it. A forward gives
+// its call slot back with release once its header is read: it lasts as long as the
+// connection, under its own bound.
+func (h *Hub) serveStream(ctx context.Context, id string, st net.Conn, release func(), forwards chan struct{}) {
 	defer st.Close()
 	st.SetReadDeadline(time.Now().Add(10 * time.Second))
 	br := bufio.NewReader(st)
 	var hdr agentproto.Header
-	var call agentproto.Call
-	if err := agentproto.ReadJSONLineLimit(br, &hdr, 4096); err != nil || hdr.Kind != agentproto.KindCall {
+	if err := agentproto.ReadJSONLineLimit(br, &hdr, 4096); err != nil {
 		_ = agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "expected a call"})
 		return
 	}
+	switch hdr.Kind {
+	case agentproto.KindCall:
+		h.serveCall(ctx, id, st, br)
+	case agentproto.KindForward:
+		release()
+		select {
+		case forwards <- struct{}{}:
+			defer func() { <-forwards }()
+		default:
+			_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "too many forwarded connections"})
+			return
+		}
+		h.serveForward(ctx, id, st, br, hdr.Port)
+	default:
+		_ = agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "expected a call"})
+	}
+}
+
+func (h *Hub) serveCall(ctx context.Context, id string, st net.Conn, br *bufio.Reader) {
+	var call agentproto.Call
 	if err := agentproto.ReadJSONLineLimit(br, &call, agentproto.MaxCallLine); err != nil {
 		_ = agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "bad call: " + err.Error()})
 		return
@@ -244,6 +281,51 @@ func (h *Hub) serveCall(ctx context.Context, id string, st net.Conn) {
 	}
 	st.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	_ = agentproto.WriteJSONLine(st, reply)
+}
+
+// serveForward connects a forwarded port of a browser VM and copies bytes both ways until
+// either side ends.
+func (h *Hub) serveForward(ctx context.Context, id string, st net.Conn, br *bufio.Reader, port int) {
+	st.SetReadDeadline(time.Time{})
+	if h.OnForward == nil || port <= 0 || port > 65535 {
+		_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "forwards are not available"})
+		return
+	}
+	dctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	up, err := h.OnForward(dctx, id, port)
+	cancel()
+	if err != nil {
+		_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: err.Error()})
+		return
+	}
+	defer up.Close()
+	if err := agentproto.WriteJSONLine(st, struct{}{}); err != nil {
+		return
+	}
+	splice(st, br, up)
+}
+
+// splice copies a's bytes (read through ar, which may hold some already) to b and b's to a,
+// until both directions end. A yamux Close only ends the writing side, so each direction
+// closes its writer when its reader ends.
+func splice(a net.Conn, ar io.Reader, b net.Conn) {
+	done := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(b, ar)
+		closeWrite(b)
+		close(done)
+	}()
+	_, _ = io.Copy(a, b)
+	closeWrite(a)
+	<-done
+}
+
+func closeWrite(c net.Conn) {
+	if cw, ok := c.(interface{ CloseWrite() error }); ok {
+		_ = cw.CloseWrite()
+		return
+	}
+	_ = c.Close()
 }
 
 // Connected reports whether the guest agent of id is connected, and its hello.
@@ -501,6 +583,16 @@ func (h *Hub) Ports(ctx context.Context, id string) ([]agentproto.Port, error) {
 func (h *Hub) Configure(ctx context.Context, id string, cfg agentproto.Config) error {
 	var ok struct{}
 	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindConfig}, cfg, &ok)
+}
+
+// Forwards has a browser VM's guest listen on loopback at exactly ports; see
+// agentproto.KindForwards.
+func (h *Hub) Forwards(ctx context.Context, id string, ports []int) error {
+	if len(ports) > agentproto.MaxForwards {
+		ports = ports[:agentproto.MaxForwards]
+	}
+	var ok struct{}
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindForwards}, agentproto.Forwards{Ports: ports}, &ok)
 }
 
 // DialTCP connects to a loopback port inside the guest.

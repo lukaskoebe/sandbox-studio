@@ -50,6 +50,10 @@ type Runner interface {
 	BrowserDownload(ctx context.Context, sandboxID string, req agentproto.BrowserDownloadsRequest,
 		fn func(d agentproto.BrowserDownload, body io.Reader) error) error
 	Upload(ctx context.Context, sandboxID string, req agentproto.UploadRequest, body io.Reader) (agentproto.UploadReply, error)
+	// Ports lists an agent sandbox's listening ports, and Forwards has a browser VM listen
+	// on those (forward.go).
+	Ports(ctx context.Context, sandboxID string) ([]agentproto.Port, error)
+	Forwards(ctx context.Context, sandboxID string, ports []int) error
 }
 
 // VMs creates, starts and stops browser VMs (sandboxes.Manager).
@@ -115,6 +119,8 @@ type state struct {
 	vm       string // the browser sandbox's ID, once known
 	session  string // groups the action log of one run of the VM
 	driver   store.Sandbox
+	fwdFrom  string // the agent sandbox whose ports the VM forwards to, and those ports
+	fwdPorts []int
 	lastUsed time.Time
 	grants   []grant
 	sites    []string // registrable domains the user approved for this browser session
@@ -383,6 +389,7 @@ func (st *state) reset() {
 		}
 	}
 	st.session, st.grants, st.eph, st.sites = "", nil, nil, nil
+	st.fwdFrom, st.fwdPorts = "", nil
 	st.url, st.refs, st.credRefs, st.secrets, st.visible = "", nil, nil, nil, false
 }
 

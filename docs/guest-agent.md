@@ -35,6 +35,8 @@ Stream kinds:
 | `snapshot`, `files` | host → guest | chat turn snapshots and the file browser's listings and reads |
 | `upload` | host → guest | a file streamed into a folder of `/workspace` (see [uploads](#uploads)) |
 | `browser` | host → guest | agent-browser commands in a browser VM |
+| `forwards` | host → guest | the loopback ports a browser VM forwards to its driving sandbox ([browser](browser.md#localhost)) |
+| `forward` | guest → host | one connection to a forwarded port; after the host's `{}`, raw bytes |
 | `call` | guest → host | hooks, memory tools and browser tools |
 
 Bulk transfers (template layer export, workspace copies) don't use the channel: guest→host

@@ -102,6 +102,7 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 		s.log().Warn("browser VM unavailable", "teammate", sb.TeammateID, "err", err)
 		return nil, errors.New("the browser could not be started; the user can look at the Browser page in Studio")
 	}
+	s.forward(ctx, st, sb)
 	c := &call{s: s, st: st, pg: pg, sb: sb}
 	res, err := t(c, ctx, params)
 	if err != nil {

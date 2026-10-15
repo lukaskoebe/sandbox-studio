@@ -313,6 +313,7 @@ func run(addr, image string, log *slog.Logger) error {
 	// Every integration that serves MCP tools is in integs by now; the chat service serves none.
 	tsk := &tasks.Service{Store: st, Bus: bus, Log: log}
 	hub.OnCall = routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)
+	hub.OnForward = brw.DialForward
 	brw.Runner, brw.VMs = hub, mgr
 	go brw.Run(ctx)
 	go brw.FollowOwners(ctx, bus, sandboxStopped(mgr))

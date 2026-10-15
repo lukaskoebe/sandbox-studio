@@ -59,6 +59,8 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     optional stdin for `batch`.
   - The live view uses `KindTCP` to the guest's loopback port 9223.
   - Nothing listens on the VM beyond loopback. No CDP port is ever exposed.
+  - The VM's loopback also holds the forwarded ports of the driving sandbox (see
+    [localhost](#localhost)); those connections go out over the channel, not a network.
 - **The guest checks every command against its own allow-list.** Only these commands
   pass: open, snapshot, click, fill, type, press, select, scroll, wait, back, forward,
   reload, upload, download, screenshot, and `get text|attr|url|title`. The flags are
@@ -81,6 +83,36 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     [security levels](network.md#security-levels)).
   - Site approvals last the browser session, and cover a page's requests once the user allows
     its site (see [network](network.md#hold-and-ask)). They end when the VM stops.
+
+## Localhost
+
+`localhost` in the browser is the agent sandbox that drives it, so an agent opens the dev
+server it just started at `http://localhost:5173/` like it would on a laptop. Nothing about
+the page's origin changes: cookies, service workers and CORS see `localhost`, and the
+browser treats it as a secure context.
+
+- **Before each of a sandbox's browser calls**, the broker lists the ports it listens on
+  (`ports`, the same list previews use) and sends them to the browser VM (`forwards`). A
+  server started since is there by the next call; one that stopped is gone. The ports a
+  browser VM uses itself (agent-browser's live views, 9222 to 9225) are never forwarded.
+- **The VM's guest listens on `127.0.0.1` and `::1` at exactly those ports**, skipping one a
+  VM process already holds. Each connection becomes a `forward` stream to the host.
+- **The host connects it to the same port of the sandbox** the ports came from, over that
+  sandbox's channel like a preview (`KindTCP`). `browser.Service.DialForward` checks the
+  stream's VM is a browser VM, that the port is one it was told to forward, and that the
+  sandbox still exists in the VM's environment, for the VM's teammate. Anything else closes
+  the connection, which the browser shows as a refused one.
+
+What this does and doesn't allow:
+
+- Only the driving sandbox, and only the ports it listened on when it last called. When
+  another of the teammate's sandboxes calls, localhost becomes that one. During a takeover
+  it stays the last driver's.
+- The connection reaches the sandbox's loopback directly, so the gateway doesn't see it.
+  The browser's [policy](#policy-checked-before-anything-runs) still applies: opening a
+  `http://localhost:…` page, clicking and filling on it, are checked against its origin's
+  rules like any other.
+- The sandbox doesn't reach the browser VM: forwards go from the browser to the sandbox only.
 
 ## Browser TLS trust
 
@@ -387,7 +419,11 @@ on request:
 - lost replies: an open that ran, a click whose outcome is unknown and an unreachable browser
   (`internal/browser`);
 - the channel's write limit: a 740 KB reply through the guest's yamux session, with every
-  write under 16 KiB (`internal/guest`, `TestChannelWritesStayBounded`).
+  write under 16 KiB (`internal/guest`, `TestChannelWritesStayBounded`);
+- localhost: the guest's listeners and their relay, the reserved and taken ports
+  (`internal/guest`), and a page on a forwarded port through the Hub, the broker and the fake
+  guests, with a port that stopped and refused forwards (`internal/e2e`,
+  `TestBrowserLocalhostIsTheDrivingSandbox`).
 
 **Verified live on Linux amd64 (2026-10-11):**
 
@@ -400,6 +436,11 @@ on request:
   the streamed canvas. A blank start page shows guidance; navigation without takeover
   and non-HTTP(S) addresses are refused. Draft preservation after a failed navigation
   was also checked with a mocked error response.
+
+**Verified live on Linux amd64 (2026-10-15):** localhost. A browser call from a sandbox
+opened `http://localhost:5173/` served there by `python3 -m http.server` on `127.0.0.1`, and
+its snapshot showed the page; a server on `::1` only opened at both `localhost` and
+`127.0.0.1`; once the server stopped, the open failed with `ERR_CONNECTION_REFUSED`.
 
 **Pending a live run:**
 

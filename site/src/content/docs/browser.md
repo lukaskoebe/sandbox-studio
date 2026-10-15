@@ -15,6 +15,12 @@ Script execution, cookie access, storage access, and page state inspection are n
 
 Browser network requests use the environment's network rules. When an agent drives the browser, requests use the driving sandbox's policy. See [Network rules](../network/) and [Secrets](../secrets/).
 
+## Open what the sandbox serves
+
+In the teammate's browser, `localhost` and `127.0.0.1` are the sandbox that drives it. When the teammate starts a dev server on port 5173 and opens `http://localhost:5173/`, the page loads from that sandbox, as it would on the teammate's own laptop. The page keeps its `localhost` origin, so logins, service workers and other localhost-only behavior work as in development.
+
+Every port the sandbox listens on is available, and a server started later is there by the teammate's next browser step. When the teammate drives from another of its sandboxes, `localhost` becomes that sandbox. These connections don't go through network rules, but the browser's own rules for clicks and typing apply to `localhost` like any other site. To open the same app yourself, use the sandbox's [preview](../sandboxes/#open-a-preview).
+
 ## Watch and take the wheel
 
 The browser is one window that looks like any browser: tabs, Back, Forward, Reload, an address bar and Downloads. It is in three places:

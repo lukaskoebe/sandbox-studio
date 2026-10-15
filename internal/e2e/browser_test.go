@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"image/jpeg"
 	"io"
 	"log/slog"
@@ -90,6 +91,7 @@ func newBrowserFixture(t *testing.T) *browserFixture {
 	f.svc = &browser.Service{Store: st, VMs: browserVMs{vmRow}, Runner: hub, Image: "browser:e2e", Dir: filepath.Join(dir, "shots"),
 		Log: log, Hold: 500 * time.Millisecond}
 	hub.OnCall = f.svc.HandleCall
+	hub.OnForward = f.svc.DialForward
 	rt := NewRuntime("base:e2e", log)
 	t.Cleanup(func() {
 		rt.Remove(ctx, "a")
@@ -220,6 +222,31 @@ func TestBrowserToolsThroughTheChannel(t *testing.T) {
 	}
 	if b, _ := f.vm.BrowserState(); len(b.Sessions) != 1 {
 		t.Errorf("sessions after close: %+v", b.Sessions)
+	}
+}
+
+// localhost in the browser is the sandbox that drives it: the ports it listens on when it
+// calls, and no others.
+func TestBrowserLocalhostIsTheDrivingSandbox(t *testing.T) {
+	f := newBrowserFixture(t)
+	want := "(Preview of sandbox " + f.agent.id + " on port 3000, path /app)"
+	if got := f.result(f.call("browser_open", `{"url":"http://localhost:3000/app"}`)); !strings.Contains(got, want) {
+		t.Fatalf("open localhost:3000: %s", got)
+	}
+	// A dev server started since is there by the next call, and one that stopped is gone.
+	f.agent.SetPorts([]int{5173})
+	if got := f.result(f.call("browser_open", `{"url":"http://127.0.0.1:5173/"}`)); !strings.Contains(got, "on port 5173, path /)") {
+		t.Fatalf("open 127.0.0.1:5173: %s", got)
+	}
+	if got := f.result(f.call("browser_open", `{"url":"http://localhost:3000/"}`)); !strings.Contains(got, "localhost:3000 refused to connect") {
+		t.Fatalf("open the stopped localhost:3000: %s", got)
+	}
+	// Only the browser VM's channel reaches a forward, and only on a forwarded port.
+	if _, err := f.svc.DialForward(f.ctx, f.agent.id, 5173); !errors.Is(err, browser.ErrNoForward) {
+		t.Fatalf("a forward from the agent sandbox: %v", err)
+	}
+	if _, err := f.svc.DialForward(f.ctx, f.vm.id, 3000); !errors.Is(err, browser.ErrNoForward) {
+		t.Fatalf("a forward of a port nothing listens on: %v", err)
 	}
 }
 

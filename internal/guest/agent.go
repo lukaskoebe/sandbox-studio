@@ -58,6 +58,9 @@ type Agent struct {
 
 	snapOnce sync.Once
 	snap     *snapshots // the chats' turn snapshots
+
+	fwdOnce sync.Once
+	fwd     *forwarder // a browser VM's forwarded loopback ports
 }
 
 // New prepares an agent; it fails if the terminal user does not exist.
@@ -213,6 +216,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.upload(st, br)
 	case agentproto.KindRun:
 		err = a.serveRun(st, br)
+	case agentproto.KindForwards:
+		err = a.forwards(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "unknown stream kind " + strconv.Quote(h.Kind)})
 	}

@@ -19,6 +19,8 @@
 //     stream carries an ACP agent's stdin and stdout (see acp.go).
 //   - KindRun (host → guest, system VMs): the host writes a RunRequest line; the guest replies
 //     with one RunResult line (see run.go).
+//   - KindForwards (host → guest) and KindForward (guest → host), browser VMs only: the
+//     loopback ports the browser reaches in the sandbox that drives it (see browser.go).
 package agentproto
 
 import (
@@ -56,7 +58,7 @@ type Header struct {
 	Session string `json:"session,omitempty"` // KindPTY, KindKill: tmux session name
 	Cols    uint16 `json:"cols,omitempty"`
 	Rows    uint16 `json:"rows,omitempty"`
-	Port    int    `json:"port,omitempty"` // KindTCP: guest loopback port
+	Port    int    `json:"port,omitempty"` // KindTCP, KindForward: loopback port
 }
 
 // Config is what a sandbox gets from its environment. The host sends it whenever the guest
