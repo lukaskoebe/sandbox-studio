@@ -143,3 +143,18 @@ The `e2e` build replaces the VM runtime and the guest agent with the fakes in
 Tests locate elements by role and label, and use `data-testid` only where a control has no
 accessible name (approval cards). Scenarios that need more fakes (the teammate browser's live
 view) are `test.fixme` in `web/e2e/todo.spec.ts`.
+
+`web/e2e-live` is a second, small suite against a real Studio that is already running and
+boots real VMs. It has its own config, and reaches Studio through a login link:
+
+```sh
+cd web
+STUDIO_LOGIN_URL="$(studio login-url)" pnpm exec playwright test -c e2e-live/playwright.config.ts
+```
+
+Its one scenario creates a sandbox in the UI, runs `docker run hello-world` in its terminal
+(noted and left out when the image has no Docker), sets the level to Locked so that
+`registry.npmjs.org` gets an approval card and allows it, then starts Vite from npm and opens
+its preview. It puts the level back to Guarded and deletes the sandbox at the end. The smoke
+workflow runs it on Linux after its own steps, and uploads traces, screenshots and videos
+when it fails.
