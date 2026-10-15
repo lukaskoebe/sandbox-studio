@@ -10,7 +10,7 @@ import {
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
   SheetContent,
@@ -25,6 +25,16 @@ import { SectionHeader } from "@/components/section-header"
 import { StatusDot } from "@/components/status-dot"
 import { textareaClass } from "@/components/memory-dialogs"
 import {
+  FeedbackTargetSelect,
+  UnifiedDiff,
+  composeNote,
+  feedbackBody,
+  parseDiff,
+  useSendFeedback,
+  type FeedbackTarget,
+  type LineComment,
+} from "@/components/review-feedback"
+import {
   $api,
   errorMessage,
   errorStatus,
@@ -32,7 +42,7 @@ import {
   type GitDetail,
 } from "@/lib/api/client"
 import { approvalKind, gitSummary } from "@/lib/approval-kinds"
-import { cn, formatAge } from "@/lib/utils"
+import { formatAge } from "@/lib/utils"
 
 type Action = "allow" | "deny" | "dismiss"
 
@@ -109,17 +119,30 @@ export function GitOutcome({ git }: { git: GitDetail }) {
 export function GitReview({ approval }: { approval: Approval }) {
   const git = approval.git
   const [note, setNote] = useState("")
+  const [comments, setComments] = useState<LineComment[]>([])
+  const [target, setTarget] = useState<FeedbackTarget>("")
   const decide = useDecideGit()
+  const feedback = useSendFeedback()
   if (!git) return null
   const pending = approval.status === "pending"
+  const params = {
+    params: { path: { env: approval.environmentId, id: approval.id } },
+  }
+  const fullNote = () =>
+    composeNote(note, parseDiff(git.review?.diff ?? ""), comments)
+  const send = () =>
+    feedback.mutate({ ...params, body: feedbackBody(target, fullNote()) })
   const busy = (action: Action) =>
     decide.isPending && decide.variables.body.action === action
   const act = (action: Action) =>
-    decide.mutate({
-      params: { path: { env: approval.environmentId, id: approval.id } },
-      // Scope only matters for network approvals.
-      body: { action, scope: "sandbox", note: note.trim() || undefined },
-    })
+    decide.mutate(
+      {
+        ...params,
+        // Scope only matters for network approvals.
+        body: { action, scope: "sandbox", note: fullNote() || undefined },
+      },
+      { onSuccess: () => target && send() }
+    )
   const rv = git.review
   const pr = git.pullRequest
   const branch = pr ? `${pr.head} → ${pr.base}` : rv?.branch
@@ -240,7 +263,11 @@ export function GitReview({ approval }: { approval: Approval }) {
               rv.diffTruncated && <Badge variant="outline">truncated</Badge>
             }
           />
-          <UnifiedDiff diff={rv.diff} />
+          <UnifiedDiff
+            diff={rv.diff}
+            comments={comments}
+            onComment={pending ? setComments : undefined}
+          />
         </section>
       )}
 
@@ -248,13 +275,30 @@ export function GitReview({ approval }: { approval: Approval }) {
         <div className="grid gap-2">
           <textarea
             aria-label="Note for the agent"
-            placeholder="Note for the agent (shown when it fetches after a rejection)"
+            placeholder={
+              rv
+                ? "Note for the agent. Comment on a line of the diff with its button."
+                : "Note for the agent"
+            }
             rows={2}
-            maxLength={2000}
+            maxLength={4000}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className={textareaClass}
           />
+          {approval.sandboxId && (
+            <FeedbackTargetSelect
+              env={approval.environmentId}
+              sandboxId={approval.sandboxId}
+              value={target}
+              onChange={setTarget}
+            />
+          )}
+          <p className="text-xs text-muted-foreground">
+            {target
+              ? "Deciding sends the outcome, the note and your line comments there."
+              : "The agent sees a rejection and its note when it next fetches or gets a prompt."}
+          </p>
           <div className="flex items-center gap-1.5">
             <Button
               variant="ghost"
@@ -265,6 +309,20 @@ export function GitReview({ approval }: { approval: Approval }) {
               {busy("dismiss") && <Spinner className="size-3" />}
               Ignore
             </Button>
+            {target && (
+              <Button
+                variant="ghost"
+                size="xs"
+                disabled={feedback.isPending || !fullNote()}
+                title="Send the note and comments, and keep the push waiting"
+                onClick={send}
+              >
+                {feedback.isPending && !decide.isPending && (
+                  <Spinner className="size-3" />
+                )}
+                Send without deciding
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -287,39 +345,6 @@ export function GitReview({ approval }: { approval: Approval }) {
         </div>
       )}
     </div>
-  )
-}
-
-function lineClass(line: string) {
-  if (line.startsWith("+++") || line.startsWith("---"))
-    return "text-muted-foreground"
-  if (line.startsWith("+"))
-    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-  if (line.startsWith("-")) return "bg-destructive/10 text-destructive"
-  if (line.startsWith("@@")) return "text-sky-600 dark:text-sky-400"
-  if (line.startsWith("diff --git"))
-    return "mt-2 font-semibold text-foreground first:mt-0"
-  if (line.startsWith("[")) return "text-amber-600 dark:text-amber-400"
-  return ""
-}
-
-/** A unified diff, colored line by line. */
-export function UnifiedDiff({ diff }: { diff: string }) {
-  if (!diff) return <p className="text-xs text-muted-foreground">No changes.</p>
-  return (
-    <ScrollArea
-      className="rounded-md bg-muted/40 ring-1 ring-foreground/10"
-      viewportClassName="max-h-[60vh]"
-    >
-      <pre className="py-2 font-mono text-[11px]/[1.45]">
-        {diff.split("\n").map((line, i) => (
-          <div key={i} className={cn("px-2 whitespace-pre", lineClass(line))}>
-            {line || " "}
-          </div>
-        ))}
-      </pre>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
   )
 }
 

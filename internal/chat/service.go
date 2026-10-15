@@ -98,6 +98,15 @@ type Service struct {
 	mu    sync.Mutex
 	live  map[string]*live
 	watch map[string]map[chan struct{}]struct{}
+	queue map[string][]queuedPrompt // chat ID → prompts that wait for its running turn, see Queue
+}
+
+// queuedPrompt is a prompt that waits for its chat to become idle.
+type queuedPrompt struct {
+	envID  string
+	launch Launch
+	p      Prompt
+	sent   func()
 }
 
 func (s *Service) log() *slog.Logger {
@@ -331,6 +340,63 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 	return store.ChatTurn{}, err
 }
 
+// Queue sends p like Send, or, while a turn runs, once the chat is idle again; queued says
+// it waits. sent is called once p went out. The queue lives in memory: a prompt still waiting
+// when Studio stops is not sent.
+func (s *Service) Queue(ctx context.Context, envID, chatID string, launch Launch, p Prompt, sent func()) (queued bool, err error) {
+	if _, err := s.Send(ctx, envID, chatID, launch, p); !errors.Is(err, ErrBusy) {
+		if err == nil && sent != nil {
+			sent()
+		}
+		return false, err
+	}
+	s.mu.Lock()
+	if s.queue == nil {
+		s.queue = map[string][]queuedPrompt{}
+	}
+	s.queue[chatID] = append(s.queue[chatID], queuedPrompt{envID: envID, launch: launch, p: p, sent: sent})
+	s.mu.Unlock()
+	// The turn may have ended since Send refused; then nothing else sends it.
+	if c, err := s.Store.Chat(ctx, envID, chatID); err == nil && c.State == store.ChatIdle {
+		go s.sendQueued(chatID)
+	}
+	return true, nil
+}
+
+// sendQueued sends the chat's next waiting prompt. A chat that went busy again keeps it; one
+// that can't take prompts anymore drops its queue.
+func (s *Service) sendQueued(chatID string) {
+	s.mu.Lock()
+	list := s.queue[chatID]
+	if len(list) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	q := list[0]
+	if len(list) == 1 {
+		delete(s.queue, chatID)
+	} else {
+		s.queue[chatID] = list[1:]
+	}
+	s.mu.Unlock()
+	_, err := s.Send(context.Background(), q.envID, chatID, q.launch, q.p)
+	switch {
+	case err == nil:
+		if q.sent != nil {
+			q.sent()
+		}
+	case errors.Is(err, ErrBusy):
+		s.mu.Lock()
+		s.queue[chatID] = append([]queuedPrompt{q}, s.queue[chatID]...)
+		s.mu.Unlock()
+	default:
+		s.mu.Lock()
+		delete(s.queue, chatID)
+		s.mu.Unlock()
+		s.log().Warn("chat: send a queued prompt", "chat", chatID, "err", err)
+	}
+}
+
 // lock moves an idle chat to state, or explains why it can't.
 func (s *Service) lock(ctx context.Context, c store.Chat, state string) (store.Chat, error) {
 	next, err := s.Store.SetChatState(ctx, c.EnvironmentID, c.ID, state, store.ChatIdle)
@@ -352,6 +418,7 @@ func (s *Service) unlock(c store.Chat, state string) {
 		if s.OnIdle != nil {
 			s.OnIdle(c.EnvironmentID, c.ID)
 		}
+		go s.sendQueued(c.ID)
 	}
 }
 

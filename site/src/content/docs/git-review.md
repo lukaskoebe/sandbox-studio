@@ -25,6 +25,8 @@ The forge row shows its Studio remote URL, in the form `https://git.studio.inter
 
 When a sandbox pushes through a configured forge, Studio stages the push and asks for review. The approval shows the sandbox, branch, commits, and a bounded diff. You can approve, reject, or ignore it. Studio checks that the upstream branch has not changed unexpectedly before it pushes the approved commit.
 
+To tell the agent what to change, comment on lines of the diff with the comment button that appears when you point at a line, and add a note below. A rejection and its note reach the agent the next time it fetches or gets a prompt. To tell it right away, choose one of the sandbox's chats or agent terminals under **Send to** before you decide: Studio sends the outcome, your note and your line comments there. A chat that is working gets them when its current turn ends. **Send without deciding** sends them and keeps the push waiting, so the agent can push a fix that replaces it. Plain shell terminals are not offered, since text typed into them would run as commands.
+
 GitHub and Forgejo/Gitea forges can also request approval to open a pull request after a reviewed push to a non-default branch. Other HTTPS and SSH forges do not provide pull-request proposals.
 
 If a host is not configured as a forge, access follows normal network rules and is not staged for Git review. Do not assume every arbitrary Git remote receives review protection.

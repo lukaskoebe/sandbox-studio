@@ -1758,8 +1758,8 @@
             "type": "string"
           },
           "note": {
-            "description": "For git approvals: a note passed on to the sandbox, such as why a push was rejected",
-            "maxLength": 2000,
+            "description": "For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments",
+            "maxLength": 8000,
             "type": "string"
           },
           "pathPrefix": {
@@ -2455,6 +2455,39 @@
         "required": [
           "kind",
           "text"
+        ],
+        "type": "object"
+      },
+      "FeedbackInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "chat": {
+            "description": "A chat of the approval's sandbox to send the feedback to",
+            "type": "string"
+          },
+          "note": {
+            "description": "The reviewer's comments, line comments included",
+            "maxLength": 8000,
+            "type": "string"
+          },
+          "terminal": {
+            "description": "Or an agent's terminal in that sandbox: a tmux session Studio started for claude, codex or opencode",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FeedbackOut": {
+        "additionalProperties": false,
+        "properties": {
+          "queued": {
+            "description": "The chat was busy: the feedback goes out when its running turn ends",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queued"
         ],
         "type": "object"
       },
@@ -7951,6 +7984,70 @@
         },
         "tags": [
           "approvals"
+        ]
+      }
+    },
+    "/api/environments/{env}/approvals/{id}/feedback": {
+      "post": {
+        "description": "Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of its chats (after the running turn, if one runs), or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.",
+        "operationId": "sendReviewFeedback",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Approval ID of a git push or pull request",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Approval ID of a git push or pull request",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackOut"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Send review feedback to the agent",
+        "tags": [
+          "git"
         ]
       }
     },

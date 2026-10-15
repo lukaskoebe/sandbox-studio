@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -536,5 +537,57 @@ func TestPromptNoteGoesWithTheNextPromptOnce(t *testing.T) {
 	prompts, _, _ := f.agent.Snapshot()
 	if !strings.Contains(string(prompts[0]), "[Studio] your push was rejected") || strings.Contains(string(prompts[1]), "[Studio]") || told != 1 {
 		t.Fatalf("prompts %s / %s, told %d", prompts[0], prompts[1], told)
+	}
+}
+
+// A prompt queued while a turn runs goes out once the chat is idle again.
+func TestQueueWaitsForTheRunningTurn(t *testing.T) {
+	release := make(chan struct{})
+	var prompts atomic.Int32
+	f := newFixture(t, &acptest.Agent{
+		Turns: []acptest.Turn{{}, {}},
+		BeforePrompt: func() {
+			if prompts.Add(1) == 1 {
+				<-release
+			}
+		},
+	})
+	ctx := context.Background()
+	first := f.send(t, "work")
+	var sent atomic.Bool
+	queued, err := f.s.Queue(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "review feedback"}, func() { sent.Store(true) })
+	if err != nil || !queued {
+		t.Fatalf("Queue = %v, %v; want queued", queued, err)
+	}
+	if sent.Load() {
+		t.Fatal("the queued prompt went out while the turn ran")
+	}
+	close(release)
+	f.wait(t, first.ID)
+	deadline := time.Now().Add(5 * time.Second)
+	for !sent.Load() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !sent.Load() {
+		t.Fatal("the queued prompt was never sent")
+	}
+	log, err := f.s.Get(ctx, f.sb.EnvironmentID, f.chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prompts2 []string
+	for _, it := range log.Items {
+		if it.User != nil {
+			prompts2 = append(prompts2, it.User.Text)
+		}
+	}
+	if len(log.Turns) != 2 || strings.Join(prompts2, "|") != "work|review feedback" {
+		t.Fatalf("prompts %q in %d turns; want the queued one second", prompts2, len(log.Turns))
+	}
+
+	// An idle chat takes it at once.
+	f.wait(t, log.Turns[1].ID)
+	if queued, err := f.s.Queue(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "more"}, nil); err != nil || queued {
+		t.Fatalf("Queue on an idle chat = %v, %v; want sent", queued, err)
 	}
 }

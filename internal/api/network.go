@@ -469,7 +469,7 @@ func (s *Server) registerNetwork(api huma.API) {
 			Host       string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports      []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
 			Scope      string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
-			Note       string     `json:"note,omitempty" maxLength:"2000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected"`
+			Note       string     `json:"note,omitempty" maxLength:"8000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments"`
 			Remember   bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
 			Method     string     `json:"method,omitempty" doc:"For network requests allowed or denied with a rule: the request method the rule covers; empty covers any"`
 			PathPrefix string     `json:"pathPrefix,omitempty" doc:"For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path"`

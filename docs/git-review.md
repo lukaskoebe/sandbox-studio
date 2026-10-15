@@ -206,6 +206,39 @@ commits, and a unified diff bounded at 512 KiB. Binary files, submodules and fil
 Approvals are decided through the usual `POST /api/environments/{env}/approvals/{id}/decide`
 endpoint (`note` is optional); the integration owning the approval kind handles it.
 
+## Review feedback
+
+The delivery above waits for the agent: its next fetch or prompt. The review can also tell
+an agent at once, in the sandbox's chat or terminal it works in.
+
+- **Line comments.** Each line of the review's diff has a comment button (on hover or focus).
+  `web/src/components/review-feedback.tsx` numbers the lines from the hunk headers and folds
+  the comments into the note, after the general note: one item per comment with the file, the
+  line number and the line's code, then the comment. So they reach the agent by every route,
+  fetch and prompt included. The prompt note keeps the note's lines (up to 8000 bytes); the
+  fetch message keeps one line of 500.
+- **Send to.** The review lists the sandbox's idle and running chats and its agent
+  terminals: tmux sessions Studio started for a harness (`@studio_harness`, see
+  [harnesses](harnesses.md)). A chat continued in the terminal is reached through that
+  terminal. Plain shells are not offered, since text typed into one runs as commands.
+- `POST /api/environments/{env}/approvals/{id}/feedback` with `{note, chat}` or
+  `{note, terminal}` sends `gitreview.Service.Feedback`'s message: "Review of your push of
+  <sha> to <branch> in <repo> on <forge>:" with the outcome (approved and pushed, the push's
+  failure, rejected, still waiting for review), then "My comments:" and the note. It is the
+  user's own message to the agent, not quoted data like the prompt note above. The web sends
+  it right after the decision, or alone with **Send without deciding**, which keeps the push
+  waiting; a later push to the branch supersedes it.
+- **To a chat** it is a prompt (`chat.Service.Queue`): sent now if the chat is idle, or kept
+  in memory and sent when the running turn ends. A prompt still waiting when Studio stops is
+  lost; the push's prompt note then still delivers a rejection.
+- **To a terminal** `sandboxes.Manager.SendToAgent` runs tmux in the guest over the run
+  stream (`KindRun`, as the agent user): `load-buffer` from stdin, `paste-buffer -p` (a
+  bracketed paste, so the TUI takes the lines as one input) and `send-keys Enter`, one call
+  each so the paste is read before the Enter. Claude Code, Codex and OpenCode all accept
+  bracketed paste; a live check against the pinned CLIs is pending.
+- Once sent, the push is marked delivered and notified, so its next fetch and prompt don't
+  tell the agent again.
+
 ## Integration interface
 
 `internal/integrations` holds a minimal compiled-in interface:

@@ -1,5 +1,5 @@
 import { CaretRightIcon, GitDiffIcon } from "@phosphor-icons/react"
-import { UnifiedDiff } from "@/components/git-review"
+import { UnifiedDiff } from "@/components/review-feedback"
 import { Badge } from "@/components/ui/badge"
 import {
   Collapsible,

@@ -407,7 +407,7 @@ func (s *Service) PromptNote(ctx context.Context, envID, sandboxID string) (stri
 		if p.State == store.PushRejected {
 			fmt.Fprintf(&b, "- the push of %s was rejected by the reviewer", push)
 			if p.Note != "" {
-				fmt.Fprintf(&b, ": %q", oneLine(p.Note))
+				fmt.Fprintf(&b, ": %q", noteText(p.Note))
 			}
 		} else {
 			fmt.Fprintf(&b, "- the approved push of %s failed; the forge answered %q", push, oneLine(p.Result))
@@ -431,6 +431,15 @@ func short(sha string) string {
 		return sha[:12]
 	}
 	return sha
+}
+
+// noteText is a reviewer's note for a prompt: its lines, line comments included, kept.
+func noteText(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > maxFeedbackNote {
+		s = s[:maxFeedbackNote] + "..."
+	}
+	return s
 }
 
 func oneLine(s string) string {

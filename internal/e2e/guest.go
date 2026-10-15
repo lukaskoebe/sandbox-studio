@@ -52,6 +52,7 @@ type Guest struct {
 	configs  int
 	home     []string
 	sessions map[string]*session
+	buffers  map[string]string // tmux paste buffers, see runTmux
 	ports    []int
 	forwards []int // a browser VM's forwarded ports
 	conns    []*Connection
@@ -62,7 +63,8 @@ type Guest struct {
 
 type session struct {
 	agentproto.Session
-	ptys map[*ptyStream]struct{}
+	ptys   map[*ptyStream]struct{}
+	pasted string // what tmux pasted into it, shown to every terminal that attaches
 }
 
 // Connection is an outbound HTTP request the guest made through the gateway.
@@ -229,12 +231,52 @@ func (g *Guest) handle(st net.Conn) {
 		err = g.serveForwards(st, br)
 	case agentproto.KindACP:
 		err = g.serveACP(st, br)
+	case agentproto.KindRun:
+		var req agentproto.RunRequest
+		if err = agentproto.ReadJSONLineLimit(br, &req, agentproto.MaxRunLine); err == nil {
+			err = agentproto.WriteJSONLine(st, g.runTmux(req))
+		}
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "the e2e guest does not support " + h.Kind + " streams"})
 	}
 	if err != nil && !errors.Is(err, io.EOF) && g.log != nil {
 		g.log.Debug("e2e guest stream", "sandbox", g.id, "kind", h.Kind, "err", err)
 	}
+}
+
+// runTmux fakes the tmux commands Studio uses to type into an agent's terminal
+// (sandboxes.Manager.SendToAgent): a paste and an Enter show on the session's terminals.
+func (g *Guest) runTmux(req agentproto.RunRequest) agentproto.RunResult {
+	a := req.Args
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.buffers == nil {
+		g.buffers = map[string]string{}
+	}
+	show := func(name, text string) agentproto.RunResult {
+		s, ok := g.sessions[name]
+		if !ok {
+			return agentproto.RunResult{ExitCode: 1, Stderr: "can't find session: " + name}
+		}
+		text = strings.ReplaceAll(text, "\n", "\r\n")
+		s.pasted += text
+		for p := range s.ptys {
+			p.write(text)
+		}
+		return agentproto.RunResult{}
+	}
+	switch {
+	case len(a) == 5 && a[0] == "tmux" && a[1] == "load-buffer" && a[4] == "-":
+		g.buffers[a[3]] = req.Stdin
+		return agentproto.RunResult{}
+	case len(a) == 8 && a[0] == "tmux" && a[1] == "paste-buffer":
+		text := g.buffers[a[5]]
+		delete(g.buffers, a[5])
+		return show(a[7], text)
+	case len(a) == 5 && a[0] == "tmux" && a[1] == "send-keys" && a[4] == "Enter":
+		return show(a[3], "\n")
+	}
+	return agentproto.RunResult{ExitCode: 127, Stderr: "the e2e guest doesn't run " + strings.Join(a, " ")}
 }
 
 func (g *Guest) sessionLocked(name string) *session {
@@ -318,7 +360,7 @@ func (g *Guest) servePTY(st net.Conn, br *bufio.Reader, name string) error {
 		delete(s.ptys, p)
 		g.mu.Unlock()
 	}()
-	p.write(prompt)
+	p.write(prompt + s.pasted)
 	var line []byte
 	for {
 		typ, payload, err := agentproto.ReadFrame(br)

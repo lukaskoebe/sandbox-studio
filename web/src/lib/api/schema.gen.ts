@@ -106,6 +106,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/approvals/{id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send review feedback to the agent
+         * @description Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of its chats (after the running turn, if one runs), or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.
+         */
+        post: operations["sendReviewFeedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/approvals/{id}/revert": {
         parameters: {
             query?: never;
@@ -2833,7 +2853,7 @@ export interface components {
             host?: string;
             /** @description For network requests allowed or denied with a rule: the request method the rule covers; empty covers any */
             method?: string;
-            /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected */
+            /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments */
             note?: string;
             /** @description For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path */
             pathPrefix?: string;
@@ -3102,6 +3122,18 @@ export interface components {
             validFrom?: string;
             /** Format: date-time */
             validUntil?: string;
+        };
+        FeedbackInBody: {
+            /** @description A chat of the approval's sandbox to send the feedback to */
+            chat?: string;
+            /** @description The reviewer's comments, line comments included */
+            note?: string;
+            /** @description Or an agent's terminal in that sandbox: a tmux session Studio started for claude, codex or opencode */
+            terminal?: string;
+        };
+        FeedbackOut: {
+            /** @description The chat was busy: the feedback goes out when its running turn ends */
+            queued: boolean;
         };
         FileChange: {
             /**
@@ -5018,6 +5050,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    sendReviewFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID of a git push or pull request */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeedbackInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeedbackOut"];
                 };
             };
             /** @description Error */
