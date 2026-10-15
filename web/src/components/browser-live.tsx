@@ -59,20 +59,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 // The frame's metadata, with the frame's own size and no offset or zoom where it is missing.
+// The height comes from the frame's shape, not the metadata: agent-browser 0.39 reports the
+// window size it launched Chromium with (1280x720), while new headless Chromium takes the
+// height of its own UI off the window, so the page and its frames are 1280x577. A frame is
+// the page scaled evenly, so its width and shape give the page's height in DIP.
 function frameMetadata(
   value: unknown,
   width: number,
   height: number
 ): FrameMetadata {
-  // verify (live): deviceWidth/Height and offsetTop are DIP, pageScaleFactor is DIP per CSS px.
   const m = isRecord(value) ? value : {}
   const field = (v: unknown, fallback: number, positive = false) =>
     typeof v === "number" && Number.isFinite(v) && (!positive || v > 0)
       ? v
       : fallback
+  const deviceWidth = field(m.deviceWidth, width, true)
   return {
-    deviceWidth: field(m.deviceWidth, width, true),
-    deviceHeight: field(m.deviceHeight, height, true),
+    deviceWidth,
+    deviceHeight: (deviceWidth * height) / width,
     offsetTop: field(m.offsetTop, 0),
     pageScaleFactor: field(m.pageScaleFactor, 1, true),
   }

@@ -42,6 +42,12 @@ import (
 // Size of the fake viewport: frames and screenshots.
 const viewW, viewH = 640, 400
 
+// windowH is the height frame metadata reports, as agent-browser 0.39 does: it sends the
+// window size it launched Chromium with, and new headless Chromium takes the height of the
+// browser's own UI off the window, so the page and its frames are less tall (1280x577 in a
+// 1280x720 window).
+const windowH = 500
+
 // maxInputs bounds the input messages a browser VM remembers for the control API.
 const maxInputs = 50
 
@@ -637,7 +643,7 @@ func (b *browserVM) screencast(ctx context.Context, c *websocket.Conn, t *tab) {
 		}
 		seq++
 		frame, _ := json.Marshal(map[string]any{"type": "frame", "seq": seq, "data": base64.StdEncoding.EncodeToString(shot),
-			"metadata": map[string]any{"deviceWidth": viewW, "deviceHeight": viewH, "offsetTop": 0, "pageScaleFactor": 1,
+			"metadata": map[string]any{"deviceWidth": viewW, "deviceHeight": windowH, "offsetTop": 0, "pageScaleFactor": 1,
 				"scrollOffsetX": 0, "scrollOffsetY": 0, "timestamp": float64(time.Now().UnixMilli()) / 1000}})
 		if c.Write(ctx, websocket.MessageText, frame) != nil {
 			return

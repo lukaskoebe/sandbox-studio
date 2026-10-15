@@ -308,7 +308,11 @@ disconnecting clears the local input buffer.
   moves in the session's history under user takeover, like navigate, and answers with the
   status; anything else is 422.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
-  (device size, offset and page scale) and the letterbox of the canvas. Presses in the bars
+  (device width, offset and page scale), its shape, and the letterbox of the canvas. The
+  page's height comes from the frame's shape, not the metadata: agent-browser 0.39 reports
+  the window size it launched Chromium with (1280×720), while new headless Chromium takes
+  the height of its own UI off the window, so the page and its frames are 1280×577. Mapping
+  through 720 put clicks below the pointer, by up to 143 px at the bottom of the page. Presses in the bars
   and above the page are not sent. A drag that leaves the canvas still releases at its edge. On touch, the tap is sent before the hidden input takes
   focus, so the keyboard does not move the page under the tap. Wheel deltas are pixels, with
   lines and pages converted.
@@ -450,6 +454,10 @@ opened `http://localhost:5173/` served there by `python3 -m http.server` on `127
 its snapshot showed the page; a server on `::1` only opened at both `localhost` and
 `127.0.0.1`; once the server stopped, the open failed with `ERR_CONNECTION_REFUSED`.
 
+**Verified on Linux amd64 with agent-browser 0.39.0 and Chrome for Testing 153, outside a
+browser VM (2026-10-15):** frame metadata. The page was 1280×577 (`innerHeight` 577,
+`outerHeight` 720), frames were 1280×577 JPEGs, and their metadata said `deviceHeight` 720.
+
 **Pending a live run:**
 
 - Browser commands with screenshots over the channel, since the 2026-10-13 fix. The channel
@@ -464,7 +472,6 @@ its snapshot showed the page; a server on `::1` only opened at both `localhost` 
 - The browser image and agent-browser's native binary on arm64.
 - Chromium's downloads into the folder with agent-browser 0.39's `--download-path` flag: a
   file the page saves should show in `browser_downloads`, and copy into `downloads/`.
-- Input message fields and frame metadata (`deviceWidth`/`deviceHeight`) for click mapping.
 - Snapshot details from a live Chromium:
   - password fields show no AX value or a masked one;
   - static text children don't carry values;
@@ -482,8 +489,8 @@ its snapshot showed the page; a server on `::1` only opened at both `localhost` 
   0.39.0.
 - The tmpfs mount at `/run/studio-browser` in the guest, and the memory of two more Chromium
   processes in the 2 GiB VM.
-- Live mouse mapping in a real browser, and the Playwright run that clicks known targets at
-  several viewport sizes and zoom levels.
+- Live mouse mapping in a browser VM since the frame-shape fix, and the Playwright run that
+  clicks known targets at several viewport sizes and zoom levels.
 
 ## Limitations
 
