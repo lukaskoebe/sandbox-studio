@@ -91,7 +91,7 @@
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: oklch(0.912 0.005 255);
   --sidebar-ring: var(--ring);
-  /* Accents: one hue per area, about 20 to 25 % less chroma than in the mockups. */
+  /* Accents: one hue per area, toned down from the first design mockups. */
   --acc-network: oklch(0.6 0.1 235);
   --acc-git: oklch(0.55 0.15 295);
   --acc-browser: oklch(0.64 0.12 48);
