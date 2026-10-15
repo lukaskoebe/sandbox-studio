@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.3.2 — 2026-10-15
+
+A browser that works like a browser, a finished terminal UI, and fixes from feedback.
+
+- **Browser:** a teammate's browser is one window with tabs (its profile, then each throwaway
+  session), Back, Forward, Reload, an address bar and Downloads. Typing an address or going
+  back takes the wheel; one line says who drives. The agent's questions show on the page,
+  and a sleeping browser wakes when you open a page. The teammate's Browser tab has its
+  Activity (every step by session, replayed from screenshots) and Sites (Ask first, Allowed
+  or Blocked per site, hidden fields) beside it; the same window opens beside a sandbox and
+  beside the teammate's conversation, whose thread shows a live card while it browses.
+  Throwaway sessions end with the chat that opened them, when their sandbox stops, or with
+  their tab's close button.
+- **Approvals:** an approval shows in one place on the page; the floating stack leaves out
+  cards a conversation, a chat, the browser, Home or a review page already shows.
+- **Previews:** a preview's service worker can no longer catch Studio's login, and **Open
+  fresh** clears a preview's caches, storage and service workers for an app that left a
+  worker behind.
+- **Terminal:** selecting text copies it, right-click opens Copy and Paste instead of the
+  browser's menu, and Ctrl+Shift+C copies; a sandbox can no longer read your clipboard.
+- **Claude subscription sign-in:** a step-by-step dialog, and the code you paste goes into
+  Claude Code for you instead of having to be typed into the terminal.
+- **Terminal UI:** `studio tui` has chat with streamed turns, Activity, git push review with
+  the diff in a pager, and new sandboxes with their progress.
+- **Sandboxes:** the workspace status line shows CPU and memory use; rebase runs in the
+  background with the progress view and names the step that failed.
+- **Pages:** git push reviews, memory conflicts and build logs have pages of their own to
+  link to. Secrets are grouped by scope, and a teammate's settings list its secrets.
+- **Git:** upstream fetches are rate-limited per staging mirror, so agent-signed fetches
+  don't ask on every push.
+- **Tests:** the e2e suite drives git push review, chats and the browser with fakes, and the
+  smoke workflow runs a browser test against a real VM.
+
 ## v0.3.1 — 2026-10-14
 
 Fixes creating sandboxes on Windows.

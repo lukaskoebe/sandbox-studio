@@ -1,6 +1,6 @@
 # Sandbox Studio — Plan
 
-Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 is built, with the v2 backlog below. C2 (terminal UI) is built in parts: its order is below.
+Status: N1–N11 shipped in v0.2.0 · 2026-10-13. C1 shipped in v0.3.0. C2 (terminal UI) is built, all four steps, in v0.3.2. What is left is the backlog below.
 
 The v2 plan is implemented (v0.1.0 and v0.1.1). How it works now is in the
 [developer documentation](docs/README.md). This plan covers the next round, driven by user
@@ -440,8 +440,8 @@ teammates' souls, the template editor, lineage, memory, the rules editor, the br
 **Order once agreed.**
 1. Home, Approvals and auth: the part that saves a browser trip. Done.
 2. Terminal attach. Done.
-3. Chat.
-4. Activity and git push diffs.
+3. Chat. Done.
+4. Activity and git push diffs. Done.
 
 **Open questions.** D7 (library). D8: should `studio tui` also be what `studio` opens when
 it runs in an interactive terminal and a server is already running? It would print the
@@ -476,9 +476,6 @@ Not scheduled in the milestones above. Items the milestones absorb are left out:
 
 **Browser and git**
 - The browser items pending a live run → [browser](docs/browser.md#verified-vs-pending-live)
-
-**Quality**
-- The open golangci-lint errcheck findings (errcheck is off in CI until they are fixed)
 
 ## Testing and conventions
 
