@@ -43,6 +43,9 @@ type Options struct {
 	// Interactive reports whether stdin and stdout are a terminal: confirmations are asked
 	// there, and refused elsewhere unless --yes is given.
 	Interactive bool
+	// Server and Flags are main's own commands and flags, for the help.
+	Server []ServerCommand
+	Flags  *flag.FlagSet
 }
 
 // DefaultOptions are the options of the studio process.
@@ -100,14 +103,15 @@ func Commands(name string) bool {
 
 // Run runs the subcommand in args[0] and returns the exit status.
 func Run(ctx context.Context, opts Options, args []string) int {
-	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
+	if len(args) == 0 || args[0] == "help" || IsHelp(args[0]) {
+		topic := ""
 		if len(args) > 1 {
-			if cmd := lookup(args[1]); cmd != nil {
-				printUsage(opts.Stdout, cmd)
-				return ExitOK
-			}
+			topic = args[1]
 		}
-		printHelp(opts.Stdout)
+		if !Help(opts.Stdout, topic, opts.Server, opts.Flags) {
+			fmt.Fprintf(opts.Stderr, "studio: unknown command %q. Run `studio help` for the commands.\n", topic)
+			return ExitUsage
+		}
 		return ExitOK
 	}
 	if args[0] == completeCommand {
@@ -222,21 +226,68 @@ func lookup(name string) *command {
 	return nil
 }
 
-func printHelp(w io.Writer) {
-	fmt.Fprint(w, `Usage: studio [-addr host:port] <command> [arguments]
+// ServerCommand is one of the commands main runs itself, for the help.
+type ServerCommand struct {
+	Name, Args, Summary string
+	// Detail is printed under the summary by "studio help <name>".
+	Detail string
+}
 
-Without a command, studio runs the server. These commands talk to a running Studio:
+// IsHelp reports whether arg asks for help.
+func IsHelp(arg string) bool { return arg == "-h" || arg == "-help" || arg == "--help" }
+
+// Help prints the help for topic: "" is every command, else one command, a server command
+// or a sandbox command. global holds studio's own flags, if known. It reports false for a
+// topic that is no command.
+func Help(w io.Writer, topic string, server []ServerCommand, global *flag.FlagSet) bool {
+	if topic != "" {
+		if cmd := lookup(topic); cmd != nil {
+			printUsage(w, cmd)
+			return true
+		}
+		for _, c := range server {
+			if c.Name == topic {
+				fmt.Fprintf(w, "Usage: studio %s\n\n%s\n", strings.TrimSpace(c.Name+" "+c.Args), c.Summary)
+				if c.Detail != "" {
+					fmt.Fprintf(w, "\n%s\n", c.Detail)
+				}
+				return true
+			}
+		}
+		return false
+	}
+	fmt.Fprint(w, `Sandbox Studio runs coding agents in microVM sandboxes on this machine, with approvals for
+what they reach and a browser of their own.
+
+Usage:
+  studio [flags]                       run Studio; open the login link it prints
+  studio [flags] <command> [arguments]
 
 `)
+	if len(server) > 0 {
+		fmt.Fprintln(w, "Studio itself:")
+		for _, c := range server {
+			fmt.Fprintf(w, "  %-12s %s\n", c.Name, c.Summary)
+		}
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintln(w, "Sandboxes and approvals, in a running Studio:")
 	for _, c := range commands {
 		fmt.Fprintf(w, "  %-12s %s\n", c.name, c.summary)
 	}
+	if global != nil {
+		fmt.Fprintln(w, "\nFlags:")
+		out := global.Output()
+		global.SetOutput(w)
+		global.PrintDefaults()
+		global.SetOutput(out)
+	}
 	fmt.Fprint(w, `
-Server commands: version, doctor, autostart, login-url, tui, openapi.
-
-Every command takes --env (or $STUDIO_ENV) and --json. Sandboxes are named by name or ID.
-Run "studio help <command>" for a command's flags.
+The sandbox commands take --env (or $STUDIO_ENV) and --json, and name sandboxes by name or
+ID. Run "studio help <command>" or "studio <command> -h" for a command's arguments and flags.
+Documentation: https://lukaskoebe.github.io/sandbox-studio/
 `)
+	return true
 }
 
 func printUsage(w io.Writer, cmd *command) {

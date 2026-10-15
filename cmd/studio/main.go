@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -63,10 +64,41 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/webui"
 )
 
+// serverCommands are the commands main runs itself, for the help.
+var serverCommands = []cli.ServerCommand{
+	{Name: "tui", Summary: "Open the terminal UI of the running Studio.",
+		Detail: "It signs in as the local owner, like the web UI's login link. q quits."},
+	{Name: "doctor", Summary: "Check that this machine can run Studio, and say how to fix what can't.",
+		Detail: "It checks the microsandbox runtime, KVM or the hypervisor, the base image, the data\ndirectory, free disk space and the -addr ports. It exits 1 if a check fails."},
+	{Name: "autostart", Args: "enable|disable|status", Summary: "Start Studio when you log in, or stop doing so.",
+		Detail: "status is the default. It writes a systemd user unit on Linux, a LaunchAgent on macOS\nand a Run key value on Windows, which take effect at the next login."},
+	{Name: "login-url", Summary: "Print a one-time login link for the running Studio."},
+	{Name: "version", Summary: "Print Studio's version and its base image."},
+	{Name: "openapi", Summary: "Print the OpenAPI document of Studio's HTTP API."},
+}
+
 func main() {
 	addr := flag.String("addr", "127.0.0.1:7878", "listen address (loopback only)")
 	image := flag.String("image", defaultImage(), "base image for new sandboxes")
+	flag.Usage = func() { cli.Help(flag.CommandLine.Output(), "", serverCommands, flag.CommandLine) }
+	if len(os.Args) > 1 && cli.IsHelp(os.Args[1]) {
+		cli.Help(os.Stdout, "", serverCommands, flag.CommandLine)
+		return
+	}
 	flag.Parse()
+
+	// "studio help …" and "studio <command> -h" print the help instead of running anything.
+	if name := flag.Arg(0); name == "help" || (name != "" && slices.ContainsFunc(flag.Args()[1:], cli.IsHelp)) {
+		topic := name
+		if name == "help" {
+			topic = flag.Arg(1)
+		}
+		if !cli.Help(os.Stdout, topic, serverCommands, flag.CommandLine) {
+			fmt.Fprintf(os.Stderr, "studio: unknown command %q. Run `studio help` for the commands.\n", topic)
+			os.Exit(cli.ExitUsage)
+		}
+		return
+	}
 
 	if flag.Arg(0) == "openapi" {
 		enc := json.NewEncoder(os.Stdout)
@@ -97,7 +129,9 @@ func main() {
 	}
 	if cli.Commands(flag.Arg(0)) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-		status := cli.Run(ctx, cli.DefaultOptions(*addr, connectCLI), flag.Args())
+		opts := cli.DefaultOptions(*addr, connectCLI)
+		opts.Server, opts.Flags = serverCommands, flag.CommandLine
+		status := cli.Run(ctx, opts, flag.Args())
 		stop()
 		os.Exit(status)
 	}

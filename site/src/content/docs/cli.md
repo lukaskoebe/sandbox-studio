@@ -41,8 +41,9 @@ The session cookie is set after the first navigation in fixtures.ts, so a fast p
 | `studio restore <sandbox> <checkpoint>` | Puts a sandbox back to a checkpoint. Asks first. Studio refuses it for now, because the current runtime cannot restore checkpoints. |
 | `studio envs` | Lists the environments. |
 
-`studio help` lists them, and `studio help <command>` shows a command's flags. Sandboxes are
-named by name or ID.
+`studio help` (or `studio -h`, `studio --help`) lists every command, Studio's own included,
+and its flags. `studio help <command>` or `studio <command> -h` shows a command's arguments
+and flags. Sandboxes are named by name or ID.
 
 ## Asking a teammate
 

@@ -309,3 +309,29 @@ func slicesContain(list []string, s string) bool {
 	}
 	return false
 }
+
+func TestHelpCoversEveryCommand(t *testing.T) {
+	var b strings.Builder
+	server := []ServerCommand{{Name: "doctor", Summary: "Check the machine.", Detail: "It checks KVM."}}
+	global := flag.NewFlagSet("studio", flag.ContinueOnError)
+	global.String("addr", "127.0.0.1:7878", "listen address")
+	if !Help(&b, "", server, global) {
+		t.Fatal("no help")
+	}
+	for _, want := range []string{"doctor       Check the machine.", "ls ", "completion", "-addr string", `"studio <command> -h"`} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("the help lacks %q:\n%s", want, b.String())
+		}
+	}
+	b.Reset()
+	if !Help(&b, "doctor", server, global) || !strings.Contains(b.String(), "Usage: studio doctor\n\nCheck the machine.\n\nIt checks KVM.") {
+		t.Errorf("doctor's help: %q", b.String())
+	}
+	b.Reset()
+	if !Help(&b, "fork", nil, nil) || !strings.Contains(b.String(), "Usage: studio fork <sandbox> <name>") {
+		t.Errorf("fork's help: %q", b.String())
+	}
+	if Help(&b, "nope", server, global) {
+		t.Error("an unknown topic had help")
+	}
+}
