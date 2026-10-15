@@ -153,7 +153,8 @@ func TestChatSessionHooksDontExtract(t *testing.T) {
 
 func TestChatIdledDebounces(t *testing.T) {
 	f := newFixture(t)
-	f.svc.ChatIdle = 30 * time.Millisecond
+	// Wide margins: the second call must land inside the window even on a loaded machine.
+	f.svc.ChatIdle = 300 * time.Millisecond
 	f.svc.ChatIdled(f.env, "c1")
 	time.Sleep(10 * time.Millisecond)
 	f.svc.ChatIdled(f.env, "c1") // moves the time out; one extraction
@@ -168,7 +169,7 @@ func TestChatIdledDebounces(t *testing.T) {
 	select {
 	case d := <-f.svc.chatsDue:
 		t.Fatalf("due twice: %+v", d)
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(400 * time.Millisecond):
 	}
 }
 
