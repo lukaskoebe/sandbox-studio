@@ -68,7 +68,7 @@ reads done when its condition already holds (the host check passes, a work mode 
 the environment has a provider, a teammate, a forge or a sandbox); the setup is complete once
 every step is done or skipped.
 
-The old addresses `/e/$env/git`, `/builds`, `/providers` and `/browser` redirect to the
+The old addresses `/e/$env/builds`, `/providers` and `/browser` redirect to the
 settings pages and teammate browsers above. `/browser?teammate=<id>` opens that teammate's
 browser.
 
