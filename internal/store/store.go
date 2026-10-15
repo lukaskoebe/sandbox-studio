@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -260,7 +262,8 @@ const SandboxKindBrowser = "browser"
 
 const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0)"
 
-// firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest free one.
+// firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest port no
+// other sandbox has and nothing on the host listens on.
 const firstDNSPort = 17100
 
 func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
@@ -410,10 +413,28 @@ func freeDNSPort(ctx context.Context, q dnsPortQueryer) (int, error) {
 		taken[p] = true
 	}
 	port := firstDNSPort
-	for taken[port] {
+	for taken[port] || !portFree(port) {
 		port++
 	}
 	return port, rows.Err()
+}
+
+// portFree reports whether nothing on the host listens on the loopback port, over UDP or TCP.
+// Another Studio on the same machine (a development one, say) numbers its sandboxes' resolvers
+// from the same first port, and a resolver that can't bind fails its sandbox's start.
+func portFree(port int) bool {
+	addr := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	udp, err := net.ListenPacket("udp", addr)
+	if err != nil {
+		return false
+	}
+	_ = udp.Close()
+	tcp, err := net.Listen("tcp", addr)
+	if err != nil {
+		return false
+	}
+	_ = tcp.Close()
+	return true
 }
 
 // LookupSandbox finds a sandbox in any environment. Only the gateway uses it, to identify
