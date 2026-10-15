@@ -30,17 +30,13 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := sess.Open()
-	if err != nil {
-		t.Fatal(err)
+	// The hello's errors are dropped: the hub may close a guest it rejects before the hello is
+	// out, and the tests check the session for that.
+	if st, err := sess.Open(); err == nil {
+		_ = agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindHello})
+		_ = agentproto.WriteJSONLine(st, agentproto.Hello{Version: "test", Arch: "amd64"})
+		st.Close()
 	}
-	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindHello}); err != nil {
-		t.Fatal(err)
-	}
-	if err := agentproto.WriteJSONLine(st, agentproto.Hello{Version: "test", Arch: "amd64"}); err != nil {
-		t.Fatal(err)
-	}
-	st.Close()
 	go func() {
 		for {
 			st, err := sess.Accept()
