@@ -84,7 +84,6 @@ test("old addresses redirect to the pages that replaced them", async ({
   await expect(page).toHaveURL(/\/teammates\/[^/]+\/browser$/)
 
   for (const [from, to] of [
-    ["git", "settings/git"],
     ["providers", "settings/providers"],
     ["builds", "settings/templates"],
     ["settings", "settings/general"],

@@ -5,7 +5,6 @@ import { toast } from "sonner"
 import {
   CloudIcon,
   CopyIcon,
-  GitBranchIcon,
   KeyIcon,
   PlugsConnectedIcon,
   PlusIcon,
@@ -46,32 +45,22 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
-import { KindChip } from "@/components/kind-chip"
 import {
   ForgeDialog,
   HostKeyCheck,
   PublicKeyNotice,
   type Scanned,
 } from "@/components/forge-dialog"
-import {
-  GitOutcome,
-  GitReviewSheet,
-  isGitApproval,
-} from "@/components/git-review"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { SectionHeader } from "@/components/section-header"
-import { StatusDot } from "@/components/status-dot"
 import {
   $api,
   errorMessage,
   type AgentStatus,
-  type Approval,
   type Forge,
 } from "@/lib/api/client"
-import { approvalKind, gitSummary } from "@/lib/approval-kinds"
 import { copyText } from "@/lib/clipboard"
 import { hasAPI, kindLabels, remoteHost, type Auth } from "@/lib/forges"
-import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings/git")({
   component: GitPage,
@@ -80,14 +69,9 @@ export const Route = createFileRoute("/e/$env/settings/git")({
 function GitPage() {
   const { env } = Route.useParams()
   const [adding, setAdding] = useState(false)
-  const [reviewing, setReviewing] = useState<string>()
   const forges = $api.useQuery("get", "/api/environments/{env}/forges", {
     params: { path: { env } },
   })
-  const approvals = $api.useQuery("get", "/api/environments/{env}/approvals", {
-    params: { path: { env }, query: { status: "all" } },
-  })
-  const pushes = (approvals.data ?? []).filter(isGitApproval)
   const list = forges.data ?? []
   const usesAgent = list.some((f) => f.auth === "agent")
   const agent = $api.useQuery("get", "/api/system/ssh-agent", undefined, {
@@ -174,113 +158,20 @@ function GitPage() {
           )}
         </section>
 
-        <section className="space-y-2">
-          <SectionHeader
-            title="Pushes"
-            icon={GitBranchIcon}
-            area="git"
-            count={pushes.length || undefined}
-          />
-          {approvals.isPending ? (
-            <Spinner className="mx-auto block" />
-          ) : pushes.length ? (
-            <div className="rounded-lg ring-1 ring-foreground/10">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Push</TableHead>
-                    <TableHead>Sandbox</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Outcome</TableHead>
-                    <TableHead>Requested</TableHead>
-                    <TableHead>
-                      <span className="sr-only">Actions</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pushes.slice(0, 100).map((a) => (
-                    <PushRow
-                      key={a.id}
-                      approval={a}
-                      onReview={() => setReviewing(a.id)}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No pushes yet.</p>
-          )}
-        </section>
+        <p className="text-xs text-muted-foreground">
+          The pushes and pull requests sandboxes made are on the{" "}
+          <Link
+            to="/e/$env/git"
+            params={{ env }}
+            className="underline underline-offset-4"
+          >
+            Git
+          </Link>{" "}
+          page.
+        </p>
       </ScrollArea>
       <ForgeDialog env={env} open={adding} onOpenChange={setAdding} />
-      <GitReviewSheet
-        approval={pushes.find((a) => a.id === reviewing)}
-        onOpenChange={(open) => {
-          if (!open) setReviewing(undefined)
-        }}
-      />
     </>
-  )
-}
-
-/** A push or pull request: what it asks, where it stands and the button that reviews it. */
-function PushRow({
-  approval,
-  onReview,
-}: {
-  approval: Approval
-  onReview: () => void
-}) {
-  const kind = approvalKind(approval)
-  const pending = approval.status === "pending"
-  return (
-    <TableRow>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <KindChip area={kind.area} icon={kind.icon}>
-            {kind.title}
-          </KindChip>
-          <Link
-            to="/e/$env/git/reviews/$id"
-            params={{ env: approval.environmentId, id: approval.id }}
-            className="max-w-96 truncate underline-offset-4 hover:underline"
-          >
-            {gitSummary(approval)}
-          </Link>
-        </div>
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {approval.git?.review?.sandbox}
-      </TableCell>
-      <TableCell>
-        {pending ? (
-          <StatusDot status="waiting" />
-        ) : (
-          <span className="capitalize">{approval.status}</span>
-        )}
-      </TableCell>
-      <TableCell>
-        {approval.git && !pending && (
-          <div className="max-w-72 whitespace-normal">
-            <GitOutcome git={approval.git} />
-          </div>
-        )}
-      </TableCell>
-      <TableCell className="text-muted-foreground">
-        {formatAge(approval.createdAt)}
-      </TableCell>
-      <TableCell>
-        <Button
-          size="xs"
-          variant={pending ? "default" : "ghost"}
-          onClick={onReview}
-        >
-          {pending ? "Review" : "Show"}
-        </Button>
-      </TableCell>
-    </TableRow>
   )
 }
 

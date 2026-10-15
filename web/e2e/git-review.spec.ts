@@ -64,9 +64,10 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
     )
     .toEqual({ name: "main", sha: pushed.commit, subject: "Add a greeting" })
 
-  // Settings → Git lists the push with its outcome and links to its page, which shows the
-  // decided review without the buttons.
-  await page.goto(`/e/${env}/settings/git`)
+  // The Git page, from the sidebar, lists the push with its outcome and links to its page,
+  // which shows the decided review without the buttons.
+  await page.getByRole("link", { name: "Git", exact: true }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/git$`))
   const row = page.getByRole("row").filter({ hasText: "team/app" })
   await expect(row).toContainText("pushed")
   await row.getByRole("link").click()
@@ -95,8 +96,13 @@ test("a pending push review opens as a page and is decided there", async ({
   })
   expect(pushed.error, pushed.output).toBeUndefined()
 
-  // The sheet's "Open as page" leads to the review's own address.
+  // The sidebar's Git link counts the push while it waits.
   await page.goto(`/e/${env}`)
+  await expect(
+    page.getByRole("link", { name: /^Git/ }).locator('[data-status="waiting"]')
+  ).toBeVisible()
+
+  // The sheet's "Open as page" leads to the review's own address.
   const card = approvals(page)
     .getByTestId("approval-card")
     .filter({ hasText: "team/app" })
@@ -119,5 +125,5 @@ test("a review that doesn't exist says so", async ({ page, env }) => {
   await page.goto(`/e/${env}/git/reviews/no-such-review`)
   await expect(page.getByText("No such review")).toBeVisible()
   await page.getByRole("link", { name: "All pushes" }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/settings/git$`))
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/git$`))
 })

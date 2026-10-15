@@ -5,6 +5,8 @@ description: Keep forge credentials on the host and approve pushes before Studio
 
 For a forge added in **Settings → Git**, Studio can act as the virtual Git remote. When a sandbox pushes through Studio, the change is staged in a private per-sandbox repository and appears in the approval inbox as a diff. The upstream branch does not change until you approve the push.
 
+**Git** in the sidebar lists every push and pull request of the environment, the ones waiting for you first, with how many wait next to it. Each opens its review.
+
 ![The Git settings page showing configured forges](../../assets/screenshots/git.jpg)
 
 ## Add a forge

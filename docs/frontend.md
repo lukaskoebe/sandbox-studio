@@ -51,7 +51,8 @@ to an environment.
 | `/e/$env/settings` | redirects to `general` |
 | `/e/$env/settings/general` | work mode, start at login, updates (the whole installation), "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
 | `/e/$env/settings/providers` | AI providers of the environment |
-| `/e/$env/settings/git` | forges and git push review of the environment |
+| `/e/$env/git` | the pushes and pull requests of the environment's sandboxes, waiting ones first; each opens its review |
+| `/e/$env/settings/git` | the forges of the environment |
 | `/e/$env/settings/templates` | template builds and templates of the environment |
 | `/e/$env/settings/runtime` | host checks (doctor) |
 | `/e/$env/settings/network` | private hosts: names the environment resolves through the host, such as a company VPN's ([network](network.md)) |
@@ -71,8 +72,8 @@ The old addresses `/e/$env/git`, `/builds`, `/providers` and `/browser` redirect
 settings pages and teammate browsers above. `/browser?teammate=<id>` opens that teammate's
 browser.
 
-The sidebar holds the environment switcher, the navigation (Home, Chats, Network, Secrets,
-Memory), the teammates and the sandboxes, and a footer with Settings, the version and the theme
+The sidebar holds the environment switcher, the navigation (Home, Chats, Git with the count of
+pushes waiting for review, Network, Secrets, Memory), the teammates and the sandboxes, and a footer with Settings, the version and the theme
 switch. Under each running sandbox it lists the guest's terminals (its tmux sessions, a robot for
 an agent's); one opens its tab in the workspace. The workspace's URL names the tab in view
 (`?terminal=` or `?chat=`), so such a link switches tabs. A sandbox row has its status dot (the word
@@ -97,9 +98,9 @@ for its workspace. One panel is open at a time, and on the workspace the URL nam
 panel is resizable from its left edge on wide screens (1024px and up) and covers the screen
 below that. Its width is remembered per page in local storage (`studio.panel.sandbox`,
 `studio.panel.chat`). Sheets remain only for detail opened from outside its context: the
-git push review (from the approval stack and Settings → Git), a memory conflict (from the
+git push review (from the approval stack and the Git page), a memory conflict (from the
 approval stack and Memory's Conflicts tab) and a build's log (from Settings → Templates). Each of those sheets
-has "Open as page", which leads to the item's own page above; Home's activity, Settings → Git,
+has "Open as page", which leads to the item's own page above; Home's activity, the Git page,
 Settings → Templates and the memory conflicts tab link there too. A page for an item that
 doesn't exist says so, and one already decided shows the outcome without the buttons.
 

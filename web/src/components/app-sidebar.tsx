@@ -13,6 +13,7 @@ import {
   ChatsCircleIcon,
   CheckIcon,
   GearIcon,
+  GitBranchIcon,
   GlobeIcon,
   KeyIcon,
   PlusIcon,
@@ -65,6 +66,7 @@ import { TeammateDialog } from "@/components/teammate-dialog"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
+import { isGitApproval } from "@/components/git-review"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { usePresence } from "@/hooks/use-teammate-presence"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
@@ -74,7 +76,7 @@ import { harnessLabels } from "@/lib/teammates"
 const groupLabel = "h-6 font-mono text-[0.625rem] tracking-wider uppercase"
 
 /**
- * The environment's navigation: Home, Chats, Network, Secrets and Memory, then the teammates
+ * The environment's navigation: Home, Chats, Git, Network, Secrets and Memory, then the teammates
  * (each with its presence) and the sandboxes (each with its status, the approvals waiting on it
  * and its terminals). Settings sit at the bottom, above the version and the theme toggle.
  */
@@ -100,9 +102,11 @@ export function AppSidebar({ env }: { env: string }) {
   const approvals = usePendingApprovals()
   const presence = usePresence(env)
   const waiting = new Map<string, number>()
+  let gitWaiting = 0
   for (const a of approvals.data ?? []) {
     if (a.sandboxId)
       waiting.set(a.sandboxId, (waiting.get(a.sandboxId) ?? 0) + 1)
+    if (a.environmentId === env && isGitApproval(a)) gitWaiting++
   }
   const matchRoute = useMatchRoute()
 
@@ -147,6 +151,25 @@ export function AppSidebar({ env }: { env: string }) {
               >
                 <ChatsCircleIcon />
                 <span>Chats</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="sm"
+                tooltip="Git"
+                isActive={
+                  !!matchRoute({
+                    to: "/e/$env/git",
+                    params: { env },
+                    fuzzy: true,
+                  })
+                }
+                className="[&_svg]:text-(--acc-git)"
+                render={<Link to="/e/$env/git" params={{ env }} />}
+              >
+                <GitBranchIcon />
+                <span className="min-w-0 flex-1 truncate">Git</span>
+                <WaitingCount count={gitWaiting} />
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>

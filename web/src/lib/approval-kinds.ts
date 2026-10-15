@@ -32,7 +32,7 @@ export type ApprovalKind = {
   page:
     | "/e/$env"
     | "/e/$env/network"
-    | "/e/$env/settings/git"
+    | "/e/$env/git"
     | "/e/$env/memory"
     | "/e/$env/teammates/$id/browser"
     | "/e/$env/chats"
@@ -85,14 +85,14 @@ const kinds: Record<string, ApprovalKind> = {
     summary: gitSummary,
     icon: GitBranchIcon,
     area: "git",
-    page: "/e/$env/settings/git",
+    page: "/e/$env/git",
   },
   "git.pr": {
     title: "Pull request",
     summary: gitSummary,
     icon: GitPullRequestIcon,
     area: "git",
-    page: "/e/$env/settings/git",
+    page: "/e/$env/git",
   },
   "memory.share": {
     title: "Memory share",
