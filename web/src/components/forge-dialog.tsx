@@ -203,6 +203,16 @@ const namePlaceholders: Record<Kind, string> = {
   ssh: "myhost",
 }
 
+/**
+ * Whether an SSH address is a repository's clone URL: [user@]host:path, with a path that isn't a
+ * port, or ssh://host/path.
+ */
+function isSSHCloneURL(v: string) {
+  const scp = /^(?:[^\s/:@]+@)?[^\s/:@]+:([^\s/][^\s]*)$/.exec(v)
+  if (scp) return !/^\d+$/.test(scp[1])
+  return /^ssh:\/\/[^\s/]+\/[^\s/][^\s]*$/.test(v)
+}
+
 function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
   const invalidate = useInvalidateForges()
   const [repoURL, setRepoURL] = useState("")
@@ -365,7 +375,10 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           placeholder={ssh ? "git@git.example.org" : "https://git.example.org"}
           autoComplete="off"
           onChange={(e) => {
-            setBaseUrl(e.target.value)
+            const v = e.target.value
+            // A clone URL pasted here fills in the form as in Repository URL.
+            if (ssh && isSSHCloneURL(v.trim())) setRepoURL(v.trim())
+            setBaseUrl(v)
             setScanned(undefined)
             setConfirmed(false)
           }}
@@ -373,7 +386,7 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
         {ssh && (
           <FieldDescription>
             user@host, or ssh://user@host:port. The user is git if you leave it
-            out.
+            out. A clone URL such as git@github.com:owner/repo.git works too.
           </FieldDescription>
         )}
       </Field>

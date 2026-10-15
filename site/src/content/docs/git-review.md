@@ -11,7 +11,7 @@ For a forge added in **Settings → Git**, Studio can act as the virtual Git rem
 
 ## Add a forge
 
-Studio supports GitHub, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, and SSH Git hosts. Add each forge to the environment where its sandboxes will use it. Forge hosts must be public; private and LAN hosts are refused. Paste a repository URL, such as `git@github.com:owner/repo.git`, and Studio fills in the rest of the form.
+Studio supports GitHub, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, and SSH Git hosts. Add each forge to the environment where its sandboxes will use it. Forge hosts must be public; private and LAN hosts are refused. Paste a repository URL, such as `git@github.com:owner/repo.git`, and Studio fills in the rest of the form: an SSH URL keeps its user, here `git`. The SSH address of an **Other SSH** forge takes a clone URL too.
 
 - For GitHub or Forgejo/Gitea/Codeberg, add a token with access limited to the repositories the agent needs.
 - For another HTTPS host, provide its username and token.
