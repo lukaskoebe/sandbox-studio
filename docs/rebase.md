@@ -39,7 +39,17 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
 
 `POST /api/environments/{env}/sandboxes/{id}/rebase` with `{"templateId": "..."}`.
 
-1. Studio resolves the new template image. A failure here changes nothing.
+The request checks the template, the home disk and the sandbox's state, and answers at once
+with the sandbox in state `creating`. The rebase then runs in the background, holding the
+sandbox, and publishes its steps on the `sandboxes` topic like a fork
+([creation progress](sandboxes.md#creation-progress)): `prepare` (steps 2–3 below), `pull`
+and `vm` (step 4's VM), `copy`, and `boot` for a sandbox that was running. The rebase dialog
+closes once the request is accepted, and the sandbox page shows the steps. `?wait=true`
+answers only once the rebase has ended, with the rebased sandbox or the error, as the
+request did before it ran in the background.
+
+1. Studio resolves the new template image. A failure here changes nothing and fails the
+   request.
 2. It writes a durable rebase record with generations `n` and `n+1`.
 3. It stops the source gracefully and starts it again in transfer mode.
 4. It creates generation `n+1` from the new template in transfer mode and copies the
@@ -47,6 +57,12 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
 5. It stops the source. A sandbox that was running is booted; a stopped one is stopped.
 6. One catalog update switches generation, template and resources.
 7. Studio removes the old VM and ends the record.
+
+A failed rebase leaves the sandbox on its old template, in its old status. Its view keeps
+`progress` with `operation: rebase`, `state: failed`, the step and the error: the dashboard
+shows the steps with the failed one marked, and the workspace a note, each with a Dismiss
+button (`DELETE /api/environments/{env}/sandboxes/{id}/progress`). The next rebase replaces
+the report.
 
 If a step before the commit fails, Studio removes the target, stops the source and ends
 the record. A sandbox that was running is then started again through the normal start

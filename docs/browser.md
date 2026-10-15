@@ -283,9 +283,15 @@ An agent can open a throwaway session next to the persistent profile:
 - **Limit.** A teammate has at most two ephemeral sessions, across its sandboxes. A third
   `open` is refused until one is closed.
 - **End.** A session ends on `browser_close`, after 10 minutes with no agent call and no user
-  input in it, when the sandbox that opened it is gone, and when the browser VM stops (idle
-  stop, Stop, delete, or a VM restart). A call to an ended session says so, and the agent opens
-  a new one. Studio's restart forgets the sessions; their profiles go with the VM.
+  input in it, when the sandbox that opened it stops or is deleted, when the chat that opened
+  it is deleted or its agent session is lost (orphaned), and when the browser VM stops (idle
+  stop, Stop, delete, or a VM restart). Studio follows sandbox and chat events for this, and
+  the idle sweep checks again every minute. A session the user has taken over is left alone
+  until it is handed back. The action log records why a session ended. A call to an ended
+  session says so, and the agent opens a new one. Studio's restart forgets the sessions; their
+  profiles go with the VM.
+- **Chat.** A session opened while exactly one chat of its sandbox is running belongs to that
+  chat. See [Limitations](#limitations).
 - **Ownership.** Only the sandbox that opened a session can drive it. Another sandbox of the
   same teammate is refused.
 - **Policy and approvals.** The policy is the persistent profile's: the same deny and allow
@@ -364,7 +370,7 @@ on request:
 - MCP tool list and image results;
 - the API (status, takeover, patterns, approval view, remember, teammate delete);
 - ephemeral sessions: the lifecycle, the limit, idle expiry on a fake clock, close, the VM
-  stop, ownership, takeover, tool arguments, approval and history marks, and the live view
+  stop, the end of the owning chat or sandbox (`owners_test.go`), ownership, takeover, tool arguments, approval and history marks, and the live view
   port of each session;
 - the guest's slots: argv, environment, stream port and session checks (`internal/guest`);
 - the browser VM's HTTPS: termination, per-request holds with the request's method, path and
@@ -441,6 +447,7 @@ on request:
 - A browser's requests are attributed to the page the broker drove last (its top-level site),
   which is exact while one page is open. A site approval covers a subresource only while every
   web page the browser has open is on an approved site.
-- Ephemeral sessions do not end with the agent's chat or session, which PLAN N11 also
-  proposed: the broker gets no signal from the agent's MCP server. They end as described
-  above.
+- A tool call names its sandbox, not its chat, so a session's chat is a guess: the one chat
+  of the sandbox that was running when the session opened. With none or several running, the
+  session belongs to no chat and ends only by the other rules. A terminal session that runs
+  an agent outside a chat has no chat either.

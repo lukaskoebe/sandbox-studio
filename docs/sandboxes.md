@@ -74,15 +74,17 @@ sandbox runs. Sandboxes started before this field existed have none until their 
 
 ## Creation progress
 
-A create, a create from a template and a fork return at once with the sandbox in state
-`creating`. Its VM is pulled, started and booted in the background (`Manager.bootSandbox`,
-`Manager.Fork`). The sandbox view's `progress` names the step it is on:
+A create, a create from a template, a fork and a rebase return at once with the sandbox in
+state `creating`. Its VM is pulled, started and booted in the background (`Manager.bootSandbox`,
+`Manager.Fork`, `Manager.Rebase`). The sandbox view's `progress` names the operation
+(`create`, `fork` or `rebase`) and the step it is on:
 
 | Step | Meaning |
 |---|---|
+| `prepare` | the sandbox stops and starts again for the copy (rebase only) |
 | `pull` | the image; the view carries layers and bytes while the pull reports them |
 | `vm` | the VM starts |
-| `copy` | the workspace copy (fork only) |
+| `copy` | the workspace copy (fork and rebase) |
 | `boot` | `studio-agent boot` runs |
 | `services` | the supervisor starts containerd, Docker and the agent |
 | `agent` | the agent answers requests |
@@ -93,13 +95,18 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
 - A create or fork that fails keeps its record in state `failed`, with the step and the
   error. Its VM is removed. A failed sandbox can't be started; deleting it is the way out.
   The error of a create from a template never carries the private image or credential.
-- A sandbox whose create or fork runs is busy: lifecycle actions, and forks and rebases of it,
-  are refused until the operation ends.
+- A sandbox whose create, fork or rebase runs is busy: lifecycle actions, and forks and
+  rebases of it, are refused until the operation ends.
 - While a create or fork runs, Studio saves its progress under `sandbox.progress.<id>` in
   the settings. On start, `Reconcile` fails each create or fork that was still running, with
   the error "Studio stopped before this step finished", and removes its VM. So no sandbox
   stays `creating` after a restart.
-- Rebase is not part of this: it still runs in the request.
+- A rebase runs through the steps `prepare`, `pull`, `vm`, `copy` and, for a sandbox that
+  was running, `boot`. The agent then connects and is configured as after any start. A
+  failed rebase rolls back ([rebase](rebase.md#rebase)), so the sandbox keeps its status;
+  only its `progress` stays, in state `failed` with the step and the error, until the next
+  rebase, a delete, a restart of Studio, or `DELETE …/sandboxes/{id}/progress` (the
+  Dismiss button). A rebase's progress isn't saved: its own rebase record recovers it.
 
 ## Resources
 

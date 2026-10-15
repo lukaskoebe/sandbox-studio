@@ -6,11 +6,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -19,7 +21,8 @@ import (
 // profile on the VM's tmpfs. The other tools reach it with its session ID; without one they
 // drive the persistent profile. The same policy, approvals and credentials apply; only
 // storage differs. A session ends on browser_close, when it was not used for
-// EphemeralIdle, when the sandbox that opened it is gone, and with the VM.
+// EphemeralIdle, when the chat that opened it ends or the sandbox that opened it stops or
+// is gone (FollowOwners), and with the VM.
 
 // ephemeralPrefix starts every ephemeral session ID. The action log files an ephemeral
 // session's actions under its ID, so the prefix also marks them there.
@@ -92,7 +95,7 @@ func (s *Service) agentPage(st *state, id string, sb store.Sandbox) (*page, erro
 
 // reserveEphemeral takes a free slot for a new ephemeral session of sb. The caller holds
 // the command slot; the session starts with its first command, sent Fresh.
-func (s *Service) reserveEphemeral(st *state, sb store.Sandbox) (*page, error) {
+func (s *Service) reserveEphemeral(st *state, sb store.Sandbox, chat string) (*page, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	used := map[int]bool{}
@@ -107,7 +110,7 @@ func (s *Service) reserveEphemeral(st *state, sb store.Sandbox) (*page, error) {
 			st.eph = map[string]*page{}
 		}
 		now := s.now()
-		pg := &page{id: newSessionID(), slot: slot, owner: sb, opened: now, used: now}
+		pg := &page{id: newSessionID(), slot: slot, owner: sb, chat: chat, opened: now, used: now}
 		st.eph[pg.id] = pg
 		return pg, nil
 	}
@@ -173,10 +176,9 @@ func (s *Service) endIdleEphemeral(ctx context.Context, idle time.Duration) {
 		s.mu.Unlock()
 		why := fmt.Sprintf("ended after %s unused", idle)
 		if !unused {
-			if _, err := s.Store.LookupSandbox(ctx, d.pg.owner.ID); err == nil {
+			if why = s.ownerGone(ctx, d.pg); why == "" {
 				continue
 			}
-			why = "ended because its sandbox is gone"
 		}
 		select {
 		case d.st.run <- struct{}{}:
@@ -190,6 +192,155 @@ func (s *Service) endIdleEphemeral(ctx context.Context, idle time.Duration) {
 			s.closeEphemeral(ctx, d.st, d.pg, why)
 		}
 		<-d.st.run
+	}
+}
+
+// Why an ephemeral session ended with its owner, for the action log.
+const (
+	whySandboxGone    = "ended because its sandbox is gone"
+	whySandboxStopped = "ended because the sandbox that opened it stopped"
+	whyChatEnded      = "ended with the chat that opened it"
+)
+
+// chatOf is the chat an ephemeral session that sb opens now belongs to. A tool call names
+// only its sandbox, so it is the chat of sb whose turn runs, if exactly one does; else the
+// session belongs to the sandbox alone.
+func (s *Service) chatOf(ctx context.Context, sb store.Sandbox) string {
+	chats, err := s.Store.Chats(ctx, sb.EnvironmentID, sb.ID)
+	if err != nil {
+		return ""
+	}
+	id := ""
+	for _, c := range chats {
+		if c.State != store.ChatRunning {
+			continue
+		}
+		if id != "" {
+			return ""
+		}
+		id = c.ID
+	}
+	return id
+}
+
+// chatEnded reports whether a chat was deleted or lost its agent session for good.
+func (s *Service) chatEnded(ctx context.Context, envID, chatID string) bool {
+	c, err := s.Store.Chat(ctx, envID, chatID)
+	if errors.Is(err, store.ErrNotFound) {
+		return true
+	}
+	return err == nil && c.State == store.ChatOrphaned
+}
+
+// ownerGone says why pg ends with its owner: its sandbox was deleted or its chat ended. It
+// is "" while both are there.
+func (s *Service) ownerGone(ctx context.Context, pg *page) string {
+	if _, err := s.Store.LookupSandbox(ctx, pg.owner.ID); errors.Is(err, store.ErrNotFound) {
+		return whySandboxGone
+	}
+	if pg.chat != "" && s.chatEnded(ctx, pg.owner.EnvironmentID, pg.chat) {
+		return whyChatEnded
+	}
+	return ""
+}
+
+// endEphemeral ends the ephemeral sessions match picks, after any command running in their
+// browser; never one the user drives.
+func (s *Service) endEphemeral(ctx context.Context, match func(*page) bool, why string) {
+	type due struct {
+		st *state
+		pg *page
+	}
+	var list []due
+	s.mu.Lock()
+	for _, st := range s.states {
+		for _, pg := range st.eph {
+			if !pg.takeover && match(pg) {
+				list = append(list, due{st, pg})
+			}
+		}
+	}
+	s.mu.Unlock()
+	for _, d := range list {
+		select {
+		case d.st.run <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
+		s.mu.Lock()
+		still := !d.pg.takeover
+		s.mu.Unlock()
+		if still {
+			s.closeEphemeral(ctx, d.st, d.pg, why)
+		}
+		<-d.st.run
+	}
+}
+
+// Stopped reports whether a sandbox's VM stopped, so the agent in it is gone.
+type Stopped func(ctx context.Context, envID, sandboxID string) (bool, error)
+
+// FollowOwners ends ephemeral sessions with their owner until ctx ends: a session ends when
+// the chat that opened it is deleted or orphaned, and when the sandbox that opened it stops
+// or is deleted. The idle sweep catches what an event missed, but for a stop.
+func (s *Service) FollowOwners(ctx context.Context, bus *events.Bus, stopped Stopped) {
+	for ctx.Err() == nil {
+		ch, unsubscribe := bus.Subscribe()
+		// The bus drops a subscriber that falls behind, so changes may have been missed.
+		s.checkOwners(ctx, events.Event{}, stopped)
+		s.followOwners(ctx, ch, stopped)
+		unsubscribe()
+	}
+}
+
+func (s *Service) followOwners(ctx context.Context, ch <-chan events.Event, stopped Stopped) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e, ok := <-ch:
+			if !ok {
+				return
+			}
+			if (e.Topic == events.TopicChats || e.Topic == events.TopicSandboxes) && e.ID != "" {
+				s.checkOwners(ctx, e, stopped)
+			}
+		}
+	}
+}
+
+// checkOwners ends the sessions whose chat or sandbox the event names and that ended; the
+// zero event checks every session.
+func (s *Service) checkOwners(ctx context.Context, e events.Event, stopped Stopped) {
+	all := e.Topic == ""
+	chats, sandboxes := map[string]string{}, map[string]string{} // ID -> environment
+	s.mu.Lock()
+	for _, st := range s.states {
+		for _, pg := range st.eph {
+			if pg.chat != "" && (all || e.Topic == events.TopicChats && e.ID == pg.chat) {
+				chats[pg.chat] = pg.owner.EnvironmentID
+			}
+			if all || e.Topic == events.TopicSandboxes && e.ID == pg.owner.ID {
+				sandboxes[pg.owner.ID] = pg.owner.EnvironmentID
+			}
+		}
+	}
+	s.mu.Unlock()
+	for chat, env := range chats {
+		if s.chatEnded(ctx, env, chat) {
+			s.endEphemeral(ctx, func(pg *page) bool { return pg.chat == chat }, whyChatEnded)
+		}
+	}
+	for id, env := range sandboxes {
+		why := ""
+		if _, err := s.Store.LookupSandbox(ctx, id); errors.Is(err, store.ErrNotFound) {
+			why = whySandboxGone
+		} else if done, err := stopped(ctx, env, id); err == nil && done {
+			why = whySandboxStopped
+		}
+		if why != "" {
+			s.endEphemeral(ctx, func(pg *page) bool { return pg.owner.ID == id }, why)
+		}
 	}
 }
 

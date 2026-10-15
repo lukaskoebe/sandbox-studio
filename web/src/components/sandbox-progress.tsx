@@ -15,9 +15,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Spinner } from "@/components/ui/spinner"
-import type { Sandbox } from "@/lib/api/client"
+import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
 import { cn, formatBytes } from "@/lib/utils"
 
 type Run = NonNullable<Sandbox["progress"]>
@@ -25,8 +28,9 @@ type Step = Run["step"]
 type Pull = NonNullable<Run["pull"]>
 type StepState = "done" | "running" | "failed" | "pending"
 
-/** What each step of a create or fork is called on screen. */
+/** What each step of a create, fork or rebase is called on screen. */
 const stepLabels: Record<Step, string> = {
+  prepare: "Preparing the sandbox for the copy",
   pull: "Pulling the image",
   vm: "Starting the VM",
   copy: "Copying the workspace",
@@ -34,6 +38,20 @@ const stepLabels: Record<Step, string> = {
   services: "Starting services",
   agent: "Connecting the agent",
   configure: "Configuring secrets and CA",
+}
+
+const verbs: Record<Run["operation"], string> = {
+  create: "Creating",
+  fork: "Forking",
+  rebase: "Rebasing",
+}
+
+/**
+ * Whether the sandbox's last rebase failed. The sandbox is back as it was; only its progress
+ * tells.
+ */
+export function rebaseFailed(sb: Sandbox) {
+  return sb.progress?.operation === "rebase" && sb.progress.state === "failed"
 }
 
 const labelTones: Record<StepState, string> = {
@@ -44,8 +62,8 @@ const labelTones: Record<StepState, string> = {
 }
 
 /**
- * A sandbox whose create or fork runs, or failed: its steps, the image pull while it runs, and
- * the error with the action that clears a failure.
+ * A sandbox whose create, fork or rebase runs, or failed: its steps, the image pull while it
+ * runs, and the error with the action that clears a failure.
  */
 export function SandboxProgress({
   sandbox: sb,
@@ -56,8 +74,9 @@ export function SandboxProgress({
   action?: ReactNode
 }) {
   const run = sb.progress
-  const failed = sb.status === "failed"
-  const verb = run?.operation === "fork" ? "Forking" : "Creating"
+  const rebase = run?.operation === "rebase"
+  const failed = sb.status === "failed" || run?.state === "failed"
+  const verb = run ? verbs[run.operation] : "Creating"
   const steps: Step[] = run?.steps?.length ? run.steps : run ? [run.step] : []
   const current = run ? steps.indexOf(run.step) : -1
 
@@ -72,7 +91,9 @@ export function SandboxProgress({
         </EmptyTitle>
         <EmptyDescription>
           {failed
-            ? "Delete the sandbox to try again."
+            ? rebase
+              ? "The sandbox stays on its old template, in the state it was in."
+              : "Delete the sandbox to try again."
             : "This can take a few minutes. The work keeps going in the background."}
         </EmptyDescription>
       </EmptyHeader>
@@ -156,5 +177,71 @@ function PullBar({ pull }: { pull?: Pull }) {
       <Progress value={value} />
       {text && <p className="text-muted-foreground tabular-nums">{text}</p>}
     </div>
+  )
+}
+
+/** Dismisses the report of a failed rebase. */
+export function DismissRebaseButton({
+  env,
+  sandbox,
+}: {
+  env: string
+  sandbox: Sandbox
+}) {
+  const queryClient = useQueryClient()
+  const dismiss = $api.useMutation(
+    "delete",
+    "/api/environments/{env}/sandboxes/{id}/progress",
+    {
+      onSuccess: () =>
+        Promise.all([
+          queryClient.invalidateQueries({
+            queryKey: ["get", "/api/environments/{env}/sandboxes"],
+          }),
+          queryClient.invalidateQueries({
+            queryKey: ["get", "/api/environments/{env}/sandboxes/{id}"],
+          }),
+        ]),
+      onError: (error) =>
+        toast.error(`Could not dismiss: ${errorMessage(error)}`),
+    }
+  )
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={dismiss.isPending}
+      onClick={() =>
+        dismiss.mutate({ params: { path: { env, id: sandbox.id } } })
+      }
+    >
+      {dismiss.isPending && <Spinner />}
+      Dismiss
+    </Button>
+  )
+}
+
+/** A note above the workspace that the sandbox's last rebase failed, and at which step. */
+export function RebaseFailedAlert({
+  env,
+  sandbox: sb,
+}: {
+  env: string
+  sandbox: Sandbox
+}) {
+  const run = sb.progress
+  if (!run || !rebaseFailed(sb)) return null
+  return (
+    <Alert variant="destructive" role="alert" className="m-2 w-auto shrink-0">
+      <WarningIcon />
+      <div className="min-w-0 space-y-2">
+        <AlertTitle>Rebase failed: {stepLabels[run.step]} failed</AlertTitle>
+        <AlertDescription>
+          The sandbox stays on its old template.{" "}
+          {run.error || "No details were recorded."}
+        </AlertDescription>
+        <DismissRebaseButton env={env} sandbox={sb} />
+      </div>
+    </Alert>
   )
 }

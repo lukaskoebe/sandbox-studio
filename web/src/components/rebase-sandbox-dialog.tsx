@@ -55,15 +55,16 @@ export function RebaseSandboxDialog({
             queryKey: ["get", "/api/environments/{env}/sandboxes/{id}"],
           }),
         ])
+        // The rebase runs in the background; the sandbox page follows its steps.
         onOpenChange(false)
-        toast.success("Sandbox rebased")
+        toast.success("Rebase started")
       },
     }
   )
   const pending = rebase.isPending
 
   function handleOpenChange(nextOpen: boolean) {
-    // A rebase in progress stays on screen until it succeeds or fails.
+    // The request only checks and accepts the rebase; it stays on screen until answered.
     if (!nextOpen && pending) return
     if (nextOpen) rebase.reset()
     onOpenChange(nextOpen)
@@ -212,20 +213,10 @@ function RebaseForm({
 
       {selected && <TemplateResources resources={selected.resources} />}
 
-      {pending ? (
-        <p
-          role="status"
-          className="flex items-center gap-2 text-muted-foreground"
-        >
-          <Spinner />
-          Copying workspace and home… This can take several minutes.
+      {failure && !pending && (
+        <p role="alert" className="text-destructive">
+          Could not rebase the sandbox: {failure}
         </p>
-      ) : (
-        failure && (
-          <p role="alert" className="text-destructive">
-            Could not rebase the sandbox: {failure}
-          </p>
-        )
       )}
 
       <DialogFooter>

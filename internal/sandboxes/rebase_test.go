@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	goruntime "runtime"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -165,6 +168,154 @@ func rebaseTemplate(t *testing.T, f *checkpointFixture, res resources.Resources)
 
 var rebaseResources = resources.Resources{CPUs: 2, MemoryMiB: 1024, MaxMemoryMiB: 2048, WorkspaceMiB: 4096, DockerMiB: 2048}
 
+// rebaseNow rebases sandbox id and waits for the outcome, as the API's wait=true does: the
+// error of a refused request or of the background rebase, else the view after it.
+func rebaseNow(f *checkpointFixture, id, templateID string) (View, error) {
+	if _, err := f.manager.Rebase(f.ctx, f.env.ID, id, templateID); err != nil {
+		return View{}, err
+	}
+	if err := f.manager.Wait(f.ctx, id); err != nil {
+		return View{}, err
+	}
+	return f.manager.Get(f.ctx, f.env.ID, id)
+}
+
+// blockingTransfer holds CreateForTransfer until release is closed, after reporting a pull.
+type blockingTransfer struct {
+	*transferFake
+	release chan struct{}
+}
+
+func (b *blockingTransfer) CreateForTransfer(ctx context.Context, name string, spec runtime.Spec, socket string, labels map[string]string) error {
+	if spec.Progress != nil {
+		spec.Progress(runtime.Progress{Phase: runtime.PhasePull, Pull: runtime.PullProgress{Layers: 2, LayersDone: 1}})
+	}
+	<-b.release
+	return b.transferFake.CreateForTransfer(ctx, name, spec, socket, labels)
+}
+
+func TestRebaseAnswersAtOnceAndPublishesItsSteps(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	source := VMName(f.sandbox)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.setWorkspace(source, "files")
+	blocking := &blockingTransfer{transferFake: tf, release: make(chan struct{})}
+	f.manager.Runtime = blocking
+
+	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := answered.Progress
+	if answered.Status != StatusCreating || p == nil || p.Operation != OperationRebase || p.State != ProgressRunning ||
+		!slices.Equal(p.Steps, rebaseRunningSteps) {
+		t.Fatalf("answer = %+v, progress %+v", answered, p)
+	}
+	// While the image pulls, the view shows the pull, and the sandbox is busy.
+	waitUntil(t, func() bool {
+		v, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+		return err == nil && v.Progress != nil && v.Progress.Step == StepPull && v.Progress.Pull != nil
+	})
+	if _, err := f.manager.Stop(f.ctx, f.env.ID, f.sandbox.ID); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Stop during a rebase: err = %v, want ErrBusy", err)
+	}
+	if err := f.manager.ClearProgress(f.ctx, f.env.ID, f.sandbox.ID); err == nil {
+		t.Fatal("a running rebase was dismissed")
+	}
+	close(blocking.release)
+	if err := f.manager.Wait(f.ctx, f.sandbox.ID); err != nil {
+		t.Fatal(err)
+	}
+	view, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Progress != nil || view.Status != runtime.StatusRunning || view.TemplateID != template.ID {
+		t.Fatalf("after the rebase: %+v, progress %+v", view, view.Progress)
+	}
+	// A rebase saves no progress: its rebase record recovers it.
+	if saved, err := f.store.SettingsWithPrefix(f.ctx, progressKeyPrefix); err != nil || len(saved) != 0 {
+		t.Fatalf("saved progress = %v, %v", saved, err)
+	}
+}
+
+func TestFailedRebaseNamesItsStepUntilDismissed(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	source := VMName(f.sandbox)
+	tf.setStatus(source, runtime.StatusRunning)
+	tf.setWorkspace(source, "files")
+	tf.fail("export:"+source, errors.New("injected"))
+
+	if _, err := rebaseNow(f, f.sandbox.ID, template.ID); err == nil {
+		t.Fatal("rebase succeeded")
+	}
+	view, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The sandbox is back as it was, running on its old template; the progress tells why.
+	p := view.Progress
+	if view.Status != runtime.StatusRunning || view.TemplateID != "" || p == nil || p.Operation != OperationRebase ||
+		p.State != ProgressFailed || p.Step != StepCopy || !strings.Contains(p.Error, "injected") {
+		t.Fatalf("view = %+v, progress %+v", view, p)
+	}
+	// It is not a failed creation: the sandbox stops and starts as usual.
+	if _, err := f.manager.Stop(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.manager.Start(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.manager.ClearProgress(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
+		t.Fatal(err)
+	}
+	if view, _ := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID); view.Progress != nil {
+		t.Fatalf("progress after dismissing = %+v", view.Progress)
+	}
+	// The next rebase replaces a failed one's report too.
+	if _, err := rebaseNow(f, f.sandbox.ID, template.ID); err == nil {
+		t.Fatal("rebase succeeded")
+	}
+	tf.clearFailure("export:" + source)
+	if _, err := rebaseNow(f, f.sandbox.ID, template.ID); err != nil {
+		t.Fatal(err)
+	}
+	if view, _ := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID); view.Progress != nil || view.TemplateID != template.ID {
+		t.Fatalf("after a successful rebase: %+v, progress %+v", view, view.Progress)
+	}
+}
+
+func TestRebaseOfStoppedSandboxHasNoBootStep(t *testing.T) {
+	f := newCheckpointFixture(t)
+	newTransferFake(f)
+	template := rebaseTemplate(t, f, rebaseResources)
+	answered, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if answered.Progress == nil || !slices.Equal(answered.Progress.Steps, rebaseStoppedSteps) {
+		t.Fatalf("progress = %+v", answered.Progress)
+	}
+	if err := f.manager.Wait(f.ctx, f.sandbox.ID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitUntil(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestRebaseRunningSandboxCopiesWorkspaceAndBootsTarget(t *testing.T) {
 	f := newCheckpointFixture(t)
 	tf := newTransferFake(f)
@@ -175,7 +326,7 @@ func TestRebaseRunningSandboxCopiesWorkspaceAndBootsTarget(t *testing.T) {
 	tf.setHome(source, "opencode sessions")
 	checkpoint := f.createReadyCheckpoint(t, "before")
 
-	view, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	view, err := rebaseNow(f, f.sandbox.ID, template.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +369,7 @@ func TestRebaseStoppedSandboxStaysStopped(t *testing.T) {
 	template := rebaseTemplate(t, f, rebaseResources)
 	tf.setWorkspace(VMName(f.sandbox), "files")
 
-	view, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	view, err := rebaseNow(f, f.sandbox.ID, template.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +403,7 @@ func TestRebaseFailureRemovesTargetAndRestoresSource(t *testing.T) {
 					tf.fail(step+":"+target, errors.New("injected"))
 				}
 
-				_, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+				_, err := rebaseNow(f, f.sandbox.ID, template.ID)
 				if err == nil {
 					t.Fatal("Rebase succeeded")
 				}
@@ -290,7 +441,7 @@ func TestRebaseFailureReportsSourceRestartFailure(t *testing.T) {
 	tf.fail("import:"+target, importErr)
 	tf.fail("start:"+source, startErr)
 
-	_, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID)
+	_, err := rebaseNow(f, f.sandbox.ID, template.ID)
 	if !errors.Is(err, importErr) || !errors.Is(err, startErr) {
 		t.Fatalf("err = %v", err)
 	}
@@ -494,7 +645,7 @@ func TestRebaseHomeFailureRollsBack(t *testing.T) {
 	tf.setStatus(source, runtime.StatusRunning)
 	tf.fail("export-home:"+source, ErrHomeTooLarge)
 
-	if _, err := f.manager.Rebase(f.ctx, f.env.ID, f.sandbox.ID, template.ID); !errors.Is(err, ErrHomeTooLarge) {
+	if _, err := rebaseNow(f, f.sandbox.ID, template.ID); !errors.Is(err, ErrHomeTooLarge) {
 		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
 	}
 	current, err := f.store.Sandbox(f.ctx, f.env.ID, f.sandbox.ID)

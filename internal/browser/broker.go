@@ -129,6 +129,7 @@ type page struct {
 	id       string        // "" for the profile, else the ephemeral session's ID
 	slot     int           // the guest's ephemeral slot, 0 for the profile
 	owner    store.Sandbox // the agent sandbox that opened an ephemeral session
+	chat     string        // the chat whose turn opened it, if it could be told; see chatOf
 	opened   time.Time
 	used     time.Time
 	takeover bool

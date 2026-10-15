@@ -17,8 +17,12 @@ import (
 // their generations.
 // A sandbox that was running is booted again; a stopped one stays stopped. Until the
 // catalog switches, any failure removes the new VM and returns the source to its state.
+//
+// Rebase checks the request and answers at once with the sandbox in state creating. The
+// rebase runs in the background, holding the sandbox, and publishes its steps as a fork
+// does; Wait returns its outcome. A failed rebase leaves the sandbox on its old template,
+// and its view keeps the step that failed until the next rebase, ClearProgress or a delete.
 func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (View, error) {
-	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -26,7 +30,12 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if err != nil {
 		return View{}, err
 	}
-	defer unlock()
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			unlock()
+		}
+	}()
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return View{}, err
 	}
@@ -36,6 +45,9 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	sb, err := m.PublicSandbox(ctx, envID, id)
 	if err != nil {
 		return View{}, err
+	}
+	if m.failedCreation(id) {
+		return View{}, lifecycleError("the sandbox could not be created; delete it")
 	}
 	rt, err := m.transfer()
 	if err != nil {
@@ -69,36 +81,53 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if err != nil {
 		return View{}, err
 	}
-
-	op, err := m.Store.BeginRebase(ctx, store.RebaseOperation{
+	wasRunning := status == runtime.StatusRunning
+	steps := rebaseStoppedSteps
+	if wasRunning {
+		steps = rebaseRunningSteps
+	}
+	if err := m.begin(ctx, sb, OperationRebase, steps); err != nil {
+		return View{}, err
+	}
+	handedOff = true
+	req := store.RebaseOperation{
 		SandboxID: sb.ID, EnvironmentID: envID, TemplateID: templateID,
 		CPUs: int(resolved.CPUs), MemoryMiB: int(resolved.MemoryMiB), MaxMemoryMiB: int(resolved.MaxMemoryMiB),
 		WorkspaceMiB: int(resolved.WorkspaceMiB), DockerMiB: int(resolved.DockerMiB),
-	})
-	if err != nil {
-		return View{}, err
 	}
-	wasRunning := status == runtime.StatusRunning
+	m.background(sb, transferTimeout, unlock, func(ctx context.Context) error {
+		return m.rebase(ctx, rt, sb, req, image, wasRunning, targetHome)
+	})
+	return m.acceptedView(ctx, sb), nil
+}
+
+// rebase runs a rebase that Rebase accepted: it records it durably, builds and fills the
+// new generation and switches the catalog to it, or rolls back.
+func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandbox, req store.RebaseOperation, image *runtime.ImageSource, wasRunning bool, targetHome uint32) error {
+	op, err := m.Store.BeginRebase(ctx, req)
+	if err != nil {
+		return err
+	}
 	if op.FromGeneration != sb.Generation {
-		return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
+		return m.rollbackRebase(ctx, sb, op, wasRunning, errors.New("sandbox generation changed"))
 	}
 	target := rebaseTarget(sb, op)
 	if err := m.rebaseInto(ctx, rt, sb, target, image, wasRunning, targetHome); err != nil {
-		return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, err)
+		return m.rollbackRebase(ctx, sb, op, wasRunning, err)
 	}
 
 	if err := m.Store.CommitRebase(ctx, op); err != nil {
 		cleanupCtx, cancel := cleanupContext(ctx)
-		current, readErr := m.Store.Sandbox(cleanupCtx, envID, id)
+		current, readErr := m.Store.Sandbox(cleanupCtx, sb.EnvironmentID, sb.ID)
 		cancel()
 		if readErr == nil && current.Generation == op.FromGeneration {
-			return View{}, m.rollbackRebase(ctx, sb, op, wasRunning, err)
+			return m.rollbackRebase(ctx, sb, op, wasRunning, err)
 		}
 		// The switch may have taken effect. Recovery finishes it; the target is never removed.
-		return View{}, errors.Join(err, readErr)
+		return errors.Join(err, readErr)
 	}
 	if wasRunning {
-		target = m.markStarted(ctx, target)
+		m.markStarted(ctx, target)
 	}
 	cleanupCtx, cancel := cleanupContext(ctx)
 	err = m.Runtime.Remove(cleanupCtx, VMName(sb))
@@ -107,9 +136,9 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	}
 	cancel()
 	if err != nil {
-		return View{}, fmt.Errorf("rebase done but cleanup is pending: %w", err)
+		return fmt.Errorf("rebase done but cleanup is pending: %w", err)
 	}
-	return m.view(ctx, target)
+	return nil
 }
 
 func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
@@ -136,10 +165,14 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 	if err := rt.StartForTransfer(ctx, VMName(sb)); err != nil {
 		return err
 	}
+	m.advance(sb.ID, StepPull)
 	sock := m.Paths.AgentSocket(sb.ID)
-	if err := rt.CreateForTransfer(ctx, VMName(target), transferSpec(target, image, egress, targetHome), sock, sandboxLabels(target)); err != nil {
+	spec := transferSpec(target, image, egress, targetHome)
+	spec.Progress = m.runtimeProgress(sb.ID)
+	if err := rt.CreateForTransfer(ctx, VMName(target), spec, sock, sandboxLabels(target)); err != nil {
 		return err
 	}
+	m.advance(sb.ID, StepCopy)
 	if err := copyTrees(ctx, rt, ownedVM(sb), ownedVM(target), target.WorkspaceMiB, targetHome > 0); err != nil {
 		return err
 	}
@@ -147,6 +180,7 @@ func (m *Manager) rebaseInto(ctx context.Context, rt transferRuntime, sb, target
 		return err
 	}
 	if wasRunning {
+		m.advance(sb.ID, StepBoot)
 		return rt.Boot(ctx, VMName(target))
 	}
 	return m.Runtime.Stop(ctx, VMName(target))
