@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/empty"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
+import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, errorMessage, errorStatus } from "@/lib/api/client"
+import { useClaimApprovals } from "@/lib/approval-claims"
 
 export const Route = createFileRoute("/e/$env/memory/conflicts/$id")({
   component: ConflictPage,
@@ -33,15 +35,20 @@ function ConflictPage() {
     { retry: (n, err) => errorStatus(err) !== 404 && n < 2 }
   )
   const c = detail.data
+  // The page decides it, so the approval stack leaves its card out.
+  const pending = usePendingApprovals()
+  useClaimApprovals(
+    (pending.data ?? [])
+      .filter((a) => a.memoryConflict?.conflictId === id)
+      .map((a) => a.id)
+  )
 
   return (
     <>
       <PageHeader>
         <h1 className="text-sm font-medium">Memory conflict</h1>
       </PageHeader>
-      {/* The bottom padding lets the decision scroll clear of the approval stack, which
-          shows this conflict's card too while it is open. */}
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4 pb-64">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
         <div className="mx-auto grid max-w-3xl gap-4 text-xs">
           {detail.isPending ? (
             <Spinner className="mx-auto block" />

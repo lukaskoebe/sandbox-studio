@@ -152,8 +152,7 @@ The `e2e` build replaces the VM runtime and the guest agent with the fakes in
   hosts in SOCKS5 instead.
 
 Tests locate elements by role and label, and use `data-testid` only where a control has no
-accessible name (approval cards). Scenarios that need more fakes (the teammate browser's live
-view) are `test.fixme` in `web/e2e/todo.spec.ts`.
+accessible name (approval cards).
 
 `web/e2e-live` is a second, small suite against a real Studio that is already running and
 boots real VMs. It has its own config, and reaches Studio through a login link:

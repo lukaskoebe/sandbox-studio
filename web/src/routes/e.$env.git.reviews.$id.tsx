@@ -20,6 +20,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, errorStatus } from "@/lib/api/client"
+import { useClaimApprovals } from "@/lib/approval-claims"
 import { approvalKind, gitSummary } from "@/lib/approval-kinds"
 import { formatAge } from "@/lib/utils"
 
@@ -48,15 +49,15 @@ function GitReviewPage() {
   )
   const a = approval.data
   const kind = a && approvalKind(a)
+  // The page decides it, so the approval stack leaves its card out.
+  useClaimApprovals(a?.status === "pending" ? [a.id] : [])
 
   return (
     <>
       <PageHeader>
         <h1 className="text-sm font-medium">Git review</h1>
       </PageHeader>
-      {/* The bottom padding lets the decision scroll clear of the approval stack, which
-          shows this review's card too while it waits. */}
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4 pb-64">
+      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
         <div className="mx-auto grid max-w-3xl gap-4 text-xs">
           {approval.isPending ? (
             <Spinner className="mx-auto block" />

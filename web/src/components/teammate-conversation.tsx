@@ -319,7 +319,7 @@ function Thread({
               </MessageScrollerItem>
             )}
             {events?.length === 0 && !live && (
-              <MessageScrollerItem className="m-auto max-w-sm text-center text-xs text-muted-foreground">
+              <MessageScrollerItem className="m-auto flex max-w-sm flex-col items-center text-center text-xs text-muted-foreground">
                 <TeammateAvatar
                   name={teammate.name}
                   avatar={teammate.avatar}

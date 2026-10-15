@@ -17,7 +17,6 @@ import {
   type BrowserAction,
   type BrowserReplay,
 } from "@/components/browser-window"
-import { StatusDot } from "@/components/status-dot"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -321,17 +320,16 @@ export function BrowserSteps({
                     <HandIcon className="mr-1 inline size-3 text-primary" />
                   )}
                   {stepWords(a, name)}
-                  {a.detail && (
+                  {a.detail && a.outcome !== "pending" && (
                     <span className="text-muted-foreground"> {a.detail}</span>
                   )}
                 </span>
               </span>
               {a.outcome === "pending" ? (
-                <StatusDot
-                  status="waiting"
-                  label="Waiting for you, on the page"
-                  className="text-[0.6875rem]"
-                />
+                <span className="flex items-center gap-1 text-[0.6875rem] text-muted-foreground">
+                  <span className="size-1.5 rounded-full bg-(--st-waiting)" />
+                  Asked you
+                </span>
               ) : a.outcome === "denied" ? (
                 <span className="text-[0.6875rem] text-muted-foreground">
                   Denied
