@@ -56,6 +56,28 @@ func (s *Service) Navigate(ctx context.Context, envID, teammateID, session, rawU
 	if !validNavigationURL(rawURL) {
 		return BrowserStatus{}, ErrBadURL
 	}
+	return s.drive(ctx, envID, teammateID, session, []string{"open", rawURL}, "open", rawURL)
+}
+
+// Moves the user can make in a session's history, as the browser's toolbar does.
+var historyMoves = map[string]bool{"back": true, "forward": true, "reload": true}
+
+// Go goes back, forward or reloads the page in a session the user has taken over, like
+// Navigate.
+func (s *Service) Go(ctx context.Context, envID, teammateID, session, to string) (BrowserStatus, error) {
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
+		return BrowserStatus{}, err
+	}
+	if !historyMoves[to] {
+		return BrowserStatus{}, ErrBadMove
+	}
+	return s.drive(ctx, envID, teammateID, session, []string{to}, to, "")
+}
+
+// drive runs one of the user's commands in a session they have taken over, records it as
+// action, and returns the status with the page it lands on. fallbackURL is logged when the
+// browser cannot say where it is.
+func (s *Service) drive(ctx context.Context, envID, teammateID, session string, args []string, action, fallbackURL string) (BrowserStatus, error) {
 	st := s.state(envID, teammateID)
 	s.mu.Lock()
 	pg := st.pageFor(session)
@@ -101,13 +123,13 @@ func (s *Service) Navigate(ctx context.Context, envID, teammateID, session, rawU
 		st.session = store.NewID()
 	}
 	st.lastUsed, pg.used = s.now(), s.now()
-	// An open may change the page before it reports a failure, so refs are invalid as soon
-	// as the command starts. Keep the old URL out of Status until it can be confirmed.
+	// A command may change the page before it reports a failure, so refs are invalid as soon
+	// as it starts. Keep the old URL out of Status until it can be confirmed.
 	pg.url, pg.refs, pg.credRefs = "", nil, nil
 	s.mu.Unlock()
 
-	data, _, navErr := s.exec(ctx, st, pg, agentproto.BrowserCommand{Args: []string{"open", rawURL}})
-	if navErr != nil {
+	data, _, runErr := s.exec(ctx, st, pg, agentproto.BrowserCommand{Args: args})
+	if runErr != nil {
 		actualURL, _ := s.currentBrowserURL(ctx, st, pg)
 		s.mu.Lock()
 		if actualURL != "" {
@@ -119,10 +141,10 @@ func (s *Service) Navigate(ctx context.Context, envID, teammateID, session, rawU
 		s.mu.Unlock()
 		logURL := actualURL
 		if logURL == "" {
-			logURL = rawURL
+			logURL = fallbackURL
 		}
-		s.record(ctx, st, pg, entry{actor: "user", action: "open", url: logURL, outcome: "failed", detail: navErr.Error()})
-		return BrowserStatus{}, navErr
+		s.record(ctx, st, pg, entry{actor: "user", action: action, url: logURL, outcome: "failed", detail: runErr.Error()})
+		return BrowserStatus{}, runErr
 	}
 
 	actualURL := returnedURL(data)
@@ -140,8 +162,54 @@ func (s *Service) Navigate(ctx context.Context, envID, teammateID, session, rawU
 	s.mu.Unlock()
 	logURL := actualURL
 	if logURL == "" {
-		logURL = rawURL
+		logURL = fallbackURL
 	}
-	s.record(ctx, st, pg, entry{actor: "user", action: "open", url: logURL, outcome: "ok"})
+	s.record(ctx, st, pg, entry{actor: "user", action: action, url: logURL, outcome: "ok"})
 	return status, nil
+}
+
+// CloseSession ends an ephemeral session for the user: its browser closes and its temporary
+// profile is deleted. An agent still using it gets an error naming the closed session.
+func (s *Service) CloseSession(ctx context.Context, envID, teammateID, session string) error {
+	if _, err := s.Store.Teammate(ctx, envID, teammateID); err != nil {
+		return err
+	}
+	if !IsEphemeral(session) {
+		return ErrNoSession
+	}
+	st := s.state(envID, teammateID)
+	s.mu.Lock()
+	pg := st.eph[session]
+	s.mu.Unlock()
+	if pg == nil {
+		return ErrNoSession
+	}
+	// The user's own takeover of it ends with it: waiting agent calls are released and fail
+	// on the closed session.
+	s.endTakeover(pg)
+	select {
+	case st.run <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-st.run }()
+	s.mu.Lock()
+	vm, current := st.vm, st.eph[pg.id] == pg
+	s.mu.Unlock()
+	if !current {
+		return nil
+	}
+	var err error
+	if vm != "" {
+		_, err = s.Runner.Browser(ctx, vm, agentproto.BrowserCommand{Args: []string{"close"}, Ephemeral: pg.slot, TimeoutMS: 20000})
+	}
+	if err != nil {
+		// The slot is wiped again before its next use.
+		s.log().Warn("closing an ephemeral browser session failed", "teammate", st.teammate, "session", pg.id, "err", err)
+	}
+	s.mu.Lock()
+	s.dropLocked(st, pg)
+	s.mu.Unlock()
+	s.record(ctx, st, pg, entry{actor: "user", sandbox: pg.owner.ID, action: "close", outcome: "ok", detail: "closed by the user"})
+	return nil
 }

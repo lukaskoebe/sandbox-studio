@@ -14,8 +14,10 @@ Code:
 - `internal/api/browser.go`: the API.
 - `cmd/studio/browser.go`: the wiring.
 - `images/browser`: the image.
-- The UI: `web/src/routes/e.$env.browser.tsx`, plus `browser-live.tsx` and
-  `browser-approval.tsx` in `web/src/components`.
+- The UI: `browser-window.tsx` (the window), `browser-rail.tsx` (activity and sites),
+  `browser-panel.tsx` (the side panel), `browser-browsing.tsx` (the conversation's card),
+  `browser-live.tsx` and `browser-approval.tsx` in `web/src/components`, and
+  `web/src/lib/browser-sites.ts`.
 
 ## One browser VM per teammate
 
@@ -207,10 +209,33 @@ The value never enters:
 
 ## Live view and takeover
 
-On a teammate-owned sandbox, **Browser** opens the same teammate browser beside the
-workspace. Drag the divider (or focus it and use the arrow keys) to resize it. On phones
-the panel fills the workspace. Closing it hides the viewer without stopping the browser
-or handing control back; **Hand back** remains an explicit action.
+The browser is one window, in three places: big on the teammate's **Browser** tab, with its
+**Activity** and **Sites** beside it; as a side panel beside a teammate-owned sandbox's
+terminal (**Browser** in the workspace toolbar); and beside the teammate's conversation, from
+**Watch** on the browsing card in the thread or the rail's **Now**. The panel's expand button
+opens the teammate's tab. Drag the panel's divider (or focus it and use the arrow keys) to
+resize it; on phones it fills the screen. Closing it hides the viewer without stopping the
+browser or handing control back.
+
+The window has, top to bottom:
+
+- **Tabs.** The teammate's own profile, then each open throwaway session with its sandbox,
+  each named by its page's site. A dot marks a tab with a question waiting. A throwaway tab's
+  X ends the session (`DELETE …/browser/sessions/{session}`).
+- **Toolbar.** Back, Forward and Reload (`POST …/browser/go {to, session}`), the address bar,
+  Downloads and the options menu (Put to sleep / Wake up, Network rules, Reset profile…). The
+  shield in the address bar opens the site's info: what the teammate may do there (Ask
+  first, Allowed, Blocked), its hidden fields and other rules.
+- **Driver line.** Who drives and what now: the teammate drives, is waiting for you, isn't
+  using the browser, you drive (with **Hand back**), or a throwaway session's sandbox.
+- **Page.** The live view. The teammate's questions (`browser.action`,
+  `browser.credential`) show on the page as cards with their answers, and leave the approval
+  stack while they do. A sleeping browser shows its last page faded, with a field to open a
+  page, which wakes it.
+
+Browsing yourself takes the wheel: typing an address and pressing Enter, or Back, Forward and
+Reload, take over first and then act. **Take the wheel** on the driver line, or on the page
+while hovering it, takes over without navigating.
 
 During takeover, tap the remote page to focus the mobile keyboard. The controls below
 the page provide Ctrl, Esc, Tab, arrows, Backspace and Enter. Ctrl applies to the next key.
@@ -224,16 +249,19 @@ disconnecting clears the local input buffer.
     while the user drives.
   - Messages are re-encoded from an allow-listed shape, so nothing else reaches the
     stream.
-- **Takeover.** "Take over" pauses agents. Agent calls wait up to 20 s, then fail with "the
+- **Takeover.** Taking the wheel pauses agents. Agent calls wait up to 20 s, then fail with "the
   user is driving the browser…". The user types passwords straight into the page. Hand
   back resumes agent calls.
-- **Open a website.** While taking over, enter a URL in **Browser address** and press
-  Enter or **Open**. Addresses without a scheme use HTTPS. A new browser starts on
+- **Open a website.** Enter a URL in **Browser address** and press Enter; it takes the wheel
+  first when an agent drives. Addresses without a scheme use HTTPS. A new browser starts on
   `about:blank`; the live view explains how to open its first page. The address follows
   page changes without replacing a draft while the user is typing.
   `POST .../browser/navigate` accepts only HTTP(S) URLs and requires a running browser
   under user takeover. Navigation is serialized with agent commands, recorded as a user
   action, and remains subject to the gateway's network rules and approvals.
+- **Back, forward, reload.** `POST .../browser/go` with `to` `back`, `forward` or `reload`
+  moves in the session's history under user takeover, like navigate, and answers with the
+  status; anything else is 422.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
   (device size, offset and page scale) and the letterbox of the canvas. Presses in the bars
   and above the page are not sent. A drag that leaves the canvas still releases at its edge. On touch, the tap is sent before the hidden input takes
@@ -264,10 +292,12 @@ An agent can open a throwaway session next to the persistent profile:
   patterns, the same `browser.action` and `browser.credential` approvals. An approval names
   the session. A one-time grant holds for its session only. An "Always" rule is per origin for
   the teammate, so it covers every session.
-- **Live view.** While an ephemeral session is open, the live view and the Browser panel show
-  a session switcher: **Profile**, then each open ephemeral session. Take over, Hand back and
-  the address form act on the selected session. Taking over one session pauses agent calls to
-  that session only. A picked session that closes falls back to Profile.
+- **Live view.** Each open ephemeral session is a tab of the window, after the profile's.
+  Taking the wheel, Hand back and the toolbar act on the selected tab. Taking over one session
+  pauses agent calls to that session only. A picked session that closes falls back to the
+  profile. The user ends a session with its tab's X or **End session**
+  (`DELETE …/browser/sessions/{session}`), which closes it as `browser_close` does and logs it
+  as the user's.
 - **History.** The action log files each session's actions under its ID, and the teammate's
   Browser tab marks them as ephemeral. Egress is attributed to the VM and its driving sandbox, not to a
   session, so the connection history does not split by session.
@@ -306,8 +336,16 @@ on request:
   `<data>/browser/`.
 - **Bounds.** The log keeps 500 actions per teammate and 200 MiB of screenshots overall,
   dropping the oldest first.
-- **Replay.** The teammate's Browser tab groups the log by session (one session per VM start) and
-  steps through the screenshots.
+- **Replay.** The Browser tab's **Activity** groups the log by session (one session per VM
+  start, and one per throwaway session), newest first, with a picture of each step that
+  changed the page. Clicking a step shows the page as it was after it, in the window, with
+  previous and next steps and **Back to live**. The side panel folds the latest session's
+  steps under the window, and the conversation's browsing card shows its last three.
+- **Sites.** The Browser tab's **Sites** lists every origin with a rule or a visit. Each has
+  a picker for clicks and typing, which sets or removes one rule for every action on the whole
+  origin (`action: "*"`), and chips for its narrower rules and hidden fields, each removable.
+  **Add a rule or hide a field** takes a rule for one action, role or label glob, or a
+  sensitive field.
 
 ## Verified vs pending live
 

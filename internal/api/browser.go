@@ -41,7 +41,7 @@ type BrowserDownloadInput struct {
 
 func (s *Server) browserError(err error) error {
 	switch {
-	case errors.Is(err, browser.ErrBadPattern), errors.Is(err, browser.ErrBadURL):
+	case errors.Is(err, browser.ErrBadPattern), errors.Is(err, browser.ErrBadURL), errors.Is(err, browser.ErrBadMove):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover):
 		return huma.Error409Conflict(err.Error())
@@ -87,6 +87,43 @@ func (s *Server) registerBrowser(api huma.API) {
 			return nil, s.browserError(err)
 		}
 		return &struct{ Body browser.BrowserStatus }{st}, nil
+	})
+
+	type goBrowserIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Body     struct {
+			To      string `json:"to" enum:"back,forward,reload" doc:"Where to go in the session's history"`
+			Session string `json:"session,omitempty" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "goBrowser", Method: http.MethodPost, Path: "/api/environments/{env}/teammates/{teammate}/browser/go", Tags: []string{"browser"},
+		Description: "Goes back, forward or reloads the page while the user has taken over, like a browser's toolbar.",
+	}, func(ctx context.Context, in *goBrowserIn) (*struct{ Body browser.BrowserStatus }, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		st, err := s.Browser.Go(ctx, in.Env, in.Teammate, in.Body.Session, in.Body.To)
+		if err != nil {
+			return nil, s.browserError(err)
+		}
+		return &struct{ Body browser.BrowserStatus }{st}, nil
+	})
+
+	type closeSessionIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Session  string `path:"session" maxLength:"32" doc:"The ephemeral session's ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "closeBrowserSession", Method: http.MethodDelete, Path: "/api/environments/{env}/teammates/{teammate}/browser/sessions/{session}", Tags: []string{"browser"},
+		DefaultStatus: http.StatusNoContent, Description: "Ends an ephemeral session: its browser closes and its temporary profile is deleted.",
+	}, func(ctx context.Context, in *closeSessionIn) (*struct{}, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		return nil, s.browserError(s.Browser.CloseSession(ctx, in.Env, in.Teammate, in.Session))
 	})
 
 	type browserAction struct {

@@ -39,6 +39,7 @@ var (
 	ErrNoTakeover = errors.New("take over the browser before navigating")
 	ErrBadURL     = errors.New("url must be an absolute http or https URL with a host, no userinfo, and at most 4000 characters")
 	ErrNoSession  = errors.New("there is no such browser session")
+	ErrBadMove    = errors.New("to must be back, forward or reload")
 )
 
 // Runner reaches a browser VM's guest agent (agentchan.Hub).

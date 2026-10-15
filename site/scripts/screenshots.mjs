@@ -276,7 +276,7 @@ await shot("build-dialog")
 await closeDialog()
 
 await go("/browser")
-await page.getByRole("tab", { name: "Rules" }).click()
+await page.getByRole("tab", { name: "Sites" }).click()
 await shot("browser")
 
 await go("/settings")

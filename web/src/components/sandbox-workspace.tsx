@@ -16,8 +16,8 @@ import { AgentSessions } from "@/components/agent-sessions"
 import { ChatThread, requestLabel } from "@/components/chat/chat-thread"
 import { SandboxChats } from "@/components/chat/sandbox-chats"
 import { WorkspaceTabs, type PanelTab } from "@/components/chat/workspace-panel"
+import { BrowserPanel } from "@/components/browser-panel"
 import { ConnectionsPanel } from "@/components/connections-panel"
-import { SandboxBrowserPanel } from "@/components/sandbox-browser-panel"
 import { StartButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
@@ -417,10 +417,11 @@ export function SandboxWorkspace({
       <div className="relative flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">{main}</div>
         {search.panel === "browser" && sb.teammateId && (
-          <SandboxBrowserPanel
+          <BrowserPanel
             key={sb.teammateId}
             env={env}
             teammate={sb.teammateId}
+            storageKey="studio.panel.sandbox"
             onClose={() => onPanel(undefined)}
           />
         )}

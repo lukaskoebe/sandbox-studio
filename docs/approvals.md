@@ -65,9 +65,10 @@ change it.
   own permission requests, Home its environment's approvals, which it shows as cards of its
   own) leave those out of the stack. Every place that shows an approval card itself claims
   its ID while it is on screen (`useClaimApprovals` in `web/src/lib/approval-claims.ts`): a
-  teammate's conversation, a chat's permission card, the Requests tab and Home. The stack
-  leaves claimed IDs out, so a card shows in one place even when several views are on the
-  page. More than one card, or a narrow page, folds the stack into an "N approvals" pill that opens the cards on click
+  teammate's conversation, a chat's permission card, the browser window's questions on its
+  page, the Requests tab and Home. The stack leaves claimed IDs out, so a card shows in one
+  place even when several views are on the page. More than one card, or a narrow page, folds
+  the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
 - A browser request's approval also offers its method and first directory, such as "GET
   /repos/*". The decision then carries `method` and `pathPrefix`, and the rule covers only

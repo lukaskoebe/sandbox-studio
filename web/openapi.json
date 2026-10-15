@@ -3188,6 +3188,29 @@
         ],
         "type": "object"
       },
+      "GoBrowserInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "maxLength": 32,
+            "type": "string"
+          },
+          "to": {
+            "description": "Where to go in the session's history",
+            "enum": [
+              "back",
+              "forward",
+              "reload"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "to"
+        ],
+        "type": "object"
+      },
       "Health": {
         "additionalProperties": false,
         "properties": {
@@ -13120,6 +13143,16 @@
               "description": "Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned",
               "type": "boolean"
             }
+          },
+          {
+            "description": "Clear the preview's caches and storage, its service workers among them, as it logs in",
+            "explode": false,
+            "in": "query",
+            "name": "fresh",
+            "schema": {
+              "description": "Clear the preview's caches and storage, its service workers among them, as it logs in",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -15119,6 +15152,69 @@
         ]
       }
     },
+    "/api/environments/{env}/teammates/{teammate}/browser/go": {
+      "post": {
+        "description": "Goes back, forward or reloads the page while the user has taken over, like a browser's toolbar.",
+        "operationId": "goBrowser",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoBrowserInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
     "/api/environments/{env}/teammates/{teammate}/browser/navigate": {
       "post": {
         "operationId": "navigateBrowser",
@@ -15330,6 +15426,63 @@
             "required": true,
             "schema": {
               "description": "Pattern ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/sessions/{session}": {
+      "delete": {
+        "description": "Ends an ephemeral session: its browser closes and its temporary profile is deleted.",
+        "operationId": "closeBrowserSession",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The ephemeral session's ID",
+            "in": "path",
+            "name": "session",
+            "required": true,
+            "schema": {
+              "description": "The ephemeral session's ID",
+              "maxLength": 32,
               "type": "string"
             }
           }

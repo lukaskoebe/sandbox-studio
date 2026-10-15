@@ -1824,6 +1824,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/go": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Goes back, forward or reloads the page while the user has taken over, like a browser's toolbar. */
+        post: operations["goBrowser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/navigate": {
         parameters: {
             query?: never;
@@ -1867,6 +1884,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["deleteBrowserPattern"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{teammate}/browser/sessions/{session}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Ends an ephemeral session: its browser closes and its temporary profile is deleted. */
+        delete: operations["closeBrowserSession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3206,6 +3240,15 @@ export interface components {
             teammateName?: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        GoBrowserInBody: {
+            /** @description An ephemeral session's ID; empty for the persistent profile */
+            session?: string;
+            /**
+             * @description Where to go in the session's history
+             * @enum {string}
+             */
+            to: "back" | "forward" | "reload";
         };
         Health: {
             /** @enum {string} */
@@ -8190,6 +8233,8 @@ export interface operations {
             query?: {
                 /** @description Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned */
                 embed?: boolean;
+                /** @description Clear the preview's caches and storage, its service workers among them, as it logs in */
+                fresh?: boolean;
             };
             header?: never;
             path: {
@@ -9452,6 +9497,44 @@ export interface operations {
             };
         };
     };
+    goBrowser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoBrowserInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrowserStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     navigateBrowser: {
         parameters: {
             query?: never;
@@ -9573,6 +9656,40 @@ export interface operations {
                 teammate: string;
                 /** @description Pattern ID */
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    closeBrowserSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+                /** @description The ephemeral session's ID */
+                session: string;
             };
             cookie?: never;
         };

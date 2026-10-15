@@ -974,3 +974,69 @@ func TestFilterInputTextBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestGoMovesInHistoryWhileTakingOver(t *testing.T) {
+	f := newFixture(t)
+	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Go(f.ctx, f.env, f.ada.ID, "", "back"); !errors.Is(err, ErrNoTakeover) {
+		t.Errorf("without takeover: %v", err)
+	}
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Go(f.ctx, f.env, f.ada.ID, "", "home"); !errors.Is(err, ErrBadMove) {
+		t.Errorf("unknown move: %v", err)
+	}
+	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", "https://example.org/a"); err != nil {
+		t.Fatal(err)
+	}
+	for _, to := range []string{"back", "forward", "reload"} {
+		before := len(f.fb.allCommands())
+		st, err := f.svc.Go(f.ctx, f.env, f.ada.ID, "", to)
+		if err != nil {
+			t.Fatalf("%s: %v", to, err)
+		}
+		// The move, then a look at where it landed.
+		if cmds := f.fb.allCommands()[before:]; len(cmds) == 0 || cmds[0].Args[0] != to {
+			t.Errorf("%s ran %v", to, cmds)
+		}
+		if st.URL != "https://example.org/a" {
+			t.Errorf("%s: status URL %q", to, st.URL)
+		}
+	}
+	actions, err := f.svc.Actions(f.ctx, f.env, f.ada.ID, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) == 0 || actions[0].Action != "reload" || actions[0].Actor != "user" {
+		t.Errorf("newest action %+v, want the user's reload", actions[0])
+	}
+}
+
+func TestUserClosesEphemeralSession(t *testing.T) {
+	f := newFixture(t)
+	id := f.openEphemeral(f.sbAda, "https://example.com/a")
+	if err := f.svc.CloseSession(f.ctx, f.env, f.ada.ID, ""); !errors.Is(err, ErrNoSession) {
+		t.Errorf("closing the profile: %v", err)
+	}
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, id, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.CloseSession(f.ctx, f.env, f.ada.ID, id); err != nil {
+		t.Fatal(err)
+	}
+	if c := f.lastCommand(); len(c.Args) != 1 || c.Args[0] != "close" || c.Ephemeral != 1 {
+		t.Errorf("close sent %+v", c)
+	}
+	if ids := f.sessionIDs(f.ada); len(ids) != 0 {
+		t.Errorf("sessions after close: %v", ids)
+	}
+	if err := f.svc.CloseSession(f.ctx, f.env, f.ada.ID, id); !errors.Is(err, ErrNoSession) {
+		t.Errorf("closing twice: %v", err)
+	}
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{"session":"`+id+`"}`); err == nil {
+		t.Error("the agent could still use the closed session")
+	}
+}

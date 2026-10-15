@@ -11,16 +11,6 @@ import {
   type DrawnFrame,
   type FrameMetadata,
 } from "@/lib/browser-coords"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import type { components } from "@/lib/api/schema.gen"
-
-type BrowserSession = components["schemas"]["BrowserSession"]
 
 // Chrome accepts CDP char text one Unicode code point at a time.
 const mobileInputSentinel = "\u200b"
@@ -946,59 +936,11 @@ export function BrowserLive({
                 This browser is on a blank page.
               </p>
               <p className="text-sm text-muted-foreground">
-                {driving
-                  ? "Enter a website in the address bar above."
-                  : "Take over, then enter a website in the address bar above."}
+                {`Enter a website in the address bar above${driving ? "" : " to take the wheel"}.`}
               </p>
             </div>
           </div>
         )}
     </div>
-  )
-}
-
-function sessionLabel(session: BrowserSession) {
-  return `${session.sandbox} · ${session.url || session.id}`
-}
-
-/**
- * Picks the browser that the live view and its controls act on: the persistent profile (value
- * "") or an ephemeral session that an agent has open.
- */
-export function BrowserSessionSelect({
-  sessions,
-  value,
-  onValueChange,
-}: {
-  sessions: BrowserSession[]
-  value: string
-  onValueChange: (session: string) => void
-}) {
-  const items = {
-    "": "Profile",
-    ...Object.fromEntries(sessions.map((s) => [s.id, sessionLabel(s)])),
-  }
-  return (
-    <Select
-      value={value}
-      onValueChange={(v) => onValueChange(v ?? "")}
-      items={items}
-    >
-      <SelectTrigger
-        size="sm"
-        aria-label="Browser session"
-        className="max-w-56 min-w-0"
-      >
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="">Profile</SelectItem>
-        {sessions.map((s) => (
-          <SelectItem key={s.id} value={s.id}>
-            {sessionLabel(s)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   )
 }

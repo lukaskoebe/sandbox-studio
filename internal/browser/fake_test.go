@@ -126,7 +126,7 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 		return map[string]any{"filled": args[1]}, nil
 	case "close":
 		return map[string]any{}, nil
-	case "click", "press", "select", "scroll", "back", "wait":
+	case "click", "press", "select", "scroll", "back", "forward", "reload", "wait":
 		return map[string]any{}, nil
 	}
 	return nil, fmt.Errorf("unknown command %q", args[0])

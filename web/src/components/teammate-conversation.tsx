@@ -22,6 +22,13 @@ import {
   ApprovalCardList,
   useApprovalReview,
 } from "@/components/approval-stack"
+import {
+  BrowsingCard,
+  BrowsingNow,
+  isBrowserAsk,
+  useBrowsing,
+} from "@/components/browser-browsing"
+import { BrowserPanel } from "@/components/browser-panel"
 import { ChatItemView } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { Markdown } from "@/components/chat/markdown"
@@ -153,12 +160,19 @@ export function TeammateConversation({
   const live = useChat(env, running?.id)
   const owned = (sandboxes.data ?? []).filter((s) => s.teammateId === id)
   const pending = usePendingApprovals()
-  const waiting = teammateApprovals(
+  const allWaiting = teammateApprovals(
     pending.data ?? [],
     env,
     id,
     new Set(owned.map((s) => s.id))
   )
+  // Watching the browser beside the thread: its questions show on its page, not also here.
+  const [watching, setWatching] = useState(false)
+  const browserWaiting = allWaiting.some((a) => isBrowserAsk(a, id))
+  const browsingNow = useBrowsing(env, id).now
+  const waiting = watching
+    ? allWaiting.filter((a) => !isBrowserAsk(a, id))
+    : allWaiting
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -171,6 +185,18 @@ export function TeammateConversation({
           live={running ? live : undefined}
           waiting={waiting}
           multiple={owned.length > 1}
+          browsing={
+            browsingNow && (
+              <BrowsingCard
+                env={env}
+                teammate={id}
+                name={teammate.name}
+                waiting={browserWaiting}
+                watching={watching}
+                onWatch={() => setWatching(true)}
+              />
+            )
+          }
         />
         <TeammateComposer
           env={env}
@@ -180,13 +206,24 @@ export function TeammateConversation({
           events={timeline.data ?? []}
         />
       </div>
-      <Rail
-        env={env}
-        teammate={teammate}
-        sandboxes={owned}
-        running={running}
-        waiting={waiting.length}
-      />
+      {watching ? (
+        <BrowserPanel
+          env={env}
+          teammate={id}
+          storageKey="studio.panel.teammate"
+          onClose={() => setWatching(false)}
+        />
+      ) : (
+        <Rail
+          env={env}
+          teammate={teammate}
+          sandboxes={owned}
+          running={running}
+          waiting={allWaiting.length}
+          browserWaiting={browserWaiting}
+          onWatch={() => setWatching(true)}
+        />
+      )}
     </div>
   )
 }
@@ -199,6 +236,7 @@ function Thread({
   live,
   waiting,
   multiple,
+  browsing,
 }: {
   env: string
   teammate: Teammate
@@ -207,6 +245,8 @@ function Thread({
   live?: ReturnType<typeof useChat>
   waiting: Approval[]
   multiple: boolean
+  /** The browser's card, while the teammate browses: after the turns, before what waits. */
+  browsing?: ReactNode
 }) {
   const openTurn = live?.turns.find((t) => !t.endedAt)
   const known = new Set(
@@ -293,6 +333,7 @@ function Thread({
             {rows.map((row, i) => (
               <MessageScrollerItem key={i}>{row}</MessageScrollerItem>
             ))}
+            {browsing && <MessageScrollerItem>{browsing}</MessageScrollerItem>}
             {waiting.length > 0 && (
               <MessageScrollerItem>
                 <Waiting approvals={waiting} env={env} />
@@ -982,12 +1023,16 @@ function Rail({
   sandboxes,
   running,
   waiting,
+  browserWaiting,
+  onWatch,
 }: {
   env: string
   teammate: Teammate
   sandboxes: Sandbox[]
   running?: Chat
   waiting: number
+  browserWaiting: boolean
+  onWatch: () => void
 }) {
   const presence = usePresence(env)(teammate.id)
   const [soul, setSoul] = useState(false)
@@ -1032,6 +1077,12 @@ function Rail({
           </div>
 
           <RailSection title="Now">
+            <BrowsingNow
+              env={env}
+              teammate={teammate.id}
+              waiting={browserWaiting}
+              onWatch={onWatch}
+            />
             {running ? (
               <Link
                 to="/e/$env/chats/$chat"

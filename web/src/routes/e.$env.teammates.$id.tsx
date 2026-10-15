@@ -52,7 +52,8 @@ const tabs = [
 
 /**
  * One teammate: its header and tabs above the tab's page. Tabs scroll sideways on phones. The
- * conversation scrolls itself, with its composer at the bottom; the other tabs scroll as pages.
+ * conversation scrolls itself, with its composer at the bottom, and the browser fills the page;
+ * the other tabs scroll as pages.
  */
 function TeammateLayout() {
   const { env, id } = Route.useParams()
@@ -98,7 +99,7 @@ function TeammateLayout() {
           </TabsList>
         </Tabs>
       </div>
-      {(active?.value ?? "conversation") === "conversation" ? (
+      {["conversation", "browser"].includes(active?.value ?? "conversation") ? (
         <Outlet />
       ) : (
         <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
