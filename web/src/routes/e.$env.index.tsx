@@ -475,8 +475,45 @@ type Entry = {
 }
 
 /**
+ * A decided git review or memory conflict links to its own page; other approvals are plain
+ * text.
+ */
+function ApprovalPageLink({
+  approval: a,
+  children,
+}: {
+  approval: Approval
+  children: ReactNode
+}) {
+  const className = "underline-offset-4 hover:underline"
+  if (a.kind === "git.push" || a.kind === "git.pr")
+    return (
+      <Link
+        to="/e/$env/git/reviews/$id"
+        params={{ env: a.environmentId, id: a.id }}
+        className={className}
+      >
+        {children}
+      </Link>
+    )
+  const conflict = a.memoryConflict?.conflictId
+  if (conflict)
+    return (
+      <Link
+        to="/e/$env/memory/conflicts/$id"
+        params={{ env: a.environmentId, id: conflict }}
+        className={className}
+      >
+        {children}
+      </Link>
+    )
+  return <>{children}</>
+}
+
+/**
  * What happened lately: decided approvals (allowed, denied, by whom or which rule) and chats
- * started, newest first. Network decisions link on to the Network page's Activity tab.
+ * started, newest first. Network decisions link on to the Network page's Activity tab; git reviews
+ * and memory conflicts to their own pages.
  */
 function Activity({ env }: { env: string }) {
   const approvals = $api.useQuery("get", "/api/environments/{env}/approvals", {
@@ -501,12 +538,12 @@ function Activity({ env }: { env: string }) {
           icon: kind.icon,
           area: kind.area,
           text: (
-            <>
+            <ApprovalPageLink approval={a}>
               <span className="text-muted-foreground">
                 {approvalDecision(a)}
               </span>{" "}
               {kind.mono ? <Ident>{summary}</Ident> : summary}
-            </>
+            </ApprovalPageLink>
           ),
           who: approvalSource(a),
         }

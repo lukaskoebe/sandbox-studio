@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react"
-import { createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -242,7 +242,13 @@ function PushRow({
           <KindChip area={kind.area} icon={kind.icon}>
             {kind.title}
           </KindChip>
-          <span className="max-w-96 truncate">{gitSummary(approval)}</span>
+          <Link
+            to="/e/$env/git/reviews/$id"
+            params={{ env: approval.environmentId, id: approval.id }}
+            className="max-w-96 truncate underline-offset-4 hover:underline"
+          >
+            {gitSummary(approval)}
+          </Link>
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">

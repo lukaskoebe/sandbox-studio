@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
 // Builds moved to Settings → Templates. Old address kept for bookmarks.
-export const Route = createFileRoute("/e/$env/builds")({
+export const Route = createFileRoute("/e/$env/builds/")({
   beforeLoad: ({ params }) => {
     throw redirect({ to: "/e/$env/settings/templates", params, replace: true })
   },

@@ -51,6 +51,9 @@ to an environment.
 | `/e/$env/settings/git` | forges and git push review of the environment |
 | `/e/$env/settings/templates` | template builds and templates of the environment |
 | `/e/$env/settings/runtime` | host checks (doctor) |
+| `/e/$env/git/reviews/$id` | one git push review: the commits and diff, decided there while it waits, its outcome after |
+| `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
+| `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |
 
 On the first load of a browser session, `/e/$env` redirects to `/setup` while the setup is
 neither completed nor dismissed and the environment has no sandbox yet; the check runs once
@@ -85,7 +88,10 @@ for its workspace. One panel is open at a time, and on the workspace the URL nam
 panel is resizable from its left edge on wide screens (1024px and up) and covers the screen
 below that. Its width is remembered per page in local storage (`studio.panel.sandbox`,
 `studio.panel.chat`). Sheets remain only for detail opened from outside its context: the
-git push review, memory conflicts and the build log of an approval card.
+git push review, memory conflicts and the build log of an approval card. Each of those sheets
+has "Open as page", which leads to the item's own page above; Home's activity, Settings → Git,
+Settings → Templates and the memory conflicts tab link there too. A page for an item that
+doesn't exist says so, and one already decided shows the outcome without the buttons.
 
 Links from before the dashboard and workspace split that carry workspace parameters
 (`?terminal=`, `?session=`, `?chat=`) redirect the dashboard to `/work`.

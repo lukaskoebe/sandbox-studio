@@ -6,7 +6,7 @@ import { MemoryQuality } from "@/components/memory-quality"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { $api } from "@/lib/api/client"
 
-export const Route = createFileRoute("/e/$env/memory")({
+export const Route = createFileRoute("/e/$env/memory/")({
   component: MemoryPage,
 })
 

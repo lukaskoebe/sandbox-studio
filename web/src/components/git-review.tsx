@@ -1,7 +1,9 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
+  ArrowSquareOutIcon,
   GitCommitIcon,
   GitDiffIcon,
   GitPullRequestIcon,
@@ -52,6 +54,9 @@ function useDecideGit() {
         queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/approvals"],
+        })
+        queryClient.invalidateQueries({
+          queryKey: ["get", "/api/environments/{env}/approvals/{id}"],
         })
       },
       onError: (err) => {
@@ -318,6 +323,18 @@ export function UnifiedDiff({ diff }: { diff: string }) {
   )
 }
 
+/** What reviewing a git approval decides, under its title. */
+export function gitReviewDescription(approval: Approval) {
+  const git = approval.git
+  if (git?.pullRequest)
+    return "The push was approved and is on the forge. Approving opens this pull request."
+  const upstream = git?.review?.upstream
+  return (
+    "The sandbox pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch." +
+    (upstream ? ` Approving pushes it ${upstream}.` : "")
+  )
+}
+
 /** A wide sheet with the review of one git approval. */
 export function GitReviewSheet({
   approval,
@@ -333,21 +350,29 @@ export function GitReviewSheet({
         {approval && kind && (
           <>
             <SheetHeader>
-              <KindChip
-                area={kind.area}
-                icon={kind.icon}
-                className="self-start"
-              >
-                {kind.title}
-              </KindChip>
+              <div className="flex items-center gap-2 pr-8">
+                <KindChip area={kind.area} icon={kind.icon}>
+                  {kind.title}
+                </KindChip>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="ml-auto"
+                  render={
+                    <Link
+                      to="/e/$env/git/reviews/$id"
+                      params={{ env: approval.environmentId, id: approval.id }}
+                      onClick={() => onOpenChange(false)}
+                    />
+                  }
+                >
+                  <ArrowSquareOutIcon />
+                  Open as page
+                </Button>
+              </div>
               <SheetTitle>{gitSummary(approval)}</SheetTitle>
               <SheetDescription>
-                {approval.git?.pullRequest
-                  ? "The push was approved and is on the forge. Approving opens this pull request."
-                  : "The sandbox pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch."}
-                {!approval.git?.pullRequest &&
-                  approval.git?.review?.upstream &&
-                  ` Approving pushes it ${approval.git.review.upstream}.`}
+                {gitReviewDescription(approval)}
               </SheetDescription>
             </SheetHeader>
             <ScrollArea

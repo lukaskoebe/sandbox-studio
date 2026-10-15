@@ -62,7 +62,8 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
 - **Panels, not sheets, for watching.** Connections, Browser and Changes sit beside the
   terminal or chat as side panels, toggled from the workspace toolbar and remembered per page
   (N3). On phones a panel takes the full screen. Sheets remain only for short detail opened
-  out of context, such as a git push review.
+  out of context, such as a git push review, and each of those has "Open as page" for an
+  address of its own that can be linked.
 - **Approvals.** Every kind has the same card: the rule on the left edge in the area's hue, a
   `KindChip` with the kind's name, a details line (source, environment, age), a title sentence
   (hosts in `Ident`), and Deny / Allow. Grouped requests list their hosts and allow the
