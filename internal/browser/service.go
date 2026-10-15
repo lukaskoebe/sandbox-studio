@@ -243,6 +243,7 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID, session st
 		was := pg.takeover
 		if !was {
 			pg.takeover, pg.resumed = true, make(chan struct{})
+			pg.turn, pg.handback = &userTurn{since: s.now(), pages: []string{pg.url}}, ""
 		}
 		st.lastUsed, pg.used = s.now(), s.now()
 		s.mu.Unlock()
@@ -292,6 +293,8 @@ func (s *Service) endTakeover(pg *page) bool {
 	// What the user did is unknown to the broker: refs are stale and a credential the
 	// user typed may show.
 	pg.refs = nil
+	pg.handback = Scrub(pg.turn.note(s.now(), pg.url), pg.secrets)
+	pg.turn = nil
 	return true
 }
 

@@ -140,6 +140,9 @@ type page struct {
 	used     time.Time
 	takeover bool
 	resumed  chan struct{} // closed when the user hands back
+	turn     *userTurn     // what the user did while taking over
+	// handback tells the next agent call what the user's turn changed; see userTurn.note.
+	handback string
 	refs     map[string]refInfo
 	url      string
 	secrets  []string        // credential values filled in this run, for Scrub
@@ -396,6 +399,7 @@ func (st *state) reset() {
 // navigated forgets what belonged to the previous page.
 func (pg *page) navigated(url string) {
 	pg.url, pg.refs, pg.credRefs, pg.visible = url, nil, nil, false
+	pg.turn.saw(url)
 }
 
 // A URL observation can be a same-document change with credential fields still visible.
@@ -404,6 +408,7 @@ func (pg *page) observedURL(url string) {
 	if url != pg.url {
 		pg.url, pg.refs, pg.credRefs = url, nil, nil
 	}
+	pg.turn.saw(url)
 }
 
 // takeGrant consumes a one-time grant that covers r in session.

@@ -289,6 +289,14 @@ disconnecting clears the local input buffer.
 - **Takeover.** Taking the wheel pauses agents. Agent calls wait up to 20 s, then fail with "the
   user is driving the browser…". The user types passwords straight into the page. Hand
   back resumes agent calls.
+- **What the agent hears after a handback.** The session's `userTurn` (`turn.go`) keeps
+  what Studio saw while the user drove: the pages the browser was on (from navigation and
+  the stream's URL messages, 10 at most and a count of the rest) and downloads the user
+  sent to a sandbox. Live-view clicks and keys reach the page as raw input and are not
+  kept, as they may be a password. On handback it becomes a note, scrubbed of filled
+  credentials, that the next agent call to that session gets in front of its result or
+  error, once: how long the user drove, those pages and downloads, where the page is now,
+  and that refs are stale.
 - **Open a website.** Enter a URL in **Browser address** and press Enter; it takes the wheel
   first when an agent drives. Addresses without a scheme use HTTPS. A new browser starts on
   `about:blank`; the live view explains how to open its first page. The address follows

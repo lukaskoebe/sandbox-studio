@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1048,5 +1049,58 @@ func TestUserClosesEphemeralSession(t *testing.T) {
 	}
 	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{"session":"`+id+`"}`); err == nil {
 		t.Error("the agent could still use the closed session")
+	}
+}
+
+// After a handback, the agent's next call says that the user drove and where the browser
+// went; the call after it doesn't repeat it.
+func TestHandbackTellsTheAgentWhatTheUserDid(t *testing.T) {
+	f := newFixture(t)
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", "https://example.org/settings"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", false); err != nil {
+		t.Fatal(err)
+	}
+	res, _ := f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`).(string)
+	note, _, _ := strings.Cut(res, "\n\n")
+	for _, want := range []string{"the user took over this browser for less than a minute", "it was on https://example.org/settings", "take a browser_snapshot"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("first call after handback lacks %q: %q", want, note)
+		}
+	}
+	if !strings.Contains(res, "page: ") {
+		t.Errorf("the note replaced the result: %q", res)
+	}
+	if again, _ := f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`).(string); strings.Contains(again, "took over") {
+		t.Errorf("the note came twice: %q", again)
+	}
+}
+
+func TestUserTurnNote(t *testing.T) {
+	t0 := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
+	turn := &userTurn{since: t0, pages: []string{"https://a.example/"}}
+	if n := turn.note(t0.Add(5*time.Minute), "https://a.example/"); !strings.Contains(n, "for 5 minutes") || !strings.Contains(n, "stayed on the page you left") {
+		t.Errorf("idle turn: %q", n)
+	}
+	for i := range 12 {
+		turn.saw(fmt.Sprintf("https://a.example/%d", i))
+	}
+	turn.saw("https://a.example/0")
+	turn.downloads = []string{"r.pdf (sent to ada as downloads/r.pdf)"}
+	n := turn.note(t0.Add(time.Minute), "https://a.example/11")
+	for _, want := range []string{"for a minute", "https://a.example/0, ", "and 3 more", "They sent downloads: r.pdf", "The page is now https://a.example/11."} {
+		if !strings.Contains(n, want) {
+			t.Errorf("note lacks %q: %q", want, n)
+		}
+	}
+	var none *userTurn
+	none.saw("https://a.example/")
+	if none.note(t0, "") != "" {
+		t.Error("a nil turn has a note")
 	}
 }

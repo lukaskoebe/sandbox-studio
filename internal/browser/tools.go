@@ -92,12 +92,21 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 			return nil, err
 		}
 	}
+	var handback string
 	s.mu.Lock()
 	st.driver, st.lastUsed = sb, s.now()
 	if pg != nil {
 		pg.used = st.lastUsed
+		handback, pg.handback = pg.handback, ""
 	}
 	s.mu.Unlock()
+	res, err := s.callTool(ctx, t, st, pg, sb, method, params)
+	return withHandback(res, err, handback)
+}
+
+// callTool runs tool t for the agent once it holds the browser.
+func (s *Service) callTool(ctx context.Context, t tool, st *state, pg *page, sb store.Sandbox, method string, params json.RawMessage) (any, error) {
+	sandboxID := sb.ID
 	if err := s.boot(ctx, st); err != nil {
 		s.log().Warn("browser VM unavailable", "teammate", sb.TeammateID, "err", err)
 		return nil, errors.New("the browser could not be started; the user can look at the Browser page in Studio")

@@ -29,7 +29,7 @@ The browser is one window that looks like any browser: tabs, Back, Forward, Relo
 - beside a teammate's sandbox, from **Browser** in the workspace toolbar;
 - beside the teammate's conversation, from **Watch** on the browsing card the thread shows while the teammate browses.
 
-The line under the toolbar always says who drives. To use the page yourself, type an address and press Enter, press Back or Reload, or choose **Take the wheel**: the teammate's browser calls wait until you choose **Hand back**. When the teammate asks to click or fill something, the question shows on the page with its answers.
+The line under the toolbar always says who drives. To use the page yourself, type an address and press Enter, press Back or Reload, or choose **Take the wheel**: the teammate's browser calls wait until you choose **Hand back**. Its next browser step then tells the teammate that you drove, which pages you were on, any downloads you sent and where the page is now. What you clicked or typed is not passed on. When the teammate asks to click or fill something, the question shows on the page with its answers.
 
 The shield in the address bar shows what the teammate may do on the site: **Ask first**, **Allowed** or **Blocked** for clicks and typing, and which fields are hidden from it. **Sites** lists every site with a rule or a visit, and **Add a rule or hide a field** covers single actions and fields. **Activity** lists every step by session; click one to see the page as it was after it.
 
