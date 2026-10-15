@@ -134,12 +134,17 @@ test("the address bar takes the wheel, Back goes back, and Hand back returns it"
   await expect
     .poll(async () => (await api.json<Status>("GET", base))!.url)
     .toBe("https://example.com/b")
+  await expect(address).toHaveValue("example.com/b")
 
   await page.getByRole("button", { name: "Back", exact: true }).click()
   await expect
     .poll(async () => (await api.json<Status>("GET", base))!.url)
     .toBe("https://example.com/a")
   await expect(address).toHaveValue("example.com/a")
+  // What is typed as the field focuses replaces the address it shows.
+  await address.fill("example.com/c")
+  await expect(address).toHaveValue("example.com/c")
+  await address.blur()
   await expect(page.getByRole("tab", { name: /example\.com/ })).toBeVisible()
 
   await page.getByRole("button", { name: `Hand back to ${name}` }).click()
@@ -193,6 +198,10 @@ test("an agent's question shows on the page, and its step replays from the activ
   await api.dismissApprovals()
   const { name, sb, call } = await browsing(page, api, env)
   await call("browser_open", { url: "https://example.com/login" })
+  // The address bar follows the teammate's page.
+  await expect(page.getByLabel("Browser address")).toHaveValue(
+    "example.com/login"
+  )
   await call("browser_snapshot", {})
   const click = (await call("browser_click", { ref: "e4" }, false))!
 

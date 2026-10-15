@@ -751,16 +751,23 @@ function Address({
   url: string
   onSites?: () => void
 }) {
-  const [draft, setDraft] = useState(url)
+  // What you typed, while you edit; otherwise the bar follows the page.
+  const [draft, setDraft] = useState<string | null>(null)
   const [focused, setFocused] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const editable = !w.replay
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (!editable || w.busy) return
-    if (await w.open(draft)) input.current?.blur()
+    if (await w.open(draft ?? url)) {
+      setDraft(null)
+      input.current?.blur()
+    }
   }
-  const shown = focused ? draft : draft.replace(/^https:\/\//, "")
+  // The value doesn't change on focus: text that arrives as the field focuses (a fast typist,
+  // autofill) would land after it instead of replacing it. An address without a scheme opens
+  // as https.
+  const shown = draft ?? url.replace(/^https:\/\//, "")
   return (
     <form
       onSubmit={submit}
@@ -786,7 +793,7 @@ function Address({
         }}
         onBlur={() => {
           setFocused(false)
-          setDraft(url)
+          setDraft(null)
         }}
         onChange={(e) => setDraft(e.target.value)}
         className="h-full min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:font-sans"
