@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+Connection  registry.npmjs.org:443
+
+  Sandbox    blub
+  Verdict    allowed
+  When       just now
+
+Rule  *.npmjs.org
+  Action     allow
+  Ports      443
+  Covers     Iris's sandboxes
+  Origin     an approval
+  Hits       14, the last 1m ago
+  Expires    in 50m
+  Created    1d ago
+  Note       npm installs                                                       
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+r rules (browser)  esc/q back  ? help

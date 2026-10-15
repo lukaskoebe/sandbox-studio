@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -23,6 +24,13 @@ const (
 	screenEnvs
 	screenHelp
 	screenApprovals
+	screenChats    // a sandbox's chats
+	screenChat     // one chat's transcript
+	screenActivity // the connections and decisions log
+	screenEntry    // one entry of the log, and its rule
+	screenPager    // the review of a git push or pull request
+	screenNew      // the form of a new sandbox
+	screenProgress // a new sandbox's create, until it is ready
 )
 
 // notice is the one line under the key bar: what the last action did, or what went wrong.
@@ -53,6 +61,7 @@ type app struct {
 	env       store.Environment // the environment on show; zero until the list arrives
 	sandboxes []sandboxes.View
 	teammates map[string]string // names by ID
+	team      []store.Teammate  // the teammates of the environment, in the API's order
 	approvals []api.ApprovalView
 	known     map[string]bool // the pending approvals of the last load, to spot new ones
 	primed    bool            // whether the first approvals load happened
@@ -63,7 +72,12 @@ type app struct {
 	refreshing bool // a debounced refresh is scheduled
 
 	screen         screen
-	back           screen             // where help returns to
+	back           screen             // where the approvals screen returns to
+	helpBack       screen             // where help returns to, and whose keys it lists
+	chats          chatState          // the chat screens
+	activity       activityState      // the Activity screens
+	pager          pagerState         // the review of a git approval
+	newSb          newState           // a new sandbox, from its form to its create's end
 	cursor         int                // the selected sandbox, among the visible ones
 	approvalCursor int                // the selected card of the approvals screen
 	choices        map[string]*choice // the approvals' choices, by the ID of a card's first approval
@@ -101,12 +115,23 @@ func (m *app) Init() tea.Cmd {
 
 // Update applies one message to the model and returns the commands it starts.
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.chatUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.activityUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.newUpdate(msg); ok {
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.keys.SetWidth(msg.Width)
 	case tea.KeyPressMsg:
 		return m.key(msg)
+	case tea.PasteMsg:
+		m.paste(msg.Content)
 	case clockMsg:
 		m.now = time.Time(msg)
 		return m, clock()
@@ -134,6 +159,7 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loaded = true
 		m.sandboxes = msg.list
+		m.team = msg.teammates
 		m.teammates = map[string]string{}
 		for _, t := range msg.teammates {
 			m.teammates[t.ID] = t.Name
@@ -142,6 +168,7 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = screenHome // the sandbox on show is gone
 			m.setNotice("That sandbox was deleted.", true)
 		}
+		m.followProgress()
 	case approvalsLoaded:
 		if msg.err != nil {
 			m.fail(msg.err)
@@ -188,10 +215,28 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// refresh refetches what the screens show: the sandboxes of the environment and the pending
-// approvals of every environment.
+// refresh refetches what the screens show: the sandboxes of the environment, the pending
+// approvals of every environment, and the list of the screen on show.
 func (m *app) refresh() tea.Cmd {
-	return tea.Batch(m.loadSandboxes(), m.loadApprovals())
+	cmds := []tea.Cmd{m.loadSandboxes(), m.loadApprovals()}
+	if m.screen == screenChats {
+		cmds = append(cmds, m.loadChats())
+	}
+	return tea.Batch(cmds...)
+}
+
+// paste takes pasted text into the field that takes the keys: the filter or the composer.
+func (m *app) paste(text string) {
+	switch {
+	case m.filtering:
+		id := m.selectedID()
+		*m.filterTarget() += strings.Join(strings.Fields(text), " ")
+		m.filtered(id)
+	case m.screen == screenChat && m.chats.composing:
+		m.chats.draft.paste(text)
+	case m.screen == screenNew && m.newSb.step == stepName:
+		m.newSb.name.paste(strings.ToLower(strings.Join(strings.Fields(text), "")))
+	}
 }
 
 // setApprovals stores the pending approvals. The first load announces nothing; a later load

@@ -68,8 +68,22 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.envsKey(msg)
 	case screenApprovals:
 		return m.approvalsKey(msg)
+	case screenChats:
+		return m.chatsKey(msg)
+	case screenChat:
+		return m.chatKey(msg)
+	case screenActivity:
+		return m.activityKey(msg)
+	case screenEntry:
+		return m.entryKey(msg)
+	case screenPager:
+		return m.pagerKey(msg)
+	case screenNew:
+		return m.newKey(msg)
+	case screenProgress:
+		return m.progressKey(msg)
 	default: // help: any key closes it
-		m.screen = m.back
+		m.screen = m.helpBack
 		return m, nil
 	}
 }
@@ -87,13 +101,15 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenDetail
 		}
 	case key.Matches(msg, keyNew):
-		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID), false)
+		if m.env.ID != "" {
+			return m, m.openNew()
+		}
 	case key.Matches(msg, keyLifecycle):
 		return m, m.toggle(m.selected())
 	case key.Matches(msg, keyDelete):
 		m.askDelete(m.selected())
 	case key.Matches(msg, keyChat):
-		m.openChat(m.selected())
+		return m, m.openChats(m.selected())
 	case key.Matches(msg, keyEnv):
 		m.openEnvs()
 	case key.Matches(msg, keyFilter):
@@ -103,7 +119,7 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyTerminal):
 		return m, m.attachTo(m.selected())
 	case key.Matches(msg, keyActivity):
-		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/network/activity"), false)
+		return m, m.openActivity("")
 	case key.Matches(msg, keyEsc):
 		if m.filter != "" {
 			m.filter = ""
@@ -124,7 +140,11 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyDelete):
 		m.askDelete(m.selected())
 	case key.Matches(msg, keyChat):
-		m.openChat(m.selected())
+		return m, m.openChats(m.selected())
+	case key.Matches(msg, keyActivity):
+		if sb := m.selected(); sb != nil {
+			return m, m.openActivity(sb.Name)
+		}
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
 	case key.Matches(msg, keyTerminal):
@@ -154,23 +174,43 @@ func (m *app) envsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// filterKey types into the filter. Enter keeps the filter, esc clears it.
+// filterKey types into the filter of the screen on show: the sandbox list's, or Activity's.
+// Enter keeps the filter, esc clears it.
 func (m *app) filterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	id := m.selectedID()
+	target := m.filterTarget()
 	switch {
 	case key.Matches(msg, keyKeep):
 		m.filtering = false
 	case key.Matches(msg, keyEsc):
-		m.filter, m.filtering = "", false
+		*target, m.filtering = "", false
 	case msg.String() == "backspace":
-		if runes := []rune(m.filter); len(runes) > 0 {
-			m.filter = string(runes[:len(runes)-1])
+		if runes := []rune(*target); len(runes) > 0 {
+			*target = string(runes[:len(runes)-1])
 		}
 	case msg.Text != "":
-		m.filter += msg.Text
+		*target += msg.Text
+	}
+	m.filtered(id)
+	return m, nil
+}
+
+// filterTarget is the filter the user types into on the screen on show.
+func (m *app) filterTarget() *string {
+	if m.screen == screenActivity {
+		return &m.activity.filter
+	}
+	return &m.filter
+}
+
+// filtered keeps the cursor in place after the filter changed: on the sandbox id on the list,
+// at the top of the Activity log.
+func (m *app) filtered(id string) {
+	if m.screen == screenActivity {
+		m.activity.cursor = 0
+		return
 	}
 	m.reselect(id)
-	return m, nil
 }
 
 // confirmKey answers a pending delete: y deletes the sandbox, any other key keeps it.
@@ -216,13 +256,6 @@ func (m *app) askDelete(sb *sandboxes.View) {
 	m.confirm = sb
 }
 
-func (m *app) openChat(sb *sandboxes.View) {
-	if sb == nil {
-		return
-	}
-	m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/sandboxes/"+sb.ID+"/work"), false)
-}
-
 func (m *app) openEnvs() {
 	m.screen = screenEnvs
 	m.picker = 0
@@ -233,8 +266,9 @@ func (m *app) openEnvs() {
 	}
 }
 
+// openHelp lists the keys of the screen on show. Any key returns to it.
 func (m *app) openHelp() {
-	m.back = m.screen
+	m.helpBack = m.screen
 	m.screen = screenHelp
 }
 
@@ -260,15 +294,23 @@ func (m *app) bindings() []key.Binding {
 	}
 	switch m.screen {
 	case screenDetail:
-		return []key.Binding{keyTerminal, keyLifecycle, keyDelete, keyChat, keyBack, keyHelp}
+		return []key.Binding{keyTerminal, keyLifecycle, keyDelete, keyChat, keyActivity, keyBack, keyHelp}
 	case screenEnvs:
 		return []key.Binding{keyUp, keyChoose, keyCancel}
 	case screenHelp:
 		return []key.Binding{keyBack}
 	case screenApprovals:
 		return m.approvalBindings()
+	case screenChats, screenChat:
+		return m.chatBindings()
+	case screenActivity, screenEntry:
+		return m.activityBindings()
+	case screenPager:
+		return m.pagerBindings()
+	case screenNew, screenProgress:
+		return m.newBindings()
 	}
-	return []key.Binding{keyOpen, keyApprovals, keyTerminal, keyLifecycle, keyDelete, keyHelp, keyQuit}
+	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyApprovals, keyTerminal, keyChat, keyHelp, keyQuit}
 }
 
 // approvalBindings are the keys the key bar shows for the approvals card under the cursor.
@@ -283,6 +325,8 @@ func (m *app) approvalBindings() []key.Binding {
 		return []key.Binding{keyAllowAll, keyDenyAll, keySplit, keyScope, keyBack}
 	case isNetwork(c.first()):
 		return []key.Binding{keyAllow, keyDeny, keyOnce, keyHour, keyPattern, keyScope, keyBack}
+	case isGit(c.first()):
+		return []key.Binding{keyReview, keyBack}
 	}
 	return []key.Binding{keyOpen, keyBack}
 }

@@ -60,6 +60,20 @@ func (m *app) body(w, h int) []string {
 		return m.helpBody()
 	case screenApprovals:
 		return m.approvalsBody(w, h)
+	case screenChats:
+		return m.chatsBody(w, h)
+	case screenChat:
+		return m.chatBody(w, h)
+	case screenActivity:
+		return m.activityBody(w, h)
+	case screenEntry:
+		return m.entryBody(w, h)
+	case screenPager:
+		return m.pagerBody(w, h)
+	case screenNew:
+		return m.newBody(w, h)
+	case screenProgress:
+		return m.progressBody(w, h)
 	}
 	return m.homeBody(w, h)
 }
@@ -74,14 +88,18 @@ func (m *app) keyBar() string {
 func (m *app) noticeLine(w int) string {
 	switch {
 	case m.filtering:
-		return styleBold.Render("/ ") + m.filter + styleAccent.Render("▏")
+		return styleBold.Render("/ ") + *m.filterTarget() + styleAccent.Render("▏")
+	case m.screen == screenChat && m.chats.composing:
+		return m.chats.draft.line("› ", w)
+	case m.screen == screenChat && m.chats.sending && m.notice.text == "":
+		return styleDim.Render("Sending…")
 	case m.confirm != nil:
 		return styleBold.Render("Delete "+m.confirm.Name+"?") + styleDim.Render(" This removes its disks.")
 	case m.notice.text != "" && m.notice.failed:
 		return styleFailed.Render(m.notice.text)
 	case m.notice.text != "":
 		return m.notice.text
-	case m.filter != "":
+	case m.filter != "" && m.screen == screenHome:
 		return styleDim.Render("filtered by “" + m.filter + "”")
 	case m.offline:
 		return styleDim.Render("Connection to Studio lost. Reconnecting…")
@@ -97,19 +115,56 @@ func (m *app) helpBody() []string {
 		{"s", "start, stop or resume the sandbox"},
 		{"d", "delete the sandbox, after asking"},
 		{"t", "the sandbox's terminal; Ctrl-] returns here"},
-		{"c", "the sandbox's chats, in the browser"},
-		{"n", "new sandbox, in the browser"},
+		{"c", "the chats with the sandbox's teammate"},
+		{"n", "new sandbox: a teammate, a template and a name"},
 		{"e", "switch environment"},
 		{"/", "filter by name, teammate or template"},
 		{"a", "approvals, from every environment"},
-		{"l", "activity, in the browser"},
+		{"l", "Activity: the connections and decisions log"},
 		{"↑/↓, j/k", "move the cursor"},
 		{"esc", "clear the filter, or go back"},
 		{"q", "go back, or quit from the list"},
 		{"?", "this help"},
 	}
 	title := "Keys"
-	if m.back == screenApprovals {
+	footer := []string{
+		"Settings, providers, teammates, templates, rules, memory and the browser",
+		"stay in the browser, at " + m.browserURL("/") + ".",
+	}
+	switch m.helpBack {
+	case screenActivity, screenEntry:
+		title = "Activity"
+		keys = [][2]string{
+			{"↑/↓, j/k", "move the cursor"},
+			{"enter", "the entry, and the rule that decided it"},
+			{"/", "filter by sandbox; esc clears it"},
+			{"r", "print where the rules are edited, in the browser"},
+			{"a", "approvals, from every environment"},
+			{"esc / q", "back"},
+		}
+		footer = []string{
+			"The log shows each sandbox's latest connections, which Studio keeps in",
+			"memory, and the decisions on its requests. It updates every two seconds.",
+		}
+	case screenChats, screenChat:
+		title = "Chat"
+		keys = [][2]string{
+			{"p", "write a prompt; enter sends it, ctrl+j starts a new line"},
+			{"esc", "put the prompt aside, or go back"},
+			{"↑/↓, j/k", "move between the tool calls and thoughts"},
+			{"enter", "expand or fold the one under the cursor, or write"},
+			{"pgup/pgdn", "scroll a page; b and space too"},
+			{"g / G", "the start or the end of the chat"},
+			{"x", "stop the running turn"},
+			{"n", "start a new chat"},
+			{"a", "approvals, from every environment"},
+			{"esc / q", "back to the chats, then to the sandbox"},
+		}
+		footer = []string{
+			"Permissions and questions of a chat are answered in the browser, and the",
+			"approvals screen (a) prints where.",
+		}
+	case screenApprovals:
 		title = "Approvals"
 		keys = [][2]string{
 			{"y / n", "allow or deny: a rule for the pattern and scope"},
@@ -122,16 +177,31 @@ func (m *app) helpBody() []string {
 			{"w", "allow the navigation's site for this browser session"},
 			{"A / D", "allow or deny every host of a group"},
 			{"r", "review a group's hosts one by one"},
-			{"enter", "open a git, browser, memory or chat approval in the browser"},
+			{"enter", "review a git push's diff, or open another kind in the browser"},
 			{"esc / q", "back"},
+		}
+	case screenPager:
+		title = "Git review"
+		keys = [][2]string{
+			{"y", "approve and push, or open the pull request"},
+			{"n", "reject: the agent sees it on its next fetch"},
+			{"i", "ignore: decide nothing, and drop the card"},
+			{"↑/↓, j/k", "scroll a line"},
+			{"pgup/pgdn", "scroll a page; b and space too"},
+			{"g / G", "the start or the end"},
+			{"esc / q", "back to the approvals"},
+		}
+		footer = []string{
+			"A note for the agent with a rejection is written in the browser.",
 		}
 	}
 	lines := []string{styleBold.Render(title)}
 	for _, k := range keys {
 		lines = append(lines, "  "+styleBold.Render(fit(k[0], 10))+" "+k[1])
 	}
-	lines = append(lines, "",
-		styleDim.Render("Settings, providers, teammates, templates, rules, memory, the browser and"),
-		styleDim.Render("Activity stay in the browser, at "+m.browserURL("/")+"."))
+	lines = append(lines, "")
+	for _, f := range footer {
+		lines = append(lines, styleDim.Render(f))
+	}
 	return lines
 }

@@ -76,10 +76,6 @@ func TestGoldenHelp(t *testing.T) {
 	golden(t, "help", press(sampleApp(), "?"))
 }
 
-func TestGoldenBrowserHint(t *testing.T) {
-	golden(t, "browser_hint", press(sampleApp(), "c"))
-}
-
 func TestGoldenApprovals(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)

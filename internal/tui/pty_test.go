@@ -21,7 +21,8 @@ import (
 )
 
 // TestTerminalSmoke runs the TUI in a pseudo-terminal, as a child process of this test binary,
-// against a test Studio. It shows Home with the sandboxes, and q quits it.
+// against a test Studio. It shows Home with the sandboxes, l opens Activity, q goes back and q
+// quits it.
 func TestTerminalSmoke(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusStopped)
@@ -53,14 +54,33 @@ func TestTerminalSmoke(t *testing.T) {
 		defer mu.Unlock()
 		return screen.String()
 	}
-	deadline := time.Now().Add(15 * time.Second)
-	for !strings.Contains(seen(), "Sandbox Studio") || !strings.Contains(seen(), "blub") {
-		if time.Now().After(deadline) {
-			t.Fatalf("Home did not show; the terminal said:\n%q", seen())
+	waitFor := func(what string, want ...string) {
+		t.Helper()
+		deadline := time.Now().Add(15 * time.Second)
+		for {
+			all := true
+			for _, w := range want {
+				all = all && strings.Contains(seen(), w)
+			}
+			if all {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("%s did not show; the terminal said:\n%q", what, seen())
+			}
+			time.Sleep(50 * time.Millisecond)
 		}
-		time.Sleep(50 * time.Millisecond)
 	}
+	waitFor("Home", "Sandbox Studio", "blub")
 
+	// l opens Activity; q returns to Home, where q quits.
+	if _, err := ptmx.Write([]byte("l")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("Activity", "Activity")
+	if _, err := ptmx.Write([]byte("q")); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := ptmx.Write([]byte("q")); err != nil {
 		t.Fatal(err)
 	}
