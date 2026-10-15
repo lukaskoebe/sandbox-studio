@@ -25,3 +25,15 @@ func TestSPA(t *testing.T) {
 		}
 	}
 }
+
+func TestManifestType(t *testing.T) {
+	h := spa(fstest.MapFS{
+		"index.html":           {Data: []byte("<html>index</html>")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"Sandbox Studio"}`)},
+	})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/manifest.webmanifest", nil))
+	if got := rec.Header().Get("Content-Type"); got != "application/manifest+json" || !strings.Contains(rec.Body.String(), "Sandbox Studio") {
+		t.Errorf("manifest: type %q body %q", got, rec.Body.String())
+	}
+}

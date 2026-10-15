@@ -21,6 +21,13 @@ binary embeds (`//go:embed`) and serves at `/`.
   copies with OSC 52; the terminal writes any OSC 52 clipboard to the browser's and refuses
   reads. Right-click opens Studio's Copy/Paste menu and never reaches tmux.
 - Editors: CodeMirror (YAML specs, Caddyfiles). Toasts: sonner.
+- Installable app: `public/manifest.webmanifest` (served as `application/manifest+json`)
+  with the icons in `public/` (`icon.svg` is the source; the PNGs and `favicon.ico` are
+  rendered from it, the maskable one without the rounded corners). There is no service
+  worker: Chromium installs without one, and a cache would only serve a stale UI after an
+  update. The pending-approval count goes on the app's icon with the Badging API
+  (`approval-stack.tsx`), next to the tab title's. `e2e/install.spec.ts` asks Chromium for
+  installability errors.
 - Theme: the design tokens are in `src/styles.css` (the Workbench theme, see
   [design/ui-style.md](design/ui-style.md)). `src/lib/theme.ts` applies the system, light or
   dark choice, stored in the browser as `studio.theme`. Shared pieces such as `SectionHeader`,

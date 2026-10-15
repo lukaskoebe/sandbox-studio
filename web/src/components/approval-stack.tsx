@@ -417,13 +417,26 @@ function notify(a: Approval) {
   }
 }
 
-/** Prefixes the tab title with the number of pending approvals, as chat apps do for unread messages. */
+/**
+ * Prefixes the tab title with the number of pending approvals, as chat apps do for unread
+ * messages, and puts it on the app's icon when Studio is installed as an app.
+ */
 function useTitleCount(count: number) {
   useEffect(() => {
     const base = document.title.replace(/^\(\d+\) /, "")
     document.title = count > 0 ? `(${count}) ${base}` : base
+    setAppBadge(count)
     return () => {
       document.title = base
+      setAppBadge(0)
     }
   }, [count])
+}
+
+/** The Badging API, where the browser has it; it shows only for an installed app. */
+function setAppBadge(count: number) {
+  if (!("setAppBadge" in navigator)) return
+  const done =
+    count > 0 ? navigator.setAppBadge(count) : navigator.clearAppBadge()
+  done.catch(() => {})
 }

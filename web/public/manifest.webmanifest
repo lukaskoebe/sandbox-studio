@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Sandbox Studio",
+  "short_name": "Studio",
+  "description": "Run coding agents in sandboxes on your machine, with approvals for what they do.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#16191c",
+  "theme_color": "#16191c",
+  "icons": [
+    { "src": "/icon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    {
+      "src": "/icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}

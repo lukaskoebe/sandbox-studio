@@ -60,6 +60,8 @@ This is the sign-in for your local Studio app. It does not sign an agent into an
 
 Studio listens on loopback, so other computers on your network cannot open its UI. The UI and the sandbox services stay on the machine running Studio.
 
+To give Studio a window and a dock or taskbar icon of its own, install it as an app: in Chrome or Edge, choose **Install Sandbox Studio** in the address bar or the browser menu; in Safari, choose **File → Add to Dock**. The app shows the number of approvals waiting on its icon. It belongs to the address you installed it from, so keep Studio on the same port.
+
 On a first start, Studio opens a guided setup at `/setup`. It checks the host, asks whether you want Chat or Terminal, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
 
 ![The guided setup: seven steps, the host check done and the work mode open](../../assets/screenshots/setup.jpg)
