@@ -327,7 +327,9 @@ func TestChatTurn(t *testing.T) {
 	var init struct {
 		ClientInfo struct{ Name, Version string }
 	}
-	json.Unmarshal(f.agent.Initial, &init)
+	if err := json.Unmarshal(f.agent.Initial, &init); err != nil {
+		t.Fatal(err)
+	}
 	if init.ClientInfo.Name != "sandbox-studio" || init.ClientInfo.Version == "" {
 		t.Fatalf("initialize %s", f.agent.Initial)
 	}

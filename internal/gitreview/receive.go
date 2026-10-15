@@ -88,12 +88,13 @@ func (e *stagingError) Unwrap() error { return e.err }
 const noThin = capability.Capability("no-thin")
 
 func receiveCaps() *capability.List {
+	// Set fails only on a capability's arguments, and these are fixed.
 	c := capability.NewList()
-	c.Set(capability.Agent, "sandbox-studio")
-	c.Set(capability.ReportStatus)
-	c.Set(capability.Sideband64k)
-	c.Set(capability.OFSDelta)
-	c.Set(noThin) // the pack must be complete on its own, so the connectivity check is meaningful
+	_ = c.Set(capability.Agent, "sandbox-studio")
+	_ = c.Set(capability.ReportStatus)
+	_ = c.Set(capability.Sideband64k)
+	_ = c.Set(capability.OFSDelta)
+	_ = c.Set(noThin) // the pack must be complete on its own, so the connectivity check is meaningful
 	return c
 }
 
@@ -116,7 +117,7 @@ func (s *Service) advertise(w http.ResponseWriter, repo *git.Repository) {
 	}
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-advertisement")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Write(buf.Bytes())
+	_, _ = w.Write(buf.Bytes())
 }
 
 // errTooLarge reports a push over the size limit.
@@ -290,7 +291,9 @@ func (s *Service) reply(w http.ResponseWriter, req *packp.ReferenceUpdateRequest
 	w.Header().Set("Cache-Control", "no-cache")
 	var report bytes.Buffer
 	if req.Capabilities.Supports(capability.ReportStatus) {
-		rs.Encode(&report)
+		if err := rs.Encode(&report); err != nil {
+			s.Log.Error("git remote: report status", "err", err)
+		}
 	}
 	typ := sideband.Type(-1)
 	switch {
@@ -300,15 +303,15 @@ func (s *Service) reply(w http.ResponseWriter, req *packp.ReferenceUpdateRequest
 		typ = sideband.Sideband
 	}
 	if typ < 0 {
-		w.Write(report.Bytes())
+		_, _ = w.Write(report.Bytes())
 		return
 	}
 	m := sideband.NewMuxer(typ, w)
 	for _, msg := range messages {
-		m.WriteChannel(sideband.ProgressMessage, []byte(msg+"\n"))
+		_, _ = m.WriteChannel(sideband.ProgressMessage, []byte(msg+"\n"))
 	}
 	if report.Len() > 0 {
-		m.WriteChannel(sideband.PackData, report.Bytes())
+		_, _ = m.WriteChannel(sideband.PackData, report.Bytes())
 	}
 	pktline.NewEncoder(w).Flush()
 }
@@ -372,7 +375,9 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	}
 	for _, p := range pending {
 		if err := s.Store.SettleGitPush(ctx, p.EnvironmentID, p.ID, store.PushPending, store.PushSuperseded, "replaced by a later push", ""); err == nil {
-			s.Store.DecideApproval(ctx, p.EnvironmentID, p.ApprovalID, store.StatusDismissed, "")
+			if err := s.Store.DecideApproval(ctx, p.EnvironmentID, p.ApprovalID, store.StatusDismissed, ""); err != nil {
+				s.Log.Warn("git remote: dismiss a replaced push's approval", "approval", p.ApprovalID, "err", err)
+			}
 		}
 	}
 
@@ -399,7 +404,9 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	})
 	if err != nil {
 		s.Log.Error("git remote: record push", "err", err)
-		s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, store.StatusDismissed, "")
+		if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, store.StatusDismissed, ""); err != nil {
+			s.Log.Warn("git remote: dismiss an unrecorded push's approval", "approval", a.ID, "err", err)
+		}
 		return "", refusal("internal error: Sandbox Studio could not record the push")
 	}
 	s.publish(t.sb.EnvironmentID, a.ID)

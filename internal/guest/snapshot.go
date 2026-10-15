@@ -248,7 +248,8 @@ func (s *snapshots) openStore() (*store, error) {
 		next, err := unix.Openat2(dir, part, beneath)
 		if errors.Is(err, unix.ENOENT) {
 			if err = unix.Mkdirat(dir, part, 0o755); err == nil || errors.Is(err, unix.EEXIST) {
-				unix.Fchownat(dir, part, s.owner[0], s.owner[1], unix.AT_SYMLINK_NOFOLLOW)
+				// Best effort: only the store itself must be Studio's, which is checked below.
+				_ = unix.Fchownat(dir, part, s.owner[0], s.owner[1], unix.AT_SYMLINK_NOFOLLOW)
 				next, err = unix.Openat2(dir, part, beneath)
 			}
 		}

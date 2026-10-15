@@ -50,7 +50,7 @@ func TestBuildWorkerLockFileHandlesShareLeaseAndRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer releaseFirst()
+	defer func() { _ = releaseFirst() }() // released and checked below; this covers a failure before
 	if _, err := first.AcquireBuildWorker(ctx); !errors.Is(err, ErrConflict) {
 		t.Fatalf("same Store acquired a second worker lease: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestBuildWorkerLockFileHandlesShareLeaseAndRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("independent database was blocked by another database's lease: %v", err)
 	}
-	defer releaseIndependent()
+	defer func() { _ = releaseIndependent() }()
 	if err := releaseIndependent(); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestBuildWorkerLockFileHandlesShareLeaseAndRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("worker lease remained held after release: %v", err)
 	}
-	defer releaseSecond()
+	defer func() { _ = releaseSecond() }()
 	if err := releaseSecond(); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,11 @@ func TestBuildWorkerLockResolvesDatabaseSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer release()
+	defer func() {
+		if err := release(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if _, err := aliasStore.AcquireBuildWorker(ctx); !errors.Is(err, ErrConflict) {
 		t.Fatalf("symlink alias acquired a second worker lease: %v", err)
 	}
@@ -186,7 +190,7 @@ func TestBuildWorkerLockIsPerInMemoryStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer releaseFirst()
+	defer func() { _ = releaseFirst() }() // released and checked below; this covers a failure before
 	if _, err := first.AcquireBuildWorker(ctx); !errors.Is(err, ErrConflict) {
 		t.Fatalf("same in-memory Store acquired a second worker lease: %v", err)
 	}
@@ -194,7 +198,7 @@ func TestBuildWorkerLockIsPerInMemoryStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("independent in-memory Store was blocked: %v", err)
 	}
-	defer releaseSecond()
+	defer func() { _ = releaseSecond() }()
 	if err := releaseFirst(); err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +275,7 @@ func TestBuildWorkerLockReleasesAfterProcessExit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("process exit left stale worker lock: %v", err)
 	}
-	defer release()
+	defer func() { _ = release() }() // released and checked below; this covers a failure before
 	if err := release(); err != nil {
 		t.Fatal(err)
 	}

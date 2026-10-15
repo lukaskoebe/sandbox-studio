@@ -335,7 +335,7 @@ func (c *Client) ChatStream(ctx context.Context, env, id string, after int64) (<
 			case strings.HasPrefix(line, "event: "):
 				name = strings.TrimPrefix(line, "event: ")
 			case strings.HasPrefix(line, "id: "):
-				fmt.Sscan(strings.TrimPrefix(line, "id: "), &rev)
+				_, _ = fmt.Sscan(strings.TrimPrefix(line, "id: "), &rev) // a malformed id keeps the last one
 			case strings.HasPrefix(line, "data: "):
 				data = strings.TrimPrefix(line, "data: ")
 			case line == "" && data != "":

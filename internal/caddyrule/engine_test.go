@@ -126,7 +126,7 @@ func TestEngineGitReadOnly(t *testing.T) {
 		requests = append(requests, seen{r.Method, r.RequestURI, r.Header.Clone()})
 		mu.Unlock()
 		w.Header().Set("Content-Length", "2")
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok"))
 	})
 	const basic = "cmVhZGVyOmZpeHR1cmUtdG9rZW4="
 	tr := load(t, "git", strings.ReplaceAll(gitReadOnly, "git.example.com", "example.com"), map[string]string{"GIT_READ_BASIC": basic})
@@ -244,10 +244,10 @@ func TestEngineStreams(t *testing.T) {
 			<-release
 			return
 		}
-		w.Write([]byte("first\n"))
+		_, _ = w.Write([]byte("first\n"))
 		w.(http.Flusher).Flush()
 		<-release
-		w.Write([]byte("second\n"))
+		_, _ = w.Write([]byte("second\n"))
 	})
 	defer close(release)
 	tr := load(t, "streams", "reverse_proxy https://example.com", nil)

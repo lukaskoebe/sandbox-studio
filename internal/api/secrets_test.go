@@ -232,8 +232,7 @@ func TestScopedSecrets(t *testing.T) {
 	if len(list) != 3 {
 		t.Fatalf("list: %+v", list)
 	}
-	var raw []map[string]any
-	json.Unmarshal(do(h, "GET", base, "").Body.Bytes(), &raw)
+	raw := decode[[]map[string]any](t, do(h, "GET", base, ""))
 	var teammates, sandboxes int
 	for _, r := range raw {
 		if r["teammateId"] == ada.ID {

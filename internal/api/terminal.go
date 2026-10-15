@@ -88,7 +88,9 @@ func bridgeTerminal(w http.ResponseWriter, r *http.Request, pty *agentchan.PTY) 
 			Rows uint16 `json:"rows"`
 		}
 		if json.Unmarshal(data, &msg) == nil && msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0 {
-			pty.Resize(msg.Cols, msg.Rows)
+			if err := pty.Resize(msg.Cols, msg.Rows); err != nil {
+				return
+			}
 		}
 	}
 }

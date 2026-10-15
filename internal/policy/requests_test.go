@@ -109,7 +109,9 @@ func TestRequestApprovalAllowsAMethodAndPath(t *testing.T) {
 	}
 
 	// A connection's approval can't carry a method or path.
-	go e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "other.example", Port: 443})
+	go func() {
+		_, _ = e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "other.example", Port: 443})
+	}()
 	for _, p := range waitPending(t, e, env.ID, 1) {
 		if p.Kind == KindNetwork {
 			if _, err := e.Resolve(ctx, env.ID, p.ID, Decision{Action: "allow", Scope: "environment", Method: "GET", PathPrefix: "/*"}); !errors.Is(err, ErrNotRequest) {

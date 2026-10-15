@@ -227,7 +227,9 @@ func TestMalformedVerdictChangesNothing(t *testing.T) {
 		t.Fatal("facts changed")
 	}
 	var n int
-	f.st.DB().QueryRow("SELECT COUNT(*) FROM memory_judgments").Scan(&n)
+	if err := f.st.DB().QueryRow("SELECT COUNT(*) FROM memory_judgments").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
 	if n != 0 {
 		t.Fatalf("a rejected verdict was cached")
 	}

@@ -145,7 +145,7 @@ func (a *agent) dispatch(m rpcMessage) {
 func (a *agent) request(m rpcMessage) {
 	result, rerr := a.handle(m)
 	if rerr != nil {
-		a.write(rpcMessage{JSONRPC: "2.0", ID: m.ID, Error: rerr})
+		_ = a.write(rpcMessage{JSONRPC: "2.0", ID: m.ID, Error: rerr})
 		return
 	}
 	a.reply(m.ID, result)
@@ -285,10 +285,10 @@ func (a *agent) call(ctx context.Context, method string, params any) (json.RawMe
 func (a *agent) reply(id json.RawMessage, result any) {
 	b, err := json.Marshal(result)
 	if err != nil {
-		a.write(rpcMessage{JSONRPC: "2.0", ID: id, Error: internal(err)})
+		_ = a.write(rpcMessage{JSONRPC: "2.0", ID: id, Error: internal(err)})
 		return
 	}
-	a.write(rpcMessage{JSONRPC: "2.0", ID: id, Result: b})
+	_ = a.write(rpcMessage{JSONRPC: "2.0", ID: id, Result: b})
 }
 
 // write sends one message. A failed write means Studio has gone, and nothing else can be
@@ -523,7 +523,7 @@ func (s *session) read(p *process, out io.Reader) {
 	}
 	readErr := sc.Err()
 	if readErr != nil {
-		io.Copy(io.Discard, out) // let the process finish writing
+		_, _ = io.Copy(io.Discard, out) // let the process finish writing
 	}
 	err := p.cmd.Wait()
 	if err == nil {
@@ -650,7 +650,7 @@ func (s *session) updates(us []acp.SessionUpdate) {
 		if err != nil {
 			continue
 		}
-		s.a.write(rpcMessage{JSONRPC: "2.0", Method: acp.MethodSessionUpdate, Params: params})
+		_ = s.a.write(rpcMessage{JSONRPC: "2.0", Method: acp.MethodSessionUpdate, Params: params})
 	}
 }
 

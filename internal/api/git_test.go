@@ -194,7 +194,7 @@ func TestSSHForges(t *testing.T) {
 		t.Fatalf("secret %+v: %v", sec.Name, err)
 	}
 	for _, dir := range []string{staging, os.TempDir()} {
-		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
 			}
@@ -206,6 +206,9 @@ func TestSSHForges(t *testing.T) {
 			}
 			return nil
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	if b, err := s.Vault.Bindings(ctx, store.Sandbox{EnvironmentID: env.ID}); err != nil || len(b) != 0 {
 		t.Fatalf("the key is bound for sandboxes: %+v, %v", b, err)

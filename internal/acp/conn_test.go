@@ -90,7 +90,9 @@ func TestRoundTrip(t *testing.T) {
 	}
 	// Studio offers form elicitation and nothing else: no fs, no terminal, no auth.
 	var offered map[string]any
-	json.Unmarshal(agent.Initial, &offered)
+	if err := json.Unmarshal(agent.Initial, &offered); err != nil {
+		t.Fatal(err)
+	}
 	caps, _ := json.Marshal(offered["clientCapabilities"])
 	if string(caps) != `{"elicitation":{"form":{}}}` {
 		t.Errorf("client capabilities = %s", caps)

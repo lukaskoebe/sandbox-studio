@@ -619,7 +619,9 @@ func TestActionApprovalAndRemember(t *testing.T) {
 	go func() {
 		a := f.pending(KindAction)
 		var p ActionPayload
-		json.Unmarshal(a.Payload, &p)
+		if err := json.Unmarshal(a.Payload, &p); err != nil {
+			t.Error(err)
+		}
 		if p.Action != "click" || p.Origin != "https://example.com" || p.Label != "Sign in" || p.SandboxName != "ada-dev" || p.TeammateName != "ada" {
 			t.Errorf("payload %+v", p)
 		}
@@ -687,7 +689,9 @@ func TestCredentialNeverLeaks(t *testing.T) {
 		go func() {
 			a := f.pending(KindCredential)
 			var p CredentialPayload
-			json.Unmarshal(a.Payload, &p)
+			if err := json.Unmarshal(a.Payload, &p); err != nil {
+				t.Error(err)
+			}
 			if p.Credential != "example-login" || p.Ref != ref || p.Origin != "https://example.com" {
 				t.Errorf("credential payload %+v", p)
 			}
@@ -751,7 +755,7 @@ func TestCredentialNeverLeaks(t *testing.T) {
 		t.Errorf("credential fill not logged by name: %s", hist)
 	}
 	shots := 0
-	filepath.WalkDir(f.svc.Dir, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(f.svc.Dir, func(path string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			shots++
 			if b, _ := os.ReadFile(path); strings.Contains(string(b), sentinel) {
@@ -759,7 +763,9 @@ func TestCredentialNeverLeaks(t *testing.T) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if shots == 0 {
 		t.Error("no screenshots at all")
 	}
@@ -848,7 +854,9 @@ func TestHistoryBound(t *testing.T) {
 		t.Errorf("%d log entries with a screenshot, %d files", withShot, len(entries))
 	}
 	// Orphans go at startup.
-	os.WriteFile(filepath.Join(f.svc.Dir, strings.Repeat("a", 32)+".jpg"), []byte("x"), 0o600)
+	if err := os.WriteFile(filepath.Join(f.svc.Dir, strings.Repeat("a", 32)+".jpg"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	f.svc.sweepScreenshots(f.ctx)
 	if after, _ := os.ReadDir(f.svc.Dir); len(after) != len(entries) {
 		t.Errorf("orphan kept: %d files", len(after))
@@ -893,7 +901,9 @@ func TestFilterInput(t *testing.T) {
 	}
 	got := FilterInput([]byte(click), true)
 	var m map[string]any
-	json.Unmarshal(got, &m)
+	if err := json.Unmarshal(got, &m); err != nil {
+		t.Fatal(err)
+	}
 	if m["eventType"] != "mousePressed" || m["x"] != 10.0 || m["button"] != "left" || m["evil"] != nil {
 		t.Errorf("mouse %s", got)
 	}

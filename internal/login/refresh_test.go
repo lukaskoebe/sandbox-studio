@@ -44,7 +44,7 @@ func newOAuthServer(t *testing.T) *oauthServer {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(o.next)
+		_ = json.NewEncoder(w).Encode(o.next)
 	}))
 	t.Cleanup(o.srv.Close)
 	return o

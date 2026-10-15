@@ -707,9 +707,10 @@ func (m *app) foldLines(it chat.Item, live bool, w int) []string {
 	}
 	status := toolStatus(tool.Status)
 	statusCell := styleDim.Render(status)
-	if status == "failed" {
+	switch status {
+	case "failed":
 		statusCell = styleFailed.Render(status)
-	} else if status == "working" {
+	case "working":
 		statusCell = styleAccent.Render(status)
 	}
 	lines := []string{spread("  "+mark+" "+title, statusCell, w)}
@@ -756,10 +757,10 @@ func toolBody(tool *chat.ToolBody) []string {
 			if c.Content == nil {
 				continue
 			}
-			switch {
-			case c.Content.Type == "text":
+			switch c.Content.Type {
+			case "text":
 				lines = append(lines, capLines(strings.Split(strings.TrimRight(c.Content.Text, "\n"), "\n"))...)
-			case c.Content.Type == "image":
+			case "image":
 				lines = append(lines, styleDim.Render("[an image]"))
 			default:
 				lines = append(lines, styleDim.Render("["+firstNonEmpty(c.Content.Name, c.Content.URI, c.Content.Type)+"]"))

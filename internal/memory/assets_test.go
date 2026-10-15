@@ -28,10 +28,16 @@ func fakeLlamaTarGz(t *testing.T) []byte {
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)
-	tw.WriteHeader(&tar.Header{Name: "llama-b11429/", Typeflag: tar.TypeDir, Mode: 0o755})
+	if err := tw.WriteHeader(&tar.Header{Name: "llama-b11429/", Typeflag: tar.TypeDir, Mode: 0o755}); err != nil {
+		t.Fatal(err)
+	}
 	body := []byte("not really a library")
-	tw.WriteHeader(&tar.Header{Name: "llama-b11429/libllama.so", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(body))})
-	tw.Write(body)
+	if err := tw.WriteHeader(&tar.Header{Name: "llama-b11429/libllama.so", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(body))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(body); err != nil {
+		t.Fatal(err)
+	}
 	if err := tw.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +66,7 @@ func newAssetServer(t *testing.T, files map[string][]byte) *assetServer {
 		if r.Method == http.MethodGet { // go-getter also sends HEAD requests
 			s.hits[name].Add(1)
 		}
-		w.Write(b)
+		_, _ = w.Write(b)
 	}))
 	t.Cleanup(s.Close)
 	return s

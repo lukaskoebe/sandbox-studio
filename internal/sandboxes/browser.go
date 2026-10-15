@@ -109,15 +109,20 @@ func (m *Manager) provision(ctx context.Context, rec store.Sandbox, r resources.
 		return err
 	}
 	defer unlock()
+	deleteRow := func() {
+		if err := m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID); err != nil {
+			m.Log.Warn("provision cleanup: delete the sandbox record", "sandbox", rec.ID, "err", err)
+		}
+	}
 	egress, err := m.Egress.Attach(rec)
 	if err != nil {
-		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
+		deleteRow()
 		return err
 	}
 	sock := m.Paths.AgentSocket(rec.ID)
 	if err := m.Hub.Listen(rec.ID, sock); err != nil {
 		m.Egress.Detach(rec.ID)
-		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
+		deleteRow()
 		return err
 	}
 	spec := runtime.Spec{
@@ -128,8 +133,10 @@ func (m *Manager) provision(ctx context.Context, rec store.Sandbox, r resources.
 	if err := m.Runtime.Create(ctx, VMName(rec), spec, sock, sandboxLabels(rec)); err != nil {
 		m.Hub.Close(rec.ID)
 		m.Egress.Detach(rec.ID)
-		m.Runtime.Remove(context.WithoutCancel(ctx), VMName(rec))
-		m.Store.DeleteSandbox(context.WithoutCancel(ctx), envID, rec.ID)
+		if err := m.Runtime.Remove(context.WithoutCancel(ctx), VMName(rec)); err != nil {
+			m.Log.Warn("provision cleanup: remove the VM", "sandbox", rec.ID, "err", err)
+		}
+		deleteRow()
 		return err
 	}
 	return nil

@@ -36,23 +36,29 @@ func fakeAnswer(q []byte) []byte {
 		hdr.RCode = dnsmessage.RCodeNameError
 	}
 	b := dnsmessage.NewBuilder(nil, hdr)
-	b.StartQuestions()
-	b.Question(question)
+	mustBuild(b.StartQuestions())
+	mustBuild(b.Question(question))
 	if question.Name.String() == wwwName {
 		edge := dnsmessage.MustNewName("edge.cdn.test.")
-		b.StartAnswers()
-		b.CNAMEResource(dnsmessage.ResourceHeader{Name: question.Name, Class: dnsmessage.ClassINET, TTL: 30},
-			dnsmessage.CNAMEResource{CNAME: edge})
-		b.AResource(dnsmessage.ResourceHeader{Name: edge, Class: dnsmessage.ClassINET, TTL: 30},
-			dnsmessage.AResource{A: netip.MustParseAddr("192.0.2.10").As4()})
-		b.AAAAResource(dnsmessage.ResourceHeader{Name: edge, Class: dnsmessage.ClassINET, TTL: 30},
-			dnsmessage.AAAAResource{AAAA: netip.MustParseAddr("2001:db8::10").As16()})
+		mustBuild(b.StartAnswers())
+		mustBuild(b.CNAMEResource(dnsmessage.ResourceHeader{Name: question.Name, Class: dnsmessage.ClassINET, TTL: 30},
+			dnsmessage.CNAMEResource{CNAME: edge}))
+		mustBuild(b.AResource(dnsmessage.ResourceHeader{Name: edge, Class: dnsmessage.ClassINET, TTL: 30},
+			dnsmessage.AResource{A: netip.MustParseAddr("192.0.2.10").As4()}))
+		mustBuild(b.AAAAResource(dnsmessage.ResourceHeader{Name: edge, Class: dnsmessage.ClassINET, TTL: 30},
+			dnsmessage.AAAAResource{AAAA: netip.MustParseAddr("2001:db8::10").As16()}))
 	}
 	msg, err := b.Finish()
+	mustBuild(err)
+	return msg
+}
+
+// mustBuild panics on an error building a test message: the messages are fixed, so one is a
+// bug in the test.
+func mustBuild(err error) {
 	if err != nil {
 		panic(err)
 	}
-	return msg
 }
 
 // fakeUpstream answers queries with its answer function and remembers every query it got.
@@ -94,7 +100,7 @@ func startUpstream(t *testing.T, answer func(q []byte) []byte) *fakeUpstream {
 				return
 			}
 			seen(buf[:n])
-			pc.WriteTo(answer(buf[:n]), addr)
+			_, _ = pc.WriteTo(answer(buf[:n]), addr)
 		}
 	}()
 	go func() {
@@ -152,12 +158,10 @@ func (s *Server) tcpConns() int {
 
 func buildQuery(id uint16, name string, typ dnsmessage.Type) []byte {
 	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: id, RecursionDesired: true})
-	b.StartQuestions()
-	b.Question(dnsmessage.Question{Name: dnsmessage.MustNewName(name), Type: typ, Class: dnsmessage.ClassINET})
+	mustBuild(b.StartQuestions())
+	mustBuild(b.Question(dnsmessage.Question{Name: dnsmessage.MustNewName(name), Type: typ, Class: dnsmessage.ClassINET}))
 	msg, err := b.Finish()
-	if err != nil {
-		panic(err)
-	}
+	mustBuild(err)
 	return msg
 }
 
@@ -393,9 +397,9 @@ func TestMalformedQueriesAreNeverForwarded(t *testing.T) {
 	notQuery := bytes.Clone(good)
 	notQuery[2] |= 1 << 3 // OpCode 1 (IQUERY)
 	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: 0x0102, RecursionDesired: true})
-	b.StartQuestions()
-	b.Question(dnsmessage.Question{Name: dnsmessage.MustNewName(wwwName), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET})
-	b.Question(dnsmessage.Question{Name: dnsmessage.MustNewName("other.test."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET})
+	mustBuild(b.StartQuestions())
+	mustBuild(b.Question(dnsmessage.Question{Name: dnsmessage.MustNewName(wwwName), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}))
+	mustBuild(b.Question(dnsmessage.Question{Name: dnsmessage.MustNewName("other.test."), Type: dnsmessage.TypeA, Class: dnsmessage.ClassINET}))
 	twoQuestions, err := b.Finish()
 	if err != nil {
 		t.Fatal(err)
@@ -638,7 +642,9 @@ func TestVirtualNamesAreAnsweredLocally(t *testing.T) {
 		if err != nil || h.ID != 0x77 || !h.Response || h.RCode != dnsmessage.RCodeSuccess {
 			t.Fatalf("type %v: header %+v, %v", typ, h, err)
 		}
-		p.SkipAllQuestions()
+		if err := p.SkipAllQuestions(); err != nil {
+			t.Fatal(err)
+		}
 		answers, err := p.AllAnswers()
 		if err != nil {
 			t.Fatal(err)

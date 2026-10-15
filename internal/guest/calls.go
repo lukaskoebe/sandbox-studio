@@ -65,7 +65,7 @@ func (a *Agent) serveCalls(ctx context.Context) error {
 				a.relayCall(c)
 			}()
 		default:
-			agentproto.WriteJSONLine(c, agentproto.CallReply{Error: "too many pending calls"})
+			_ = agentproto.WriteJSONLine(c, agentproto.CallReply{Error: "too many pending calls"})
 			c.Close()
 		}
 	}
@@ -74,7 +74,7 @@ func (a *Agent) serveCalls(ctx context.Context) error {
 func (a *Agent) relayCall(c net.Conn) {
 	defer c.Close()
 	c.SetDeadline(time.Now().Add(callRelayTimeout))
-	reply := func(r agentproto.CallReply) { agentproto.WriteJSONLine(c, r) }
+	reply := func(r agentproto.CallReply) { _ = agentproto.WriteJSONLine(c, r) } // the caller may have given up
 	var call agentproto.Call
 	if err := agentproto.ReadJSONLineLimit(bufio.NewReader(c), &call, agentproto.MaxCallLine); err != nil {
 		reply(agentproto.CallReply{Error: "bad call: " + err.Error()})

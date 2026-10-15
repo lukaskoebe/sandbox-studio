@@ -250,7 +250,9 @@ func (s *Service) Changes(ctx context.Context, envID, chatID, turnID string) (Tu
 	}
 	stored := TurnChanges{Files: []agentproto.FileChange{}}
 	if len(t.Changes) > 0 {
-		json.Unmarshal(t.Changes, &stored)
+		if err := json.Unmarshal(t.Changes, &stored); err != nil {
+			return TurnChanges{}, fmt.Errorf("the turn's changes are unreadable: %w", err)
+		}
 	}
 	if t.Snapshot == "" || t.EndedAt == nil || len(t.Changes) == 0 {
 		return stored, nil

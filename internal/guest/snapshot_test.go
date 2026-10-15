@@ -224,12 +224,15 @@ func mustManifest(t *testing.T, s *snapshots, id string) *manifest {
 func blobCount(t *testing.T, s *snapshots) int {
 	t.Helper()
 	n := 0
-	filepath.WalkDir(filepath.Join(s.store, "blobs"), func(_ string, d os.DirEntry, _ error) error {
+	err := filepath.WalkDir(filepath.Join(s.store, "blobs"), func(_ string, d os.DirEntry, _ error) error {
 		if d != nil && !d.IsDir() {
 			n++
 		}
 		return nil
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	return n
 }
 

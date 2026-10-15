@@ -143,7 +143,7 @@ func ServeMCP(ctx context.Context, in io.Reader, out io.Writer, c Caller) error 
 		}
 		wmu.Lock()
 		defer wmu.Unlock()
-		agentproto.WriteJSONLine(out, r)
+		_ = agentproto.WriteJSONLine(out, r) // a client that has gone also ends in, which ends the loop
 	}
 	var wg sync.WaitGroup
 	defer wg.Wait()

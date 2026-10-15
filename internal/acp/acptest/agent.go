@@ -202,7 +202,7 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 		SessionID string          `json:"sessionId"`
 		Prompt    json.RawMessage `json:"prompt"`
 	}
-	json.Unmarshal(params, &p)
+	_ = json.Unmarshal(params, &p) // only the session methods have these; others may have no params
 	switch method {
 	case "initialize":
 		a.mu.Lock()
@@ -255,7 +255,9 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 				a.update(p.SessionID, s.Update)
 			case s.Permission != nil:
 				var req map[string]json.RawMessage
-				json.Unmarshal(s.Permission, &req)
+				if err := json.Unmarshal(s.Permission, &req); err != nil || req == nil {
+					panic("acptest: Step.Permission is not a JSON object")
+				}
 				req["sessionId"], _ = json.Marshal(p.SessionID)
 				out, ok := a.request("session/request_permission", req)
 				if !ok {
@@ -304,7 +306,9 @@ func (a *Agent) send(v any) error {
 	}
 	a.wmu.Lock()
 	defer a.wmu.Unlock()
-	a.w.Write(append(b, '\n'))
+	if _, err := a.w.Write(append(b, '\n')); err != nil {
+		return err
+	}
 	return a.w.Flush()
 }
 
@@ -315,11 +319,11 @@ func (a *Agent) reply(id json.RawMessage, result any, e *rpcError) {
 	} else {
 		m["result"] = result
 	}
-	a.send(m)
+	_ = a.send(m) // a client that has gone away gets no reply
 }
 
 func (a *Agent) update(session string, u json.RawMessage) {
-	a.send(map[string]any{"jsonrpc": "2.0", "method": "session/update",
+	_ = a.send(map[string]any{"jsonrpc": "2.0", "method": "session/update",
 		"params": map[string]any{"sessionId": session, "update": u}})
 }
 

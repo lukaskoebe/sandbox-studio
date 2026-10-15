@@ -354,7 +354,9 @@ func TestApprovalShowsTeammateScope(t *testing.T) {
 	}
 	plain := newSandbox(t, s, env, "plain")
 	for _, sb := range []store.Sandbox{owned, plain} {
-		go s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: sb.Name + ".example.com", Port: 443})
+		go func() {
+			_, _ = s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: sb.Name + ".example.com", Port: 443})
+		}()
 	}
 
 	// The card of a sandbox's network approval names its owner and the scope it starts with.
@@ -371,7 +373,9 @@ func TestApprovalShowsTeammateScope(t *testing.T) {
 	if rec := do(h, "POST", decide, `{"action":"allow","host":"*.example.com"}`); rec.Code != http.StatusOK {
 		t.Fatalf("decide: %d %s", rec.Code, rec.Body)
 	}
-	go s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: owned.ID, SandboxName: owned.Name, Host: "api.example.org", Port: 443})
+	go func() {
+		_, _ = s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: owned.ID, SandboxName: owned.Name, Host: "api.example.org", Port: 443})
+	}()
 	if next := awaitApproval(t, h, "api.example.org", 443); next.Teammate == nil || next.Teammate.PatternLevel != "wildcard" {
 		t.Fatalf("next approval: %+v", next.Teammate)
 	}

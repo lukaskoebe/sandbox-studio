@@ -38,7 +38,7 @@ func TestParse(t *testing.T) {
 
 func TestRoute(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "guest says hi to "+r.Host)
+		_, _ = io.WriteString(w, "guest says hi to "+r.Host)
 	}))
 	defer upstream.Close()
 
@@ -49,7 +49,7 @@ func TestRoute(t *testing.T) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
 	}
 	h := Route(dial, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "studio")
+		_, _ = io.WriteString(w, "studio")
 	}))
 
 	rec := httptest.NewRecorder()
@@ -174,11 +174,11 @@ func TestRouteGuardsServiceWorkers(t *testing.T) {
 		if r.Header.Get("Accept-Encoding") == "gzip" {
 			w.Header().Set("Content-Encoding", "gzip")
 			zw := gzip.NewWriter(w)
-			io.WriteString(zw, "self.v=1")
+			_, _ = io.WriteString(zw, "self.v=1")
 			zw.Close()
 			return
 		}
-		io.WriteString(w, "self.v=1")
+		_, _ = io.WriteString(w, "self.v=1")
 	}))
 	defer upstream.Close()
 	dial := func(ctx context.Context, id string, port int) (net.Conn, error) {

@@ -250,7 +250,7 @@ func refuse(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Sandbox-Studio", "git")
 	w.WriteHeader(code)
-	io.WriteString(w, msg+"\n")
+	_, _ = io.WriteString(w, msg+"\n")
 }
 
 func (t target) upstreamURL(rest string) string {

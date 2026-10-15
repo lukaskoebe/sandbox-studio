@@ -156,7 +156,9 @@ func (c *call) currentURL(ctx context.Context) (string, error) {
 	var v struct {
 		URL string `json:"url"`
 	}
-	json.Unmarshal(data, &v)
+	if err := json.Unmarshal(data, &v); err != nil {
+		return "", errors.New("the page's address was not understood")
+	}
 	c.s.mu.Lock()
 	if v.URL != c.pg.url {
 		c.pg.navigated(v.URL)
@@ -342,7 +344,7 @@ func (c *call) open(ctx context.Context, params json.RawMessage) (any, error) {
 		opened := false
 		defer func() {
 			if !opened {
-				c.s.closeEphemeral(context.WithoutCancel(ctx), c.st, pg, "ended because its first page did not open")
+				_ = c.s.closeEphemeral(context.WithoutCancel(ctx), c.st, pg, "ended because its first page did not open") // it logs a failure
 			}
 		}()
 		res, err := c.openPage(ctx, in.URL, origin)
@@ -386,7 +388,11 @@ func (c *call) openPage(ctx context.Context, url, origin string) (string, error)
 		URL   string `json:"url"`
 		Title string `json:"title"`
 	}
-	json.Unmarshal(data, &v)
+	if err := json.Unmarshal(data, &v); err != nil {
+		e.outcome, e.detail = "failed", "the reply was not understood"
+		c.s.record(ctx, c.st, c.pg, e)
+		return "", userError{errors.New("the browser's reply to browser_open was not understood")}
+	}
 	c.s.mu.Lock()
 	c.pg.navigated(v.URL)
 	secrets := c.pg.secrets
@@ -618,7 +624,9 @@ func (c *call) getText(ctx context.Context, params json.RawMessage) (any, error)
 	var v struct {
 		Text string `json:"text"`
 	}
-	json.Unmarshal(data, &v) // verify (live): the key of get text's response
+	if err := json.Unmarshal(data, &v); err != nil { // verify (live): the key of get text's response
+		return nil, errors.New("the text was not understood")
+	}
 	c.s.mu.Lock()
 	secrets := c.pg.secrets
 	c.s.mu.Unlock()

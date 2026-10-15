@@ -255,7 +255,9 @@ func (s *Service) fillApproved(ctx context.Context, envID string, p CredentialPa
 	var cur struct {
 		URL string `json:"url"`
 	}
-	json.Unmarshal(data, &cur)
+	if err := json.Unmarshal(data, &cur); err != nil {
+		return fail(errors.New("the page's address was not understood"))
+	}
 	if Origin(cur.URL) != p.Origin {
 		return fail(refuse("the page moved to %s since the request; ask again", Origin(cur.URL)))
 	}

@@ -325,7 +325,9 @@ func TestSubmitCanonicalDedupAndIsolation(t *testing.T) {
 func TestBuildOrdersConfigurationBeforeSetupAndPublishes(t *testing.T) {
 	h := newBuildHarness(t)
 	job := h.submit(t, testSource)
-	h.w.process(context.Background(), h.claim(t))
+	if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+		t.Fatal(err)
+	}
 	job = h.job(t, job.ID)
 	if job.Status != store.BuildReady || job.CleanupPending || job.SandboxID != "" || job.TemplateID == "" {
 		t.Fatalf("job %+v", job)
@@ -349,7 +351,9 @@ func TestBuildOrdersConfigurationBeforeSetupAndPublishes(t *testing.T) {
 	// inspection, without allocating another build sandbox or running commands.
 	oldRuns := h.runs
 	second := h.submit(t, testSource)
-	h.w.process(context.Background(), h.claim(t))
+	if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+		t.Fatal(err)
+	}
 	second = h.job(t, second.ID)
 	if second.ID == job.ID || second.TemplateID != job.TemplateID || second.Status != store.BuildReady || h.runs != oldRuns || h.basePrepares != 1 || h.baseReleases != 1 {
 		t.Fatalf("cache hit: %+v runs %d", second, h.runs)
@@ -359,7 +363,9 @@ func TestBuildOrdersConfigurationBeforeSetupAndPublishes(t *testing.T) {
 func TestExportStreamsExportLayerThroughReceive(t *testing.T) {
 	h := newBuildHarness(t)
 	job := h.submit(t, testSource)
-	h.w.process(context.Background(), h.claim(t))
+	if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+		t.Fatal(err)
+	}
 	if job = h.job(t, job.ID); job.Status != store.BuildReady {
 		t.Fatalf("job %+v", job)
 	}
@@ -392,7 +398,9 @@ func TestExportRejectsInvalidStreamOrFailedCommand(t *testing.T) {
 			h := newBuildHarness(t)
 			change(h)
 			job := h.submit(t, testSource)
-			h.w.process(context.Background(), h.claim(t))
+			if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+				t.Fatal(err)
+			}
 			if job = h.job(t, job.ID); job.Status != store.BuildFailed {
 				t.Fatalf("job %+v", job)
 			}
@@ -413,7 +421,12 @@ func TestExportReturnsWhenReceiveFailsWhileCommandKeepsWriting(t *testing.T) {
 	job := h.submit(t, testSource)
 	claimed := h.claim(t)
 	done := make(chan struct{})
-	go func() { h.w.process(context.Background(), claimed); close(done) }()
+	go func() {
+		if err := h.w.process(context.Background(), claimed); err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
@@ -441,7 +454,9 @@ func TestExporterDeadlineWhileBuildContextIsLiveIsNotTotalBuildTimeout(t *testin
 	h := newBuildHarness(t)
 	h.exportErr = errors.Join(context.DeadlineExceeded, errors.New("open /tmp/private-export-layer"))
 	job := h.submit(t, testSource)
-	h.w.process(context.Background(), h.claim(t))
+	if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+		t.Fatal(err)
+	}
 
 	job = h.job(t, job.ID)
 	if !h.exportCtxLive {
@@ -499,7 +514,9 @@ func TestPreparedBaseReleasedWhenBuildSandboxBootFails(t *testing.T) {
 	h.bootErr = errors.New("native image source rejected")
 	h.baseReleaseErr = errors.New("private release detail")
 	job := h.submit(t, testSource)
-	h.w.process(context.Background(), h.claim(t))
+	if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+		t.Fatal(err)
+	}
 	job = h.job(t, job.ID)
 	if job.Status != store.BuildFailed || job.CleanupPending || job.SandboxID != "" || h.basePrepares != 1 || h.baseReleases != 1 {
 		t.Fatalf("boot failure ownership/release: job=%+v prepares=%d releases=%d", job, h.basePrepares, h.baseReleases)
@@ -521,7 +538,9 @@ func TestConfigurationFailureDoesNotRunSetupAndRetainsFailedCleanup(t *testing.T
 	h := newBuildHarness(t)
 	h.configureErr, h.cleanupErr = errors.New("guest rejected config"), errors.New("VM still running")
 	job := h.submit(t, testSource)
-	h.w.process(context.Background(), h.claim(t))
+	if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+		t.Fatal(err)
+	}
 	job = h.job(t, job.ID)
 	if h.runs != 0 || job.Status != store.BuildFailed || !job.CleanupPending || job.SandboxID == "" || job.CleanupError == "" {
 		t.Fatalf("unsafe failure: %+v runs %d", job, h.runs)
@@ -548,7 +567,12 @@ func TestCancelQuarantinesUntilNativeRunSettles(t *testing.T) {
 	job := h.submit(t, testSource)
 	claimed := h.claim(t)
 	done := make(chan struct{})
-	go func() { h.w.process(context.Background(), claimed); close(done) }()
+	go func() {
+		if err := h.w.process(context.Background(), claimed); err != nil {
+			t.Error(err)
+		}
+		close(done)
+	}()
 	select {
 	case <-started:
 	case <-time.After(3 * time.Second):
@@ -589,7 +613,9 @@ func TestCancellationWinsLateCachePublication(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	h.w.process(context.Background(), h.claim(t))
+	if err := h.w.process(context.Background(), h.claim(t)); err != nil {
+		t.Fatal(err)
+	}
 	job = h.job(t, job.ID)
 	if job.Status != store.BuildCancelled || job.TemplateID != "" || job.CleanupPending {
 		t.Fatalf("late completion resurrected: %+v", job)

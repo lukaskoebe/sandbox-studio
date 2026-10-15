@@ -66,7 +66,7 @@ func (s *session) answerPermission(conn net.Conn) {
 	if err := json.NewDecoder(io.LimitReader(conn, 1<<20)).Decode(&req); err != nil {
 		return
 	}
-	json.NewEncoder(conn).Encode(s.decide(req))
+	_ = json.NewEncoder(conn).Encode(s.decide(req)) // a caller that has gone needs no answer
 }
 
 // decide asks Studio about a permission request of the running turn. Questions are refused:
@@ -124,7 +124,7 @@ func ServePermission(ctx context.Context, in io.Reader, out io.Writer, socket st
 		}
 		wmu.Lock()
 		defer wmu.Unlock()
-		out.Write(append(b, '\n'))
+		_, _ = out.Write(append(b, '\n'))
 	}
 	var wg sync.WaitGroup
 	defer wg.Wait()

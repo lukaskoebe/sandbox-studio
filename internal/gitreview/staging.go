@@ -103,7 +103,7 @@ func (rm *remote) fetchMirror(ctx context.Context, r *git.Repository) error {
 		req := packp.NewUploadPackRequestFromCapabilities(ar.Capabilities)
 		req.Wants, req.Haves = wants, haves
 		if ar.Capabilities.Supports(capability.NoProgress) {
-			req.Capabilities.Set(capability.NoProgress)
+			_ = req.Capabilities.Set(capability.NoProgress) // it takes no arguments, so it can't fail
 		}
 		resp, err := sess.UploadPack(ctx, req)
 		if err != nil {

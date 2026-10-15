@@ -309,7 +309,7 @@ func (p *sshProcess) Close() error {
 // failure explains why the remote service ended early, from what it wrote to stderr.
 func (p *sshProcess) failure(path string) error {
 	done := make(chan struct{})
-	go func() { p.sess.Wait(); close(done) }()
+	go func() { _ = p.sess.Wait(); close(done) }() // stderr tells why, not its exit status
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -477,7 +477,7 @@ func (ss *sshSession) Close() error {
 	}
 	if !ss.packRun {
 		// Goodbye without a request: a flush, as git does.
-		ss.p.stdin.Write(pktline.FlushPkt)
+		_, _ = ss.p.stdin.Write(pktline.FlushPkt)
 		ss.p.stdin.Close()
 	}
 	return ss.p.Close()
@@ -533,11 +533,11 @@ func (s *Service) sshUploadPack(w http.ResponseWriter, r *http.Request, t target
 		w.WriteHeader(http.StatusOK)
 		if !v2 {
 			e := pktline.NewEncoder(w)
-			e.EncodeString("# service=git-upload-pack\n")
+			_ = e.EncodeString("# service=git-upload-pack\n")
 			e.Flush()
 		}
-		w.Write(adv)
-		p.stdin.Write(pktline.FlushPkt)
+		_, _ = w.Write(adv)
+		_, _ = p.stdin.Write(pktline.FlushPkt) // ends upload-pack, which is closed next anyway
 		p.stdin.Close()
 		return
 	}

@@ -151,7 +151,7 @@ func (f *fakeForge) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-git-upload-pack-result")
-		resp.Encode(w)
+		_ = resp.Encode(w)
 	case rest == "git-receive-pack":
 		req := packp.NewReferenceUpdateRequest()
 		if err := req.Decode(r.Body); err != nil {
@@ -159,14 +159,17 @@ func (f *fakeForge) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sess, _ := tr.NewReceivePackSession(ep, nil)
-		sess.AdvertisedReferencesContext(ctx)
+		if _, err := sess.AdvertisedReferencesContext(ctx); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		rs, err := sess.ReceivePack(ctx, req)
 		if rs == nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
-		rs.Encode(w)
+		_ = rs.Encode(w)
 	default:
 		http.NotFound(w, r)
 	}
@@ -179,20 +182,20 @@ func (f *fakeForge) advertise(w http.ResponseWriter, service string, ar *packp.A
 	}
 	ar.Prefix = [][]byte{[]byte("# service=" + service), pktline.Flush}
 	w.Header().Set("Content-Type", "application/x-"+service+"-advertisement")
-	ar.Encode(w)
+	_ = ar.Encode(w)
 }
 
 func (f *fakeForge) api(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "token "+forgeToken {
 		w.WriteHeader(http.StatusUnauthorized)
-		io.WriteString(w, `{"message":"token is required"}`)
+		_, _ = io.WriteString(w, `{"message":"token is required"}`)
 		return
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/user":
-		io.WriteString(w, `{"login":"studio-bot"}`)
+		_, _ = io.WriteString(w, `{"login":"studio-bot"}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/owner/repo":
-		io.WriteString(w, `{"default_branch":"main"}`)
+		_, _ = io.WriteString(w, `{"default_branch":"main"}`)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/owner/repo/pulls":
 		var pr PullRequest
 		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
@@ -204,10 +207,10 @@ func (f *fakeForge) api(w http.ResponseWriter, r *http.Request) {
 		n := len(f.pulls)
 		f.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"number": n, "html_url": f.srv.URL + "/owner/repo/pulls/1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"number": n, "html_url": f.srv.URL + "/owner/repo/pulls/1"})
 	default:
 		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"message":"not found"}`)
+		_, _ = io.WriteString(w, `{"message":"not found"}`)
 	}
 }
 
@@ -217,20 +220,20 @@ func (f *fakeForge) githubAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Header.Get("Authorization") != "Bearer "+forgeToken {
 		w.WriteHeader(http.StatusUnauthorized)
-		io.WriteString(w, `{"message":"Bad credentials"}`)
+		_, _ = io.WriteString(w, `{"message":"Bad credentials"}`)
 		return
 	}
 	if r.Header.Get("X-GitHub-Api-Version") != GitHubAPIVersion || r.Header.Get("Accept") != "application/vnd.github+json" {
 		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, `{"message":"missing version or accept header"}`)
+		_, _ = io.WriteString(w, `{"message":"missing version or accept header"}`)
 		return
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user":
 		w.Header().Set("GitHub-Authentication-Token-Expiration", "2030-01-02 03:04:05 UTC")
-		io.WriteString(w, `{"login":"octo-bot"}`)
+		_, _ = io.WriteString(w, `{"login":"octo-bot"}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/repo":
-		io.WriteString(w, `{"default_branch":"main"}`)
+		_, _ = io.WriteString(w, `{"default_branch":"main"}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/old":
 		w.Header().Set("Location", f.srv.URL+"/api/v3/repositories/42")
 		w.WriteHeader(http.StatusMovedPermanently)
@@ -245,16 +248,16 @@ func (f *fakeForge) githubAPI(w http.ResponseWriter, r *http.Request) {
 		for _, p := range f.pulls {
 			if p.Head == pr.Head {
 				w.WriteHeader(http.StatusUnprocessableEntity)
-				io.WriteString(w, `{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"A pull request already exists for owner:`+pr.Head+`."}]}`)
+				_, _ = io.WriteString(w, `{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"A pull request already exists for owner:`+pr.Head+`."}]}`)
 				return
 			}
 		}
 		f.pulls = append(f.pulls, pr)
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"number": len(f.pulls), "html_url": f.srv.URL + "/owner/repo/pull/1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"number": len(f.pulls), "html_url": f.srv.URL + "/owner/repo/pull/1"})
 	default:
 		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"message":"Not Found"}`)
+		_, _ = io.WriteString(w, `{"message":"Not Found"}`)
 	}
 }
 
@@ -264,14 +267,14 @@ func (f *fakeForge) gitlabAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if r.Header.Get("Authorization") != "Bearer "+forgeToken {
 		w.WriteHeader(http.StatusUnauthorized)
-		io.WriteString(w, `{"message":"401 Unauthorized"}`)
+		_, _ = io.WriteString(w, `{"message":"401 Unauthorized"}`)
 		return
 	}
 	switch {
 	case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/user":
-		io.WriteString(w, `{"username":"gl-bot"}`)
+		_, _ = io.WriteString(w, `{"username":"gl-bot"}`)
 	case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/group%2Fsub%2Fproj":
-		io.WriteString(w, `{"default_branch":"trunk"}`)
+		_, _ = io.WriteString(w, `{"default_branch":"trunk"}`)
 	case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/group%2Fsub%2Fproj/merge_requests":
 		var mr mergeRequest
 		if err := json.NewDecoder(r.Body).Decode(&mr); err != nil {
@@ -283,16 +286,16 @@ func (f *fakeForge) gitlabAPI(w http.ResponseWriter, r *http.Request) {
 		for _, m := range f.merges {
 			if m.Source == mr.Source {
 				w.WriteHeader(http.StatusConflict)
-				io.WriteString(w, `{"message":["Another open merge request already exists for this source branch: !1"]}`)
+				_, _ = io.WriteString(w, `{"message":["Another open merge request already exists for this source branch: !1"]}`)
 				return
 			}
 		}
 		f.merges = append(f.merges, mr)
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]any{"iid": len(f.merges), "web_url": f.srv.URL + "/group/sub/proj/-/merge_requests/1"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"iid": len(f.merges), "web_url": f.srv.URL + "/group/sub/proj/-/merge_requests/1"})
 	default:
 		w.WriteHeader(http.StatusNotFound)
-		io.WriteString(w, `{"message":"404 Not Found"}`)
+		_, _ = io.WriteString(w, `{"message":"404 Not Found"}`)
 	}
 }
 
@@ -306,7 +309,9 @@ func commitFile(t *testing.T, repo *git.Repository, name, content, msg string) p
 	if err != nil {
 		t.Fatal(err)
 	}
-	io.WriteString(fh, content)
+	if _, err := io.WriteString(fh, content); err != nil {
+		t.Fatal(err)
+	}
 	fh.Close()
 	if _, err := wt.Add(name); err != nil {
 		t.Fatal(err)
@@ -1010,7 +1015,9 @@ func TestRealGit(t *testing.T) {
 	if out, err := run(home, "clone", g.url(), work); err != nil {
 		t.Fatalf("clone: %v\n%s", err, out)
 	}
-	os.WriteFile(filepath.Join(work, "agent.txt"), []byte("from the agent\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(work, "agent.txt"), []byte("from the agent\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if out, err := run(work, "add", "agent.txt"); err != nil {
 		t.Fatal(out)
 	}

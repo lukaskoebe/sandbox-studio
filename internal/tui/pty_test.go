@@ -116,7 +116,7 @@ func TestTUIChild(t *testing.T) {
 func TestAttachInATerminal(t *testing.T) {
 	received := make(chan string, 1)
 	client := fakeTerminal(t, func(ctx context.Context, c *websocket.Conn, _ *http.Request) {
-		c.Write(ctx, websocket.MessageBinary, []byte("sandbox ready"))
+		_ = c.Write(ctx, websocket.MessageBinary, []byte("sandbox ready"))
 		var got bytes.Buffer
 		for {
 			typ, data, err := c.Read(ctx)

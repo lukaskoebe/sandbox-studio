@@ -268,11 +268,11 @@ func (a *Agent) servePTY(st net.Conn, br *bufio.Reader, h agentproto.Header) err
 			}
 			switch typ {
 			case agentproto.FrameData:
-				f.Write(p)
+				_, _ = f.Write(p) // a terminal that is gone ends the read loop below
 			case agentproto.FrameResize:
 				var r agentproto.Resize
 				if json.Unmarshal(p, &r) == nil && r.Cols > 0 && r.Rows > 0 {
-					pty.Setsize(f, &pty.Winsize{Cols: r.Cols, Rows: r.Rows})
+					_ = pty.Setsize(f, &pty.Winsize{Cols: r.Cols, Rows: r.Rows})
 				}
 			}
 		}
@@ -370,13 +370,13 @@ func servTCP(st net.Conn, br *bufio.Reader, port int) error {
 	defer up.Close()
 	done := make(chan struct{})
 	go func() {
-		io.Copy(up, br)
+		_, _ = io.Copy(up, br)
 		if c, ok := up.(*net.TCPConn); ok {
-			c.CloseWrite()
+			_ = c.CloseWrite()
 		}
 		close(done)
 	}()
-	io.Copy(st, up)
+	_, _ = io.Copy(st, up)
 	// A yamux Close only ends our side. Without it the host never learns that the server
 	// dropped an idle keep-alive connection, reuses it, and the request hangs.
 	st.Close()

@@ -231,7 +231,9 @@ func TestEphemeralLiveViewPort(t *testing.T) {
 		ports = append(ports, port)
 		return nil, errors.New("no stream in this test")
 	}
-	f.svc.Relay(f.ctx, f.env, f.ada.ID, id, nil) // the stream never comes up
+	if err := f.svc.Relay(f.ctx, f.env, f.ada.ID, id, nil); err == nil { // the stream never comes up
+		t.Error("the stream came up")
+	}
 	if len(ports) == 0 || ports[0] != agentproto.BrowserStreamPort+1 {
 		t.Errorf("the session streamed on %v", ports)
 	}
@@ -239,7 +241,9 @@ func TestEphemeralLiveViewPort(t *testing.T) {
 		t.Errorf("the stream started in slot %d", c.Ephemeral)
 	}
 	ports = nil
-	f.svc.Relay(f.ctx, f.env, f.ada.ID, "", nil)
+	if err := f.svc.Relay(f.ctx, f.env, f.ada.ID, "", nil); err == nil {
+		t.Error("the stream came up")
+	}
 	if len(ports) == 0 || ports[0] != agentproto.BrowserStreamPort {
 		t.Errorf("the persistent profile streamed on %v", ports)
 	}
@@ -294,7 +298,9 @@ func TestEphemeralApprovals(t *testing.T) {
 	go func() {
 		a := f.pending(KindAction)
 		var p ActionPayload
-		json.Unmarshal(a.Payload, &p)
+		if err := json.Unmarshal(a.Payload, &p); err != nil {
+			t.Error(err)
+		}
 		if p.Session != id || !strings.Contains(a.Subject, "(ephemeral session "+id+")") {
 			t.Errorf("approval %+v, subject %q", p, a.Subject)
 		}

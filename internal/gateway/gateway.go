@@ -335,7 +335,7 @@ func splice(c net.Conn, br io.Reader, up net.Conn) (sent, received int64) {
 
 func closeWrite(c net.Conn) {
 	if cw, ok := c.(interface{ CloseWrite() error }); ok {
-		cw.CloseWrite()
+		_ = cw.CloseWrite()
 	} else {
 		c.Close()
 	}
@@ -393,10 +393,12 @@ func (g *Gateway) handshake(c net.Conn, br *bufio.Reader) (store.Sandbox, socksT
 		return sb, t, err
 	}
 	if !strings.ContainsRune(string(offered), 2) {
-		c.Write([]byte{5, 0xff})
+		_, _ = c.Write([]byte{5, 0xff})
 		return sb, t, errors.New("client does not offer user/password authentication")
 	}
-	c.Write([]byte{5, 2})
+	if _, err := c.Write([]byte{5, 2}); err != nil {
+		return sb, t, err
+	}
 
 	user, pass, err := readCredentials(br)
 	if err != nil {
@@ -404,21 +406,23 @@ func (g *Gateway) handshake(c net.Conn, br *bufio.Reader) (store.Sandbox, socksT
 	}
 	want := Password(g.Key, user)
 	if !hmac.Equal([]byte(pass), []byte(want)) {
-		c.Write([]byte{1, 1})
+		_, _ = c.Write([]byte{1, 1})
 		return sb, t, errAuth
 	}
 	if sb, err = g.Sandbox(context.Background(), user); err != nil {
-		c.Write([]byte{1, 1})
+		_, _ = c.Write([]byte{1, 1})
 		return sb, t, fmt.Errorf("sandbox %q: %w", user, err)
 	}
-	c.Write([]byte{1, 0})
+	if _, err := c.Write([]byte{1, 0}); err != nil {
+		return sb, t, err
+	}
 
 	req := make([]byte, 4)
 	if _, err := io.ReadFull(br, req); err != nil {
 		return sb, t, err
 	}
 	if req[0] != 5 || req[1] != 1 { // CONNECT only
-		c.Write([]byte{5, 7, 0, 1, 0, 0, 0, 0, 0, 0})
+		_, _ = c.Write([]byte{5, 7, 0, 1, 0, 0, 0, 0, 0, 0})
 		return sb, t, fmt.Errorf("unsupported command %d", req[1])
 	}
 	switch req[3] {
@@ -439,14 +443,14 @@ func (g *Gateway) handshake(c net.Conn, br *bufio.Reader) (store.Sandbox, socksT
 			return sb, t, err
 		}
 		if t.domain = clientHost(string(name)); t.domain == "" {
-			c.Write([]byte{5, 4, 0, 1, 0, 0, 0, 0, 0, 0})
+			_, _ = c.Write([]byte{5, 4, 0, 1, 0, 0, 0, 0, 0, 0})
 			return sb, t, fmt.Errorf("invalid destination %q", name)
 		}
 		if ip, err := netip.ParseAddr(t.domain); err == nil {
 			t.domain, t.addr = "", ip.Unmap()
 		}
 	default:
-		c.Write([]byte{5, 8, 0, 1, 0, 0, 0, 0, 0, 0})
+		_, _ = c.Write([]byte{5, 8, 0, 1, 0, 0, 0, 0, 0, 0})
 		return sb, t, fmt.Errorf("unsupported address type %d", req[3])
 	}
 	port := make([]byte, 2)

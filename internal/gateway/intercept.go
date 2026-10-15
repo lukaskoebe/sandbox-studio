@@ -622,7 +622,7 @@ func writeRefusal(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Sandbox-Studio", "refused")
 	w.WriteHeader(code)
-	io.WriteString(w, msg+"\n")
+	_, _ = io.WriteString(w, msg+"\n")
 }
 
 // serveHTTP serves HTTP/1.1 or HTTP/2 on c with h until the client hangs up or waits
@@ -649,7 +649,7 @@ func serveHTTP(c net.Conn, h http.Handler, log *slog.Logger, timeout time.Durati
 			}
 		},
 	}
-	srv.Serve(l)
+	_ = srv.Serve(l) // it returns once the connection is done, with the listener closed
 }
 
 // singleListener hands out one connection, then blocks until closed.

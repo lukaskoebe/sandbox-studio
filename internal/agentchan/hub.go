@@ -212,16 +212,16 @@ func (h *Hub) serveCall(ctx context.Context, id string, st net.Conn) {
 	var hdr agentproto.Header
 	var call agentproto.Call
 	if err := agentproto.ReadJSONLineLimit(br, &hdr, 4096); err != nil || hdr.Kind != agentproto.KindCall {
-		agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "expected a call"})
+		_ = agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "expected a call"})
 		return
 	}
 	if err := agentproto.ReadJSONLineLimit(br, &call, agentproto.MaxCallLine); err != nil {
-		agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "bad call: " + err.Error()})
+		_ = agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "bad call: " + err.Error()})
 		return
 	}
 	st.SetReadDeadline(time.Time{})
 	if h.OnCall == nil {
-		agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "calls are not available"})
+		_ = agentproto.WriteJSONLine(st, agentproto.CallReply{Error: "calls are not available"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
@@ -234,7 +234,7 @@ func (h *Hub) serveCall(ctx context.Context, id string, st net.Conn) {
 		reply = agentproto.CallReply{Error: "encoding the result failed"}
 	}
 	st.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	agentproto.WriteJSONLine(st, reply)
+	_ = agentproto.WriteJSONLine(st, reply)
 }
 
 // Connected reports whether the guest agent of id is connected, and its hello.

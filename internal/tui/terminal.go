@@ -71,7 +71,7 @@ func (a *attachment) Run() error {
 			conn.CloseNow()
 			return err
 		}
-		defer term.Restore(fd, state)
+		defer func() { _ = term.Restore(fd, state) }()
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
 	defer cancel()
@@ -95,7 +95,7 @@ func (a *attachment) Run() error {
 				return
 			}
 			if typ == websocket.MessageBinary {
-				a.out.Write(data)
+				_, _ = a.out.Write(data)
 			}
 		}
 	}()
@@ -118,7 +118,7 @@ func (a *attachment) Run() error {
 		chunk := buf[:n]
 		if i := bytes.IndexByte(chunk, detachKey); i >= 0 {
 			if i > 0 {
-				conn.Write(ctx, websocket.MessageBinary, chunk[:i])
+				_ = conn.Write(ctx, websocket.MessageBinary, chunk[:i]) // detaching either way
 			}
 			detach(conn, detaching, readerDone)
 			return nil

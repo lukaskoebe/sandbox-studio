@@ -17,7 +17,7 @@ func TestRegistryPullable(t *testing.T) {
 				http.Error(w, "bad scope", http.StatusBadRequest)
 				return
 			}
-			w.Write([]byte(`{"token":"t0k"}`))
+			_, _ = w.Write([]byte(`{"token":"t0k"}`))
 		case r.Header.Get("Authorization") != "Bearer t0k":
 			w.Header().Set("WWW-Authenticate", `Bearer realm="`+srv.URL+`/token",service="reg",scope="repository:o/base:pull"`)
 			w.WriteHeader(http.StatusUnauthorized)

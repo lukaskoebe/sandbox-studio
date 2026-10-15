@@ -187,8 +187,8 @@ func exportFile(t *testing.T, m ExportManifest, archive string) []byte {
 func homeChunks(home string) []byte {
 	var buf bytes.Buffer
 	c := chunkWriter{w: &buf}
-	c.Write([]byte(home))
-	c.end()
+	_, _ = c.Write([]byte(home)) // into a bytes.Buffer, which cannot fail
+	_ = c.end()
 	return buf.Bytes()
 }
 
@@ -391,8 +391,12 @@ func TestImportFormat1HasNoHome(t *testing.T) {
 func TestReadChunksStopsAtLimit(t *testing.T) {
 	var file bytes.Buffer
 	c := chunkWriter{w: &file}
-	c.Write(bytes.Repeat([]byte("x"), maxChunkBytes+10)) // two chunks
-	c.end()
+	if _, err := c.Write(bytes.Repeat([]byte("x"), maxChunkBytes+10)); err != nil { // two chunks
+		t.Fatal(err)
+	}
+	if err := c.end(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := readChunks(io.Discard, bytes.NewReader(file.Bytes()), maxChunkBytes); !errors.Is(err, ErrHomeTooLarge) {
 		t.Fatalf("err = %v, want ErrHomeTooLarge", err)
 	}

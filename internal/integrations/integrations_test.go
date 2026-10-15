@@ -37,7 +37,9 @@ func TestToolIsFoundByItsCallName(t *testing.T) {
 	if !ok {
 		t.Fatal("fake_tool not found")
 	}
-	found.Handle(context.Background(), store.Sandbox{ID: "sb-1"}, nil)
+	if _, err := found.Handle(context.Background(), store.Sandbox{ID: "sb-1"}, nil); err != nil {
+		t.Fatal(err)
+	}
 	if got != "sb-1" {
 		t.Fatalf("handler got sandbox %q", got)
 	}

@@ -66,7 +66,9 @@ func TestFoldGolden(t *testing.T) {
 			got, _ := json.MarshalIndent(out, "", "  ")
 			golden := strings.TrimSuffix(path, ".jsonl") + ".golden.json"
 			if *update {
-				os.WriteFile(golden, append(got, '\n'), 0o644)
+				if err := os.WriteFile(golden, append(got, '\n'), 0o644); err != nil {
+					t.Fatal(err)
+				}
 			}
 			want, err := os.ReadFile(golden)
 			if err != nil {

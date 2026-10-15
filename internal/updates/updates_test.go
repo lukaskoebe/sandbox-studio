@@ -34,7 +34,7 @@ func fakeGitHub(t *testing.T, tag string) (*httptest.Server, *atomic.Int32) {
 		if r.Header.Get("Accept") != "application/vnd.github+json" {
 			t.Errorf("accept header %q", r.Header.Get("Accept"))
 		}
-		w.Write([]byte(`{"tag_name":"` + tag + `","html_url":"https://github.com/lukaskoebe/sandbox-studio/releases/tag/` + tag + `"}`))
+		_, _ = w.Write([]byte(`{"tag_name":"` + tag + `","html_url":"https://github.com/lukaskoebe/sandbox-studio/releases/tag/` + tag + `"}`))
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &hits
@@ -60,9 +60,15 @@ func TestChecksAtMostDaily(t *testing.T) {
 		t.Fatalf("enable: %+v %v hits=%d", st, err, hits.Load())
 	}
 	now = now.Add(23 * time.Hour)
-	c.CheckIfDue(ctx)
-	c.SetEnabled(ctx, false)
-	c.SetEnabled(ctx, true)
+	if _, err := c.CheckIfDue(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.SetEnabled(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.SetEnabled(ctx, true); err != nil {
+		t.Fatal(err)
+	}
 	if hits.Load() != 1 {
 		t.Fatalf("checked again within a day: %d", hits.Load())
 	}

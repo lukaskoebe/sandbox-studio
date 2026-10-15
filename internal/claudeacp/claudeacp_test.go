@@ -57,7 +57,7 @@ func fakeClaude() {
 	args := os.Args[1:]
 	if path := os.Getenv(argvEnv); path != "" {
 		if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-			json.NewEncoder(f).Encode(args)
+			exitOn(json.NewEncoder(f).Encode(args))
 			f.Close()
 		}
 	}
@@ -102,11 +102,16 @@ func fakeClaude() {
 
 func readFixture(name string) []byte {
 	b, err := os.ReadFile(filepath.Join(os.Getenv(dataEnv), name))
+	exitOn(err)
+	return b
+}
+
+// exitOn ends the fake on an error, which the test sees as Claude Code failing.
+func exitOn(err error) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	return b
 }
 
 // flagOf is the value of flag in args, or "".
@@ -149,8 +154,8 @@ func writeTranscript(session string) {
 		dir = filepath.Join(home, ".claude")
 	}
 	p := filepath.Join(dir, "projects", "test-project")
-	os.MkdirAll(p, 0o700)
-	os.WriteFile(filepath.Join(p, session+".jsonl"), []byte("{}\n"), 0o600)
+	exitOn(os.MkdirAll(p, 0o700))
+	exitOn(os.WriteFile(filepath.Join(p, session+".jsonl"), []byte("{}\n"), 0o600))
 }
 
 type pluginServer struct {
@@ -194,14 +199,14 @@ func askPermission(servers map[string]pluginServer, tool, name, input string) pe
 		os.Exit(1)
 	}
 	enc := json.NewEncoder(stdin)
-	enc.Encode(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize",
-		"params": map[string]any{"protocolVersion": "2025-06-18"}})
-	enc.Encode(map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"})
-	enc.Encode(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": map[string]any{
+	exitOn(enc.Encode(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize",
+		"params": map[string]any{"protocolVersion": "2025-06-18"}}))
+	exitOn(enc.Encode(map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"}))
+	exitOn(enc.Encode(map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": map[string]any{
 		"name": toolName,
 		"arguments": map[string]any{"tool_name": name, "input": json.RawMessage(input),
 			"tool_use_id": testToolID},
-	}})
+	}}))
 	var ans permissionAnswer
 	sc := bufio.NewScanner(stdout)
 	for sc.Scan() {
@@ -217,12 +222,12 @@ func askPermission(servers map[string]pluginServer, tool, name, input string) pe
 			continue
 		}
 		if len(r.Result.Content) > 0 {
-			json.Unmarshal([]byte(r.Result.Content[0].Text), &ans)
+			exitOn(json.Unmarshal([]byte(r.Result.Content[0].Text), &ans))
 		}
 		break
 	}
 	stdin.Close()
-	cmd.Wait()
+	exitOn(cmd.Wait())
 	return ans
 }
 
@@ -272,12 +277,15 @@ func startShim(t *testing.T) *shim {
 	serverEnd, clientEnd := net.Pipe()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	go Serve(ctx, serverEnd, serverEnd, Options{
-		Claude:    exe,
-		ClaudeEnv: []string{roleEnv + "=claude", argvEnv + "=" + argv, dataEnv + "=" + data},
-		Self:      exe,
-		Log:       os.Stderr,
-	})
+	// Serve ends with the test, when its error has no one left to report to.
+	go func() {
+		_ = Serve(ctx, serverEnd, serverEnd, Options{
+			Claude:    exe,
+			ClaudeEnv: []string{roleEnv + "=claude", argvEnv + "=" + argv, dataEnv + "=" + data},
+			Self:      exe,
+			Log:       os.Stderr,
+		})
+	}()
 	cl := &testClient{
 		updates: make(chan acp.SessionNotification, 256),
 		perms:   make(chan acp.RequestPermissionRequest, 16),

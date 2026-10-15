@@ -246,7 +246,7 @@ func (s *Server) serveUDP() {
 			defer func() { <-s.udpSem }()
 			if resp := s.resolve("udp", q); resp != nil {
 				// The client may already be gone; there is nothing to do about that.
-				s.udp.WriteTo(resp, addr)
+				_, _ = s.udp.WriteTo(resp, addr)
 			}
 		}()
 	}

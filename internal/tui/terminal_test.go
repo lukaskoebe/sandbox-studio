@@ -84,7 +84,7 @@ func TestAttachShowsTheSandboxAndDetachesWithCtrlBracket(t *testing.T) {
 	var mu sync.Mutex
 	var got bytes.Buffer
 	client := fakeTerminal(t, func(ctx context.Context, c *websocket.Conn, _ *http.Request) {
-		c.Write(ctx, websocket.MessageBinary, []byte("hello from the sandbox"))
+		_ = c.Write(ctx, websocket.MessageBinary, []byte("hello from the sandbox"))
 		for {
 			typ, data, err := c.Read(ctx)
 			if err != nil {
@@ -94,7 +94,7 @@ func TestAttachShowsTheSandboxAndDetachesWithCtrlBracket(t *testing.T) {
 				mu.Lock()
 				got.Write(data)
 				mu.Unlock()
-				c.Write(ctx, websocket.MessageBinary, data) // the shell echoes
+				_ = c.Write(ctx, websocket.MessageBinary, data) // the shell echoes
 			}
 		}
 	})
@@ -157,7 +157,9 @@ func TestAttachForwardsResizes(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the size change was not sent")
 	}
-	pw.Write([]byte{detachKey})
+	if _, err := pw.Write([]byte{detachKey}); err != nil {
+		t.Fatal(err)
+	}
 	<-done
 }
 
@@ -165,7 +167,7 @@ func TestAttachForwardsResizes(t *testing.T) {
 // without going to the sandbox.
 func TestAttachEndsWithTheSandboxAndAKeyReturns(t *testing.T) {
 	client := fakeTerminal(t, func(ctx context.Context, c *websocket.Conn, _ *http.Request) {
-		c.Write(ctx, websocket.MessageBinary, []byte("bye"))
+		_ = c.Write(ctx, websocket.MessageBinary, []byte("bye"))
 		c.Close(websocket.StatusNormalClosure, "exited")
 	})
 	pw, out, done := attach(t, client, fixedSize(80, 24))

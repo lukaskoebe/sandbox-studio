@@ -25,7 +25,7 @@ func TestAuthenticatedPreviewFlow(t *testing.T) {
 		seen <- r.Header.Get("Cookie")
 		http.SetCookie(w, &http.Cookie{Name: webauth.SessionCookie, Value: "guest-forgery", Path: "/"})
 		http.SetCookie(w, &http.Cookie{Name: "app", Value: "works", Path: "/"})
-		w.Write([]byte("guest page"))
+		_, _ = w.Write([]byte("guest page"))
 	}))
 	defer guest.Close()
 	dial := func(ctx context.Context, id string, port int) (net.Conn, error) {

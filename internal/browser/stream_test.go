@@ -28,9 +28,16 @@ func TestRelay(t *testing.T) {
 			return
 		}
 		defer c.CloseNow()
-		c.Write(r.Context(), websocket.MessageText, []byte(`{"type":"frame","data":"AAAA","metadata":{}}`))
-		c.Write(r.Context(), websocket.MessageText, []byte(`{"type":"tabs","tabs":[{"url":"https://clicked.example/path","active":true}]}`))
-		c.Write(r.Context(), websocket.MessageText, []byte(`{"type":"url","url":"https://redirected.example/path"}`))
+		for _, m := range []string{
+			`{"type":"frame","data":"AAAA","metadata":{}}`,
+			`{"type":"tabs","tabs":[{"url":"https://clicked.example/path","active":true}]}`,
+			`{"type":"url","url":"https://redirected.example/path"}`,
+		} {
+			if err := c.Write(r.Context(), websocket.MessageText, []byte(m)); err != nil {
+				t.Error(err)
+				return
+			}
+		}
 		for {
 			_, data, err := c.Read(r.Context())
 			if err != nil {
@@ -57,7 +64,9 @@ func TestRelay(t *testing.T) {
 		if err != nil {
 			return
 		}
-		f.svc.Relay(r.Context(), f.env, f.ada.ID, "", c)
+		if err := f.svc.Relay(r.Context(), f.env, f.ada.ID, "", c); err != nil {
+			t.Error(err)
+		}
 	}))
 	defer ui.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -84,15 +93,21 @@ func TestRelay(t *testing.T) {
 	}
 	release()
 	click := `{"type":"input_mouse","eventType":"mousePressed","x":1,"y":2,"button":"left","clickCount":1}`
-	c.Write(ctx, websocket.MessageText, []byte(click))
-	c.Write(ctx, websocket.MessageText, []byte(`{"type":"ack","seq":1}`))
+	if err := c.Write(ctx, websocket.MessageText, []byte(click)); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Write(ctx, websocket.MessageText, []byte(`{"type":"ack","seq":1}`)); err != nil {
+		t.Fatal(err)
+	}
 	if m := <-got; !strings.Contains(m, `"ack"`) {
 		t.Errorf("input passed while the agent drives: %s", m)
 	}
 	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
 		t.Fatal(err)
 	}
-	c.Write(ctx, websocket.MessageText, []byte(click))
+	if err := c.Write(ctx, websocket.MessageText, []byte(click)); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case m := <-got:
 		if !strings.Contains(m, "mousePressed") {

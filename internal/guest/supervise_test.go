@@ -163,8 +163,11 @@ func TestCappedLogStartsOver(t *testing.T) {
 		t.Fatal(err)
 	}
 	l := &cappedLog{f: f, max: 10}
-	io.WriteString(l, "12345678")
-	io.WriteString(l, "abcd")
+	for _, s := range []string{"12345678", "abcd"} {
+		if _, err := io.WriteString(l, s); err != nil {
+			t.Fatal(err)
+		}
+	}
 	l.Close()
 	b, _ := os.ReadFile(f.Name())
 	if string(b) != "abcd" {

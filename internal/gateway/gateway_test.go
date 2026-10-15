@@ -99,8 +99,8 @@ func newHarness(t *testing.T, banner string) *harness {
 			client, server := net.Pipe()
 			go func() {
 				defer server.Close()
-				server.Write([]byte(banner))
-				io.Copy(server, server)
+				_, _ = server.Write([]byte(banner))
+				_, _ = io.Copy(server, server) // echoes until the gateway hangs up
 			}()
 			return client, nil
 		},
@@ -110,7 +110,7 @@ func newHarness(t *testing.T, banner string) *harness {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { l.Close() })
-	go h.gw.Serve(l)
+	go func() { _ = h.gw.Serve(l) }() // ends when the listener closes
 	h.addr = l.Addr().String()
 	return h
 }
@@ -140,7 +140,8 @@ func (h *harness) lastDial() string {
 func clientHello(t testing.TB, serverName string) []byte {
 	t.Helper()
 	a, b := net.Pipe()
-	go tls.Client(a, &tls.Config{ServerName: serverName}).Handshake()
+	// Only the ClientHello is wanted: the handshake fails when the pipe closes.
+	go func() { _ = tls.Client(a, &tls.Config{ServerName: serverName}).Handshake() }()
 	defer a.Close()
 	buf := make([]byte, peekSize)
 	n, err := b.Read(buf)
@@ -170,7 +171,9 @@ func TestTLSIsNamedBySNIAndDialedByName(t *testing.T) {
 	}
 	defer c.Close()
 	hello := clientHello(t, "Allowed.Example")
-	c.Write(hello)
+	if _, err := c.Write(hello); err != nil {
+		t.Fatal(err)
+	}
 	echo := make([]byte, len(hello))
 	if _, err := io.ReadFull(c, echo); err != nil || string(echo) != string(hello) {
 		t.Fatalf("ClientHello not replayed upstream: %v", err)
@@ -211,7 +214,9 @@ func TestHTTPRefusals(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c.Write([]byte("GET / HTTP/1.1\r\nHost: " + host + ":80\r\nUser-Agent: test\r\n\r\n"))
+		if _, err := c.Write([]byte("GET / HTTP/1.1\r\nHost: " + host + ":80\r\nUser-Agent: test\r\n\r\n")); err != nil {
+			t.Fatal(err)
+		}
 		resp, _ := io.ReadAll(c)
 		c.Close()
 		if !strings.HasPrefix(string(resp), "HTTP/1.1 403 ") || !strings.Contains(string(resp), want) {
@@ -332,8 +337,10 @@ func TestDriverDecides(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c.Write([]byte("GET / HTTP/1.1\r\nHost: unknown.example\r\n\r\n"))
-		io.ReadAll(c)
+		if _, err := c.Write([]byte("GET / HTTP/1.1\r\nHost: unknown.example\r\n\r\n")); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.ReadAll(c) // until the gateway hangs up
 		c.Close()
 		h.policy.mu.Lock()
 		defer h.policy.mu.Unlock()
@@ -359,7 +366,9 @@ func TestDeniedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Write([]byte("GET / HTTP/1.1\r\nHost: refused.example:80\r\nUser-Agent: test\r\n\r\n"))
+	if _, err := c.Write([]byte("GET / HTTP/1.1\r\nHost: refused.example:80\r\nUser-Agent: test\r\n\r\n")); err != nil {
+		t.Fatal(err)
+	}
 	resp, _ := io.ReadAll(c)
 	c.Close()
 	if !strings.HasPrefix(string(resp), "HTTP/1.1 403 ") || !strings.Contains(string(resp), "The user denied the request to connect to refused.example:80.") {

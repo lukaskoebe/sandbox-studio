@@ -72,7 +72,9 @@ func startACP(t *testing.T, slots *acpSlots, chat, script string) (net.Conn, *bu
 func TestACPPipesAndExits(t *testing.T) {
 	var slots acpSlots
 	host, br, done, _ := startACP(t, &slots, "c1", `read line; echo "got $line"`)
-	io.WriteString(host, "ping\n")
+	if _, err := io.WriteString(host, "ping\n"); err != nil {
+		t.Fatal(err)
+	}
 	if line, _ := br.ReadString('\n'); line != "got ping\n" {
 		t.Fatalf("line = %q", line)
 	}
@@ -423,7 +425,9 @@ func TestACPSlots(t *testing.T) {
 	for chat, want := range map[string]string{"c5": "at most 4 chats", "c2": "already running"} {
 		cmd := exec.Command("true")
 		host, guest := net.Pipe()
-		go runACP(&slots, guest, bufio.NewReader(guest), cmd, chat, filepath.Join(t.TempDir(), "log"))
+		go func() {
+			_ = runACP(&slots, guest, bufio.NewReader(guest), cmd, chat, filepath.Join(t.TempDir(), "log"))
+		}()
 		line, _ := bufio.NewReader(host).ReadString('\n')
 		host.Close()
 		if !strings.Contains(line, want) || cmd.Process != nil {

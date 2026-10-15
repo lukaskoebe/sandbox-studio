@@ -75,7 +75,12 @@ func TestMCPOverPipe(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- ServeMCP(context.Background(), inR, outW, fc); outW.Close() }()
 	dec := bufio.NewReader(outR)
-	send := func(s string) { io.WriteString(inW, s+"\n") }
+	send := func(s string) {
+		t.Helper()
+		if _, err := io.WriteString(inW, s+"\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	recv := func() map[string]any {
 		t.Helper()
 		line, err := dec.ReadBytes('\n')
@@ -143,7 +148,9 @@ func TestMCPOverPipe(t *testing.T) {
 func guestHome(t *testing.T) string {
 	home := t.TempDir()
 	for _, d := range []string{".claude/projects/-workspace", ".codex/sessions", ".local/share/opencode"} {
-		os.MkdirAll(filepath.Join(home, d), 0o755)
+		if err := os.MkdirAll(filepath.Join(home, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return home
 }
@@ -244,8 +251,13 @@ func TestTranscriptDelta(t *testing.T) {
 		return err
 	}
 	appendFile := func(s string) {
-		f, _ := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		f.WriteString(s)
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString(s); err != nil {
+			t.Fatal(err)
+		}
 		f.Close()
 	}
 
@@ -312,7 +324,9 @@ func TestTranscriptDelta(t *testing.T) {
 	}
 
 	// A replaced (shorter) file is read from the start.
-	os.WriteFile(path, []byte(claudeLine("user", "fresh")), 0o644)
+	if err := os.WriteFile(path, []byte(claudeLine("user", "fresh")), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := run(agenthook.PreCompact); err != nil {
 		t.Fatal(err)
 	}
@@ -325,9 +339,13 @@ func TestTranscriptPathRestricted(t *testing.T) {
 	h, _ := agenthook.Lookup("claude")
 	home := guestHome(t)
 	outside := filepath.Join(t.TempDir(), "secret.jsonl")
-	os.WriteFile(outside, []byte(claudeLine("user", "secret")), 0o644)
+	if err := os.WriteFile(outside, []byte(claudeLine("user", "secret")), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	link := filepath.Join(home, ".claude/projects/-workspace/link.jsonl")
-	os.Symlink(outside, link)
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
 	fc := &fakeCaller{}
 	for _, p := range []string{outside, link, "relative.jsonl", filepath.Join(home, ".claude/../.ssh/id")} {
 		in, _ := json.Marshal(map[string]any{"session_id": "s", "transcript_path": p})

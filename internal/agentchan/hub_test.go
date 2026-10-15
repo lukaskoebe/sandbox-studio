@@ -30,9 +30,16 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, _ := sess.Open()
-	agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindHello})
-	agentproto.WriteJSONLine(st, agentproto.Hello{Version: "test", Arch: "amd64"})
+	st, err := sess.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindHello}); err != nil {
+		t.Fatal(err)
+	}
+	if err := agentproto.WriteJSONLine(st, agentproto.Hello{Version: "test", Arch: "amd64"}); err != nil {
+		t.Fatal(err)
+	}
 	st.Close()
 	go func() {
 		for {
@@ -40,73 +47,89 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 			if err != nil {
 				return
 			}
+			// Replies are written with their errors dropped: a reply that fails shows up on
+			// the hub's side as a failed read, which the test checks.
 			go func() {
 				defer st.Close()
 				br := bufio.NewReader(st)
 				var h agentproto.Header
-				agentproto.ReadJSONLine(br, &h)
+				if err := agentproto.ReadJSONLine(br, &h); err != nil {
+					return
+				}
 				switch h.Kind {
 				case agentproto.KindSessions:
-					agentproto.WriteJSONLine(st, []agentproto.Session{{Name: "main", Windows: 1}})
+					_ = agentproto.WriteJSONLine(st, []agentproto.Session{{Name: "main", Windows: 1}})
 				case agentproto.KindPorts:
-					agentproto.WriteJSONLine(st, agentproto.Error{Error: "boom"})
+					_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "boom"})
 				case agentproto.KindRun:
 					var req agentproto.RunRequest
-					agentproto.ReadJSONLine(br, &req)
-					agentproto.WriteJSONLine(st, agentproto.RunResult{Stdout: strings.Join(req.Args, " ") + " " + req.Env["TOKEN"], ExitCode: 3})
+					if err := agentproto.ReadJSONLine(br, &req); err != nil {
+						return
+					}
+					_ = agentproto.WriteJSONLine(st, agentproto.RunResult{Stdout: strings.Join(req.Args, " ") + " " + req.Env["TOKEN"], ExitCode: 3})
 				case agentproto.KindUpload:
 					var req agentproto.UploadRequest
-					agentproto.ReadJSONLine(br, &req)
+					if err := agentproto.ReadJSONLine(br, &req); err != nil {
+						return
+					}
 					data := make([]byte, req.Size)
 					if _, err := io.ReadFull(br, data); err != nil {
 						return
 					}
 					if req.Name == "taken" {
-						agentproto.WriteJSONLine(st, agentproto.Error{Error: "taken already exists", Code: agentproto.CodeExists})
+						_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "taken already exists", Code: agentproto.CodeExists})
 						return
 					}
-					agentproto.WriteJSONLine(st, agentproto.UploadReply{Name: req.Name, Size: int64(len(data))})
+					_ = agentproto.WriteJSONLine(st, agentproto.UploadReply{Name: req.Name, Size: int64(len(data))})
 				case agentproto.KindBrowserDownloads:
 					var req agentproto.BrowserDownloadsRequest
-					agentproto.ReadJSONLine(br, &req)
+					if err := agentproto.ReadJSONLine(br, &req); err != nil {
+						return
+					}
 					switch req.Name {
 					case "":
-						agentproto.WriteJSONLine(st, agentproto.BrowserDownloadList{Files: []agentproto.BrowserDownload{{Name: "a.pdf", Size: 3}}})
+						_ = agentproto.WriteJSONLine(st, agentproto.BrowserDownloadList{Files: []agentproto.BrowserDownload{{Name: "a.pdf", Size: 3}}})
 					case "gone":
-						agentproto.WriteJSONLine(st, agentproto.Error{Error: "no such download"})
+						_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "no such download"})
 					default:
-						agentproto.WriteJSONLine(st, agentproto.BrowserDownload{Name: req.Name, Size: 3})
-						st.Write([]byte("abc"))
+						_ = agentproto.WriteJSONLine(st, agentproto.BrowserDownload{Name: req.Name, Size: 3})
+						_, _ = st.Write([]byte("abc"))
 					}
 				case agentproto.KindHomeFiles:
 					// Answers with the paths it got, as an error the test can read.
 					var req agentproto.HomeFiles
-					agentproto.ReadJSONLine(br, &req)
+					if err := agentproto.ReadJSONLine(br, &req); err != nil {
+						return
+					}
 					var paths []string
 					for _, f := range req.Files {
 						paths = append(paths, f.Path)
 					}
-					agentproto.WriteJSONLine(st, agentproto.Error{Error: "got " + strings.Join(paths, ",")})
+					_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "got " + strings.Join(paths, ",")})
 				case agentproto.KindConfig:
 					var cfg agentproto.Config
-					agentproto.ReadJSONLine(br, &cfg)
-					if cfg.CA == "bad" {
-						agentproto.WriteJSONLine(st, agentproto.Error{Error: "bad CA"})
+					if err := agentproto.ReadJSONLine(br, &cfg); err != nil {
 						return
 					}
-					agentproto.WriteJSONLine(st, struct{}{})
+					if cfg.CA == "bad" {
+						_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "bad CA"})
+						return
+					}
+					_ = agentproto.WriteJSONLine(st, struct{}{})
 					configs <- cfg
 				case agentproto.KindACP:
 					var req agentproto.StartACP
-					agentproto.ReadJSONLine(br, &req)
+					if err := agentproto.ReadJSONLine(br, &req); err != nil {
+						return
+					}
 					if req.Harness == "missing" {
-						agentproto.WriteJSONLine(st, agentproto.Error{Error: "not installed", Code: agentproto.CodeHarness})
+						_ = agentproto.WriteJSONLine(st, agentproto.Error{Error: "not installed", Code: agentproto.CodeHarness})
 						return
 					}
 					// The ack and the agent's first line in one write: the hub must not lose
 					// what it buffered.
-					st.Write([]byte("{}\n{\"hello\":\"" + req.Chat + "\"}\n"))
-					io.Copy(st, br)
+					_, _ = st.Write([]byte("{}\n{\"hello\":\"" + req.Chat + "\"}\n"))
+					_, _ = io.Copy(st, br)
 				case agentproto.KindPTY:
 					// Echo input upper-cased, then exit on "exit".
 					for {
@@ -118,10 +141,10 @@ func fakeGuest(t *testing.T, path string, configs chan<- agentproto.Config) *yam
 							continue
 						}
 						if string(p) == "exit" {
-							agentproto.WriteFrame(st, agentproto.FrameExit, []byte("0"))
+							_ = agentproto.WriteFrame(st, agentproto.FrameExit, []byte("0"))
 							return
 						}
-						agentproto.WriteFrame(st, agentproto.FrameData, []byte(strings.ToUpper(string(p))))
+						_ = agentproto.WriteFrame(st, agentproto.FrameData, []byte(strings.ToUpper(string(p))))
 					}
 				}
 			}()
@@ -201,13 +224,17 @@ func TestHub(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Write([]byte("hi"))
+	if _, err := p.Write([]byte("hi")); err != nil {
+		t.Fatal(err)
+	}
 	buf := make([]byte, 16)
 	n, err := p.Read(buf)
 	if err != nil || string(buf[:n]) != "HI" {
 		t.Fatalf("pty read %q %v", buf[:n], err)
 	}
-	p.Write([]byte("exit"))
+	if _, err := p.Write([]byte("exit")); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := p.Read(buf); err != io.EOF {
 		t.Fatalf("want EOF after exit, got %v", err)
 	}
@@ -297,8 +324,12 @@ func TestHubCalls(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer st.Close()
-		agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindCall})
-		agentproto.WriteJSONLine(st, c)
+		if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindCall}); err != nil {
+			t.Fatal(err)
+		}
+		if err := agentproto.WriteJSONLine(st, c); err != nil {
+			t.Fatal(err)
+		}
 		var r agentproto.CallReply
 		if err := agentproto.ReadJSONLine(bufio.NewReader(st), &r); err != nil {
 			t.Fatal(err)
@@ -357,7 +388,9 @@ func TestOpenACP(t *testing.T) {
 	if line, _ := br.ReadString('\n'); line != `{"hello":"c1"}`+"\n" {
 		t.Fatalf("first line = %q", line)
 	}
-	io.WriteString(rwc, "echo\n")
+	if _, err := io.WriteString(rwc, "echo\n"); err != nil {
+		t.Fatal(err)
+	}
 	if line, _ := br.ReadString('\n'); line != "echo\n" {
 		t.Fatalf("echo = %q", line)
 	}

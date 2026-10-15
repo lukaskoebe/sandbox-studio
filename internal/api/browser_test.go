@@ -91,8 +91,7 @@ func TestBrowserAPI(t *testing.T) {
 	if rec.Code != 201 {
 		t.Fatalf("pattern: %d %s", rec.Code, rec.Body)
 	}
-	var pat store.BrowserPattern
-	json.Unmarshal(rec.Body.Bytes(), &pat)
+	pat := decode[store.BrowserPattern](t, rec)
 	if pat.TeammateID != p.ID || pat.Action != "*" {
 		t.Errorf("pattern %+v", pat)
 	}
@@ -104,8 +103,7 @@ func TestBrowserAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec = do(h, "GET", "http://localhost:7878/api/environments/"+env.ID+"/approvals?status=pending", "")
-	var views []ApprovalView
-	json.Unmarshal(rec.Body.Bytes(), &views)
+	views := decode[[]ApprovalView](t, rec)
 	if len(views) != 1 || views[0].BrowserAction == nil || views[0].BrowserAction.Origin != "https://example.com" {
 		t.Errorf("approval view: %s", rec.Body)
 	}

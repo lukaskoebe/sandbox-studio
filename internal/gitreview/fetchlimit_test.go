@@ -53,12 +53,16 @@ func TestMirrorFetchIsSkippedWithinTheInterval(t *testing.T) {
 		t.Fatalf("other mirror: n = %d, err = %v", n, err)
 	}
 	clock.add(MirrorFetchInterval - time.Second)
-	l.fetch(ctx, "/a", "env/forge/o/r", fn)
+	if err := l.fetch(ctx, "/a", "env/forge/o/r", fn); err != nil {
+		t.Fatal(err)
+	}
 	if n != 2 {
 		t.Fatalf("fetched again before the interval ended (n = %d)", n)
 	}
 	clock.add(time.Second)
-	l.fetch(ctx, "/a", "env/forge/o/r", fn)
+	if err := l.fetch(ctx, "/a", "env/forge/o/r", fn); err != nil {
+		t.Fatal(err)
+	}
 	if n != 3 {
 		t.Fatalf("did not fetch again after the interval (n = %d)", n)
 	}
@@ -151,7 +155,9 @@ func TestMirrorFetchOutlivesACallerHangingUp(t *testing.T) {
 		t.Fatalf("fetches = %d, fetch context error = %v", n.Load(), fetchCtxErr.Load())
 	}
 	// And it counts for the interval.
-	l.fetch(context.Background(), "/a", "r", fn)
+	if err := l.fetch(context.Background(), "/a", "r", fn); err != nil {
+		t.Fatal(err)
+	}
 	if n.Load() != 1 {
 		t.Fatal("a completed fetch whose first caller hung up did not count")
 	}
@@ -164,13 +170,25 @@ func TestForgetMakesEveryMirrorOfTheRepositoryFetch(t *testing.T) {
 	fn := func(path string) func(context.Context) error {
 		return func(context.Context) error { count[path]++; return nil }
 	}
-	l.fetch(ctx, "/sb1/r", "env/f/o/r", fn("/sb1/r"))
-	l.fetch(ctx, "/sb2/r", "env/f/o/r", fn("/sb2/r"))
-	l.fetch(ctx, "/sb1/other", "env/f/o/other", fn("/sb1/other"))
+	if err := l.fetch(ctx, "/sb1/r", "env/f/o/r", fn("/sb1/r")); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.fetch(ctx, "/sb2/r", "env/f/o/r", fn("/sb2/r")); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.fetch(ctx, "/sb1/other", "env/f/o/other", fn("/sb1/other")); err != nil {
+		t.Fatal(err)
+	}
 	l.forget("env/f/o/r")
-	l.fetch(ctx, "/sb1/r", "env/f/o/r", fn("/sb1/r"))
-	l.fetch(ctx, "/sb2/r", "env/f/o/r", fn("/sb2/r"))
-	l.fetch(ctx, "/sb1/other", "env/f/o/other", fn("/sb1/other"))
+	if err := l.fetch(ctx, "/sb1/r", "env/f/o/r", fn("/sb1/r")); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.fetch(ctx, "/sb2/r", "env/f/o/r", fn("/sb2/r")); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.fetch(ctx, "/sb1/other", "env/f/o/other", fn("/sb1/other")); err != nil {
+		t.Fatal(err)
+	}
 	if count["/sb1/r"] != 2 || count["/sb2/r"] != 2 || count["/sb1/other"] != 1 {
 		t.Fatalf("fetches = %v", count)
 	}
@@ -186,7 +204,9 @@ func TestForgetMakesEveryMirrorOfTheRepositoryFetch(t *testing.T) {
 	l2.forget("r")
 	close(release)
 	<-done
-	l2.fetch(ctx, "/a", "r", func(context.Context) error { n.Add(1); return nil })
+	if err := l2.fetch(ctx, "/a", "r", func(context.Context) error { n.Add(1); return nil }); err != nil {
+		t.Fatal(err)
+	}
 	if n.Load() != 2 {
 		t.Fatalf("fetches = %d, want 2: the one running during forget counted", n.Load())
 	}
@@ -196,9 +216,13 @@ func TestLimiterDropsStaleMirrors(t *testing.T) {
 	l, clock := newLimiter()
 	ctx := context.Background()
 	ok := func(context.Context) error { return nil }
-	l.fetch(ctx, "/a", "r", ok)
+	if err := l.fetch(ctx, "/a", "r", ok); err != nil {
+		t.Fatal(err)
+	}
 	clock.add(MirrorFetchInterval)
-	l.fetch(ctx, "/b", "r", ok)
+	if err := l.fetch(ctx, "/b", "r", ok); err != nil {
+		t.Fatal(err)
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if _, ok := l.mirrors["/a"]; ok || len(l.mirrors) != 1 {

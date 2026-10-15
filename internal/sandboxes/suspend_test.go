@@ -39,8 +39,14 @@ func connectGuest(path string) (*yamux.Session, error) {
 		sess.Close()
 		return nil, err
 	}
-	agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindHello})
-	agentproto.WriteJSONLine(st, agentproto.Hello{Version: "test", Arch: "amd64"})
+	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindHello}); err != nil {
+		sess.Close()
+		return nil, err
+	}
+	if err := agentproto.WriteJSONLine(st, agentproto.Hello{Version: "test", Arch: "amd64"}); err != nil {
+		sess.Close()
+		return nil, err
+	}
 	st.Close()
 	go func() {
 		for {

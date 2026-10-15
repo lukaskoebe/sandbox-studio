@@ -122,14 +122,14 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 			}
 			defer c.Close()
 			rw.Flush()
-			io.Copy(c, rw) // echoes until the client hangs up
+			_, _ = io.Copy(c, rw) // echoes until the client hangs up
 			return
 		}
 		w.Header().Set("X-Echo-Auth", r.Header.Get("Authorization"))
 		if r.URL.Path == "/trailer" {
 			w.Header().Add("Trailer", "X-Echo-Secret")
 			w.WriteHeader(http.StatusOK)
-			io.WriteString(w, "response body")
+			_, _ = io.WriteString(w, "response body")
 			w.Header().Set("X-Echo-Secret", r.Header.Get("Authorization"))
 			return
 		}
@@ -219,7 +219,7 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { l.Close() })
-	go h.gw.Serve(l)
+	go func() { _ = h.gw.Serve(l) }() // ends when the listener closes
 	h.addr = l.Addr().String()
 	return h
 }
@@ -522,7 +522,9 @@ func TestInterceptUpgrades(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("upgrade: %v %v", resp, err)
 	}
-	c.Write([]byte("ping"))
+	if _, err := c.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
 	buf := make([]byte, 4)
 	if _, err := io.ReadFull(br, buf); err != nil || string(buf) != "ping" {
 		t.Fatalf("echo %q %v", buf, err)

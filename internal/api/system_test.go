@@ -17,7 +17,7 @@ func TestSystemSettings(t *testing.T) {
 	h, s := newTestServer(t)
 	home := t.TempDir()
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"tag_name":"v9.0.0","html_url":"https://github.com/lukaskoebe/sandbox-studio/releases/tag/v9.0.0"}`))
+		_, _ = w.Write([]byte(`{"tag_name":"v9.0.0","html_url":"https://github.com/lukaskoebe/sandbox-studio/releases/tag/v9.0.0"}`))
 	}))
 	defer gh.Close()
 	s.System = System{

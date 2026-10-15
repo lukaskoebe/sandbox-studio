@@ -34,7 +34,7 @@ func serveAgent(t *testing.T, a agent.Agent) {
 			}
 			go func() {
 				defer c.Close()
-				agent.ServeAgent(a, c)
+				_ = agent.ServeAgent(a, c) // ends with an error when the client hangs up
 			}()
 		}
 	}()
@@ -157,7 +157,9 @@ func TestSSHAgentRefusedAndMissing(t *testing.T) {
 		t.Fatalf("refused keys: %v", err)
 	}
 
-	keyring.RemoveAll()
+	if err := keyring.RemoveAll(); err != nil {
+		t.Fatal(err)
+	}
 	_, err = sh.svc.TestForge(sh.ctx, sh.forge, "owner/repo")
 	if !errors.Is(err, ErrNoAgent) || !strings.Contains(err.Error(), "no keys") {
 		t.Fatalf("empty agent: %v", err)

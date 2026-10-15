@@ -259,13 +259,17 @@ func TestShareNeedsApproval(t *testing.T) {
 	f := newFixture(t)
 	fact := f.remember(f.sbAda.ID, "The api repository runs tests with make check")
 	var res struct{ ApprovalID string }
-	json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodShare, map[string]any{"fact_id": fact.ID}), &res)
+	if err := json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodShare, map[string]any{"fact_id": fact.ID}), &res); err != nil {
+		t.Fatal(err)
+	}
 	a, err := f.st.Approval(f.ctx, f.env, res.ApprovalID)
 	if err != nil || a.Kind != ApprovalKind || a.Status != "pending" || a.SandboxID != f.sbAda.ID {
 		t.Fatalf("approval %+v %v", a, err)
 	}
 	var p SharePayload
-	json.Unmarshal(a.Payload, &p)
+	if err := json.Unmarshal(a.Payload, &p); err != nil {
+		t.Fatal(err)
+	}
 	if p.TeammateID != f.ada.ID || p.FactID != fact.ID || p.Text != fact.Text {
 		t.Fatalf("payload %+v", p)
 	}
@@ -274,7 +278,9 @@ func TestShareNeedsApproval(t *testing.T) {
 		t.Fatalf("shared before approval: %+v", shared)
 	}
 	// remember with scope shared is a share request too.
-	json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodRemember, map[string]any{"text": "Deploys freeze on Fridays", "kind": "decision", "scope": "shared"}), &res)
+	if err := json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodRemember, map[string]any{"text": "Deploys freeze on Fridays", "kind": "decision", "scope": "shared"}), &res); err != nil {
+		t.Fatal(err)
+	}
 	if res.ApprovalID == "" {
 		t.Fatal("remember scope=shared made no approval")
 	}
@@ -289,7 +295,9 @@ func TestShareNeedsApproval(t *testing.T) {
 	if _, err := f.svc.DecideShare(f.ctx, a, store.StatusApproved); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("deciding twice: %v", err)
 	}
-	json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodShare, map[string]any{"fact_id": fact.ID}), &res)
+	if err := json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodShare, map[string]any{"fact_id": fact.ID}), &res); err != nil {
+		t.Fatal(err)
+	}
 	a2, _ := f.st.Approval(f.ctx, f.env, res.ApprovalID)
 	if again, _ := f.svc.DecideShare(f.ctx, a2, store.StatusApproved); again.ID != sf.ID || again.SupportCount != 2 {
 		t.Fatalf("second share should reinforce: %+v", again)
@@ -468,7 +476,9 @@ func TestExtractionRejects(t *testing.T) {
 			var rejected bool
 			for _, e := range f.logOf("s1") {
 				var w extractWhy
-				json.Unmarshal(e.Why, &w)
+				if err := json.Unmarshal(e.Why, &w); err != nil {
+					t.Fatal(err)
+				}
 				rejected = rejected || (e.Kind == LogExtraction && w.Rejected != "")
 			}
 			if !rejected {
@@ -511,7 +521,9 @@ func TestExtractionBudget(t *testing.T) {
 	// Call cap for unpriced models.
 	f.svc.Budget = Budget{MaxCostMicros: 1, MaxCalls: 1}
 	m := UtilityModel{Model: "local"}
-	f.svc.spend(f.ctx, f.env, 1, 1, 0)
+	if err := f.svc.spend(f.ctx, f.env, 1, 1, 0); err != nil {
+		t.Fatal(err)
+	}
 	if why, _ := f.svc.overBudget(f.ctx, f.env, m, 10); why == "" {
 		t.Fatal("call cap not enforced")
 	}
@@ -533,7 +545,9 @@ func TestCorrect(t *testing.T) {
 	f := newFixture(t)
 	old := f.remember(f.sbAda.ID, "Staging lives at staging.acme.test")
 	var out struct{ Fact memory.Fact }
-	json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodCorrect, map[string]any{"fact_id": old.ID, "text": "Staging lives at stage.acme.test"}), &out)
+	if err := json.Unmarshal(f.mustCall(f.sbAda.ID, agentproto.MethodCorrect, map[string]any{"fact_id": old.ID, "text": "Staging lives at stage.acme.test"}), &out); err != nil {
+		t.Fatal(err)
+	}
 	if out.Fact.Supersedes != old.ID {
 		t.Fatalf("correct: %+v", out.Fact)
 	}

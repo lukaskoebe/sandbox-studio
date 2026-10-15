@@ -361,7 +361,7 @@ func (a *Auth) servePreviewLogin(w http.ResponseWriter, r *http.Request, host st
 		// just set does. A page rather than a redirect, so that every browser applies it.
 		w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		io.WriteString(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><title>Opening preview</title>`)
+		_, _ = io.WriteString(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><title>Opening preview</title>`)
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)

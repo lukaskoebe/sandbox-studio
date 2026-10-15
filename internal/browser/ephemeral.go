@@ -189,7 +189,7 @@ func (s *Service) endIdleEphemeral(ctx context.Context, idle time.Duration) {
 		still := !d.pg.takeover && (!unused || s.now().Sub(d.pg.used) > idle)
 		s.mu.Unlock()
 		if still {
-			s.closeEphemeral(ctx, d.st, d.pg, why)
+			_ = s.closeEphemeral(ctx, d.st, d.pg, why) // it logs a failure
 		}
 		<-d.st.run
 	}
@@ -271,7 +271,7 @@ func (s *Service) endEphemeral(ctx context.Context, match func(*page) bool, why 
 		still := !d.pg.takeover
 		s.mu.Unlock()
 		if still {
-			s.closeEphemeral(ctx, d.st, d.pg, why)
+			_ = s.closeEphemeral(ctx, d.st, d.pg, why) // it logs a failure
 		}
 		<-d.st.run
 	}

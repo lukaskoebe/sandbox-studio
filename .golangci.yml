@@ -12,6 +12,27 @@ run:
 linters:
   default: standard
   settings:
+    errcheck:
+      # Best-effort calls whose error has nothing left to do: rolling back a transaction that
+      # may have committed, deadlines on a connection (a dead one fails its next read or
+      # write anyway), closing a websocket, removing a temporary file after a failure (as
+      # os.Remove), and signals to a process that may have exited.
+      exclude-functions:
+        - (*database/sql.Tx).Rollback
+        - (net.Conn).SetDeadline
+        - (net.Conn).SetReadDeadline
+        - (net.Conn).SetWriteDeadline
+        - (*crypto/tls.Conn).SetDeadline
+        - (*crypto/tls.Conn).SetReadDeadline
+        - (*crypto/tls.Conn).SetWriteDeadline
+        - (*github.com/hashicorp/yamux.Stream).SetDeadline
+        - (*github.com/hashicorp/yamux.Stream).SetReadDeadline
+        - (*github.com/hashicorp/yamux.Stream).SetWriteDeadline
+        - (*github.com/coder/websocket.Conn).CloseNow
+        - golang.org/x/sys/unix.Unlinkat
+        - (*os.Process).Kill
+        - (*os.Process).Signal
+        - syscall.Kill
     staticcheck:
       # ST1005 is off: error strings are sentences the API and the CLI show as written.
       checks: ["all", "-ST1000", "-ST1003", "-ST1005", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
@@ -19,6 +40,10 @@ linters:
     # Errors from Close, Flush, Remove and the print functions are conventionally ignored.
     presets:
       - std-error-handling
+    rules:
+      # The spikes are throwaway experiments, kept for reference (docs/spikes.md).
+      - path: ^spikes/
+        linters: [errcheck]
 
 issues:
   # Report every finding: the defaults hide all but 50 per linter and 3 of the same message.

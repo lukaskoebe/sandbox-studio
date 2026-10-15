@@ -178,9 +178,13 @@ func serveFakeDNS(c net.Conn, records map[string][]netip.Addr) {
 			hdr := dnsmessage.ResourceHeader{Name: q.Name, Class: dnsmessage.ClassINET, TTL: 60}
 			switch {
 			case q.Type == dnsmessage.TypeA && a.Is4():
-				b.AResource(hdr, dnsmessage.AResource{A: a.As4()})
+				if b.AResource(hdr, dnsmessage.AResource{A: a.As4()}) != nil {
+					return
+				}
 			case q.Type == dnsmessage.TypeAAAA && a.Is6():
-				b.AAAAResource(hdr, dnsmessage.AAAAResource{AAAA: a.As16()})
+				if b.AAAAResource(hdr, dnsmessage.AAAAResource{AAAA: a.As16()}) != nil {
+					return
+				}
 			}
 		}
 		msg, err := b.Finish()

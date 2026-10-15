@@ -122,7 +122,9 @@ func (f *fakeSSH) repo(path string) string {
 	f.git("init", "-q", "--bare", "-b", "main", dir)
 	work := f.t.TempDir()
 	f.git("clone", "-q", dir, work)
-	os.WriteFile(filepath.Join(work, "README.md"), []byte("hello\n"), 0o644)
+	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("hello\n"), 0o644); err != nil {
+		f.t.Fatal(err)
+	}
 	f.git("-C", work, "add", ".")
 	f.git("-C", work, "-c", "user.name=Up", "-c", "user.email=up@example.com", "commit", "-q", "-m", "Initial commit")
 	f.git("-C", work, "push", "-q", "origin", "HEAD:main")
@@ -138,13 +140,13 @@ func (f *fakeSSH) serve(nc net.Conn, cfg *ssh.ServerConfig) {
 	go func() {
 		for r := range reqs {
 			f.refuse(r.Type)
-			r.Reply(false, nil)
+			_ = r.Reply(false, nil)
 		}
 	}()
 	for nch := range chans {
 		if nch.ChannelType() != "session" {
 			f.refuse("channel " + nch.ChannelType())
-			nch.Reject(ssh.UnknownChannelType, "no")
+			_ = nch.Reject(ssh.UnknownChannelType, "no")
 			continue
 		}
 		ch, creqs, err := nch.Accept()
@@ -168,7 +170,10 @@ func (f *fakeSSH) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 		switch r.Type {
 		case "env":
 			var kv struct{ Name, Value string }
-			ssh.Unmarshal(r.Payload, &kv)
+			if err := ssh.Unmarshal(r.Payload, &kv); err != nil {
+				_ = r.Reply(false, nil)
+				continue
+			}
 			f.mu.Lock()
 			f.env = append(f.env, kv.Name+"="+kv.Value)
 			f.mu.Unlock()
@@ -177,19 +182,22 @@ func (f *fakeSSH) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 			if ok {
 				env = append(env, kv.Name+"="+kv.Value)
 			}
-			r.Reply(ok, nil)
+			_ = r.Reply(ok, nil)
 		case "exec":
 			var cmd struct{ Command string }
-			ssh.Unmarshal(r.Payload, &cmd)
+			if err := ssh.Unmarshal(r.Payload, &cmd); err != nil {
+				_ = r.Reply(false, nil)
+				continue
+			}
 			f.mu.Lock()
 			f.commands = append(f.commands, cmd.Command)
 			f.mu.Unlock()
-			r.Reply(true, nil)
+			_ = r.Reply(true, nil)
 			f.exec(ch, cmd.Command, env)
 			return
 		default:
 			f.refuse(r.Type)
-			r.Reply(false, nil)
+			_ = r.Reply(false, nil)
 		}
 	}
 }
@@ -197,7 +205,7 @@ func (f *fakeSSH) session(ch ssh.Channel, reqs <-chan *ssh.Request) {
 func (f *fakeSSH) exec(ch ssh.Channel, command string, env []string) {
 	status := uint32(1)
 	defer func() {
-		ch.SendRequest("exit-status", false, binary.BigEndian.AppendUint32(nil, status))
+		_, _ = ch.SendRequest("exit-status", false, binary.BigEndian.AppendUint32(nil, status))
 	}()
 	service, arg, ok := strings.Cut(command, " ")
 	if !ok || (service != "git-upload-pack" && service != "git-receive-pack") || len(arg) < 2 || arg[0] != '\'' || arg[len(arg)-1] != '\'' {
@@ -270,7 +278,7 @@ func (sh *sshHarness) assertKeyHidden(t *testing.T, g *guest) {
 	// Nothing outside the vault holds the key: not the staging repositories, not the
 	// fake forge's files (which stand in for anything Studio might write).
 	for _, dir := range []string{sh.svc.Dir, os.TempDir()} {
-		filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
 			}
@@ -282,6 +290,9 @@ func (sh *sshHarness) assertKeyHidden(t *testing.T, g *guest) {
 			}
 			return nil
 		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
@@ -485,7 +496,9 @@ func TestSSHRealGit(t *testing.T) {
 	upWork := t.TempDir()
 	sh.ssh.git("clone", "-q", upstream, upWork)
 	upCommit := func(msg string) {
-		os.WriteFile(filepath.Join(upWork, "up.txt"), []byte(msg), 0o644)
+		if err := os.WriteFile(filepath.Join(upWork, "up.txt"), []byte(msg), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		sh.ssh.git("-C", upWork, "add", ".")
 		sh.ssh.git("-C", upWork, "-c", "user.name=Up", "-c", "user.email=up@example.com", "commit", "-q", "-m", msg)
 		sh.ssh.git("-C", upWork, "push", "-q", "origin", "HEAD:main")
@@ -499,7 +512,9 @@ func TestSSHRealGit(t *testing.T) {
 			// Many local commits the forge lacks make the fetch negotiate over several
 			// rounds before it finds the common one.
 			for i := range 40 {
-				os.WriteFile(filepath.Join(work, "local.txt"), []byte(fmt.Sprint(i)), 0o644)
+				if err := os.WriteFile(filepath.Join(work, "local.txt"), []byte(fmt.Sprint(i)), 0o644); err != nil {
+					t.Fatal(err)
+				}
 				run(work, "add", ".")
 				run(work, "commit", "-q", "-m", fmt.Sprint("local ", i))
 			}

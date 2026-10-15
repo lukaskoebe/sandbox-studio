@@ -264,7 +264,11 @@ func run(addr, image string, log *slog.Logger) error {
 	}
 	defer gl.Close()
 	gw.Driver = brw.Driver // a browser VM's connections follow the rules of the agent driving it
-	go gw.Serve(gl)
+	go func() {
+		if err := gw.Serve(gl); err != nil {
+			log.Error("network gateway stopped", "err", err)
+		}
+	}()
 
 	// Memory embeds in the background. The model is downloaded on the first memory write,
 	// never at startup.

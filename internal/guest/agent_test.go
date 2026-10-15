@@ -45,7 +45,7 @@ func TestServTCPPassesServerClose(t *testing.T) {
 	defer ln.Close()
 	go func() {
 		if c, err := ln.Accept(); err == nil {
-			c.Write([]byte("bye"))
+			_, _ = c.Write([]byte("bye"))
 			c.Close()
 		}
 	}()
@@ -67,7 +67,7 @@ func TestServTCPPassesServerClose(t *testing.T) {
 			return
 		}
 		defer st.Close()
-		servTCP(st, bufio.NewReader(st), ln.Addr().(*net.TCPAddr).Port)
+		_ = servTCP(st, bufio.NewReader(st), ln.Addr().(*net.TCPAddr).Port)
 	}()
 
 	st, err := host.Open()
@@ -116,7 +116,7 @@ func TestChannelWritesStayBounded(t *testing.T) {
 	reply := bytes.Repeat([]byte("a reply line of a browser screenshot\n"), 20<<10)
 	go func() {
 		if st, err := guest.Open(); err == nil {
-			st.Write(reply)
+			_, _ = st.Write(reply)
 			st.Close()
 		}
 	}()

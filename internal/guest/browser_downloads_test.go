@@ -22,8 +22,8 @@ func downloadReply(t *testing.T, folder string, req agentproto.BrowserDownloadsR
 	t.Helper()
 	host, guest := net.Pipe()
 	t.Cleanup(func() { host.Close(); guest.Close() })
-	go serveBrowserDownloads(guest, bufio.NewReader(guest), func(int) string { return folder })
-	go agentproto.WriteJSONLine(host, req)
+	go func() { _ = serveBrowserDownloads(guest, bufio.NewReader(guest), func(int) string { return folder }) }()
+	go func() { _ = agentproto.WriteJSONLine(host, req) }()
 	return bufio.NewReader(host)
 }
 

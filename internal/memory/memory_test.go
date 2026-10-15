@@ -607,7 +607,9 @@ func TestWorkerEmbedsInBackground(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		var n int
-		f.st.DB().QueryRow("SELECT COUNT(*) FROM memory_embeddings e JOIN memory_chunks c ON c.id = e.chunk_id WHERE c.fact_id = ?", fact.ID).Scan(&n)
+		if err := f.st.DB().QueryRow("SELECT COUNT(*) FROM memory_embeddings e JOIN memory_chunks c ON c.id = e.chunk_id WHERE c.fact_id = ?", fact.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
 		if n == 1 {
 			break
 		}

@@ -41,8 +41,8 @@ func TestWorkspaceExportImportRoundTrip(t *testing.T) {
 	dst := t.TempDir()
 	must(t, os.Mkdir(filepath.Join(dst, "lost+found"), 0o700))
 	must(t, ImportWorkspace(dst, &archive))
-	t.Cleanup(func() { os.Chmod(filepath.Join(dst, "sub"), 0o700) })
-	t.Cleanup(func() { os.Chmod(filepath.Join(src, "sub"), 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(dst, "sub"), 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(src, "sub"), 0o700) })
 
 	for _, name := range []string{"sub", "empty", "run.sh", "sub/data", "hard", "rel", "abs"} {
 		a, err := os.Lstat(filepath.Join(src, name))

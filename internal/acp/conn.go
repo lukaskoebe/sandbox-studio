@@ -162,7 +162,7 @@ func (c *Conn) read() {
 			continue
 		}
 		if err != nil {
-			c.closeRWC()
+			_ = c.closeRWC()
 			if errors.Is(err, io.EOF) {
 				err = io.ErrUnexpectedEOF
 			}
@@ -183,7 +183,7 @@ func (c *Conn) read() {
 				}()
 			default:
 				c.shutdown(errors.New("the agent has too many concurrent requests"))
-				c.closeRWC()
+				_ = c.closeRWC()
 				return
 			}
 		case m.Method != "":

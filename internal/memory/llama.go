@@ -61,7 +61,7 @@ func (l *Llama) Prepare(ctx context.Context) error {
 	params.PoolingType = llama.PoolingTypeMean
 	c, err := llama.InitFromModel(m, params)
 	if err != nil {
-		llama.ModelFree(m)
+		_ = llama.ModelFree(m) // it fails only on a zero handle
 		return err
 	}
 	l.model, l.lctx, l.vocab, l.dims = m, c, llama.ModelGetVocab(m), llama.ModelNEmbd(m)
@@ -77,8 +77,9 @@ func (l *Llama) Close() {
 		return
 	}
 	l.ready.Store(false)
-	llama.Free(l.lctx)
-	llama.ModelFree(l.model)
+	// They fail only on zero handles, which a ready model doesn't have.
+	_ = llama.Free(l.lctx)
+	_ = llama.ModelFree(l.model)
 }
 
 // EmbedDocument uses embeddinggemma's document prompt.
@@ -104,7 +105,9 @@ func (l *Llama) embed(text string) ([]float32, error) {
 	if err != nil {
 		return nil, err
 	}
-	llama.MemoryClear(mem, true)
+	if err := llama.MemoryClear(mem, true); err != nil {
+		return nil, err
+	}
 	tokens := llama.Tokenize(l.vocab, text, true, true)
 	if len(tokens) > nCtx {
 		tokens = tokens[:nCtx]

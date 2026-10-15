@@ -73,7 +73,7 @@ func TestBrowserVMTrustsOnlyTheEnvironmentCA(t *testing.T) {
 func TestBrowserVMRefusesUpstreamWithoutValidCertificate(t *testing.T) {
 	h := newBrowserHarness(t)
 	self := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "reached")
+		_, _ = io.WriteString(w, "reached")
 	}))
 	t.Cleanup(self.Close)
 	h.policy.mu.Lock()
@@ -116,7 +116,9 @@ func TestBrowserVMUpgradesWebSockets(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("upgrade: %v %v", resp, err)
 	}
-	c.Write([]byte("ping"))
+	if _, err := c.Write([]byte("ping")); err != nil {
+		t.Fatal(err)
+	}
 	buf := make([]byte, 4)
 	if _, err := io.ReadFull(br, buf); err != nil || string(buf) != "ping" {
 		t.Fatalf("echo %q %v", buf, err)

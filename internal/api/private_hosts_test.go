@@ -56,7 +56,9 @@ func TestApprovalsCannotAddPrivateHosts(t *testing.T) {
 	env := newEnvironment(t, s, "work")
 	base := testOrigin + "/api/environments/" + env.ID
 
-	go s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, Host: "git.company.local", Port: 443})
+	go func() {
+		_, _ = s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, Host: "git.company.local", Port: 443})
+	}()
 	pending := awaitApproval(t, h, "git.company.local", 443)
 	rec := do(h, "POST", base+"/approvals/"+pending.ID+"/decide", `{"action":"allow","scope":"environment","host":"*.company.local"}`)
 	if rec.Code != http.StatusOK {

@@ -151,7 +151,7 @@ func runACP(slots *acpSlots, st net.Conn, br *bufio.Reader, cmd *exec.Cmd, chat,
 		close(outputDrained)
 		_ = st.Close()
 		_ = stdin.Close()
-		stopAndWait(p)
+		_ = stopAndWait(p) // the failed reply is the error to return
 		return err
 	}
 

@@ -159,7 +159,9 @@ func TestRevertReviewerDecision(t *testing.T) {
 	}
 
 	// A question still waiting is not a decision to revert.
-	go s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: "asked.example.net", Port: 443})
+	go func() {
+		_, _ = s.Policy.Decide(ctx, policy.Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: "asked.example.net", Port: 443})
+	}()
 	pending := awaitApproval(t, h, "asked.example.net", 443)
 	if rec := do(h, "POST", base+"/approvals/"+pending.ID+"/revert", ""); rec.Code != http.StatusConflict {
 		t.Fatalf("a pending approval: %d", rec.Code)

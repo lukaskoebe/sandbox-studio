@@ -208,8 +208,12 @@ func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 		}
 	default:
 		for _, dir := range []string{browserProfile, browserDownload} {
-			os.MkdirAll(dir, 0o700)
-			os.Chown(dir, int(a.user.uid), int(a.user.gid))
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				return replyError(st, err)
+			}
+			if err := os.Chown(dir, int(a.user.uid), int(a.user.gid)); err != nil {
+				return replyError(st, err)
+			}
 		}
 	}
 	out, err := a.runBrowser(ctx, slot, req.Args, req.Stdin)
@@ -246,7 +250,7 @@ func (a *Agent) endEphemeral(slot browserSlot) error {
 	sockets := filepath.Join(a.user.home, ".agent-browser")
 	if _, err := os.Stat(filepath.Join(sockets, slot.session+".sock")); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		a.runBrowserTrusted(ctx, slot, []string{"close"}, "") // the daemon may already be gone
+		_, _ = a.runBrowserTrusted(ctx, slot, []string{"close"}, "") // the daemon may already be gone
 		cancel()
 	}
 	killSession(slot)

@@ -43,7 +43,9 @@ func parseReply(t *testing.T, msg []byte) (dnsmessage.Header, []answer) {
 			r, _ := p.AAAAResource()
 			a.addr = netip.AddrFrom16(r.AAAA)
 		default:
-			p.SkipAnswer()
+			if err := p.SkipAnswer(); err != nil {
+				t.Fatalf("reply answer: %v", err)
+			}
 		}
 		out = append(out, a)
 	}
