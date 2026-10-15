@@ -20,6 +20,9 @@ says.
 - Checkpoint restore, blocked by microsandbox #1736 →
   [sandboxes](docs/sandboxes.md#checkpoints). The lineage timeline's Restore and "Fork from
   here" wait on it: the menu items are always disabled and there is no backend for either.
+- Scheduled checkpoints run against the fake runtime only; a live run on a real VM should
+  take, prune (oldest first, with force) and list them over a day →
+  [sandboxes](docs/sandboxes.md#scheduled-checkpoints)
 - Full-snapshot suspend instead of in-place pause (a restored VM can't get Studio's proxy
   and DNS) → [sandboxes](docs/sandboxes.md#suspend-and-resume)
 - Live runs of what is built but only checked against fakes: CPU and memory resize
@@ -46,6 +49,13 @@ says.
 **Browser**
 - The browser items pending a live run, ephemeral sessions included →
   [browser](docs/browser.md#verified-vs-pending-live)
+- The teammate browser keeps one profile, so a service worker an app registered on
+  `localhost:PORT` stays and can answer for another app on that port later → [browser](docs/browser.md)
+- An embedded preview's frame cookie lasts 8 hours like the session; after that an app shell its
+  service worker cached loads, but its fetches get 403 until the page is reloaded through Studio
+- Safari's handling of `*.localhost` previews as secure contexts is unverified
+- A stealth engine for sites that block automation: agent-browser drives CDP engines only, so
+  Camoufox (Firefox) would replace it; its experimental Obscura mode is the cheaper first try
 - A Playwright run that clicks known targets in a real browser at several viewport sizes and
   zoom levels; the e2e suite checks the mapping against the fake only
 
@@ -56,6 +66,7 @@ says.
   through review, with the key only in the host agent
 
 **Terminal UI**
+- The more visual look, in four phases → [design](docs/design/tui-visual.md)
 - The PTY smoke test opens Home and Activity and quits, but doesn't answer an approval
 - The site's terminal UI page shows a hand-copied text block, not one generated from the
   golden test
