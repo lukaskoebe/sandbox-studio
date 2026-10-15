@@ -105,8 +105,12 @@ func (l *Llama) embed(text string) ([]float32, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := llama.MemoryClear(mem, true); err != nil {
-		return nil, err
+	// embeddinggemma attends both ways, so llama.cpp gives its context no KV memory and
+	// decodes each batch on its own; a model with memory keeps the last text's tokens.
+	if mem != 0 {
+		if err := llama.MemoryClear(mem, true); err != nil {
+			return nil, err
+		}
 	}
 	tokens := llama.Tokenize(l.vocab, text, true, true)
 	if len(tokens) > nCtx {

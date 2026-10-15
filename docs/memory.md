@@ -86,6 +86,12 @@ changes, update the thresholds in the same commit and say why.
 
 - `memory.Embedder` has a production implementation (`Llama`: embeddinggemma-300m Q8_0
   through llama.cpp, loaded with yzma) and a deterministic `FakeEmbedder` for tests.
+  `TestLlamaEmbeds` runs the real model when `STUDIO_EMBED_ASSETS` names a directory with
+  the pinned assets, such as `~/.local/share/sandbox-studio/memory`; run it after changing
+  `llama.go` or the pinned build. embeddinggemma attends both ways, so llama.cpp gives its
+  context no KV memory (`llama_get_memory` is NULL) and `embed` clears memory only when
+  there is some. Up to v0.3.2 it cleared unconditionally, every embedding failed with
+  "invalid memory handle", and search ran on BM25 alone.
 - One background worker embeds new chunks from a bounded queue (256); when it overflows, or
   at startup, it sweeps for chunks without a vector of the current model. Writes never
   wait for it, and search uses BM25 alone until the model is ready.
