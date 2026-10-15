@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { BrowserStealth } from "@/components/browser-stealth"
 import { SectionHeader } from "@/components/section-header"
 import { TeammateLevelSelect } from "@/components/security-level"
 import { Button } from "@/components/ui/button"
@@ -65,6 +66,9 @@ function TeammateSettings() {
           </FieldDescription>
         </Field>
       </section>
+      <div className="border-t pt-6">
+        <BrowserStealth env={env} teammate={teammate} />
+      </div>
       <div className="border-t pt-6">
         <TeammateSecrets env={env} teammate={teammate} />
       </div>

@@ -274,7 +274,7 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID, session st
 	s.mu.Lock()
 	vm := st.vm
 	s.mu.Unlock()
-	if res, err := s.Runner.Browser(ctx, vm, agentproto.BrowserCommand{Args: []string{"get", "url"}, Ephemeral: pg.slot, Screenshot: true, TimeoutMS: 10000}); err == nil {
+	if res, err := s.run(ctx, st, vm, agentproto.BrowserCommand{Args: []string{"get", "url"}, Ephemeral: pg.slot, Screenshot: true, TimeoutMS: 10000}); err == nil {
 		shot = res.Screenshot
 	}
 	s.record(ctx, st, pg, entry{actor: "user", action: "handback", outcome: "ok", detail: "the user handed back to the agents", shot: shot})

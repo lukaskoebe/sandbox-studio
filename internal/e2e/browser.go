@@ -73,9 +73,10 @@ var (
 
 // browserVM is the browser of one boot of a browser VM.
 type browserVM struct {
-	mu     sync.Mutex
-	tabs   [agentproto.MaxBrowserEphemeral + 1]*tab // nil until the slot's session started
-	inputs []json.RawMessage
+	mu      sync.Mutex
+	tabs    [agentproto.MaxBrowserEphemeral + 1]*tab // nil until the slot's session started
+	inputs  []json.RawMessage
+	stealth bool // whether the last command asked for stealth mode
 	// fetch loads a localhost page through the VM's forwarded ports, as Chromium would.
 	fetch func(u *url.URL) (string, bool)
 }
@@ -405,6 +406,7 @@ func (b *browserVM) command(req agentproto.BrowserCommand) (agentproto.BrowserRe
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.stealth = req.Stealth
 	t := b.tabs[req.Ephemeral]
 	if req.Ephemeral > 0 && len(req.Args) == 1 && req.Args[0] == "close" && !req.Fresh {
 		if t != nil {
@@ -665,6 +667,8 @@ type BrowserState struct {
 	Sessions []BrowserSession `json:"sessions"`
 	// Inputs are the last mouse and keyboard messages its live views passed on, oldest first.
 	Inputs []json.RawMessage `json:"inputs"`
+	// Stealth is whether the last command asked for stealth mode.
+	Stealth bool `json:"stealth"`
 }
 
 // BrowserSession is one started session slot: 0 is the persistent profile.
@@ -689,7 +693,7 @@ func (g *Guest) BrowserState() (BrowserState, bool) {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	out := BrowserState{Sessions: []BrowserSession{}, Inputs: append([]json.RawMessage{}, b.inputs...)}
+	out := BrowserState{Sessions: []BrowserSession{}, Inputs: append([]json.RawMessage{}, b.inputs...), Stealth: b.stealth}
 	for slot, t := range b.tabs {
 		if t == nil {
 			continue

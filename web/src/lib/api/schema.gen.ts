@@ -2020,6 +2020,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/stealth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Turns stealth mode of the teammate's browser on or off (docs/browser.md#stealth-mode). The browser restarts with its next command, keeping its profile. */
+        put: operations["setBrowserStealth"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/takeover": {
         parameters: {
             query?: never;
@@ -4261,6 +4278,10 @@ export interface components {
             /** @description The whole list, which replaces the current one */
             hosts: components["schemas"]["PrivateHostInput"][] | null;
         };
+        SetStealthInBody: {
+            /** @description Run the teammate's browser in stealth mode */
+            on: boolean;
+        };
         SetTeammateLevelInBody: {
             /** @description The level of the teammate's sandboxes, one of locked, guarded, assisted or open; empty hands the teammate back to the environment's level */
             level: string;
@@ -4409,6 +4430,8 @@ export interface components {
             approvalScope: "sandbox" | "teammate" | "environment";
             /** @description One emoji, shape:<name> for a generated avatar, or empty to show the initials */
             avatar: string;
+            /** @description The teammate's browser runs in stealth mode: a desktop Chrome user agent, no automation flag, a desktop screen and human pointer movement */
+            browserStealth: boolean;
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
@@ -10132,6 +10155,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setBrowserStealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStealthInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
             };
             /** @description Error */
             default: {

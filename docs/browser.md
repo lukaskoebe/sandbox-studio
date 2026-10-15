@@ -402,6 +402,40 @@ on request:
   **Add a rule or hide a field** takes a rule for one action, role or label glob, or a
   sensitive field.
 
+## Stealth mode
+
+For sites that turn automated browsers away, a teammate's browser can run in stealth mode:
+**Browser** in the teammate's settings (`PUT …/teammates/{teammate}/browser/stealth {on}`,
+the `browser_stealth` column). Off by default.
+
+What changes, all of it Chromium's own behavior rather than injected scripts:
+
+| | Default | Stealth |
+|---|---|---|
+| User agent | `… HeadlessChrome/<major>.0.0.0 …` | `… Chrome/<major>.0.0.0 …`, the one desktop Chromium sends on Linux |
+| Client hints (`Sec-CH-UA`, `navigator.userAgentData`) | Chromium's brands | the same brands |
+| `navigator.webdriver` | `true` | `false` (`--disable-blink-features=AutomationControlled`) |
+| `screen` | 800×600, smaller than the window | 1920×1080 |
+| Agents' clicks | the pointer jumps to the target | agent-browser's `--input-mode human`: a curved path to it, about 130 ms more per click |
+
+- **How.** `BrowserCommand.Stealth` carries the teammate's setting on every command; the
+  broker sets it in one place (`Service.run`). In stealth mode the guest starts Chromium
+  through a script it writes to `/run/studio-browser/chromium-stealth` (root-owned, on the
+  tmpfs it mounts there), so it works in browser VMs made from any image. The script adds
+  Chromium's switches itself: agent-browser's `--args` splits at commas, which a user agent
+  has, and its `--user-agent` sets a CDP override without client hints, so the page saw a
+  Chrome without brands. The screen switch comes after agent-browser's own, so it wins.
+- **Switching.** The other executable changes agent-browser's launch options, so its next
+  command restarts the browser, with the same profile and logins. Every command of a session,
+  `close` included, must carry the same setting: a command with other launch options makes
+  agent-browser relaunch Chromium first.
+- **What it does not do.** The WebGL renderer is still SwiftShader, as in any VM without a
+  GPU; the page is still driven over CDP, which sites that look deeper detect; CAPTCHAs are
+  not solved. Stronger options are another engine: agent-browser's Obscura engine has stealth
+  of its own, but rejects `--profile` and `--ca-cert` and runs headless only without a
+  screencast, so it could keep neither logins, the environment CA nor the live view. Camoufox
+  (Firefox) would replace agent-browser, which drives CDP engines only.
+
 ## Verified vs pending live
 
 **Verified with fakes** (`go test ./internal/browser ./internal/agentcall ./internal/api
@@ -455,8 +489,14 @@ its snapshot showed the page; a server on `::1` only opened at both `localhost` 
 `127.0.0.1`; once the server stopped, the open failed with `ERR_CONNECTION_REFUSED`.
 
 **Verified on Linux amd64 with agent-browser 0.39.0 and Chrome for Testing 153, outside a
-browser VM (2026-10-15):** frame metadata. The page was 1280×577 (`innerHeight` 577,
-`outerHeight` 720), frames were 1280×577 JPEGs, and their metadata said `deviceHeight` 720.
+browser VM (2026-10-15):**
+
+- Frame metadata: the page was 1280×577 (`innerHeight` 577, `outerHeight` 720), frames
+  were 1280×577 JPEGs, and their metadata said `deviceHeight` 720.
+- Stealth mode through the same script: `navigator.webdriver` false, the user agent without
+  `HeadlessChrome`, the brands kept in `navigator.userAgentData` and in the `Sec-CH-UA`
+  request headers, the screen 1920×1080; `--input-mode human` clicks were trusted events with
+  a curved path (8 moves instead of 1), 162 ms instead of 33 ms.
 
 **Pending a live run:**
 
@@ -472,6 +512,8 @@ browser VM (2026-10-15):** frame metadata. The page was 1280×577 (`innerHeight`
 - The browser image and agent-browser's native binary on arm64.
 - Chromium's downloads into the folder with agent-browser 0.39's `--download-path` flag: a
   file the page saves should show in `browser_downloads`, and copy into `downloads/`.
+- Stealth mode in a browser VM: Debian's `chromium --version` gives the user agent's major
+  version, and switching restarts the browser with the live view still connected.
 - Snapshot details from a live Chromium:
   - password fields show no AX value or a masked one;
   - static text children don't carry values;

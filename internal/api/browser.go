@@ -68,6 +68,28 @@ func (s *Server) registerBrowser(api huma.API) {
 		return &struct{ Body browser.BrowserStatus }{st}, s.browserError(err)
 	})
 
+	type setStealthIn struct {
+		Env      string `path:"env" doc:"Environment ID"`
+		Teammate string `path:"teammate" doc:"Teammate ID"`
+		Body     struct {
+			On bool `json:"on" doc:"Run the teammate's browser in stealth mode"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setBrowserStealth", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{teammate}/browser/stealth", Tags: []string{"browser"},
+		Description: "Turns stealth mode of the teammate's browser on or off (docs/browser.md#stealth-mode). The browser restarts with its next command, keeping its profile.",
+	}, func(ctx context.Context, in *setStealthIn) (*struct{ Body store.Teammate }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		t, err := s.Store.SetTeammateBrowserStealth(ctx, in.Env, in.Teammate, in.Body.On)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{t}, nil
+	})
+
 	type navigateBrowserIn struct {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`

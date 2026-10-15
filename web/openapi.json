@@ -5925,6 +5925,19 @@
         ],
         "type": "object"
       },
+      "SetStealthInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "on": {
+            "description": "Run the teammate's browser in stealth mode",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on"
+        ],
+        "type": "object"
+      },
       "SetTeammateLevelInBody": {
         "additionalProperties": false,
         "properties": {
@@ -6344,6 +6357,10 @@
             "description": "One emoji, shape:\u003cname\u003e for a generated avatar, or empty to show the initials",
             "type": "string"
           },
+          "browserStealth": {
+            "description": "The teammate's browser runs in stealth mode: a desktop Chrome user agent, no automation flag, a desktop screen and human pointer movement",
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -6419,7 +6436,8 @@
           "gitEmail",
           "createdAt",
           "updatedAt",
-          "securityLevel"
+          "securityLevel",
+          "browserStealth"
         ],
         "type": "object"
       },
@@ -16043,6 +16061,69 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/stealth": {
+      "put": {
+        "description": "Turns stealth mode of the teammate's browser on or off (docs/browser.md#stealth-mode). The browser restarts with its next command, keeping its profile.",
+        "operationId": "setBrowserStealth",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetStealthInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {

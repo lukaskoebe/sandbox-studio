@@ -50,6 +50,10 @@ type BrowserCommand struct {
 	// Screenshot asks for a JPEG of the viewport after the command, for the action log.
 	Screenshot bool `json:"screenshot,omitempty"`
 	TimeoutMS  int  `json:"timeoutMs,omitempty"`
+	// Stealth runs the session's Chromium in stealth mode (docs/browser.md#stealth-mode). It
+	// is a launch option, so it must be the same on every command of a session, close
+	// included: agent-browser restarts a browser whose launch options changed.
+	Stealth bool `json:"stealth,omitempty"`
 }
 
 // BrowserResult is agent-browser's JSON response and the optional screenshot.

@@ -273,6 +273,8 @@ type Teammate struct {
 	// SecurityLevel overrides the environment's network security level for this teammate's
 	// sandboxes; empty means the environment's.
 	SecurityLevel string `json:"securityLevel" enum:",locked,guarded,assisted,open" doc:"The network security level of this teammate's sandboxes; empty means the environment's"`
+	// BrowserStealth runs the teammate's browser in stealth mode (docs/browser.md#stealth-mode).
+	BrowserStealth bool `json:"browserStealth" doc:"The teammate's browser runs in stealth mode: a desktop Chrome user agent, no automation flag, a desktop screen and human pointer movement"`
 	// Heartbeat is the check-in schedule; nil while it is off.
 	Heartbeat *Heartbeat `json:"heartbeat,omitempty"`
 	// HeartbeatAt is the last check-in of any outcome, which the schedule counts from.
@@ -280,13 +282,13 @@ type Teammate struct {
 }
 
 // teammateCols selects a teammate; provider_id reads as "" for a teammate without a provider.
-const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at"
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at, browser_stealth"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
 	var created, updated, beat int64
 	var every, from, to int
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat)
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat, &p.BrowserStealth)
 	if every > 0 {
 		p.Heartbeat = &Heartbeat{EveryHours: every, FromHour: from, ToHour: to}
 	}
@@ -325,6 +327,19 @@ func insertTeammate(ctx context.Context, q execer, p Teammate, t int64) error {
 		provider_id, model, git_name, git_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, t, t)
 	return err
+}
+
+// SetTeammateBrowserStealth turns stealth mode of the teammate's browser on or off. The
+// browser picks it up with its next command.
+func (s *Store) SetTeammateBrowserStealth(ctx context.Context, envID, id string, on bool) (Teammate, error) {
+	res, err := s.db.ExecContext(ctx, "UPDATE teammates SET browser_stealth = ?, updated_at = ? WHERE environment_id = ? AND id = ?", on, now(), envID, id)
+	if err != nil {
+		return Teammate{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Teammate{}, ErrNotFound
+	}
+	return s.Teammate(ctx, envID, id)
 }
 
 // SetTeammateSecurityLevel sets a teammate's security level override; "" hands the teammate back

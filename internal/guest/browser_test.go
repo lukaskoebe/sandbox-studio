@@ -35,6 +35,30 @@ func TestBrowserArgvKeepsPersistentProfileAndCertificateVerification(t *testing.
 	}
 }
 
+func TestBrowserArgvInStealthMode(t *testing.T) {
+	plain := strings.Join(browserArgv(browserSlotFor(0), []string{"open", "https://example.com"}), " ")
+	if !strings.Contains(plain, "--executable-path "+browserChromium+" ") || strings.Contains(plain, "--input-mode") {
+		t.Fatalf("plain argv = %q", plain)
+	}
+	slot, _, err := checkBrowserSession(agentproto.BrowserCommand{Args: []string{"open", "https://example.com"}, Stealth: true})
+	if err != nil || !slot.stealth {
+		t.Fatalf("a stealth command's slot = %+v, %v", slot, err)
+	}
+	stealth := strings.Join(browserArgv(slot, []string{"open", "https://example.com"}), " ")
+	if !strings.Contains(stealth, "--executable-path "+browserStealthChromium+" ") || !strings.Contains(stealth, "--input-mode human open https://example.com") ||
+		!strings.Contains(stealth, "--profile "+browserProfile+" ") {
+		t.Fatalf("stealth argv = %q", stealth)
+	}
+	// The user agent has commas, which agent-browser's --args would split; the script hands
+	// it to Chromium whole, and its screen size comes after agent-browser's.
+	for _, want := range []string{`"--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major:-140}.0.0.0 Safari/537.36"`,
+		"--disable-blink-features=AutomationControlled", `"$@" --ozone-override-screen-size=1920,1080`} {
+		if !strings.Contains(browserStealthScript, want) {
+			t.Errorf("the stealth script lacks %s", want)
+		}
+	}
+}
+
 func TestCheckBrowserArgs(t *testing.T) {
 	ok := [][]string{
 		{"open", "https://example.com"},

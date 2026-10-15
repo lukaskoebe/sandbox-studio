@@ -35,6 +35,12 @@ The shield in the address bar shows what the teammate may do on the site: **Ask 
 
 A browser sleeps after a while unused and wakes when the teammate browses or you open a page. **Reset profile** in the options menu signs the teammate out of every site.
 
+## Stealth mode
+
+Some sites turn automated browsers away. For a teammate that needs them, turn on **Stealth mode** under **Browser** in the teammate's settings. Its browser then presents itself like a desktop Chrome: a normal user agent and screen, without the flag that marks an automated browser, and the teammate's pointer moves to what it clicks the way a hand does, which makes each click a little slower. The browser restarts with its next step and keeps its logins.
+
+Stealth mode does not solve CAPTCHAs, and sites that look deeper can still tell an automated browser.
+
 ## Throwaway sessions
 
 An agent can open a throwaway session for a task that should not leave cookies or logins behind. A throwaway session starts with an empty profile. It ends when the agent closes it, after 10 minutes without use, when the sandbox that opened it stops or is deleted, when the chat that opened it is deleted, or when the teammate's browser stops. Studio knows the chat only when it was the sandbox's one running chat. A session you have taken over stays until you hand it back. Its cookies, storage and downloads are discarded with it. A teammate can have two at a time, across its sandboxes.

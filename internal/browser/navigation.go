@@ -201,7 +201,7 @@ func (s *Service) CloseSession(ctx context.Context, envID, teammateID, session s
 	}
 	var err error
 	if vm != "" {
-		_, err = s.Runner.Browser(ctx, vm, agentproto.BrowserCommand{Args: []string{"close"}, Ephemeral: pg.slot, TimeoutMS: 20000})
+		_, err = s.run(ctx, st, vm, agentproto.BrowserCommand{Args: []string{"close"}, Ephemeral: pg.slot, TimeoutMS: 20000})
 	}
 	if err != nil {
 		// The slot is wiped again before its next use.

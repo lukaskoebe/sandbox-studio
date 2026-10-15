@@ -140,7 +140,7 @@ func (s *Service) closeEphemeral(ctx context.Context, st *state, pg *page, why s
 	}
 	var err error
 	if vm != "" {
-		_, err = s.Runner.Browser(ctx, vm, agentproto.BrowserCommand{Args: []string{"close"}, Ephemeral: pg.slot, TimeoutMS: 20000})
+		_, err = s.run(ctx, st, vm, agentproto.BrowserCommand{Args: []string{"close"}, Ephemeral: pg.slot, TimeoutMS: 20000})
 	}
 	if err != nil {
 		// The slot is wiped again before its next use.

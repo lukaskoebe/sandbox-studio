@@ -308,6 +308,16 @@ type batchItem struct {
 // the browser VM broke. The command may have run, so the tools check the page before they answer.
 type lostReply struct{ error }
 
+// run sends one command to the teammate's browser VM with the teammate's launch options.
+// Every command goes through here, so a session's options agree from one command to the
+// next and agent-browser restarts its browser only when the user changed them.
+func (s *Service) run(ctx context.Context, st *state, vm string, cmd agentproto.BrowserCommand) (agentproto.BrowserResult, error) {
+	if tm, err := s.Store.Teammate(ctx, st.env, st.teammate); err == nil {
+		cmd.Stealth = tm.BrowserStealth
+	}
+	return s.Runner.Browser(ctx, vm, cmd)
+}
+
 // exec runs one agent-browser command in a session of the teammate's browser VM. Errors
 // are scrubbed.
 func (s *Service) exec(ctx context.Context, st *state, pg *page, cmd agentproto.BrowserCommand) (json.RawMessage, []byte, error) {
@@ -321,7 +331,7 @@ func (s *Service) exec(ctx context.Context, st *state, pg *page, cmd agentproto.
 		cmd.TimeoutMS = int(commandTimeout / time.Millisecond)
 	}
 	cmd.Ephemeral = pg.slot
-	res, err := s.Runner.Browser(ctx, vm, cmd)
+	res, err := s.run(ctx, st, vm, cmd)
 	if err != nil {
 		if pg.slot > 0 && strings.Contains(err.Error(), agentproto.ErrBrowserEphemeralGone) {
 			// The VM restarted under the session: its profile is gone, and so is the session.

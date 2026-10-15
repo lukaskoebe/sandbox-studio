@@ -38,13 +38,30 @@ const (
 	browserEphemeralRoot = "/run/studio-browser"
 	browserEphemeralSize = "size=640m"
 	tmpfsMagic           = 0x01021994
+	// browserStealthChromium starts Chromium in stealth mode; the guest writes it, so it
+	// works in browser VMs made from any image.
+	browserStealthChromium = browserEphemeralRoot + "/chromium-stealth"
 )
+
+// browserStealthScript is Chromium with what stealth mode changes (docs/browser.md#stealth-mode).
+// Chromium's own switches, not agent-browser's options: agent-browser splits --args at
+// commas, which a user agent has, and its --user-agent override drops the client hints, so
+// the page would see a Chrome without brands. The user agent is the one desktop Chromium
+// sends on Linux, on any CPU; the screen switch comes after agent-browser's, so it wins.
+const browserStealthScript = `#!/bin/sh
+# Written by studio-agent: Chromium in stealth mode (docs/browser.md#stealth-mode).
+major=$(/usr/bin/chromium --version 2>/dev/null | grep -o '[0-9][0-9]*\.' | head -n 1 | tr -d .)
+exec /usr/bin/chromium --disable-blink-features=AutomationControlled \
+	"--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major:-140}.0.0.0 Safari/537.36" \
+	"$@" --ozone-override-screen-size=1920,1080
+`
 
 // browserSlot is where one agent-browser session keeps its state.
 type browserSlot struct {
 	session, profile, downloads string
 	port                        int
 	ephemeral                   bool
+	stealth                     bool // a launch option, the same on every command of the session
 }
 
 // browserSlotFor is the persistent profile for 0 and ephemeral slot n otherwise.
@@ -120,6 +137,7 @@ func checkBrowserSession(req agentproto.BrowserCommand) (browserSlot, bool, erro
 		return browserSlot{}, false, errors.New("bad browser session")
 	}
 	slot := browserSlotFor(req.Ephemeral)
+	slot.stealth = req.Stealth
 	closing := slot.ephemeral && len(req.Args) == 1 && req.Args[0] == "close" && !req.Fresh && req.Stdin == "" && !req.Screenshot
 	return slot, closing, nil
 }
@@ -142,11 +160,39 @@ func checkBrowserBatch(stdin string) error {
 }
 
 // browserArgv adds the fixed options to a command. Each slot is its own agent-browser
-// session: a daemon with its own Chromium and profile.
+// session: a daemon with its own Chromium and profile. Stealth mode starts Chromium through
+// browserStealthChromium, and the other executable makes agent-browser restart the browser
+// when the mode changes; its pointer moves to a click the way a hand does.
 func browserArgv(slot browserSlot, args []string) []string {
+	chromium := browserChromium
+	if slot.stealth {
+		chromium = browserStealthChromium
+	}
 	argv := []string{"--json", "--session", slot.session, "--profile", slot.profile,
-		"--executable-path", browserChromium, "--download-path", slot.downloads}
+		"--executable-path", chromium, "--download-path", slot.downloads}
+	if slot.stealth {
+		argv = append(argv, "--input-mode", "human")
+	}
 	return append(argv, args...)
+}
+
+// writeStealthChromium puts browserStealthChromium in place, owned by root so the browser
+// user cannot change what it runs.
+func writeStealthChromium() error {
+	if err := ensureTmpfs(browserEphemeralRoot); err != nil {
+		return fmt.Errorf("stealth browser: %w", err)
+	}
+	if b, err := os.ReadFile(browserStealthChromium); err == nil && string(b) == browserStealthScript {
+		return nil
+	}
+	tmp := browserStealthChromium + ".tmp"
+	if err := os.WriteFile(tmp, []byte(browserStealthScript), 0o755); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		return err
+	}
+	return os.Rename(tmp, browserStealthChromium)
 }
 
 // browserEnv is added to the agent user's environment.
@@ -309,6 +355,11 @@ func (a *Agent) runBrowser(ctx context.Context, slot browserSlot, args []string,
 	prepare := func(ctx context.Context) error {
 		if err := writeBrowserPolicies(browserPolicyFile); err != nil {
 			return err
+		}
+		if slot.stealth {
+			if err := writeStealthChromium(); err != nil {
+				return err
+			}
 		}
 		return a.prepareBrowserTrust(ctx)
 	}

@@ -88,6 +88,7 @@ type FakeBrowser = {
   browser?: {
     sessions: { slot: number; url: string }[]
     inputs: { type: string; eventType?: string; x?: number; y?: number }[]
+    stealth: boolean
   }
 }
 
@@ -263,4 +264,28 @@ test("a throwaway session is a tab, and closing the tab ends it", async ({
   await expect
     .poll(async () => (await api.json<Status>("GET", base))!.sessions ?? [])
     .toEqual([])
+})
+
+// Stealth mode is switched in the teammate's settings, and the browser's next command runs
+// with it.
+test("stealth mode is switched in the settings and reaches the browser", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { tm, call } = await browsing(page, api, env)
+  const fake = () =>
+    api.json<FakeBrowser>("GET", `/api/e2e/teammates/${tm}/browser`)
+  await call("browser_snapshot", {})
+  expect((await fake())!.browser!.stealth).toBe(false)
+
+  await page.goto(`/e/${env}/teammates/${tm}/settings`)
+  const stealth = page.getByRole("switch", { name: "Stealth mode" })
+  await expect(stealth).not.toBeChecked()
+  await stealth.click()
+  await expect(page.getByText("Stealth mode on")).toBeVisible()
+  await expect(stealth).toBeChecked()
+
+  await call("browser_snapshot", {})
+  expect((await fake())!.browser!.stealth).toBe(true)
 })

@@ -54,8 +54,10 @@ says.
 - An embedded preview's frame cookie lasts 8 hours like the session; after that an app shell its
   service worker cached loads, but its fetches get 403 until the page is reloaded through Studio
 - Safari's handling of `*.localhost` previews as secure contexts is unverified
-- A stealth engine for sites that block automation: agent-browser drives CDP engines only, so
-  Camoufox (Firefox) would replace it; its experimental Obscura mode is the cheaper first try
+- Stealth mode in a browser VM: Debian Chromium's version in the user agent, and a switch
+  restarting the browser under a connected live view → [browser](docs/browser.md#stealth-mode)
+- A stronger stealth engine than Chromium's stealth mode: Obscura keeps no profile, CA or live
+  view, so Camoufox (Firefox) would mean replacing agent-browser → [browser](docs/browser.md#stealth-mode)
 - A Playwright run that clicks known targets in a real browser at several viewport sizes and
   zoom levels; the e2e suite checks the mapping against the fake only
 

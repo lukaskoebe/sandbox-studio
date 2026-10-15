@@ -1104,3 +1104,20 @@ func TestUserTurnNote(t *testing.T) {
 		t.Error("a nil turn has a note")
 	}
 }
+
+func TestStealthModeGoesWithEveryCommand(t *testing.T) {
+	f := newFixture(t)
+	f.fb.url = "about:blank"
+	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	if _, err := f.st.SetTeammateBrowserStealth(f.ctx, f.env, f.ada.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	cmds := f.fb.allCommands()
+	if len(cmds) < 2 || cmds[0].Stealth || !cmds[len(cmds)-1].Stealth {
+		t.Fatalf("stealth of the commands before and after turning it on: %+v", cmds)
+	}
+}
