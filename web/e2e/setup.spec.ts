@@ -88,7 +88,7 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
       page.getByRole("link", { name: "Open workspace" })
     ).toBeVisible({ timeout: 30_000 })
     await page.getByRole("link", { name: "Open workspace" }).click()
-    await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+\/work$/)
+    await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+\/work(\?|$)/)
 
     // Every step is done or skipped now, so the setup is complete and Home has no card.
     await page.goto("/")
