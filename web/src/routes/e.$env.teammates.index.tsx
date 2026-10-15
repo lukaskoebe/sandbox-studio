@@ -50,12 +50,7 @@ function TeammatesPage() {
   const canAdd = providerList.length > 0
 
   const addButton = (
-    <Button
-      size="sm"
-      disabled={!canAdd}
-      title={canAdd ? undefined : "Add a provider first"}
-      onClick={() => setAdding(true)}
-    >
+    <Button size="sm" onClick={() => setAdding(true)}>
       <PlusIcon />
       Add a teammate
     </Button>
@@ -158,7 +153,7 @@ function TeammatesPage() {
                 )}
               </EmptyDescription>
             </EmptyHeader>
-            {canAdd && <EmptyContent>{addButton}</EmptyContent>}
+            <EmptyContent>{addButton}</EmptyContent>
           </Empty>
         )}
       </ScrollArea>

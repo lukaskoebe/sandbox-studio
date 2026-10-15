@@ -39,7 +39,7 @@ If an environment has no teammates when you add a provider, Studio adds a teamma
 ## Start a teammate session
 
 1. Add a provider and enter its API key.
-2. Add a teammate and select a supported harness, provider, and model.
+2. Add a teammate and select a supported harness, provider, and model. A teammate needs a provider for its model: in an environment without one, **New teammate** says so and leads to **Settings → Providers**.
 3. Create a sandbox and assign that teammate.
 4. Open the sandbox and choose **Start session**. Studio opens the harness in a terminal tab.
 

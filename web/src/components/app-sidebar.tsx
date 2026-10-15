@@ -104,7 +104,6 @@ export function AppSidebar({ env }: { env: string }) {
     if (a.sandboxId)
       waiting.set(a.sandboxId, (waiting.get(a.sandboxId) ?? 0) + 1)
   }
-  const canAddTeammate = (providers.data?.length ?? 0) > 0
   const matchRoute = useMatchRoute()
 
   return (
@@ -206,8 +205,7 @@ export function AppSidebar({ env }: { env: string }) {
           </SidebarGroupLabel>
           <SidebarGroupAction
             className="top-1.5"
-            title={canAddTeammate ? "New teammate" : "Add a provider first"}
-            disabled={!canAddTeammate}
+            title="New teammate"
             onClick={() => setAddingTeammate(true)}
           >
             <PlusIcon />

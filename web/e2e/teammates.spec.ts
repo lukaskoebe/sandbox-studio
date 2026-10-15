@@ -48,3 +48,27 @@ test("a teammate is copied to another environment from its options menu, and ope
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible()
   await expect(page.getByText("No provider", { exact: true })).toBeVisible()
 })
+
+// Without a provider there is no model to choose, so adding a teammate says so and leads to the
+// providers, from the sidebar and from the teammates page alike.
+test("adding a teammate without a provider explains why and leads to the providers", async ({
+  page,
+  api,
+}) => {
+  const fresh = await api.json<{ id: string }>("POST", "/api/environments", {
+    name: `Empty ${Math.random().toString(36).slice(2, 8)}`,
+  })
+  await page.goto(`/e/${fresh!.id}/teammates`)
+  await page.getByTitle("New teammate").click()
+  const dialog = page.getByRole("dialog", { name: "Add a provider first" })
+  await expect(dialog.getByText(/this environment has none yet/)).toBeVisible()
+  await dialog.getByRole("button", { name: "Cancel" }).click()
+  await expect(dialog).toBeHidden()
+
+  await page.getByRole("button", { name: "Add a teammate" }).first().click()
+  await dialog.getByRole("link", { name: "Add a provider" }).click()
+  await expect(page).toHaveURL(
+    new RegExp(`/e/${fresh!.id}/settings/providers$`)
+  )
+  await expect(dialog).toBeHidden()
+})
