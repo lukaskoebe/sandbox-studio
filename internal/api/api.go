@@ -294,6 +294,18 @@ func (s *Server) registerSandboxes(api huma.API) {
 		}
 		return &struct{ Body []PreviewPort }{out}, apiError(err)
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getSandboxUsage", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/usage", Tags: []string{"sandboxes"},
+		Summary:     "A running sandbox's CPU and memory use",
+		Description: "The runtime samples a VM every few seconds, so polling faster shows nothing new. A sandbox that doesn't run answers 409.",
+	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body sandboxes.ResourceUse }, error) {
+		v, err := s.Sandboxes.Usage(ctx, in.Env, in.ID)
+		if errors.Is(err, sandboxes.ErrUsageUnavailable) {
+			return nil, huma.Error501NotImplemented(err.Error())
+		}
+		return &struct{ Body sandboxes.ResourceUse }{v}, apiError(err)
+	})
 }
 
 func (s *Server) previewURL(id string, port int) string {

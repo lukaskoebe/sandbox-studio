@@ -170,6 +170,24 @@ func (r *Runtime) Status(_ context.Context, name string) (runtime.Status, error)
 	return runtime.StatusAbsent, nil
 }
 
+// FakeCPUPercent and FakeMemoryBytes are the use every running fake VM reports: half of one
+// vCPU, and 768 MiB.
+const (
+	FakeCPUPercent  = 50
+	FakeMemoryBytes = 768 << 20
+)
+
+// Usage reports the same use for every running VM; msb reports none for a VM that doesn't run.
+func (r *Runtime) Usage(_ context.Context, name string) (runtime.Usage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.vms[name]
+	if !ok || v.status != runtime.StatusRunning {
+		return runtime.Usage{}, errors.New("VM " + name + " is not running")
+	}
+	return runtime.Usage{CPUPercent: FakeCPUPercent, MemoryBytes: FakeMemoryBytes, MemoryLimitBytes: uint64(v.size.MemoryMiB) << 20}, nil
+}
+
 func (r *Runtime) Statuses(_ context.Context, prefix string) (map[string]runtime.Status, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

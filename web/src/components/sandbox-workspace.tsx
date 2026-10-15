@@ -21,6 +21,7 @@ import { StartButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import { SandboxProgress } from "@/components/sandbox-progress"
+import { SandboxUsageText } from "@/components/sandbox-usage"
 import { SidePanel } from "@/components/side-panel"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
@@ -455,7 +456,7 @@ export function SandboxWorkspace({
 
 /**
  * The workspace's status line: the sandbox's state, its ID and template, its listening ports,
- * and the approvals waiting on it.
+ * the approvals waiting on it, and its CPU and memory use while it runs.
  */
 function StatusBar({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const approvals = usePendingApprovals()
@@ -497,7 +498,8 @@ function StatusBar({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
         )}
       </span>
       <span className="ml-auto flex items-center gap-3 px-2.5 max-md:hidden">
-        gen {sb.generation}
+        <SandboxUsageText env={env} sandbox={sb} className="max-lg:hidden" />
+        <span>gen {sb.generation}</span>
       </span>
     </footer>
   )

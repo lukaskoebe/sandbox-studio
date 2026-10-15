@@ -5170,6 +5170,42 @@
         ],
         "type": "object"
       },
+      "ResourceUse": {
+        "additionalProperties": false,
+        "properties": {
+          "cpuPercent": {
+            "description": "The share of the sandbox's CPUs in use over the last few seconds, from 0 to 100",
+            "format": "double",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number"
+          },
+          "cpus": {
+            "description": "The sandbox's CPU count",
+            "format": "int64",
+            "type": "integer"
+          },
+          "memoryBytes": {
+            "description": "The memory the guest uses",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "memoryTotalBytes": {
+            "description": "The sandbox's memory size",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cpuPercent",
+          "cpus",
+          "memoryBytes",
+          "memoryTotalBytes"
+        ],
+        "type": "object"
+      },
       "Resources": {
         "additionalProperties": false,
         "properties": {
@@ -13760,6 +13796,60 @@
         },
         "tags": [
           "terminals"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/usage": {
+      "get": {
+        "description": "The runtime samples a VM every few seconds, so polling faster shows nothing new. A sandbox that doesn't run answers 409.",
+        "operationId": "getSandboxUsage",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceUse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "A running sandbox's CPU and memory use",
+        "tags": [
+          "sandboxes"
         ]
       }
     },

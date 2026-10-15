@@ -77,7 +77,8 @@ Both sandbox pages share a header: the sandbox's name and ID, its status, the pa
 (Dashboard, Workspace) and the options menu (fork, rebase, export, suspend or resume, stop,
 delete). The dashboard's start and stop buttons and the workspace's tabs are the everyday
 path; the menu holds the rest. The workspace ends in a status line: state, ID, template,
-listening ports, approvals waiting and generation.
+listening ports, approvals waiting, CPU and memory use while the sandbox runs (`cpu 12% · mem
+1.2/4 GiB`, polled every 5 seconds, hidden below the large breakpoint) and generation.
 
 Side panels (`components/side-panel.tsx`) hold what you watch next to the terminal or chat:
 the teammate browser, connections, and files with changes. The chat page uses the same panel

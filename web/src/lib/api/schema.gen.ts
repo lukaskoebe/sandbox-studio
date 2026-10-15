@@ -1550,6 +1550,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A running sandbox's CPU and memory use
+         * @description The runtime samples a VM every few seconds, so polling faster shows nothing new. A sandbox that doesn't run answers 409.
+         */
+        get: operations["getSandboxUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/secrets": {
         parameters: {
             query?: never;
@@ -3830,6 +3850,28 @@ export interface components {
             templateName?: string;
             /** Format: int64 */
             workspaceMiB: number;
+        };
+        ResourceUse: {
+            /**
+             * Format: double
+             * @description The share of the sandbox's CPUs in use over the last few seconds, from 0 to 100
+             */
+            cpuPercent: number;
+            /**
+             * Format: int64
+             * @description The sandbox's CPU count
+             */
+            cpus: number;
+            /**
+             * Format: int64
+             * @description The memory the guest uses
+             */
+            memoryBytes: number;
+            /**
+             * Format: int64
+             * @description The sandbox's memory size
+             */
+            memoryTotalBytes: number;
         };
         Resources: {
             /** Format: int64 */
@@ -8592,6 +8634,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getSandboxUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceUse"];
+                };
             };
             /** @description Error */
             default: {
