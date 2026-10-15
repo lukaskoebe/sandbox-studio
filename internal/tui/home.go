@@ -117,7 +117,7 @@ func (m *app) homeBody(w, h int) []string {
 		return []string{
 			"No sandboxes in " + m.env.Name + " yet.",
 			"",
-			styleDim.Render("Create one in the browser: " + m.browserURL("/e/"+m.env.ID)),
+			styleDim.Render("Press n to create one."),
 		}
 	}
 	visible := m.visible()

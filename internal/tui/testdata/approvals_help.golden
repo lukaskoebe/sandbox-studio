@@ -11,11 +11,11 @@ Approvals
   w          allow the navigation's site for this browser session
   A / D      allow or deny every host of a group
   r          review a group's hosts one by one
-  enter      open a git, browser, memory or chat approval in the browser
+  enter      review a git push's diff, or open another kind in the browser
   esc / q    back
 
-Settings, providers, teammates, templates, rules, memory, the browser and
-Activity stay in the browser, at http://127.0.0.1:7878/.
+Settings, providers, teammates, templates, rules, memory and the browser
+stay in the browser, at http://127.0.0.1:7878/.
 
 
 

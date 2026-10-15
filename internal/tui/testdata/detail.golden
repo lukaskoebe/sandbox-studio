@@ -20,4 +20,4 @@ api-refactor                                                         ● Running
 
 
 ────────────────────────────────────────────────────────────────────────────────
-t terminal  s start/stop  d delete  c chat  esc/q back  ? help
+t terminal  s start/stop  d delete  c chat  l activity  esc/q back  ? help

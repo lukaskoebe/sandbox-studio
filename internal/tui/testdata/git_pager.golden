@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+Git push  Push 2 commits to fix-login on GitHub/acme/web
+
+  Repository GitHub/acme/web
+  Sandbox    api-refactor · teammate Finn
+  Branch     fix-login · new branch
+  Change     ∅ → a4c2f0d · 2 files +7 −1
+
+Nothing reaches the forge until you approve; the agent sees a rejection on
+its next fetch.
+Approving pushes it over SSH to ssh://git@github.com/acme/web.git.
+
+Commits (2)
+  a4c2f0d Test that enter submits the login form                   Finn · 2m ago
+  77d0b2c Submit the login form on enter                           Finn · 5m ago
+          The sign-in control was a div.
+
+Diff
+diff --git a/src/login.tsx b/src/login.tsx
+index 3b18e51..a4c2f0d 100644
+────────────────────────────────────────────────────────────────────────────────
+y approve and push  n reject  i ignore  ↑↓/pgdn scroll  esc/q back  ? help

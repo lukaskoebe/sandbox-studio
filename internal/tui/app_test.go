@@ -171,17 +171,12 @@ func TestToggleFollowsThePhase(t *testing.T) {
 }
 
 func TestBrowserHintsPrintTheURL(t *testing.T) {
-	m := press(sampleApp(), "c")
-	if want := "open in browser: http://127.0.0.1:7878/e/env1/sandboxes/sb1/work"; m.notice.text != want {
-		t.Fatalf("chat hint %q", m.notice.text)
+	m := press(sampleApp(), "l", "r")
+	if m.screen != screenActivity {
+		t.Fatalf("l opens %v", m.screen)
 	}
-	m = press(m, "n")
-	if want := "open in browser: http://127.0.0.1:7878/e/env1"; m.notice.text != want {
-		t.Fatalf("new hint %q", m.notice.text)
-	}
-	m = press(m, "l")
-	if want := "open in browser: http://127.0.0.1:7878/e/env1/network/activity"; m.notice.text != want {
-		t.Fatalf("activity hint %q", m.notice.text)
+	if want := "open in browser: http://127.0.0.1:7878/e/env1/network/rules"; m.notice.text != want {
+		t.Fatalf("rules hint %q", m.notice.text)
 	}
 }
 

@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+Fix the login form · blub                                                  Ready
+› The login form doesn't submit on enter. Can you fix it?
+
+  ▸ Thought it through
+  ▸ Read src/login.tsx                                                      done
+  ▸ Edit src/login.tsx                                                      done
+
+Fixed
+
+The form used a `div` as its button, so enter did nothing. It is a real submit
+button now:
+
+    <button type="submit">Sign in</button>
+
+- Enter submits the form.
+- The button is focusable.
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+p prompt  ↑/↓ tools  pgup scroll  n new chat  esc/q back  ? help

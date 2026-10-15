@@ -1,16 +1,16 @@
 Sandbox Studio · Default                                            ● 1 approval
 ────────────────────────────────────────────────────────────────────────────────
-▸ ● Running   blub             Iris      node-22+python-… up 2h 14m  
-  ● Running   api-refactor     Finn      go@2             up 12m     1 approval
-  ○ Stopped   docs-site        Iris      node@3                      
-  ◐ Booting   demo             —         base                        
+Creating login-fix in Default · Iris · node-22+python-3.13@2
 
+  ◐ Pulling the image
+    312.0 MiB of 840.0 MiB
+  · Starting the VM
+  · Booting the guest
+  · Starting services
+  · Connecting the agent
+  · Configuring secrets and CA
 
-
-
-
-
-
+It opens once it is ready. esc leaves it to finish on its own.
 
 
 
@@ -20,5 +20,4 @@ Sandbox Studio · Default                                            ● 1 appro
 
 
 ────────────────────────────────────────────────────────────────────────────────
-enter open  a approvals  t terminal  s start/stop  d delete  ? help  q quit
-open in browser: http://127.0.0.1:7878/e/env1/sandboxes/sb1/work
+esc/q back

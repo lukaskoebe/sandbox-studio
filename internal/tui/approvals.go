@@ -301,6 +301,12 @@ func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.approvalCursor = max(m.approvalCursor-1, 0)
 	case key.Matches(msg, keyDown):
 		m.approvalCursor = min(m.approvalCursor+1, len(cards)-1)
+	case isGit(a) && key.Matches(msg, keyOpen):
+		m.openPager(a)
+	case isGit(a):
+		if key.Matches(msg, keyAllow, keyDeny, keyIgnore) {
+			m.setNotice("Review it first: enter opens the diff.", false)
+		}
 	case !isNetwork(a) || c.group:
 		return m.otherCardKey(msg, c)
 	case key.Matches(msg, keyPattern):
@@ -457,6 +463,9 @@ func (m *app) cardLines(c card, selected bool, w int) []string {
 		lines = append(lines, "    "+styleDim.Render("pattern ")+patternText(a, *ch)+
 			"   "+styleDim.Render("scope ")+scopeLabel(a, ch.scope)+
 			"   "+styleDim.Render("ports ")+portsText(*ch))
+	case isGit(a):
+		lines = append(lines, "    "+summary(a))
+		lines = append(lines, "    "+styleDim.Render("enter opens its diff"))
 	default:
 		lines = append(lines, "    "+summary(a))
 		lines = append(lines, "    "+styleDim.Render("enter opens it in the browser"))

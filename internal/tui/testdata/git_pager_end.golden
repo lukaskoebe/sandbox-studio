@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+   return (
+     <form onSubmit={submit}>
+       <input name="user" />
+-      <div onClick={submit}>Sign in</div>
++      <button type="submit">Sign in</button>
+     </form>
+   )
+ }
+diff --git a/src/login.test.tsx b/src/login.test.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/login.test.tsx
+@@ -0,0 +1,6 @@
++import { render } from "@testing-library/react"
++
++test("enter submits", () => {
++    const form = render(<Login />)
++    expect(form).toBeTruthy()
++})
+────────────────────────────────────────────────────────────────────────────────
+y approve and push  n reject  i ignore  ↑↓/pgdn scroll  esc/q back  ? help

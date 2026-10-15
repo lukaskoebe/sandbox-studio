@@ -4,7 +4,7 @@ Approvals from every environment, newest first
 
   Git push  api-refactor · Default · 30s ago                                    
     Push 2 commits to feature/login on GitHub/acme/web
-    enter opens it in the browser
+    enter opens its diff
 
   api-refactor wants 3 hosts  Default · 1m ago                                  
     pypi.org:443 · files.pythonhosted.org:443 · pypi.python.org:443

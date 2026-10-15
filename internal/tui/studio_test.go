@@ -14,7 +14,9 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -25,8 +27,9 @@ import (
 
 // fakeVMs is the VM runtime of the tests: a VM is its status, which the tests set.
 type fakeVMs struct {
-	mu       sync.Mutex
-	statuses map[string]runtime.Status
+	mu        sync.Mutex
+	statuses  map[string]runtime.Status
+	createErr error // what Create answers, when set
 }
 
 var _ sandboxes.SandboxRuntime = (*fakeVMs)(nil)
@@ -38,6 +41,12 @@ func (r *fakeVMs) set(name string, status runtime.Status) {
 }
 
 func (r *fakeVMs) Create(_ context.Context, name string, _ runtime.Spec, _ string, _ map[string]string) error {
+	r.mu.Lock()
+	err := r.createErr
+	r.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	r.set(name, runtime.StatusRunning)
 	return nil
 }
@@ -142,11 +151,18 @@ func startStudio(t *testing.T) *testStudio {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	bus := &events.Bus{}
 	vms := &fakeVMs{statuses: map[string]runtime.Status{}}
+	dirs := paths.Paths{Data: t.TempDir()}
+	if err := dirs.Ensure(); err != nil {
+		t.Fatal(err)
+	}
 	mgr := &sandboxes.Manager{
 		Store: st, Runtime: vms, Hub: agentchan.NewHub(log), Egress: fakeEgress{},
-		Paths: paths.Paths{Data: t.TempDir()}, Log: log, Bus: bus,
+		Paths: dirs, Log: log, Bus: bus,
 	}
-	s := &api.Server{Store: st, Sandboxes: mgr, Bus: bus, Log: log, Policy: &policy.Engine{Store: st, Bus: bus, Hold: time.Second}}
+	s := &api.Server{
+		Store: st, Sandboxes: mgr, Bus: bus, Log: log, Policy: &policy.Engine{Store: st, Bus: bus, Hold: time.Second},
+		Chats: &chat.Service{Store: st, Bus: bus}, Conns: &gateway.ConnLog{},
+	}
 	mux := http.NewServeMux()
 	s.Register(mux)
 	srv := httptest.NewServer(api.Guard(auth.Middleware(mux)))

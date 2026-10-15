@@ -17,6 +17,7 @@ var (
 	styleDim    = lipgloss.NewStyle().Faint(true)
 	styleAccent = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	styleFailed = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	styleAdded  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // added lines of a diff
 )
 
 // helpStyles draws the key bar in the same palette: keys in bold, their words dim.

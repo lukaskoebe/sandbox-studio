@@ -157,7 +157,7 @@ func TestNetworkKeysMakeTheirDecision(t *testing.T) {
 	if _, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"}); cmd != nil {
 		t.Fatal("allow on a git card decided it in the terminal")
 	}
-	if got := m.notice.text; got != "open in browser: http://127.0.0.1:7878/e/env1/settings/git" {
+	if got := m.notice.text; got != "Review it first: enter opens the diff." {
 		t.Fatalf("git card hint: %q", got)
 	}
 }

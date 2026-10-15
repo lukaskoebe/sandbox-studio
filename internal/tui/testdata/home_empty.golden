@@ -2,7 +2,7 @@ Sandbox Studio · Default                                            no approval
 ────────────────────────────────────────────────────────────────────────────────
 No sandboxes in Default yet.
 
-Create one in the browser: http://127.0.0.1:7878/e/env1
+Press n to create one.
 
 
 
@@ -20,4 +20,4 @@ Create one in the browser: http://127.0.0.1:7878/e/env1
 
 
 ────────────────────────────────────────────────────────────────────────────────
-enter open  a approvals  t terminal  s start/stop  d delete  ? help  q quit
+enter open  n new  s start/stop  a approvals  t terminal  c chat  ? help  q quit

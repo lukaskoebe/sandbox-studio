@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+login-fix could not be created in Default · Iris · node-22+python-3.13@2
+
+  ✓ Pulling the image
+  ✓ Starting the VM
+  ✗ Booting the guest
+  · Starting services
+  · Connecting the agent
+  · Configuring secrets and CA
+
+the guest did not answer within 2m0s
+
+Delete it with d, then try again.
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+d delete  esc/q back
