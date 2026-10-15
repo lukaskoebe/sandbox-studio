@@ -63,6 +63,7 @@ function scopeHelp(scope: string) {
 export function SecretDialog({
   env,
   secret,
+  scope,
   sandboxes,
   open,
   onOpenChange,
@@ -70,6 +71,11 @@ export function SecretDialog({
   env: string
   /** The secret to edit; absent for a new one. */
   secret?: Secret
+  /**
+   * The scope a new secret starts with: "environment", a sandbox ID, or "teammate:" and a
+   * teammate ID. Absent means the environment.
+   */
+  scope?: string
   sandboxes: Sandbox[]
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -79,9 +85,10 @@ export function SecretDialog({
       <DialogContent>
         {/* The form, including a typed value, exists only while the dialog is open. */}
         <SecretForm
-          key={secret?.id ?? "new"}
+          key={secret?.id ?? `new:${scope ?? ""}`}
           env={env}
           secret={secret}
+          initialScope={scope}
           sandboxes={sandboxes}
           onDone={() => onOpenChange(false)}
         />
@@ -93,11 +100,13 @@ export function SecretDialog({
 function SecretForm({
   env,
   secret,
+  initialScope,
   sandboxes,
   onDone,
 }: {
   env: string
   secret?: Secret
+  initialScope?: string
   sandboxes: Sandbox[]
   onDone: () => void
 }) {
@@ -107,7 +116,11 @@ function SecretForm({
   // "environment", a sandbox ID, or "teammate:" and a teammate ID, as in the rule dialog.
   const [scope, setScope] = useState(
     secret?.sandboxId ??
-      (secret?.teammateId ? `teammate:${secret.teammateId}` : "environment")
+      (secret?.teammateId
+        ? `teammate:${secret.teammateId}`
+        : secret
+          ? "environment"
+          : (initialScope ?? "environment"))
   )
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },

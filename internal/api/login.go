@@ -62,6 +62,26 @@ func (s *Server) registerLogins(api huma.API) {
 			Token string `json:"token" minLength:"1" maxLength:"256" doc:"The long-lived token from claude setup-token, as the terminal printed it"`
 		}
 	}
+	type sendCodeIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Provider ID"`
+		Body struct {
+			Code string `json:"code" minLength:"1" maxLength:"2048" doc:"The code Claude's sign-in page shows after the user authorized, or a Claude Code token"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "sendProviderLoginCode", Method: http.MethodPost, Path: "/api/environments/{env}/providers/{id}/login/code", Tags: []string{"providers"},
+		Description: "Types the code from Claude's sign-in page into the running sign-in's terminal and presses Enter, so the user needn't paste it into the terminal. Claude Code then prints its token, which Studio stores; poll the sign-in. A Claude Code token is stored as pasted.",
+	}, func(ctx context.Context, in *sendCodeIn) (*struct{ Body LoginView }, error) {
+		if err := s.checkLogins(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		if err := s.Login.SendCode(ctx, in.Env, in.ID, in.Body.Code); err != nil {
+			return nil, loginError(err)
+		}
+		return &struct{ Body LoginView }{LoginView(s.Login.Status(in.ID))}, nil
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "pasteProviderLoginToken", Method: http.MethodPost, Path: "/api/environments/{env}/providers/{id}/login/token", Tags: []string{"providers"},
 		Description: "Stores a Claude Code token the user copied from the terminal, when Studio couldn't read it there. It ends a running sign-in.",
@@ -93,7 +113,8 @@ func loginError(err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, login.ErrNotSubscription), errors.Is(err, login.ErrNoPaste), errors.Is(err, login.ErrInvalidToken):
+	case errors.Is(err, login.ErrNotSubscription), errors.Is(err, login.ErrNoPaste), errors.Is(err, login.ErrInvalidToken),
+		errors.Is(err, login.ErrNoCode), errors.Is(err, login.ErrInvalidCode):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, login.ErrNoLogin):
 		return huma.Error409Conflict(err.Error())

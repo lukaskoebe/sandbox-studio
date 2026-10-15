@@ -18,7 +18,7 @@ You can create a blank sandbox or choose a ready template from **Settings → Te
 
 ## Work in a terminal
 
-Open a sandbox from the sidebar to see its dashboard: a band with its status, owner, template, resources and age, then its chats, terminals, history and checkpoints, with ports and recent connections at the side. Choose **Workspace** in its header to work in it. Terminals run inside the sandbox at `/workspace`. Use **+** in the tab strip to open an additional terminal, run a shell yourself, or start the selected teammate's agent session with **Start session**. The sandbox's chats open in the same strip. Docker runs inside the sandbox and uses its persistent Docker disk.
+Open a sandbox from the sidebar to see its dashboard: a band with its status, owner, template, resources and age, then its chats, terminals, history and checkpoints, with ports and recent connections at the side. Choose **Workspace** in its header to work in it. Terminals run inside the sandbox at `/workspace`. Use **+** in the tab strip to open an additional terminal, run a shell yourself, or start the selected teammate's agent session with **Start session**. The sandbox's chats open in the same strip. Docker runs inside the sandbox and uses its persistent Docker disk. The status line along the bottom of the workspace shows the sandbox's state, ID, template, ports and waiting approvals, and while it runs its CPU and memory use, such as `cpu 12% · mem 1.2/4 GiB` (CPU as a share of all its CPUs).
 
 ![A terminal open at /workspace in a running sandbox](../../assets/screenshots/sandbox-terminal.jpg)
 

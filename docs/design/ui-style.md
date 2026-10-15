@@ -92,8 +92,9 @@ Pitch: a tool you keep open all day. Dense, tabular, graphite neutrals, identifi
 - **Section headers.** A 20 px square tile with a small icon (in the area's hue where the
   section belongs to one), a 13 px semibold title, and a count.
 - **Status bar.** Each sandbox has one slim bar along the bottom of its workspace: state, ID,
-  template, ports, pending approvals, generation. CPU, memory and uptime wait for the API to
-  report them.
+  template, ports, pending approvals, CPU and memory use while it runs (`cpu 12% · mem 1.2/4
+  GiB`, from `GET …/sandboxes/{id}/usage`, hidden below the large breakpoint), generation.
+  Uptime waits for the API to report it.
 - **Home.** Body text at 13px like the other pages. A stat strip (running of all sandboxes,
   approvals waiting, working of all teammates). The main column: the sandbox table (name and
   ID, owner, template, status with uptime, ports, approvals waiting; an empty cell stays empty
@@ -181,7 +182,7 @@ primitives above and keeps the e2e selectors it had.
   Checkpoints are rows like the others, saved from a dialog in the section header. The
   workspace's tab strip keeps tabs left and tools right, and has a status line below.
 - **Done: network.** Rules (grouped by domain, filters in the URL), requests and activity tabs.
-- **Done: secrets.**
+- **Done: secrets.** A section per scope (environment, each teammate, each sandbox) with a `SectionHeader` and a table; the columns line up from one section to the next.
 - **Done: memory.** Pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.
 - **Done: teammates.** List, overview, chats, browser and settings tabs; the teammate form.
 - **Done: chat.** The chat page header and the new chat notice.

@@ -3913,6 +3913,14 @@
             "description": "The one-time code of ChatGPT's device sign-in",
             "type": "string"
           },
+          "codeRejected": {
+            "description": "Claude Code printed an error after the last code; the terminal shows it",
+            "type": "boolean"
+          },
+          "codeSent": {
+            "description": "A code from the sign-in page was typed into Claude Code; the sign-in waits for its answer",
+            "type": "boolean"
+          },
           "message": {
             "type": "string"
           },
@@ -3937,7 +3945,9 @@
         },
         "required": [
           "state",
-          "paste"
+          "paste",
+          "codeSent",
+          "codeRejected"
         ],
         "type": "object"
       },
@@ -5197,6 +5207,42 @@
         ],
         "type": "object"
       },
+      "ResourceUse": {
+        "additionalProperties": false,
+        "properties": {
+          "cpuPercent": {
+            "description": "The share of the sandbox's CPUs in use over the last few seconds, from 0 to 100",
+            "format": "double",
+            "maximum": 100,
+            "minimum": 0,
+            "type": "number"
+          },
+          "cpus": {
+            "description": "The sandbox's CPU count",
+            "format": "int64",
+            "type": "integer"
+          },
+          "memoryBytes": {
+            "description": "The memory the guest uses",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "memoryTotalBytes": {
+            "description": "The sandbox's memory size",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cpuPercent",
+          "cpus",
+          "memoryBytes",
+          "memoryTotalBytes"
+        ],
+        "type": "object"
+      },
       "Resources": {
         "additionalProperties": false,
         "properties": {
@@ -5619,6 +5665,21 @@
           "studioOnly",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "SendCodeInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The code Claude's sign-in page shows after the user authorized, or a Claude Code token",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
         ],
         "type": "object"
       },
@@ -11503,6 +11564,69 @@
         ]
       }
     },
+    "/api/environments/{env}/providers/{id}/login/code": {
+      "post": {
+        "description": "Types the code from Claude's sign-in page into the running sign-in's terminal and presses Enter, so the user needn't paste it into the terminal. Claude Code then prints its token, which Studio stores; poll the sign-in. A Claude Code token is stored as pasted.",
+        "operationId": "sendProviderLoginCode",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendCodeInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      }
+    },
     "/api/environments/{env}/providers/{id}/login/token": {
       "post": {
         "description": "Stores a Claude Code token the user copied from the terminal, when Studio couldn't read it there. It ends a running sign-in.",
@@ -13854,6 +13978,60 @@
         },
         "tags": [
           "terminals"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/usage": {
+      "get": {
+        "description": "The runtime samples a VM every few seconds, so polling faster shows nothing new. A sandbox that doesn't run answers 409.",
+        "operationId": "getSandboxUsage",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceUse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "A running sandbox's CPU and memory use",
+        "tags": [
+          "sandboxes"
         ]
       }
     },

@@ -171,3 +171,35 @@ test("the dashboard and the workspace fit a 390px screen, and a panel covers it"
   await panel.getByRole("button", { name: "Close panel" }).click()
   await expect(panel).toBeHidden()
 })
+
+test("the workspace status line shows CPU and memory use while the sandbox runs", async ({
+  page,
+  api,
+  env,
+}) => {
+  const id = await api.createSandbox(sandboxName("usage"))
+  const use = await api.json<{
+    cpuPercent: number
+    cpus: number
+    memoryBytes: number
+    memoryTotalBytes: number
+  }>("GET", `/api/environments/${env}/sandboxes/${id}/usage`)
+  // The e2e runtime reports half a vCPU and 768 MiB for every running VM.
+  expect(use!.cpuPercent).toBeCloseTo(50 / use!.cpus)
+  expect(use!.memoryBytes).toBe(768 << 20)
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  const usage = page.getByText(/^cpu \d+% · mem [\d.]+\/[\d.]+ (GiB|MiB)$/)
+  await expect(usage).toHaveText(
+    new RegExp(`^cpu ${Math.round(use!.cpuPercent)}% · mem `)
+  )
+
+  await page.getByRole("button", { name: "Sandbox options" }).click()
+  await page.getByRole("menuitem", { name: "Stop", exact: true }).click()
+  await expect(usage).toBeHidden()
+  const stopped = await api.request.get(
+    `/api/environments/${env}/sandboxes/${id}/usage`
+  )
+  expect(stopped.status()).toBe(409)
+})

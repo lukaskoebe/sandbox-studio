@@ -23,7 +23,12 @@ var (
 	ErrNoPaste         = errors.New("only a Claude subscription takes a pasted token")
 	ErrInvalidToken    = errors.New("that is not a Claude Code token: it starts with sk-ant-oat")
 	ErrNoLogin         = errors.New("no sign-in is running for this provider")
+	ErrNoCode          = errors.New("only a Claude sign-in takes a code; a ChatGPT code is entered on the sign-in page")
+	ErrInvalidCode     = errors.New("that is not a sign-in code: paste the code from the sign-in page, on one line")
 )
+
+// maxCodeLen bounds a pasted sign-in code. Claude's codes are a few hundred characters.
+const maxCodeLen = 2048
 
 // The CLI's tmux session in a login VM, and the terminal size it runs in.
 const (
@@ -51,6 +56,10 @@ type View struct {
 	// Paste is set when the user can paste a Claude Code token instead, because Studio couldn't
 	// read the token from the terminal.
 	Paste bool `json:"paste"`
+	// CodeSent is set once a Claude sign-in's code was typed into the CLI, until the sign-in ends.
+	CodeSent bool `json:"codeSent" doc:"A code from the sign-in page was typed into Claude Code; the sign-in waits for its answer"`
+	// CodeRejected is set when Claude Code printed an error after the last code was sent.
+	CodeRejected bool `json:"codeRejected" doc:"Claude Code printed an error after the last code; the terminal shows it"`
 }
 
 // Machines runs the system VMs of logins and utility calls (sandboxes.Manager).
@@ -165,12 +174,17 @@ type attempt struct {
 	url, code string
 	message   string
 	paste     bool
+	// codeSent and codeRejected follow the codes the user sent; errorsBefore is how many error
+	// lines the terminal showed when the last one was sent, so only a new one rejects it.
+	codeSent, codeRejected bool
+	errorsBefore           int
 }
 
 func (a *attempt) view() View {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return View{State: a.state, URL: a.url, Code: a.code, Message: a.message, Paste: a.paste}
+	return View{State: a.state, URL: a.url, Code: a.code, Message: a.message, Paste: a.paste,
+		CodeSent: a.codeSent, CodeRejected: a.codeRejected}
 }
 
 func (a *attempt) running() bool {
@@ -309,6 +323,73 @@ func (s *Service) PasteToken(ctx context.Context, envID, providerID, token strin
 	return nil
 }
 
+// SendCode types the code from Claude's sign-in page into the CLI of a running sign-in and
+// presses Enter, as the user would in its terminal. Claude Code then prints the token, which
+// the watch reads. A Claude Code token pasted here instead is stored as PasteToken stores it.
+func (s *Service) SendCode(ctx context.Context, envID, providerID, code string) error {
+	p, err := s.subscription(ctx, envID, providerID)
+	if err != nil {
+		return err
+	}
+	if p.Kind != teammates.KindClaudeSubscription {
+		return ErrNoCode
+	}
+	code = strings.TrimSpace(code)
+	if ValidClaudeToken(code) {
+		return s.PasteToken(ctx, envID, providerID, code)
+	}
+	if !validCode(code) {
+		return ErrInvalidCode
+	}
+	s.mu.Lock()
+	a := s.attempts[providerID]
+	s.mu.Unlock()
+	var id string
+	if a != nil {
+		a.mu.Lock()
+		if a.state == StateWaiting {
+			id = a.sandboxID
+		}
+		a.mu.Unlock()
+	}
+	if id == "" {
+		return ErrNoLogin
+	}
+	// Errors the terminal shows already don't count against this code.
+	text, _ := s.capture(ctx, id)
+	before := errorLines(text)
+	// The text goes literally (-l), and the Enter in a call of its own, so the CLI reads the code
+	// as typed input before the key that submits it. verify (S8): send-keys -l of the pinned tmux.
+	for _, args := range [][]string{
+		{"tmux", "send-keys", "-t", sessionName, "-l", "--", code},
+		{"tmux", "send-keys", "-t", sessionName, "Enter"},
+	} {
+		res, err := s.Guest.Run(ctx, id, agentproto.RunRequest{Args: args, TimeoutSec: 30})
+		if err != nil {
+			return err
+		}
+		if res.ExitCode != 0 {
+			return fmt.Errorf("typing the code into the sign-in: %s", strings.TrimSpace(res.Stderr))
+		}
+	}
+	a.set(func(a *attempt) { a.codeSent, a.codeRejected, a.errorsBefore = true, false, before })
+	return nil
+}
+
+// validCode reports whether code can be a sign-in code: one line of printable text, short
+// enough to type.
+func validCode(code string) bool {
+	if code == "" || len(code) > maxCodeLen {
+		return false
+	}
+	for _, r := range code {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
 // run is one sign-in: it starts the login VM and the CLI in it, then waits for the result. It
 // always ends the attempt through finish, which removes the login VM. ctx is the attempt's: Cancel
 // and the timeout end it.
@@ -381,12 +462,16 @@ func (s *Service) watch(ctx context.Context, a *attempt, sandboxID string) {
 		} else {
 			url = FirstURL(text)
 		}
+		errs := errorLines(text)
 		a.set(func(a *attempt) {
 			if url != "" {
 				a.url = url
 			}
 			if code != "" {
 				a.code = code
+			}
+			if a.codeSent && errs > a.errorsBefore {
+				a.codeRejected = true
 			}
 		})
 		if p.Kind == teammates.KindClaudeSubscription {
@@ -475,6 +560,7 @@ func (s *Service) finish(a *attempt, state, msg string, paste bool) {
 	a.set(func(a *attempt) {
 		a.state, a.message, a.paste, a.sandboxID = state, msg, paste, ""
 		a.url, a.code = "", ""
+		a.codeSent, a.codeRejected = false, false
 	})
 	s.notify(p.EnvironmentID)
 }

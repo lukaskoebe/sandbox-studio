@@ -20,6 +20,7 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { TeammateForm } from "@/components/teammate-form"
 import { TeammateHeartbeat } from "@/components/teammate-heartbeat"
+import { TeammateSecrets } from "@/components/teammate-secrets"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/teammates/$id/settings")({
@@ -64,6 +65,9 @@ function TeammateSettings() {
           </FieldDescription>
         </Field>
       </section>
+      <div className="border-t pt-6">
+        <TeammateSecrets env={env} teammate={teammate} />
+      </div>
       <section className="space-y-3 border-t pt-6">
         <SectionHeader title={`Delete ${teammate.name}`} icon={TrashIcon} />
         <p className="text-xs text-muted-foreground">

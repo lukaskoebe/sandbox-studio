@@ -138,6 +138,25 @@ against a live VM yet. A live run should check that a CPU decrease and a memory 
 to the running VM without a restart, and that a growth above the boot-time capacity reports
 `nextStart` and takes effect at the next start.
 
+### Live use
+
+`GET /api/environments/{env}/sandboxes/{id}/usage` reports a running sandbox's CPU and memory
+use from msb's metrics (`SandboxHandle.Metrics`, which msb samples every few seconds):
+
+- `cpuPercent`: the share of all the sandbox's CPUs in use over the last sample window, 0 to
+  100. msb reports vCPU time where 100 is one vCPU busy; Studio divides by the catalogued CPU
+  count and caps at 100, since a live CPU decrease can leave the boot-time vCPUs higher.
+- `memoryBytes`: the memory the guest uses, against `memoryTotalBytes`, the catalogued memory
+  size (msb's limit when the catalog has none).
+
+A sandbox that doesn't run answers 409, and a runtime without metrics 501. The workspace's
+status line polls it every 5 seconds while the sandbox runs. The e2e runtime reports half a
+vCPU and 768 MiB for every running VM.
+
+Verified vs. pending: the scaling and the API are covered by fake-runtime tests; the meaning of
+msb's `memory_bytes` (guest-used memory) is taken from its metrics crate and has not been
+checked against a live VM.
+
 ## Checkpoints
 
 - A checkpoint is a disk snapshot in the group `sbx-<id>`: root, workspace, Docker and home

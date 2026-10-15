@@ -20,7 +20,15 @@ var (
 	deviceURL        = regexp.MustCompile(`https://auth\.openai\.com/[^\s]*`)
 	deviceCode       = regexp.MustCompile(`\b[A-Z0-9]{4}-[A-Z0-9]{4,6}\b`)
 	anyURL           = regexp.MustCompile(`https://[^\s]+`)
+	// errorLine is a line in which a CLI reports a failure, such as Claude Code's
+	// "OAuth error: …" after a wrong code. verify (S8): the wording of the pinned Claude Code.
+	errorLine = regexp.MustCompile(`(?im)^.*\b(error|invalid|failed)\b.*$`)
 )
+
+// errorLines counts the lines of text that report a failure.
+func errorLines(text string) int {
+	return len(errorLine.FindAllStringIndex(text, -1))
+}
 
 // urlChars is a line that can continue a URL or a token Claude Code broke over lines.
 var urlChars = regexp.MustCompile(`^[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]+$`)

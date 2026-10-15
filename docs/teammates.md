@@ -39,10 +39,19 @@ other sandboxes, no project, and network only to the hosts its kind needs
 
 - **Claude Pro/Max (`claude_subscription`).** `claude setup-token` runs in a tmux session named
   `login` in the login VM, which reaches `platform.claude.com` (where the code is exchanged) and `api.anthropic.com`. The
-  user opens the page it prints, signs in, and pastes the code into the terminal the dialog
-  shows. Studio reads the long-lived token from the pane, stores it as the provider's secret
-  bound to `api.anthropic.com`, and removes the VM. If it can't read the token, the dialog
-  offers to paste it instead.
+  dialog lists the steps: open the page it prints, sign in and authorize, copy the code the
+  page shows, and paste it into the dialog's code field (or its Paste button, which reads the
+  clipboard). `POST …/providers/{id}/login/code` types the code into the CLI with `tmux
+  send-keys -l` and Enter; nobody has to type into the terminal, which stays behind a "Show
+  the terminal" toggle. A pasted `sk-ant-oat` token is saved as the token instead. The login
+  view's `codeSent` says a code went in; `codeRejected` says the pane gained an error line
+  (`error`, `invalid` or `failed`) after it, and the dialog then opens the terminal so its
+  message is in view. Studio reads the long-lived token from the pane, stores it as the
+  provider's secret bound to `api.anthropic.com`, and removes the VM. The dialog's "Use a
+  token from claude setup-token instead" takes a token made on the user's own computer, and
+  opens by itself when Studio couldn't read the token. Verified vs. pending: the code
+  delivery is covered by fake-guest tests; the error-line heuristic has not been checked
+  against a live `claude setup-token` rejecting a code.
 - **ChatGPT (`chatgpt_subscription`).** `codex login --device-auth` runs in the login VM, which
   reaches `auth.openai.com`. The dialog shows the page and the one-time code the device login
   prints. When Codex has written `~/.codex/auth.json`, Studio reads it and stores two things:
