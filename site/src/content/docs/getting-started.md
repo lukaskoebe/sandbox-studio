@@ -15,7 +15,19 @@ Keep at least 5 GB free for the runtime, images, and sandbox disks. On first sta
 
 ## Install
 
-**The first binary release is pending; there is no release tag or downloadable archive yet.** The release installer is not usable yet. For now, build Studio from source. From a terminal with Go 1.26, Node 22 with pnpm 11, a C toolchain, and Docker installed, run:
+On Linux and macOS, run the installer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh
+```
+
+The script downloads the latest release for your platform, checks it against the release's `checksums.txt`, and installs `studio` to `~/.local/bin` without sudo. It then checks KVM or Hypervisor.framework access and tells you what to fix; it never installs other software. Set `SANDBOX_STUDIO_VERSION` (for example `v0.3.2`) to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to change the directory.
+
+On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains a single `studio` executable; put it anywhere on your `PATH`.
+
+### Build from source
+
+From a terminal with Go 1.26, Node 22 with pnpm 11, a C toolchain, and Docker installed, run:
 
 ```sh
 git clone https://github.com/lukaskoebe/sandbox-studio.git
@@ -26,35 +38,37 @@ make image
 make image-browser
 ```
 
-`make image` builds the local base image needed for new sandboxes. `make image-browser` builds the separate image for teammates' browsers; both development images must be loaded locally.
+`make image` builds the local base image needed for new sandboxes. `make image-browser` builds the separate image for teammates' browsers; both development images must be loaded locally. The binary is `./bin/studio`.
 
 ## Start Studio
 
 Open a terminal and check the host:
 
 ```sh
-./bin/studio doctor
+studio doctor
 ```
 
 Then start the app:
 
 ```sh
-./bin/studio
+studio
 ```
 
-Studio prints a one-time link to its local UI at `http://127.0.0.1:7878`. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, use `./bin/studio login-url` from the repository root.
+Studio prints a one-time link to its local UI at `http://127.0.0.1:7878`. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, run `studio login-url`.
 
 This is the sign-in for your local Studio app. It does not sign an agent into an AI provider. For agent sessions, add a provider in the environment first: an API key, or a Claude Pro/Max or ChatGPT subscription sign-in.
 
 Studio listens on loopback, so other computers on your network cannot open its UI. The UI and the sandbox services stay on the machine running Studio.
 
-On a first start, Studio opens a guided setup at `/setup`. It checks the host, asks whether you want Chat or Terminal, adds an AI provider, accepts a default teammate, connects a git forge if you have one, explains approvals, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
+On a first start, Studio opens a guided setup at `/setup`. It checks the host, asks whether you want Chat or Terminal, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
+
+![The guided setup: seven steps, the host check done and the work mode open](../../assets/screenshots/setup.jpg)
 
 ## Prepare your first agent
 
 The guided setup adds the provider, creates a default teammate named Iris for it, and creates the first sandbox with Iris. To do the same by hand:
 
-1. In **Settings → Providers**, add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
+1. In **Settings → Providers**, sign in with a Claude Pro/Max or ChatGPT subscription, or add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
 2. In Teammates, create a teammate and choose its harness, provider, model, role, and optional working instructions (“soul”).
 3. Create a sandbox and select that teammate. Ownership is fixed when the sandbox is created.
 4. Open the sandbox and select **Start session**. The agent opens in a terminal tab.

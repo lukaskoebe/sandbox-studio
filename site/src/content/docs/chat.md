@@ -7,12 +7,12 @@ Chat mode lets you work with a teammate's agent like in a messenger instead of i
 
 ## Choose Chat or Terminal
 
-The first time you open Studio, it asks **How do you want to work with agents?**
+The guided setup's **Work mode** step lets you pick how you work with agents:
 
-- **Chat** (recommended): write to your teammates, see what they do, and approve risky steps with a click.
+- **Chat** (recommended): write to your teammates like in a messenger, see what they do, and approve risky steps with a click.
 - **Terminal**: run each agent's own command-line app in the sandbox, as a developer would.
 
-Closing the dialog without choosing picks Chat. You can change it any time under **Settings → General**. The choice only decides what a sandbox workspace shows first: with Chat, its latest chat; with Terminal, its terminals. Both stay one click away in the workspace strip either way.
+You can change it any time under **Settings → General → Work mode**. The choice only decides what a sandbox workspace shows first: with Chat, its latest chat; with Terminal, its terminals. Until you choose, a workspace opens on its terminals. Both stay one click away in the workspace strip either way.
 
 ## What chats need
 

@@ -110,7 +110,6 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `POST dream`, `GET dreams?scope=` | start consolidating a scope (202, 409 while one runs); runs with stats |
 | `POST facts/{id}/promote` | propose a teammate fact for shared memory (`memory.share` approval) |
 | `GET suggestions?scope=`, `POST suggestions/{id}/accept`, `POST suggestions/{id}/dismiss` | open suggestions of a scope; accept or dismiss one ([Suggestions](#suggestions)) |
-
 | `GET sessions?teammate=`, `GET sessions/{id}/log` | agent sessions and what memory did in each, with reasons |
 | `GET usage` | today's extraction calls and spend against the daily budget, utility model per provider, and `sharedJudge`: whose utility model consolidates shared memory |
 | `GET quality` | the quality numbers of the environment ([Quality](#quality)) |
@@ -119,7 +118,8 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 The Memory page in the environment sidebar shows shared memory: the extraction budget line,
 the [quality](#quality) numbers, and tabs for pages, facts, conflicts (with "Dream now", recent
 runs and a sheet that shows both facts side by side with sources, tiers and timeline, and
-resolves), search and sessions. Above the tabs are the Export and Import buttons
+resolves; each conflict also has its own page, `/e/$env/memory/conflicts/$id`), search and
+sessions. Above the tabs are the Export and Import buttons
 ([Export and import](#export-and-import)) and the open [suggestions](#suggestions), each with
 Promote or Accept, and Dismiss. A facts' context shows as a badge, and the fact form takes one.
 A teammate's private memory has the same tabs on its teammate page, where its facts can be
@@ -287,8 +287,9 @@ again. "Promote to shared" on the memory page creates the same approval.
 **Extraction.** One host worker (queue of 64; a full queue fails the hook so the guest
 resends) calls the provider's utility model directly with the real key from the vault,
 which is never logged: `claude-haiku-4-5` for `anthropic_api`, `gpt-6-luna` for
-`openai_api` (unconfirmed, S7), the endpoint's model for `openai_compatible`, none for
-subscriptions (S8). The answer must be `{"facts": [...], "summary": "…"}` with at most 20 facts of text,
+`openai_api` (unconfirmed, S7), the endpoint's model for `openai_compatible`. A subscription's
+utility model (`haiku` for a Claude subscription, `gpt-6-luna` for ChatGPT) runs as a one-shot
+CLI call in the provider's utility VM instead ([teammates](teammates.md)). The answer must be `{"facts": [...], "summary": "…"}` with at most 20 facts of text,
 kind, tier (`user` or `inferred`), entities, attribute and an evidence quote found in the
 transcript; one bad fact, an unknown field or anything like a credential rejects the whole
 answer. `user` tier stays only if the quote is from a user line. The prompt names the
@@ -321,8 +322,8 @@ ends included); a teammate's run also takes new shared facts.
 2. Pairs: each new fact against up to 8 related active facts (same attribute or a shared
    entity) of its scope and shared; new shared facts against the teammate's facts. At most
    100 pairs per run; pairs with a conflict are skipped.
-3. Judge: the teammate's utility model, as for extraction; none for subscriptions, S8, so
-   those runs only dedupe and compile. The judge sees each fact's context, if it has one. Shared memory uses the teammate that has had a
+3. Judge: the teammate's utility model, as for extraction, including a subscription's
+   through its utility VM. The judge sees each fact's context, if it has one. Shared memory uses the teammate that has had a
    utility model the longest. Studio does not record when a teammate's provider was set, so
    that is the oldest teammate whose provider has one (by creation time, then ID); there is
    no fallback to another teammate if its key or client fails. The run records the teammate,

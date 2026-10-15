@@ -157,13 +157,13 @@ type HostKeyChangedError struct {
 }
 
 func (e *HostKeyChangedError) Error() string {
-	return fmt.Sprintf("the host key of %s changed (pinned %s, offered %s); check with the host's admin, then re-pin it on the Git page",
+	return fmt.Sprintf("the host key of %s changed (pinned %s, offered %s); check with the host's admin, then re-pin it in Settings → Git",
 		e.Host, e.Pinned, e.Offered)
 }
 
 // sshClient connects to f and authenticates with key, or with the host's SSH agent for
 // auth agent, accepting only the pinned host key.
-// A different host key is recorded on the forge, so the Git page can offer to re-pin it.
+// A different host key is recorded on the forge, so Settings → Git can offer to re-pin it.
 func (s *Service) sshClient(ctx context.Context, f store.Forge, key string) (*ssh.Client, error) {
 	u, err := ParseSSHURL(f.BaseURL)
 	if err != nil {
@@ -214,11 +214,11 @@ func (s *Service) sshClient(ctx context.Context, f store.Forge, key string) (*ss
 		}
 		return nil, changed
 	case err != nil && strings.Contains(err.Error(), "no common algorithm for host key"):
-		return nil, fmt.Errorf("%s no longer offers a %s host key; check with the host's admin, then re-pin it on the Git page", u.Host, pinned.Type())
+		return nil, fmt.Errorf("%s no longer offers a %s host key; check with the host's admin, then re-pin it in Settings → Git", u.Host, pinned.Type())
 	case err != nil && refusedAuth(err) && f.Auth == store.ForgeAuthAgent:
 		return nil, fmt.Errorf("%s refused the keys in your SSH agent: add your public key to your account on the host, with write access to push", u.Host)
 	case err != nil && refusedAuth(err):
-		return nil, fmt.Errorf("%s refused Studio's key: add the public key shown on the Git page to the repository or account, with write access to push", u.Host)
+		return nil, fmt.Errorf("%s refused Studio's key: add the public key shown in Settings → Git to the repository or account, with write access to push", u.Host)
 	case err != nil:
 		return nil, fmt.Errorf("SSH to %s: %w", addr, err)
 	}

@@ -7,16 +7,16 @@ host: network connections, git pushes, browser actions and credentials. You revi
 approve those from a local web UI. Studio is a single binary that serves the API and the UI
 on `127.0.0.1`.
 
-> **Status: early.** v0.1 is the first public release; expect rough edges and breaking
-> changes between 0.x releases. Windows support is a preview. See [docs/](docs/README.md) for how
+> **Status: early.** Releases are early (the latest is v0.3.x); expect rough edges and
+> breaking changes between 0.x releases. Windows support is a preview. See [docs/](docs/README.md) for how
 > it is built and [PLAN.md](PLAN.md) for what comes next.
 
 ## Features
 
 - **Teammates.** Named agents with a role, a "soul" (personality and working rules), a
   harness (OpenCode, Claude Code or Codex), a provider, a model and a git identity. Each
-  owns its sandboxes. Providers are Anthropic and OpenAI API keys or an OpenAI-compatible
-  endpoint; subscription logins (Claude Pro/Max, ChatGPT) are not supported yet.
+  owns its sandboxes. Providers are Anthropic and OpenAI API keys, an OpenAI-compatible
+  endpoint, or a Claude Pro/Max or ChatGPT subscription sign-in.
 - **Memory.** Each teammate remembers across sessions, sandboxes and harnesses, and there
   is a shared team memory. Recall and capture run through harness hooks. Consolidation
   merges duplicates and turns contradictions into items you resolve. Embeddings run
@@ -81,7 +81,7 @@ The script downloads the latest release for your platform, checks it against the
 `checksums.txt` (and with `gh attestation verify` when the GitHub CLI is installed and
 logged in), and installs `studio` to `~/.local/bin` without sudo. It then checks KVM or
 Hypervisor.framework access and tells you what to fix; it never installs other software.
-Set `SANDBOX_STUDIO_VERSION=v0.1.0` to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to
+Set `SANDBOX_STUDIO_VERSION=v0.3.2` to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to
 change the directory.
 
 **Windows**, or installing by hand: download the archive for your platform from
@@ -102,7 +102,8 @@ On first start Studio installs the matching microsandbox runtime into `~/.micros
 it pulls the base image the first time a sandbox needs it, so it needs network access. Open
 the printed link; it expires after ten minutes and works once. Run `studio login-url` for a
 new one while Studio is running. Or run `studio tui` in a terminal for a keyboard client of the
-running Studio: sandboxes, approvals and terminals ([docs/tui.md](docs/tui.md)), or commands
+running Studio: sandboxes (including creating them), approvals including git push review,
+chats, activity and terminals ([docs/tui.md](docs/tui.md)), or commands
 such as `studio ls`, `studio ask <sandbox> "<prompt>"` and `studio approve <id>` for scripts
 ([docs/cli.md](docs/cli.md)). Data lives in
 the user data directory (`~/.local/share/sandbox-studio` on Linux,
@@ -115,12 +116,12 @@ the loopback ports Studio listens on. Every finding comes with a fix. The same c
 startup, where problems are logged as warnings and Studio starts anyway, and on
 **Settings → Runtime**.
 
-**Settings** also has two options, both off by default:
+**Settings → General** also has two options, both off by default:
 
 - **Start at login** (or `studio autostart enable|disable|status`) adds a per-user systemd
   unit, LaunchAgent or `HKCU\...\Run` entry. It needs no administrator rights and starts the
   binary it was enabled from, so enable it again after moving the binary.
-- **Check for updates** asks GitHub for the latest release at most once a day and shows when a
+- **Updates** asks GitHub for the latest release at most once a day and shows when a
   newer one is available. Studio never downloads or installs updates itself.
 
 ### Platform notes

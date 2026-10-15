@@ -28,7 +28,7 @@ forge kinds and keeps everything else.
 | GitHub credential | Fine-grained personal access token. Not a GitHub App, not OAuth device flow. |
 | GitHub PRs | REST API with `net/http`, same `git.pr` approval as Forgejo. |
 | GitLab | Push and fetch work as kind `https`. Merge-request proposals are deferred. |
-| Migration | `018_git_remotes.sql` (next free after `017_browser.sql`) |
+| Migration | `019_git_remotes.sql` (after `018_teammates.sql`) |
 
 ## 1. Arbitrary SSH remotes
 
@@ -75,11 +75,11 @@ the key secret. The host must be a public name or address, the same rule as HTTP
   sandbox. Sandboxes still go through push review.
 - Slow signatures. A signature that takes `DefaultSlowSign` (2 s) or longer means the agent
   asked the user to confirm it: a hardware key touch or a password manager prompt. Studio
-  records `agent_slow_at` on the forge. The Git page then shows a dismissible hint with "Set up
-  a Studio key", which switches the forge to `key` and shows the public key. Dismissal is
+  records `agent_slow_at` on the forge. Settings → Git then shows a dismissible hint with
+  "Set up a Studio key", which switches the forge to `key` and shows the public key. Dismissal is
   `agent_hint_dismissed`, per forge (`POST …/forges/{id}/dismiss-agent-hint`).
-- No agent: the forge's operations fail with "SSH agent not available" and how to fix it. The
-  Git page shows the same, and `studio doctor` warns (never fails) while an agent forge exists.
+- No agent: the forge's operations fail with "SSH agent not available" and how to fix it.
+  Settings → Git shows the same, and `studio doctor` warns (never fails) while an agent forge exists.
 
 ### Host key pinning
 
@@ -95,8 +95,8 @@ Pick: **scan and confirm at creation.** The Add forge dialog has two steps for `
 
 Afterwards every connection pins exactly that key (`HostKeyAlgorithms` restricted to its
 type, `ssh.FixedHostKey`). A mismatch fails the push, fetch or test with
-"The host key of <host> changed (pinned SHA256:a, offered SHA256:b). Check with the host's
-admin, then re-pin it on the Git page." The forge row shows the same warning; re-pinning is a
+"the host key of <host> changed (pinned SHA256:a, offered SHA256:b); check with the host's
+admin, then re-pin it in Settings → Git". The forge row shows the same warning; re-pinning is a
 new scan plus confirmation (`POST /forges/{id}/host-key`).
 
 Not an inbox approval: the user is present in the dialog when the forge is created, and an
@@ -259,8 +259,8 @@ is no user endpoint; for `ssh` it authenticates and reports whether the key was 
 
 ## 4. UI
 
-Forges stay on the environment's **Git page** (they are per environment, like secrets), not
-in global Settings.
+Forges are on **Settings → Git** of each environment (they are per environment, like
+secrets).
 
 - **Add forge** dialog: a repository URL first (`git@host:owner/repo.git`,
   `ssh://user@host:port/owner/repo.git` or `https://host/owner/repo`). It fills the kind, base
@@ -289,13 +289,13 @@ in global Settings.
     SHA256:…" for `ssh` forges, "over HTTPS as <login>" otherwise.
   - `git.pr` (GitHub): title "Open a pull request on GitHub"; summary "<branch> → <default> in
     <owner>/<repo>".
-- **Sandbox-facing texts** (as `remote:` lines): "This environment has no forge for
-  github.com. Add one on the Git page in Sandbox Studio.", host-key mismatch, "the forge
+- **Sandbox-facing texts** (as `remote:` lines): `This environment has no forge
+  "<forge>". Add it in Sandbox Studio under Settings → Git.`, host-key mismatch, "the forge
   refused Studio's key/token".
 
 ## 5. Schema, API, tests, docs
 
-### Migration `018_git_remotes.sql`
+### Migration `019_git_remotes.sql`
 
 - Rebuild `forges` (SQLite can't widen a CHECK): `kind IN ('forgejo', 'github', 'https', 'ssh')`,
   new `username TEXT NOT NULL DEFAULT ''`, `host_key TEXT NOT NULL DEFAULT ''`; copy rows,

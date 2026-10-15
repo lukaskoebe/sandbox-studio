@@ -403,10 +403,10 @@ Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
 **UI** (`web/src/`):
 
 - **Routes.**
-  - `routes/e.$env.chats.tsx`: the list, across sandboxes, with "New chat", which picks a
-    sandbox that has an owner teammate.
+  - `routes/e.$env.chats.index.tsx`: the list, across sandboxes, with "New chat", which opens
+    `routes/e.$env.chats.new.tsx` to pick a sandbox that has an owner teammate.
   - `routes/e.$env.chats.$chat.tsx`: the chat itself.
-  - The sidebar gets "Chats" above "Sandboxes".
+  - "Chats" is the second navigation item in the sidebar, under "Home".
 - **Chat page.**
   - **Left:** `MessageScroller` (from `@shadcn/react` 0.3.1, released 2026-08-31, React ≥ 19,
     no other dependencies) with `Message`, `Bubble`, `Attachment` and `Marker` from
@@ -421,13 +421,13 @@ Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
   - `tool-call-card.tsx`, `plan-card.tsx`, `permission-card.tsx` (reuses
     `approval-decision.tsx`), `question-card.tsx`.
   - `composer.tsx`, `preview-panel.tsx`, `files-panel.tsx`, `changes-panel.tsx`.
-- **Sandbox page:** "New session" follows the preference. A chat-backed tmux session shows
+- **Sandbox page:** "Start session" follows the preference. A chat-backed tmux session shows
   "Back to chat", and a chat shows "Open in terminal".
 - **The choice and the preference.**
   - The guided setup's work mode step ([frontend](../frontend.md#routes)) asks "Chat
     (recommended) or Terminal" with `WorkModePicker`. The answer is saved with
     `setUISettings`. Until a choice is saved, the sandbox page doesn't open the chat by itself.
-  - Settings shows the same choice as a `ToggleGroup` under "Agents".
+  - Settings → General shows the same choice as a `ToggleGroup`, "Work mode".
   - The preference sets the default only. Both views exist for every session.
 
 ## 4. Open this chat in the terminal
@@ -439,7 +439,7 @@ a session at a time, so Studio hands it over instead of sharing it.
    - Studio sends `session/close` and ends the ACP stream.
    - It starts a tmux session through `StartSession`, with the resume command below. The
      session is tagged `@studio_harness` plus a new option `@studio_chat=<chat>`.
-   - The chat goes to state `terminal`, the composer is replaced by "Continue in chat", and
+   - The chat goes to state `terminal`, the composer is replaced by "Back to chat", and
      the UI opens the terminal tab.
 2. **Terminal to chat.**
    - "Back to chat" ends the tmux session. Each harness saves after every message. The TUI
@@ -462,6 +462,8 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
 
 - **Both at once.** The chat is read-only while its TUI runs.
 - **Subscription Claude teammates.** They have no chat at all (section 1).
+  - Superseded: a Claude subscription's chats run `studio-agent claude-acp` (section 1, and
+    [harnesses](../harnesses.md#claude-subscription-chats)).
 - **A session the agent can't resume.** `live.open` resumes the ACP session with
   `session/resume` (or `session/load`). When the agent answers with an error, the chat
   becomes `orphaned`: read-only, with "Start a new chat". The agent's session files live in
@@ -521,7 +523,7 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
   - **Limits.** The store is capped at 2 GiB per sandbox. Studio keeps snapshots for the
     newest 50 turns per chat and garbage-collects unreferenced blobs. Older turns lose
     their Undo button.
-- **Disk checkpoints stay** the manual, whole-sandbox tool in the Checkpoints sheet.
+- **Disk checkpoints stay** the manual, whole-sandbox tool in the Checkpoints section of the sandbox dashboard.
 
 **Preview panel.**
 
@@ -580,8 +582,8 @@ need a real provider.
      Codex runs without `codex login` and with `agent-full-access` taking effect.
 3. **Chat UI and the preference.**
    - Build: the shadcn chat components, `@shadcn/react@0.3.1`, the chat routes and item
-     renderers, the composer with attachments, the onboarding dialog, and the Settings
-     toggle.
+     renderers, the composer with attachments, the guided setup's Work mode step, and the
+     Settings toggle.
    - Checks: tsc, lint and prettier. Component tests with recorded items cover every item
      kind, and stop.
    - Manual: a non-developer walkthrough with the fake agent.

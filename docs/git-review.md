@@ -13,7 +13,8 @@ GitHub's `owner/repo` and GitLab's `group/sub/repo` all work; on Forgejo and Git
 be exactly `owner/repo`. The store keeps everything before the last segment in `owner`. The host resolves only
 inside sandboxes (dnsproxy) and is served with the environment CA, like any intercepted
 host. Code: `internal/gitreview`, the API in `internal/api/git.go`, the UI in
-`web/src/routes/e.$env.git.tsx` and `web/src/components/git-review.tsx`.
+`web/src/routes/e.$env.settings.git.tsx`, `web/src/routes/e.$env.git.reviews.$id.tsx` and
+`web/src/components/git-review.tsx`.
 
 ## Forges
 

@@ -6,8 +6,30 @@ sandbox's teammate, follow the network Activity, and drop into a sandbox's termi
 else stays in the browser, and the TUI prints the URL where it applies. Plain `studio` is still
 the server; `studio tui` only ever connects to one.
 
-The design is in [PLAN.md](../PLAN.md#c2--terminal-ui-concept). The user page is
-[Terminal UI](../site/src/content/docs/tui.md).
+The user page is [Terminal UI](../site/src/content/docs/tui.md).
+
+## Why a terminal client
+
+Studio is a browser app on a loopback-only server. Using it from another machine means a
+tunnel or the LAN Vite setup, people who live in a terminal still switched to a browser to
+answer an approval, and over plain SSH (a dev box, a homelab server, a cloud VM) nothing
+worked without forwarding a port. The TUI runs *on* the host, so nothing new listens on the
+network.
+
+It covers the daily loop rather than parity with the web: it is a client of the same HTTP
+API and adds no second way to change state. Settings, providers, souls, the template editor,
+lineage, memory, the rules editor and the browser stay in the web app; the TUI prints their
+URL.
+
+- **Library.** Charm's Bubble Tea v2 with Lip Gloss and Bubbles (`charm.land/*/v2`, MIT,
+  works on Windows terminals). `tview` has heavier widgets and less control over the look; a
+  hand-rolled renderer on `golang.org/x/term` needs no dependency but much more code. There
+  is no markdown renderer: chat text gets light styling (bold headings, indented code)
+  instead of a glamour dependency.
+- **`studio tui`, not `studio`.** Plain `studio` stays the server even in an interactive
+  terminal with a server already running, so scripts and autostart never get a UI.
+- **One screen at a time**, with a header and a key bar and no panes, so it works at 80×24
+  and over slow links.
 
 ## Starting it
 
@@ -58,7 +80,7 @@ The decisions go to the same endpoint as the web card (`POST
 
 ### Git review
 
-`enter` on a git card opens the review the web's git sheet shows (`web/src/components/git-review.tsx`),
+`enter` on a git card opens the review the web's git sheet and page show (`web/src/components/git-review.tsx`),
 from the approval's `git` detail: the repository, sandbox and teammate, the branch (and whether
 it is new), the change with its file count and line totals, the commits, and the unified diff,
 colored as on the web (`+` green, `-` red, hunks in the accent). A pull request shows its

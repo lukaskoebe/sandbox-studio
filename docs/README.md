@@ -34,4 +34,4 @@ data locations, repository layout, security model, testing and conventions.
 - [Decisions and history](decisions.md): decisions log, what changed from v1, milestones.
 - [Spikes](spikes.md): M0 spikes and later live qualifications, with what is still open.
 - Design docs: [chat mode](design/chat-mode.md), [git remotes](design/git-remotes.md).
-- [PLAN.md](../PLAN.md): the current plan and the backlog left from the v2 plan.
+- [PLAN.md](../PLAN.md): the backlog, what is still open.

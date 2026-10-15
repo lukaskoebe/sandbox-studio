@@ -294,9 +294,12 @@ No test ran a vendor CLI or reached a vendor's host. The owner checks them with 
 accounts. Each assumption is marked `verify (S8)` in the code. The steps:
 
 1. Claude Pro/Max. In Settings → Providers, Add provider → Claude subscription → Add. Choose
-   Sign in with Claude. Expect a terminal showing `claude setup-token` and a page link. Open the
-   link, sign in, and paste the code into the terminal. Expect "The sign-in is saved." and the
-   provider `ready`. If the token isn't read, paste the printed token in the dialog instead.
+   Sign in with Claude. Expect the dialog's steps: open the sign-in page, sign in and authorize,
+   copy the code the page shows, and paste it into the dialog's code field (or choose Paste).
+   The terminal running `claude setup-token` is hidden behind "Show the terminal Claude Code
+   runs in". Expect "The sign-in is saved." and the provider `ready`. If the token isn't read,
+   "Use a token from claude setup-token instead" opens: paste the token that
+   `claude setup-token` prints on your own machine.
 2. Claude teammate. Create one on that provider with the Claude Code harness and start a session.
    In its terminal, `echo $CLAUDE_CODE_OAUTH_TOKEN` shows a `studio-` placeholder, and a prompt
    gets an answer.

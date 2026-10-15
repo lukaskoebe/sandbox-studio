@@ -1,11 +1,9 @@
 # UI style (design)
 
-Status: Chosen: A Workbench (2026-10-13), accents toned down (PLAN.md D3). The app theme in
+Status: Chosen: A Workbench (2026-10-13), accents toned down. The app theme in
 `web/src/styles.css` is direction A. This page covers its tokens, the
-shared primitives and the rules for rolling it out page by page behind the e2e suite (N4).
-Direction B stays in the dev-only mockups (`/mockups`, see
-[frontend.md](../frontend.md#development)) for comparison. Its tokens live in
-`web/src/mockups/mockups.css` with their original, untoned accents.
+shared primitives and the rules for rolling it out page by page behind the e2e suite.
+Direction B, not chosen, is kept below as a design record.
 
 The stock shadcn look (`base-mira`, stone base color, 0.45 rem radius, a green primary) is
 clean but interchangeable. The chosen direction adds three things shadcn does not give:
@@ -23,7 +21,7 @@ They mark nav icons, the icons of the workspace's panel buttons, approval cards 
 left edge and the icon tile), kind chips, section icon tiles of that area, and the lineage view.
 Never body text, buttons or card backgrounds.
 
-The accents are about 20 to 25 % less chroma than in the mockups; hue and lightness are
+The accents are about 20 to 25 % less chroma than first proposed; hue and lightness are
 unchanged. Tints are softer too: icon tiles use 11 % of the hue (was 14 %). Icons on their
 tile reach 3.1 to 4.5:1 in light and 6.4 to 7.5:1 in dark.
 
@@ -59,9 +57,9 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
   `ThemeToggle` below. The choice is stored in the browser as `studio.theme`; "system" follows
   the OS preference. Dark neutrals are tinted, never pure black. Accent and status hues keep
   their roles and get lighter.
-- **Panels, not sheets, for watching.** Connections, Browser and Changes sit beside the
-  terminal or chat as side panels, toggled from the workspace toolbar and remembered per page
-  (N3). On phones a panel takes the full screen. Sheets remain only for short detail opened
+- **Panels, not sheets, for watching.** Connections, Browser (only with a teammate) and Files
+  (files and changes) sit beside the terminal or chat as side panels, toggled from the
+  workspace toolbar and remembered per page. On phones a panel takes the full screen. Sheets remain only for short detail opened
   out of context, such as a git push review, and each of those has "Open as page" for an
   address of its own that can be linked.
 - **Approvals.** Every kind has the same card: the rule on the left edge in the area's hue, a
@@ -71,7 +69,8 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
 - **The approval stack.** It sits bottom right on every page but Home, which answers its own
   environment's approvals in place (the stack still shows other environments' there), and does
   not cover content unless
-  someone opens it. One approval shows its card at 640 px and wider; that card is the one
+  someone opens it. It leaves out the cards that a conversation, chat, browser window or review
+  page on screen already shows (`useClaimApprovals`). One approval shows its card at 640 px and wider; that card is the one
   exception, since it has to be answered. More than one approval, or a narrower page, folds the
   cards into an "N approvals" pill, a
   small outline button with the count chip (`WaitingCount`) and a caret. The pill opens the
@@ -144,7 +143,7 @@ Shared pieces for the rollout. Use them instead of local styling.
 ## Direction B: "Calm studio" (not chosen)
 
 Pitch: a studio you share with a team. Warm paper neutrals around the green, room to breathe,
-teammates shown as people. Kept in the mockups only.
+teammates shown as people.
 
 - **Density.** List rows 40 to 48 px with 16 px side padding. Cards use 20 px padding, a 16 px
   radius and a soft shadow. The content column is 60 rem wide and centred in an inset panel.
@@ -166,7 +165,7 @@ teammates shown as people. Kept in the mockups only.
 
 ## Rollout status
 
-Pages move over one at a time, each behind the e2e suite (N4). A page that has moved uses the
+Pages move over one at a time, each behind the e2e suite. A page that has moved uses the
 primitives above and keeps the e2e selectors it had.
 
 - **Done: sidebar.** Compact rows. Sandboxes show their name in mono, their status dot and the
@@ -185,7 +184,8 @@ primitives above and keeps the e2e selectors it had.
 - **Done: network.** Rules (grouped by domain, filters in the URL), requests and activity tabs.
 - **Done: secrets.** A section per scope (environment, each teammate, each sandbox) with a `SectionHeader` and a table; the columns line up from one section to the next.
 - **Done: memory.** Pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.
-- **Done: teammates.** List, overview, chats, browser and settings tabs; the teammate form.
+- **Done: teammates.** List; Conversation, Tasks, Chats, Memory, Browser and Settings tabs; the
+  teammate form.
 - **Done: chat.** The chat page header and the new chat notice.
 - **Done: git.** Settings (forges, pushes and forge dialogs) and the git review sheet.
 - **Done: settings.** General, providers, git, network, templates and runtime; the build log

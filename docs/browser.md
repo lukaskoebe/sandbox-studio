@@ -2,7 +2,7 @@
 
 Agents browse the web through a real Chromium. It runs in a separate microVM per teammate,
 and Studio is the only client: agents get MCP tools, never CDP. This doc covers the
-implementation (milestone M7).
+implementation.
 
 Code:
 - `internal/browser`: the broker, policy, redaction, credentials, history, live view relay and
@@ -36,13 +36,15 @@ Why per teammate:
 
 **Lifecycle:**
 
-- **Created lazily.** The first browser call, or Start in the UI, creates the VM from the
-  browser image: 2 CPUs, 2 GiB of memory and a 2 GiB disk for the profile.
+- **Created lazily.** The first browser call, opening a page in the UI, or Wake up in the
+  browser window's options menu creates the VM from the browser image: 2 CPUs, 2 GiB of
+  memory and a 2 GiB disk for the profile.
 - **Stopped when idle.** A VM with no call and no live viewer for 10 minutes stops. The
   profile disk stays.
-- **Deleted on demand.** Delete in the UI removes the VM and its profile but keeps the
-  history. Deleting the teammate also drops its history, and its rules go with it. Deleting
-  a teammate is refused while it still has agent sandboxes.
+- **Deleted on demand.** Reset profile… in the options menu removes the VM and its profile
+  but keeps the history and the site rules. Deleting the teammate also drops its history,
+  and its rules go with it. Deleting a teammate is refused while it still has agent
+  sandboxes.
 
 The image is `sandbox-studio-browser`, at the same version as the base image. Build it with
 `make image-browser`.
@@ -321,8 +323,8 @@ on request:
 - **List.** The guest lists a session's folder: regular files only, newest first, at most 100.
   Hidden files, Chromium's `.crdownload` partials, links and folders are not downloads. A
   folder that does not exist yet has none. `browser_downloads` lists the persistent profile
-  and the ephemeral sessions the calling sandbox opened; the Browser page's **Downloads** tab
-  lists every session of the teammate's browser, while the browser runs.
+  and the ephemeral sessions the calling sandbox opened; the browser window's **Downloads**
+  button lists every session of the teammate's browser, while the browser runs.
 - **Copy.** A copy streams the file from the browser VM through the host into the target
   sandbox's `downloads/` folder, with `Hub.Upload` (the upload path, the same name checks and
   the 100 MiB limit). The sandbox's guest creates `downloads/` when it is missing and keeps an
@@ -429,7 +431,7 @@ on request:
 - The tmpfs mount at `/run/studio-browser` in the guest, and the memory of two more Chromium
   processes in the 2 GiB VM.
 - Live mouse mapping in a real browser, and the Playwright run that clicks known targets at
-  several viewport sizes and zoom levels (PLAN N2).
+  several viewport sizes and zoom levels.
 
 ## Limitations
 

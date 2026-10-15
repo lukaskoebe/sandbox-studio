@@ -88,7 +88,9 @@ change it.
   approximate.
 - New approvals raise a browser notification (Notification API) once the user allows it.
 - The terminal UI ([terminal UI](tui.md)) lists the same approvals and decides network approvals
-  through the same endpoint, with the same choices. Its other kinds open in the browser.
+  through the same endpoint, with the same choices. It reviews git pushes and pull requests in
+  its pager, with their commits and diff, and decides them there. Browser, memory and chat
+  approvals open in the browser.
 - Each kind has its own card: host and attempts with rule scope and pattern, commits and
   diff, browser action with its URL and an "always on this origin" choice, memory facts
   side by side, chat permission options. Every card names its kind in a chip and marks the

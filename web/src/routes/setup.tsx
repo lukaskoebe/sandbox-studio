@@ -4,7 +4,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { $api } from "@/lib/api/client"
 import { lastEnvironment } from "@/lib/environment"
 
-// The guided setup (PLAN N5). It sits outside an environment's layout: it works on the
+// The guided setup. It sits outside an environment's layout: it works on the
 // environment last opened here, or the first one.
 export const Route = createFileRoute("/setup")({
   component: SetupPage,

@@ -16,7 +16,7 @@ Run these before sending a change; CI runs them too.
 
 ```sh
 gofmt -l .                                    # must print nothing
-golangci-lint run --disable errcheck          # the linters CI runs; see .golangci.yml
+golangci-lint run                             # the linters CI runs; see .golangci.yml
 go vet -tags nobadger,nomysql,nopgx ./...
 go vet -tags e2e,nobadger,nomysql,nopgx ./... # the e2e build, see below
 go test -tags nobadger,nomysql,nopgx ./...
@@ -32,7 +32,8 @@ The `nobadger,nomysql,nopgx` build tags leave out the storage backends of Caddy'
 which Studio doesn't use; release builds use them too. Tests use fakes and never start VMs.
 Real VMs are booted by the smoke workflow (`.github/workflows/smoke.yml`), nightly and on
 demand: it builds Studio on Linux, macOS and Windows, starts it, and creates and deletes a
-sandbox with the `studio` commands. On a microsandbox-capable host, the same by hand:
+sandbox with the `studio` commands. On Linux it then runs the Playwright tests in
+`web/e2e-live` against that Studio. On a microsandbox-capable host, the same by hand:
 
 ```sh
 make build image
@@ -69,5 +70,6 @@ CI runs the suite on every push.
 ## Conventions
 
 - Commit messages are a single line.
-- User-facing behaviour is documented in `docs/`; update it with the change.
+- User-facing behaviour is documented in `site/src/content/docs/`, implementation notes in
+  `docs/`; update them with the change.
 - No new dependencies without a discussion in the issue.

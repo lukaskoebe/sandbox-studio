@@ -14,7 +14,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// settingSetup stores the guided setup's progress (PLAN N5, docs/frontend.md).
+// settingSetup stores the guided setup's progress (docs/frontend.md).
 const settingSetup = "setup.v1"
 
 // The two outcomes a setup step can have. A step without one is still to do.

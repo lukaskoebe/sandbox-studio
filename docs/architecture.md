@@ -57,7 +57,7 @@ Non-goals:
   model and git identity, plus a private memory scope. A teammate owns sandboxes and one
   browser VM. See [teammates](teammates.md).
 - **Provider.** An environment's LLM access: Anthropic API key, OpenAI API key, an
-  OpenAI-compatible endpoint, or a Claude or ChatGPT subscription (not usable yet). The kind
+  OpenAI-compatible endpoint, or a Claude or ChatGPT subscription. The kind
   decides which harnesses can use it and which utility model memory jobs use.
 - **Sandbox.** A microVM with a root filesystem, a `/workspace` disk, a `/home/agent` disk and
   a `/var/lib/docker` disk. It persists across stop and start. See [sandboxes](sandboxes.md).
@@ -118,7 +118,10 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
   reconcile sandboxes, recover chats and build jobs, then serve the API and UI.
 - Subcommands: `studio` (serve), `openapi`, `login-url`, `tui` (the [terminal UI](tui.md)),
-  `doctor`, `version`, `autostart enable|disable|status`. The guest binary is `studio-agent` (see
+  `doctor`, `version`, `autostart enable|disable|status`, and the sandbox commands of
+  `internal/cli` (`ls`, `show`, `start`, `stop`, `suspend`, `resume`, `create`, `fork`, `rm`,
+  `shell`, `ask`, `approvals`, `approve`, `deny`, `checkpoints`, `checkpoint`, `restore`,
+  `envs`, `completion`; see [command line](cli.md)). The guest binary is `studio-agent` (see
   [guest agent](guest-agent.md)).
 
 ## Data locations
@@ -163,14 +166,20 @@ internal/
   agentchan/ agentproto/ agentbin/      host side and wire format of the agent channel
   guest/ agentcall/ agenthook/          guest agent internals
   harness/ teammates/ acp/ chat/        harness adapters, teammates, ACP chats
+  claudeacp/                            ACP shim that runs Claude Code for subscription chats
+  login/                                subscription logins in a system VM
+  tasks/ heartbeat/                     teammates' task lists and scheduled check-ins
+  netreview/                            AI reviewer of the assisted security level
   memory/ agentmem/                     memory store and its use in sessions
   browser/ gitreview/ integrations/     browser broker, git review
   preview/ webauth/ api/ events/ webui/ HTTP surface
   tui/                                  terminal UI client (studio tui)
+  cli/                                  command line client (studio ls, ask, approve, …)
   store/                                SQLite catalog and migrations
   doctor/ autostart/ updates/ diskspace/ paths/ version/
   e2e/                                  fakes of the e2e build (-tags e2e only)
-web/                  Vite + React + TanStack Router + shadcn (Base UI); e2e tests in web/e2e
+web/                  Vite + React + TanStack Router + shadcn (Base UI); e2e tests in web/e2e,
+                      browser tests against a real Studio in web/e2e-live
 images/base/          base image (Dockerfile + rootfs)
 images/browser/       browser VM image
 site/                 user documentation (Astro Starlight)
@@ -198,8 +207,8 @@ docs/                 developer documentation
 - `internal/harness/opencode-plugin.test.mjs` tests the OpenCode plugin with `node --test`.
 - Live qualifications are programs under `spikes/`; results are in [spikes](spikes.md).
 - CI (`.github/workflows/ci.yml`): on Linux, macOS and Windows, `go vet`, `go test`,
-  `go build`; on Linux also gofmt, the OpenAPI schema check, the guest agent build,
-  `install.sh` tests and shellcheck. The web job checks the generated API types, then runs
+  `go build` and the Linux guest agent build; on Linux and macOS the `install.sh` tests; on
+  Linux also gofmt, golangci-lint, the OpenAPI schema check and shellcheck. The web job checks the generated API types, then runs
   typecheck, ESLint, Prettier and the build. The e2e job runs `make e2e` on Linux with
   Playwright's Chromium. `docs.yml` builds the site.
 - Smoke (`.github/workflows/smoke.yml`, nightly and on demand): on Linux, macOS and Windows,
@@ -207,7 +216,8 @@ docs/                 developer documentation
   and delete it. Linux boots the base image built from the commit, the others the latest
   release's. GitHub's macOS runners have no nested virtualization, so the boot is skipped
   there with a warning. On Windows, Studio is started through WMI: the runner's job object
-  doesn't allow breakaway, and msb starts each VM detached from its job.
+  doesn't allow breakaway, and msb starts each VM detached from its job. Linux then runs
+  the browser tests of `web/e2e-live` against the same Studio.
 - Releases: see [release](release.md).
 
 ## Conventions
@@ -218,3 +228,5 @@ docs/                 developer documentation
   both.
 - `make test` and `make lint` run the local checks.
 - User-facing features get a page in `site/`; implementation notes go in `docs/`.
+- Every change adds or updates e2e scenarios for what it changes; nothing merges with a red
+  suite.

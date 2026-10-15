@@ -7,7 +7,7 @@ A sandbox is a Linux microVM with Docker, a persistent `/workspace`, and its own
 
 ## Create one
 
-1. Choose **New sandbox** from the overview.
+1. Choose **New sandbox** on Home, or **+** next to **Sandboxes** in the sidebar.
 2. Enter a name using lowercase letters, digits, and dashes.
 3. Optionally choose a teammate. This choice cannot be changed later.
 4. Select **Create**. Studio opens the sandbox while it boots. The page lists the creation steps and shows the progress of the image download. If a step fails, the page shows the error and a **Delete** button.
@@ -36,7 +36,7 @@ Start and stop are on the dashboard. The options menu (**⋯**, on both pages) h
 
 ## Side panels
 
-In the workspace, **Browser**, **Connections**, and **Files** open a panel beside the terminal or chat. **Connections** lists where the sandbox connects. **Files** shows the sandbox's files, the changes of its chats, and its running apps. To copy files in, drop them onto the Files panel or choose **Upload…** from its folder menu. They go into the folder shown, up to 100 MiB each. If a name is taken, you choose whether to replace the file or keep both. Drag the panel's left edge to resize it on a desktop; on a phone it fills the screen. Close it with its close button or Escape.
+In the workspace, **Browser**, **Connections**, and **Files** open a panel beside the terminal or chat. **Browser** shows only when the sandbox has a teammate. **Connections** lists where the sandbox connects. **Files** shows the sandbox's files, the changes of its chats, and its running apps. To copy files in, drop them onto the Files panel or choose **Upload…** from its folder menu. They go into the folder shown, up to 100 MiB each. If a name is taken, you choose whether to replace the file or keep both. Drag the panel's left edge to resize it on a desktop; on a phone it fills the screen. Close it with its close button or Escape.
 
 Rebasing changes the template and carries over `/workspace` and the home directory; Docker data and terminal sessions are not carried over. The rebase runs in the background: the sandbox page shows its steps as for a new sandbox. If it fails, the sandbox stays on its old template and the page names the step that failed until you dismiss it. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
 
@@ -57,7 +57,7 @@ If a web server is listening on a sandbox port, open **Previews** in the workspa
 
 Studio removes its own authentication cookies before forwarding preview requests and filters Studio cookies from preview responses. The preview app's own cookies are retained. Preview links do not expose the sandbox to your LAN.
 
-Each port keeps its own browser storage, so a service worker an app registered stays after the app stops, and may keep serving it to whatever runs on the port next. Choose **Open fresh** under the port in **Previews** (or the broom next to **Open** on the dashboard, or **Reload fresh** in a chat's preview) to clear the preview's caches, storage and service workers before it opens. Its cookies stay.
+Each port keeps its own browser storage, so a service worker an app registered stays after the app stops, and may keep serving it to whatever runs on the port next. In **Previews**, choose **Open fresh** and then the port (or the broom next to **Open** on the dashboard, or **Reload fresh** in a chat's preview) to clear the preview's caches, storage and service workers before it opens. Its cookies stay.
 
 ## Export a workspace
 

@@ -55,8 +55,9 @@ func (m UtilityModel) cost(in, out int) int64 {
 // ErrNoUtility means the provider has no utility model Studio can call.
 var ErrNoUtility = errors.New("no utility model for this provider")
 
-// UtilityFor is the utility model of a provider; ok is false for subscriptions, and for an
-// API-key provider whose key was never added, since its calls would carry no key.
+// UtilityFor is the utility model of a provider; ok is false for a kind without one, for an
+// endpoint without a model, and for a provider whose key or login was never added, since its
+// calls would carry no credential.
 func UtilityFor(p store.Provider) (UtilityModel, bool) {
 	m, ok := utilityModelOf(p)
 	if ok && p.SecretID == "" {

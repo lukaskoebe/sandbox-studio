@@ -5,7 +5,7 @@ description: Drive sandboxes, ask a teammate and answer approvals from a shell o
 
 `studio <command>` talks to the Studio that is already running on this machine. It covers the
 daily loop for scripts and quick work: list and start sandboxes, ask a teammate, answer
-approvals, save checkpoints. For a keyboard UI, use the [terminal UI](/tui/); for everything
+approvals, save checkpoints. For a keyboard UI, use the [terminal UI](../tui/); for everything
 else, the browser.
 
 ```sh
@@ -38,7 +38,7 @@ The session cookie is set after the first navigation in fixtures.ts, so a fast p
 | `studio approve <id>`, `studio deny <id>` | Decides an approval. |
 | `studio checkpoints <sandbox>` | Lists a sandbox's checkpoints. |
 | `studio checkpoint <sandbox> [name]` | Saves a checkpoint. |
-| `studio restore <sandbox> <checkpoint>` | Puts a sandbox back to a checkpoint. Asks first. |
+| `studio restore <sandbox> <checkpoint>` | Puts a sandbox back to a checkpoint. Asks first. Studio refuses it for now, because the current runtime cannot restore checkpoints. |
 | `studio envs` | Lists the environments. |
 
 `studio help` lists them, and `studio help <command>` shows a command's flags. Sandboxes are

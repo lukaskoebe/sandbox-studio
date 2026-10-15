@@ -8,7 +8,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 )
 
-// Site scope (C1): what the policy asks of a browser about the pages it has open. The policy
+// Site scope: what the policy asks of a browser about the pages it has open. The policy
 // decides the requests of a browser VM one at a time; the broker says which page each one
 // belongs to, and which sites the user approved for the browser session.
 

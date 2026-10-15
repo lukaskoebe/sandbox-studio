@@ -19,7 +19,7 @@ function RequestsTab() {
   const requests = $api.useQuery("get", "/api/environments/{env}/approvals", {
     params: { path: { env }, query: { status: "pending" } },
   })
-  // Git approvals are reviewed on the Git page.
+  // Only network requests: a git push is decided in its review, the rest in the approval stack.
   const list = (requests.data ?? []).filter(isNetworkApproval)
   useClaimApprovals(list.map((a) => a.id))
 

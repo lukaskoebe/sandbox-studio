@@ -73,7 +73,7 @@ capped at 100.
 
 ## Edit the spec in the editor
 
-The Builds dialog edits the spec in a CodeMirror YAML editor that uses the Caddyfile
+The "New template build" dialog (**New build** on Settings → Templates) edits the spec in a CodeMirror YAML editor that uses the Caddyfile
 editor's theme. It highlights the YAML and suggests top-level and resource keys, tool
 names, size units (`MiB` and `GiB`), and apt package names from a short built-in list.
 About 400 ms after typing pauses, it sends the draft to the validate route and marks each
@@ -84,7 +84,7 @@ same action. Undo brings back the text from before the insert.
 
 ## Import and export YAML source
 
-In the Builds dialog, **Import YAML** reads one `.yaml` or `.yml` file into the draft; it
+In the "New template build" dialog, **Import YAML** reads one `.yaml` or `.yml` file into the draft; it
 does not submit or run a build. Files must be at most 65,536 bytes, contain strict UTF-8,
 and not be empty or contain NUL. A rejected or unreadable file leaves the existing draft
 unchanged. Import does not submit a build: the editor checks the loaded draft, and
@@ -237,7 +237,8 @@ age-based lock expiry or automatic takeover of a possibly live worker.
 
 ## Create a sandbox from a ready template
 
-The Templates page offers **Create sandbox** for a ready build that has a template. The
+A ready build that has a template offers **Create sandbox** on its sheet (opened from
+Settings → Templates) and on its page (`/e/$env/builds/$id`). The
 dialog loads that same-environment ready template, displays its resource sizes, and sends
 only a sandbox name. Resource limits are fixed by the template's canonical spec; the
 instance API does not accept resource overrides.
@@ -289,7 +290,7 @@ qualification state was removed after cleanup. See the
 
 UI validation used mocked desktop/mobile workflows and web checks; no live-worker UI
 build or workflow was run. Earlier Linux amd64 registry and exporter/source-import
-qualifications remain in the [M3 spike report](spikes.md#persistent-registry-qualification-2026-10-09)
+qualifications remain in the [spike report](spikes.md#persistent-registry-qualification-2026-10-09)
 and its [layer-transfer results](spikes.md#layer-transfer-and-capture-foundations).
 Still open: live qualification of the exec export path including apt/mise network
 installs, cold-cache base pulls, a template build on a release base, macOS and Windows host

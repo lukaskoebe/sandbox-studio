@@ -2,7 +2,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { $api, errorMessage, type Setup } from "@/lib/api/client"
 
-/** The seven steps of the guided setup, in the order of the wizard (PLAN N5). */
+/** The seven steps of the guided setup, in the order of the wizard. */
 export const setupSteps = [
   { key: "doctor", title: "Host check" },
   { key: "workMode", title: "Work mode" },

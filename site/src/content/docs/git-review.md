@@ -3,7 +3,7 @@ title: Git review
 description: Keep forge credentials on the host and approve pushes before Studio sends them upstream.
 ---
 
-For a forge added on an environment's **Git** page, Studio can act as the virtual Git remote. When a sandbox pushes through Studio, the change is staged in a private per-sandbox repository and appears in the approval inbox as a diff. The upstream branch does not change until you approve the push.
+For a forge added in **Settings → Git**, Studio can act as the virtual Git remote. When a sandbox pushes through Studio, the change is staged in a private per-sandbox repository and appears in the approval inbox as a diff. The upstream branch does not change until you approve the push.
 
 ![The Git settings page showing configured forges](../../assets/screenshots/git.jpg)
 

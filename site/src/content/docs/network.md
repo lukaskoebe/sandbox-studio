@@ -67,6 +67,10 @@ reverse_proxy https://api.example.com {
 
 Create the secret first and bind it to `api.example.com`. Studio checks Caddy rules before saving them. Rules support a limited set of request handlers and fixed public upstream hosts; imports, file access, environment lookups, extra listeners, and arbitrary Caddy modules are not available.
 
+## Private hosts (company VPN)
+
+Sandboxes can't reach private addresses, so a company host behind a VPN, such as `git.company.local`, is unreachable by default. To let sandboxes reach one, add it under **Private hosts** on **Settings → Network**, as a host name or a wildcard such as `*.company.local`. Ports default to 80 and 443; list others, such as 22 for SSH. The host still needs a rule, an approval, or a security level's allow like any other host. Approvals, rules, and imported environment files never add private hosts, and loopback, link-local, and the host's own addresses stay unreachable.
+
 ## Browser and Git approvals are separate
 
 The network policy controls which hosts a sandbox can reach. Browser actions that change a page can also need a **browser action** approval. Git pushes to a forge configured in **Settings → Git** use **Git push** review. A network allow does not approve either of those actions. See [Browser](../browser/) and [Git review](../git-review/).
