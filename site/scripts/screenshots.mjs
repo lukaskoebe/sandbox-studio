@@ -1,24 +1,31 @@
 // Captures the screenshots in src/assets/screenshots from a running scratch Studio.
 //
-//   node scripts/screenshots.mjs '<login link>'
+//   node scripts/screenshots.mjs '<login link>' [name ...]
 //
 // Run it against a throwaway Studio (its own SANDBOX_STUDIO_HOME and -addr), never your
 // real one: it seeds demo data with fake keys, creates two sandboxes and leaves them for
 // you to delete. It uses an installed Chromium (CHROMIUM, default /snap/bin/chromium) and
 // never downloads a browser. No harness session is started, so no model API is called.
-import { mkdir } from "node:fs/promises"
+// Names after the link capture only those screenshots; the login link works once, so later
+// runs pass the session cookie Studio's first run saved instead (see `session` below).
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { chromium } from "playwright-core"
 
 const link = process.argv[2]
-if (!link?.includes("#studio-login=")) {
-  console.error("usage: node scripts/screenshots.mjs '<login link printed by studio>'")
+if (!link?.includes("#studio-login=") && link !== "again") {
+  console.error("usage: node scripts/screenshots.mjs '<login link printed by studio>' [name ...]")
+  console.error("       node scripts/screenshots.mjs again [name ...]")
   process.exit(2)
 }
-const base = new URL(link).origin
+const only = new Set(process.argv.slice(3))
+const wanted = (name) => only.size === 0 || only.has(name)
 const out = fileURLToPath(new URL("../src/assets/screenshots/", import.meta.url))
+const session = fileURLToPath(new URL("../.screenshots-session.json", import.meta.url))
 await mkdir(out, { recursive: true })
 
+const saved = link === "again" ? JSON.parse(await readFile(session, "utf8")) : null
+const base = saved?.base ?? new URL(link).origin
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM ?? "/snap/bin/chromium",
   headless: true,
@@ -27,10 +34,17 @@ const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
   colorScheme: "light",
   baseURL: base,
+  storageState: saved?.state,
 })
 const page = await context.newPage()
-await page.goto(link)
-await page.getByText("Sandboxes", { exact: true }).first().waitFor()
+if (!saved) {
+  // The first start opens the guided setup.
+  await page.goto(link)
+  await page.getByRole("button", { name: /Host check/ }).waitFor()
+  await page.waitForTimeout(1500)
+  if (wanted("setup")) await page.screenshot({ path: `${out}setup.jpg`, type: "jpeg", quality: 82 })
+  await writeFile(session, JSON.stringify({ base, state: await context.storageState() }))
+}
 
 // --- API helpers (the page's session cookie authenticates them) ---------------------------
 
@@ -54,6 +68,9 @@ async function ensure(path, match, body) {
 const FAKE_KEY = "sk-demo-not-a-real-key"
 const envs = await list("/api/environments")
 const env = envs[0].id
+// Terminals rather than chats, and the guided setup out of the way.
+await api("PUT", "/api/settings/ui", { agentView: "terminal" })
+await api("PUT", `/api/setup?env=${env}`, { steps: {}, dismissed: true })
 await ensure("/api/environments", (e) => e.name === "Private", { name: "Private" })
 const E = `/api/environments/${env}`
 
@@ -150,10 +167,6 @@ for (const pattern of [
     pattern
   )
 }
-const checkpoints = await list(`${E}/sandboxes/${storefront.id}/checkpoints`)
-if (!checkpoints.some?.((c) => c.name === "before-upgrade")) {
-  await api("POST", `${E}/sandboxes/${storefront.id}/checkpoints`, { name: "before-upgrade" })
-}
 
 // --- Screenshots --------------------------------------------------------------------------
 
@@ -186,112 +199,168 @@ async function closeDialog() {
   await page.getByRole("dialog").first().waitFor({ state: "detached", timeout: 5000 }).catch(() => {})
   await page.waitForTimeout(400)
 }
-
-// Login screen, in a context without a session.
-{
-  const fresh = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "light" })
-  const p = await fresh.newPage()
-  await p.goto(base)
-  await p.getByText("Connect to Studio").waitFor()
-  await shot("login", p)
-  await fresh.close()
+async function running(sb) {
+  for (let i = 0; i < 300; i++) {
+    const now = await api("GET", `${E}/sandboxes/${sb.id}`)
+    if (now.status === "running") return
+    if (now.status === "stopped") await api("POST", `${E}/sandboxes/${sb.id}/start`)
+    await page.waitForTimeout(1000)
+  }
+  throw new Error(`${sb.name} did not start`)
+}
+/** Dismisses what is still waiting, such as the requests of an earlier step. */
+async function clearApprovals() {
+  for (const a of await list("/api/approvals?status=pending"))
+    await api("POST", `/api/environments/${a.environmentId}/approvals/${a.id}/decide`, { action: "dismiss", scope: "environment" })
+}
+/** Runs one screenshot step; a failure is reported and the next step goes on. */
+async function step(name, fn) {
+  if (!wanted(name)) return
+  try {
+    await fn()
+  } catch (err) {
+    console.error(`failed ${name}: ${err.message.split("\n")[0]}`)
+    await page.keyboard.press("Escape").catch(() => {})
+  }
 }
 
-await go("")
-await shot("overview")
-await button("New sandbox").click()
-await page.getByLabel("Name").fill("my-project")
-await shot("new-sandbox")
-await closeDialog()
-
-await page.getByRole("button", { name: /Default/ }).first().click()
-await shot("environments")
-await closeDialog()
+await step("new-sandbox", async () => {
+  await go("")
+  await page.getByTitle("New sandbox").click()
+  await page.getByLabel("Name").fill("my-project")
+  await shot("new-sandbox")
+  await closeDialog()
+})
+await step("environments", async () => {
+  await go("")
+  await page.getByRole("button", { name: /Default/ }).first().click()
+  await shot("environments")
+  await closeDialog()
+})
 
 // A terminal with a shell, then a request to an unknown host that waits for approval.
-await go(`/sandboxes/${webshop.id}`)
-await page.locator(".xterm").first().click()
-await page.keyboard.type("clear\n")
-await page.waitForTimeout(500)
-await page.keyboard.type("cd /workspace && uname -srm && docker --version\n", { delay: 15 })
-await page.waitForTimeout(2500)
-await shot("sandbox-terminal")
-await page.keyboard.type("curl -sI https://example.com | head -1\n", { delay: 15 })
-await page.getByText("example.com", { exact: false }).last().waitFor({ timeout: 30000 })
-await page.waitForTimeout(1500)
-await shot("approval")
-await button("Ignore").click().catch(() => {})
-await page.waitForTimeout(1000)
+await step("sandbox-terminal", async () => {
+  await running(webshop)
+  await go(`/sandboxes/${webshop.id}/work`)
+  await page.locator(".xterm").first().click()
+  await page.keyboard.type("clear\n")
+  await page.waitForTimeout(500)
+  await page.keyboard.type("cd /workspace && uname -srm && docker --version\n", { delay: 15 })
+  // The first docker call in a fresh VM takes seconds; xterm draws on a canvas, so there
+  // is no text to wait for.
+  await page.waitForTimeout(8000)
+  await shot("sandbox-terminal")
+})
+await step("approval", async () => {
+  // An earlier run's Deny left a rule for the host, so nothing would ask.
+  for (const r of await list(`${E}/rules`))
+    if (r.host === "example.com") await api("DELETE", `${E}/rules/${r.id}`)
+  await running(webshop)
+  await go(`/sandboxes/${webshop.id}/work`)
+  await page.locator(".xterm").first().click()
+  await page.keyboard.type("clear\n")
+  await page.keyboard.type("curl -sI https://example.com | head -1\n", { delay: 15 })
+  await page.getByTestId("approval-card").first().waitFor({ timeout: 30000 })
+  await page.waitForTimeout(1500)
+  await shot("approval")
+  await page.getByTestId("approval-card").first().getByRole("button", { name: "Deny", exact: true }).click()
+})
 
-await button("Connections").click()
-await page.waitForTimeout(1000)
-await shot("connections")
-await closeDialog()
+await step("checkpoints", async () => {
+  await running(storefront)
+  const checkpoints = await list(`${E}/sandboxes/${storefront.id}/checkpoints`)
+  if (!checkpoints.some?.((c) => c.name === "before-upgrade"))
+    await api("POST", `${E}/sandboxes/${storefront.id}/checkpoints`, { name: "before-upgrade" })
+  await go(`/sandboxes/${storefront.id}`)
+  await page.getByRole("region", { name: "Checkpoints" }).waitFor()
+  await shot("checkpoints")
+})
 
-await go(`/sandboxes/${storefront.id}`)
-await button("Checkpoints").click()
-await page.waitForTimeout(1000)
-await shot("checkpoints")
-await closeDialog()
+await step("rule-dialog", async () => {
+  await go("/network/rules")
+  await button("Add rule").click()
+  await page.getByRole("dialog").getByLabel("Host", { exact: true }).fill("api.openai.com")
+  await page.getByRole("dialog").getByText("Proxy", { exact: true }).click()
+  await shot("rule-dialog")
+  await closeDialog()
+})
+await step("secrets", async () => {
+  await go("/secrets")
+  await shot("secrets")
+})
+await step("providers", async () => {
+  await go("/settings/providers")
+  await shot("providers")
+})
+await step("teammates", async () => {
+  await go("/teammates")
+  await shot("teammates")
+})
+await step("git", async () => {
+  await go("/settings/git")
+  await shot("git")
+})
+await step("memory", async () => {
+  await go("/memory")
+  await page.getByRole("tab", { name: "Facts" }).click()
+  await shot("memory")
+})
+await step("build-dialog", async () => {
+  await go("/settings/templates")
+  await button("New build").click()
+  await page.waitForTimeout(500)
+  await shot("build-dialog")
+  await closeDialog()
+})
 
-await go("/network")
-await shot("network")
-await button("Add rule").click()
-await page.getByLabel("Host").fill("api.openai.com")
-await page.getByRole("radio", { name: "Proxy" }).click().catch(() => page.getByText("Proxy", { exact: true }).click())
-await shot("rule-dialog")
-await closeDialog()
-
-await go("/secrets")
-await shot("secrets")
-await go("/providers")
-await shot("providers")
-await button("Add provider").click()
-await page.waitForTimeout(500)
-await shot("provider-dialog")
-await closeDialog()
-
-await go("/teammates")
-await shot("teammates")
-await page.getByRole("button", { name: /Add a teammate/ }).first().click()
-await page.waitForTimeout(500)
-await shot("teammate-dialog")
-await closeDialog()
-
-await go("/git")
-await shot("git")
-await button("Add forge").click()
-await page.waitForTimeout(500)
-await shot("forge-dialog")
-await closeDialog()
-
-await go("/memory")
-await page.getByRole("tab", { name: "Facts" }).click()
-await shot("memory")
-
-await go("/builds")
-await button("New build").click()
-await page.waitForTimeout(500)
-await shot("build-dialog")
-await closeDialog()
-
-await go("/browser")
-await page.getByRole("tab", { name: "Sites" }).click()
-await shot("browser")
-
-await go("/settings")
-await shot("settings")
+// Home once both sandboxes run and the denied request shows in its activity.
+await step("overview", async () => {
+  await running(webshop)
+  await running(storefront)
+  await clearApprovals()
+  await go("")
+  await shot("overview")
+})
 
 // A dark hero for the landing page.
-{
-  const dark = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark", baseURL: base, storageState: await context.storageState() })
+await step("hero-dark", async () => {
+  await running(webshop)
+  await clearApprovals()
+  const dark = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    colorScheme: "dark",
+    baseURL: base,
+    storageState: await context.storageState(),
+  })
   const p = await dark.newPage()
-  await p.emulateMedia({ colorScheme: "dark" })
-  await p.goto(`/e/${env}/sandboxes/${webshop.id}`)
-  await p.waitForTimeout(2500)
-  console.log(await p.evaluate(() => [matchMedia("(prefers-color-scheme: dark)").matches, document.documentElement.className, getComputedStyle(document.body).backgroundColor]))
+  await p.goto(`/e/${env}/sandboxes/${webshop.id}/work`)
+  await p.locator(".xterm").first().click()
+  await p.keyboard.type("clear\n")
+  await p.waitForTimeout(1000)
+  await p.keyboard.type("cd /workspace && uname -srm && docker --version && node --version\n", { delay: 15 })
+  await p.waitForTimeout(8000)
   await shot("hero-dark", p)
   await dark.close()
-}
+})
+
+// Ada's browser on a real page, which you drive from the address bar, with her sites beside
+// it. It comes last: the sandboxes stop first, to leave memory for the browser VM.
+await step("browser", async () => {
+  for (const sb of [webshop, storefront]) await api("POST", `${E}/sandboxes/${sb.id}/stop`).catch(() => {})
+  for (const host of ["*.wikipedia.org", "*.wikimedia.org"])
+    await ensure(`${E}/rules`, (r) => r.host === host, { host, action: "allow", ports: [443], teammateId: ada.id })
+  await go(`/teammates/${ada.id}/browser`)
+  // A sleeping browser has one field to open a page; a running one has the address bar.
+  const address = page.getByLabel("Open a page").or(page.getByLabel("Browser address"))
+  await address.fill("en.wikipedia.org/wiki/Sandbox_(computer_security)")
+  await address.press("Enter")
+  await page.getByLabel("Live view of the browser").waitFor({ timeout: 180000 })
+  await page.getByLabel("Browser address").and(page.locator('[value="en.wikipedia.org/wiki/Sandbox_(computer_security)"]')).waitFor({ timeout: 60000 })
+  await page.waitForTimeout(5000)
+  await clearApprovals()
+  await page.getByRole("tab", { name: "Sites" }).click()
+  await shot("browser")
+  await button(/Hand back/).click().catch(() => {})
+})
 
 await browser.close()
