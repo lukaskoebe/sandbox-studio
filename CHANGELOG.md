@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.3.3 — 2026-10-15
+
+Scheduled checkpoints, review feedback that reaches the agent, a browser that opens what its
+sandbox serves, and fixes from feedback.
+
+- **Checkpoints:** a sandbox can take checkpoints on a schedule, every 1, 4, 12 or 24 hours.
+  It keeps the newest 3 and the last of each day for a week, and never deletes yours. Off by
+  default; checkpoints can now be deleted oldest first.
+- **Git review:** comment on lines of the diff, and send your review straight to the agent:
+  as a prompt to one of the sandbox's chats (queued while a turn runs) or pasted into an
+  agent's terminal. Pushes and pull requests have their own **Git** page in the sidebar,
+  with the count waiting for review. An SSH forge's address takes a clone URL such as
+  `git@github.com:owner/repo.git`.
+- **Browser:** a teammate's browser opens what its sandbox serves at `localhost`, and clicks
+  on the live view land where the pointer is (they drifted down toward the bottom of the
+  page). After you hand the browser back, the teammate is told how long you drove, the pages
+  you were on and where the page is now. A new **Stealth mode** in a teammate's settings
+  presents its browser as a desktop Chrome for sites that turn automated browsers away.
+  Chromium no longer asks about Google's services.
+- **Previews:** an app's service worker works in the chat's preview panel; its script and
+  fetches got 403 there.
+- **Memory:** embeddings work again; every chunk failed with "invalid memory handle" and
+  search ran on keywords alone.
+- **Sidebar:** a running sandbox's terminals are listed under it, and a link can name the
+  workspace tab to show.
+- **Terminal:** Ctrl+L clears a terminal that is scrolled up.
+- **Teammates:** without a provider, adding a teammate says why it can't and leads to the
+  providers.
+- **App:** Studio can be installed as an app, with its own icon and the number of approvals
+  waiting on it.
+- **Command line:** `studio -h`, `--help` and `help` list Studio's commands, and every command
+  answers `-h`.
+- **Sandboxes:** a second Studio on the machine can start sandboxes; DNS ports another
+  program holds are skipped.
+
 ## v0.3.2 — 2026-10-15
 
 A browser that works like a browser, a finished terminal UI, and fixes from feedback.
