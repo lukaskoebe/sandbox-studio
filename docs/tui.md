@@ -6,7 +6,8 @@ sandbox's teammate, follow the network Activity, and drop into a sandbox's termi
 else stays in the browser, and the TUI prints the URL where it applies. Plain `studio` is still
 the server; `studio tui` only ever connects to one.
 
-The user page is [Terminal UI](../site/src/content/docs/tui.md).
+The user page is [Terminal UI](../site/src/content/docs/tui.md). A proposal for a richer look
+on wide and capable terminals is in [design/tui-visual.md](design/tui-visual.md).
 
 ## Why a terminal client
 
