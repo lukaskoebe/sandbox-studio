@@ -22,7 +22,20 @@ export type GuestState = {
     body?: string
     error?: string
   }[]
+  /** The scripted ACP agents the guest served, one per chat agent started. */
+  acp: {
+    chat: string
+    harness: string
+    prompts: unknown[]
+    outcomes: { outcome: { outcome: string; optionId?: string } }[]
+  }[]
 }
+
+/** A branch of a fake upstream repository (internal/e2e, /api/e2e/upstream). */
+export type UpstreamBranch = { name: string; sha: string; subject: string }
+
+/** What the fake guest's push did (POST /api/e2e/sandboxes/{id}/push). */
+export type Pushed = { commit?: string; output: string; error?: string }
 
 /** Studio's API and the fake runtime's control API, logged in. */
 export class Api {
@@ -60,6 +73,57 @@ export class Api {
   /** Makes the fake guest request http://host:port/ through the gateway. */
   connect(id: string, host: string, port = 80) {
     return this.json("POST", `/api/e2e/sandboxes/${id}/connect`, { host, port })
+  }
+
+  /** Waits until the fake guest of a sandbox is connected and has its config. */
+  async guestReady(id: string) {
+    await expect
+      .poll(async () => {
+        const s = await this.guest(id)
+        return s.connected && s.ca
+      })
+      .toBe(true)
+  }
+
+  /**
+   * (Re)creates the fake forge's bare repository <host>/<path> with one commit on main.
+   * Every forge URL of the e2e build reaches it.
+   */
+  async createUpstream(repo: string) {
+    const res = await this.json<{ branches: UpstreamBranch[] }>(
+      "PUT",
+      `/api/e2e/upstream/${repo}`
+    )
+    return res!.branches
+  }
+
+  async upstream(repo: string) {
+    const res = await this.json<{ branches: UpstreamBranch[] }>(
+      "GET",
+      `/api/e2e/upstream/${repo}`
+    )
+    return res!.branches
+  }
+
+  /**
+   * Makes the fake guest clone url through the gateway, commit file and push the branch, as
+   * git in the sandbox would.
+   */
+  async push(
+    id: string,
+    push: {
+      url: string
+      branch?: string
+      file: string
+      content: string
+      message: string
+    }
+  ) {
+    return (await this.json<Pushed>(
+      "POST",
+      `/api/e2e/sandboxes/${id}/push`,
+      push
+    ))!
   }
 
   /** Dismisses every pending approval, so tests don't see each other's. */

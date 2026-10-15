@@ -31,11 +31,49 @@ var Requests func(ctx context.Context, sandboxID, host string, port int, req pol
 //	POST /api/e2e/sandboxes/{id}/connect  {"host": "example.com", "port": 80}: an HTTP request
 //	                                    through the gateway, in the background
 //	PUT  /api/e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
+//	POST /api/e2e/sandboxes/{id}/push     a Push: the guest clones through the gateway, commits one
+//	                                    file and pushes; answers with Pushed once git is done
 //	POST /api/e2e/requests                {"sandboxId", "host", "port", "method", "path", "navigation",
 //	                                    "site"}: decides one browser request, as the gateway would, and
 //	                                    answers with the outcome once it is decided
+//	PUT  /api/e2e/upstream/{repo...}      (re)creates the upstream bare repository <host>/<path> with
+//	                                    one commit on main, and lists its branches
+//	GET  /api/e2e/upstream/{repo...}      the upstream repository's branches
 func (r *Runtime) Control() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/e2e/sandboxes/{id}/push", func(w http.ResponseWriter, req *http.Request) {
+		g, ok := r.Guest(req.PathValue("id"))
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		var p Push
+		if err := json.NewDecoder(io.LimitReader(req.Body, 1<<20)).Decode(&p); err != nil || p.URL == "" || p.File == "" || p.Message == "" {
+			http.Error(w, "want {url, branch, file, content, message}", http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, http.StatusOK, g.Push(req.Context(), p))
+	})
+	upstream := func(w http.ResponseWriter, req *http.Request, list func(string) ([]Branch, error)) {
+		if r.Upstream == nil {
+			http.Error(w, "no upstream", http.StatusNotImplemented)
+			return
+		}
+		branches, err := list(req.PathValue("repo"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Branches []Branch `json:"branches"`
+		}{branches})
+	}
+	mux.HandleFunc("PUT /api/e2e/upstream/{repo...}", func(w http.ResponseWriter, req *http.Request) {
+		upstream(w, req, r.Upstream.Create)
+	})
+	mux.HandleFunc("GET /api/e2e/upstream/{repo...}", func(w http.ResponseWriter, req *http.Request) {
+		upstream(w, req, r.Upstream.Branches)
+	})
 	mux.HandleFunc("GET /api/e2e/sandboxes/{id}", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))
 		if !ok {

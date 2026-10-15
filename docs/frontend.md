@@ -124,11 +124,22 @@ The `e2e` build replaces the VM runtime and the guest agent with the fakes in
   terminals that echo input, sessions, listening ports and TCP for previews.
 - `POST /api/e2e/sandboxes/{id}/connect` makes the fake guest request a host through the real
   gateway, so network approvals appear. Every upstream host answers "hello from <host>".
+- Git push review reaches a fake forge. `PUT /api/e2e/upstream/{host}/{path}` (re)creates a
+  bare repository with one commit on main, and `GET` lists its branches. The e2e build hands
+  the git remote an HTTP client that sends every forge request to these repositories (git's
+  smart HTTP, served by go-git), whatever the forge's host. `POST /api/e2e/sandboxes/{id}/push`
+  makes the fake guest clone a repository through the gateway, as git in the sandbox would
+  (`https://git.studio.internal/<forge>/<path>.git` over the SOCKS5 proxy, trusting Studio's
+  CA), commit a file and push a branch; it answers with the commit and git's output.
+- A chat's agent is a scripted ACP agent. The fake guest serves the `acp` stream with
+  `acptest.Agent`, and every prompt plays the same turn: a message, a tool call that asks for
+  permission (allow or reject), then the tool call's end and a closing message once answered.
+  `GET /api/e2e/sandboxes/{id}` lists each agent's chat, prompts and permission outcomes.
 - `/api/e2e/` exists only in the e2e build, behind the same login as the API. The gateway,
   approvals, rules, secrets, git review and the catalog are the real ones. The per-sandbox
   DNS resolvers are not started, because they listen on fixed ports; the fake guest names
   hosts in SOCKS5 instead.
 
 Tests locate elements by role and label, and use `data-testid` only where a control has no
-accessible name (approval cards). Scenarios that need more fakes (git review, chats and the
-browser) are `test.fixme` in `web/e2e/todo.spec.ts`.
+accessible name (approval cards). Scenarios that need more fakes (the teammate browser's live
+view) are `test.fixme` in `web/e2e/todo.spec.ts`.

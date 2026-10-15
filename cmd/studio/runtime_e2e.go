@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/e2e"
@@ -43,6 +44,16 @@ func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return e2e.Egress{Gat
 
 func upstreamDial() gatewayDial { return e2e.Dial }
 
+// fakeUpstream stands in for the forges; the control API creates its repositories.
+var fakeUpstream *e2e.Upstream
+
+// forgeClient sends every forge request of the git remote to the fake upstream, whose bare
+// repositories live in the data directory.
+func forgeClient(data string) *http.Client {
+	fakeUpstream = e2e.NewUpstream(filepath.Join(data, "e2e-upstream"))
+	return fakeUpstream.Client()
+}
+
 // registerControl serves the control API behind the API's login, like the rest of the API. Its
 // requests are decided by the policy, as a sandbox's connections are.
 func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine) {
@@ -54,5 +65,6 @@ func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine)
 		return engine.Decide(ctx, policy.Request{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, SandboxName: sb.Name,
 			Host: host, Port: port, Browser: true, Deferred: true, HTTP: &req})
 	}
+	fakeRuntime.Upstream = fakeUpstream
 	mux.Handle(e2e.ControlPrefix, fakeRuntime.Control())
 }

@@ -27,6 +27,8 @@ var ErrNoVMs = errors.New("the e2e build has no VMs")
 type Runtime struct {
 	Image string
 	Log   *slog.Logger
+	// Upstream is the forges behind Studio's git remote; Studio sets it.
+	Upstream *Upstream
 
 	mu     sync.Mutex
 	vms    map[string]*vm    // by VM name

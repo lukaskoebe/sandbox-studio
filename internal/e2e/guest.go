@@ -34,8 +34,9 @@ var DefaultPorts = []int{3000}
 
 // Guest is a fake guest agent. It dials its sandbox's agent socket like studio-agent does
 // over vsock, says hello, and serves the host's streams: config, pty (an echoing
-// shell), sessions, kill, ports, tcp, home-files and start-session. It records what the
-// host sent, for the tests to read through the control API.
+// shell), sessions, kill, ports, tcp, home-files, start-session and acp (a scripted ACP
+// agent in place of the harness's). It records what the host sent, for the tests to read
+// through the control API. It also pushes to git remotes through the gateway (Push).
 type Guest struct {
 	id  string
 	log *slog.Logger
@@ -50,6 +51,7 @@ type Guest struct {
 	sessions map[string]*session
 	ports    []int
 	conns    []*Connection
+	acp      []*acpProcess
 }
 
 type session struct {
@@ -209,6 +211,8 @@ func (g *Guest) handle(st net.Conn) {
 		err = g.servePTY(st, br, h.Session)
 	case agentproto.KindTCP:
 		err = g.serveTCP(st, br, h.Port)
+	case agentproto.KindACP:
+		err = g.serveACP(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "the e2e guest does not support " + h.Kind + " streams"})
 	}
@@ -490,18 +494,20 @@ type State struct {
 	Sessions   []agentproto.Session `json:"sessions"`
 	Ports      []int                `json:"ports"`
 	Connection []Connection         `json:"connections"`
+	ACP        []ACPAgent           `json:"acp"`
 }
 
 // State reports the guest's recorded state.
 func (g *Guest) State() State {
 	sessions := g.Sessions()
 	env := g.Env()
+	agents := g.acpState()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	s := State{
 		Connected: g.sess != nil && !g.sess.IsClosed(), Configs: g.configs, Env: env,
 		CA: g.config != nil && strings.Contains(g.config.CA, "BEGIN CERTIFICATE"), HomeFiles: append([]string{}, g.home...),
-		Sessions: sessions, Ports: slices.Clone(g.ports), Connection: []Connection{},
+		Sessions: sessions, Ports: slices.Clone(g.ports), Connection: []Connection{}, ACP: agents,
 	}
 	for _, c := range g.conns {
 		s.Connection = append(s.Connection, *c)
