@@ -334,7 +334,7 @@ func (c *call) open(ctx context.Context, params json.RawMessage) (any, error) {
 	if c.pg == nil {
 		// A new ephemeral session: its first command starts it with an empty profile. If
 		// the open fails, the session ends again.
-		pg, err := c.s.reserveEphemeral(c.st, c.sb)
+		pg, err := c.s.reserveEphemeral(c.st, c.sb, c.s.chatOf(ctx, c.sb))
 		if err != nil {
 			return nil, err
 		}

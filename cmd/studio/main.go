@@ -310,6 +310,7 @@ func run(addr, image string, log *slog.Logger) error {
 	hub.OnCall = routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)
 	brw.Runner, brw.VMs = hub, mgr
 	go brw.Run(ctx)
+	go brw.FollowOwners(ctx, bus, sandboxStopped(mgr))
 	go mgr.FollowEnvironments(ctx, bus)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err

@@ -12,6 +12,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
+	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
@@ -24,6 +26,18 @@ func newBrowser(st *store.Store, vault *secrets.Vault, bus *events.Bus, data, im
 	return &browser.Service{
 		Store: st, Keys: vault, Log: log, Image: browserImage(image), Dir: filepath.Join(data, "browser"),
 		Notify: func(envID string) { bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: envID}) },
+	}
+}
+
+// sandboxStopped tells the browser broker when an agent sandbox's VM no longer runs, so the
+// ephemeral browser sessions it opened end. A suspended sandbox still counts as running.
+func sandboxStopped(mgr *sandboxes.Manager) browser.Stopped {
+	return func(ctx context.Context, envID, id string) (bool, error) {
+		v, err := mgr.Get(ctx, envID, id)
+		if err != nil {
+			return false, err
+		}
+		return !v.Status.IsRunning() && v.Status != runtime.StatusSuspended && v.Status != runtime.StatusDraining, nil
 	}
 }
 

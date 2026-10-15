@@ -19,6 +19,6 @@ Browser network requests use the environment's network rules. When an agent driv
 
 ## Throwaway sessions
 
-An agent can open a throwaway session for a task that should not leave cookies or logins behind. A throwaway session starts with an empty profile. It ends when the agent closes it, after 10 minutes without use, when the sandbox that opened it is deleted, or when the teammate's browser stops. Its cookies, storage and downloads are discarded with it. A teammate can have two at a time, across its sandboxes.
+An agent can open a throwaway session for a task that should not leave cookies or logins behind. A throwaway session starts with an empty profile. It ends when the agent closes it, after 10 minutes without use, when the sandbox that opened it stops or is deleted, when the chat that opened it is deleted, or when the teammate's browser stops. Studio knows the chat only when it was the sandbox's one running chat. A session you have taken over stays until you hand it back. Its cookies, storage and downloads are discarded with it. A teammate can have two at a time, across its sandboxes.
 
 Approvals work as they do for the teammate's own browser. Approval cards name the session. While a throwaway session is open, the live view shows a session switcher with **Profile** and the open throwaway sessions, so you can watch one or take it over.
