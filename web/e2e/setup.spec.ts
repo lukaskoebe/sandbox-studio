@@ -14,7 +14,10 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await expect(page).toHaveURL(/\/setup$/)
 
     // Each step is a row; the open one shows its body and the buttons to move on.
-    const row = (title: string) => page.getByRole("button", { name: title })
+    // A step's row is named by its title and state, after its number until done ("4 Teammate To do",
+    // "Teammate Done").
+    const row = (title: string) =>
+      page.getByRole("button", { name: new RegExp(`^(\\d+ )?${title} `) })
     const open = (title: string) =>
       expect(row(title)).toHaveAttribute("aria-expanded", "true")
     const next = () => page.getByRole("button", { name: "Next", exact: true })
