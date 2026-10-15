@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import {
   ArrowSquareOutIcon,
   BroadcastIcon,
+  BroomIcon,
   BrowserIcon,
   ChatCircleDotsIcon,
   GitDiffIcon,
@@ -32,6 +33,10 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -49,7 +54,11 @@ import { useAgentView } from "@/lib/agent-view"
 import { $api, isReady, type Sandbox } from "@/lib/api/client"
 import { chatTitle, useChat, type ChatTurn } from "@/lib/chats"
 import { shortTemplate } from "@/lib/lineage"
-import { onStudioMachine, openPreviewTab } from "@/lib/previews"
+import {
+  freshPreviewHint,
+  onStudioMachine,
+  openPreviewTab,
+} from "@/lib/previews"
 import { cn } from "@/lib/utils"
 
 /** The workspace's side panels: one is open at a time, named in the URL. */
@@ -654,6 +663,35 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
+        {list.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <BroomIcon />
+                Open fresh
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                <p className="px-2 py-1.5 text-[0.625rem] text-muted-foreground">
+                  {freshPreviewHint}: for an app whose service worker still
+                  serves an old version.
+                </p>
+                {list.map((p) => (
+                  <DropdownMenuItem
+                    key={p.port}
+                    render={<button type="button" />}
+                    onClick={() =>
+                      void openPreviewTab(env, sb.id, p.port, true)
+                    }
+                  >
+                    :{p.port}
+                    <ArrowSquareOutIcon className="ml-auto" />
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        )}
         {!onStudioMachine && list.length > 0 && (
           <p className="px-2 py-1.5 text-[0.625rem] text-muted-foreground">
             Previews open on the machine running Studio.

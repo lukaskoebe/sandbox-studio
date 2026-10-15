@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   ArrowSquareOutIcon,
+  BroomIcon,
   BroadcastIcon,
   ChatCircleDotsIcon,
   CpuIcon,
@@ -30,7 +31,11 @@ import type { Area } from "@/lib/accents"
 import { $api, isReady, type Sandbox } from "@/lib/api/client"
 import { chatStateLabels, chatTitle } from "@/lib/chats"
 import { harnessLabels } from "@/lib/teammates"
-import { onStudioMachine, openPreviewTab } from "@/lib/previews"
+import {
+  freshPreviewHint,
+  onStudioMachine,
+  openPreviewTab,
+} from "@/lib/previews"
 import { formatAge, formatUptime } from "@/lib/utils"
 
 /**
@@ -304,8 +309,17 @@ function Ports({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
             <Ident>{`:${p.port}`}</Ident>
             <Button
               variant="ghost"
-              size="xs"
+              size="icon-xs"
               className="ml-auto"
+              title={`Open fresh: ${freshPreviewHint.toLowerCase()}`}
+              aria-label={`Open :${p.port} fresh`}
+              onClick={() => void openPreviewTab(env, sb.id, p.port, true)}
+            >
+              <BroomIcon />
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={() => void openPreviewTab(env, sb.id, p.port)}
             >
               Open

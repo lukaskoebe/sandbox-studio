@@ -4,9 +4,11 @@
 package preview
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"html"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -50,11 +52,19 @@ func Route(dial DialFunc, next http.Handler) http.Handler {
 			// The upstream "host" is only a key for dialing and connection pooling.
 			pr.SetURL(&url.URL{Scheme: "http", Host: net.JoinHostPort(id, strconv.Itoa(port))})
 			pr.Out.Host = pr.In.Host
+			if isWorkerScript(pr.In) {
+				// Without the browser's Accept-Encoding the transport asks for gzip itself and
+				// hands back the decoded script, which guardWorker can prepend to.
+				pr.Out.Header.Del("Accept-Encoding")
+			}
 			stripStudioCookies(pr.Out.Header)
 			pr.SetXForwarded()
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			filterGuestCookies(resp.Header)
+			if isWorkerScript(resp.Request) {
+				return guardWorker(resp)
+			}
 			return nil
 		},
 		Transport: &http.Transport{
@@ -142,4 +152,62 @@ func dropGuestCookie(value string) bool {
 		}
 	}
 	return false
+}
+
+// workerGuard runs before a preview's service worker's own fetch handlers: Studio's paths, such
+// as the preview login, always go to the network. A worker that answered navigations from its
+// cache would otherwise keep the login from reaching Studio, and the preview from signing in
+// again once its cookie expires.
+const workerGuard = `self.addEventListener("fetch",function(e){if(new URL(e.request.url).pathname.indexOf("/__studio/")===0)e.stopImmediatePropagation()});`
+
+// maxWorkerScript bounds the service worker scripts Studio reads to guard; larger ones pass
+// through unchanged.
+const maxWorkerScript = 16 << 20
+
+// isWorkerScript reports a browser's fetch of a service worker's main script, for
+// registration or an update check.
+func isWorkerScript(r *http.Request) bool {
+	return r != nil && r.Header.Get("Service-Worker") == "script"
+}
+
+// guardWorker puts workerGuard in front of a service worker script, after a "use strict"
+// directive so that the script stays strict. It goes on the script's first line, so that only
+// that line's columns move in a source map.
+func guardWorker(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Encoding") != "" {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxWorkerScript+1))
+	resp.Body.Close()
+	if err != nil {
+		return err
+	}
+	if len(body) <= maxWorkerScript {
+		body = guardScript(body)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", fmt.Sprint(len(body)))
+	return nil
+}
+
+func guardScript(script []byte) []byte {
+	at := 0
+	trimmed := bytes.TrimLeft(script, " \t\r\n\ufeff")
+	for _, d := range []string{`"use strict"`, `'use strict'`} {
+		if rest, ok := bytes.CutPrefix(trimmed, []byte(d)); ok {
+			at = len(script) - len(rest)
+			if len(rest) > 0 && rest[0] == ';' {
+				at++
+			}
+			break
+		}
+	}
+	out := make([]byte, 0, len(script)+len(workerGuard)+1)
+	out = append(out, script[:at]...)
+	if at > 0 {
+		out = append(out, ';')
+	}
+	out = append(out, workerGuard...)
+	return append(out, script[at:]...)
 }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
+import { useClaimApprovals } from "@/lib/approval-claims"
 import type { ChatItem, PermissionOption } from "@/lib/chats"
 
 type Action = "allow" | "deny" | "dismiss"
@@ -105,11 +106,12 @@ export function PermissionCard({
   teammateName: string
 }) {
   const p = item.permission
+  const pending = item.status === "pending"
+  useClaimApprovals([pending ? item.approvalId : undefined])
   if (!p) return null
   const tc = p.toolCall
   const kind = toolKind(tc.kind)
   const diffs = (tc.content ?? []).filter((c) => c.type === "diff")
-  const pending = item.status === "pending"
   const chosen = p.options?.find((o) => o.optionId === p.outcome)
   const outcome =
     (outcomes[item.status ?? ""] ?? item.status) +

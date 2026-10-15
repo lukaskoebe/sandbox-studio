@@ -62,6 +62,7 @@ import {
   type Teammate,
 } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
+import { useClaimApprovals } from "@/lib/approval-claims"
 import { approvalCards } from "@/lib/approval-groups"
 import { chatTitle, useChat, type Chat, type ChatItem } from "@/lib/chats"
 import { heartbeatSentence } from "@/lib/tasks"
@@ -714,6 +715,7 @@ function Learned({
 
 /** What waits for you on this teammate, as the approval cards elsewhere show it. */
 function Waiting({ env, approvals }: { env: string; approvals: Approval[] }) {
+  useClaimApprovals(approvals.map((a) => a.id))
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   const envs = $api.useQuery("get", "/api/environments")
   const { sheet, review } = useApprovalReview(approvals)

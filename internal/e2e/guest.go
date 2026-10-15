@@ -389,7 +389,15 @@ func (g *Guest) Env() map[string]string {
 	return env
 }
 
-// serveTCP answers HTTP on the listening ports, as a dev server would.
+// A page on the fake dev server that registers a service worker, which answers every
+// navigation from its cache, as an offline-first app does.
+const (
+	pwaPage   = `<!doctype html><title>PWA</title><p id="app">PWA</p><script>navigator.serviceWorker.register("/pwa-sw.js")</script>`
+	pwaWorker = `self.addEventListener("install",()=>self.skipWaiting());self.addEventListener("activate",e=>e.waitUntil(clients.claim()));self.addEventListener("fetch",e=>{if(e.request.mode==="navigate")e.respondWith(new Response("<p>cached app</p>",{headers:{"Content-Type":"text/html"}}))})`
+)
+
+// serveTCP answers HTTP on the listening ports, as a dev server would: plain text, except for
+// /pwa and its service worker.
 func (g *Guest) serveTCP(st net.Conn, br *bufio.Reader, port int) error {
 	g.mu.Lock()
 	listening := slices.Contains(g.ports, port)
@@ -403,8 +411,14 @@ func (g *Guest) serveTCP(st net.Conn, br *bufio.Reader, port int) error {
 			return err
 		}
 		io.Copy(io.Discard, req.Body)
-		body := fmt.Sprintf("Preview of sandbox %s on port %d, path %s\n", g.id, port, req.URL.Path)
-		if _, err := fmt.Fprintf(st, "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: %d\r\n\r\n%s", len(body), body); err != nil {
+		body, typ := fmt.Sprintf("Preview of sandbox %s on port %d, path %s\n", g.id, port, req.URL.Path), "text/plain"
+		switch req.URL.Path {
+		case "/pwa":
+			body, typ = pwaPage, "text/html"
+		case "/pwa-sw.js":
+			body, typ = pwaWorker, "text/javascript"
+		}
+		if _, err := fmt.Fprintf(st, "HTTP/1.1 200 OK\r\nContent-Type: %s; charset=utf-8\r\nContent-Length: %d\r\n\r\n%s", typ, len(body), body); err != nil {
 			return err
 		}
 		if req.Close {

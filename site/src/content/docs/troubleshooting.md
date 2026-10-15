@@ -34,7 +34,7 @@ Restore is disabled with the current runtime. Checkpoints can be saved and delet
 
 ## A preview does not open
 
-Confirm the sandbox is running, the server is listening on the port you selected, and you opened the link on the machine running Studio. Preview links use `.localhost`; they are not intended for another device on your LAN.
+Confirm the sandbox is running, the server is listening on the port you selected, and you opened the link on the machine running Studio. Preview links use `.localhost`; they are not intended for another device on your LAN. If the preview shows an old version of the app, or an app that no longer runs on that port, open it with **Open fresh**: a service worker may be answering from its cache.
 
 ## Move the data directory
 

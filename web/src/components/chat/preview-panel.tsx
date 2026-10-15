@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import {
   ArrowClockwiseIcon,
+  BroomIcon,
   ArrowSquareOutIcon,
   BroadcastIcon,
 } from "@phosphor-icons/react"
@@ -23,6 +24,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
 import {
   onStudioMachine,
+  freshPreviewHint,
   openPreviewTab,
   previewLoginURL,
 } from "@/lib/previews"
@@ -52,7 +54,8 @@ export function PreviewPanel({
   const [picked, setPicked] = useState<number>()
   // The first port until one is picked, and again if the picked one goes away.
   const port = list.some((p) => p.port === picked) ? picked : list.at(0)?.port
-  const [nonce, setNonce] = useState(0)
+  // Each reload counts up; a fresh one also clears the preview's storage as it loads.
+  const [nonce, setNonce] = useState({ n: 0, fresh: false })
 
   if (list.length === 0) {
     return (
@@ -98,9 +101,19 @@ export function PreviewPanel({
           size="icon-sm"
           title="Reload"
           disabled={!onStudioMachine}
-          onClick={() => setNonce((n) => n + 1)}
+          onClick={() => setNonce((r) => ({ n: r.n + 1, fresh: false }))}
         >
           <ArrowClockwiseIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title={`Reload fresh: ${freshPreviewHint.toLowerCase()}`}
+          aria-label="Reload fresh"
+          disabled={!onStudioMachine}
+          onClick={() => setNonce((r) => ({ n: r.n + 1, fresh: true }))}
+        >
+          <BroomIcon />
         </Button>
         <Button
           variant="outline"
@@ -119,7 +132,7 @@ export function PreviewPanel({
             env={env}
             sandboxId={sandboxId}
             port={port}
-            reloadKey={`${String(reloadKey)}:${nonce}`}
+            reloadKey={`${String(reloadKey)}:${nonce.n}${nonce.fresh ? ":fresh" : ""}`}
           />
         ) : (
           <p className="text-muted-foreground">
@@ -147,7 +160,10 @@ function PreviewFrame({
   // Every load needs a new one-time login URL.
   useEffect(() => {
     let cancelled = false
-    previewLoginURL(env, sandboxId, port, true).then(
+    previewLoginURL(env, sandboxId, port, {
+      embed: true,
+      fresh: reloadKey.endsWith(":fresh"),
+    }).then(
       (url) => {
         if (cancelled) return
         setError(undefined)

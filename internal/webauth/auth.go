@@ -355,6 +355,15 @@ func (a *Auth) servePreviewLogin(w http.ResponseWriter, r *http.Request, host st
 		cookie.SameSite, cookie.Secure, cookie.Partitioned = http.SameSiteNoneMode, true, true
 	}
 	http.SetCookie(w, cookie)
+	if r.URL.Query().Get("fresh") == "1" {
+		// Starts the preview over: its caches and storage go, service workers among them,
+		// which may serve an app that no longer runs on the port. Cookies stay, so the one
+		// just set does. A page rather than a redirect, so that every browser applies it.
+		w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		io.WriteString(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><title>Opening preview</title>`)
+		return
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 

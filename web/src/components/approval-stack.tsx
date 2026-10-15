@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react"
-import { Link, useMatchRoute } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react"
 import { ApprovalDecision } from "@/components/approval-decision"
 import { NetworkGroupCard } from "@/components/approval-group"
@@ -31,6 +31,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { $api, type Approval } from "@/lib/api/client"
+import { useClaimedApprovals } from "@/lib/approval-claims"
 import { ruleClass } from "@/lib/accents"
 import {
   approvalCards,
@@ -50,8 +51,8 @@ const maxCards = 3
 
 /**
  * Pending approvals, shown on every page: a held connection waits on the answer, a staged
- * git push waits for review. The network page's Requests tab lists its environment's network
- * requests itself, so the stack leaves them out there.
+ * git push waits for review. Approvals the page already shows in place are left out
+ * (lib/approval-claims.ts), so each shows once.
  *
  * One approval shows its card at sm and wider. More than one, or a phone, folds the cards
  * into an "N approvals" pill that opens them on click, so the stack covers the page only when
@@ -65,7 +66,6 @@ export function ApprovalStack() {
     { refetchInterval: 15000 }
   )
   const envs = $api.useQuery("get", "/api/environments")
-  const matchRoute = useMatchRoute()
   const notifications = useNotifications(pending.data)
   const [expanded, setExpanded] = useState(false)
   const panelId = useId()
@@ -74,29 +74,10 @@ export function ApprovalStack() {
   const all = pending.data ?? []
   useTitleCount(all.length)
 
-  // Pages that list these requests themselves: the network page's Requests tab lists its
-  // environment's network requests, a chat lists its own permission requests.
-  // Home lists its environment's approvals as cards of its own, a teammate's conversation the
-  // teammate's.
-  const onNetwork = matchRoute({ to: "/e/$env/network/requests" })
-  const onChat = matchRoute({ to: "/e/$env/chats/$chat" })
-  const onHome = matchRoute({ to: "/e/$env" })
-  const onTeammate = matchRoute({ to: "/e/$env/teammates/$id" })
-  const items = all.filter(
-    (a) =>
-      !(
-        onNetwork &&
-        isNetworkApproval(a) &&
-        a.environmentId === onNetwork.env
-      ) &&
-      !(onChat && a.chatPermission?.chatId === onChat.chat) &&
-      !(onHome && a.environmentId === onHome.env) &&
-      !(
-        onTeammate &&
-        a.environmentId === onTeammate.env &&
-        approvalOf(a) === onTeammate.id
-      )
-  )
+  // What the page shows in place (a chat's permission cards, Home's and a teammate's cards,
+  // the network requests list, the browser's questions) stays out of the stack.
+  const claimed = useClaimedApprovals()
+  const items = all.filter((a) => !claimed.has(a.id))
   const { sheet, review } = useApprovalReview(all)
   const cards = approvalCards(items, split)
   if (cards.length === 0) return sheet
@@ -155,16 +136,6 @@ export function ApprovalStack() {
       </Button>
       {sheet}
     </section>
-  )
-}
-
-/** The teammate an approval waits on, as the teammate's conversation lists it. */
-function approvalOf(a: Approval) {
-  return (
-    a.teammate?.id ??
-    a.memoryShare?.teammateId ??
-    a.browserAction?.teammateId ??
-    a.browserCredential?.teammateId
   )
 }
 

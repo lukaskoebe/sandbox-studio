@@ -7,21 +7,28 @@ export const onStudioMachine = ["localhost", "127.0.0.1", "[::1]"].includes(
 )
 
 /**
- * The one-time login URL of a sandbox port's preview. With embed, the preview cookie works
- * inside an iframe. Each URL logs in once, so every load needs a new one.
+ * How a preview opens. embed makes the preview cookie work inside an iframe. fresh clears the
+ * preview's caches and storage first, service workers among them: a worker can keep serving
+ * an app that no longer runs on the port.
  */
+export type PreviewOpen = { embed?: boolean; fresh?: boolean }
+
+/** The one-time login URL of a sandbox port's preview; every load needs a new one. */
 export async function previewLoginURL(
   env: string,
   id: string,
   port: number,
-  embed = false
+  { embed = false, fresh = false }: PreviewOpen = {}
 ): Promise<string> {
   const { data, error, response } = await fetchClient.POST(
     "/api/environments/{env}/sandboxes/{id}/previews/{port}/open",
     {
       params: {
         path: { env, id, port },
-        query: embed ? { embed: true } : undefined,
+        query:
+          embed || fresh
+            ? { ...(embed && { embed }), ...(fresh && { fresh }) }
+            : undefined,
       },
     }
   )
@@ -41,7 +48,12 @@ export async function previewLoginURL(
  * Opens a preview in a new tab. The tab opens first, while the click still counts as a
  * user gesture, and goes to the login URL once Studio returns it.
  */
-export async function openPreviewTab(env: string, id: string, port: number) {
+export async function openPreviewTab(
+  env: string,
+  id: string,
+  port: number,
+  fresh = false
+) {
   let popup: Window | null = null
   try {
     popup = window.open("about:blank", "_blank")
@@ -56,7 +68,7 @@ export async function openPreviewTab(env: string, id: string, port: number) {
   }
   try {
     popup.opener = null
-    popup.location.replace(await previewLoginURL(env, id, port))
+    popup.location.replace(await previewLoginURL(env, id, port, { fresh }))
   } catch (error) {
     try {
       popup.close()
@@ -71,3 +83,7 @@ export async function openPreviewTab(env: string, id: string, port: number) {
     })
   }
 }
+
+/** Says what opening a preview fresh does, for its menu items and buttons. */
+export const freshPreviewHint =
+  "Clears the preview's caches, storage and service workers, then opens it"

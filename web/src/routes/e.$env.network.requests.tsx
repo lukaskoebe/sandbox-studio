@@ -5,6 +5,7 @@ import { Ident } from "@/components/ident"
 import { SectionHeader } from "@/components/section-header"
 import { Spinner } from "@/components/ui/spinner"
 import { $api } from "@/lib/api/client"
+import { useClaimApprovals } from "@/lib/approval-claims"
 import { isNetworkApproval } from "@/lib/approval-kinds"
 import { formatAge } from "@/lib/utils"
 
@@ -20,6 +21,7 @@ function RequestsTab() {
   })
   // Git approvals are reviewed on the Git page.
   const list = (requests.data ?? []).filter(isNetworkApproval)
+  useClaimApprovals(list.map((a) => a.id))
 
   if (requests.isPending) return <Spinner className="mx-auto block" />
   return (

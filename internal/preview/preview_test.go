@@ -2,6 +2,7 @@ package preview
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -149,5 +150,58 @@ func TestRouteFiltersUpgradeResponseCookies(t *testing.T) {
 	setCookies := resp.Cookies()
 	if len(setCookies) != 1 || setCookies[0].Name != "app" || setCookies[0].Value != "kept" {
 		t.Fatalf("upgrade response cookies: got %#v, want only app=kept", setCookies)
+	}
+}
+
+func TestGuardScript(t *testing.T) {
+	for in, want := range map[string]string{
+		"self.x=1":                 workerGuard + "self.x=1",
+		"\"use strict\";self.x=1":  "\"use strict\";;" + workerGuard + "self.x=1",
+		"  'use strict'\nself.x=1": "  'use strict';" + workerGuard + "\nself.x=1",
+		"import a from './a.js'":   workerGuard + "import a from './a.js'",
+	} {
+		if got := string(guardScript([]byte(in))); got != want {
+			t.Errorf("guardScript(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// A service worker's script gets the guard, decoded from the guest's gzip; other scripts and
+// pages pass through as the guest sent them.
+func TestRouteGuardsServiceWorkers(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		if r.Header.Get("Accept-Encoding") == "gzip" {
+			w.Header().Set("Content-Encoding", "gzip")
+			zw := gzip.NewWriter(w)
+			io.WriteString(zw, "self.v=1")
+			zw.Close()
+			return
+		}
+		io.WriteString(w, "self.v=1")
+	}))
+	defer upstream.Close()
+	dial := func(ctx context.Context, id string, port int) (net.Conn, error) {
+		return net.Dial("tcp", upstream.Listener.Addr().String())
+	}
+	h := Route(dial, http.NotFoundHandler())
+
+	req := httptest.NewRequest("GET", "http://5173-sb1.localhost:7878/sw.js", nil)
+	req.Header.Set("Service-Worker", "script")
+	req.Header.Set("Accept-Encoding", "gzip, br")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if body := rec.Body.String(); body != workerGuard+"self.v=1" || rec.Header().Get("Content-Encoding") != "" {
+		t.Fatalf("worker script: %q, encoding %q", body, rec.Header().Get("Content-Encoding"))
+	}
+	if rec.Header().Get("Content-Length") != fmt.Sprint(len(workerGuard)+len("self.v=1")) {
+		t.Fatalf("worker script length: %q", rec.Header().Get("Content-Length"))
+	}
+
+	req = httptest.NewRequest("GET", "http://5173-sb1.localhost:7878/app.js", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if body := rec.Body.String(); body != "self.v=1" {
+		t.Fatalf("plain script: %q", body)
 	}
 }

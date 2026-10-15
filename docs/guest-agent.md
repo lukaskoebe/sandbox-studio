@@ -92,6 +92,14 @@ small or move their bytes to msb exec.
   is its own origin.
   Opening one goes through a short-lived ticket (see [API](api.md#auth)). The UI lists the
   listening ports from the `ports` stream.
+- Service workers: when the browser fetches a preview's service worker script (header
+  `Service-Worker: script`), Studio puts a small fetch handler on its first line that sends
+  Studio's own paths (`/__studio/`) to the network before the app's handlers run. A worker
+  that answers navigations from its cache can then still not keep the preview login from
+  reaching Studio. Scripts over 16 MiB pass unchanged. "Open fresh" (`fresh=1` on the login
+  link) answers the login with `Clear-Site-Data: "cache", "storage"`, which removes the
+  preview's caches, storage and service workers but keeps its cookies, for an app that left a
+  worker behind from whatever ran on that port before.
 - Files: the Files panel browses `/workspace` read-only. Listings and reads never follow
   symlinks, and only files the `agent` user may read are shown.
 

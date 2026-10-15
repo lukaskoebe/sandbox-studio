@@ -431,6 +431,18 @@ func TestPreviewTicketTargetBindingCookieIsolationAndRedirect(t *testing.T) {
 		t.Fatalf("embedded preview Set-Cookie = %q", raw)
 	}
 
+	// Opening a preview fresh clears its caches and storage, service workers among them, and
+	// still signs in.
+	freshToken, err := a.IssuePreview(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+freshToken+"&fresh=1", host, nil, "", downstream())
+	if fresh.Code != http.StatusOK || fresh.Header().Get("Clear-Site-Data") != `"cache", "storage"` ||
+		!strings.Contains(fresh.Body.String(), `url=/`) || len(fresh.Result().Cookies()) != 1 {
+		t.Fatalf("fresh preview login = %d %v %q", fresh.Code, fresh.Header(), fresh.Body.String())
+	}
+
 	// The same one-time ticket cannot be redeemed again.
 	again := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+token, host, nil, "", downstream())
 	if again.Code != http.StatusForbidden {

@@ -53,6 +53,7 @@ import {
   type Teammate,
 } from "@/lib/api/client"
 import { tileClass, type Area } from "@/lib/accents"
+import { useClaimApprovals } from "@/lib/approval-claims"
 import { approvalCards } from "@/lib/approval-groups"
 import {
   approvalDecision,
@@ -428,6 +429,7 @@ function Approvals({
 }) {
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set())
   const envs = $api.useQuery("get", "/api/environments")
+  useClaimApprovals(approvals.map((a) => a.id))
   const { sheet, review } = useApprovalReview(approvals)
   const cards = approvalCards(approvals, split)
   const envName = () => envs.data?.find((e) => e.id === env)?.name

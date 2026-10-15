@@ -10,9 +10,10 @@ test("a held connection asks; Allow adds a rule and clears the card in every tab
   const id = await api.createSandbox(sandboxName("net"))
   const host = `api-${Math.random().toString(36).slice(2, 8)}.example.org`
 
-  await page.goto(`/e/${env}`)
+  // Home lists approvals in place, so the stack shows them on other pages.
+  await page.goto(`/e/${env}/secrets`)
   const other = await context.newPage()
-  await other.goto(`/e/${env}`)
+  await other.goto(`/e/${env}/memory`)
   await api.connect(id, host)
 
   const card = approvals(page)
@@ -217,3 +218,23 @@ test("a browser navigation asks with its site; Allow site lets it through withou
 function freshLabel() {
   return Math.random().toString(36).slice(2, 8)
 }
+
+test("an approval shows once: in the teammate's conversation, not also in the stack", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const teammate = await addTeammate(api, env, `Once ${sandboxName("t")}`)
+  const id = await api.createSandbox(sandboxName("once"), teammate)
+  const host = `once-${Math.random().toString(36).slice(2, 8)}.example.org`
+
+  await page.goto(`/e/${env}/teammates/${teammate}`)
+  await api.connect(id, host)
+  const cards = page.getByTestId("approval-card").filter({ hasText: host })
+  await expect(cards).toHaveCount(1)
+  // Elsewhere the stack shows it.
+  await page.goto(`/e/${env}/secrets`)
+  await expect(cards).toHaveCount(1)
+  await api.dismissApprovals()
+})

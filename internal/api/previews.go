@@ -17,6 +17,7 @@ type previewOpenPath struct {
 	Port int    `path:"port" doc:"Preview port" minimum:"1" maximum:"65535"`
 	// Embed is for the chat's preview panel, which frames the preview.
 	Embed bool `query:"embed" doc:"Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned"`
+	Fresh bool `query:"fresh" doc:"Clear the preview's caches and storage, its service workers among them, as it logs in"`
 }
 
 type previewOpenBody struct {
@@ -70,6 +71,9 @@ func (s *Server) registerPreviews(api huma.API) {
 		query.Set("token", token)
 		if in.Embed {
 			query.Set("embed", "1")
+		}
+		if in.Fresh {
+			query.Set("fresh", "1")
 		}
 		u.RawQuery = query.Encode()
 		return &struct{ Body previewOpenBody }{Body: previewOpenBody{URL: u.String()}}, nil
