@@ -121,6 +121,13 @@ The `e2e` build replaces the VM runtime and the guest agent with the fakes in
   terminals that echo input, sessions, listening ports and TCP for previews.
 - `POST /api/e2e/sandboxes/{id}/connect` makes the fake guest request a host through the real
   gateway, so network approvals appear. Every upstream host answers "hello from <host>".
+- A teammate's browser VM boots like a sandbox, and its fake guest answers agent-browser
+  commands from a small page model (`internal/e2e/browser.go`): every http(s) page is a sign-in
+  form whose button goes to `/welcome`, each session has its own history, and screenshots and
+  live-view frames are small JPEGs coloured by the URL. `POST /api/e2e/sandboxes/{id}/calls
+  {method, params, wait}` makes a sandbox's agent call a tool (such as `browser_click`) through
+  the real channel and broker, so browser approvals and the action log fill as they would;
+  `GET /api/e2e/teammates/{id}/browser` reads the browser's sessions and the live view's input.
 - `/api/e2e/` exists only in the e2e build, behind the same login as the API. The gateway,
   approvals, rules, secrets, git review and the catalog are the real ones. The per-sandbox
   DNS resolvers are not started, because they listen on fixed ports; the fake guest names

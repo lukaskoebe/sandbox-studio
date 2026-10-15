@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -34,8 +35,9 @@ var DefaultPorts = []int{3000}
 
 // Guest is a fake guest agent. It dials its sandbox's agent socket like studio-agent does
 // over vsock, says hello, and serves the host's streams: config, pty (an echoing
-// shell), sessions, kill, ports, tcp, home-files and start-session. It records what the
-// host sent, for the tests to read through the control API.
+// shell), sessions, kill, ports, tcp, home-files, start-session, and in a browser VM
+// browser and browser-downloads (browser.go). It records what the host sent, for the tests
+// to read through the control API, and makes calls to Studio as `studio-agent mcp` would.
 type Guest struct {
 	id  string
 	log *slog.Logger
@@ -50,6 +52,8 @@ type Guest struct {
 	sessions map[string]*session
 	ports    []int
 	conns    []*Connection
+	calls    []*Call
+	browser  *browserVM // the browser of this boot, once Studio sent a browser stream
 }
 
 type session struct {
@@ -77,7 +81,7 @@ func (g *Guest) boot(socket string, egress runtime.Egress) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	stop := make(chan struct{})
-	g.stop, g.egress, g.sessions = stop, egress, map[string]*session{}
+	g.stop, g.egress, g.sessions, g.browser = stop, egress, map[string]*session{}, nil
 	go g.run(socket, stop)
 }
 
@@ -208,7 +212,15 @@ func (g *Guest) handle(st net.Conn) {
 	case agentproto.KindPTY:
 		err = g.servePTY(st, br, h.Session)
 	case agentproto.KindTCP:
-		err = g.serveTCP(st, br, h.Port)
+		if b, t := g.screencastTab(h.Port); t != nil {
+			err = g.serveScreencast(st, br, b, t)
+		} else {
+			err = g.serveTCP(st, br, h.Port)
+		}
+	case agentproto.KindBrowser:
+		err = g.serveBrowser(st, br)
+	case agentproto.KindBrowserDownloads:
+		err = g.serveBrowserDownloads(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "the e2e guest does not support " + h.Kind + " streams"})
 	}
@@ -453,6 +465,73 @@ func (g *Guest) Connect(host string, port int) {
 	}()
 }
 
+// Call is a call the guest made to Studio, as `studio-agent mcp` forwards a tool call: the
+// host answers it for the sandbox whose channel it came on.
+type Call struct {
+	ID     int             `json:"id"`
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params,omitempty"`
+	Done   bool            `json:"done"`
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  string          `json:"error,omitempty"`
+}
+
+// callTimeout is longer than Studio holds a call for an approval.
+const callTimeout = 3 * time.Minute
+
+// Call makes a call to Studio in the background. done is closed once it is answered.
+func (g *Guest) Call(method string, params json.RawMessage) (id int, done <-chan struct{}) {
+	g.mu.Lock()
+	c := &Call{ID: len(g.calls), Method: method, Params: params}
+	g.calls = append(g.calls, c)
+	sess := g.sess
+	g.mu.Unlock()
+	ch := make(chan struct{})
+	go func() {
+		defer close(ch)
+		reply, err := call(sess, agentproto.Call{Method: method, Params: params})
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		c.Done, c.Result, c.Error = true, reply.Result, reply.Error
+		if err != nil {
+			c.Error = err.Error()
+		}
+	}()
+	return c.ID, ch
+}
+
+// CallState returns a call the guest made.
+func (g *Guest) CallState(id int) (Call, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if id < 0 || id >= len(g.calls) {
+		return Call{}, false
+	}
+	return *g.calls[id], true
+}
+
+// call sends one call over the guest's channel and reads Studio's reply.
+func call(sess *yamux.Session, c agentproto.Call) (agentproto.CallReply, error) {
+	var reply agentproto.CallReply
+	if sess == nil || sess.IsClosed() {
+		return reply, errors.New("not connected to Studio")
+	}
+	st, err := sess.Open()
+	if err != nil {
+		return reply, err
+	}
+	defer st.Close()
+	st.SetDeadline(time.Now().Add(callTimeout))
+	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindCall}); err != nil {
+		return reply, err
+	}
+	if err := agentproto.WriteJSONLine(st, c); err != nil {
+		return reply, err
+	}
+	err = agentproto.ReadJSONLineLimit(bufio.NewReader(st), &reply, agentproto.MaxCallLine)
+	return reply, err
+}
+
 // request speaks SOCKS5 with the sandbox's gateway credentials, then HTTP/1.1.
 func request(egress runtime.Egress, host string, port int) (int, string, error) {
 	if egress.Proxy == "" {
@@ -508,21 +587,31 @@ type State struct {
 	Sessions   []agentproto.Session `json:"sessions"`
 	Ports      []int                `json:"ports"`
 	Connection []Connection         `json:"connections"`
+	Calls      []Call               `json:"calls"`
+	// Browser is the fake browser of a browser VM, once Studio drove it.
+	Browser *BrowserState `json:"browser,omitempty"`
 }
 
 // State reports the guest's recorded state.
 func (g *Guest) State() State {
 	sessions := g.Sessions()
 	env := g.Env()
+	var browser *BrowserState
+	if b, ok := g.BrowserState(); ok {
+		browser = &b
+	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	s := State{
 		Connected: g.sess != nil && !g.sess.IsClosed(), Configs: g.configs, Env: env,
 		CA: g.config != nil && strings.Contains(g.config.CA, "BEGIN CERTIFICATE"), HomeFiles: append([]string{}, g.home...),
-		Sessions: sessions, Ports: slices.Clone(g.ports), Connection: []Connection{},
+		Sessions: sessions, Ports: slices.Clone(g.ports), Connection: []Connection{}, Calls: []Call{}, Browser: browser,
 	}
 	for _, c := range g.conns {
 		s.Connection = append(s.Connection, *c)
+	}
+	for _, c := range g.calls {
+		s.Calls = append(s.Calls, *c)
 	}
 	return s
 }

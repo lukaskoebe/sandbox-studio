@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -31,6 +32,14 @@ var Requests func(ctx context.Context, sandboxID, host string, port int, req pol
 //	POST /api/e2e/sandboxes/{id}/connect  {"host": "example.com", "port": 80}: an HTTP request
 //	                                    through the gateway, in the background
 //	PUT  /api/e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
+//	POST /api/e2e/sandboxes/{id}/calls    {"method": "browser_click", "params": {"ref": "e4"}, "wait": false}:
+//	                                    a call to Studio from the sandbox, as `studio-agent mcp` makes
+//	                                    for a tool. With wait it answers with the Call once Studio
+//	                                    has; without, at once with 202, the call going on in the
+//	                                    background and its outcome in the guest's State
+//	GET  /api/e2e/sandboxes/{id}/calls/{n} one call and its outcome
+//	GET  /api/e2e/teammates/{id}/browser  the State of the teammate's browser VM's guest, with its
+//	                                    fake browser's sessions and live-view input
 //	POST /api/e2e/requests                {"sandboxId", "host", "port", "method", "path", "navigation",
 //	                                    "site"}: decides one browser request, as the gateway would, and
 //	                                    answers with the outcome once it is decided
@@ -94,6 +103,56 @@ func (r *Runtime) Control() http.Handler {
 		writeJSON(w, http.StatusOK, struct {
 			Outcome string `json:"outcome"`
 		}{outcome})
+	})
+	mux.HandleFunc("POST /api/e2e/sandboxes/{id}/calls", func(w http.ResponseWriter, req *http.Request) {
+		g, ok := r.Guest(req.PathValue("id"))
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		var body struct {
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+			Wait   bool            `json:"wait"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 64<<10)).Decode(&body); err != nil || body.Method == "" {
+			http.Error(w, "want {method, params, wait}", http.StatusBadRequest)
+			return
+		}
+		id, done := g.Call(body.Method, body.Params)
+		status := http.StatusAccepted
+		if body.Wait {
+			select {
+			case <-done:
+				status = http.StatusOK
+			case <-req.Context().Done():
+				return
+			}
+		}
+		c, _ := g.CallState(id)
+		writeJSON(w, status, c)
+	})
+	mux.HandleFunc("GET /api/e2e/sandboxes/{id}/calls/{n}", func(w http.ResponseWriter, req *http.Request) {
+		g, ok := r.Guest(req.PathValue("id"))
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		n, err := strconv.Atoi(req.PathValue("n"))
+		c, ok := g.CallState(n)
+		if err != nil || !ok {
+			http.NotFound(w, req)
+			return
+		}
+		writeJSON(w, http.StatusOK, c)
+	})
+	mux.HandleFunc("GET /api/e2e/teammates/{id}/browser", func(w http.ResponseWriter, req *http.Request) {
+		g, ok := r.BrowserGuest(req.PathValue("id"))
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		writeJSON(w, http.StatusOK, g.State())
 	})
 	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/ports", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))

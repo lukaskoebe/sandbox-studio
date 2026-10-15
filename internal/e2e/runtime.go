@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/templateimage"
 )
 
@@ -35,6 +36,7 @@ type Runtime struct {
 
 type vm struct {
 	sandboxID string
+	name      string // the sandbox's name: browser-<teammate> for a browser VM
 	status    runtime.Status
 	socket    string
 	egress    runtime.Egress
@@ -54,13 +56,26 @@ func (r *Runtime) Guest(sandboxID string) (*Guest, bool) {
 	return g, ok
 }
 
+// BrowserGuest returns the guest agent of a teammate's browser VM, if it exists.
+func (r *Runtime) BrowserGuest(teammateID string) (*Guest, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, v := range r.vms {
+		if v.name == sandboxes.BrowserName(teammateID) {
+			g, ok := r.guests[v.sandboxID]
+			return g, ok
+		}
+	}
+	return nil, false
+}
+
 func (r *Runtime) Create(_ context.Context, name string, spec runtime.Spec, socket string, labels map[string]string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.vms[name]; ok {
 		return errors.New("a VM named " + name + " already exists")
 	}
-	v := &vm{sandboxID: labels["studio.sandbox-id"], socket: socket, egress: spec.Egress, size: runtime.Size{CPUs: spec.CPUs, MemoryMiB: spec.MemoryMiB}}
+	v := &vm{sandboxID: labels["studio.sandbox-id"], name: labels["studio.sandbox-name"], socket: socket, egress: spec.Egress, size: runtime.Size{CPUs: spec.CPUs, MemoryMiB: spec.MemoryMiB}}
 	r.vms[name] = v
 	r.bootLocked(v)
 	return nil
