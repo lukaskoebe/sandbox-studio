@@ -240,3 +240,22 @@ test("the workspace status line shows CPU and memory use while the sandbox runs"
   )
   expect(stopped.status()).toBe(409)
 })
+
+// A schedule takes its first checkpoint as soon as it is turned on, and marks it as its own.
+test("a checkpoint schedule takes a checkpoint", async ({ page, api, env }) => {
+  const id = await api.createSandbox(sandboxName("sched"))
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  const section = page.getByRole("region", { name: "Checkpoints" })
+  await section.getByRole("combobox", { name: "Take checkpoints" }).click()
+  await page.getByRole("option", { name: "Every 4 hours" }).click()
+  await expect(section.getByText(/keeps the newest 3/)).toBeVisible()
+  const auto = section.getByRole("listitem").filter({ hasText: /^Auto / })
+  await expect(auto).toHaveCount(1)
+  await expect(auto.getByText("auto", { exact: true })).toBeVisible()
+
+  // After a reload the schedule is still on.
+  await page.reload()
+  await expect(
+    section.getByRole("combobox", { name: "Take checkpoints" })
+  ).toContainText("Every 4 hours")
+})

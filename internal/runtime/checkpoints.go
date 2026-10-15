@@ -18,10 +18,6 @@ var ErrCheckpointRestoreUnavailable = errors.New("checkpoint restore is unavaila
 // whose processes microsandbox can't freeze for a consistent snapshot.
 var ErrLiveCheckpointUnsupported = errors.New("this sandbox was created with systemd as its init, so it must be stopped before a checkpoint")
 
-// ErrCheckpointInUse means a newer indexed checkpoint depends on this one.
-// Delete dependent checkpoints first; Studio never forces removal of a parent.
-var ErrCheckpointInUse = errors.New("checkpoint has dependent newer checkpoints; delete those checkpoints first")
-
 // CheckpointRestoreSupported reports whether a restored sandbox can keep its egress. SDK
 // v0.7.7 restores a disk snapshot with msb's default network: restore accepts policy rules
 // and vsock routes but neither the resolver nor the gateway proxy, and inheriting resources
@@ -62,11 +58,10 @@ func (r *Runtime) CreateCheckpoint(ctx context.Context, vmName, sandboxID, check
 	return nil
 }
 
-// RemoveCheckpoint removes one exact checkpoint. It refuses to remove a
-// checkpoint with indexed children. If the target is the group head and has a
-// surviving member, it first moves the head to the target's parent (or another
-// member in the same Studio-owned group), then removes the target without force.
-// A singleton head is removed directly; the SDK clears that group head.
+// RemoveCheckpoint removes one exact checkpoint, older or newer than the others. If the
+// target is the group head and has a surviving member, it first moves the head to the
+// target's parent (or another member in the same Studio-owned group). A singleton head is
+// removed directly; the SDK clears that group head.
 func (r *Runtime) RemoveCheckpoint(ctx context.Context, sandboxID, checkpointID string) error {
 	group := checkpointGroup(sandboxID)
 	handle, err := msb.Snapshot.Get(ctx, checkpointSelector(sandboxID, checkpointID))
@@ -114,22 +109,16 @@ func (r *Runtime) RemoveCheckpoint(ctx context.Context, sandboxID, checkpointID 
 		headMoved = true
 	}
 
-	// force=false is required here: SDK removal will continue to reject a parent
-	// if a child appeared after the list above (for example, through another SDK
-	// process). Never trade the integrity of a surviving checkpoint for cleanup.
-	if err := handle.Remove(ctx, false); err != nil {
+	// A snapshot's parent is only lineage: each snapshot directory holds full copies of the
+	// sandbox's disk layers, so a child restores intact without it (checked 2026-10-15 with
+	// msb v0.7.7 by restoring a third snapshot after force-removing the two before it).
+	// The SDK refuses a parent without force, which would keep scheduled checkpoints from
+	// pruning their oldest.
+	if err := handle.Remove(ctx, true); err != nil {
 		if msb.IsKind(err, msb.ErrSnapshotNotFound) {
 			return nil
 		}
 		removeErr := fmt.Errorf("remove checkpoint: %w", err)
-		// A different SDK process can publish a child after our preflight list.
-		// Re-list after the SDK's non-forced refusal so that this race still
-		// reaches callers as the typed dependency conflict.
-		if latest, listErr := msb.Snapshot.List(ctx); listErr == nil {
-			if latestRecords, recordsErr := checkpointRecords(latest); recordsErr == nil {
-				removeErr = checkpointRemovalError(latestRecords, group, handle.ID(), err)
-			}
-		}
 		if !headMoved {
 			return removeErr
 		}
@@ -180,22 +169,10 @@ func checkpointRemovalParent(records []checkpointRecord, group, targetID string)
 			parentID = record.parentID
 		}
 	}
-	for _, record := range records {
-		if record.id != targetID && record.parentID == targetID {
-			return "", ErrCheckpointInUse // The snapshot ID means nothing to the user.
-		}
-	}
 	if !targetFound {
 		return "", errors.New("inspect indexed checkpoints for removal: target is missing from its Studio-owned snapshot group")
 	}
 	return parentID, nil
-}
-
-func checkpointRemovalError(records []checkpointRecord, group, targetID string, removeErr error) error {
-	if _, dependencyErr := checkpointRemovalParent(records, group, targetID); errors.Is(dependencyErr, ErrCheckpointInUse) {
-		return dependencyErr
-	}
-	return fmt.Errorf("remove checkpoint: %w", removeErr)
 }
 
 func checkpointRemovalHead(records []checkpointRecord, group, targetID, parentID, currentHeadID string) string {

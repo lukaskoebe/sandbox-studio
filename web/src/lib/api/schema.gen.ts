@@ -1216,6 +1216,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCheckpointSchedule"];
+        /**
+         * Take checkpoints on a schedule
+         * @description Studio takes a checkpoint every everyHours while the sandbox runs, or once after it stopped, and deletes the older ones it took: it keeps the newest three and the newest of each of the seven days before. Checkpoints taken by hand, or renamed, are never deleted. Turning the schedule off keeps the checkpoints it took.
+         */
+        put: operations["setCheckpointSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/checkpoints": {
         parameters: {
             query?: never;
@@ -2531,6 +2551,8 @@ export interface components {
             session: string;
         };
         Checkpoint: {
+            /** @description Taken by the sandbox's checkpoint schedule, which deletes it again; renaming it keeps it */
+            auto: boolean;
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
@@ -2541,6 +2563,15 @@ export interface components {
             sandboxId: string;
             /** @enum {string} */
             state: "creating" | "ready" | "deleting";
+        };
+        CheckpointSchedule: {
+            /**
+             * Format: int64
+             * @description Hours between scheduled checkpoints; 0 when the schedule is off
+             */
+            everyHours: number;
+            /** @description Why the last scheduled checkpoint was not taken, if it wasn't */
+            note?: string;
         };
         Commit: {
             author: string;
@@ -3445,6 +3476,8 @@ export interface components {
             templateName?: string;
         };
         LineageCheckpoint: {
+            /** @description Taken by the sandbox's checkpoint schedule, which deletes it again */
+            auto: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: int64 */
@@ -4172,6 +4205,14 @@ export interface components {
             teammateId: string;
             /** Format: int64 */
             writes: number;
+        };
+        SetCheckpointScheduleInBody: {
+            /**
+             * Format: int64
+             * @description Hours between scheduled checkpoints; 0 turns the schedule off
+             * @enum {integer}
+             */
+            everyHours: 0 | 1 | 4 | 12 | 24;
         };
         SetCuratedInBody: {
             /** @description The IDs of the curated entries this environment turns off. The whole list, which replaces the current one */
@@ -7919,6 +7960,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Chat"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getCheckpointSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointSchedule"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setCheckpointSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCheckpointScheduleInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckpointSchedule"];
                 };
             };
             /** @description Error */

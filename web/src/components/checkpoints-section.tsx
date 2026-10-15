@@ -29,14 +29,23 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { SectionHeader } from "@/components/section-header"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
+import type { components } from "@/lib/api/schema.gen"
 import { formatAge } from "@/lib/utils"
 
 /**
- * Disk checkpoints of one sandbox, on its dashboard, as a list with a save action. They work
- * while it is stopped. The history above shows the same checkpoints on the line.
+ * Disk checkpoints of one sandbox, on its dashboard, as a list with a save action and the
+ * schedule that takes them. They work while it is stopped. The history above shows the same
+ * checkpoints on the line.
  */
 export function CheckpointsSection({
   env,
@@ -116,9 +125,9 @@ export function CheckpointsSection({
         }
       />
       <p className="text-xs text-muted-foreground">
-        A checkpoint saves the disks, not running processes.{" "}
-        {hint ?? (list.length > 1 && "Delete newer ones before older ones.")}
+        A checkpoint saves the disks, not running processes. {hint}
       </p>
+      <CheckpointSchedule env={env} sandboxId={sandbox.id} />
       {checkpoints.isPending ? (
         <div className="grid h-(--wb-row) place-items-center">
           <Spinner />
@@ -140,6 +149,14 @@ export function CheckpointsSection({
                 <span className="min-w-0 flex-1 truncate">
                   {checkpoint.name}
                 </span>
+                {checkpoint.auto && (
+                  <span
+                    className="shrink-0 rounded-sm border px-1 font-mono text-[0.6875rem] text-muted-foreground"
+                    title="Taken on schedule, which deletes it again. Rename it in the history to keep it."
+                  >
+                    auto
+                  </span>
+                )}
                 {checkpoint.state !== "ready" && (
                   <span
                     className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground"
@@ -273,6 +290,107 @@ export function CheckpointsSection({
         />
       )}
     </section>
+  )
+}
+
+type EveryHours =
+  components["schemas"]["SetCheckpointScheduleInBody"]["everyHours"]
+
+const scheduleOptions: Record<string, string> = {
+  "0": "Off",
+  "1": "Every hour",
+  "4": "Every 4 hours",
+  "12": "Every 12 hours",
+  "24": "Daily",
+}
+
+/**
+ * How often Studio checkpoints the sandbox on its own, and which of those it keeps. The
+ * note says why the last one wasn't taken.
+ */
+function CheckpointSchedule({
+  env,
+  sandboxId,
+}: {
+  env: string
+  sandboxId: string
+}) {
+  const queryClient = useQueryClient()
+  const path = { params: { path: { env, id: sandboxId } } }
+  const schedule = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule",
+    path
+  )
+  const set = $api.useMutation(
+    "put",
+    "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule",
+    {
+      onSettled: () =>
+        queryClient.invalidateQueries({
+          queryKey: [
+            "get",
+            "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule",
+          ],
+        }),
+      onError: (err) =>
+        toast.error("Could not change the schedule", {
+          description: errorMessage(err),
+        }),
+    }
+  )
+  const every = set.isPending
+    ? set.variables.body.everyHours
+    : (schedule.data?.everyHours ?? 0)
+
+  return (
+    <div className="grid gap-1 text-xs">
+      <div className="flex items-center gap-2">
+        <span id="checkpoint-schedule" className="text-muted-foreground">
+          Take checkpoints
+        </span>
+        <Select
+          value={String(every)}
+          disabled={schedule.isPending}
+          items={scheduleOptions}
+          onValueChange={(v) =>
+            v &&
+            set.mutate({
+              ...path,
+              body: { everyHours: Number(v) as EveryHours },
+            })
+          }
+        >
+          <SelectTrigger
+            size="sm"
+            aria-labelledby="checkpoint-schedule"
+            className="w-36"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(scheduleOptions).map(([v, text]) => (
+              <SelectItem key={v} value={v}>
+                {text}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {set.isPending && <Spinner />}
+      </div>
+      {every > 0 && (
+        <p className="text-muted-foreground">
+          Taken while the sandbox runs, or once after it stopped. Studio keeps
+          the newest 3 and the last of each day for a week; the ones you save
+          stay. Each holds a copy of the sandbox&apos;s disks.
+        </p>
+      )}
+      {every > 0 && schedule.data?.note && (
+        <p className="text-destructive">
+          The last one wasn&apos;t taken: {schedule.data.note}
+        </p>
+      )}
+    </div>
   )
 }
 

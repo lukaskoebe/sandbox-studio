@@ -72,6 +72,9 @@ type Manager struct {
 	ops   map[string]*operation // sandbox ID → its create or fork; see progress.go
 
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
+	autoFailed  sync.Map // sandbox ID → when its scheduled checkpoint last failed, see scheduledCheckpoint
+	kickOnce    sync.Once
+	kick        chan struct{} // see scheduleKick
 	harness     harnessConfigs
 	// sandbox ID → *sync.Mutex held by lifecycle changes, see tryMutation. Entries stay for
 	// the Manager's lifetime so a deleted sandbox's lock can't be swapped under a holder.

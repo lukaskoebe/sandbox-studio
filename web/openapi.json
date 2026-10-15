@@ -891,6 +891,10 @@
       "Checkpoint": {
         "additionalProperties": false,
         "properties": {
+          "auto": {
+            "description": "Taken by the sandbox's checkpoint schedule, which deletes it again; renaming it keeps it",
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -927,7 +931,26 @@
           "name",
           "state",
           "generation",
-          "createdAt"
+          "createdAt",
+          "auto"
+        ],
+        "type": "object"
+      },
+      "CheckpointSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "everyHours": {
+            "description": "Hours between scheduled checkpoints; 0 when the schedule is off",
+            "format": "int64",
+            "type": "integer"
+          },
+          "note": {
+            "description": "Why the last scheduled checkpoint was not taken, if it wasn't",
+            "type": "string"
+          }
+        },
+        "required": [
+          "everyHours"
         ],
         "type": "object"
       },
@@ -3576,6 +3599,10 @@
       "LineageCheckpoint": {
         "additionalProperties": false,
         "properties": {
+          "auto": {
+            "description": "Taken by the sandbox's checkpoint schedule, which deletes it again",
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -3608,6 +3635,7 @@
           "state",
           "generation",
           "createdAt",
+          "auto",
           "restoreAllowed"
         ],
         "type": "object"
@@ -5781,6 +5809,27 @@
           "lastEventAt",
           "injections",
           "writes"
+        ],
+        "type": "object"
+      },
+      "SetCheckpointScheduleInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "everyHours": {
+            "description": "Hours between scheduled checkpoints; 0 turns the schedule off",
+            "enum": [
+              0,
+              1,
+              4,
+              12,
+              24
+            ],
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "everyHours"
         ],
         "type": "object"
       },
@@ -12461,6 +12510,120 @@
         },
         "tags": [
           "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule": {
+      "get": {
+        "operationId": "getCheckpointSchedule",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointSchedule"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "checkpoints"
+        ]
+      },
+      "put": {
+        "description": "Studio takes a checkpoint every everyHours while the sandbox runs, or once after it stopped, and deletes the older ones it took: it keeps the newest three and the newest of each of the seven days before. Checkpoints taken by hand, or renamed, are never deleted. Turning the schedule off keeps the checkpoints it took.",
+        "operationId": "setCheckpointSchedule",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCheckpointScheduleInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointSchedule"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Take checkpoints on a schedule",
+        "tags": [
+          "checkpoints"
         ]
       }
     },

@@ -488,9 +488,9 @@ The ACP session ID is the harness's own ID. The Claude adapter passes it as the 
   2. **A restore is too much.** It needs a stopped sandbox and a new generation, which
      kills the ACP process and dev servers. It would also roll back the root and Docker
      disks, not just the request's file changes.
-  3. **Checkpoints can't be pruned from the oldest end.** They form a dependency chain:
-     `ErrCheckpointInUse` means newer checkpoints depend on older ones. One per prompt
-     would grow without bound.
+  3. **A checkpoint costs a copy of the sandbox's disks.** Since 2026-10-15 older ones can be
+     pruned first ([scheduled checkpoints](../sandboxes.md#scheduled-checkpoints)), but one
+     per prompt would still cost gigabytes an hour.
 - **What we build instead: turn snapshots** in the guest. They follow the same model as the
   workspace export (`internal/guest/workspace.go`): a content-addressed copy of
   `/workspace`.

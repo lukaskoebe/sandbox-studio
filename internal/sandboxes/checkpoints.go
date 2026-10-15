@@ -36,6 +36,11 @@ func (m *Manager) Checkpoints(ctx context.Context, envID, id string) ([]store.Ch
 
 // CreateCheckpoint captures the current sandbox disks, of a running or a stopped sandbox.
 func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) (store.Checkpoint, error) {
+	return m.createCheckpoint(ctx, envID, id, name, false)
+}
+
+// createCheckpoint is CreateCheckpoint, or with auto one the sandbox's schedule takes.
+func (m *Manager) createCheckpoint(ctx context.Context, envID, id, name string, auto bool) (store.Checkpoint, error) {
 	defer m.publish(envID, id)
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return store.Checkpoint{}, err
@@ -69,7 +74,11 @@ func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) 
 		return store.Checkpoint{}, ErrCheckpointState
 	}
 
-	checkpoint, err := m.Store.CreateCheckpoint(ctx, envID, id, name)
+	create := m.Store.CreateCheckpoint
+	if auto {
+		create = m.Store.CreateAutoCheckpoint
+	}
+	checkpoint, err := create(ctx, envID, id, name)
 	if err != nil {
 		return store.Checkpoint{}, err
 	}
@@ -85,6 +94,9 @@ func (m *Manager) CreateCheckpoint(ctx context.Context, envID, id, name string) 
 		}
 	}
 	checkpoint.State = store.CheckpointStateReady
+	if auto {
+		return checkpoint, nil // The sandbox's history would fill with checkpoints that go again.
+	}
 	event := store.SandboxEvent{EnvironmentID: envID, SandboxID: id, Kind: store.EventCheckpoint, Generation: checkpoint.Generation,
 		Name: sb.Name, CheckpointID: checkpoint.ID, CheckpointName: checkpoint.Name}
 	m.recordEvent(ctx, event)
@@ -114,50 +126,27 @@ func (m *Manager) DeleteCheckpoint(ctx context.Context, envID, id, checkpointID 
 }
 
 func (m *Manager) deleteCheckpointLocked(ctx context.Context, envID, id, checkpointID string) error {
-	cp, err := m.Store.Checkpoint(ctx, envID, id, checkpointID)
-	if err != nil {
+	if _, err := m.Store.Checkpoint(ctx, envID, id, checkpointID); err != nil {
 		return err
 	}
 	if err := m.Store.SetCheckpointState(ctx, envID, id, checkpointID, store.CheckpointStateDeleting); err != nil {
 		return err
 	}
 	if err := m.Runtime.RemoveCheckpoint(ctx, id, checkpointID); err != nil {
-		// A checkpoint that newer ones depend on was left as it was, so it isn't half deleted.
-		if errors.Is(err, runtime.ErrCheckpointInUse) {
-			resetCtx, cancel := cleanupContext(ctx)
-			defer cancel()
-			return errors.Join(err, m.Store.SetCheckpointState(resetCtx, envID, id, checkpointID, cp.State))
-		}
 		return err
 	}
 	return m.Store.DeleteCheckpoint(ctx, envID, id, checkpointID)
 }
 
-// deleteCheckpointsLocked removes every tracked artifact while respecting runtime snapshot
-// dependencies. A failed parent is retried after any children removed in the same pass.
+// deleteCheckpointsLocked removes every tracked artifact, trying each even after one fails.
 func (m *Manager) deleteCheckpointsLocked(ctx context.Context, envID, id string, checkpoints []store.Checkpoint) error {
-	pending := checkpoints
-	for len(pending) > 0 {
-		remaining := make([]store.Checkpoint, 0, len(pending))
-		var failures []error
-		progress := false
-		for _, checkpoint := range pending {
-			if err := m.deleteCheckpointLocked(ctx, envID, id, checkpoint.ID); err != nil {
-				remaining = append(remaining, checkpoint)
-				failures = append(failures, fmt.Errorf("delete checkpoint %q: %w", checkpoint.Name, err))
-				continue
-			}
-			progress = true
+	var failures []error
+	for _, checkpoint := range checkpoints {
+		if err := m.deleteCheckpointLocked(ctx, envID, id, checkpoint.ID); err != nil {
+			failures = append(failures, fmt.Errorf("delete checkpoint %q: %w", checkpoint.Name, err))
 		}
-		if len(remaining) == 0 {
-			return nil
-		}
-		if !progress {
-			return errors.Join(failures...)
-		}
-		pending = remaining
 	}
-	return nil
+	return errors.Join(failures...)
 }
 
 // RestoreCheckpoint restores a checkpoint into a new VM generation. The source must

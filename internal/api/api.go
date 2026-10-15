@@ -323,7 +323,7 @@ func apiError(err error) error {
 		return huma.Error404NotFound(err.Error())
 	case errors.Is(err, store.ErrExists):
 		return huma.Error409Conflict(err.Error())
-	case errors.Is(err, runtime.ErrCheckpointInUse), errors.Is(err, runtime.ErrCheckpointRestoreUnavailable),
+	case errors.Is(err, runtime.ErrCheckpointRestoreUnavailable),
 		errors.Is(err, runtime.ErrLiveCheckpointUnsupported),
 		errors.Is(err, store.ErrConflict),
 		errors.Is(err, sandboxes.ErrBusy),
@@ -342,7 +342,7 @@ func apiError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, sandboxes.ErrCheckpointName):
+	case errors.Is(err, sandboxes.ErrCheckpointName), errors.Is(err, sandboxes.ErrCheckpointSchedule):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, gitreview.ErrInvalid), errors.Is(err, integrations.ErrAction):
 		return huma.Error422UnprocessableEntity(err.Error())

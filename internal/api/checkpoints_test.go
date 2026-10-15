@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -339,7 +340,7 @@ func TestLiveCheckpointOfSystemdSandboxConflicts(t *testing.T) {
 	}
 }
 
-func TestDeleteCheckpointInUseConflictRetainsSourceAndCheckpoint(t *testing.T) {
+func TestFailedCheckpointDeleteRetainsSourceAndCheckpoint(t *testing.T) {
 	h, s, env, sb, rt := checkpointAPI(t)
 	base := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID + "/checkpoints"
 	createRec := do(h, http.MethodPost, base, `{"name":"in-use"}`)
@@ -347,10 +348,10 @@ func TestDeleteCheckpointInUseConflictRetainsSourceAndCheckpoint(t *testing.T) {
 		t.Fatalf("create checkpoint: %d %s", createRec.Code, createRec.Body)
 	}
 	checkpoint := decode[store.Checkpoint](t, createRec)
-	rt.setRemoveCheckpointError(runtime.ErrCheckpointInUse)
+	rt.setRemoveCheckpointError(errors.New("snapshot directory is busy"))
 
-	if rec := do(h, http.MethodDelete, base+"/"+checkpoint.ID, ""); rec.Code != http.StatusConflict {
-		t.Fatalf("delete checkpoint in use: %d %s", rec.Code, rec.Body)
+	if rec := do(h, http.MethodDelete, base+"/"+checkpoint.ID, ""); rec.Code != http.StatusInternalServerError {
+		t.Fatalf("delete checkpoint that fails to go: %d %s", rec.Code, rec.Body)
 	}
 
 	source, err := s.Store.Sandbox(context.Background(), env.ID, sb.ID)
@@ -397,5 +398,22 @@ func TestSuspendSandboxEndpoint(t *testing.T) {
 	}
 	if rec := do(h, http.MethodPost, base+"/start", ""); rec.Code != http.StatusConflict {
 		t.Fatalf("start a suspended sandbox: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestCheckpointScheduleAPI(t *testing.T) {
+	h, _, env, sb, _ := checkpointAPI(t)
+	url := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID + "/checkpoint-schedule"
+	if rec := do(h, http.MethodGet, url, ""); rec.Code != http.StatusOK || decode[store.CheckpointSchedule](t, rec).EveryHours != 0 {
+		t.Fatalf("schedule before one is set: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, http.MethodPut, url, `{"everyHours":2}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("every 2 hours: %d %s; want 422", rec.Code, rec.Body)
+	}
+	if rec := do(h, http.MethodPut, url, `{"everyHours":4}`); rec.Code != http.StatusOK || decode[store.CheckpointSchedule](t, rec).EveryHours != 4 {
+		t.Fatalf("every 4 hours: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, http.MethodGet, url, ""); decode[store.CheckpointSchedule](t, rec).EveryHours != 4 {
+		t.Fatalf("schedule after it was set: %s", rec.Body)
 	}
 }

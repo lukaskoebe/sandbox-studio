@@ -203,3 +203,72 @@ func TestCommitRestoreRejectsUnexpectedGenerationAndRetainsOperation(t *testing.
 		t.Fatalf("ended restore against unexpected generation: %v", err)
 	}
 }
+
+// A schedule is per sandbox and goes with it; its checkpoints are marked auto until renamed.
+func TestCheckpointSchedules(t *testing.T) {
+	ctx := context.Background()
+	s, err := Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	env, _ := s.CreateEnvironment(ctx, "work")
+	other, _ := s.CreateEnvironment(ctx, "other")
+	sb, err := s.CreateSandbox(ctx, Sandbox{EnvironmentID: env.ID, Name: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cs, err := s.CheckpointSchedule(ctx, env.ID, sb.ID); err != nil || cs.EveryHours != 0 {
+		t.Fatalf("no schedule: %+v %v", cs, err)
+	}
+	if err := s.SetCheckpointSchedule(ctx, other.ID, sb.ID, 4); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("schedule in another environment: %v", err)
+	}
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 4); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCheckpointScheduleNote(ctx, env.ID, sb.ID, "the sandbox is suspended"); err != nil {
+		t.Fatal(err)
+	}
+	if all, err := s.CheckpointSchedules(ctx); err != nil || len(all) != 1 || all[0].EveryHours != 4 || all[0].Note != "the sandbox is suspended" || all[0].EnvironmentID != env.ID {
+		t.Fatalf("schedules %+v %v", all, err)
+	}
+	// Changing the interval forgets the note.
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 24); err != nil {
+		t.Fatal(err)
+	}
+	if cs, _ := s.CheckpointSchedule(ctx, env.ID, sb.ID); cs.EveryHours != 24 || cs.Note != "" {
+		t.Fatalf("changed schedule %+v", cs)
+	}
+
+	auto, err := s.CreateAutoCheckpoint(ctx, env.ID, sb.ID, "Auto 1")
+	if err != nil || !auto.Auto {
+		t.Fatalf("auto checkpoint %+v %v", auto, err)
+	}
+	if err := s.SetCheckpointState(ctx, env.ID, sb.ID, auto.ID, CheckpointStateReady); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Checkpoint(ctx, env.ID, sb.ID, auto.ID); !got.Auto {
+		t.Fatal("the auto mark was not stored")
+	}
+	if renamed, err := s.RenameCheckpoint(ctx, env.ID, sb.ID, auto.ID, "keep this"); err != nil || renamed.Auto {
+		t.Fatalf("renamed %+v %v", renamed, err)
+	}
+	if got, _ := s.Checkpoint(ctx, env.ID, sb.ID, auto.ID); got.Auto {
+		t.Fatal("a renamed checkpoint is still the schedule's")
+	}
+
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	if all, _ := s.CheckpointSchedules(ctx); len(all) != 0 {
+		t.Fatalf("schedule off, still listed: %+v", all)
+	}
+	_ = s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 1)
+	if err := s.DeleteSandbox(ctx, env.ID, sb.ID); err != nil {
+		t.Fatal(err)
+	}
+	if all, _ := s.CheckpointSchedules(ctx); len(all) != 0 {
+		t.Fatalf("a deleted sandbox's schedule stayed: %+v", all)
+	}
+}

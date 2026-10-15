@@ -2,37 +2,19 @@ package runtime
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 )
 
-func TestCheckpointRemovalRefusesParentBeforeMovingHead(t *testing.T) {
+func TestCheckpointRemovalAllowsAParent(t *testing.T) {
 	const group = "sbx-sandbox"
 	records := []checkpointRecord{
 		{id: "older", group: group},
 		{id: "newer", group: group, parentID: "older"},
 	}
 
-	if _, err := checkpointRemovalParent(records, group, "older"); !errors.Is(err, ErrCheckpointInUse) {
-		t.Fatalf("checkpointRemovalParent error = %v; want ErrCheckpointInUse", err)
-	}
-}
-
-func TestCheckpointRemovalErrorClassifiesChildAddedAfterPreflight(t *testing.T) {
-	const group = "sbx-sandbox"
-	removeErr := errors.New("SDK refused removal because an indexed child exists")
-	records := []checkpointRecord{
-		{id: "older", group: group},
-		{id: "newer", group: group, parentID: "older"},
-	}
-
-	err := checkpointRemovalError(records, group, "older", removeErr)
-	if !errors.Is(err, ErrCheckpointInUse) {
-		t.Fatalf("checkpointRemovalError = %v; want ErrCheckpointInUse", err)
-	}
-	if got := err.Error(); got != ErrCheckpointInUse.Error() {
-		t.Fatalf("checkpointRemovalError message = %q; want the plain dependency message", got)
+	if _, err := checkpointRemovalParent(records, group, "older"); err != nil {
+		t.Fatalf("checkpointRemovalParent: %v", err)
 	}
 }
 

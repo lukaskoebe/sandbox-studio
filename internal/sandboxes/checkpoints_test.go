@@ -374,60 +374,21 @@ func TestDeleteSandboxRemovesCheckpointArtifactsBeforeCatalog(t *testing.T) {
 	}
 }
 
-func TestDeleteSandboxRetriesParentAfterRemovingIndexedChild(t *testing.T) {
+// A snapshot holds its own disk layers, so an older checkpoint goes without its newer ones.
+func TestDeleteCheckpointRemovesAnOlderOne(t *testing.T) {
 	f := newCheckpointFixture(t)
-	sourceName := VMName(f.sandbox)
-	f.runtime.setStatus(sourceName, runtime.StatusStopped)
-	if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "first"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.manager.CreateCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, "second"); err != nil {
-		t.Fatal(err)
-	}
-	checkpoints, err := f.manager.Checkpoints(f.ctx, f.env.ID, f.sandbox.ID)
-	if err != nil || len(checkpoints) != 2 {
-		t.Fatalf("checkpoints before delete = %+v, %v", checkpoints, err)
-	}
-	// The first row in store order is made the parent, so the first deletion pass must
-	// encounter it before its indexed child regardless of same-second random ID ordering.
-	parentID, childID := checkpoints[0].ID, checkpoints[1].ID
-	f.runtime.setCheckpointChild(parentID, childID)
-	var checkpointsAtSourceRemoval int
-	f.runtime.onRemove = func(name string) {
-		if name == sourceName {
-			checkpointsAtSourceRemoval = f.runtime.checkpointCount()
-		}
-	}
+	older := f.createReadyCheckpoint(t, "first")
+	newer := f.createReadyCheckpoint(t, "second")
 
-	if err := f.manager.Delete(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
-		t.Fatal(err)
+	if err := f.manager.DeleteCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, older.ID); err != nil {
+		t.Fatalf("DeleteCheckpoint(older): %v", err)
 	}
-	if calls := f.runtime.countCall("remove-checkpoint:" + parentID); calls != 2 {
-		t.Fatalf("parent removal attempts = %d; want first failure and retry", calls)
+	if _, err := f.store.Checkpoint(f.ctx, f.env.ID, f.sandbox.ID, older.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("older checkpoint after delete: %v; want not found", err)
 	}
-	if calls := f.runtime.countCall("remove-checkpoint:" + childID); calls != 1 {
-		t.Fatalf("child removal attempts = %d; want one", calls)
-	}
-	if checkpointsAtSourceRemoval != 0 {
-		t.Fatalf("sandbox source removed with %d checkpoint artifacts remaining", checkpointsAtSourceRemoval)
-	}
-	if f.runtime.hasVM(sourceName) {
-		t.Fatal("sandbox source remains after successful delete")
-	}
-}
-
-func TestDeleteCheckpointWithChildLeavesItReady(t *testing.T) {
-	f := newCheckpointFixture(t)
-	parent := f.createReadyCheckpoint(t, "first")
-	child := f.createReadyCheckpoint(t, "second")
-	f.runtime.setCheckpointChild(parent.ID, child.ID)
-
-	if err := f.manager.DeleteCheckpoint(f.ctx, f.env.ID, f.sandbox.ID, parent.ID); !errors.Is(err, runtime.ErrCheckpointInUse) {
-		t.Fatalf("DeleteCheckpoint(parent) = %v; want ErrCheckpointInUse", err)
-	}
-	got, err := f.store.Checkpoint(f.ctx, f.env.ID, f.sandbox.ID, parent.ID)
+	got, err := f.store.Checkpoint(f.ctx, f.env.ID, f.sandbox.ID, newer.ID)
 	if err != nil || got.State != store.CheckpointStateReady {
-		t.Fatalf("parent after refused delete = %+v, %v; want ready", got, err)
+		t.Fatalf("newer checkpoint = %+v, %v; want ready", got, err)
 	}
 }
 
@@ -576,7 +537,6 @@ type fakeSandboxRuntime struct {
 	mu                 sync.Mutex
 	statuses           map[string]runtime.Status
 	checkpoints        map[string]bool
-	checkpointChildren map[string]string
 	failures           map[string]error
 	calls              []string
 	restoreDisabled    bool
@@ -590,11 +550,10 @@ type fakeSandboxRuntime struct {
 
 func newFakeSandboxRuntime() *fakeSandboxRuntime {
 	return &fakeSandboxRuntime{
-		statuses:           make(map[string]runtime.Status),
-		checkpoints:        make(map[string]bool),
-		checkpointChildren: make(map[string]string),
-		failures:           make(map[string]error),
-		sizes:              make(map[string]runtime.Size),
+		statuses:    make(map[string]runtime.Status),
+		checkpoints: make(map[string]bool),
+		failures:    make(map[string]error),
+		sizes:       make(map[string]runtime.Size),
 	}
 }
 
@@ -783,10 +742,6 @@ func (f *fakeSandboxRuntime) RemoveCheckpoint(_ context.Context, sandboxID, chec
 		return err
 	}
 	f.mu.Lock()
-	if childID, ok := f.checkpointChildren[checkpointID]; ok && f.checkpoints[sandboxID+"/"+childID] {
-		f.mu.Unlock()
-		return runtime.ErrCheckpointInUse // As the real runtime reports an indexed child.
-	}
 	delete(f.checkpoints, key)
 	f.mu.Unlock()
 	return nil
@@ -860,22 +815,10 @@ func (f *fakeSandboxRuntime) setCheckpoint(sandboxID, checkpointID string) {
 	f.mu.Unlock()
 }
 
-func (f *fakeSandboxRuntime) setCheckpointChild(parentID, childID string) {
-	f.mu.Lock()
-	f.checkpointChildren[parentID] = childID
-	f.mu.Unlock()
-}
-
 func (f *fakeSandboxRuntime) setCheckpointRestoreSupported(supported bool) {
 	f.mu.Lock()
 	f.restoreDisabled = !supported
 	f.mu.Unlock()
-}
-
-func (f *fakeSandboxRuntime) checkpointCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.checkpoints)
 }
 
 func (f *fakeSandboxRuntime) countCall(call string) int {

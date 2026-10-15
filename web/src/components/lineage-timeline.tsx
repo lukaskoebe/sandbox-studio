@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -488,9 +489,21 @@ function CheckpointMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Checkpoint ${checkpoint.name}`}
+        title={
+          checkpoint.auto
+            ? "Taken on schedule, which deletes it again"
+            : undefined
+        }
         className="grid size-6 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        <span className="size-3 rounded-full border-2 border-muted-foreground bg-background" />
+        <span
+          className={cn(
+            "rounded-full border-2 bg-background",
+            checkpoint.auto
+              ? "size-2.5 border-muted-foreground/60"
+              : "size-3 border-muted-foreground"
+          )}
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="center">
         <MenuAction
@@ -649,6 +662,12 @@ function RenameCheckpointDialog({
         >
           <DialogHeader>
             <DialogTitle>Rename {checkpoint.name}</DialogTitle>
+            {checkpoint.auto && (
+              <DialogDescription>
+                The schedule took this checkpoint. Once renamed, it is yours,
+                and the schedule no longer deletes it.
+              </DialogDescription>
+            )}
           </DialogHeader>
           <Field>
             <FieldLabel htmlFor="lineage-checkpoint-rename">Name</FieldLabel>

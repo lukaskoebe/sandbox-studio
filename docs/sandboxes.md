@@ -165,10 +165,36 @@ checked against a live VM.
   crash-consistent at the filesystem level, not at the application level.
 - Sandboxes created with systemd as init must be stopped first
   (`ErrLiveCheckpointUnsupported`).
-- Deleting a checkpoint moves the group head to a surviving member first; Studio never
-  forces removal. A checkpoint with dependent newer ones answers with a conflict.
+- Deleting a checkpoint moves the group head to a surviving member first, then removes it
+  with force, so an older checkpoint can go before newer ones. That is safe: a snapshot's
+  parent is lineage only, and each snapshot directory holds full copies of the disk layers.
+  Checked on 2026-10-15 with msb 0.7.7: after force-removing the first two of three
+  snapshots, the third restored with every file intact. The cost is disk space: each
+  checkpoint takes about as much as the sandbox's used disks.
 - A checkpoint can be renamed (`PUT .../checkpoints/{checkpoint}` with `{"name"}`). Its
   name is a catalog label; the disks are not touched.
+
+### Scheduled checkpoints
+
+A sandbox can take checkpoints on a schedule, off by default
+(`GET`/`PUT .../checkpoint-schedule` with `{"everyHours"}`: 0, 1, 4, 12 or 24). The table
+`checkpoint_schedules` holds one row per sandbox with a schedule;
+`Manager.RunCheckpointSchedules` checks them every minute, and setting a schedule wakes it
+at once, so the first checkpoint is taken right away.
+
+- A checkpoint is due when the schedule's newest one (`checkpoints.auto`) is `everyHours`
+  old. A running sandbox gets one then. A stopped one gets one only if it started since the
+  last, as its disks can't have changed otherwise; a suspended one waits.
+- It is named `Auto YYYY-MM-DD HH:MM` in local time and records no history event, since it
+  is deleted again.
+- After each new one the schedule prunes its own: it keeps the newest 3 and the newest of each
+  of the 7 days before today (local time), so at most 10. Checkpoints taken by hand are never
+  pruned, and renaming a scheduled one makes it the user's (`auto` is cleared).
+- A failed attempt is logged and saved as the schedule's `note`, shown in the UI; the
+  schedule tries again after 15 minutes. `ErrBusy` (another operation on the sandbox) just
+  waits for the next minute. A systemd sandbox, which can't be checkpointed while it runs,
+  gets its note while running and its checkpoint once it stopped.
+- Turning the schedule off keeps the checkpoints it took.
 
 **Restore is disabled.** With microsandbox 0.7.7 a restored VM gets msb's default network
 (no resolver, no gateway proxy); restore options can't set either

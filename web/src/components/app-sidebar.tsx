@@ -397,7 +397,13 @@ function SandboxTerminals({ env, sb }: { env: string; sb: Sandbox }) {
     params: { env, id: sb.id },
   })
   const list = running
-    ? [...(terminals.data ?? [])].sort((a, b) => a.created - b.created)
+    ? [...(terminals.data ?? [])].sort(
+        // tmux counts in seconds, so sessions made in the same one go main first, then by name
+        (a, b) =>
+          a.created - b.created ||
+          Number(b.name === "main") - Number(a.name === "main") ||
+          a.name.localeCompare(b.name, undefined, { numeric: true })
+      )
     : []
   if (!list.length) return null
   return (

@@ -89,4 +89,31 @@ func (s *Server) registerCheckpoints(api huma.API) {
 		view, err := s.Sandboxes.RestoreCheckpoint(ctx, in.Env, in.ID, in.Checkpoint)
 		return &sandboxOut{view}, apiError(err)
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getCheckpointSchedule", Method: http.MethodGet,
+		Path: "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule", Tags: []string{"checkpoints"},
+	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body store.CheckpointSchedule }, error) {
+		cs, err := s.Sandboxes.CheckpointSchedule(ctx, in.Env, in.ID)
+		return &struct{ Body store.CheckpointSchedule }{cs}, apiError(err)
+	})
+
+	type setCheckpointScheduleIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Body struct {
+			EveryHours int `json:"everyHours" enum:"0,1,4,12,24" doc:"Hours between scheduled checkpoints; 0 turns the schedule off"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "setCheckpointSchedule", Method: http.MethodPut,
+		Path: "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule", Tags: []string{"checkpoints"},
+		Summary: "Take checkpoints on a schedule",
+		Description: "Studio takes a checkpoint every everyHours while the sandbox runs, or once after it stopped, and deletes the older ones it took: " +
+			"it keeps the newest three and the newest of each of the seven days before. Checkpoints taken by hand, or renamed, are never deleted. " +
+			"Turning the schedule off keeps the checkpoints it took.",
+	}, func(ctx context.Context, in *setCheckpointScheduleIn) (*struct{ Body store.CheckpointSchedule }, error) {
+		cs, err := s.Sandboxes.SetCheckpointSchedule(ctx, in.Env, in.ID, in.Body.EveryHours)
+		return &struct{ Body store.CheckpointSchedule }{cs}, apiError(err)
+	})
 }

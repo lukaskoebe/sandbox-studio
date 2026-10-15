@@ -29,20 +29,30 @@ type Checkpoint struct {
 	State         string    `json:"state" enum:"creating,ready,deleting"`
 	Generation    int       `json:"generation"`
 	CreatedAt     time.Time `json:"createdAt"`
+	Auto          bool      `json:"auto" doc:"Taken by the sandbox's checkpoint schedule, which deletes it again; renaming it keeps it"`
 }
 
-const checkpointCols = "id, environment_id, sandbox_id, name, state, generation, created_at"
+const checkpointCols = "id, environment_id, sandbox_id, name, state, generation, created_at, auto"
 
 func scanCheckpoint(row interface{ Scan(...any) error }) (Checkpoint, error) {
 	var cp Checkpoint
 	var created int64
-	err := row.Scan(&cp.ID, &cp.EnvironmentID, &cp.SandboxID, &cp.Name, &cp.State, &cp.Generation, &created)
+	err := row.Scan(&cp.ID, &cp.EnvironmentID, &cp.SandboxID, &cp.Name, &cp.State, &cp.Generation, &created, &cp.Auto)
 	cp.CreatedAt = time.Unix(created, 0)
 	return cp, err
 }
 
 // CreateCheckpoint inserts a creating checkpoint for the sandbox's current generation.
 func (s *Store) CreateCheckpoint(ctx context.Context, envID, sandboxID, name string) (Checkpoint, error) {
+	return s.createCheckpoint(ctx, envID, sandboxID, name, false)
+}
+
+// CreateAutoCheckpoint is CreateCheckpoint for the sandbox's checkpoint schedule.
+func (s *Store) CreateAutoCheckpoint(ctx context.Context, envID, sandboxID, name string) (Checkpoint, error) {
+	return s.createCheckpoint(ctx, envID, sandboxID, name, true)
+}
+
+func (s *Store) createCheckpoint(ctx context.Context, envID, sandboxID, name string, auto bool) (Checkpoint, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Checkpoint{}, err
@@ -58,10 +68,10 @@ func (s *Store) CreateCheckpoint(ctx context.Context, envID, sandboxID, name str
 	}
 	cp := Checkpoint{
 		ID: NewID(), EnvironmentID: envID, SandboxID: sandboxID, Name: name,
-		State: CheckpointStateCreating, Generation: generation, CreatedAt: time.Unix(now(), 0),
+		State: CheckpointStateCreating, Generation: generation, CreatedAt: time.Unix(now(), 0), Auto: auto,
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO checkpoints ("+checkpointCols+") VALUES (?, ?, ?, ?, ?, ?, ?)",
-		cp.ID, cp.EnvironmentID, cp.SandboxID, cp.Name, cp.State, cp.Generation, cp.CreatedAt.Unix())
+	_, err = tx.ExecContext(ctx, "INSERT INTO checkpoints ("+checkpointCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		cp.ID, cp.EnvironmentID, cp.SandboxID, cp.Name, cp.State, cp.Generation, cp.CreatedAt.Unix(), cp.Auto)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Checkpoint{}, fmt.Errorf("a checkpoint named %q: %w", name, ErrExists)
@@ -135,7 +145,8 @@ func (s *Store) SetCheckpointState(ctx context.Context, envID, sandboxID, checkp
 	return tx.Commit()
 }
 
-// RenameCheckpoint changes the name of a ready checkpoint. Names stay unique per sandbox.
+// RenameCheckpoint changes the name of a ready checkpoint. Names stay unique per sandbox. A
+// scheduled checkpoint becomes the user's, which the schedule no longer deletes.
 func (s *Store) RenameCheckpoint(ctx context.Context, envID, sandboxID, checkpointID, name string) (Checkpoint, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -152,7 +163,7 @@ func (s *Store) RenameCheckpoint(ctx context.Context, envID, sandboxID, checkpoi
 	if cp.State != CheckpointStateReady {
 		return Checkpoint{}, ErrConflict
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE checkpoints SET name = ? WHERE environment_id = ? AND sandbox_id = ? AND id = ?", name, envID, sandboxID, checkpointID); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE checkpoints SET name = ?, auto = 0 WHERE environment_id = ? AND sandbox_id = ? AND id = ?", name, envID, sandboxID, checkpointID); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return Checkpoint{}, fmt.Errorf("a checkpoint named %q: %w", name, ErrExists)
 		}
@@ -161,7 +172,7 @@ func (s *Store) RenameCheckpoint(ctx context.Context, envID, sandboxID, checkpoi
 	if err := tx.Commit(); err != nil {
 		return Checkpoint{}, err
 	}
-	cp.Name = name
+	cp.Name, cp.Auto = name, false
 	return cp, nil
 }
 

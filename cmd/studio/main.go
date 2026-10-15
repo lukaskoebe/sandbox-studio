@@ -352,6 +352,7 @@ func run(addr, image string, log *slog.Logger) error {
 	go brw.Run(ctx)
 	go brw.FollowOwners(ctx, bus, sandboxStopped(mgr))
 	go mgr.FollowEnvironments(ctx, bus)
+	go mgr.RunCheckpointSchedules(ctx)
 	if err := mgr.Reconcile(ctx); err != nil {
 		return err
 	}

@@ -61,6 +61,7 @@ type LineageCheckpoint struct {
 	State      string    `json:"state" enum:"creating,ready,deleting"`
 	Generation int       `json:"generation"`
 	CreatedAt  time.Time `json:"createdAt"`
+	Auto       bool      `json:"auto" doc:"Taken by the sandbox's checkpoint schedule, which deletes it again"`
 	// RestoreAllowed is true when the runtime can restore checkpoints (its gate is open) and
 	// this one is ready. The sandbox must also be stopped.
 	RestoreAllowed bool `json:"restoreAllowed"`
@@ -214,7 +215,7 @@ func (m *Manager) Lineage(ctx context.Context, envID, id string) (Lineage, error
 	restorable := out.CheckpointRestoreSupported
 	for _, cp := range checkpoints {
 		out.Checkpoints = append(out.Checkpoints, LineageCheckpoint{
-			ID: cp.ID, Name: cp.Name, State: cp.State, Generation: cp.Generation, CreatedAt: cp.CreatedAt,
+			ID: cp.ID, Name: cp.Name, State: cp.State, Generation: cp.Generation, CreatedAt: cp.CreatedAt, Auto: cp.Auto,
 			RestoreAllowed: restorable && cp.State == store.CheckpointStateReady,
 		})
 	}
