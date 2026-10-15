@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { ArrowClockwiseIcon, HammerIcon, PlusIcon } from "@phosphor-icons/react"
 import { BuildDialog } from "@/components/build-dialog"
 import { BuildJobSheet } from "@/components/build-job-sheet"
@@ -142,18 +142,24 @@ function BuildsWorkspace({ env }: { env: string }) {
                         return (
                           <TableRow key={job.id}>
                             <TableCell>
-                              {job.templateName ? (
-                                <>
-                                  <span className="font-medium">
-                                    {job.templateName}
-                                  </span>{" "}
-                                  <Ident>{shortId(job.id)}</Ident>
-                                </>
-                              ) : (
-                                <>
-                                  Build <Ident>{shortId(job.id)}</Ident>
-                                </>
-                              )}
+                              <Link
+                                to="/e/$env/builds/$id"
+                                params={{ env, id: job.id }}
+                                className="underline-offset-4 hover:underline"
+                              >
+                                {job.templateName ? (
+                                  <>
+                                    <span className="font-medium">
+                                      {job.templateName}
+                                    </span>{" "}
+                                    <Ident>{shortId(job.id)}</Ident>
+                                  </>
+                                ) : (
+                                  <>
+                                    Build <Ident>{shortId(job.id)}</Ident>
+                                  </>
+                                )}
+                              </Link>
                             </TableCell>
                             <TableCell>
                               <BuildStatusBadge status={job.status} />

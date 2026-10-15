@@ -23,6 +23,8 @@ its approval kinds with a decide function, and the API hands the decision to the
 
 - `GET /api/approvals?status=pending`: all environments, for the global stack.
 - `GET /api/environments/{env}/approvals`
+- `GET /api/environments/{env}/approvals/{id}`: one approval, pending or decided (the pages of
+  a git push review and a memory conflict read it).
 - `POST /api/environments/{env}/approvals/{id}/decide` with `action` `allow`, `deny` or
   `dismiss`. For `network`, allow and deny create a rule (`host`, `ports`, `scope`, and
   `expiresAt` for a rule that stops matching at that time), and dismiss only closes the

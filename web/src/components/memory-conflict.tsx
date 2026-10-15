@@ -1,7 +1,9 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
+  ArrowSquareOutIcon,
   CheckCircleIcon,
   ClockCounterClockwiseIcon,
   MoonStarsIcon,
@@ -44,7 +46,7 @@ type DreamRun = components["schemas"]["DreamRun"]
 type Resolution = components["schemas"]["ConflictResolution"]
 
 /** What the judge's verdicts mean, for the conflict header. */
-const verdictText: Record<string, string> = {
+export const verdictText: Record<string, string> = {
   contradiction: "The two facts cannot both be true.",
   temporal_supersession:
     "B looks like a newer value of A, but it comes from a less trusted source or would replace a shared fact, so it was not applied by itself.",
@@ -77,9 +79,28 @@ export function ConflictSheet({
     <Sheet open={conflictId !== undefined} onOpenChange={onOpenChange}>
       <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-3xl">
         <SheetHeader>
-          <KindChip area="memory" icon={ScalesIcon} className="self-start">
-            Memory conflict
-          </KindChip>
+          <div className="flex items-center gap-2 pr-8">
+            <KindChip area="memory" icon={ScalesIcon}>
+              Memory conflict
+            </KindChip>
+            {conflictId !== undefined && (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="ml-auto"
+                render={
+                  <Link
+                    to="/e/$env/memory/conflicts/$id"
+                    params={{ env, id: conflictId }}
+                    onClick={() => onOpenChange(false)}
+                  />
+                }
+              >
+                <ArrowSquareOutIcon />
+                Open as page
+              </Button>
+            )}
+          </div>
           <SheetTitle>Conflicting facts</SheetTitle>
           <SheetDescription>
             {c ? (verdictText[c.verdict] ?? c.verdict) : "Two facts disagree."}
@@ -107,7 +128,11 @@ export function ConflictSheet({
   )
 }
 
-function ConflictBody({
+/**
+ * One conflict: both facts with their sources and tiers, the timeline around them, and, while
+ * it is open, the ways to resolve it. The sheet and the conflict's own page show it.
+ */
+export function ConflictBody({
   env,
   conflict: c,
   onResolved,

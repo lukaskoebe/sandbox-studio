@@ -54,6 +54,9 @@ to an environment.
 | `/e/$env/settings/git` | forges and git push review of the environment |
 | `/e/$env/settings/templates` | template builds and templates of the environment |
 | `/e/$env/settings/runtime` | host checks (doctor) |
+| `/e/$env/git/reviews/$id` | one git push review: the commits and diff, decided there while it waits, its outcome after |
+| `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
+| `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |
 
 On the first load of a browser session, `/e/$env` redirects to `/setup` while the setup is
 neither completed nor dismissed and the environment has no sandbox yet; the check runs once
@@ -89,7 +92,10 @@ for its workspace. One panel is open at a time, and on the workspace the URL nam
 panel is resizable from its left edge on wide screens (1024px and up) and covers the screen
 below that. Its width is remembered per page in local storage (`studio.panel.sandbox`,
 `studio.panel.chat`). Sheets remain only for detail opened from outside its context: the
-git push review, memory conflicts and the build log of an approval card.
+git push review, memory conflicts and the build log of an approval card. Each of those sheets
+has "Open as page", which leads to the item's own page above; Home's activity, Settings → Git,
+Settings → Templates and the memory conflicts tab link there too. A page for an item that
+doesn't exist says so, and one already decided shows the outcome without the buttons.
 
 Links from before the dashboard and workspace split that carry workspace parameters
 (`?terminal=`, `?session=`, `?chat=`) redirect the dashboard to `/work`.
@@ -129,11 +135,37 @@ The `e2e` build replaces the VM runtime and the guest agent with the fakes in
   {method, params, wait}` makes a sandbox's agent call a tool (such as `browser_click`) through
   the real channel and broker, so browser approvals and the action log fill as they would;
   `GET /api/e2e/teammates/{id}/browser` reads the browser's sessions and the live view's input.
+- Git push review reaches a fake forge. `PUT /api/e2e/upstream/{host}/{path}` (re)creates a
+  bare repository with one commit on main, and `GET` lists its branches. The e2e build hands
+  the git remote an HTTP client that sends every forge request to these repositories (git's
+  smart HTTP, served by go-git), whatever the forge's host. `POST /api/e2e/sandboxes/{id}/push`
+  makes the fake guest clone a repository through the gateway, as git in the sandbox would
+  (`https://git.studio.internal/<forge>/<path>.git` over the SOCKS5 proxy, trusting Studio's
+  CA), commit a file and push a branch; it answers with the commit and git's output.
+- A chat's agent is a scripted ACP agent. The fake guest serves the `acp` stream with
+  `acptest.Agent`, and every prompt plays the same turn: a message, a tool call that asks for
+  permission (allow or reject), then the tool call's end and a closing message once answered.
+  `GET /api/e2e/sandboxes/{id}` lists each agent's chat, prompts and permission outcomes.
 - `/api/e2e/` exists only in the e2e build, behind the same login as the API. The gateway,
   approvals, rules, secrets, git review and the catalog are the real ones. The per-sandbox
   DNS resolvers are not started, because they listen on fixed ports; the fake guest names
   hosts in SOCKS5 instead.
 
 Tests locate elements by role and label, and use `data-testid` only where a control has no
-accessible name (approval cards). Scenarios that need more fakes (git review, chats and the
-browser) are `test.fixme` in `web/e2e/todo.spec.ts`.
+accessible name (approval cards). Scenarios that need more fakes (the teammate browser's live
+view) are `test.fixme` in `web/e2e/todo.spec.ts`.
+
+`web/e2e-live` is a second, small suite against a real Studio that is already running and
+boots real VMs. It has its own config, and reaches Studio through a login link:
+
+```sh
+cd web
+STUDIO_LOGIN_URL="$(studio login-url)" pnpm exec playwright test -c e2e-live/playwright.config.ts
+```
+
+Its one scenario creates a sandbox in the UI, runs `docker run hello-world` in its terminal
+(noted and left out when the image has no Docker), sets the level to Locked so that
+`registry.npmjs.org` gets an approval card and allows it, then starts Vite from npm and opens
+its preview. It puts the level back to Guarded and deletes the sandbox at the end. The smoke
+workflow runs it on Linux after its own steps, and uploads traces, screenshots and videos
+when it fails.

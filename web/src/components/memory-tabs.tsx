@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   BrainIcon,
@@ -580,8 +581,20 @@ function ConflictsTab({ env, scope }: { env: string; scope: string }) {
               </span>
               <Button
                 size="sm"
-                variant={c.status === "open" ? "default" : "outline"}
+                variant="ghost"
                 className="ml-auto"
+                render={
+                  <Link
+                    to="/e/$env/memory/conflicts/$id"
+                    params={{ env, id: c.id }}
+                  />
+                }
+              >
+                Open as page
+              </Button>
+              <Button
+                size="sm"
+                variant={c.status === "open" ? "default" : "outline"}
                 onClick={() => setOpen(c.id)}
               >
                 {c.status === "open" ? "Resolve…" : "Details"}

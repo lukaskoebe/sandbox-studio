@@ -446,6 +446,21 @@ func (s *Server) registerNetwork(api huma.API) {
 		return &struct{ Body []ApprovalView }{list}, apiError(err)
 	})
 
+	type approvalIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Approval ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "getApproval", Method: http.MethodGet, Path: "/api/environments/{env}/approvals/{id}", Tags: []string{"approvals"},
+		Description: "One approval in any status, such as a git push review a link points to.",
+	}, func(ctx context.Context, in *approvalIn) (*struct{ Body ApprovalView }, error) {
+		a, err := s.Store.Approval(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
+	})
+
 	type decideIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`

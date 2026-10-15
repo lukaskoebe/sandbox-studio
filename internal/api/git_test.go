@@ -341,4 +341,18 @@ func TestGitApprovalsAreSettledByTheIntegration(t *testing.T) {
 	if rec := do(h, "POST", url, `{"action":"allow"}`); rec.Code != http.StatusConflict {
 		t.Fatalf("second decision: %d %s", rec.Code, rec.Body)
 	}
+
+	// A link to the review still finds it once decided, with its outcome; other
+	// environments and unknown IDs don't.
+	one := testOrigin + "/api/environments/" + env.ID + "/approvals/" + a.ID
+	got := decode[ApprovalView](t, do(h, "GET", one, ""))
+	if got.ID != a.ID || got.Status != store.StatusDenied || got.Git == nil || got.Git.Push.Note != "split it up" {
+		t.Fatalf("one approval: %+v", got)
+	}
+	other := newEnvironment(t, s, "other")
+	for _, u := range []string{testOrigin + "/api/environments/" + other.ID + "/approvals/" + a.ID, one + "x"} {
+		if rec := do(h, "GET", u, ""); rec.Code != http.StatusNotFound {
+			t.Fatalf("GET %s: %d %s", u, rec.Code, rec.Body)
+		}
+	}
 }

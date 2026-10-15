@@ -35,9 +35,11 @@ var DefaultPorts = []int{3000}
 
 // Guest is a fake guest agent. It dials its sandbox's agent socket like studio-agent does
 // over vsock, says hello, and serves the host's streams: config, pty (an echoing
-// shell), sessions, kill, ports, tcp, home-files, start-session, and in a browser VM
-// browser and browser-downloads (browser.go). It records what the host sent, for the tests
-// to read through the control API, and makes calls to Studio as `studio-agent mcp` would.
+// shell), sessions, kill, ports, tcp, home-files, start-session, acp (a scripted ACP agent in
+// place of the harness's), and in a browser VM browser and browser-downloads (browser.go). It
+// records what the host sent, for the tests to read through the control API, and makes calls
+// to Studio as `studio-agent mcp` would. It also pushes to git remotes through the gateway
+// (Push).
 type Guest struct {
 	id  string
 	log *slog.Logger
@@ -54,6 +56,7 @@ type Guest struct {
 	conns    []*Connection
 	calls    []*Call
 	browser  *browserVM // the browser of this boot, once Studio sent a browser stream
+	acp      []*acpProcess
 }
 
 type session struct {
@@ -221,6 +224,8 @@ func (g *Guest) handle(st net.Conn) {
 		err = g.serveBrowser(st, br)
 	case agentproto.KindBrowserDownloads:
 		err = g.serveBrowserDownloads(st, br)
+	case agentproto.KindACP:
+		err = g.serveACP(st, br)
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "the e2e guest does not support " + h.Kind + " streams"})
 	}
@@ -588,6 +593,7 @@ type State struct {
 	Ports      []int                `json:"ports"`
 	Connection []Connection         `json:"connections"`
 	Calls      []Call               `json:"calls"`
+	ACP        []ACPAgent           `json:"acp"`
 	// Browser is the fake browser of a browser VM, once Studio drove it.
 	Browser *BrowserState `json:"browser,omitempty"`
 }
@@ -600,12 +606,13 @@ func (g *Guest) State() State {
 	if b, ok := g.BrowserState(); ok {
 		browser = &b
 	}
+	agents := g.acpState()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	s := State{
 		Connected: g.sess != nil && !g.sess.IsClosed(), Configs: g.configs, Env: env,
 		CA: g.config != nil && strings.Contains(g.config.CA, "BEGIN CERTIFICATE"), HomeFiles: append([]string{}, g.home...),
-		Sessions: sessions, Ports: slices.Clone(g.ports), Connection: []Connection{}, Calls: []Call{}, Browser: browser,
+		Sessions: sessions, Ports: slices.Clone(g.ports), Connection: []Connection{}, Calls: []Call{}, ACP: agents, Browser: browser,
 	}
 	for _, c := range g.conns {
 		s.Connection = append(s.Connection, *c)

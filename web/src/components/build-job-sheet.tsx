@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import {
+  ArrowSquareOutIcon,
   FileTextIcon,
   PlusIcon,
   TerminalWindowIcon,
@@ -31,6 +33,7 @@ import { SectionHeader } from "@/components/section-header"
 import {
   $api,
   errorMessage,
+  errorStatus,
   fetchClient,
   type BuildJob,
 } from "@/lib/api/client"
@@ -40,6 +43,7 @@ import {
 } from "@/lib/template-source"
 import { formatAge } from "@/lib/utils"
 
+/** A build job's details, output and spec in a sheet, from the builds list. */
 export function BuildJobSheet({
   env,
   id,
@@ -53,12 +57,68 @@ export function BuildJobSheet({
   onUseSpec: (source: string) => void
   onCreate: (templateId: string) => void
 }) {
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
+        <SheetHeader className="border-b pr-12">
+          <SheetTitle>
+            Build <Ident>{shortId(id)}</Ident>
+          </SheetTitle>
+          <SheetDescription>
+            Build job details, output, and the submitted template spec.
+          </SheetDescription>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="self-start"
+            render={
+              <Link
+                to="/e/$env/builds/$id"
+                params={{ env, id }}
+                onClick={onClose}
+              />
+            }
+          >
+            <ArrowSquareOutIcon />
+            Open as page
+          </Button>
+        </SheetHeader>
+        <ScrollArea className="min-h-0 flex-1">
+          <BuildJobView
+            env={env}
+            id={id}
+            onUseSpec={onUseSpec}
+            onCreate={onCreate}
+          />
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+/**
+ * One build job, kept current while it runs: status, errors, cancel, the log and the spec. The
+ * sheet and the build's own page show it. A build that doesn't exist says so.
+ */
+export function BuildJobView({
+  env,
+  id,
+  onUseSpec,
+  onCreate,
+}: {
+  env: string
+  id: string
+  onUseSpec: (source: string) => void
+  onCreate: (templateId: string) => void
+}) {
   const job = $api.useQuery(
     "get",
     "/api/environments/{env}/builds/{id}",
     { params: { path: { env, id } } },
     {
+      retry: (n, err) => errorStatus(err) !== 404 && n < 2,
       refetchInterval: (query) => {
+        if (query.state.status === "error") return false
         const data = query.state.data
         return data && !isBuildActive(data.status) && !data.cleanupPending
           ? 5000
@@ -71,45 +131,43 @@ export function BuildJobSheet({
       ? 5000
       : 1000
 
+  if (job.isPending)
+    return (
+      <div className="grid h-full place-items-center p-6">
+        <Spinner />
+      </div>
+    )
+  if (job.isError) {
+    const missing = errorStatus(job.error) === 404
+    return (
+      <Empty className="m-6 border">
+        <EmptyHeader>
+          <EmptyTitle>
+            {missing ? "No such build" : "Build unavailable"}
+          </EmptyTitle>
+          <EmptyDescription>
+            {missing
+              ? "This build isn't in this environment. It may have been removed with its template."
+              : errorMessage(job.error)}
+          </EmptyDescription>
+        </EmptyHeader>
+        {!missing && (
+          <Button variant="outline" onClick={() => void job.refetch()}>
+            Retry
+          </Button>
+        )}
+      </Empty>
+    )
+  }
   return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
-        <SheetHeader className="border-b pr-12">
-          <SheetTitle>
-            Build <Ident>{shortId(id)}</Ident>
-          </SheetTitle>
-          <SheetDescription>
-            Build job details, output, and the submitted template spec.
-          </SheetDescription>
-        </SheetHeader>
-        <ScrollArea className="min-h-0 flex-1">
-          {job.isPending ? (
-            <div className="grid h-full place-items-center p-6">
-              <Spinner />
-            </div>
-          ) : job.isError ? (
-            <Empty className="m-6">
-              <EmptyHeader>
-                <EmptyTitle>Build unavailable</EmptyTitle>
-                <EmptyDescription>{errorMessage(job.error)}</EmptyDescription>
-              </EmptyHeader>
-              <Button variant="outline" onClick={() => void job.refetch()}>
-                Retry
-              </Button>
-            </Empty>
-          ) : (
-            <BuildJobContents
-              env={env}
-              id={id}
-              job={job.data}
-              refreshMs={refreshMs}
-              onUseSpec={onUseSpec}
-              onCreate={onCreate}
-            />
-          )}
-        </ScrollArea>
-      </SheetContent>
-    </Sheet>
+    <BuildJobContents
+      env={env}
+      id={id}
+      job={job.data}
+      refreshMs={refreshMs}
+      onUseSpec={onUseSpec}
+      onCreate={onCreate}
+    />
   )
 }
 
@@ -347,6 +405,6 @@ function BuildJobContents({
   )
 }
 
-function shortId(id: string) {
+export function shortId(id: string) {
   return id.slice(0, 8)
 }

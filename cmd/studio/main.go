@@ -246,7 +246,8 @@ func run(addr, image string, log *slog.Logger) error {
 	conns := &gateway.ConnLog{}
 	authority := &ca.Authority{Store: st, Sealer: vault}
 	caddy := &caddyrule.Engine{Dir: filepath.Join(p.Data, "caddy"), Dial: gateway.DialPublic}
-	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log}
+	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log,
+		Client: forgeClient(p.Data)}
 	integs := integrations.Set{gitRemote}
 	brw := newBrowser(st, vault, bus, p.Data, image, log) // settles browser.action and browser.credential approvals
 	integs = append(integs, brw)

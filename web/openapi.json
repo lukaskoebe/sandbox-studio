@@ -7789,6 +7789,59 @@
         ]
       }
     },
+    "/api/environments/{env}/approvals/{id}": {
+      "get": {
+        "description": "One approval in any status, such as a git push review a link points to.",
+        "operationId": "getApproval",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Approval ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Approval ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "approvals"
+        ]
+      }
+    },
     "/api/environments/{env}/approvals/{id}/decide": {
       "post": {
         "operationId": "decideApproval",
