@@ -86,7 +86,10 @@ small or move their bytes to msb exec.
 ## Terminals and previews
 
 - Terminals: xterm.js ↔ WebSocket (`internal/api/terminal.go`) ↔ Studio ↔ `pty` stream ↔
-  tmux. Sessions are named and survive UI reloads and Studio restarts.
+  tmux. Sessions are named and survive UI reloads and Studio restarts. tmux runs with
+  `internal/guest/tmux.conf`: the mouse wheel scrolls its history in copy mode, where Ctrl-L
+  leaves copy mode and reaches the shell. A tmux server reads it when it starts, so a running
+  sandbox gets a change at its next start.
 - Previews: `http://<port>-<sandbox-id>.localhost:<studio-port>/` is proxied to that guest
   loopback port over a `tcp` stream (`internal/preview`). The guest dials `127.0.0.1`,
   then `::1` (Vite and others bind only `::1` for "localhost"), and closes its side when
