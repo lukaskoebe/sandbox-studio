@@ -30,6 +30,8 @@ A browser that works like a browser, a finished terminal UI, and fixes from feed
   link to. Secrets are grouped by scope, and a teammate's settings list its secrets.
 - **Git:** upstream fetches are rate-limited per staging mirror, so agent-signed fetches
   don't ask on every push.
+- **Windows:** a sandbox's agent channel keeps accepting after a client hangs up, and closing
+  it no longer hangs when the client hangs up at the same moment.
 - **Tests:** the e2e suite drives git push review, chats and the browser with fakes, and the
   smoke workflow runs a browser test against a real VM.
 
