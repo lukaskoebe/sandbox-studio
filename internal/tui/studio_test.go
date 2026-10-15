@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -151,7 +152,14 @@ func startStudio(t *testing.T) *testStudio {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	bus := &events.Bus{}
 	vms := &fakeVMs{statuses: map[string]runtime.Status{}}
-	dirs := paths.Paths{Data: t.TempDir()}
+	// Not t.TempDir: under macOS's $TMPDIR its path makes the sandboxes' sockets longer than a
+	// Unix socket path may be.
+	data, err := os.MkdirTemp("", "ss-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(data) })
+	dirs := paths.Paths{Data: data}
 	if err := dirs.Ensure(); err != nil {
 		t.Fatal(err)
 	}
