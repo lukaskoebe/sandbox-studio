@@ -26,6 +26,9 @@ const (
 	SessionCookie = "studio_session"
 	// PreviewCookie stores the host-bound preview authorization.
 	PreviewCookie = "studio_preview"
+	// PreviewFrameCookie is the preview authorization of the chat's preview panel for its
+	// service worker, which Chromium sends no partitioned cookie; see servePreviewLogin.
+	PreviewFrameCookie = "studio_preview_frame"
 
 	loginTicketLifetime   = 10 * time.Minute
 	previewTicketLifetime = time.Minute
@@ -209,7 +212,7 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 				a.servePreviewLogin(w, r, host)
 				return
 			}
-			if !a.validCookie(r, PreviewCookie, "preview", host) {
+			if !a.validCookie(r, PreviewCookie, "preview", host) && !a.validFrameCookie(r, host) {
 				http.Error(w, "Open this preview from Sandbox Studio.", http.StatusForbidden)
 				return
 			}
@@ -353,6 +356,13 @@ func (a *Auth) servePreviewLogin(w http.ResponseWriter, r *http.Request, host st
 		// SameSite=None cookie is sent there. Browsers require Secure for that, and allow it
 		// on *.localhost as a secure context; Partitioned keeps it to frames under Studio.
 		cookie.SameSite, cookie.Secure, cookie.Partitioned = http.SameSiteNoneMode, true, true
+		// Chromium sends a partitioned cookie neither with a framed page's service worker
+		// script nor with the worker's own fetches, so an app's worker could not install.
+		// This cookie is not partitioned, which a browser blocking third-party cookies
+		// refuses, and counts only for the requests such a worker makes; see validFrameCookie.
+		frame := a.signedCookie(r, PreviewFrameCookie, "preview-frame", host, a.now().Add(previewSessionLife), http.SameSiteNoneMode)
+		frame.Secure = true
+		http.SetCookie(w, frame)
 	}
 	http.SetCookie(w, cookie)
 	if r.URL.Query().Get("fresh") == "1" {
@@ -380,6 +390,17 @@ func (a *Auth) signedCookie(r *http.Request, name, kind, host string, expires ti
 		Name: name, Value: value, Path: "/", Expires: expires, MaxAge: maxAge,
 		HttpOnly: true, Secure: r.TLS != nil, SameSite: sameSite,
 	}
+}
+
+// validFrameCookie accepts the preview panel's unpartitioned cookie for same-origin
+// requests and navigations only: what the preview's own pages and service worker send. It
+// goes with every request to the preview host, also from other sites, which can't send
+// either kind: browsers set Sec-Fetch-* themselves, and requests without them are refused.
+func (a *Auth) validFrameCookie(r *http.Request, host string) bool {
+	if r.Header.Get("Sec-Fetch-Site") != "same-origin" && r.Header.Get("Sec-Fetch-Mode") != "navigate" {
+		return false
+	}
+	return a.validCookie(r, PreviewFrameCookie, "preview-frame", host)
 }
 
 func (a *Auth) validCookie(r *http.Request, name, kind, host string) bool {

@@ -112,7 +112,7 @@ func stripStudioCookies(header http.Header) {
 		for _, part := range parts {
 			cookieName, _, ok := strings.Cut(strings.TrimSpace(part), "=")
 			cookieName = strings.TrimSpace(cookieName)
-			if ok && cookieName != webauth.SessionCookie && cookieName != webauth.PreviewCookie {
+			if ok && cookieName != webauth.SessionCookie && cookieName != webauth.PreviewCookie && cookieName != webauth.PreviewFrameCookie {
 				kept = append(kept, part)
 			}
 		}
@@ -142,7 +142,7 @@ func dropGuestCookie(value string) bool {
 	parts := strings.Split(value, ";")
 	name, _, hasValue := strings.Cut(strings.TrimSpace(parts[0]), "=")
 	name = strings.TrimSpace(name)
-	if hasValue && (name == webauth.SessionCookie || name == webauth.PreviewCookie) {
+	if hasValue && (name == webauth.SessionCookie || name == webauth.PreviewCookie || name == webauth.PreviewFrameCookie) {
 		return true
 	}
 	for _, part := range parts[1:] {

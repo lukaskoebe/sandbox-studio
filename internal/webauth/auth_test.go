@@ -422,13 +422,59 @@ func TestPreviewTicketTargetBindingCookieIsolationAndRedirect(t *testing.T) {
 	if embed.Code != http.StatusSeeOther || embed.Header().Get("Location") != "/" {
 		t.Fatalf("embedded preview login = %d %v", embed.Code, embed.Header())
 	}
-	embedded := embed.Result().Cookies()
-	if len(embedded) != 1 || embedded[0].Name != PreviewCookie || !embedded[0].HttpOnly || !embedded[0].Secure || !embedded[0].Partitioned ||
-		embedded[0].SameSite != http.SameSiteNoneMode || embedded[0].MaxAge != int(previewSessionLife.Seconds()) {
-		t.Fatalf("embedded preview cookie = %#v", embedded)
+	embedded := map[string]*http.Cookie{}
+	for _, c := range embed.Result().Cookies() {
+		embedded[c.Name] = c
 	}
-	if raw := embed.Header().Get("Set-Cookie"); !strings.Contains(raw, "SameSite=None") || !strings.Contains(raw, "; Secure") || !strings.Contains(raw, "; Partitioned") {
-		t.Fatalf("embedded preview Set-Cookie = %q", raw)
+	part, frame := embedded[PreviewCookie], embedded[PreviewFrameCookie]
+	if len(embedded) != 2 || part == nil || !part.HttpOnly || !part.Secure || !part.Partitioned ||
+		part.SameSite != http.SameSiteNoneMode || part.MaxAge != int(previewSessionLife.Seconds()) {
+		t.Fatalf("embedded preview cookie = %#v", part)
+	}
+	// The panel's service worker gets no partitioned cookie, so a second one is not.
+	if frame == nil || !frame.HttpOnly || !frame.Secure || frame.Partitioned || frame.SameSite != http.SameSiteNoneMode {
+		t.Fatalf("embedded preview frame cookie = %#v", frame)
+	}
+	var partRaw string
+	for _, raw := range embed.Header().Values("Set-Cookie") {
+		if strings.HasPrefix(raw, PreviewCookie+"=") {
+			partRaw = raw
+		}
+	}
+	if !strings.Contains(partRaw, "SameSite=None") || !strings.Contains(partRaw, "; Secure") || !strings.Contains(partRaw, "; Partitioned") {
+		t.Fatalf("embedded preview Set-Cookie = %q", partRaw)
+	}
+	// The frame cookie counts for the preview's own requests and navigations, not for
+	// requests other sites make, nor as the preview cookie.
+	withFrame := func(site, mode string) int {
+		h := http.Header{}
+		h.Set("Cookie", PreviewFrameCookie+"="+frame.Value)
+		if site != "" {
+			h.Set("Sec-Fetch-Site", site)
+		}
+		if mode != "" {
+			h.Set("Sec-Fetch-Mode", mode)
+		}
+		return request(a, http.MethodGet, "http://"+host+"/sw.js", host, h, "", downstream()).Code
+	}
+	for _, c := range []struct {
+		site, mode string
+		want       int
+	}{
+		{"same-origin", "same-origin", http.StatusNoContent},
+		{"cross-site", "navigate", http.StatusNoContent},
+		{"cross-site", "no-cors", http.StatusForbidden},
+		{"same-site", "cors", http.StatusForbidden},
+		{"", "", http.StatusForbidden},
+	} {
+		if got := withFrame(c.site, c.mode); got != c.want {
+			t.Errorf("frame cookie with Sec-Fetch-Site %q, Mode %q: %d, want %d", c.site, c.mode, got, c.want)
+		}
+	}
+	swapped := http.Header{}
+	swapped.Set("Cookie", PreviewCookie+"="+frame.Value)
+	if got := request(a, http.MethodGet, "http://"+host+"/", host, swapped, "", downstream()).Code; got != http.StatusForbidden {
+		t.Errorf("the frame cookie's value as the preview cookie: %d", got)
 	}
 
 	// Opening a preview fresh clears its caches and storage, service workers among them, and

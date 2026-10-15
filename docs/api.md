@@ -38,6 +38,15 @@ from other local users and from web pages:
   `studio_preview` cookie for that preview host (eight hours, SameSite=Lax). Studio's
   cookies are stripped before proxying to the guest, and guest responses can't set Studio
   cookies or cookies for sibling hosts.
+- The chat's preview panel frames the preview cross-site, so its login (`embed=1`) sets
+  `studio_preview` as SameSite=None, Secure and Partitioned, which only frames under
+  Studio's site get. Chromium sends a framed page's service worker no partitioned cookie,
+  neither for its script nor for its fetches, so the same login also sets
+  `studio_preview_frame`: SameSite=None and not partitioned (a browser that blocks
+  third-party cookies drops it, and the worker stays out). It counts only for requests
+  with `Sec-Fetch-Site: same-origin` or `Sec-Fetch-Mode: navigate`, which the preview's own
+  pages and worker send and another site's requests can't (browsers set those headers);
+  its signature is of its own kind, so it can't stand in for `studio_preview`.
 - The Vite dev server (`pnpm dev`, `pnpm dev:lan`) proxies `/api` with Studio's origin and
   goes through the same login exchange; it gets no key or bypass.
 

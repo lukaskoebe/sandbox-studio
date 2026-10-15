@@ -71,6 +71,7 @@ func TestRouteCookieBoundary(t *testing.T) {
 		gotCookies <- r.Cookies()
 		w.Header().Add("Set-Cookie", webauth.SessionCookie+"=guest; Path=/")
 		w.Header().Add("Set-Cookie", webauth.PreviewCookie+"=guest; Path=/")
+		w.Header().Add("Set-Cookie", webauth.PreviewFrameCookie+"=guest; Path=/")
 		w.Header().Add("Set-Cookie", "domain=guest; Domain=localhost; Path=/")
 		w.Header().Add("Set-Cookie", `app=x; Comment="ignored; Domain=localhost; rest"`)
 		w.Header().Add("Set-Cookie", "app=kept; Path=/; HttpOnly")
@@ -82,7 +83,7 @@ func TestRouteCookieBoundary(t *testing.T) {
 		return net.Dial("tcp", upstream.Listener.Addr().String())
 	}, http.NotFoundHandler())
 	req := httptest.NewRequest("GET", "http://3000-sb1.localhost:7878/", nil)
-	req.Header.Set("Cookie", webauth.SessionCookie+"=studio; app=kept; "+webauth.PreviewCookie+"=ticket")
+	req.Header.Set("Cookie", webauth.SessionCookie+"=studio; app=kept; "+webauth.PreviewCookie+"=ticket; "+webauth.PreviewFrameCookie+"=ticket")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
