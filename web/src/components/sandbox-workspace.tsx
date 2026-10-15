@@ -81,9 +81,12 @@ const keyOf = (t: Tab) => `${t.kind}:${t.kind === "terminal" ? t.name : t.id}`
 export function SandboxWorkspace({
   search,
   onPanel,
+  onTab,
 }: {
   search: { terminal?: string; chat?: string; panel?: WorkspacePanelId }
   onPanel: (panel: WorkspacePanelId | undefined) => void
+  /** The tab in view changed: the URL names it, so a link to another tab switches to it. */
+  onTab: (tab: { terminal?: string; chat?: string }) => void
 }) {
   const { env, sandbox: sb } = useSandboxPage()
   const queryClient = useQueryClient()
@@ -186,6 +189,17 @@ export function SandboxWorkspace({
     tabs.at(-1) ??
     null
   const chatActive = current?.kind === "chat"
+  // Only a change of the tab in view goes to the URL. A link changes the URL first, and the
+  // tab follows it above.
+  const currentKey = current && keyOf(current)
+  useEffect(() => {
+    if (!current) return
+    const tab =
+      current.kind === "terminal"
+        ? { terminal: current.name }
+        : { chat: current.id }
+    if (tab.terminal !== search.terminal || tab.chat !== search.chat) onTab(tab)
+  }, [currentKey])
   const chatLog = useChat(
     env,
     current?.kind === "chat" ? current.id : undefined

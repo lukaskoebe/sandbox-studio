@@ -73,7 +73,9 @@ browser.
 
 The sidebar holds the environment switcher, the navigation (Home, Chats, Network, Secrets,
 Memory), the teammates and the sandboxes, and a footer with Settings, the version and the theme
-switch. A sandbox row has its status dot (the word
+switch. Under each running sandbox it lists the guest's terminals (its tmux sessions, a robot for
+an agent's); one opens its tab in the workspace. The workspace's URL names the tab in view
+(`?terminal=` or `?chat=`), so such a link switches tabs. A sandbox row has its status dot (the word
 is its tooltip) and the count of approvals waiting on it. A teammate's dot shows its presence:
 waiting for you while one of its approvals is pending (a browser action or credential, a
 memory share, or a tool permission in one of its chats), working while one of its chats is

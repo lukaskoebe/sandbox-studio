@@ -31,6 +31,12 @@ function WorkspaceRoute() {
       onPanel={(panel) =>
         void navigate({ search: (prev) => ({ ...prev, panel }), replace: true })
       }
+      onTab={(tab) =>
+        void navigate({
+          search: (prev) => ({ panel: prev.panel, ...tab }),
+          replace: true,
+        })
+      }
     />
   )
 }

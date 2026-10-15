@@ -19,10 +19,47 @@ test("the dashboard shows the sandbox's sections, and the workspace opens its te
     await expect(page.getByRole("region", { name: section })).toBeVisible()
 
   await page.getByRole("link", { name: "Workspace", exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`/sandboxes/${id}/work$`))
+  // The URL names the terminal in view.
+  await expect(page).toHaveURL(
+    new RegExp(`/sandboxes/${id}/work\\?terminal=main$`)
+  )
   const term = terminal(page)
   await term.run("echo workspace")
   await expect(term.line("workspace")).toHaveCount(1)
+})
+
+// The sidebar lists a running sandbox's terminals under it; one opens its tab in the workspace.
+test("the sidebar lists a sandbox's terminals and opens one", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("terms")
+  const id = await api.createSandbox(name)
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  await terminal(page).run("echo first")
+  await page.getByRole("button", { name: "New terminal" }).click()
+  await expect(page).toHaveURL(/terminal=(2|%222%22)$/)
+  await terminal(page).run("echo second")
+
+  const list = page.getByRole("list", { name: `Terminals of ${name}` })
+  await expect(list.getByRole("link")).toHaveText(["main", "2"])
+  await expect(list.getByRole("link", { name: "2" })).toHaveAttribute(
+    "data-active",
+    ""
+  )
+  await list.getByRole("link", { name: "main" }).click()
+  await expect(page).toHaveURL(/terminal=main$/)
+  await expect(
+    page.getByRole("button", { name: "main", pressed: true })
+  ).toBeVisible()
+
+  // From another page, too.
+  await page.goto(`/e/${env}/network`)
+  await list.getByRole("link", { name: "2" }).click()
+  await expect(
+    page.getByRole("button", { name: "2", exact: true, pressed: true })
+  ).toBeVisible()
 })
 
 test("a side panel opens and closes from the workspace toolbar", async ({

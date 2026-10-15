@@ -1,5 +1,10 @@
 import { useState } from "react"
-import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router"
+import {
+  Link,
+  useMatchRoute,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -11,7 +16,9 @@ import {
   GlobeIcon,
   KeyIcon,
   PlusIcon,
+  RobotIcon,
   SquaresFourIcon,
+  TerminalWindowIcon,
 } from "@phosphor-icons/react"
 import {
   Sidebar,
@@ -26,6 +33,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSkeleton,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -57,15 +67,16 @@ import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { usePresence } from "@/hooks/use-teammate-presence"
-import { $api, errorMessage } from "@/lib/api/client"
+import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
+import { harnessLabels } from "@/lib/teammates"
 
 /** The section labels: small, mono and uppercase, as the Workbench's lists title theirs. */
 const groupLabel = "h-6 font-mono text-[0.625rem] tracking-wider uppercase"
 
 /**
  * The environment's navigation: Home, Chats, Network, Secrets and Memory, then the teammates
- * (each with its presence) and the sandboxes (each with its status and the approvals waiting on
- * it). Settings sit at the bottom, above the version and the theme toggle.
+ * (each with its presence) and the sandboxes (each with its status, the approvals waiting on it
+ * and its terminals). Settings sit at the bottom, above the version and the theme toggle.
  */
 export function AppSidebar({ env }: { env: string }) {
   const [creating, setCreating] = useState(false)
@@ -290,6 +301,7 @@ export function AppSidebar({ env }: { env: string }) {
                     <span className="min-w-0 flex-1 truncate">{sb.name}</span>
                     <WaitingCount count={waiting.get(sb.id) ?? 0} />
                   </SidebarMenuButton>
+                  <SandboxTerminals env={env} sb={sb} />
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
@@ -342,6 +354,59 @@ export function AppSidebar({ env }: { env: string }) {
         onOpenChange={setAddingTeammate}
       />
     </Sidebar>
+  )
+}
+
+/**
+ * A running sandbox's terminals, the guest's tmux sessions, oldest first: a shell or an agent's
+ * session, each opening in the sandbox's workspace.
+ */
+function SandboxTerminals({ env, sb }: { env: string; sb: Sandbox }) {
+  const running = phase(sb) === "ready"
+  const terminals = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/terminals",
+    { params: { path: { env, id: sb.id } } },
+    { refetchInterval: 5000, enabled: running }
+  )
+  const matchRoute = useMatchRoute()
+  const search = useSearch({ strict: false })
+  const here = !!matchRoute({
+    to: "/e/$env/sandboxes/$id/work",
+    params: { env, id: sb.id },
+  })
+  const list = running
+    ? [...(terminals.data ?? [])].sort((a, b) => a.created - b.created)
+    : []
+  if (!list.length) return null
+  return (
+    <SidebarMenuSub aria-label={`Terminals of ${sb.name}`}>
+      {list.map((t) => {
+        const harness =
+          t.harness && t.harness in harnessLabels
+            ? harnessLabels[t.harness as keyof typeof harnessLabels]
+            : t.harness
+        return (
+          <SidebarMenuSubItem key={t.name}>
+            <SidebarMenuSubButton
+              size="sm"
+              isActive={here && search.terminal === t.name}
+              title={harness ? `${t.name}: ${harness}` : `Terminal ${t.name}`}
+              render={
+                <Link
+                  to="/e/$env/sandboxes/$id/work"
+                  params={{ env, id: sb.id }}
+                  search={{ terminal: t.name }}
+                />
+              }
+            >
+              {t.harness ? <RobotIcon /> : <TerminalWindowIcon />}
+              <span className="font-mono">{t.name}</span>
+            </SidebarMenuSubButton>
+          </SidebarMenuSubItem>
+        )
+      })}
+    </SidebarMenuSub>
   )
 }
 
