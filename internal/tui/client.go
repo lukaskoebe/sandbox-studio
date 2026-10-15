@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
@@ -157,6 +159,89 @@ func (c *Client) Decide(ctx context.Context, env, id string, d Decision) (api.Ap
 	return out, err
 }
 
+// Templates lists an environment's ready templates, which a new sandbox can start from.
+func (c *Client) Templates(ctx context.Context, env string) ([]api.TemplateView, error) {
+	var out []api.TemplateView
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/templates", nil, nil, &out)
+	return out, err
+}
+
+// CreateSandbox creates a sandbox for a teammate ("" for none) from a template ("" for the base
+// image). It returns at once, with the sandbox in state creating; the create goes on in Studio,
+// and the sandboxes topic of the event stream announces each step.
+func (c *Client) CreateSandbox(ctx context.Context, env, name, teammate, template string) (sandboxes.View, error) {
+	path := "/api/environments/" + env + "/sandboxes"
+	var body any = sandboxes.CreateRequest{Name: name, TeammateID: teammate}
+	if template != "" {
+		path = "/api/environments/" + env + "/templates/" + template + "/sandboxes"
+		body = map[string]string{"name": name, "teammateId": teammate}
+	}
+	var out sandboxes.View
+	_, err := c.send(ctx, http.MethodPost, path, nil, body, &out)
+	return out, err
+}
+
+// SandboxChats lists the chats of a sandbox.
+func (c *Client) SandboxChats(ctx context.Context, env, sandbox string) ([]store.Chat, error) {
+	var out []store.Chat
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/chats", nil, nil, &out)
+	return out, err
+}
+
+// Chat reads a chat with its turns and items. Its stream follows on from the chat's rev.
+func (c *Client) Chat(ctx context.Context, env, id string) (chat.Log, error) {
+	var out chat.Log
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/chats/"+id, nil, nil, &out)
+	return out, err
+}
+
+// prompt is the body of a prompt: the TUI sends text only.
+type prompt struct {
+	Text string `json:"text"`
+}
+
+// CreateChat starts a chat with the sandbox's teammate and sends it the first prompt.
+func (c *Client) CreateChat(ctx context.Context, env, sandbox, text string) (store.Chat, error) {
+	var out store.Chat
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+sandbox+"/chats", nil, prompt{Text: text}, &out)
+	return out, err
+}
+
+// SendPrompt starts a turn of a chat. Studio refuses it while a turn runs.
+func (c *Client) SendPrompt(ctx context.Context, env, id, text string) (chat.Turn, error) {
+	var out chat.Turn
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/chats/"+id+"/prompt", nil, prompt{Text: text}, &out)
+	return out, err
+}
+
+// CancelChat stops the chat's running turn, if any. The turn ends on the stream.
+func (c *Client) CancelChat(ctx context.Context, env, id string) error {
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/chats/"+id+"/cancel", nil, nil, nil)
+	return err
+}
+
+// Approvals lists an environment's approvals of every status, newest first.
+func (c *Client) Approvals(ctx context.Context, env string) ([]api.ApprovalView, error) {
+	var out []api.ApprovalView
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/approvals?status=all", nil, nil, &out)
+	return out, err
+}
+
+// Rules lists an environment's network rules.
+func (c *Client) Rules(ctx context.Context, env string) ([]store.Rule, error) {
+	var out []store.Rule
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/rules", nil, nil, &out)
+	return out, err
+}
+
+// Connections lists a sandbox's most recent connections, newest first. Studio keeps them in
+// memory only.
+func (c *Client) Connections(ctx context.Context, env, sandbox string) ([]gateway.Conn, error) {
+	var out []gateway.Conn
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/connections", nil, nil, &out)
+	return out, err
+}
+
 // Do makes one API call for clients other than the TUI, such as the command line: in, when not
 // nil, is sent as JSON, and a success answer is decoded into out when out is not nil.
 func (c *Client) Do(ctx context.Context, method, path string, in, out any) error {
@@ -202,6 +287,92 @@ func (c *Client) Subscribe(ctx context.Context) (<-chan events.Event, error) {
 		}
 	}()
 	return ch, nil
+}
+
+// ChatEvent is one change on a chat's stream: the chat, a turn or an item, at a rev. Exactly
+// one of Chat, Turn and Item is set.
+type ChatEvent struct {
+	Rev  int64
+	Chat *store.Chat
+	Turn *chat.Turn
+	Item *chat.Item
+}
+
+// maxChatEvent bounds one event of a chat's stream: an item holds at most a few hundred KiB.
+const maxChatEvent = 4 << 20
+
+// ChatStream follows a chat from a rev (/api/environments/{env}/chats/{chat}/stream): every turn
+// and item written after it, then each change as it happens. The channel closes when the stream
+// ends for any reason; the caller reopens it from the last rev it saw, so nothing is missed. A
+// deleted chat fails with a 404 APIError.
+func (c *Client) ChatStream(ctx context.Context, env, id string, after int64) (<-chan ChatEvent, error) {
+	url := fmt.Sprintf("http://%s/api/environments/%s/chats/%s/stream?after=%d", c.addr, env, id, after)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, apiError(resp.StatusCode, data)
+	}
+	ch := make(chan ChatEvent)
+	go func() {
+		defer close(ch)
+		defer resp.Body.Close()
+		scanner := bufio.NewScanner(resp.Body)
+		scanner.Buffer(make([]byte, 0, 64<<10), maxChatEvent)
+		var name, data string
+		var rev int64
+		for scanner.Scan() {
+			line := scanner.Text()
+			switch {
+			case strings.HasPrefix(line, "event: "):
+				name = strings.TrimPrefix(line, "event: ")
+			case strings.HasPrefix(line, "id: "):
+				fmt.Sscan(strings.TrimPrefix(line, "id: "), &rev)
+			case strings.HasPrefix(line, "data: "):
+				data = strings.TrimPrefix(line, "data: ")
+			case line == "" && data != "":
+				ev, ok := decodeChatEvent(name, rev, data)
+				name, data = "", ""
+				if !ok {
+					continue
+				}
+				select {
+				case ch <- ev:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return ch, nil
+}
+
+// decodeChatEvent reads one event of a chat's stream. Events it doesn't know are skipped.
+func decodeChatEvent(name string, rev int64, data string) (ChatEvent, bool) {
+	ev := ChatEvent{Rev: rev}
+	var err error
+	switch name {
+	case "chat":
+		ev.Chat = &store.Chat{}
+		err = json.Unmarshal([]byte(data), ev.Chat)
+	case "turn":
+		ev.Turn = &chat.Turn{}
+		err = json.Unmarshal([]byte(data), ev.Turn)
+	case "item":
+		ev.Item = &chat.Item{}
+		err = json.Unmarshal([]byte(data), ev.Item)
+	default:
+		return ev, false
+	}
+	return ev, err == nil
 }
 
 // send makes one request. in, when not nil, is sent as JSON, and a success answer is decoded
