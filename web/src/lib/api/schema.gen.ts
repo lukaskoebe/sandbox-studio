@@ -1009,6 +1009,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/providers/{id}/login/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Types the code from Claude's sign-in page into the running sign-in's terminal and presses Enter, so the user needn't paste it into the terminal. Claude Code then prints its token, which Studio stores; poll the sign-in. A Claude Code token is stored as pasted. */
+        post: operations["sendProviderLoginCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/providers/{id}/login/token": {
         parameters: {
             query?: never;
@@ -3453,6 +3470,10 @@ export interface components {
         LoginView: {
             /** @description The one-time code of ChatGPT's device sign-in */
             code?: string;
+            /** @description Claude Code printed an error after the last code; the terminal shows it */
+            codeRejected: boolean;
+            /** @description A code from the sign-in page was typed into Claude Code; the sign-in waits for its answer */
+            codeSent: boolean;
             message?: string;
             paste: boolean;
             /** @enum {string} */
@@ -4026,6 +4047,10 @@ export interface components {
             teammateId?: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        SendCodeInBody: {
+            /** @description The code Claude's sign-in page shows after the user authorized, or a Claude Code token */
+            code: string;
         };
         Session: {
             /** Format: int64 */
@@ -7222,6 +7247,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    sendProviderLoginCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Provider ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendCodeInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginView"];
+                };
             };
             /** @description Error */
             default: {

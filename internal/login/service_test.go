@@ -268,3 +268,77 @@ func TestSignInEndsWhenItsSessionIsGone(t *testing.T) {
 		t.Fatalf("view after the session vanished: %+v", got)
 	}
 }
+
+// A code pasted in the dialog is typed into the CLI with Enter after it, and the token the CLI
+// prints then is stored. An error the CLI prints after a code marks the code rejected.
+func TestSendCodeTypesTheCodeIntoTheCLI(t *testing.T) {
+	ctx := context.Background()
+	e := newTestEnv(t)
+	p := e.provider(t, "Max", teammates.KindClaudeSubscription)
+	if err := e.svc.SendCode(ctx, e.env, p.ID, "abc#def"); !errors.Is(err, ErrNoLogin) {
+		t.Fatalf("a code without a sign-in: %v", err)
+	}
+	e.guest.setPane("An earlier error.\nPaste code here if prompted >", false)
+	if _, err := e.svc.Start(ctx, e.env, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return e.svc.Status(p.ID).State == StateWaiting })
+
+	for _, bad := range []string{"", "two\nlines", strings.Repeat("x", maxCodeLen+1)} {
+		if err := e.svc.SendCode(ctx, e.env, p.ID, bad); !errors.Is(err, ErrInvalidCode) {
+			t.Fatalf("code %q: %v", bad, err)
+		}
+	}
+	if err := e.svc.SendCode(ctx, e.env, p.ID, "  -abc#def \n"); err != nil {
+		t.Fatal(err)
+	}
+	e.guest.mu.Lock()
+	typed := e.guest.typed
+	e.guest.mu.Unlock()
+	if typed != "-abc#def<Enter>" {
+		t.Fatalf("typed %q", typed)
+	}
+	if got := e.svc.Status(p.ID); !got.CodeSent || got.CodeRejected {
+		t.Fatalf("view after the code %+v", got)
+	}
+	// The earlier error doesn't count; a new one does.
+	time.Sleep(20 * time.Millisecond)
+	if got := e.svc.Status(p.ID); got.CodeRejected {
+		t.Fatalf("an old error rejected the code: %+v", got)
+	}
+	e.guest.setPane("An earlier error.\nPaste code here if prompted > -abc#def\nOAuth error: Request failed with status code 400", false)
+	waitFor(t, func() bool { return e.svc.Status(p.ID).CodeRejected })
+
+	if err := e.svc.SendCode(ctx, e.env, p.ID, "good#code"); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.svc.Status(p.ID); got.CodeRejected {
+		t.Fatalf("a new code is still rejected: %+v", got)
+	}
+	e.guest.setPane("Your OAuth token (valid for 1 year):\n\n"+tokenText+"\n", true)
+	if got := e.await(t, p.ID); got.State != StateDone || got.CodeSent {
+		t.Fatalf("end view %+v", got)
+	}
+	stored, _ := e.st.Provider(ctx, e.env, p.ID)
+	if e.vault.value(stored.SecretID) != tokenText {
+		t.Fatalf("stored %q", e.vault.value(stored.SecretID))
+	}
+}
+
+// A token pasted where the code goes is stored as a pasted token; ChatGPT takes no code.
+func TestSendCodeTakesATokenAndOnlyClaude(t *testing.T) {
+	ctx := context.Background()
+	e := newTestEnv(t)
+	p := e.provider(t, "Max", teammates.KindClaudeSubscription)
+	if err := e.svc.SendCode(ctx, e.env, p.ID, tokenText); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := e.st.Provider(ctx, e.env, p.ID)
+	if e.vault.value(stored.SecretID) != tokenText {
+		t.Fatalf("the token was not stored: %q", e.vault.value(stored.SecretID))
+	}
+	c := e.provider(t, "Plus", teammates.KindChatGPTSubscription)
+	if err := e.svc.SendCode(ctx, e.env, c.ID, "ABCD-1234"); !errors.Is(err, ErrNoCode) {
+		t.Fatalf("a ChatGPT code: %v", err)
+	}
+}

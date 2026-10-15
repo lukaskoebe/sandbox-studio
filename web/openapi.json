@@ -3890,6 +3890,14 @@
             "description": "The one-time code of ChatGPT's device sign-in",
             "type": "string"
           },
+          "codeRejected": {
+            "description": "Claude Code printed an error after the last code; the terminal shows it",
+            "type": "boolean"
+          },
+          "codeSent": {
+            "description": "A code from the sign-in page was typed into Claude Code; the sign-in waits for its answer",
+            "type": "boolean"
+          },
           "message": {
             "type": "string"
           },
@@ -3914,7 +3922,9 @@
         },
         "required": [
           "state",
-          "paste"
+          "paste",
+          "codeSent",
+          "codeRejected"
         ],
         "type": "object"
       },
@@ -5628,6 +5638,21 @@
           "studioOnly",
           "createdAt",
           "updatedAt"
+        ],
+        "type": "object"
+      },
+      "SendCodeInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The code Claude's sign-in page shows after the user authorized, or a Claude Code token",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
         ],
         "type": "object"
       },
@@ -11495,6 +11520,69 @@
               }
             },
             "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/environments/{env}/providers/{id}/login/code": {
+      "post": {
+        "description": "Types the code from Claude's sign-in page into the running sign-in's terminal and presses Enter, so the user needn't paste it into the terminal. Claude Code then prints its token, which Studio stores; poll the sign-in. A Claude Code token is stored as pasted.",
+        "operationId": "sendProviderLoginCode",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Provider ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendCodeInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginView"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {

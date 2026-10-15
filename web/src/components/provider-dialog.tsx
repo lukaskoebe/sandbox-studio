@@ -35,6 +35,20 @@ import {
 } from "@/lib/api/client"
 import { isSubscription, kindLabels, providerKinds } from "@/lib/teammates"
 
+// What each kind asks for, so an API key and a subscription sign-in don't look alike.
+const kindHints: Record<ProviderKind, string> = {
+  anthropic_api:
+    "Pay per use with a key from console.anthropic.com. Paste the key below; there is no sign-in.",
+  openai_api:
+    "Pay per use with a key from platform.openai.com. Paste the key below; there is no sign-in.",
+  openai_compatible:
+    "Any endpoint that speaks the OpenAI API, with its URL, model and key.",
+  claude_subscription:
+    "Use your Claude Pro or Max plan. You sign in with your Claude account in the browser; there is no key to paste.",
+  chatgpt_subscription:
+    "Use your ChatGPT Plus or Pro plan. You sign in with your ChatGPT account in the browser; there is no key to paste.",
+}
+
 export function ProviderDialog({
   env,
   provider,
@@ -166,7 +180,13 @@ function ProviderForm({
       }}
     >
       <DialogHeader>
-        <DialogTitle>{provider ? "Edit provider" : "Add provider"}</DialogTitle>
+        <DialogTitle>
+          {provider && subscription
+            ? `Sign in to ${provider.name}`
+            : provider
+              ? "Edit provider"
+              : "Add provider"}
+        </DialogTitle>
         <DialogDescription>
           How teammates reach a model. API keys and subscription logins are
           stored as secrets, so sandboxes only ever see a placeholder.
@@ -213,13 +233,15 @@ function ProviderForm({
             ))}
           </SelectContent>
         </Select>
+        {!current && <FieldDescription>{kindHints[kind]}</FieldDescription>}
       </Field>
       {subscription ? (
         current ? (
           <ProviderLogin env={env} provider={current} />
         ) : (
           <p className="rounded-md bg-muted px-3 py-2 text-xs/relaxed text-muted-foreground">
-            Add the provider, then sign in with your subscription.
+            Add the provider, then sign in with your subscription in your
+            browser. Nothing to paste yet.
           </p>
         )
       ) : (

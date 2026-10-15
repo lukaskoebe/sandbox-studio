@@ -132,6 +132,7 @@ type fakeGuest struct {
 	gone      bool
 	files     map[string]string
 	runs      []string
+	typed     string // what send-keys typed into the login's pane, keys in angle brackets
 	written   [][]agentproto.HomeFile
 	connected map[string]bool
 	// cli is the answer to a one-shot CLI call (claude or codex), and calls records the calls.
@@ -170,6 +171,14 @@ func (g *fakeGuest) Run(ctx context.Context, id string, req agentproto.RunReques
 	g.runs = append(g.runs, line)
 	switch {
 	case strings.HasPrefix(line, "tmux new-session"), strings.HasPrefix(line, "tmux set-option"):
+		return agentproto.RunResult{}, nil
+	case strings.HasPrefix(line, "tmux send-keys"):
+		// -l types its last argument literally; anything else is a key, such as Enter.
+		if req.Args[len(req.Args)-2] == "--" {
+			g.typed += req.Args[len(req.Args)-1]
+		} else {
+			g.typed += "<" + req.Args[len(req.Args)-1] + ">"
+		}
 		return agentproto.RunResult{}, nil
 	case strings.HasPrefix(line, "tmux capture-pane"):
 		if g.gone {

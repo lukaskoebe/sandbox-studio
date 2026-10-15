@@ -2,7 +2,12 @@ import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { PencilSimpleIcon, PlusIcon, TrashIcon } from "@phosphor-icons/react"
+import {
+  PencilSimpleIcon,
+  PlusIcon,
+  SignInIcon,
+  TrashIcon,
+} from "@phosphor-icons/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -140,8 +145,17 @@ function ProvidersPage() {
                       {formatAge(p.updatedAt)}
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end gap-0.5">
-                        {!isSubscription(p.kind) && (
+                      <div className="flex items-center justify-end gap-0.5">
+                        {isSubscription(p.kind) ? (
+                          <Button
+                            variant={p.state === "ready" ? "ghost" : "outline"}
+                            size="sm"
+                            onClick={() => setDialog({ provider: p })}
+                          >
+                            <SignInIcon />
+                            {p.state === "ready" ? "Sign in again" : "Sign in"}
+                          </Button>
+                        ) : (
                           <Button
                             variant="ghost"
                             size="icon-sm"
