@@ -118,7 +118,7 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
       ports
         .getByRole("listitem")
         .filter({ hasText: ":5173" })
-        .getByRole("button", { name: "Open" })
+        .getByRole("button", { name: "Open", exact: true })
         .click(),
     ])
     await expect(
