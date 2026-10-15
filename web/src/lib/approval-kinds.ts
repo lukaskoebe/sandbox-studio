@@ -188,7 +188,8 @@ const decisionWords: Record<string, string> = {
 
 /**
  * How a decided request is named: "Approved", or "Denied once" for one connection only, "Denied ·
- * tracker", "Allowed · curated list", "Allowed · level Open", or the reviewer's decision.
+ * tracker", "Denied · Chromium's own", "Allowed · curated list", "Allowed · level Open", or the
+ * reviewer's decision.
  */
 export function approvalDecision(a: Approval): string {
   if (a.network?.tracker) return "Denied · tracker"
@@ -200,6 +201,8 @@ export function approvalDecision(a: Approval): string {
       return "Allowed · curated list"
     case "reviewer":
       return `${a.status === "denied" ? "Denied" : "Allowed"} · reviewer`
+    case "chromium":
+      return "Denied · Chromium's own"
   }
   const word = decisionWords[a.status] ?? a.status
   return a.once ? `${word} once` : word

@@ -3581,7 +3581,7 @@ export interface components {
              * @description How the request was decided without asking; empty when the user decided it
              * @enum {string}
              */
-            decided?: "open" | "curated" | "reviewer";
+            decided?: "open" | "curated" | "reviewer" | "chromium";
             host: string;
             /** @description Origin of the Referer header, as the browser sent it; shown, never trusted */
             initiator?: string;

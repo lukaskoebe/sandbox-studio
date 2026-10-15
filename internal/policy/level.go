@@ -30,6 +30,7 @@ const (
 	DecidedOpen     = "open"     // the security level open
 	DecidedCurated  = "curated"  // the curated list
 	DecidedReviewer = "reviewer" // the AI reviewer
+	DecidedChromium = "chromium" // denied: a request Chromium makes for itself (ChromiumService)
 )
 
 // levelInput is what the decision table reads.

@@ -4021,7 +4021,8 @@
             "enum": [
               "open",
               "curated",
-              "reviewer"
+              "reviewer",
+              "chromium"
             ],
             "type": "string"
           },

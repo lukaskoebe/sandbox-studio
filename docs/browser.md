@@ -36,6 +36,9 @@ Why per teammate:
 
 **Lifecycle:**
 
+- **Quiet.** Chromium's own calls to Google's services are turned off by managed policies
+  or denied without asking ([network](network.md#chromiums-own-requests)), so a page's
+  approvals are about the page.
 - **Created lazily.** The first browser call, opening a page in the UI, or Wake up in the
   browser window's options menu creates the VM from the browser image: 2 CPUs, 2 GiB of
   memory and a 2 GiB disk for the profile.

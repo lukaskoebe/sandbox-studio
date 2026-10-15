@@ -38,6 +38,8 @@ func (g *Gateway) decideRequest(r *http.Request, decider store.Sandbox, host str
 		return fmt.Sprintf("The user denied the request to %s.", where)
 	case errors.Is(err, policy.ErrTracker):
 		return fmt.Sprintf("%s is on the tracker list that Sandbox Studio blocks in browsers.", host)
+	case errors.Is(err, policy.ErrChromium):
+		return fmt.Sprintf("Sandbox Studio blocks %s %s on %s: Chromium calls it for itself, and no page needs it.", info.Method, info.Path, where)
 	}
 	g.Log.Error("network policy", "sandbox", decider.ID, "host", host, "err", err)
 	return fmt.Sprintf("Sandbox Studio could not decide the request to %s: %v", where, err)

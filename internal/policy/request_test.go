@@ -307,3 +307,45 @@ func TestBrowserTrackersAreDenied(t *testing.T) {
 		t.Fatalf("with trackers allowed, got %v, want the browser's requests decided one at a time", err)
 	}
 }
+
+// A request Chromium makes for its own services is denied without asking and recorded with its
+// reason; the same host's other paths ask as usual, and an allow rule wins.
+func TestBrowserChromiumServicesAreDenied(t *testing.T) {
+	ctx := context.Background()
+	e, env, sb := newEngine(t)
+	e.Hold = 50 * time.Millisecond
+	list := Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "accounts.google.com", Port: 443, Browser: true, Deferred: true,
+		HTTP: &HTTPRequest{Method: "POST", Path: "/ListAccounts"}}
+	if _, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "accounts.google.com", Port: 443, Browser: true, Deferred: true}); !errors.Is(err, ErrPerRequest) {
+		t.Fatalf("the connection: got %v, want its requests decided one at a time", err)
+	}
+	for range 2 {
+		if _, err := e.Decide(ctx, list); !errors.Is(err, ErrChromium) {
+			t.Fatalf("got %v, want ErrChromium", err)
+		}
+	}
+	denied, _ := e.Store.Approvals(ctx, env.ID, store.StatusDenied, 10)
+	if len(denied) != 1 || denied[0].Subject != "chromium accounts.google.com:443" || denied[0].Attempts != 2 || denied[0].Kind != KindRequest {
+		t.Fatalf("activity: %+v", denied)
+	}
+	var req NetworkRequest
+	if err := json.Unmarshal(denied[0].Payload, &req); err != nil || req.Decided != DecidedChromium || req.Reason == "" || req.Path != "/ListAccounts" {
+		t.Errorf("payload %+v %v", req, err)
+	}
+
+	signin := list
+	signin.HTTP = &HTTPRequest{Method: "GET", Path: "/signin", Navigation: true, Site: "google.com"}
+	if _, err := e.Decide(ctx, signin); !errors.Is(err, ErrUndecided) {
+		t.Fatalf("a sign-in page: got %v, want it asked", err)
+	}
+
+	if _, err := e.Store.CreateRule(ctx, store.Rule{EnvironmentID: env.ID, Host: "accounts.google.com", Ports: []int{443}, Action: store.ActionAllow}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Settle(ctx, env.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := e.Decide(ctx, list); err != nil || r.Action != store.ActionAllow {
+		t.Fatalf("an allow rule did not win: %+v %v", r, err)
+	}
+}

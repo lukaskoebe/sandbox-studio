@@ -116,6 +116,20 @@ before any approval, site approval or security level. The environment switch "Bl
 (`environments.block_trackers`, on by default) turns the list off. Each denial shows in Activity
 as "Denied · tracker", one row per host with its attempts.
 
+## Chromium's own requests
+
+Chromium calls Google's services on its own: sign-in, sync, component updates, network time,
+autofill, model downloads and its new tab page. Each would ask the user about a host no page
+needed. The guest agent writes managed policies to `/etc/chromium/policies/managed/` before it
+launches agent-browser (`internal/guest/browser_policy.go`), which turn most of them off.
+Three calls go out anyway, with Chromium 155: the check for signed-in Google accounts
+(`accounts.google.com/ListAccounts`), the push messaging check-in
+(`android.clients.google.com/checkin`) and the component updater
+(`update.googleapis.com/service/update2/`). A browser VM's requests to these paths are denied
+without asking (`internal/policy/chromium.go`), after the rules, so an allow rule lets them
+through. Each shows in Activity as "Denied · Chromium's own", with the reason. Other paths of
+the same hosts, such as a Google sign-in page, are decided as usual.
+
 ## System VMs
 
 The VMs of subscription logins (`claude-login`, `codex-login`, `claude-utility` and

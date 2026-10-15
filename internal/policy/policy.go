@@ -53,6 +53,9 @@ var (
 	// ErrTracker is returned for a request of a browser VM to a host on the tracker list, while
 	// the environment blocks trackers and no rule allows the host.
 	ErrTracker = errors.New("the host is on the tracker list")
+	// ErrChromium is returned for a request a browser VM's Chromium makes for its own services
+	// (ChromiumService), while no rule allows it.
+	ErrChromium = errors.New("the request is one Chromium makes for itself")
 	// ErrNotRequest is returned for a method or path given for an approval of a connection.
 	ErrNotRequest = errors.New("a method or path can only be allowed for a browser request")
 )
@@ -110,9 +113,9 @@ type NetworkRequest struct {
 	// Tracker is set for a request of a browser denied because its host is on the tracker list.
 	Tracker bool `json:"tracker,omitempty"`
 	// Decided says how a request that no rule covers was decided without asking: "open" (the
-	// security level Open), "curated" (the curated list) or "reviewer" (the AI reviewer). Empty
-	// means the user decided it.
-	Decided string `json:"decided,omitempty" enum:"open,curated,reviewer" doc:"How the request was decided without asking; empty when the user decided it"`
+	// security level Open), "curated" (the curated list), "reviewer" (the AI reviewer) or
+	// "chromium" (a request Chromium makes for itself). Empty means the user decided it.
+	Decided string `json:"decided,omitempty" enum:"open,curated,reviewer,chromium" doc:"How the request was decided without asking; empty when the user decided it"`
 	// Reason is what the list entry or the reviewer says about the decision.
 	Reason string `json:"reason,omitempty" doc:"The curated entry, or the reviewer's reason"`
 }
@@ -270,11 +273,16 @@ func (e *Engine) Terminates(ctx context.Context, req Request) bool {
 }
 
 // check returns the rule that decides req now, if one does: a matching rule; else, for a
-// browser's request, ErrTracker when the request is to a tracker and the environment blocks
-// trackers; else the site the user approved for the browser session.
+// browser's request, ErrChromium when Chromium makes it for itself, ErrTracker when the request
+// is to a tracker and the environment blocks trackers; else the site the user approved for the
+// browser session.
 func (e *Engine) check(ctx context.Context, rules []store.Rule, req Request, teammate string) (store.Rule, bool, error) {
 	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port, req.HTTP); ok {
 		return r, true, nil
+	}
+	if reason := ChromiumService(req.Host, req.HTTP); req.Browser && reason != "" {
+		e.recordChromium(ctx, req, teammate, reason)
+		return store.Rule{}, false, ErrChromium
 	}
 	if req.Browser && Tracker(req.Host) {
 		env, err := e.Store.Environment(ctx, req.EnvironmentID)
@@ -305,6 +313,26 @@ func (e *Engine) recordTracker(ctx context.Context, req Request) {
 	})
 	if err != nil {
 		e.log().Error("network rules: record a tracker", "err", err)
+	}
+	e.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: req.EnvironmentID})
+}
+
+// recordChromium logs a browser request denied as one Chromium makes for itself in the Activity
+// list, with the reason.
+func (e *Engine) recordChromium(ctx context.Context, req Request, teammate, reason string) {
+	host := Normalize(req.Host)
+	kind, _, n := e.approvalOf(ctx, req, host, teammate)
+	n.Site, n.Decided, n.Reason = "", DecidedChromium, reason
+	payload, _ := json.Marshal(n)
+	err := e.Store.RecordDenied(ctx, store.Approval{
+		EnvironmentID: req.EnvironmentID,
+		SandboxID:     req.SandboxID,
+		Kind:          kind,
+		Subject:       "chromium " + host + ":" + strconv.Itoa(req.Port),
+		Payload:       payload,
+	})
+	if err != nil {
+		e.log().Error("network rules: record a request of Chromium", "err", err)
 	}
 	e.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: req.EnvironmentID})
 }

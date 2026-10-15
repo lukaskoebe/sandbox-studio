@@ -301,11 +301,18 @@ func killSession(slot browserSlot) {
 	}
 }
 
-// runBrowser runs agent-browser and returns its JSON response. A failed command exits
+// runBrowser runs agent-browser, after the policies and the CA are in place, and returns its
+// JSON response. A failed command exits
 // non-zero and still prints a response with success false, which is returned as is. The
 // stdin and the arguments are never logged: a batch may carry a credential.
 func (a *Agent) runBrowser(ctx context.Context, slot browserSlot, args []string, stdin string) (json.RawMessage, error) {
-	return runBrowserAfterTrust(ctx, a.prepareBrowserTrust, func(ctx context.Context) (json.RawMessage, error) {
+	prepare := func(ctx context.Context) error {
+		if err := writeBrowserPolicies(browserPolicyFile); err != nil {
+			return err
+		}
+		return a.prepareBrowserTrust(ctx)
+	}
+	return runBrowserAfterTrust(ctx, prepare, func(ctx context.Context) (json.RawMessage, error) {
 		return a.runBrowserTrusted(ctx, slot, args, stdin)
 	})
 }
