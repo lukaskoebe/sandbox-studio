@@ -72,14 +72,19 @@ change it.
   place even when several views are on the page. More than one card, or a narrow page, folds
   the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
-- A browser request's approval makes a browser-only rule unless Options says "Browser and
-  sandboxes" (`browserOnly`), and its Options also offer "Allow for this session"
-  (`allow_session`), which makes no rule (see [network](network.md#hold-and-ask)).
+- A network approval's Options have two rows: who the decision covers and for how long. For a
+  browser request, Who is "<teammate>'s browser", "All browsers" or "Browsers and sandboxes"
+  (only the last leaves out `browserOnly`), and For is "Always", "1 hour", "This session" or
+  "Once". "This session" makes no rule (`allow_site` for a navigation, `allow_session` with the
+  card's host pattern otherwise; see [network](network.md#hold-and-ask)) and so turns Who off.
+  For a sandbox's connection, Who is the scope and Any port, and For has no session. The
+  Allow and Deny buttons name the lifetime, such as "Allow for 1 hour"
+  (`decisionLabel` in `web/src/components/approval-decision.tsx`).
 - A browser request's approval also offers its method and first directory, such as "GET
   /repos/*". The decision then carries `method` and `pathPrefix`, and the rule covers only
   those requests ([network](network.md#request-rules)).
-- A browser navigation to a new site offers "Allow site <site> for this browser session", which
-  approves the site for the session without a rule (`allow_site`).
+- Allowing a browser navigation, with or without a rule, also approves its site for the
+  browser session, so the page's own requests don't each ask.
 - Network requests from one sandbox that arrive within 3 seconds of each other are one card,
   "<sandbox> wants N hosts", with the hosts listed, Allow all, Deny all, and Review
   individually (which turns them into the per-host cards). A browser's requests group by the

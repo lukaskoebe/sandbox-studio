@@ -1,5 +1,5 @@
 import type { Locator } from "@playwright/test"
-import { approvals, expect, test } from "./fixtures"
+import { addTeammate, approvals, expect, sandboxName, test } from "./fixtures"
 
 /** Descendants of el that stick out of it, and el itself if it scrolls sideways or leaves the viewport. */
 function overflowing(el: Locator) {
@@ -63,6 +63,43 @@ for (const [width, path] of [
 
     await api.dismissApprovals()
   })
+
+test("a browser request's Options fit its card on a phone", async ({
+  page,
+  api,
+  env,
+}) => {
+  await page.setViewportSize({ width: 390, height: 900 })
+  await api.dismissApprovals()
+  const suffix = Math.random().toString(36).slice(2, 8)
+  const teammate = await addTeammate(api, env, `a-teammate-${suffix}`)
+  const id = await api.createSandbox(sandboxName("browser"), teammate)
+  const host = `challenges-${suffix}.example.com`
+  void api
+    .json("POST", "/api/e2e/requests", {
+      sandboxId: id,
+      host,
+      port: 443,
+      method: "GET",
+      path: "/turnstile/v0/b/d2d3316b729e/api.js",
+    })
+    .catch(() => {})
+
+  await page.goto(`/e/${env}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: host })
+  await card.getByRole("button", { name: "Options", exact: true }).click()
+  await expect(card.getByRole("group", { name: "Who" })).toBeVisible()
+  expect(await overflowing(card)).toEqual([])
+  // The session's longer button label and its hint fit too.
+  await card.getByRole("button", { name: "This session", exact: true }).click()
+  await expect(
+    card.getByRole("button", { name: "Allow for session", exact: true })
+  ).toBeVisible()
+  expect(await overflowing(card)).toEqual([])
+  await api.dismissApprovals()
+})
 
 test("the setup card on Home and the setup fit a phone", async ({
   page,

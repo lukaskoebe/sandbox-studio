@@ -117,6 +117,7 @@ test("an approval can allow a host for one hour, and the Rules tab counts the ru
     .filter({ hasText: host })
   await expect(card).toBeVisible()
   await card.getByRole("button", { name: "Options", exact: true }).click()
+  await card.getByRole("button", { name: "1 hour", exact: true }).click()
   await card
     .getByRole("button", { name: "Allow for 1 hour", exact: true })
     .click()
@@ -144,6 +145,7 @@ test("allow once and deny once answer the held connection without a rule; Activi
     .getByTestId("approval-card")
     .filter({ hasText: allowed })
   await card.getByRole("button", { name: "Options", exact: true }).click()
+  await card.getByRole("button", { name: "Once", exact: true }).click()
   await card.getByRole("button", { name: "Allow once", exact: true }).click()
   await expect(card).toBeHidden()
   await expect
@@ -157,6 +159,7 @@ test("allow once and deny once answer the held connection without a rule; Activi
     .getByTestId("approval-card")
     .filter({ hasText: denied })
   await card.getByRole("button", { name: "Options", exact: true }).click()
+  await card.getByRole("button", { name: "Once", exact: true }).click()
   await card.getByRole("button", { name: "Deny once", exact: true }).click()
   await expect(card).toBeHidden()
   await expect
@@ -177,9 +180,10 @@ test("allow once and deny once answer the held connection without a rule; Activi
   )
 })
 
-// A browser navigation to a new site asks with the site; allowing the site lets the navigation
-// through for the browser session, and makes no rule.
-test("a browser navigation asks with its site; Allow site lets it through without a rule", async ({
+// A browser navigation to a new site asks with the site. Allowing it for the session lets it
+// through without a rule; a plain Allow makes a rule and approves the site for the session too,
+// so the page's requests to other hosts pass without asking.
+test("an allowed navigation approves its site, and the page's requests pass", async ({
   page,
   api,
   env,
@@ -187,43 +191,68 @@ test("a browser navigation asks with its site; Allow site lets it through withou
   await api.dismissApprovals()
   const teammate = await addTeammate(api, env, `browser-${freshLabel()}`)
   const id = await api.createSandbox(sandboxName("nav"), teammate)
-  const host = `www.${freshLabel()}.example.org`
+  const label = freshLabel()
+  const request = (host: string, site?: string) =>
+    api.json<{ outcome: string }>("POST", "/api/e2e/requests", {
+      sandboxId: id,
+      host,
+      port: 443,
+      method: "GET",
+      path: site ? "/" : "/app.js",
+      navigation: !!site,
+      site,
+    })
 
   await page.goto(`/e/${env}`)
-  const decided = api.json<{ outcome: string }>("POST", "/api/e2e/requests", {
-    sandboxId: id,
-    host,
-    port: 443,
-    method: "GET",
-    path: "/",
-    navigation: true,
-    site: "example.org",
-  })
-  const card = approvals(page)
+  const sessionHost = `www.${label}.example.org`
+  let decided = request(sessionHost, `${label}.example.org`)
+  let card = approvals(page)
     .getByTestId("approval-card")
-    .filter({ hasText: host })
-  await expect(card).toBeVisible()
+    .filter({ hasText: sessionHost })
+  await card.getByRole("button", { name: "Options", exact: true }).click()
+  await card.getByRole("button", { name: "This session", exact: true }).click()
+  await expect(card).toContainText(
+    `Allows the site ${label}.example.org in this browser until it stops.`
+  )
   await card
-    .getByRole("button", {
-      name: "Allow site example.org for this browser session",
-    })
+    .getByRole("button", { name: "Allow for session", exact: true })
     .click()
   await expect(card).toBeHidden()
   await expect(decided).resolves.toEqual({ outcome: "allowed" })
 
-  await page.goto(`/e/${env}/network/rules`)
-  await expect(page.getByRole("cell", { name: host, exact: true })).toBeHidden()
+  const ruleHost = `docs.${label}.example.com`
+  decided = request(ruleHost, `${label}.example.com`)
+  card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: ruleHost })
+  await card.getByRole("button", { name: ruleHost, exact: true }).click()
+  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(card).toBeHidden()
+  await expect(decided).resolves.toEqual({ outcome: "allowed" })
+  // The page is on an approved site: its requests to other hosts don't ask.
+  await expect(request(`cdn.${label}.example.net`)).resolves.toEqual({
+    outcome: "allowed",
+  })
+
+  await page.goto(`/e/${env}/network/rules?q=${label}`)
+  await expect(
+    page.getByRole("cell", { name: sessionHost, exact: true })
+  ).toBeHidden()
+  await expect(
+    page.getByRole("row").filter({ hasText: ruleHost })
+  ).toBeVisible()
 })
 
 // A browser's request can be allowed for the browser session, without a rule, or by a rule for
-// the browser only: the sandbox's own connections to the host still ask.
-test("a browser request can be allowed for the session, or by a rule only in the browser", async ({
+// the teammate's browser: the sandbox's own connections to the host still ask.
+test("a browser request can be allowed for the session, or by a rule for the teammate's browser", async ({
   page,
   api,
   env,
 }) => {
   await api.dismissApprovals()
-  const teammate = await addTeammate(api, env, `browser-${freshLabel()}`)
+  const name = `browser-${freshLabel()}`
+  const teammate = await addTeammate(api, env, name)
   const id = await api.createSandbox(sandboxName("where"), teammate)
   const label = freshLabel()
   const session = `cdn.${label}.example.net`
@@ -244,8 +273,9 @@ test("a browser request can be allowed for the session, or by a rule only in the
     .filter({ hasText: session })
   await card.getByRole("button", { name: "Options", exact: true }).click()
   await card.getByRole("button", { name: session, exact: true }).click()
+  await card.getByRole("button", { name: "This session", exact: true }).click()
   await card
-    .getByRole("button", { name: "Allow for this session", exact: true })
+    .getByRole("button", { name: "Allow for session", exact: true })
     .click()
   await expect(card).toBeHidden()
   await expect(decided).resolves.toEqual({ outcome: "allowed" })
@@ -257,9 +287,13 @@ test("a browser request can be allowed for the session, or by a rule only in the
     .getByTestId("approval-card")
     .filter({ hasText: browserOnly })
   await card.getByRole("button", { name: "Options", exact: true }).click()
+  // The teammate's approval scope, the environment, preselects all browsers.
   await expect(
-    card.getByRole("button", { name: "Only in the browser", exact: true })
+    card.getByRole("button", { name: "All browsers", exact: true })
   ).toHaveAttribute("aria-pressed", "true")
+  await card
+    .getByRole("button", { name: `${name}'s browser`, exact: true })
+    .click()
   await card.getByRole("button", { name: browserOnly, exact: true }).click()
   await card.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(card).toBeHidden()
@@ -278,6 +312,9 @@ test("a browser request can be allowed for the session, or by a rule only in the
   await expect(
     page.getByRole("row").filter({ hasText: browserOnly })
   ).toContainText("browser only")
+  await expect(
+    page.getByRole("row").filter({ hasText: browserOnly })
+  ).toContainText(name)
   await expect(
     page.getByRole("cell", { name: session, exact: true })
   ).toBeHidden()

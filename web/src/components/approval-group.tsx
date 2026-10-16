@@ -5,9 +5,17 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import {
+  decisionBody,
+  decisionLabel,
+  defaultReach,
+  isBrowserRequest,
+  LifetimeToggle,
+  ReachToggle,
   refreshDecisions,
   ScopeToggle,
+  type BrowserReach,
   type DecisionScope,
+  type Lifetime,
 } from "@/components/approval-decision"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
@@ -27,8 +35,9 @@ import { cn, formatAge, hostPort } from "@/lib/utils"
 /**
  * The network requests one sandbox made close together, as one card: the hosts, then Allow all,
  * Deny all, or Review individually for the per-host cards. Allow all and Deny all decide each
- * host with a rule of its own, covering the scope chosen under Options as on a single card.
- * A browser page's requests say which site the page is on, and the card is titled with it.
+ * host as a single card would, for who and how long Options say: with a rule of its own, for
+ * the browser session, or once. A browser page's requests say which site the page is on, and
+ * the card is titled with it.
  */
 export function NetworkGroupCard({
   approvals,
@@ -46,6 +55,9 @@ export function NetworkGroupCard({
   const [scope, setScope] = useState<DecisionScope>(
     owner?.approvalScope ?? "environment"
   )
+  const browser = isBrowserRequest(first)
+  const [reach, setReach] = useState<BrowserReach>(defaultReach(first))
+  const [lifetime, setLifetime] = useState<Lifetime>("always")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [working, setWorking] = useState<"allow" | "deny">()
   const kind = approvalKind(first)
@@ -68,7 +80,12 @@ export function NetworkGroupCard({
         "/api/environments/{env}/approvals/{id}/decide",
         {
           params: { path: { env: a.environmentId, id: a.id } },
-          body: { action, scope, host: a.network?.host },
+          body: decisionBody(a, action, {
+            lifetime,
+            scope,
+            reach,
+            host: a.network?.host,
+          }),
         }
       )
       if (error && response.status !== 409) failure ??= errorMessage(error)
@@ -110,12 +127,28 @@ export function NetworkGroupCard({
           </ul>
         </ScrollArea>
         {optionsOpen && (
-          <ScopeToggle
-            value={scope}
-            onChange={setScope}
-            sandboxName={sandbox}
-            owner={owner?.name}
-          />
+          <>
+            {browser ? (
+              <ReachToggle
+                value={reach}
+                onChange={setReach}
+                owner={owner?.name}
+                disabled={lifetime === "session" || lifetime === "once"}
+              />
+            ) : (
+              <ScopeToggle
+                value={scope}
+                onChange={setScope}
+                sandboxName={sandbox}
+                owner={owner?.name}
+              />
+            )}
+            <LifetimeToggle
+              value={lifetime}
+              onChange={setLifetime}
+              browser={browser}
+            />
+          </>
         )}
         <div className="flex flex-wrap items-center gap-1.5">
           <Button variant="ghost" size="xs" onClick={onReview}>
@@ -137,7 +170,7 @@ export function NetworkGroupCard({
             onClick={() => void decideAll("deny")}
           >
             {working === "deny" && <Spinner />}
-            Deny all
+            {decisionLabel("deny", lifetime, true)}
           </Button>
           <Button
             size="sm"
@@ -145,7 +178,7 @@ export function NetworkGroupCard({
             onClick={() => void decideAll("allow")}
           >
             {working === "allow" && <Spinner />}
-            Allow all
+            {decisionLabel("allow", lifetime, true)}
           </Button>
         </div>
       </CardContent>

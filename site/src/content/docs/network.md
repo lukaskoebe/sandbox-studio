@@ -88,9 +88,18 @@ A rule for an address no sandbox can reach, such as `127.0.0.1`, this computer's
 
 ## Requests from the browser
 
-When the browser asks for a host, the request card shows the page's request, such as `GET /npm/lib.js`. **Allow** and **Deny** make a rule that covers only the browser, so the agent can browse a site without its sandbox being able to download from it. To cover the sandboxes too, open **Options** and pick **Browser and sandboxes**.
+When the browser asks for a host, the request card shows the page's request, such as `GET /npm/lib.js`. **Allow** and **Deny** make a rule that covers only the browser, so the agent can browse a site without its sandbox being able to download from it.
 
-To allow a host only for now, open **Options** and choose **Allow for this session**. The host, or the pattern you picked on the card, is then allowed in that teammate's browser until the browser stops, and no rule is added. A navigation to a new site also offers **Allow site … for this browser session**, which allows the site and the pages on it.
+When you allow the browser to open a site, the site is allowed for the rest of the browser session too: the page's own requests, such as its scripts and images on the same site, no longer ask. Requests to other hosts, such as a CDN, still ask once each.
+
+**Options** on the card has two rows:
+
+- **Who**: the teammate's browser, **All browsers** of the environment, or **Browsers and sandboxes**, which also lets the sandboxes connect to the host. The teammate's approval scope picks the default.
+- **For**: **Always**, **1 hour**, **This session** or **Once**. **This session** allows the site, or the host or pattern you picked on the card, in that teammate's browser until the browser stops, and adds no rule. **Once** answers only this request.
+
+The Allow and Deny buttons say how long they last, such as **Allow for 1 hour**.
+
+Reports that Chromium sends sites on its own, such as Network Error Logging, are refused without asking.
 
 ## Browser and Git approvals are separate
 

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { useQueryClient, type QueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { CaretDownIcon } from "@phosphor-icons/react"
@@ -17,17 +17,11 @@ import {
   errorStatus,
   type Approval,
 } from "@/lib/api/client"
+import type { paths } from "@/lib/api/schema.gen"
 import { cn } from "@/lib/utils"
 
-type Action = "allow" | "deny" | "dismiss"
-
-/**
- * The buttons: an action; an allow whose rule expires after an hour; an allow or deny for the
- * one connection, without a rule; or, for a browser's request, an allow of its site or its host
- * pattern for the browser session, without a rule.
- */
-type Choice =
-  Action | "allowHour" | "allowOnce" | "denyOnce" | "allowSite" | "allowSession"
+type DecideBody =
+  paths["/api/environments/{env}/approvals/{id}/decide"]["post"]["requestBody"]["content"]["application/json"]
 
 const hour = 60 * 60 * 1000
 
@@ -74,46 +68,104 @@ export function useDecideApproval() {
   )
 }
 
-/** Where a browser request's rule applies: the browsers only, or the sandboxes too. */
-export function WhereToggle({
-  browserOnly,
-  onChange,
-}: {
-  browserOnly: boolean
-  onChange: (browserOnly: boolean) => void
-}) {
-  return (
-    <ToggleGroup
-      aria-label="Where"
-      variant="outline"
-      value={[browserOnly ? "browser" : "everywhere"]}
-      onValueChange={(v) => {
-        if (v[0]) onChange(v[0] === "browser")
-      }}
-      className="w-full"
-    >
-      <ToggleGroupItem
-        value="browser"
-        size="sm"
-        title="The rule covers what the browsers load, not the sandboxes' own connections"
-        className="min-w-0 flex-1 shrink"
-      >
-        <span className="truncate">Only in the browser</span>
-      </ToggleGroupItem>
-      <ToggleGroupItem
-        value="everywhere"
-        size="sm"
-        title="The rule covers the sandboxes' own connections too"
-        className="min-w-0 flex-1 shrink"
-      >
-        <span className="truncate">Browser and sandboxes</span>
-      </ToggleGroupItem>
-    </ToggleGroup>
-  )
-}
-
 /** Who a rule covers: the whole environment, or only the sandbox that asked. */
 export type DecisionScope = "environment" | "teammate" | "sandbox"
+
+/**
+ * Who a browser request's rule covers: the teammate's browser (the sandbox's, without a
+ * teammate), every browser of the environment, or the browsers and the sandboxes.
+ */
+export type BrowserReach = "browser" | "browsers" | "everywhere"
+
+/**
+ * How long a decision lasts: a rule, a rule for an hour, the browser session (browser requests
+ * only, without a rule), or this request only.
+ */
+export type Lifetime = "always" | "hour" | "session" | "once"
+
+/** Whether an approval is a browser's request, which names its method. */
+export function isBrowserRequest(a: Approval) {
+  return !!a.network?.method
+}
+
+/** Where a browser request's decision starts: the teammate's choice of scope, else its browser. */
+export function defaultReach(a: Approval): BrowserReach {
+  return a.teammate?.approvalScope === "environment" ? "browsers" : "browser"
+}
+
+/** The scope a rule gets from a request's choices. */
+function scopeOf(
+  a: Approval,
+  scope: DecisionScope,
+  reach: BrowserReach
+): DecisionScope {
+  if (!isBrowserRequest(a)) return scope
+  if (reach !== "browser") return "environment"
+  return a.teammate ? "teammate" : "sandbox"
+}
+
+/**
+ * The decision for an approval: allow or deny, for the lifetime chosen. Always and an hour make
+ * a rule for the host pattern and the scope (a browser request's reach). The browser session
+ * allows a navigation's site, or another request's host pattern, in the teammate's browser
+ * without a rule; denying for it denies once. Once answers the held connections of this request.
+ */
+export function decisionBody(
+  a: Approval,
+  action: "allow" | "deny",
+  choice: {
+    lifetime: Lifetime
+    scope: DecisionScope
+    reach: BrowserReach
+    host?: string
+    ports?: number[]
+    method?: string
+    pathPrefix?: string
+  }
+): DecideBody {
+  const scope = scopeOf(a, choice.scope, choice.reach)
+  if (
+    choice.lifetime === "once" ||
+    (choice.lifetime === "session" && action === "deny")
+  )
+    return { action: `${action}_once`, scope }
+  if (choice.lifetime === "session")
+    return a.network?.navigation && a.network.site
+      ? { action: "allow_site", scope }
+      : { action: "allow_session", host: choice.host, scope }
+  return {
+    action,
+    scope,
+    host: choice.host,
+    ports: choice.ports,
+    method: choice.method,
+    pathPrefix: choice.pathPrefix,
+    ...(isBrowserRequest(a) && choice.reach !== "everywhere"
+      ? { browserOnly: true }
+      : {}),
+    ...(choice.lifetime === "hour"
+      ? { expiresAt: new Date(Date.now() + hour).toISOString() }
+      : {}),
+  }
+}
+
+/** The label of the allow or deny button for a lifetime, such as "Allow for 1 hour". */
+export function decisionLabel(
+  action: "allow" | "deny",
+  lifetime: Lifetime,
+  all = false
+) {
+  const verb = `${action === "allow" ? "Allow" : "Deny"}${all ? " all" : ""}`
+  switch (lifetime) {
+    case "hour":
+      return `${verb} for 1 hour`
+    case "session":
+      return action === "allow" ? `${verb} for session` : `${verb} once`
+    case "once":
+      return `${verb} once`
+  }
+  return verb
+}
 
 /** The scope choice of a network decision, as two toggles. */
 export function ScopeToggle({
@@ -171,13 +223,143 @@ export function ScopeToggle({
   )
 }
 
+/** A labeled row of the Options: what the toggles below it decide. */
+function OptionRow({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-1">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      {children}
+    </div>
+  )
+}
+
 /**
- * Decides one network approval: the host pattern to allow or deny, any port or the default
- * ports, and whether the rule covers the whole environment or only the requesting sandbox.
- * A browser's request makes a rule for the browsers only, unless the sandboxes are picked too.
- * Compact keeps the pattern and the buttons visible and folds the port, scope, where and
- * lifetime choices (an hour, the browser session, or this connection only) behind an Options
- * disclosure.
+ * Who a browser request's rule covers. The session and once answers make no rule, so the
+ * choice is off for them.
+ */
+export function ReachToggle({
+  value,
+  onChange,
+  owner,
+  disabled,
+}: {
+  value: BrowserReach
+  onChange: (reach: BrowserReach) => void
+  owner?: string
+  disabled?: boolean
+}) {
+  const items: { value: BrowserReach; label: string; title: string }[] = [
+    {
+      value: "browser",
+      label: owner ? `${owner}'s browser` : "This browser",
+      title: "The rule covers what this browser loads",
+    },
+    {
+      value: "browsers",
+      label: "All browsers",
+      title: "The rule covers what every browser of the environment loads",
+    },
+    {
+      value: "everywhere",
+      label: "Browsers and sandboxes",
+      title:
+        "The rule covers the browsers and the sandboxes' own connections too",
+    },
+  ]
+  return (
+    <ToggleGroup
+      aria-label="Who"
+      variant="outline"
+      value={[value]}
+      disabled={disabled}
+      onValueChange={(v) => {
+        const next = items.find((i) => i.value === v[0])
+        if (next) onChange(next.value)
+      }}
+      className="w-full"
+    >
+      {items.map((i) => (
+        <ToggleGroupItem
+          key={i.value}
+          value={i.value}
+          size="sm"
+          title={i.title}
+          className="min-w-0 flex-1 shrink"
+        >
+          <span className="truncate">{i.label}</span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
+}
+
+/** How long a decision lasts. The browser session is offered for browser requests only. */
+export function LifetimeToggle({
+  value,
+  onChange,
+  browser,
+}: {
+  value: Lifetime
+  onChange: (lifetime: Lifetime) => void
+  browser: boolean
+}) {
+  const items: { value: Lifetime; label: string; title: string }[] = [
+    { value: "always", label: "Always", title: "A rule that stays" },
+    { value: "hour", label: "1 hour", title: "A rule that expires in an hour" },
+    ...(browser
+      ? [
+          {
+            value: "session" as const,
+            label: "This session",
+            title:
+              "Until the browser stops, without a rule; the sandboxes still ask",
+          },
+        ]
+      : []),
+    {
+      value: "once",
+      label: "Once",
+      title: "Only this request, without a rule; the next one asks again",
+    },
+  ]
+  return (
+    <ToggleGroup
+      aria-label="For"
+      variant="outline"
+      value={[value]}
+      onValueChange={(v) => {
+        const next = items.find((i) => i.value === v[0])
+        if (next) onChange(next.value)
+      }}
+      className="w-full"
+    >
+      {items.map((i) => (
+        <ToggleGroupItem
+          key={i.value}
+          value={i.value}
+          size="sm"
+          title={i.title}
+          className="min-w-0 flex-1 shrink"
+        >
+          <span className="truncate">{i.label}</span>
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  )
+}
+
+/**
+ * Decides one network approval: the host pattern to allow or deny, who the rule covers and for
+ * how long. A sandbox's request picks the scope and the ports; a browser's request picks the
+ * browser, every browser, or the browsers and the sandboxes, and can be allowed for the browser
+ * session. Allow and Deny say the lifetime they decide for. Compact keeps the pattern and the
+ * buttons visible and folds the other choices behind an Options disclosure.
  */
 export function ApprovalDecision({
   approval,
@@ -188,6 +370,7 @@ export function ApprovalDecision({
 }) {
   const net = approval.network
   const owner = approval.teammate
+  const browser = isBrowserRequest(approval)
   // Without patterns from the server, the requested host itself is the one choice. The level
   // the owner chose last is preselected.
   const patterns = net?.patterns?.length ? net.patterns : net ? [net.host] : []
@@ -204,67 +387,38 @@ export function ApprovalDecision({
   // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
   const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
   const [scope, setScope] = useState<DecisionScope>(defaultScope)
-  // Only a browser's requests are named by their method; their rule starts out browser-only.
-  const browser = !!net?.method
-  const [browserOnly, setBrowserOnly] = useState(browser)
+  const [reach, setReach] = useState<BrowserReach>(defaultReach(approval))
+  const [lifetime, setLifetime] = useState<Lifetime>("always")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
-  const [chosen, setChosen] = useState<Choice>()
-  const busy = (choice: Choice) => decide.isPending && chosen === choice
+  const [chosen, setChosen] = useState<string>()
+  const busy = (choice: string) => decide.isPending && chosen === choice
   // A folded choice that differs from the default still shows on the Options button.
-  const changed = anyPort || scope !== defaultScope || browserOnly !== browser
+  const changed =
+    anyPort ||
+    lifetime !== "always" ||
+    (browser ? reach !== defaultReach(approval) : scope !== defaultScope)
 
-  const act = (choice: Choice) => {
+  const act = (choice: "allow" | "deny" | "dismiss") => {
     setChosen(choice)
     const params = {
       params: { path: { env: approval.environmentId, id: approval.id } },
     }
-    const rule = {
-      scope,
-      host: pattern,
-      ports: anyPort ? [] : undefined,
-      ...(browserOnly ? { browserOnly } : {}),
-      ...(requestLevel && net?.method && net.pathPattern
-        ? { method: net.method, pathPrefix: net.pathPattern }
-        : {}),
-    }
-    switch (choice) {
-      case "dismiss":
-        return decide.mutate({ ...params, body: { action: choice, scope } })
-      case "allowSite":
-        return decide.mutate({
-          ...params,
-          body: { action: "allow_site", scope },
-        })
-      // The session allow covers the host pattern in this teammate's browser until it stops.
-      case "allowSession":
-        return decide.mutate({
-          ...params,
-          body: { action: "allow_session", host: pattern, scope },
-        })
-      // A once decision answers this connection; the server ignores the rule's fields.
-      case "allowOnce":
-        return decide.mutate({
-          ...params,
-          body: { action: "allow_once", scope },
-        })
-      case "denyOnce":
-        return decide.mutate({
-          ...params,
-          body: { action: "deny_once", scope },
-        })
-      case "allowHour":
-        return decide.mutate({
-          ...params,
-          body: {
-            ...rule,
-            action: "allow",
-            expiresAt: new Date(Date.now() + hour).toISOString(),
-          },
-        })
-      default:
-        return decide.mutate({ ...params, body: { ...rule, action: choice } })
-    }
+    if (choice === "dismiss")
+      return decide.mutate({ ...params, body: { action: choice, scope } })
+    decide.mutate({
+      ...params,
+      body: decisionBody(approval, choice, {
+        lifetime,
+        scope,
+        reach,
+        host: pattern,
+        ports: anyPort ? [] : undefined,
+        ...(requestLevel && net?.method && net.pathPattern
+          ? { method: net.method, pathPrefix: net.pathPattern }
+          : {}),
+      }),
+    })
   }
 
   return (
@@ -318,90 +472,55 @@ export function ApprovalDecision({
           )}
         </ToggleGroup>
       )}
-      {net?.navigation && net.site && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          disabled={decide.isPending}
-          onClick={() => act("allowSite")}
-        >
-          {busy("allowSite") && <Spinner />}
-          {`Allow site ${net.site} for this browser session`}
-        </Button>
-      )}
       {(!compact || optionsOpen) && (
         <>
-          <label className="flex items-center gap-2 text-xs">
-            <Checkbox checked={anyPort} onCheckedChange={setAnyPort} />
-            Any port
-            {!anyPort && net && (
-              <span className="ml-auto text-muted-foreground">
-                Default: {defaultPorts(net.port)}
-              </span>
-            )}
-          </label>
-          <ScopeToggle
-            value={scope}
-            onChange={setScope}
-            sandboxName={net?.sandboxName}
-            owner={owner?.name}
-          />
-          {browser && (
-            <WhereToggle browserOnly={browserOnly} onChange={setBrowserOnly} />
+          {browser ? (
+            <OptionRow label="Who">
+              <ReachToggle
+                value={reach}
+                onChange={setReach}
+                owner={owner?.name}
+                disabled={lifetime === "session" || lifetime === "once"}
+              />
+            </OptionRow>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 text-xs">
+                <Checkbox checked={anyPort} onCheckedChange={setAnyPort} />
+                Any port
+                {!anyPort && net && (
+                  <span className="ml-auto text-muted-foreground">
+                    Default: {defaultPorts(net.port)}
+                  </span>
+                )}
+              </label>
+              <OptionRow label="Who">
+                <ScopeToggle
+                  value={scope}
+                  onChange={setScope}
+                  sandboxName={net?.sandboxName}
+                  owner={owner?.name}
+                />
+              </OptionRow>
+            </>
           )}
-          <div className="flex flex-wrap justify-end gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={decide.isPending}
-              onClick={() => act("allowHour")}
-            >
-              {busy("allowHour") && <Spinner />}
-              Allow for 1 hour
-            </Button>
-            {browser && owner && (
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={decide.isPending}
-                      onClick={() => act("allowSession")}
-                    />
-                  }
-                >
-                  {busy("allowSession") && <Spinner />}
-                  Allow for this session
-                </TooltipTrigger>
-                <TooltipContent>
-                  {`Allow ${pattern} in ${owner.name}'s browser until it stops, without a rule`}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={decide.isPending}
-              onClick={() => act("allowOnce")}
-            >
-              {busy("allowOnce") && <Spinner />}
-              Allow once
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={decide.isPending}
-              onClick={() => act("denyOnce")}
-            >
-              {busy("denyOnce") && <Spinner />}
-              Deny once
-            </Button>
-          </div>
+          <OptionRow label="For">
+            <LifetimeToggle
+              value={lifetime}
+              onChange={setLifetime}
+              browser={browser}
+            />
+          </OptionRow>
+          {browser && lifetime === "session" && (
+            <p className="text-xs text-muted-foreground">
+              {net?.navigation && net.site
+                ? `Allows the site ${net.site} in this browser until it stops.`
+                : `Allows ${pattern} in this browser until it stops.`}
+            </p>
+          )}
         </>
       )}
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
         <Tooltip>
           <TooltipTrigger
             render={
@@ -451,7 +570,7 @@ export function ApprovalDecision({
           onClick={() => act("deny")}
         >
           {busy("deny") && <Spinner />}
-          Deny
+          {decisionLabel("deny", lifetime)}
         </Button>
         <Button
           size="sm"
@@ -459,7 +578,7 @@ export function ApprovalDecision({
           onClick={() => act("allow")}
         >
           {busy("allow") && <Spinner />}
-          Allow
+          {decisionLabel("allow", lifetime)}
         </Button>
       </div>
     </div>
