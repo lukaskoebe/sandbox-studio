@@ -193,7 +193,14 @@ visible thing, updated in place, not one row per chunk.
   `file:///attachments/<name>` URI, which needs the agent's `embeddedContext` prompt
   capability. Nothing is written into the workspace, so undo and the Changes panel never
   see them. At most 10 MiB per prompt.
-- Only one prompt runs per chat. Studio has no prompt queue.
+- Only one prompt runs per chat. A prompt sent while a turn runs waits in the chat's queue
+  (`queuePrompt`, `chat.Service.Enqueue`): when the turn ends, however it ends (Stop
+  included), the next waiting prompt starts the next turn, one turn each, in order. ACP has
+  no way into a running turn, so steering means the next turn. The queue lives in memory,
+  per chat: prompts still waiting when Studio stops, or when the chat goes to the terminal,
+  are dropped. The chat's stream sends it whole as a `queue` event whenever it changes, and
+  `getChat` has it as `queued`; `unqueuePrompt` takes one off. The composer shows the
+  waiting prompts above the box: Edit takes one back into the draft, Remove drops it.
 
 **Cancelling.** Stop sends `session/cancel`. Studio settles every open `chat.permission`
 approval of the chat as dismissed and answers its requests with `outcome: cancelled`. The
@@ -377,6 +384,8 @@ Paths under `/api/environments/{env}`:
 | `GET /chats/{chat}` | `getChat` | The chat, its turns and items |
 | `DELETE /chats/{chat}` | `deleteChat` | Also `session/delete` when live |
 | `POST /chats/{chat}/prompt` | `sendPrompt` | Body `{text, attachments[]}` (base64, at most 10 MiB in total). 202 with the turn. 409 while running |
+| `POST /chats/{chat}/queue` | `queuePrompt` | Body as `sendPrompt`. 202 `{queued, prompt?}`: sent at once, or waiting for the running turn. The UI sends with this |
+| `DELETE /chats/{chat}/queue/{id}` | `unqueuePrompt` | 204, or 404 once the prompt went |
 | `POST /chats/{chat}/cancel` | `cancelChat` | |
 | `POST /chats/{chat}/turns/{turn}/undo` | `undoTurn` | 204. 409 while running, or once the turn is undone or its snapshot is gone |
 | `GET /chats/{chat}/turns/{turn}/changes` | `getTurnChanges` | `{files[], more}` with diffs. Without the snapshots, the stored list without diffs |

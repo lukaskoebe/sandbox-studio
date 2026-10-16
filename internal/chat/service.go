@@ -107,6 +107,15 @@ type queuedPrompt struct {
 	launch Launch
 	p      Prompt
 	sent   func()
+	view   QueuedPrompt
+}
+
+// QueuedPrompt is a prompt that waits for its chat's running turn to end, as the chat shows it.
+type QueuedPrompt struct {
+	ID          string    `json:"id"`
+	Text        string    `json:"text"`
+	Attachments []string  `json:"attachments,omitempty" doc:"The names of its files"`
+	QueuedAt    time.Time `json:"queuedAt"`
 }
 
 func (s *Service) log() *slog.Logger {
@@ -175,9 +184,10 @@ func (s *Service) create(ctx context.Context, sb store.Sandbox, harnessName stri
 
 // Log is a chat with all its turns and items.
 type Log struct {
-	Chat  store.Chat `json:"chat"`
-	Turns []Turn     `json:"turns"`
-	Items []Item     `json:"items"`
+	Chat   store.Chat     `json:"chat"`
+	Turns  []Turn         `json:"turns"`
+	Items  []Item         `json:"items"`
+	Queued []QueuedPrompt `json:"queued" doc:"Prompts that go once the running turn ends, in order"`
 }
 
 // Turn is a chat turn with its usage and changed files decoded.
@@ -213,7 +223,7 @@ func (s *Service) Get(ctx context.Context, envID, chatID string) (Log, error) {
 	if err != nil {
 		return Log{}, err
 	}
-	out := Log{Chat: c, Turns: make([]Turn, 0, len(turns)), Items: make([]Item, 0, len(items))}
+	out := Log{Chat: c, Turns: make([]Turn, 0, len(turns)), Items: make([]Item, 0, len(items)), Queued: s.Queued(chatID)}
 	for _, t := range turns {
 		out.Turns = append(out.Turns, TurnView(t))
 	}
@@ -242,6 +252,9 @@ func (s *Service) Delete(ctx context.Context, envID, chatID string) error {
 	if err := s.Store.DeleteChat(ctx, envID, chatID); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	delete(s.queue, chatID)
+	s.mu.Unlock()
 	s.changed(envID, chatID, true)
 	if err := s.collect(ctx, envID, c.SandboxID); err != nil {
 		s.log().Debug("chat: collect the snapshots of a deleted chat", "chat", chatID, "err", err)
@@ -344,23 +357,66 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 // it waits. sent is called once p went out. The queue lives in memory: a prompt still waiting
 // when Studio stops is not sent.
 func (s *Service) Queue(ctx context.Context, envID, chatID string, launch Launch, p Prompt, sent func()) (queued bool, err error) {
+	_, queued, err = s.Enqueue(ctx, envID, chatID, launch, p, sent)
+	return queued, err
+}
+
+// Enqueue is Queue that also returns the waiting prompt as the chat shows it, when it waits.
+func (s *Service) Enqueue(ctx context.Context, envID, chatID string, launch Launch, p Prompt, sent func()) (QueuedPrompt, bool, error) {
 	if _, err := s.Send(ctx, envID, chatID, launch, p); !errors.Is(err, ErrBusy) {
 		if err == nil && sent != nil {
 			sent()
 		}
-		return false, err
+		return QueuedPrompt{}, false, err
+	}
+	view := QueuedPrompt{ID: store.NewID(), Text: p.Text, QueuedAt: time.Now().UTC()}
+	for _, f := range p.Attachments {
+		view.Attachments = append(view.Attachments, f.Name)
 	}
 	s.mu.Lock()
 	if s.queue == nil {
 		s.queue = map[string][]queuedPrompt{}
 	}
-	s.queue[chatID] = append(s.queue[chatID], queuedPrompt{envID: envID, launch: launch, p: p, sent: sent})
+	s.queue[chatID] = append(s.queue[chatID], queuedPrompt{envID: envID, launch: launch, p: p, sent: sent, view: view})
 	s.mu.Unlock()
+	s.changed(envID, chatID, false)
 	// The turn may have ended since Send refused; then nothing else sends it.
 	if c, err := s.Store.Chat(ctx, envID, chatID); err == nil && c.State == store.ChatIdle {
 		go s.sendQueued(chatID)
 	}
-	return true, nil
+	return view, true, nil
+}
+
+// Queued returns the prompts waiting for the chat's running turn, in the order they go.
+func (s *Service) Queued(chatID string) []QueuedPrompt {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]QueuedPrompt, 0, len(s.queue[chatID]))
+	for _, q := range s.queue[chatID] {
+		out = append(out, q.view)
+	}
+	return out
+}
+
+// Unqueue takes a waiting prompt off the chat's queue, so it never goes. A prompt that already
+// went, or never waited, is store.ErrNotFound.
+func (s *Service) Unqueue(envID, chatID, id string) error {
+	s.mu.Lock()
+	list := s.queue[chatID]
+	i := slices.IndexFunc(list, func(q queuedPrompt) bool { return q.view.ID == id && q.envID == envID })
+	if i < 0 {
+		s.mu.Unlock()
+		return store.ErrNotFound
+	}
+	list = slices.Delete(slices.Clone(list), i, i+1)
+	if len(list) == 0 {
+		delete(s.queue, chatID)
+	} else {
+		s.queue[chatID] = list
+	}
+	s.mu.Unlock()
+	s.changed(envID, chatID, false)
+	return nil
 }
 
 // sendQueued sends the chat's next waiting prompt. A chat that went busy again keeps it; one
@@ -387,6 +443,9 @@ func (s *Service) sendQueued(chatID string) {
 		}
 	case errors.Is(err, ErrBusy):
 		s.mu.Lock()
+		if s.queue == nil {
+			s.queue = map[string][]queuedPrompt{}
+		}
 		s.queue[chatID] = append([]queuedPrompt{q}, s.queue[chatID]...)
 		s.mu.Unlock()
 	default:
@@ -395,6 +454,7 @@ func (s *Service) sendQueued(chatID string) {
 		s.mu.Unlock()
 		s.log().Warn("chat: send a queued prompt", "chat", chatID, "err", err)
 	}
+	s.changed(q.envID, chatID, false)
 }
 
 // lock moves an idle chat to state, or explains why it can't.

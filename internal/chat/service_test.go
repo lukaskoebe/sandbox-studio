@@ -591,3 +591,68 @@ func TestQueueWaitsForTheRunningTurn(t *testing.T) {
 		t.Fatalf("Queue on an idle chat = %v, %v; want sent", queued, err)
 	}
 }
+
+// Prompts queued while a turn runs show in the chat in order, one taken off never goes, and the
+// rest go one turn after another.
+func TestQueuedPromptsShowAndCanBeTakenOff(t *testing.T) {
+	release := make(chan struct{})
+	var prompts atomic.Int32
+	f := newFixture(t, &acptest.Agent{
+		Turns: []acptest.Turn{{}, {}, {}},
+		BeforePrompt: func() {
+			if prompts.Add(1) == 1 {
+				<-release
+			}
+		},
+	})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	first := f.send(t, "work")
+	wake, stop := f.s.Watch(f.chat.ID)
+	defer stop()
+	var views []QueuedPrompt
+	for _, text := range []string{"steer one", "steer two", "steer three"} {
+		q, queued, err := f.s.Enqueue(ctx, env, f.chat.ID, f.launch(), Prompt{Text: text}, nil)
+		if err != nil || !queued || q.ID == "" || q.Text != text {
+			t.Fatalf("Enqueue(%s) = %+v, %v, %v", text, q, queued, err)
+		}
+		views = append(views, q)
+	}
+	select {
+	case <-wake:
+	case <-time.After(time.Second):
+		t.Fatal("queueing didn't wake the chat's streams")
+	}
+	if log, _ := f.s.Get(ctx, env, f.chat.ID); len(log.Queued) != 3 || log.Queued[0].Text != "steer one" || log.Queued[2].Text != "steer three" {
+		t.Fatalf("queued: %+v", log.Queued)
+	}
+	if err := f.s.Unqueue(env, f.chat.ID, views[1].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Unqueue(env, f.chat.ID, views[1].ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("taking off twice: %v", err)
+	}
+	if err := f.s.Unqueue("other", f.chat.ID, views[0].ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("another environment took a prompt off: %v", err)
+	}
+	close(release)
+	f.wait(t, first.ID)
+	deadline := time.Now().Add(5 * time.Second)
+	var log Log
+	for time.Now().Before(deadline) {
+		log, _ = f.s.Get(ctx, env, f.chat.ID)
+		if len(log.Turns) == 3 && log.Turns[2].EndedAt != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	var texts []string
+	for _, it := range log.Items {
+		if it.User != nil {
+			texts = append(texts, it.User.Text)
+		}
+	}
+	if got := strings.Join(texts, "|"); got != "work|steer one|steer three" || len(log.Queued) != 0 {
+		t.Fatalf("prompts %q, still queued %+v", got, log.Queued)
+	}
+}

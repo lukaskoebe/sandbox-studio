@@ -3897,6 +3897,16 @@
               "null"
             ]
           },
+          "queued": {
+            "description": "Prompts that go once the running turn ends, in order",
+            "items": {
+              "$ref": "#/components/schemas/QueuedPrompt"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "turns": {
             "items": {
               "$ref": "#/components/schemas/Turn"
@@ -3910,7 +3920,8 @@
         "required": [
           "chat",
           "turns",
-          "items"
+          "items",
+          "queued"
         ],
         "type": "object"
       },
@@ -5044,6 +5055,54 @@
         },
         "required": [
           "message"
+        ],
+        "type": "object"
+      },
+      "QueueOut": {
+        "additionalProperties": false,
+        "properties": {
+          "prompt": {
+            "$ref": "#/components/schemas/QueuedPrompt",
+            "description": "The waiting prompt, when it waits"
+          },
+          "queued": {
+            "description": "The prompt waits for the running turn; otherwise it started a turn",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queued"
+        ],
+        "type": "object"
+      },
+      "QueuedPrompt": {
+        "additionalProperties": false,
+        "properties": {
+          "attachments": {
+            "description": "The names of its files",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "queuedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "queuedAt"
         ],
         "type": "object"
       },
@@ -8771,6 +8830,125 @@
               }
             },
             "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/queue": {
+      "post": {
+        "description": "Sends the prompt like sendPrompt, or, while a turn runs, queues it to go once the turn ends, after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still waiting when Studio stops are not sent.",
+        "operationId": "queuePrompt",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueOut"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/chats/{chat}/queue/{id}": {
+      "delete": {
+        "description": "Takes a waiting prompt off the chat's queue, so it never goes. 404 once it went.",
+        "operationId": "unqueuePrompt",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Chat ID",
+            "in": "path",
+            "name": "chat",
+            "required": true,
+            "schema": {
+              "description": "Chat ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Queued prompt ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Queued prompt ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "default": {
             "content": {

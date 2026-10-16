@@ -309,6 +309,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/chats/{chat}/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sends the prompt like sendPrompt, or, while a turn runs, queues it to go once the turn ends, after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still waiting when Studio stops are not sent. */
+        post: operations["queuePrompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/chats/{chat}/queue/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Takes a waiting prompt off the chat's queue, so it never goes. 404 once it went. */
+        delete: operations["unqueuePrompt"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/chats/{chat}/return": {
         parameters: {
             query?: never;
@@ -3628,6 +3662,8 @@ export interface components {
         Log: {
             chat: components["schemas"]["Chat"];
             items: components["schemas"]["Item"][] | null;
+            /** @description Prompts that go once the running turn ends, in order */
+            queued: components["schemas"]["QueuedPrompt"][] | null;
             turns: components["schemas"]["Turn"][] | null;
         };
         LogEntry: {
@@ -3977,6 +4013,20 @@ export interface components {
             message: string;
             /** @description The form, as a restricted JSON Schema */
             schema?: unknown;
+        };
+        QueueOut: {
+            /** @description The waiting prompt, when it waits */
+            prompt?: components["schemas"]["QueuedPrompt"];
+            /** @description The prompt waits for the running turn; otherwise it started a turn */
+            queued: boolean;
+        };
+        QueuedPrompt: {
+            /** @description The names of its files */
+            attachments?: string[] | null;
+            id: string;
+            /** Format: date-time */
+            queuedAt: string;
+            text: string;
         };
         RebaseInBody: {
             /** @description A ready template in the same environment */
@@ -5585,6 +5635,78 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Turn"];
                 };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    queuePrompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromptRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOut"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    unqueuePrompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Chat ID */
+                chat: string;
+                /** @description Queued prompt ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {

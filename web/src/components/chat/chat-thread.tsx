@@ -5,6 +5,7 @@ import { ChatCircleDotsIcon, TerminalWindowIcon } from "@phosphor-icons/react"
 import { ChatItemView, turnUsage } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { PlanCard } from "@/components/chat/plan-card"
+import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { TurnFooter } from "@/components/chat/turn-footer"
 import { Button } from "@/components/ui/button"
 import {
@@ -29,6 +30,7 @@ import {
   type Chat,
   type ChatItem,
   type ChatTurn,
+  type QueuedPrompt,
   type useChat,
 } from "@/lib/chats"
 import { cn } from "@/lib/utils"
@@ -68,6 +70,7 @@ export function ChatThread({
       chat={chat}
       items={log.items}
       turns={log.turns}
+      queued={log.queued}
       teammateName={teammateName}
       label={(t) => requestLabel(log.items, t)}
       onShowChanges={onShowChanges}
@@ -80,6 +83,7 @@ function ChatLog({
   chat,
   items,
   turns,
+  queued,
   teammateName,
   label,
   onShowChanges,
@@ -88,6 +92,7 @@ function ChatLog({
   chat: Chat
   items: ChatItem[]
   turns: ChatTurn[]
+  queued: QueuedPrompt[]
   teammateName: string
   label: (t: ChatTurn) => string
   onShowChanges: (turnId: string) => void
@@ -189,15 +194,31 @@ function ChatLog({
           {pinned?.plan && (
             <PlanCard entries={pinned.plan.entries ?? []} live />
           )}
-          <ChatComposer env={env} chat={chat} />
+          <ChatComposer
+            env={env}
+            chat={chat}
+            queued={queued}
+            teammateName={teammateName}
+          />
         </div>
       </div>
     </MessageScrollerProvider>
   )
 }
 
-function ChatComposer({ env, chat }: { env: string; chat: Chat }) {
+function ChatComposer({
+  env,
+  chat,
+  queued,
+  teammateName,
+}: {
+  env: string
+  chat: Chat
+  queued: QueuedPrompt[]
+  teammateName: string
+}) {
   const [error, setError] = useState<string>()
+  const [insert, setInsert] = useState<{ id: string; text: string }>()
   const path = { env, chat: chat.id }
 
   if (chat.state === "terminal") return <InTerminal env={env} chat={chat} />
@@ -222,10 +243,11 @@ function ChatComposer({ env, chat }: { env: string; chat: Chat }) {
     )
   }
 
+  // While a turn runs, a message waits for it to end, after the ones already waiting.
   const send = async (prompt: Prompt) => {
     setError(undefined)
     const res = await fetchClient.POST(
-      "/api/environments/{env}/chats/{chat}/prompt",
+      "/api/environments/{env}/chats/{chat}/queue",
       { params: { path }, body: prompt }
     )
     if (res.error) {
@@ -244,18 +266,28 @@ function ChatComposer({ env, chat }: { env: string; chat: Chat }) {
       })
 
   return (
-    <Composer
-      onSend={send}
-      onStop={stop}
-      running={chat.state === "running"}
-      error={error}
-      autoFocus
-      placeholder={
-        chat.state === "running"
-          ? "Write your next message; send it once this one is done"
-          : "Reply…"
-      }
-    />
+    <>
+      <QueuedPrompts
+        env={env}
+        chatId={chat.id}
+        queued={queued}
+        teammateName={teammateName}
+        onEdit={(q) => setInsert({ id: q.id, text: q.text })}
+      />
+      <Composer
+        onSend={send}
+        onStop={stop}
+        running={chat.state === "running"}
+        error={error}
+        autoFocus
+        insert={insert}
+        placeholder={
+          chat.state === "running"
+            ? `Steer ${teammateName}: this goes once the current turn ends`
+            : "Reply…"
+        }
+      />
+    </>
   )
 }
 

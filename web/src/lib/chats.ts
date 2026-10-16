@@ -7,6 +7,7 @@ export type ChatItem = components["schemas"]["Item"]
 export type ChatTurn = components["schemas"]["Turn"]
 export type ToolBody = components["schemas"]["ToolBody"]
 export type PermissionOption = components["schemas"]["PermissionOption"]
+export type QueuedPrompt = components["schemas"]["QueuedPrompt"]
 
 /** At most this many bytes of attachments per prompt, as the server enforces. */
 export const maxAttachmentBytes = 10 << 20
@@ -34,18 +35,27 @@ type State = {
   chat?: Chat
   turns: Map<string, ChatTurn>
   items: Map<string, ChatItem>
+  /** Prompts that go once the running turn ends, in order. */
+  queued: QueuedPrompt[]
   /** The last rev seen, where a reconnect resumes. */
   rev: number
 }
 
 type Action =
   | { type: "reset" }
-  | { type: "loaded"; chat: Chat; turns: ChatTurn[]; items: ChatItem[] }
+  | {
+      type: "loaded"
+      chat: Chat
+      turns: ChatTurn[]
+      items: ChatItem[]
+      queued: QueuedPrompt[]
+    }
   | { type: "failed"; error: string; gone: boolean }
   | { type: "live"; live: boolean }
   | { type: "chat"; chat: Chat; rev: number }
   | { type: "turn"; turn: ChatTurn; rev: number }
   | { type: "item"; item: ChatItem; rev: number }
+  | { type: "queue"; queued: QueuedPrompt[] }
 
 const initial: State = {
   status: "loading",
@@ -53,6 +63,7 @@ const initial: State = {
   live: false,
   turns: new Map(),
   items: new Map(),
+  queued: [],
   rev: 0,
 }
 
@@ -80,6 +91,7 @@ function reduce(s: State, a: Action): State {
         chat: a.chat,
         turns: new Map(a.turns.map((t) => [t.id, t])),
         items: new Map(a.items.map((i) => [i.id, i])),
+        queued: a.queued,
         rev: a.chat.rev,
       }
     case "failed":
@@ -103,6 +115,8 @@ function reduce(s: State, a: Action): State {
         items: upsert(s.items, a.item),
         rev: Math.max(s.rev, a.rev),
       }
+    case "queue":
+      return { ...s, queued: a.queued }
   }
 }
 
@@ -144,6 +158,13 @@ export function useChat(env: string, chatId: string | undefined) {
       on("chat")
       on("turn")
       on("item")
+      // The queue is whole each time, and not part of the log, so it moves no rev.
+      source.addEventListener("queue", (e: MessageEvent<string>) =>
+        dispatch({
+          type: "queue",
+          queued: (JSON.parse(e.data) as QueuedPrompt[] | null) ?? [],
+        })
+      )
       // EventSource would retry with the URL's original ?after=, so reconnect by hand
       // from the last rev; a deleted chat answers 404, which load reports.
       source.onerror = () => {
@@ -176,6 +197,7 @@ export function useChat(env: string, chatId: string | undefined) {
           chat: data.chat,
           turns: data.turns ?? [],
           items: data.items ?? [],
+          queued: data.queued ?? [],
         })
       }
       connect()

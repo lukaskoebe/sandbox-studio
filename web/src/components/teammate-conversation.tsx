@@ -33,6 +33,7 @@ import { ChatItemView } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { Markdown } from "@/components/chat/markdown"
 import { PlanCard } from "@/components/chat/plan-card"
+import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { toolKind } from "@/components/chat/tool-call-card"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
@@ -71,7 +72,13 @@ import {
 import type { components } from "@/lib/api/schema.gen"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { approvalCards } from "@/lib/approval-groups"
-import { chatTitle, useChat, type Chat, type ChatItem } from "@/lib/chats"
+import {
+  chatTitle,
+  useChat,
+  type Chat,
+  type ChatItem,
+  type QueuedPrompt,
+} from "@/lib/chats"
 import { heartbeatSentence } from "@/lib/tasks"
 import { harnessLabels, kindLabels } from "@/lib/teammates"
 import { cn } from "@/lib/utils"
@@ -204,6 +211,7 @@ export function TeammateConversation({
           sandboxes={owned}
           chats={mine}
           events={timeline.data ?? []}
+          queued={running && live.chat?.id === running.id ? live.queued : []}
         />
       </div>
       {watching ? (
@@ -790,15 +798,19 @@ function TeammateComposer({
   sandboxes,
   chats,
   events,
+  queued,
 }: {
   env: string
   teammate: Teammate
   sandboxes: Sandbox[]
   chats: Chat[]
   events: Event[]
+  /** The messages waiting for the running chat's turn to end. */
+  queued: QueuedPrompt[]
 }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>("message")
+  const [insert, setInsert] = useState<{ id: string; text: string }>()
   const [fresh, setFresh] = useState(false)
   const [problem, setProblem] = useState<string>()
   const lastSandbox = [...events].reverse().find((e) => e.turn)?.sandboxId
@@ -868,8 +880,9 @@ function TeammateComposer({
           text: `I added a task to your list: "${title}".${details ? `\n\n${details}` : ""}\n\nPlease work on it now: mark it in progress, and done when you finish.`,
         })
       } else if (continuing) {
+        // While a turn runs, the message waits for it to end.
         const { error } = await fetchClient.POST(
-          "/api/environments/{env}/chats/{chat}/prompt",
+          "/api/environments/{env}/chats/{chat}/queue",
           { params: { path: { env, chat: continuing.id } }, body: p }
         )
         if (error) throw error
@@ -897,9 +910,12 @@ function TeammateComposer({
   }
 
   const placeholder = {
-    message: continuing
-      ? `Message ${teammate.name}…`
-      : `Message ${teammate.name}; this starts a new chat…`,
+    message:
+      continuing?.state === "running"
+        ? `Steer ${teammate.name}: this goes once the current turn ends`
+        : continuing
+          ? `Message ${teammate.name}…`
+          : `Message ${teammate.name}; this starts a new chat…`,
     task: `Hand ${teammate.name} a task: the first line is its title. It starts on it right away.`,
     teach: `Tell ${teammate.name} something to remember for good…`,
   }[mode]
@@ -920,10 +936,20 @@ function TeammateComposer({
     ) : undefined
 
   return (
-    <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-4">
+    <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-4 pb-4">
+      {continuing?.state === "running" && (
+        <QueuedPrompts
+          env={env}
+          chatId={continuing.id}
+          queued={queued}
+          teammateName={teammate.name}
+          onEdit={(q) => setInsert({ id: q.id, text: q.text })}
+        />
+      )}
       <Composer
         onSend={send}
         onStop={stop}
+        insert={insert}
         running={continuing?.state === "running"}
         error={problem}
         placeholder={placeholder}

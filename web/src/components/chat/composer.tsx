@@ -38,7 +38,8 @@ const maxFiles = 20
 /**
  * Where the person writes to the agent: Enter sends, Shift+Enter starts a new line.
  * Files come from the paperclip or a paste; together they stay under the 10 MiB the server
- * takes. While the agent works the send button becomes Stop.
+ * takes. While the agent works, Stop joins the send button, and what is sent waits for the
+ * turn to end: onSend queues it.
  */
 export function Composer({
   onSend,
@@ -51,6 +52,7 @@ export function Composer({
   toolbar,
   hint,
   attachments: canAttach = true,
+  insert,
   className,
 }: {
   /** Sends the prompt; resolves true when it went through, so the draft clears. */
@@ -68,9 +70,16 @@ export function Composer({
   hint?: ReactNode
   /** Whether files can be attached; without, the paperclip is gone and pasted files ignored. */
   attachments?: boolean
+  /** Text to put in the draft, such as a queued message taken back to edit; once per id. */
+  insert?: { id: string; text: string }
   className?: string
 }) {
   const [text, setText] = useState("")
+  const [inserted, setInserted] = useState<string>()
+  if (insert && insert.id !== inserted) {
+    setInserted(insert.id)
+    setText((t) => (t.trim() ? `${t}\n\n${insert.text}` : insert.text))
+  }
   const [files, setFiles] = useState<File[]>([])
   const [problem, setProblem] = useState<string>()
   const [sending, setSending] = useState(false)
@@ -97,7 +106,7 @@ export function Composer({
   }
 
   const send = async () => {
-    if (sending || running || disabled) return
+    if (sending || disabled) return
     if (!text.trim() && files.length === 0) return
     setSending(true)
     try {
@@ -234,7 +243,7 @@ export function Composer({
               {formatBytes(size)} of {formatBytes(maxAttachmentBytes)}
             </span>
           )}
-          {running ? (
+          {running && (
             <Button
               size="sm"
               variant="outline"
@@ -245,18 +254,21 @@ export function Composer({
               {stopping ? <Spinner /> : <StopIcon weight="fill" />}
               Stop
             </Button>
-          ) : (
-            <Button
-              size="icon-sm"
-              className="ml-auto"
-              aria-label="Send"
-              title="Send (Enter)"
-              disabled={sending || (!text.trim() && files.length === 0)}
-              onClick={() => void send()}
-            >
-              {sending ? <Spinner /> : <ArrowUpIcon />}
-            </Button>
           )}
+          <Button
+            size="icon-sm"
+            className={cn(!running && "ml-auto")}
+            aria-label={running ? "Queue" : "Send"}
+            title={
+              running
+                ? "Queue (Enter): it goes once this turn ends"
+                : "Send (Enter)"
+            }
+            disabled={sending || (!text.trim() && files.length === 0)}
+            onClick={() => void send()}
+          >
+            {sending ? <Spinner /> : <ArrowUpIcon />}
+          </Button>
         </div>
       </div>
       {shown && (

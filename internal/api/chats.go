@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -149,6 +150,56 @@ func (s *Server) registerChats(api huma.API) {
 		}
 		t, err := chats.Send(context.WithoutCancel(ctx), in.Env, in.Chat, launch, in.Body.prompt())
 		return &struct{ Body chat.Turn }{chat.TurnView(t)}, apiError(err)
+	})
+
+	type queueOut struct {
+		Queued bool               `json:"queued" doc:"The prompt waits for the running turn; otherwise it started a turn"`
+		Prompt *chat.QueuedPrompt `json:"prompt,omitempty" doc:"The waiting prompt, when it waits"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "queuePrompt", Method: http.MethodPost, Path: "/api/environments/{env}/chats/{chat}/queue", Tags: []string{"chats"},
+		DefaultStatus: http.StatusAccepted, MaxBodyBytes: maxPromptBytes,
+		Description: "Sends the prompt like sendPrompt, or, while a turn runs, queues it to go once the turn ends, " +
+			"after the prompts already waiting. The chat's stream shows the queue. It lives in memory: prompts still " +
+			"waiting when Studio stops are not sent.",
+	}, func(ctx context.Context, in *promptIn) (*struct{ Body queueOut }, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		launch, err := s.chatLaunchFor(ctx, in.Env, in.Chat)
+		if err != nil {
+			return nil, err
+		}
+		q, queued, err := chats.Enqueue(context.WithoutCancel(ctx), in.Env, in.Chat, launch, in.Body.prompt(), nil)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		out := queueOut{Queued: queued}
+		if queued {
+			out.Prompt = &q
+		}
+		return &struct{ Body queueOut }{out}, nil
+	})
+
+	type queuedPath struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		Chat string `path:"chat" doc:"Chat ID"`
+		ID   string `path:"id" doc:"Queued prompt ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "unqueuePrompt", Method: http.MethodDelete, Path: "/api/environments/{env}/chats/{chat}/queue/{id}", Tags: []string{"chats"},
+		DefaultStatus: http.StatusNoContent,
+		Description:   "Takes a waiting prompt off the chat's queue, so it never goes. 404 once it went.",
+	}, func(ctx context.Context, in *queuedPath) (*struct{}, error) {
+		chats, err := s.chats()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := s.Store.Chat(ctx, in.Env, in.Chat); err != nil {
+			return nil, apiError(err)
+		}
+		return nil, apiError(chats.Unqueue(in.Env, in.Chat, in.ID))
 	})
 
 	huma.Register(api, huma.Operation{
@@ -380,7 +431,8 @@ type ChatTerminal struct {
 // streamChat sends a chat's changes as server-sent events: every turn and item changed
 // after the rev in ?after= or Last-Event-ID, then live changes. Events are `chat`
 // (store.Chat, first and whenever its state, title or session changes), `turn`
-// (chat.Turn) and `item` (chat.Item); each carries its rev as the event ID, so a
+// (chat.Turn), `item` (chat.Item) and `queue` ([]chat.QueuedPrompt, first and whenever the
+// prompts waiting for the running turn change); each carries a rev as the event ID, so a
 // reconnect resumes where it left off. The stream ends when the chat is deleted.
 func (s *Server) streamChat(w http.ResponseWriter, r *http.Request) {
 	chats, err := s.chats()
@@ -419,6 +471,7 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request) {
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
 	var sent *store.Chat // a copy: c is overwritten by each read
+	var queue []chat.QueuedPrompt
 	for {
 		// Turns and items in rev order, so the last ID sent is a safe place to resume;
 		// the chat comes last, since its rev covers everything read with it.
@@ -437,6 +490,10 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request) {
 			sent = &last
 		}
 		after = max(after, c.Rev)
+		if q := chats.Queued(chatID); queue == nil || !slices.EqualFunc(q, queue, func(a, b chat.QueuedPrompt) bool { return a.ID == b.ID }) {
+			writeEvent(w, "queue", after, q)
+			queue = q
+		}
 		if rc.Flush() != nil {
 			return
 		}
