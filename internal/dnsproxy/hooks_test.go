@@ -131,7 +131,7 @@ func TestVirtualAddressesArePerNameAndAddress(t *testing.T) {
 		{"ssh.company.local", "10.0.0.6"},
 	} {
 		a := v.addr(c.name, netip.MustParseAddr(c.ip))
-		if seen[a] || a == VirtualAddr || !netip.MustParsePrefix("198.18.0.0/15").Contains(a) || strings.HasSuffix(a.String(), ".0") {
+		if seen[a] || a == VirtualAddr || a == HostAddr || !netip.MustParsePrefix("198.18.0.0/15").Contains(a) || strings.HasSuffix(a.String(), ".0") {
 			t.Fatalf("%s for %s %s: not a fresh virtual address", a, c.name, c.ip)
 		}
 		seen[a] = true

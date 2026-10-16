@@ -208,7 +208,13 @@ function RuleForm({
   const headerError = action === "proxy" ? problems.find(Boolean) : undefined
   const caddyfileError = action === "caddy" && !caddyfile.trim()
 
-  const onSaved = () => {
+  const onSaved = (saved: Rule) => {
+    // The rule is saved either way; it just never applies (an address of this computer, say).
+    if (saved.unreachable)
+      toast.warning("No sandbox can reach this rule", {
+        description: saved.unreachable,
+        duration: 12_000,
+      })
     queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
     queryClient.invalidateQueries({
       queryKey: ["get", "/api/environments/{env}/approvals"],

@@ -61,18 +61,19 @@ func TestLevelDecisionTable(t *testing.T) {
 
 func TestPublicHost(t *testing.T) {
 	for host, want := range map[string]bool{
-		"registry.npmjs.org": true, // names are checked by the dialer
-		"localhost":          true,
-		"1.1.1.1":            true,
-		"2606:4700::1111":    true,
-		"10.0.0.5":           false, // private
-		"192.168.1.1":        false,
-		"127.0.0.1":          false,
-		"169.254.169.254":    false, // link-local, the cloud metadata address
-		"100.64.1.1":         false, // carrier-grade NAT, also Tailscale
-		"198.18.0.1":         false, // Studio's virtual services
-		"::1":                false,
-		"fd00::1":            false,
+		"registry.npmjs.org":   true, // names are checked by the dialer
+		"localhost":            true,
+		"1.1.1.1":              true,
+		"2606:4700::1111":      true,
+		"10.0.0.5":             false, // private
+		"192.168.1.1":          false,
+		"127.0.0.1":            false,
+		"169.254.169.254":      false, // link-local, the cloud metadata address
+		"100.64.1.1":           false, // carrier-grade NAT, also Tailscale
+		"198.18.0.1":           false, // Studio's virtual services
+		"host.studio.internal": false, // this computer: only a rule or an approval reaches it
+		"::1":                  false,
+		"fd00::1":              false,
 	} {
 		if got := publicHost(host); got != want {
 			t.Errorf("publicHost(%s) = %v, want %v", host, got, want)

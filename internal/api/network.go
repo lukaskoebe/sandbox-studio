@@ -529,6 +529,9 @@ func (s *Server) registerNetwork(api huma.API) {
 			return nil, err
 		}
 		list, err := s.Store.Rules(ctx, in.Env)
+		for i := range list {
+			list[i] = s.withReach(ctx, list[i])
+		}
 		return &struct{ Body []store.Rule }{list}, apiError(err)
 	})
 
@@ -561,7 +564,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		if err := s.Policy.Settle(ctx, in.Env); err != nil {
 			return nil, apiError(err)
 		}
-		return &struct{ Body store.Rule }{r}, nil
+		return &struct{ Body store.Rule }{s.withReach(ctx, r)}, nil
 	})
 
 	type updateRuleIn struct {
@@ -587,7 +590,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		if err := s.Policy.Settle(ctx, in.Env); err != nil {
 			return nil, apiError(err)
 		}
-		return &struct{ Body store.Rule }{r}, nil
+		return &struct{ Body store.Rule }{s.withReach(ctx, r)}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -727,6 +730,14 @@ type reviewerView struct {
 	Available bool   `json:"available" doc:"Whether the assisted level asks the AI reviewer; without a utility model it asks the user, as guarded does"`
 	Provider  string `json:"provider,omitempty" doc:"The provider whose utility model answers"`
 	Model     string `json:"model,omitempty" doc:"The utility model that answers"`
+}
+
+// withReach fills in r.Unreachable.
+func (s *Server) withReach(ctx context.Context, r store.Rule) store.Rule {
+	if s.Reach != nil {
+		r.Unreachable = s.Reach.Unreachable(ctx, r)
+	}
+	return r
 }
 
 func (s *Server) reviewer(ctx context.Context, env string) (reviewerView, error) {

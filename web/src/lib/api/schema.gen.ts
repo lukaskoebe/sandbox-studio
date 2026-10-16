@@ -567,6 +567,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/host-ports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The ports of this computer that the environment's sandboxes may connect to, as host.studio.internal. */
+        get: operations["listHostPorts"];
+        /** @description Replaces the ports of this computer open to sandboxes. Only the owner changes them, in Network settings. Connections still need a rule or an approval, and Studio's own ports stay closed. */
+        put: operations["setHostPorts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/lineage": {
         parameters: {
             query?: never;
@@ -981,9 +999,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The names whose connections may reach private addresses, such as company hosts behind a VPN. */
+        /** @description The local network list: names whose connections may reach private addresses, such as company hosts behind a VPN, and private addresses sandboxes may reach, such as a NAS. */
         get: operations["listPrivateHosts"];
-        /** @description Replaces the private hosts list. Only the owner changes it, in Network settings. */
+        /** @description Replaces the local network list. Only the owner changes it, in Network settings. */
         put: operations["setPrivateHosts"];
         post?: never;
         delete?: never;
@@ -3763,13 +3781,13 @@ export interface components {
             url: string;
         };
         PrivateHost: {
-            /** @description A host name or a wildcard, as in rules: git.company.local or *.company.local */
+            /** @description A host name or a wildcard, as in rules (git.company.local or *.company.local), a private IPv4 address (192.168.178.20) or a range of them (192.168.178.0/24) */
             host: string;
             /** @description Ports the host may be reached on. Empty means 80 and 443 */
             ports: number[] | null;
         };
         PrivateHostInput: {
-            /** @description A host name or a wildcard, such as git.company.local or *.company.local */
+            /** @description A host name or a wildcard, such as git.company.local or *.company.local, a private IPv4 address such as 192.168.178.20, or a range such as 192.168.178.0/24 */
             host: string;
             /** @description Ports the host may be reached on. Empty or omitted means 80 and 443 */
             ports?: number[] | null;
@@ -4119,6 +4137,8 @@ export interface components {
             sandboxId?: string;
             /** @description Set for rules that apply to every sandbox of one teammate */
             teammateId?: string;
+            /** @description Read-only: why no sandbox can make the connections the rule allows, such as an address of this computer; empty when it can or Studio can't tell */
+            unreachable?: string;
         };
         RuleConfig: {
             ca?: string;
@@ -4266,6 +4286,10 @@ export interface components {
         SetCuratedInBody: {
             /** @description The IDs of the curated entries this environment turns off. The whole list, which replaces the current one */
             disabled: string[] | null;
+        };
+        SetHostPortsInBody: {
+            /** @description The whole list, which replaces the current one. Each from 1 to 65535 */
+            ports: number[] | null;
         };
         SetLevelInBody: {
             /**
@@ -6152,6 +6176,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Forge"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listHostPorts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setHostPorts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetHostPortsInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[] | null;
                 };
             };
             /** @description Error */

@@ -352,17 +352,20 @@ func (s *Server) resolve(network string, q query) []byte {
 }
 
 // virtualRange is where virtual addresses come from: 198.18.0.0/15, which is never public. The
-// first two are Studio's own services (VirtualAddr) and are never handed out.
+// first virtualReserved are Studio's own (VirtualAddr, HostAddr) and are never handed out.
 var virtualRange = netip.MustParseAddr("198.18.0.0").As4()
 
-const virtualCount = 1 << 17
+const (
+	virtualCount    = 1 << 17
+	virtualReserved = 4
+)
 
 // virtualAddrs hands out one virtual address per name and address it answers for, so that a
 // connection to the address names the host to the gateway. It is safe for concurrent use.
 type virtualAddrs struct {
-	mu   sync.Mutex
-	by   map[string]netip.Addr
-	next uint32
+	mu sync.Mutex
+	by map[string]netip.Addr
+	n  uint32 // addresses handed out
 }
 
 func (v *virtualAddrs) addr(name string, real netip.Addr) netip.Addr {
@@ -376,8 +379,8 @@ func (v *virtualAddrs) addr(name string, real netip.Addr) netip.Addr {
 		v.by = map[string]netip.Addr{}
 	}
 	// Wraps around after virtualCount addresses, which only a long-lived sandbox reaches.
-	v.next = 2 + v.next%(virtualCount-2)
-	n := binary.BigEndian.Uint32(virtualRange[:]) + v.next
+	n := binary.BigEndian.Uint32(virtualRange[:]) + virtualReserved + v.n%(virtualCount-virtualReserved)
+	v.n++
 	a := netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)})
 	v.by[key] = a
 	return a
@@ -547,14 +550,47 @@ const VirtualDomain = "studio.internal"
 // VirtualAddr is in 198.18.0.0/15 (benchmarking), which is never routed publicly.
 var VirtualAddr = netip.AddrFrom4([4]byte{198, 18, 0, 1})
 
+// HostName is the computer Studio runs on, as sandboxes reach it: only on the ports the
+// environment opened to them (Settings → Network), which the gateway dials on loopback. It has an
+// address of its own, so that a connection that names no server (SSH) still names the host.
+const HostName = "host." + VirtualDomain
+
+// HostAddr is HostName's address.
+var HostAddr = netip.AddrFrom4([4]byte{198, 18, 0, 2})
+
+// LANDomain holds a name for every IPv4 address, such as 192-168-178-20.lan.studio.internal for
+// 192.168.178.20. microsandbox refuses private addresses, so a sandbox reaches an address on the
+// environment's local network list by this name, which the gateway turns back into the address.
+const LANDomain = "lan." + VirtualDomain
+
+// LANName returns the name under LANDomain of an IPv4 address.
+func LANName(ip netip.Addr) string {
+	return strings.ReplaceAll(ip.Unmap().String(), ".", "-") + "." + LANDomain
+}
+
+// LANAddr returns the IPv4 address that a name under LANDomain stands for.
+func LANAddr(name string) (netip.Addr, bool) {
+	name = strings.TrimSuffix(strings.ToLower(name), ".")
+	label, ok := strings.CutSuffix(name, "."+LANDomain)
+	if !ok || strings.Contains(label, ".") {
+		return netip.Addr{}, false
+	}
+	ip, err := netip.ParseAddr(strings.ReplaceAll(label, "-", "."))
+	if err != nil || !ip.Is4() || LANName(ip) != name {
+		return netip.Addr{}, false
+	}
+	return ip, true
+}
+
 // IsVirtual reports whether name is under VirtualDomain.
 func IsVirtual(name string) bool {
 	name = strings.TrimSuffix(strings.ToLower(name), ".")
 	return name == VirtualDomain || strings.HasSuffix(name, "."+VirtualDomain)
 }
 
-// local answers names under VirtualDomain without asking upstream: an A record for
-// VirtualAddr, and no records of other types.
+// local answers names under VirtualDomain without asking upstream: an A record for VirtualAddr,
+// HostAddr for HostName, a virtual address of its own for a name under LANDomain, and no records
+// of other types.
 func (s *Server) local(q query) ([]byte, bool) {
 	name := strings.TrimSuffix(strings.ToLower(q.question.Name.String()), ".")
 	if !IsVirtual(name) {
@@ -572,12 +608,18 @@ func (s *Server) local(q query) ([]byte, bool) {
 		return servfail(q), true
 	}
 	if q.question.Type == dnsmessage.TypeA && q.question.Class == dnsmessage.ClassINET {
+		addr := VirtualAddr
+		if name == HostName {
+			addr = HostAddr
+		} else if ip, ok := LANAddr(name); ok {
+			addr = s.virtual.addr(name, ip)
+		}
 		if b.StartAnswers() != nil || b.AResource(dnsmessage.ResourceHeader{
 			Name: q.question.Name, Class: dnsmessage.ClassINET, TTL: 60,
-		}, dnsmessage.AResource{A: VirtualAddr.As4()}) != nil {
+		}, dnsmessage.AResource{A: addr.As4()}) != nil {
 			return servfail(q), true
 		}
-		s.Names.put(VirtualAddr, name, 60)
+		s.Names.put(addr, name, 60)
 	}
 	msg, err := b.Finish()
 	if err != nil {

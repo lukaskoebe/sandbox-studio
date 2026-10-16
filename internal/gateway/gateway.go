@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
+	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
@@ -54,6 +55,9 @@ type Gateway struct {
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	// PrivateHosts returns the private hosts of an environment (private.go); nil means none.
 	PrivateHosts func(ctx context.Context, envID string) ([]store.PrivateHost, error)
+	// HostPorts returns the ports of this computer an environment opened to its sandboxes
+	// (host.go); nil means none.
+	HostPorts func(ctx context.Context, envID string) ([]int, error)
 	// Own are Studio's own listeners as host:port. No private host is dialed on their ports.
 	Own []string
 	// CA issues the certificates presented to sandboxes on intercepted connections.
@@ -178,13 +182,17 @@ func (g *Gateway) handle(c net.Conn) {
 	if name = policy.Normalize(name); validHost(name) {
 		host, source = name, proto
 	}
+	// A name for a local network address stands for the address: rules and approvals name it.
+	if ip, ok := dnsproxy.LANAddr(host); ok {
+		host = ip.String()
+	}
 	port := int(target.port)
 	entry := g.Conns.add(sb.ID, Conn{Host: host, Port: port, Address: target.String(), Source: source})
 	verdict, ruleID, problem := VerdictFailed, "", ""
 	var sent, received int64
 	defer func() { g.Conns.finish(entry, verdict, ruleID, problem, sent, received) }()
 
-	if isVirtual(host) {
+	if isVirtual(host) && !isHost(host) {
 		verdict, sent, received, problem = g.serveVirtual(c, br, entry, sb, host, proto)
 		return
 	}

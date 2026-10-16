@@ -61,6 +61,11 @@ type Server struct {
 	Chats        *chat.Service // its endpoints answer 503 without it
 	// Login runs the subscription sign-ins; their endpoints answer 503 without it.
 	Login *login.Service
+	// Reach says why no sandbox can make the connections a rule allows (Rule.Unreachable); nil
+	// leaves rules without warnings.
+	Reach interface {
+		Unreachable(context.Context, store.Rule) string
+	}
 }
 
 // BuildService is the optional durable template-build backend. Keeping this

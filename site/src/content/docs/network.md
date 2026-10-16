@@ -67,9 +67,22 @@ reverse_proxy https://api.example.com {
 
 Create the secret first and bind it to `api.example.com`. Studio checks Caddy rules before saving them. Rules support a limited set of request handlers and fixed public upstream hosts; imports, file access, environment lookups, extra listeners, and arbitrary Caddy modules are not available.
 
-## Private hosts (company VPN)
+## This computer
 
-Sandboxes can't reach private addresses, so a company host behind a VPN, such as `git.company.local`, is unreachable by default. To let sandboxes reach one, add it under **Private hosts** on **Settings → Network**, as a host name or a wildcard such as `*.company.local`. Ports default to 80 and 443; list others, such as 22 for SSH. The host still needs a rule, an approval, or a security level's allow like any other host. Approvals, rules, and imported environment files never add private hosts, and loopback, link-local, and the host's own addresses stay unreachable.
+Sandboxes never reach the computer Studio runs on, so `ssh you@192.168.178.63` or `curl localhost:3000` from a sandbox fails: `localhost` is the sandbox itself, and this computer's own addresses are refused. To let sandboxes reach a service here, open its port under **This computer** on **Settings → Network**. Sandboxes then connect to `host.studio.internal` on that port, for example `ssh you@host.studio.internal`, and Studio connects them to the port on this computer's loopback, so a service listening on `127.0.0.1` or `0.0.0.0` answers. Each connection still needs a rule for `host.studio.internal` or an approval; a security level never allows it. Studio's own ports stay closed.
+
+## Local network
+
+Sandboxes reach public addresses only, so a NAS at `192.168.178.20` or a company host behind a VPN, such as `git.company.local`, is unreachable by default. To let sandboxes reach one, add it under **Local network** on **Settings → Network**:
+
+- A **name** or a wildcard such as `*.company.local`. Sandboxes use the name as it is.
+- A **private IPv4 address**, such as `192.168.178.20`, or a **range**, such as `192.168.178.0/24`. Sandboxes can't connect to private addresses directly, so they use the name the list shows, `192-168-178-20.lan.studio.internal`; rules and approvals name the address itself.
+
+Ports default to 80 and 443; list others, such as 22 for SSH. Each connection still needs a rule or an approval, never a security level. Approvals, rules, and imported environment files never add to the list, and loopback, link-local, and this computer's own addresses stay unreachable: use **This computer** for those.
+
+## Rules no sandbox can reach
+
+A rule for an address no sandbox can reach, such as `127.0.0.1`, this computer's own address, or a private address that isn't on the local network list, is saved, but it never applies. The Rules page marks such a rule with the reason and a link to the setting that changes it.
 
 ## Browser and Git approvals are separate
 

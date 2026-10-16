@@ -19,21 +19,25 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// Private hosts. Upstream dials refuse non-public addresses, so a company host that resolves
-// to a private address (git.company.local behind a VPN, say) is unreachable. An environment's
-// private hosts list is the one opt-in to that: a connection to a listed name may also reach
-// the private addresses that name resolves to. Nothing else changes: the policy still has to
-// allow the host, and a name that isn't listed is refused private addresses as before.
+// The local network (the private hosts list, internally). Upstream dials refuse non-public
+// addresses, so a company host that resolves to a private address (git.company.local behind a
+// VPN, say) or a NAS on the LAN is unreachable. An environment's local network list is the one
+// opt-in to that: a connection to a listed name may also reach the private addresses that name
+// resolves to, and a listed private address or range may be reached itself. Nothing else
+// changes: the policy still has to allow the host, and a name that isn't listed is refused
+// private addresses as before.
 //
 // The gateway resolves a listed name itself, when it dials, through the host's resolver (the
 // dialer's Resolver, which is net.DefaultResolver: /etc/resolv.conf and nsswitch.conf, or
 // getaddrinfo with cgo, so a VPN's split DNS applies). The addresses the sandbox saw in its own
 // DNS answers are never dialed: the sandbox's lookups of a listed name get virtual addresses
 // instead (dns.go), which the gateway maps back to the name. Every address the dialer connects
-// to is checked against the name it was dialed for. Loopback, link-local (the cloud metadata
-// address among them), unspecified and multicast addresses, Studio's virtual services
-// (198.18.0.0/15), the host's own private addresses and Studio's own listening ports stay
-// refused for every name.
+// to is checked against the name it was dialed for. A listed address is reached by its name
+// under dnsproxy.LANDomain, since microsandbox refuses private addresses. Loopback, link-local
+// (the cloud metadata address among them), unspecified and multicast addresses, Studio's virtual
+// services (198.18.0.0/15), the host's own private addresses and Studio's own listening ports
+// stay refused for every entry. The host itself is reached as dnsproxy.HostName, on the ports
+// the environment opened (host.go).
 
 // privateRanges are the private addresses a listed name may resolve to: RFC 1918, carrier-grade
 // NAT (100.64.0.0/10, which VPNs such as Tailscale use) and IPv6 unique local addresses.
@@ -48,19 +52,13 @@ var privateRanges = []netip.Prefix{
 // defaultPrivatePorts are the ports of a private host entry that names none.
 var defaultPrivatePorts = []int{80, 443}
 
-// ValidPrivateHost checks an entry of a private hosts list and returns it normalized. The host
-// is a name, or a wildcard over a domain of its own: a public suffix such as *.com must not make
-// every name under it reachable on private addresses.
+// ValidPrivateHost checks an entry of a local network list and returns it normalized. The host
+// is a name, a wildcard over a domain of its own (a public suffix such as *.com must not make
+// every name under it reachable on private addresses), or a private IPv4 address or range.
 func ValidPrivateHost(h store.PrivateHost) (store.PrivateHost, error) {
-	pattern, err := policy.ValidPattern(h.Host)
+	pattern, err := validPrivatePattern(h.Host)
 	if err != nil {
 		return h, err
-	}
-	switch {
-	case pattern == "*":
-		return h, errors.New("a private host is a name, or a wildcard such as *.company.local, not *")
-	case net.ParseIP(pattern) != nil:
-		return h, fmt.Errorf("%s is an IP address; a private host is a name, such as git.company.local", pattern)
 	}
 	if domain, wild := strings.CutPrefix(pattern, "*."); wild {
 		if _, err := publicsuffix.EffectiveTLDPlusOne(domain); err != nil {
@@ -81,29 +79,86 @@ func ValidPrivateHost(h store.PrivateHost) (store.PrivateHost, error) {
 	return store.PrivateHost{Host: pattern, Ports: ports}, nil
 }
 
-// listedName reports whether the private hosts list covers host on some port.
+// validPrivatePattern checks and normalizes the host of a local network entry.
+func validPrivatePattern(host string) (string, error) {
+	host = strings.TrimSpace(host)
+	if prefix, err := netip.ParsePrefix(host); err == nil {
+		prefix = prefix.Masked()
+		if !prefix.Addr().Is4() {
+			return "", fmt.Errorf("%s: only IPv4 ranges can be listed", host)
+		}
+		if !slices.ContainsFunc(privateRanges, func(p netip.Prefix) bool { return p.Overlaps(prefix) && p.Bits() <= prefix.Bits() }) {
+			return "", fmt.Errorf("%s is not a private range: list a part of 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 or 100.64.0.0/10", host)
+		}
+		if prefix.IsSingleIP() {
+			return prefix.Addr().String(), nil
+		}
+		return prefix.String(), nil
+	}
+	pattern, err := policy.ValidPattern(host)
+	if err != nil {
+		return "", err
+	}
+	if pattern == "*" {
+		return "", errors.New("list a name, a wildcard such as *.company.local, or a private address, not *")
+	}
+	if ip, err := netip.ParseAddr(pattern); err == nil {
+		ip = ip.Unmap()
+		switch {
+		case !ip.Is4():
+			return "", fmt.Errorf("%s: only IPv4 addresses can be listed; list the host's name instead", pattern)
+		case !slices.ContainsFunc(privateRanges, func(p netip.Prefix) bool { return p.Contains(ip) }):
+			return "", fmt.Errorf("%s is not a private address: sandboxes reach public addresses without being listed, and never loopback or link-local ones", pattern)
+		}
+		return ip.String(), nil
+	}
+	return pattern, nil
+}
+
+// entryAddrs returns the addresses a local network entry lists, if it lists addresses.
+func entryAddrs(h store.PrivateHost) (netip.Prefix, bool) {
+	if prefix, err := netip.ParsePrefix(h.Host); err == nil {
+		return prefix, true
+	}
+	if ip, err := netip.ParseAddr(h.Host); err == nil {
+		return netip.PrefixFrom(ip, ip.BitLen()), true
+	}
+	return netip.Prefix{}, false
+}
+
+// entryCovers reports whether a local network entry covers host: a name its pattern covers, or an
+// address in its range.
+func entryCovers(h store.PrivateHost, host string) bool {
+	prefix, isAddrs := entryAddrs(h)
+	ip, err := netip.ParseAddr(host)
+	switch {
+	case isAddrs:
+		return err == nil && prefix.Contains(ip.Unmap())
+	case err == nil:
+		return false
+	}
+	return policy.Covers(h.Host, host)
+}
+
+// listedName reports whether the local network list covers the name host on some port.
 func listedName(list []store.PrivateHost, host string) bool {
 	host = policy.Normalize(host)
 	if net.ParseIP(host) != nil {
 		return false
 	}
-	return slices.ContainsFunc(list, func(h store.PrivateHost) bool { return policy.Covers(h.Host, host) })
+	return slices.ContainsFunc(list, func(h store.PrivateHost) bool { return entryCovers(h, host) })
 }
 
-// listed reports whether the private hosts list covers a connection to host:port. Only names
-// can be listed: an IP address is never a private host, so a sandbox can't reach private
-// addresses by naming them.
+// listed reports whether the local network list covers a connection to host:port. An address is
+// covered only by an entry that lists it, never by a name that resolves to it.
 func listed(list []store.PrivateHost, host string, port int) bool {
 	host = policy.Normalize(host)
-	if net.ParseIP(host) != nil {
-		return false
-	}
 	for _, h := range list {
 		ports := h.Ports
 		if len(ports) == 0 {
 			ports = defaultPrivatePorts
 		}
-		if slices.Contains(ports, port) && policy.Covers(h.Host, host) {
+		if slices.Contains(ports, port) && entryCovers(h, host) {
 			return true
 		}
 	}
@@ -199,8 +254,9 @@ func (g *Gateway) upstreamDialer(envID string) func(ctx context.Context, network
 	return g.guardedDialer(envID, nil)
 }
 
-// guardedDialer dials upstream connections of environment envID. A name on the environment's
-// private hosts list may reach its private addresses. Any other name is dialed by fallback, or
+// guardedDialer dials upstream connections of environment envID. dnsproxy.HostName reaches the
+// ports of this computer the environment opened (host.go). A name on the environment's local
+// network list may reach its private addresses, and a listed address may be reached. Any other name is dialed by fallback, or
 // with public addresses only if fallback is nil.
 func (g *Gateway) guardedDialer(envID string, fallback func(ctx context.Context, network, addr string) (net.Conn, error)) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -211,6 +267,9 @@ func (g *Gateway) guardedDialer(envID string, fallback func(ctx context.Context,
 		port, err := strconv.Atoi(portString)
 		if err != nil {
 			return nil, err
+		}
+		if isHost(policy.Normalize(host)) {
+			return g.dialHost(ctx, envID, network, port)
 		}
 		var list []store.PrivateHost
 		if g.PrivateHosts != nil {

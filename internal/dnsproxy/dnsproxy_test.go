@@ -669,3 +669,61 @@ func TestVirtualNamesAreAnsweredLocally(t *testing.T) {
 		t.Fatalf("%d queries went upstream", n)
 	}
 }
+
+// answerA asks srv for name's A record and returns the one address of the answer.
+func answerA(t *testing.T, srv *Server, name string) netip.Addr {
+	t.Helper()
+	var p dnsmessage.Parser
+	if _, err := p.Start(udpExchange(t, srv.Addr(), buildQuery(0x78, name, dnsmessage.TypeA))); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SkipAllQuestions(); err != nil {
+		t.Fatal(err)
+	}
+	answers, err := p.AllAnswers()
+	if err != nil || len(answers) != 1 {
+		t.Fatalf("%s: %d answers, %v", name, len(answers), err)
+	}
+	return netip.AddrFrom4(answers[0].Body.(*dnsmessage.AResource).A)
+}
+
+func TestHostAndLANNamesGetAddressesOfTheirOwn(t *testing.T) {
+	up := startUpstream(t, fakeAnswer)
+	srv := listen(t, up.addr)
+	answerA(t, srv, "git.studio.internal.")
+	if a := answerA(t, srv, "Host.Studio.Internal."); a != HostAddr {
+		t.Fatalf("host.studio.internal = %s", a)
+	}
+	lan := answerA(t, srv, "192-168-178-20.lan.studio.internal.")
+	if lan == VirtualAddr || lan == HostAddr || !netip.MustParsePrefix("198.18.0.0/15").Contains(lan) {
+		t.Fatalf("LAN name = %s", lan)
+	}
+	if again := answerA(t, srv, "192-168-178-20.lan.studio.internal."); again != lan {
+		t.Fatalf("LAN name = %s, then %s", lan, again)
+	}
+	for addr, want := range map[netip.Addr]string{
+		VirtualAddr: "git.studio.internal", HostAddr: "host.studio.internal", lan: "192-168-178-20.lan.studio.internal",
+	} {
+		if name, ok := srv.Names.Lookup(addr); !ok || name != want {
+			t.Fatalf("Lookup(%s) = %q, %v; want %s", addr, name, ok, want)
+		}
+	}
+}
+
+func TestLANNames(t *testing.T) {
+	ip := netip.MustParseAddr("192.168.178.20")
+	if name := LANName(ip); name != "192-168-178-20.lan.studio.internal" {
+		t.Fatalf("LANName = %s", name)
+	}
+	if got, ok := LANAddr("192-168-178-20.LAN.studio.internal."); !ok || got != ip {
+		t.Fatalf("LANAddr = %s, %v", got, ok)
+	}
+	for _, name := range []string{
+		"lan.studio.internal", "x.lan.studio.internal", "192-168-178.lan.studio.internal",
+		"192-168-178-020.lan.studio.internal", "a.192-168-178-20.lan.studio.internal", "192-168-178-20.studio.internal",
+	} {
+		if got, ok := LANAddr(name); ok {
+			t.Fatalf("LANAddr(%s) = %s", name, got)
+		}
+	}
+}

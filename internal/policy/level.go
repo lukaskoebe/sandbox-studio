@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"slices"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/dnsproxy"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -62,8 +63,12 @@ func (in levelInput) decide() verdict {
 }
 
 // publicHost reports whether host is a name, which the dialer checks when it connects, or a public
-// address. A private address is never allowed by a level: a sandbox can't reach one by naming it.
+// address. A private address, a local network address among them, and this computer
+// (dnsproxy.HostName) are never allowed by a level, only by a rule or an approval.
 func publicHost(host string) bool {
+	if host == dnsproxy.HostName {
+		return false
+	}
 	ip, err := netip.ParseAddr(host)
 	return err != nil || Public(ip)
 }

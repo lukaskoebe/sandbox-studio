@@ -4472,7 +4472,7 @@
         "additionalProperties": false,
         "properties": {
           "host": {
-            "description": "A host name or a wildcard, as in rules: git.company.local or *.company.local",
+            "description": "A host name or a wildcard, as in rules (git.company.local or *.company.local), a private IPv4 address (192.168.178.20) or a range of them (192.168.178.0/24)",
             "type": "string"
           },
           "ports": {
@@ -4497,7 +4497,7 @@
         "additionalProperties": false,
         "properties": {
           "host": {
-            "description": "A host name or a wildcard, such as git.company.local or *.company.local",
+            "description": "A host name or a wildcard, such as git.company.local or *.company.local, a private IPv4 address such as 192.168.178.20, or a range such as 192.168.178.0/24",
             "maxLength": 253,
             "minLength": 1,
             "type": "string"
@@ -5441,6 +5441,10 @@
           "teammateId": {
             "description": "Set for rules that apply to every sandbox of one teammate",
             "type": "string"
+          },
+          "unreachable": {
+            "description": "Read-only: why no sandbox can make the connections the rule allows, such as an address of this computer; empty when it can or Studio can't tell",
+            "type": "string"
           }
         },
         "required": [
@@ -5883,6 +5887,27 @@
         },
         "required": [
           "disabled"
+        ],
+        "type": "object"
+      },
+      "SetHostPortsInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "ports": {
+            "description": "The whole list, which replaces the current one. Each from 1 to 65535",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ports"
         ],
         "type": "object"
       },
@@ -9665,6 +9690,114 @@
         ]
       }
     },
+    "/api/environments/{env}/host-ports": {
+      "get": {
+        "description": "The ports of this computer that the environment's sandboxes may connect to, as host.studio.internal.",
+        "operationId": "listHostPorts",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      },
+      "put": {
+        "description": "Replaces the ports of this computer open to sandboxes. Only the owner changes them, in Network settings. Connections still need a rule or an approval, and Studio's own ports stay closed.",
+        "operationId": "setHostPorts",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHostPortsInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "network"
+        ]
+      }
+    },
     "/api/environments/{env}/lineage": {
       "get": {
         "description": "The environment's family tree: sandboxes grouped by template, with each fork under its source. Deleted sandboxes stay as tombstones.",
@@ -11324,7 +11457,7 @@
     },
     "/api/environments/{env}/private-hosts": {
       "get": {
-        "description": "The names whose connections may reach private addresses, such as company hosts behind a VPN.",
+        "description": "The local network list: names whose connections may reach private addresses, such as company hosts behind a VPN, and private addresses sandboxes may reach, such as a NAS.",
         "operationId": "listPrivateHosts",
         "parameters": [
           {
@@ -11371,7 +11504,7 @@
         ]
       },
       "put": {
-        "description": "Replaces the private hosts list. Only the owner changes it, in Network settings.",
+        "description": "Replaces the local network list. Only the owner changes it, in Network settings.",
         "operationId": "setPrivateHosts",
         "parameters": [
           {

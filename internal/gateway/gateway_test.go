@@ -378,3 +378,33 @@ func TestDeniedOnce(t *testing.T) {
 		t.Fatalf("connection log: %+v", log)
 	}
 }
+
+func TestLANAndHostNamesAreDecidedAndDialed(t *testing.T) {
+	h := newHarness(t, "SSH-2.0-test\r\n")
+	h.policy.rules["192.168.178.20"] = store.Rule{ID: "r5", Action: store.ActionAllow}
+	h.policy.rules["host.studio.internal"] = store.Rule{ID: "r6", Action: store.ActionAllow}
+	buf := make([]byte, 4)
+	for _, tc := range []struct{ target, want string }{
+		// A local network address is named by its address, so rules and approvals name it.
+		{"192-168-178-20.lan.studio.internal:22", "192.168.178.20:22"},
+		// This computer goes through the rules like any host, not to Studio's own services.
+		{"host.studio.internal:22", "host.studio.internal:22"},
+	} {
+		target, want := tc.target, tc.want
+		c, err := h.dial(t, Password([]byte("key"), "sb1"), target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.ReadFull(c, buf); err != nil {
+			t.Fatalf("%s: %v", target, err)
+		}
+		c.Close()
+		if got := h.lastDial(); got != want {
+			t.Fatalf("%s: dialed %q, want %q", target, got, want)
+		}
+	}
+	log := h.gw.Conns.List("sb1")
+	if len(log) != 2 || log[1].Host != "192.168.178.20" || log[0].Host != "host.studio.internal" { // newest first
+		t.Fatalf("connection log: %+v", log)
+	}
+}

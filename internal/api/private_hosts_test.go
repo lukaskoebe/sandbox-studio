@@ -31,7 +31,8 @@ func TestPrivateHostsCRUD(t *testing.T) {
 	for _, body := range []string{
 		`{"hosts":[{"host":"*.com"}]}`,
 		`{"hosts":[{"host":"*"}]}`,
-		`{"hosts":[{"host":"10.0.0.5"}]}`,
+		`{"hosts":[{"host":"8.8.8.8"}]}`,
+		`{"hosts":[{"host":"127.0.0.1"}]}`,
 		`{"hosts":[{"host":"a.corp.local"},{"host":"A.corp.local."}]}`,
 		`{"hosts":[{"host":"a.corp.local","ports":[70000]}]}`,
 	} {
@@ -45,6 +46,58 @@ func TestPrivateHostsCRUD(t *testing.T) {
 
 	if rec := do(h, "GET", testOrigin+"/api/environments/missing/private-hosts", ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("unknown environment: %d", rec.Code)
+	}
+}
+
+func TestHostPortsCRUD(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	url := testOrigin + "/api/environments/" + env.ID + "/host-ports"
+	if ports := decode[[]int](t, do(h, "GET", url, "")); len(ports) != 0 {
+		t.Fatalf("new environment: %v", ports)
+	}
+	if rec := do(h, "PUT", url, `{"ports":[8080,22,8080]}`); rec.Code != http.StatusOK {
+		t.Fatalf("set: %d %s", rec.Code, rec.Body)
+	}
+	if ports := decode[[]int](t, do(h, "GET", url, "")); !reflect.DeepEqual(ports, []int{22, 8080}) {
+		t.Fatalf("list: %v", ports)
+	}
+	for _, body := range []string{`{"ports":[0]}`, `{"ports":[65536]}`} {
+		if rec := do(h, "PUT", url, body); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d, want 422", body, rec.Code)
+		}
+	}
+	if rec := do(h, "PUT", url, `{"ports":[]}`); rec.Code != http.StatusOK {
+		t.Fatalf("clear: %d %s", rec.Code, rec.Body)
+	}
+	if ports := decode[[]int](t, do(h, "GET", url, "")); len(ports) != 0 {
+		t.Fatalf("cleared: %v", ports)
+	}
+}
+
+type fakeReach map[string]string // by host
+
+func (f fakeReach) Unreachable(_ context.Context, r store.Rule) string { return f[r.Host] }
+
+func TestRulesSayWhenNoSandboxReachesThem(t *testing.T) {
+	h, s := newTestServer(t)
+	s.Reach = fakeReach{"192.168.178.63": "an address of this computer"}
+	env := newEnvironment(t, s, "work")
+	url := testOrigin + "/api/environments/" + env.ID + "/rules"
+	rec := do(h, "POST", url, `{"host":"192.168.178.63","ports":[22],"action":"allow"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	if r := decode[store.Rule](t, rec); r.Unreachable != "an address of this computer" {
+		t.Fatalf("created: %+v", r)
+	}
+	if rec := do(h, "POST", url, `{"host":"github.com","action":"allow"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	for _, r := range decode[[]store.Rule](t, do(h, "GET", url, "")) {
+		if want := s.Reach.Unreachable(context.Background(), r); r.Unreachable != want {
+			t.Errorf("%s: %q, want %q", r.Host, r.Unreachable, want)
+		}
 	}
 }
 
@@ -82,9 +135,12 @@ func TestEnvironmentFileLeavesPrivateHostsOut(t *testing.T) {
 	if rec := do(h, "PUT", base+"/private-hosts", `{"hosts":[{"host":"git.company.local"}]}`); rec.Code != http.StatusOK {
 		t.Fatalf("set: %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(h, "PUT", base+"/host-ports", `{"ports":[2222]}`); rec.Code != http.StatusOK {
+		t.Fatalf("set host ports: %d %s", rec.Code, rec.Body)
+	}
 	rec := do(h, "GET", base+"/export", "")
 	exported := rec.Body.String()
-	if rec.Code != http.StatusOK || strings.Contains(exported, "company.local") || strings.Contains(exported, "privateHosts") {
+	if rec.Code != http.StatusOK || strings.Contains(exported, "company.local") || strings.Contains(exported, "privateHosts") || strings.Contains(exported, "2222") {
 		t.Fatalf("export: %d %s", rec.Code, exported)
 	}
 

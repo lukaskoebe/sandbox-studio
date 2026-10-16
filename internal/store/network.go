@@ -98,6 +98,8 @@ type Rule struct {
 	Hits          int        `json:"hits" doc:"Connections the rule decided, as of the last write, which happens about once a minute"`
 	LastHitAt     *time.Time `json:"lastHitAt,omitempty" doc:"When the rule last decided a connection, as of the last write"`
 	CreatedAt     time.Time  `json:"createdAt"`
+	// Unreachable is filled in by the API, never stored.
+	Unreachable string `json:"unreachable,omitempty" doc:"Read-only: why no sandbox can make the connections the rule allows, such as an address of this computer; empty when it can or Studio can't tell"`
 }
 
 // RuleConfig holds the settings of proxy and caddy rules.

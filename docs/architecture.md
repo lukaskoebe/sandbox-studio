@@ -195,7 +195,7 @@ docs/                 developer documentation
 | Agent steals credentials | Secrets live only on the host. Guests see placeholders, substituted only for bound hosts. |
 | Agent bypasses browser policy | The browser runs in its own VM, driven only by the broker. No CDP for agents; password values are redacted; credentials are filled by Studio. |
 | Agent pushes to or acts on external services | Pushes go to a staging repo and wait for review. Browser actions and PRs are approvals. |
-| Guest reaches host or private services | The fence allows public destinations only; the gateway dials public addresses only, except for the names on an environment's private hosts list, which it may dial on their private addresses (see [network](network.md#private-hosts-company-vpn)). Host services are virtual hosts the gateway serves, or the per-sandbox agent channel. |
+| Guest reaches host or private services | The fence allows public destinations only; the gateway dials public addresses only, except for the entries of an environment's local network list, whose private addresses it may dial, and the host ports the environment opened, which it dials on loopback for `host.studio.internal` (see [network](network.md#local-network)). Studio's own ports stay closed. Host services are virtual hosts the gateway serves, or the per-sandbox agent channel. |
 | Local web attacker, DNS rebinding | Loopback listeners, host-bound session cookies, a Host check and a same-origin check on unsafe methods. See [API](api.md). |
 
 ## Testing and CI

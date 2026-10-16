@@ -1,10 +1,11 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  BuildingsIcon,
+  DesktopIcon,
   PlusIcon,
+  ShareNetworkIcon,
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
@@ -43,7 +44,8 @@ function NetworkPage() {
         className="min-h-0 flex-1"
         viewportClassName="space-y-5 p-3 md:p-4"
       >
-        <PrivateHostsSection key={env} env={env} />
+        <HostPortsSection key={`host-${env}`} env={env} />
+        <LocalNetworkSection key={`lan-${env}`} env={env} />
       </ScrollArea>
     </>
   )
@@ -61,7 +63,7 @@ function parsePorts(text: string): number[] | null {
     : null
 }
 
-function PrivateHostsSection({ env }: { env: string }) {
+function LocalNetworkSection({ env }: { env: string }) {
   const queryClient = useQueryClient()
   const list = $api.useQuery("get", "/api/environments/{env}/private-hosts", {
     params: { path: { env } },
@@ -80,6 +82,10 @@ function PrivateHostsSection({ env }: { env: string }) {
         queryClient.invalidateQueries({
           queryKey: ["get", "/api/environments/{env}/private-hosts"],
         })
+        // A rule's warning depends on the list.
+        queryClient.invalidateQueries({
+          queryKey: ["get", "/api/environments/{env}/rules"],
+        })
         setHost("")
         setPorts("")
         setFormError(undefined)
@@ -88,7 +94,7 @@ function PrivateHostsSection({ env }: { env: string }) {
         // A 422 says which host is wrong, so it stays in the form.
         if (errorStatus(err) === 422) setFormError(errorMessage(err))
         else
-          toast.error("Could not save the private hosts", {
+          toast.error("Could not save the local network", {
             description: errorMessage(err),
           })
       },
@@ -112,32 +118,18 @@ function PrivateHostsSection({ env }: { env: string }) {
   return (
     <section className="grid max-w-3xl gap-3">
       <SectionHeader
-        title="Private hosts"
-        icon={BuildingsIcon}
+        title="Local network"
+        icon={ShareNetworkIcon}
         area="network"
         count={hosts.length || undefined}
       />
-      <div
-        role="note"
-        className="flex gap-2 rounded-(--radius) border border-amber-500/40 bg-amber-500/10 p-3 text-xs/relaxed"
-      >
-        <WarningIcon className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-        <p>
-          Private hosts let sandboxes reach company hosts that resolve to
-          private addresses, through this machine's VPN. Once listed, a host's
-          private addresses are reachable from every sandbox of this environment
-          that a rule allows the host for. Only list hosts you trust. Approvals,
-          rules and imported environment files never add hosts here.{" "}
-          <a
-            href="https://lukaskoebe.github.io/sandbox-studio/network/#private-hosts-company-vpn"
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-4"
-          >
-            Learn more
-          </a>
-        </p>
-      </div>
+      <TrustNote anchor="local-network">
+        Sandboxes reach public addresses only. List the devices on your local
+        network or behind this computer's VPN that they may reach too, such as a
+        NAS at 192.168.178.20 or git.company.local. Each connection still needs
+        a rule or an approval. Only list hosts you trust: approvals, rules and
+        imported environment files never add them here.
+      </TrustNote>
 
       {/* One card: the hosts as rows, then the form to add one as its last row. */}
       <div className="divide-y overflow-hidden rounded-(--radius) border bg-card text-xs">
@@ -147,21 +139,22 @@ function PrivateHostsSection({ env }: { env: string }) {
           </div>
         ) : list.isError && !list.data ? (
           <p role="alert" className="px-3 py-2.5 text-destructive">
-            Could not load the private hosts: {errorMessage(list.error)}
+            Could not load the local network: {errorMessage(list.error)}
           </p>
         ) : hosts.length === 0 ? (
           <p className="px-3 py-2.5 text-muted-foreground">
-            No private hosts. Sandboxes reach public addresses only.
+            Nothing listed. Sandboxes reach public addresses only.
           </p>
         ) : (
-          <ul className="divide-y" aria-label="Private hosts">
+          <ul className="divide-y" aria-label="Local network">
             {hosts.map((h) => (
               <li
                 key={h.host}
-                className="flex h-(--wb-row) items-center gap-3 px-3"
+                className="flex min-h-(--wb-row) items-center gap-3 px-3 py-1.5"
               >
-                <span className="min-w-0 flex-1 truncate font-mono">
-                  {h.host}
+                <span className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="truncate font-mono">{h.host}</span>
+                  <LANNameHint host={h.host} />
                 </span>
                 <span className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground">
                   {h.ports?.length
@@ -196,14 +189,21 @@ function PrivateHostsSection({ env }: { env: string }) {
             <Input
               id="private-host"
               autoComplete="off"
-              placeholder="git.company.local or *.company.local"
+              placeholder="192.168.178.20, 192.168.178.0/24 or git.company.local"
               value={host}
               onChange={(e) => {
                 setHost(e.target.value)
                 setFormError(undefined)
               }}
             />
-            {formError && <FieldError>{formError}</FieldError>}
+            {formError ? (
+              <FieldError>{formError}</FieldError>
+            ) : (
+              <FieldDescription>
+                An address, a range, a name or a wildcard such as
+                *.company.local.
+              </FieldDescription>
+            )}
           </Field>
           <Field data-invalid={portList === null || undefined}>
             <FieldLabel htmlFor="private-host-ports">Ports</FieldLabel>
@@ -235,7 +235,177 @@ function PrivateHostsSection({ env }: { env: string }) {
             disabled={!host.trim() || portList === null || save.isPending}
           >
             {save.isPending ? <Spinner /> : <PlusIcon />}
-            Add private host
+            Add
+          </Button>
+        </form>
+      </div>
+    </section>
+  )
+}
+
+/** The warning every opt-in of this page carries, with a link to its docs. */
+function TrustNote({
+  anchor,
+  children,
+}: {
+  anchor: string
+  children: ReactNode
+}) {
+  return (
+    <div
+      role="note"
+      className="flex gap-2 rounded-(--radius) border border-amber-500/40 bg-amber-500/10 p-3 text-xs/relaxed"
+    >
+      <WarningIcon className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+      <p>
+        {children}{" "}
+        <a
+          href={`https://lukaskoebe.github.io/sandbox-studio/network/#${anchor}`}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-4"
+        >
+          Learn more
+        </a>
+      </p>
+    </div>
+  )
+}
+
+const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(\/\d{1,2})?$/
+
+/**
+ * The name sandboxes use for a listed address: microsandbox refuses private addresses, so a
+ * sandbox connects to 192-168-178-20.lan.studio.internal, which the gateway turns back into
+ * 192.168.178.20. A listed name is used as it is, so it gets no hint.
+ */
+function LANNameHint({ host }: { host: string }) {
+  const m = ipv4.exec(host)
+  if (!m) return null
+  const name = m[5]
+    ? `${m[1]}-${m[2]}-${m[3]}-N.lan.studio.internal`
+    : `${host.replaceAll(".", "-")}.lan.studio.internal`
+  return (
+    <span className="text-[0.6875rem] break-all text-muted-foreground">
+      Sandboxes connect to <span className="font-mono">{name}</span>
+    </span>
+  )
+}
+
+/** The ports of this computer open to sandboxes, as host.studio.internal. */
+function HostPortsSection({ env }: { env: string }) {
+  const queryClient = useQueryClient()
+  const list = $api.useQuery("get", "/api/environments/{env}/host-ports", {
+    params: { path: { env } },
+  })
+  const [port, setPort] = useState("")
+  const ports = list.data ?? []
+  const parsed = parsePorts(port)
+  const save = $api.useMutation("put", "/api/environments/{env}/host-ports", {
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["get", "/api/environments/{env}/host-ports"],
+      })
+      // A rule's warning depends on the open ports.
+      queryClient.invalidateQueries({
+        queryKey: ["get", "/api/environments/{env}/rules"],
+      })
+      setPort("")
+    },
+    onError: (err) =>
+      toast.error("Could not save the open ports", {
+        description: errorMessage(err),
+      }),
+  })
+  const write = (next: number[]) =>
+    save.mutate({ params: { path: { env } }, body: { ports: next } })
+  const add = () => {
+    if (!parsed?.length || save.isPending) return
+    write([...ports, ...parsed])
+  }
+
+  return (
+    <section className="grid max-w-3xl gap-3">
+      <SectionHeader
+        title="This computer"
+        icon={DesktopIcon}
+        area="network"
+        count={ports.length || undefined}
+      />
+      <TrustNote anchor="this-computer">
+        Sandboxes never reach the computer Studio runs on. Open a port to let
+        them connect to a service here, such as SSH on 22 or a database, at{" "}
+        <span className="font-mono">host.studio.internal</span>. Each connection
+        still needs a rule or an approval, and Studio's own ports stay closed.
+      </TrustNote>
+
+      <div className="divide-y overflow-hidden rounded-(--radius) border bg-card text-xs">
+        {list.isPending ? (
+          <div className="grid h-(--wb-row) place-items-center">
+            <Spinner />
+          </div>
+        ) : list.isError && !list.data ? (
+          <p role="alert" className="px-3 py-2.5 text-destructive">
+            Could not load the open ports: {errorMessage(list.error)}
+          </p>
+        ) : ports.length === 0 ? (
+          <p className="px-3 py-2.5 text-muted-foreground">
+            No ports open. Sandboxes can't reach this computer.
+          </p>
+        ) : (
+          <ul className="divide-y" aria-label="Open ports">
+            {ports.map((p) => (
+              <li key={p} className="flex h-(--wb-row) items-center gap-3 px-3">
+                <span className="min-w-0 flex-1 truncate font-mono">
+                  host.studio.internal:{p}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  title="Close"
+                  aria-label={`Close port ${p}`}
+                  disabled={save.isPending}
+                  onClick={() => write(ports.filter((x) => x !== p))}
+                >
+                  <TrashIcon />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form
+          className="grid gap-3 bg-muted/30 p-3 sm:grid-cols-[11rem_auto] sm:items-start"
+          onSubmit={(e) => {
+            e.preventDefault()
+            add()
+          }}
+        >
+          <Field data-invalid={parsed === null || undefined}>
+            <FieldLabel htmlFor="host-port">Port</FieldLabel>
+            <Input
+              id="host-port"
+              autoComplete="off"
+              inputMode="numeric"
+              placeholder="22"
+              value={port}
+              aria-invalid={parsed === null}
+              onChange={(e) => setPort(e.target.value)}
+            />
+            {parsed === null && (
+              <FieldError>
+                Port numbers from 1 to 65535, with commas.
+              </FieldError>
+            )}
+          </Field>
+          <Button
+            type="submit"
+            variant="outline"
+            className="sm:mt-[1.375rem] sm:justify-self-start"
+            disabled={!parsed?.length || save.isPending}
+          >
+            {save.isPending ? <Spinner /> : <PlusIcon />}
+            Open port
           </Button>
         </form>
       </div>

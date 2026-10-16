@@ -290,7 +290,7 @@ func run(addr, image string, log *slog.Logger) error {
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
 		Virtual: integs.Routes(), Dial: upstreamDial(),
-		PrivateHosts: st.PrivateHosts, Own: []string{addr, gatewayAddr, templateRegistryAddr},
+		PrivateHosts: st.PrivateHosts, HostPorts: st.HostPorts, Own: []string{addr, gatewayAddr, templateRegistryAddr},
 	}
 	gl, err := net.Listen("tcp", gatewayAddr)
 	if err != nil {
@@ -422,7 +422,7 @@ func run(addr, image string, log *slog.Logger) error {
 
 	mux := http.NewServeMux()
 	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
-		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats, Login: logins}
+		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats, Login: logins, Reach: gw}
 	// Heartbeats give teammates with open tasks their check-ins, until ctx ends (docs/teammates.md).
 	beats := &heartbeat.Service{Store: st, Sandboxes: mgr, Chats: chats, Plan: apiServer.ChatLaunch, Bus: bus, Log: log}
 	go beats.Run(ctx)

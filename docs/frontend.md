@@ -62,7 +62,7 @@ to an environment.
 | `/e/$env/settings/git` | the forges of the environment |
 | `/e/$env/settings/templates` | template builds and templates of the environment |
 | `/e/$env/settings/runtime` | host checks (doctor) |
-| `/e/$env/settings/network` | private hosts: names the environment resolves through the host, such as a company VPN's ([network](network.md)) |
+| `/e/$env/settings/network` | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
 | `/e/$env/git/reviews/$id` | one git push review: the commits and diff, decided there while it waits, its outcome after |
 | `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
 | `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |

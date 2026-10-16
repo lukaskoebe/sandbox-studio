@@ -11,8 +11,9 @@ microsandbox's own policy, fixed at creation (see [sandboxes](sandboxes.md#netwo
 DNS only to the sandbox's resolver, TCP only to public addresses and only through the
 gateway's SOCKS5 port, everything else denied. UDP is blocked, so QUIC falls back to TCP.
 Private and host addresses are unreachable; host services are virtual hosts (below) or the
-[agent channel](guest-agent.md). Company hosts behind a VPN are the exception: the gateway
-dials them, for names on the [private hosts](#private-hosts-company-vpn) list.
+[agent channel](guest-agent.md). The environment's opt-ins are the exceptions, and the gateway
+dials them: the ports of [this computer](#this-computer) it opened, as `host.studio.internal`,
+and the entries of its [local network](#local-network) list.
 
 ## DNS
 
@@ -20,7 +21,9 @@ Each sandbox has its own loopback resolver (UDP and TCP, `dnsproxy`), so names c
 back per sandbox. It forwards to the host's system resolvers and records A/AAAA answers for
 IP→name lookups. Policy is applied at connect time, and the resolver shapes two answers:
 a name that a [deny rule](#dns-level-deny) refuses gets NXDOMAIN, and a name on the
-[private hosts](#private-hosts-company-vpn) list gets virtual addresses.
+[local network](#local-network) list gets virtual addresses. It answers names under
+`studio.internal` itself: `198.18.0.1` for Studio's services, `198.18.0.2` for
+`host.studio.internal`, and a virtual address of its own for each `a-b-c-d.lan.studio.internal`.
 
 ## Gateway pipeline
 
@@ -34,12 +37,16 @@ Per connection (`gateway.go`):
    wait for the server to speak first. A name the client sends is lower-cased and loses one
    trailing dot; then it must be a host name or IP address, with no spaces and no wildcard.
    A sniffed name that fails this is ignored; a SOCKS domain that fails it is refused.
-3. Names under `*.studio.internal` (DNS answer `198.18.0.1`) are virtual hosts served by the
-   gateway itself, e.g. `git.studio.internal` for [git review](git-review.md).
+3. A name under `lan.studio.internal` becomes the address it stands for
+   (`192-168-178-20.lan.studio.internal` is `192.168.178.20`), so the policy and the log see
+   the address. Other names under `*.studio.internal` are virtual hosts served by the gateway
+   itself, e.g. `git.studio.internal` for [git review](git-review.md), except
+   `host.studio.internal`, which goes on like any host.
 4. Ask the policy (below). Without a decision, the connection is held.
 5. Act:
    - `allow`: dial the **name** (not the IP the sandbox picked) and splice the bytes. The dialer
-     takes public addresses only, plus the private addresses of a private host.
+     takes public addresses only, plus the private addresses of a local network entry, and
+     dials `host.studio.internal` on loopback if its port is open.
    - `proxy` and `caddy` rules, any web connection to a host a secret is bound to, and every
      HTTPS connection of a browser VM are intercepted: TLS is terminated with a certificate from
      the environment's CA, then each HTTP request is checked, rewritten and sent on over a new
@@ -50,9 +57,9 @@ Per connection (`gateway.go`):
      to retry; other protocols are closed.
 
 Upstream dials refuse non-public addresses, so neither the gateway nor Caddy upstreams reach
-the host or private networks. The one exception is a name on the environment's
-[private hosts](#private-hosts-company-vpn) list, which may reach its private addresses.
-`DialPublic`, which Studio uses for its own forge connections, never makes that exception.
+the host or private networks. The exceptions are the environment's opt-ins:
+[this computer](#this-computer)'s open ports and the [local network](#local-network) list.
+`DialPublic`, which Studio uses for its own forge connections, never makes them.
 
 ## Rules
 
@@ -77,6 +84,16 @@ A rule counts the connections it decides (`hits`) and when it last did (`lastHit
 policy counts them in memory and writes the counts about once a minute and at shutdown, so
 the figures can lag by a minute. A rule is unused when it has decided nothing in 30 days and
 is at least 30 days old; the Rules tab marks those, and `unused=1` shows only them.
+
+A rule no sandbox can reach is saved, but it never applies, and since the connection is refused
+before the policy is asked, it never gets a hit either. The API fills in `unreachable` with the
+reason (`Gateway.Unreachable`, `gateway/reach.go`) when it lists, creates or updates a rule:
+`localhost` and loopback addresses (the sandbox itself), this computer's own addresses (use
+`host.studio.internal`), `host.studio.internal` on a port that isn't open, a private address or
+port the [local network](#local-network) list doesn't cover, a `lan.studio.internal` name (rules
+name the address), and addresses no entry can list, such as link-local ones. A name is never
+flagged, since it may resolve anywhere, and neither is a deny rule. The Rules tab shows the
+reason under the host, with a link to Network settings, and the rule dialog warns on save.
 
 Matching (`policy/match.go`):
 
@@ -234,10 +251,11 @@ No level does these things:
   bytes pass as before: a placeholder there is only a random name that no host can turn into a
   secret;
 - allow a private or otherwise non-public address, such as loopback, RFC 1918, carrier-grade NAT or
-  link-local. The dialer refuses them anyway, unless a [private host](#private-hosts-company-vpn)
-  names them;
-- allow a [private host](#private-hosts-company-vpn), even at `open`: the AI reviewer never sees
-  one either. Only a rule you make or an approval reaches a company host;
+  link-local. The dialer refuses them anyway, unless the [local network](#local-network) list
+  covers them;
+- allow a name on the [local network](#local-network) list or
+  [this computer](#this-computer), even at `open`: the AI reviewer never sees one either. Only a
+  rule you make or an approval reaches them;
 - lift the tracker list for a browser VM, or an explicit deny rule;
 - send a secret to a host it isn't bound to. Secrets reach bound hosts at every level.
 
@@ -306,31 +324,52 @@ name nothing refuses still resolves, so that it can be approved. Connections are
 when they are made, so a refusal here is only the faster answer. A refused lookup goes in the
 sandbox's connection log, once a minute per name, with the rule that refused it.
 
-## Private hosts (company VPN)
+## This computer
 
-Upstream connections refuse non-public addresses, so a company host that resolves to a
-private address, such as `git.company.local` behind a VPN, is unreachable by default. An
-environment's private hosts list (Settings → Network) is the opt-in for such hosts:
+The fence refuses the host's addresses, and a sandbox's `localhost` is the sandbox. An
+environment's host ports (Settings → Network → This computer; `store.HostPorts`,
+`gateway/host.go`) are the opt-in to a service on the computer Studio runs on:
+
+- A sandbox connects to `host.studio.internal` on an open port. Its resolver answers
+  `198.18.0.2`, an address of its own, so a connection that names no server (SSH) is still
+  named. The gateway asks the policy like for any host, then dials the port on `127.0.0.1`,
+  or on `::1` if nothing answers there, so a service listening on loopback or `0.0.0.0` answers.
+- A port that isn't open is refused with a message that says where to open it. Studio's own
+  ports (its server, the gateway, the template registry) are refused whether listed or not.
+- The policy decides each connection: a rule for `host.studio.internal`, or an approval. A
+  security level never allows it (`publicHost` is false for it), nor the AI reviewer.
+  Approvals, rules, imports and reviewers never open ports; an environment file doesn't carry
+  them.
+
+## Local network
+
+Upstream connections refuse non-public addresses, so a NAS at `192.168.178.20` or a company host
+that resolves to a private address, such as `git.company.local` behind a VPN, is unreachable by
+default. An environment's local network list (Settings → Network; `store.PrivateHost`, "private
+hosts" in the code and the API) is the opt-in for such hosts:
 
 - A connection to a listed name on a listed port may reach the private addresses that name
   resolves to: RFC 1918 (10/8, 172.16/12, 192.168/16), IPv6 unique local (fc00::/7) and
   carrier-grade NAT (100.64/10, which Tailscale uses). Public addresses stay reachable as before.
-- Stays refused for every name: loopback, link-local (including the cloud metadata address
+- A listed private IPv4 address or range (`192.168.178.20`, `192.168.178.0/24`, within those
+  ranges) may be reached on a listed port. The fence refuses private addresses, so a sandbox
+  connects to `192-168-178-20.lan.studio.internal`; its resolver answers a virtual address,
+  and the gateway turns the name back into the address, which rules, approvals and the log
+  name. Only IPv4 is listed by address; an IPv6 host is listed by name.
+- Stays refused for every entry: loopback, link-local (including the cloud metadata address
   169.254.169.254), unspecified and multicast addresses, `198.18.0.0/15` (Studio's virtual
   services), the host's own private addresses (so a dev server on `0.0.0.0` stays out of
-  reach) and Studio's own ports.
+  reach; [this computer](#this-computer) opens such a port) and Studio's own ports.
 - A name not on the list stays refused private addresses, whatever DNS says, so a name that
-  rebinds to a private address is still blocked. An IP address is never a private host: a
-  sandbox can't reach a private address by naming it.
-- The list only lifts the address restriction. The policy still decides, so a private host
-  needs an allow rule, an approval or a security level's allow like any other host. A level never
-  allows a private address, so a listed name is decided like any other name. Approvals, rules,
-  the AI reviewer
-  and imports never add to the list. An environment file doesn't carry it, so an import
-  starts without private hosts.
-- An entry is a host name or a wildcard over a domain of its own: `git.company.local` or
-  `*.company.local`. Not `*`, not an IP address, and not a public suffix such as `*.com`.
-  Ports default to 80 and 443; other ports, such as 22 for SSH, must be listed.
+  rebinds to a private address is still blocked. A name entry never covers an address, and an
+  address entry never covers a name that resolves to it.
+- The list only lifts the address restriction. The policy still decides, so a listed host
+  needs an allow rule or an approval. A level never allows a private address or a listed name,
+  nor does the AI reviewer. Approvals, rules and imports never add to the list. An environment
+  file doesn't carry it, so an import starts without one.
+- A name entry is a host name or a wildcard over a domain of its own: `git.company.local` or
+  `*.company.local`. Not `*`, and not a public suffix such as `*.com`. Ports default to 80 and
+  443; other ports, such as 22 for SSH, must be listed.
 
 **Names.** The sandbox asks its own resolver, which asks the host's resolvers, so the VPN's
 split DNS applies (on Linux, through systemd-resolved's routing domains). Listed names never
@@ -342,7 +381,7 @@ get IPv4 addresses only. When the sandbox connects, the gateway dials the name, 
 address the sandbox holds: it resolves the name itself, with the host's resolver (Go's
 `net.DefaultResolver`, which reads `/etc/resolv.conf` and `nsswitch.conf`, or the system
 resolver through cgo), and checks each address it connects to. That is why the sandbox's
-answers never matter for a private host, and why a `.local` name must resolve through
+answers never matter for a listed name, and why a `.local` name must resolve through
 unicast DNS on the host. mDNS-only names (answered on the LAN by multicast) aren't supported.
 On systemd-resolved, a `.local` name goes to the VPN's DNS only when the VPN link has a routing
 domain for it. Check with `resolvectl query git.company.local`.
@@ -350,12 +389,13 @@ domain for it. Check with `resolvectl query git.company.local`.
 **Other protocols.** The gateway dials the name of any TCP connection that has one (from SOCKS,
 the sandbox's DNS answers, or the TLS server name or HTTP Host), so `ssh` to a listed host works
 on a listed port, such as 22, given a rule that allows the host. A connection by IP
-address alone, for example through a hosts file entry, can't reach a private host, since the
-gateway needs the name. This is untested here: no VPN was available.
+address alone, for example through a hosts file entry, can't reach a listed name, since the
+gateway needs the name; list the address instead. Names through a VPN are untested here: no
+VPN was available.
 
 **Setup.**
 
-1. In Settings → Network, add `*.company.local` (or `git.company.local`). Add a port such as
+1. In Settings → Network → Local network, add `*.company.local` (or `git.company.local`). Add a port such as
    `22` only if a protocol other than web needs it.
 2. On the host, check the name resolves: `resolvectl query git.company.local`.
 3. Allow the host: approve the sandbox's request on the Requests tab, or add an allow rule for
@@ -372,7 +412,7 @@ A `proxy` rule can change where its requests go. The rule editor offers these un
 
 - **Upstream**: a host or host:port to send the requests to, instead of the rule's host. The
   port defaults to the connection's. The upstream goes through the same dial guard: public
-  addresses, or the private addresses of a [private host](#private-hosts-company-vpn). Secrets
+  addresses, or the private addresses of a [local network](#local-network) entry. Secrets
   go only to the upstream they are bound to, so a placeholder of a secret bound only to the
   approved host is refused.
 - **Host header**: the Host header sent upstream. Without it, the sandbox's Host header (the
@@ -409,8 +449,8 @@ A `caddy` rule's config is the body of one site block, compiled by Caddy's Caddy
 and run as a library (no listeners, no admin endpoint, storage in `<data>/caddy`). The
 compiler (`caddyrule/compile.go`) allows a fixed set of matchers, handlers and
 `reverse_proxy` options. It refuses environment and file placeholders, `{$VAR}`, `import`
-and `encode`; upstreams must be fixed addresses, dialed as the gateway dials (private hosts
-included). Secrets
+and `encode`; upstreams must be fixed addresses, dialed as the gateway dials (the local network
+and this computer included). Secrets
 (`{secret.NAME}`) may appear only in `reverse_proxy` request header values, only for
 `https` upstreams the secret is bound to. Caddy never sees them: it gets a marker that
 Studio's transport fills in. The sandbox's own placeholders are not swapped under a Caddy

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -25,6 +26,11 @@ func TestValidPrivateHost(t *testing.T) {
 		{" GIT.Company.Local. ", "git.company.local", []int{}},
 		{"*.company.local", "*.company.local", []int{}},
 		{"*.corp.example.net", "*.corp.example.net", []int{}},
+		{"192.168.178.20", "192.168.178.20", []int{}},
+		{"::ffff:10.0.0.5", "10.0.0.5", []int{}},
+		{"192.168.178.7/24", "192.168.178.0/24", []int{}},
+		{"100.64.0.0/10", "100.64.0.0/10", []int{}},
+		{"10.0.0.5/32", "10.0.0.5", []int{}},
 	}
 	for _, c := range ok {
 		got, err := ValidPrivateHost(store.PrivateHost{Host: c.in})
@@ -42,8 +48,14 @@ func TestValidPrivateHost(t *testing.T) {
 		in   store.PrivateHost
 	}{
 		{"any host", store.PrivateHost{Host: "*"}},
-		{"IPv4 address", store.PrivateHost{Host: "10.0.0.5"}},
+		{"public IPv4 address", store.PrivateHost{Host: "8.8.8.8"}},
+		{"loopback address", store.PrivateHost{Host: "127.0.0.1"}},
+		{"link-local address", store.PrivateHost{Host: "169.254.169.254"}},
+		{"Studio's virtual address", store.PrivateHost{Host: "198.18.0.1"}},
 		{"IPv6 address", store.PrivateHost{Host: "fd00::5"}},
+		{"range wider than a private range", store.PrivateHost{Host: "192.0.0.0/8"}},
+		{"public range", store.PrivateHost{Host: "8.8.8.0/24"}},
+		{"IPv6 range", store.PrivateHost{Host: "fd00::/8"}},
 		{"wildcard over a top-level domain", store.PrivateHost{Host: "*.com"}},
 		{"wildcard over a local top-level domain", store.PrivateHost{Host: "*.local"}},
 		{"wildcard over a public suffix", store.PrivateHost{Host: "*.co.uk"}},
@@ -78,7 +90,13 @@ func TestListedNames(t *testing.T) {
 		{"wildcard covers subdomains", wild, "ssh.corp.local", 22, true},
 		{"wildcard on a port it doesn't list", wild, "ssh.corp.local", 443, false},
 		{"wildcard does not cover other domains", wild, "corp.local.evil.example", 22, false},
-		{"IP address is never listed", []store.PrivateHost{{Host: "10.0.0.5"}}, "10.0.0.5", 443, false},
+		{"listed address", []store.PrivateHost{{Host: "10.0.0.5", Ports: []int{22}}}, "10.0.0.5", 22, true},
+		{"listed address on another port", []store.PrivateHost{{Host: "10.0.0.5", Ports: []int{22}}}, "10.0.0.5", 443, false},
+		{"other address", []store.PrivateHost{{Host: "10.0.0.5"}}, "10.0.0.6", 443, false},
+		{"address in a listed range", []store.PrivateHost{{Host: "192.168.178.0/24"}}, "192.168.178.20", 80, true},
+		{"address outside a listed range", []store.PrivateHost{{Host: "192.168.178.0/24"}}, "192.168.179.20", 80, false},
+		{"a name never lists an address", []store.PrivateHost{{Host: "*.corp.local"}}, "10.0.0.5", 443, false},
+		{"an address never lists a name", []store.PrivateHost{{Host: "10.0.0.0/8"}}, "git.corp.local", 443, false},
 		{"no list", nil, "git.company.local", 443, false},
 	}
 	for _, c := range cases {
@@ -235,7 +253,7 @@ func TestDialGuardResolvesNames(t *testing.T) {
 		{"meta.company.local:443", "not a public or private address"},
 		{"ssh.company.local:443", "non-public address 10.0.0.5"}, // port 443 isn't listed
 		{"studio.company.local:7878", "Studio's own port"},
-		{"10.0.0.5:443", "non-public address 10.0.0.5"}, // a raw private address is never a private host
+		{"10.0.0.5:443", "non-public address 10.0.0.5"}, // a name never lists the address it resolves to
 		{"127.0.0.1:443", "non-public address 127.0.0.1"},
 		{"169.254.169.254:80", "non-public address 169.254.169.254"},
 	}
@@ -262,5 +280,84 @@ func TestCheckPrivateRefusesHostAddresses(t *testing.T) {
 	}
 	if err := check("tcp", "192.168.1.6:443", nil); err != nil {
 		t.Fatalf("another private address: %v", err)
+	}
+}
+
+func TestDialGuardReachesListedAddressesButNotTheHosts(t *testing.T) {
+	saved := interfaceAddrs
+	interfaceAddrs = func() ([]net.Addr, error) {
+		return []net.Addr{&net.IPNet{IP: net.ParseIP("192.168.1.5"), Mask: net.CIDRMask(24, 32)}}, nil
+	}
+	t.Cleanup(func() { interfaceAddrs = saved })
+	g := &Gateway{
+		Addr: "127.0.0.1:7879", Log: slog.New(slog.DiscardHandler), Conns: &ConnLog{},
+		PrivateHosts: func(context.Context, string) ([]store.PrivateHost, error) {
+			return []store.PrivateHost{{Host: "192.168.1.0/24", Ports: []int{22}}}, nil
+		},
+	}
+	for addr, want := range map[string]string{
+		"192.168.1.5:22":  "an address of this computer", // listed, but the host's own
+		"192.168.1.6:443": "non-public address",          // listed on 22 only
+		"192.168.2.6:22":  "non-public address",          // not listed
+	} {
+		conn, err := g.guardedDialer("env", nil)(context.Background(), "tcp", addr)
+		if conn != nil {
+			conn.Close()
+		}
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("dial %s: err = %v, want a refusal containing %q", addr, err, want)
+		}
+	}
+}
+
+func TestDialGuardReachesOpenHostPorts(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = c.Write([]byte("SSH-2.0-test\r\n"))
+			c.Close()
+		}
+	}()
+	port := l.Addr().(*net.TCPAddr).Port
+	g := &Gateway{
+		Addr: "127.0.0.1:7879", Log: slog.New(slog.DiscardHandler), Conns: &ConnLog{},
+		HostPorts: func(_ context.Context, envID string) ([]int, error) {
+			if envID != "env" {
+				return nil, nil
+			}
+			return []int{port, 7879}, nil
+		},
+	}
+	conn, err := g.guardedDialer("env", nil)(context.Background(), "tcp", net.JoinHostPort("Host.Studio.Internal", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatalf("dial an open port: %v", err)
+	}
+	banner, _ := io.ReadAll(conn)
+	conn.Close()
+	if string(banner) != "SSH-2.0-test\r\n" {
+		t.Fatalf("read %q", banner)
+	}
+	for _, c := range []struct {
+		env, addr, want string
+	}{
+		{"other", net.JoinHostPort("host.studio.internal", strconv.Itoa(port)), "not open to sandboxes"},
+		{"env", "host.studio.internal:2222", "not open to sandboxes"},
+		{"env", "host.studio.internal:7879", "Studio's own port"},
+	} {
+		conn, err := g.guardedDialer(c.env, nil)(context.Background(), "tcp", c.addr)
+		if conn != nil {
+			conn.Close()
+		}
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s dials %s: err = %v, want a refusal containing %q", c.env, c.addr, err, c.want)
+		}
 	}
 }
