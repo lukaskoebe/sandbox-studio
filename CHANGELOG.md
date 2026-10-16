@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.3.4 — 2026-10-16
+
+A browser that asks far less, messages you can send while the agent works, and sandboxes that
+can reach this computer and the local network when you let them.
+
+- **Browser:** allowing a page also allows its site for the browser session, so the page's
+  own scripts and images no longer ask one after the other; a page that is still loading
+  counts as its site. Reports Chromium sends sites on its own, such as Network Error Logging,
+  are refused without asking. A rule from a browser request covers only the browsers, not the
+  sandboxes, unless you choose **Browsers and sandboxes**; rules get an **Only in the
+  browser** switch.
+- **Approvals:** a network approval's **Options** ask two things: **Who** (the teammate's
+  browser, all browsers, or browsers and sandboxes; for a sandbox, its scope and ports) and
+  **For** (always, 1 hour, this session or once). The buttons say how long they last, such
+  as **Allow for 1 hour**. When Studio rejects a decision, the message says which field
+  failed, and suggests restarting a Studio that is older than the page.
+- **Chats:** a message sent while the agent works waits above the composer, where you can
+  edit or remove it, and goes as the next turn; Enter during a turn steers the next one.
+  Only chats with replies you haven't seen are marked in green, a working agent pulses
+  quietly, and open chat tabs survive a reload.
+- **Network:** sandboxes can reach open ports of this computer as `host.studio.internal`, and
+  addresses on the **Local network** list as `192-168-1-20.lan.studio.internal`; both are off
+  by default. The Rules page flags a rule no sandbox can reach, with the reason.
+- **Git review:** a **Folder on this computer** forge serves repositories from a folder such
+  as `~/git` with no token; an approved push goes in as `git push` to the folder would.
+
 ## v0.3.3 — 2026-10-15
 
 Scheduled checkpoints, review feedback that reaches the agent, a browser that opens what its
