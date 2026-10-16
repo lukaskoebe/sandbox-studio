@@ -30,6 +30,7 @@ import { SidePanel } from "@/components/side-panel"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
+import { CountPill } from "@/components/count-pill"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -56,7 +57,8 @@ import { Terminal } from "@/components/terminal"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { useAgentView } from "@/lib/agent-view"
 import { $api, isReady, type Sandbox } from "@/lib/api/client"
-import { chatTitle, useChat, type ChatTurn } from "@/lib/chats"
+import { hasNews, useChatsSeen } from "@/lib/chat-seen"
+import { chatTitle, useChat, type Chat, type ChatTurn } from "@/lib/chats"
 import { shortTemplate } from "@/lib/lineage"
 import {
   freshPreviewHint,
@@ -99,11 +101,26 @@ export function SandboxWorkspace({
   // Terminal tabs are the guest's tmux sessions: they outlive the browser, and sessions an
   // agent starts appear here too. Open ones stay mounted while hidden, so switching keeps
   // scrollback and the connection.
-  const [terminals, setTerminals] = useState<string[]>([])
+  const [terminals, setTerminals] = useState<string[]>(() =>
+    search.terminal ? [search.terminal] : []
+  )
   const [closing, setClosing] = useState<ReadonlySet<string>>(new Set())
   const [adopted, setAdopted] = useState(false)
-  const [chatIds, setChatIds] = useState<string[]>([])
-  const [picked, setPicked] = useState<Tab | null>(null)
+  // Open chat tabs outlive a reload of the page, as the terminals do in the guest.
+  const [chatIds, setChatIds] = useState<string[]>(() => {
+    const open = openChats(sb.id)
+    return search.chat && !open.includes(search.chat)
+      ? [...open, search.chat]
+      : open
+  })
+  // The tab a link names is in view from the first render, before restored tabs could be.
+  const [picked, setPicked] = useState<Tab | null>(() =>
+    search.terminal
+      ? { kind: "terminal", name: search.terminal }
+      : search.chat
+        ? { kind: "chat", id: search.chat }
+        : null
+  )
   const [panelTab, setPanelTab] = useState<PanelTab>("changes")
   const [turnId, setTurnId] = useState<string>()
 
@@ -179,6 +196,17 @@ export function SandboxWorkspace({
     setPicked({ kind: "chat", id: latest.id })
   }, [view, chats.data, picked])
 
+  useEffect(() => saveOpenChats(sb.id, chatIds), [sb.id, chatIds])
+  // A deleted chat leaves the tabs.
+  useEffect(() => {
+    if (!chats.data) return
+    const ids = new Set(chats.data.map((c) => c.id))
+    setChatIds((prev) => {
+      const kept = prev.filter((id) => ids.has(id))
+      return kept.length === prev.length ? prev : kept
+    })
+  }, [chats.data])
+
   const tabs: Tab[] = [
     ...terminals.map((name): Tab => ({ kind: "terminal", name })),
     ...chatIds.map((id): Tab => ({ kind: "chat", id })),
@@ -234,10 +262,12 @@ export function SandboxWorkspace({
     }
     if (current && keyOf(current) === keyOf(t)) setPicked(null)
   }
+  const chatOf = (id: string) => chats.data?.find((c) => c.id === id)
   const chatLabel = (id: string) => {
-    const chat = chats.data?.find((c) => c.id === id)
+    const chat = chatOf(id)
     return chat ? chatTitle(chat) : "Chat"
   }
+  const seen = useChatsSeen()
 
   // Changes of the chat in view open on the Files and changes panel.
   const showChanges = (id: string) => {
@@ -368,7 +398,7 @@ export function SandboxWorkspace({
                     onClick={() => setPicked(t)}
                   >
                     {t.kind === "chat" && (
-                      <ChatCircleDotsIcon className="size-3.5 shrink-0" />
+                      <ChatTabIcon chat={chatOf(t.id)} seen={seen} on={on} />
                     )}
                     <span className="truncate">{label}</span>
                   </button>
@@ -479,6 +509,65 @@ export function SandboxWorkspace({
       </div>
       <StatusBar env={env} sandbox={sb} />
     </>
+  )
+}
+
+const openChatsKey = (sandbox: string) => `studio.workspace.chats.${sandbox}`
+
+/** The chat tabs open in this browser tab's workspace of a sandbox. */
+function openChats(sandbox: string): string[] {
+  try {
+    const ids: unknown = JSON.parse(
+      sessionStorage.getItem(openChatsKey(sandbox)) ?? "[]"
+    )
+    return Array.isArray(ids)
+      ? ids.filter((id): id is string => typeof id === "string")
+      : []
+  } catch {
+    return []
+  }
+}
+
+function saveOpenChats(sandbox: string, ids: string[]) {
+  try {
+    if (ids.length === 0) sessionStorage.removeItem(openChatsKey(sandbox))
+    else sessionStorage.setItem(openChatsKey(sandbox), JSON.stringify(ids))
+  } catch {
+    // Not remembered; the tabs still work.
+  }
+}
+
+/**
+ * A chat tab's icon, marked while the agent works and, on a tab not in view, when it has a
+ * change this browser hasn't seen.
+ */
+function ChatTabIcon({
+  chat,
+  seen,
+  on,
+}: {
+  chat?: Chat
+  seen: ReturnType<typeof useChatsSeen>
+  on: boolean
+}) {
+  const working = chat?.state === "running"
+  const news = !on && !!chat && hasNews(chat, seen)
+  return (
+    <span className="relative flex shrink-0">
+      <ChatCircleDotsIcon
+        className={cn("size-3.5", news && "text-primary")}
+        weight={news ? "fill" : "regular"}
+      />
+      {(working || news) && (
+        <span
+          aria-label={working ? "Working" : "New"}
+          className={cn(
+            "absolute -top-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-background",
+            working ? "animate-pulse bg-muted-foreground" : "bg-primary"
+          )}
+        />
+      )}
+    </span>
   )
 }
 
@@ -657,12 +746,8 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
         <BroadcastIcon />
-        Previews
-        {list.length > 0 && (
-          <span className="rounded-full bg-primary px-1.5 text-[0.625rem] text-primary-foreground">
-            {list.length}
-          </span>
-        )}
+        <span className="max-md:sr-only">Previews</span>
+        {list.length > 0 && <CountPill count={list.length} />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuGroup>

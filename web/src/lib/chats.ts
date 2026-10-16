@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from "react"
 import { errorMessage, fetchClient } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
+import { markChatSeen } from "@/lib/chat-seen"
 
 export type Chat = components["schemas"]["Chat"]
 export type ChatItem = components["schemas"]["Item"]
@@ -217,6 +218,18 @@ export function useChat(env: string, chatId: string | undefined) {
       source?.close()
     }
   }, [env, chatId])
+
+  // A chat followed on a page in view is seen (lib/chat-seen.ts), up to its last change.
+  const seenRev = state.chat ? state.rev : undefined
+  useEffect(() => {
+    if (!chatId || seenRev === undefined) return
+    const mark = () => {
+      if (document.visibilityState === "visible") markChatSeen(chatId, seenRev)
+    }
+    mark()
+    document.addEventListener("visibilitychange", mark)
+    return () => document.removeEventListener("visibilitychange", mark)
+  }, [chatId, seenRev])
 
   const items = [...state.items.values()].sort((a, b) => a.seq - b.seq)
   const turns = [...state.turns.values()].sort((a, b) => a.seq - b.seq)

@@ -32,6 +32,7 @@ Open **Chats** in the sidebar and choose **New chat**, or choose **New chat** on
 - Use the paperclip to attach files, up to 10 MiB per message in total.
 - While the teammate works, **Stop** ends the current request. A message you send meanwhile waits above the box and goes as soon as the teammate finishes, so you can steer it without stopping it. Messages wait in the order you sent them; **Edit** takes one back into the box, the **×** removes it. Waiting messages don't survive a restart of Studio.
 - The agent may give the chat a title as it goes. **Chats** lists every chat of the environment; a sandbox lists its own on its dashboard and in its workspace.
+- In a sandbox's workspace, the **Chats** menu and the chat tabs mark a chat whose agent is working with a pulsing grey dot, and one with something you haven't seen yet, such as a finished reply or a chat that started while you were away, in green, until you open it. What you have seen is remembered in this browser. The chat tabs you had open come back when you reload the page.
 
 The chat shows the agent's replies, what it is thinking, the tools it runs (expand a card to see details such as edits and output), and its plan as a checklist while it works. Under each finished request you see how many files it changed and, if the agent reports it, tokens, cost, and how full its memory is.
 

@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { RobotIcon, StopIcon } from "@phosphor-icons/react"
+import { RobotIcon, StopIcon, TerminalWindowIcon } from "@phosphor-icons/react"
+import { CountPill } from "@/components/count-pill"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -93,15 +94,14 @@ export function AgentSessions({
         onClick={() => start.mutate(path)}
       >
         {start.isPending ? <Spinner /> : <RobotIcon />}
-        Start session
+        <span className="max-md:sr-only">Start session</span>
       </Button>
       {list.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-            Sessions
-            <span className="rounded-full bg-primary px-1.5 text-[0.625rem] text-primary-foreground">
-              {list.length}
-            </span>
+            <TerminalWindowIcon />
+            <span className="max-md:sr-only">Sessions</span>
+            <CountPill count={list.length} />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuGroup>

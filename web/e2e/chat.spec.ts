@@ -108,3 +108,37 @@ test("a message sent while the agent works waits for its turn to end", async ({
   expect(JSON.stringify(agents[0].prompts[1])).toContain("Then fix the lint")
   expect(JSON.stringify(agents[0].prompts)).not.toContain("changelog")
 })
+
+// The workspace's Chats menu is quiet until a chat has something this browser hasn't seen:
+// then its count turns green and the chat says New, until it is opened.
+test("the workspace marks only the chats with something new", async ({
+  page,
+  api,
+  env,
+}) => {
+  const teammate = await addTeammate(
+    api,
+    env,
+    `Marked ${Math.random().toString(36).slice(2, 6)}`
+  )
+  const id = await api.createSandbox(sandboxName("marks"), teammate)
+  await api.guestReady(id)
+  const chats = `/api/environments/${env}/sandboxes/${id}/chats`
+  await api.json("POST", chats)
+
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  const menu = page.getByRole("button", { name: /^Chats/ })
+  await expect(menu.getByTitle("1 chat")).toBeVisible()
+
+  // A chat that starts while the page is open is new.
+  const fresh = (await api.json<{ id: string }>("POST", chats))!
+  await expect(menu.getByTitle("1 new since you last looked")).toBeVisible()
+  await menu.click()
+  const item = page
+    .getByRole("menuitem")
+    .filter({ has: page.getByLabel("New", { exact: true }) })
+  await expect(item).toHaveCount(1)
+  await item.click()
+  await expect(page).toHaveURL(new RegExp(`chat=${fresh.id}`))
+  await expect(menu.getByTitle("2 chats")).toBeVisible()
+})
