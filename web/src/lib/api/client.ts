@@ -48,8 +48,23 @@ export type Harness = Teammate["harness"]
 /** The message of an API problem response, or of any thrown error. */
 export function errorMessage(err: unknown): string {
   if (err && typeof err === "object") {
-    const e = err as { detail?: string; title?: string; message?: string }
-    return e.detail ?? e.message ?? e.title ?? "Something went wrong"
+    const e = err as {
+      detail?: string
+      title?: string
+      message?: string
+      errors?: { message?: string; location?: string }[]
+    }
+    const msg = e.detail ?? e.message ?? e.title ?? "Something went wrong"
+    // A validation problem says which fields failed: an unexpected property usually means
+    // the page is newer than the Studio server it talks to.
+    const fields = (e.errors ?? [])
+      .filter((f) => f.message)
+      .map((f) => (f.location ? `${f.location}: ${f.message}` : f.message))
+    if (fields.length === 0) return msg
+    const stale = (e.errors ?? []).some(
+      (f) => f.message === "unexpected property"
+    )
+    return `${msg} (${fields.join("; ")})${stale ? ". Is Studio older than this page? Restart it to update." : ""}`
   }
   return String(err)
 }

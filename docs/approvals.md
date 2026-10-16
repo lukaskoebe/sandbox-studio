@@ -85,6 +85,9 @@ change it.
   those requests ([network](network.md#request-rules)).
 - Allowing a browser navigation, with or without a rule, also approves its site for the
   browser session, so the page's own requests don't each ask.
+- An API error shows its validation details: a body the server rejects names the field, and
+  an unexpected property suggests restarting a Studio older than the page (`errorMessage` in
+  `web/src/lib/api/client.ts`).
 - Network requests from one sandbox that arrive within 3 seconds of each other are one card,
   "<sandbox> wants N hosts", with the hosts listed, Allow all, Deny all, and Review
   individually (which turns them into the per-host cards). A browser's requests group by the
