@@ -1,20 +1,370 @@
+/* Sandbox Studio's docs theme: the green and near-black of the app and the videos, Inter for
+   text and Source Code Pro for code. Starlight's own rules sit in cascade layers, so these
+   unlayered rules win without extra specificity. */
+
+@font-face {
+  font-family: 'Inter Variable';
+  src: url('../fonts/inter-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Code Pro';
+  src: url('../fonts/SourceCodePro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Code Pro';
+  src: url('../fonts/SourceCodePro-Medium.ttf') format('truetype');
+  font-weight: 500 700;
+  font-display: swap;
+}
+
 :root {
-  --sl-color-accent-low: #e4f4e9;
+  --sl-font: 'Inter Variable';
+  --sl-font-mono: 'Source Code Pro';
+  --sl-line-height: 1.7;
+  --sl-text-h1: 2.5rem;
+  --sl-text-h2: 1.75rem;
+  --sl-text-h3: 1.3rem;
+  --sl-text-h4: 1.1rem;
+  --sl-content-width: 46rem;
+  --sl-sidebar-width: 17.5rem;
+  --sl-nav-height: 3.75rem;
+
+  /* Dark (the default). */
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #e8eeeb;
+  --sl-color-gray-2: #b9c3be;
+  --sl-color-gray-3: #8b9690;
+  --sl-color-gray-4: #5d6863;
+  --sl-color-gray-5: #283030;
+  --sl-color-gray-6: #151a1c;
+  --sl-color-black: #0b0e10;
+  --sl-color-accent-low: #10301f;
+  --sl-color-accent: #3fc168;
+  --sl-color-accent-high: #bff0cf;
+  --sl-color-text-accent: #65c58b;
+  --sl-color-bg-nav: rgba(11, 14, 16, 0.78);
+  --sl-color-bg-sidebar: #0b0e10;
+  --sl-color-bg-inline-code: #1a2023;
+  --sl-color-hairline: #1a2022;
+  --sl-color-hairline-light: #252c2e;
+  --sl-color-hairline-shade: #070909;
+
+  --ss-green: #3fc168;
+  --ss-green-soft: rgba(63, 193, 104, 0.12);
+  --ss-green-border: rgba(63, 193, 104, 0.32);
+  --ss-green-ring: rgba(63, 193, 104, 0.2);
+  --ss-surface: #11161a;
+  --ss-code-bg: #0f1417;
+  --ss-glow: rgba(63, 193, 104, 0.16);
+  --ss-glow-strong: rgba(63, 193, 104, 0.22);
+  --ss-dot: rgba(255, 255, 255, 0.09);
+}
+
+:root[data-theme='light'] {
+  --sl-color-white: #0d1311;
+  --sl-color-gray-1: #1b2320;
+  --sl-color-gray-2: #39433f;
+  --sl-color-gray-3: #5d6964;
+  --sl-color-gray-4: #8a9590;
+  --sl-color-gray-5: #cdd4d1;
+  --sl-color-gray-6: #eaeeec;
+  --sl-color-gray-7: #f5f7f6;
+  --sl-color-black: #ffffff;
+  --sl-color-accent-low: #dcf3e4;
   --sl-color-accent: #16834b;
   --sl-color-accent-high: #0b3c23;
+  --sl-color-text-accent: #127440;
+  --sl-color-bg-nav: rgba(255, 255, 255, 0.8);
+  --sl-color-bg-sidebar: #fafbfa;
+  --sl-color-bg-inline-code: #eef2f0;
+  --sl-color-hairline: #edf0ef;
+  --sl-color-hairline-light: #e1e6e4;
+  --sl-color-hairline-shade: #cfd6d3;
+
+  --ss-green: #16834b;
+  --ss-green-soft: rgba(22, 131, 75, 0.09);
+  --ss-green-border: rgba(22, 131, 75, 0.28);
+  --ss-green-ring: rgba(22, 131, 75, 0.16);
+  --ss-surface: #ffffff;
+  --ss-code-bg: #f6f8f7;
+  --ss-glow: rgba(63, 193, 104, 0.16);
+  --ss-glow-strong: rgba(22, 131, 75, 0.18);
+  --ss-dot: rgba(13, 19, 17, 0.09);
 }
 
-:root[data-theme='dark'] {
-  --sl-color-accent-low: #173e2a;
-  --sl-color-accent: #65c58b;
-  --sl-color-accent-high: #d8f6e2;
+body {
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+::selection {
+  background: var(--ss-green-ring);
 }
 
-.hero h1 {
+/* Header: translucent over the page, with a hairline. The inner div shares the class. */
+header.header {
+  backdrop-filter: saturate(160%) blur(14px);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  border-bottom: 1px solid var(--sl-color-hairline-light);
+}
+.site-title {
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--sl-color-white);
+}
+.site-title img {
+  height: 1.6rem;
+  width: auto;
+}
+site-search button[data-open-modal] {
+  border-radius: 0.6rem;
+  border-color: var(--sl-color-hairline-light);
+  background: var(--ss-surface);
+}
+
+/* Sidebar: quiet groups, a soft pill for the current page. */
+.sidebar-pane {
+  border-inline-end: 1px solid var(--sl-color-hairline-light);
+}
+.sidebar-content {
+  padding-top: 1.25rem;
+}
+.sidebar-content .top-level > li > details > summary .group-label > .large,
+.sidebar-content .group-label .large {
+  font-family: var(--__sl-font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+}
+.sidebar-content a {
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  color: var(--sl-color-gray-2);
+  font-size: 0.925rem;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+.sidebar-content a:hover {
+  color: var(--sl-color-white);
+  background: var(--sl-color-gray-6);
+}
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  color: var(--sl-color-text-accent);
+  background: var(--ss-green-soft);
+  font-weight: 600;
+}
+.sidebar-content ul ul li {
+  border-inline-start-color: var(--sl-color-hairline-light);
+}
+
+/* Table of contents. */
+.right-sidebar {
+  border-inline-start: 1px solid var(--sl-color-hairline-light);
+}
+starlight-toc a[aria-current='true'],
+starlight-toc a[aria-current='true']:hover {
+  color: var(--sl-color-text-accent);
+  font-weight: 560;
+}
+
+/* Page titles and headings. */
+.content-panel {
+  border-top-color: var(--sl-color-hairline-light);
+}
+h1#_top {
+  font-weight: 700;
   letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+.sl-markdown-content :is(h2, h3, h4, h5):not(:where(.not-content *)) {
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  color: var(--sl-color-white);
+}
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  margin-top: 2.75rem;
+}
+.sl-markdown-content h3:not(:where(.not-content *)) {
+  margin-top: 2rem;
+}
+.sl-markdown-content :is(p, li):not(:where(.not-content *)) {
+  color: var(--sl-color-gray-2);
+}
+.sl-markdown-content strong:not(:where(.not-content *)) {
+  color: var(--sl-color-gray-1);
+  font-weight: 620;
 }
 
-.sl-markdown-content img {
-  border: 1px solid var(--sl-color-gray-5);
+/* Links. */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--sl-color-text-accent);
+  text-decoration-color: var(--ss-green-border);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: currentColor;
+}
+
+/* Inline code. */
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+  padding: 0.12em 0.4em;
+  border-radius: 0.35rem;
+  border: 1px solid var(--sl-color-hairline-light);
+  font-size: 0.86em;
+  color: var(--sl-color-gray-1);
+}
+
+/* Screenshots: a frame like the app's windows. */
+.sl-markdown-content img:not(:where(.not-content *)) {
+  border: 1px solid var(--sl-color-hairline-light);
+  border-radius: 0.85rem;
+  box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.55);
+}
+
+/* Tables. */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  display: table;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--sl-color-hairline-light);
   border-radius: 0.75rem;
+  overflow: hidden;
+  font-size: var(--sl-text-sm);
+}
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  border: 0;
+  border-bottom: 1px solid var(--sl-color-hairline-light);
+  padding: 0.6rem 0.9rem;
+}
+.sl-markdown-content tr:last-child td:not(:where(.not-content *)) {
+  border-bottom: 0;
+}
+.sl-markdown-content th:not(:where(.not-content *)) {
+  background: var(--ss-surface);
+  color: var(--sl-color-gray-1);
+  font-weight: 600;
+}
+@media (max-width: 40rem) {
+  .sl-markdown-content table:not(:where(.not-content *)) {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* Asides. */
+.starlight-aside {
+  border-radius: 0.75rem;
+  border: 1px solid var(--sl-color-asides-border);
+  border-inline-start-width: 3px;
+}
+
+/* Cards and link cards. */
+.card,
+.sl-link-card {
+  border-radius: 0.9rem;
+  border-color: var(--sl-color-hairline-light);
+  background: var(--ss-surface);
+  box-shadow: none;
+}
+.sl-link-card:hover {
+  border-color: var(--ss-green-border);
+  background: var(--ss-surface);
+}
+.sl-link-card .title {
+  font-weight: 620;
+  color: var(--sl-color-white);
+}
+.sl-link-card .description {
+  color: var(--sl-color-gray-3);
+}
+
+/* Buttons. */
+.sl-link-button {
+  border-radius: 0.65rem;
+  font-weight: 580;
+  font-size: var(--sl-text-base);
+  padding: 0.65rem 1.25rem;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    transform 0.15s;
+}
+.sl-link-button.primary {
+  background: var(--ss-green);
+  border-color: var(--ss-green);
+  color: #06140c;
+}
+:root[data-theme='light'] .sl-link-button.primary {
+  color: #ffffff;
+}
+.sl-link-button.primary:hover {
+  filter: brightness(1.08);
+}
+.sl-link-button.secondary {
+  border-color: var(--sl-color-hairline-light);
+  background: var(--ss-surface);
+  color: var(--sl-color-white);
+}
+.sl-link-button.secondary:hover {
+  border-color: var(--sl-color-gray-4);
+}
+.sl-link-button svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Tabs. */
+starlight-tabs [role='tablist'] {
+  border-bottom-color: var(--sl-color-hairline-light);
+}
+starlight-tabs [role='tab'][aria-selected='true'] {
+  color: var(--sl-color-white);
+  border-color: var(--ss-green);
+}
+
+/* Footer: pagination and the edit link. */
+.pagination-links a {
+  border-radius: 0.85rem;
+  border-color: var(--sl-color-hairline-light);
+  box-shadow: none;
+}
+.pagination-links a:hover {
+  border-color: var(--ss-green-border);
+}
+
+/* The landing page: wider, with the hero's backdrop allowed past the column. */
+html[data-has-hero] {
+  --sl-content-width: 72rem;
+}
+html[data-has-hero] main {
+  overflow-x: clip;
+}
+html[data-has-hero] .content-panel {
+  border-top: 0;
+}
+html[data-has-hero] .content-panel + .content-panel {
+  border-top: 0;
+}
+.landing-section .accent,
+.landing-hero .accent {
+  color: var(--ss-green);
+}
+html[data-has-hero] .sl-markdown-content > .card-grid,
+html[data-has-hero] .landing-section .card-grid {
+  margin-top: 0;
 }

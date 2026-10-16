@@ -1,0 +1,244 @@
+---
+// The landing page's hero: the headline and actions from the page's frontmatter, the install
+// command, and the overview video. Only the landing page sets `hero`, so this replaces
+// Starlight's hero there and nowhere else.
+import { LinkButton } from '@astrojs/starlight/components'
+
+const { data } = Astro.locals.starlightRoute.entry
+const { title = data.title, tagline, actions = [] } = data.hero || {}
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+const install = 'curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh'
+---
+
+<div class="landing-hero not-content">
+  <div class="hero-backdrop" aria-hidden="true"></div>
+  <a class="hero-eyebrow" href="https://github.com/lukaskoebe/sandbox-studio/releases">
+    <span class="eyebrow-dot"></span>
+    Free and open source
+    <span class="eyebrow-sep">·</span>
+    <span class="eyebrow-link">Latest release →</span>
+  </a>
+  <h1 id="_top" data-page-title set:html={title} />
+  {tagline && <p class="hero-tagline" set:html={tagline} />}
+  <div class="hero-actions">
+    {
+      actions.map(({ link: href, text, variant, icon }) => (
+        <LinkButton href={href} variant={variant} icon={icon?.name}>
+          {text}
+        </LinkButton>
+      ))
+    }
+  </div>
+  <div class="hero-install">
+    <span class="install-prompt" aria-hidden="true">$</span>
+    <code>{install}</code>
+    <button type="button" class="install-copy" data-copy={install} aria-label="Copy the install command">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>
+      <span class="copy-label">Copy</span>
+    </button>
+  </div>
+  <p class="hero-platforms">Linux · macOS on Apple Silicon · Windows 11 (preview)</p>
+
+  <figure class="hero-video">
+    <video
+      class="landing-video"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="auto"
+      poster={`${base}video/everyone.jpg`}
+      aria-label="A teammate builds a bakery website in its own sandbox, asks before reaching a new site, keeps passwords on your computer, and asks before placing an order"
+    >
+      <source src={`${base}video/everyone.webm`} type="video/webm" />
+      <source src={`${base}video/everyone.mp4`} type="video/mp4" />
+    </video>
+  </figure>
+</div>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>('.install-copy')) {
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy ?? '')
+      } catch {
+        return
+      }
+      const label = button.querySelector('.copy-label')
+      if (!label) return
+      label.textContent = 'Copied'
+      setTimeout(() => (label.textContent = 'Copy'), 1600)
+    })
+  }
+  // Respect reduced motion: show the first frame with controls instead of playing on its own.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    for (const video of document.querySelectorAll<HTMLVideoElement>('video[autoplay]')) {
+      video.removeAttribute('autoplay')
+      video.pause()
+      video.controls = true
+    }
+  }
+</script>
+
+<style>
+  .landing-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding-block: clamp(2.5rem, 7vw, 5.5rem) 1rem;
+  }
+  .hero-backdrop {
+    position: absolute;
+    inset: -6rem -50vw auto;
+    height: 46rem;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 50% 60% at 50% 30%, var(--ss-glow), transparent 70%),
+      radial-gradient(circle, var(--ss-dot) 1px, transparent 1.2px) 0 0 / 28px 28px;
+    mask-image: radial-gradient(ellipse 60% 70% at 50% 35%, #000 25%, transparent 75%);
+  }
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--sl-color-hairline-light);
+    background: var(--ss-surface);
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+    transition: border-color 0.15s;
+  }
+  .hero-eyebrow:hover {
+    border-color: var(--sl-color-accent);
+  }
+  .eyebrow-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--ss-green);
+    box-shadow: 0 0 0 3px var(--ss-green-ring);
+  }
+  .eyebrow-sep {
+    color: var(--sl-color-gray-4);
+  }
+  .eyebrow-link {
+    color: var(--sl-color-text-accent);
+    font-weight: 550;
+  }
+  h1 {
+    margin-top: 1.5rem;
+    max-width: 16ch;
+    font-size: clamp(2.4rem, 1rem + 5.4vw, 4.75rem);
+    line-height: 1.02;
+    letter-spacing: -0.045em;
+    font-weight: 700;
+    color: var(--sl-color-white);
+    text-wrap: balance;
+  }
+  .hero-tagline {
+    margin-top: 1.4rem;
+    max-width: 40rem;
+    font-size: clamp(1.05rem, 0.9rem + 0.6vw, 1.3rem);
+    line-height: 1.55;
+    color: var(--sl-color-gray-2);
+    text-wrap: pretty;
+  }
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+  .hero-install {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 100%;
+    margin-top: 1.75rem;
+    padding: 0.5rem 0.5rem 0.5rem 1rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    background: var(--ss-code-bg);
+    font-family: var(--__sl-font-mono);
+    font-size: var(--sl-text-sm);
+  }
+  .install-prompt {
+    color: var(--ss-green);
+    font-weight: 600;
+  }
+  .hero-install code {
+    overflow-x: auto;
+    white-space: nowrap;
+    color: var(--sl-color-gray-1);
+    scrollbar-width: none;
+  }
+  .install-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: none;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    background: var(--ss-surface);
+    color: var(--sl-color-gray-2);
+    font: 500 var(--sl-text-xs) / 1 var(--__sl-font);
+    cursor: pointer;
+  }
+  .install-copy:hover {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-gray-4);
+  }
+  .install-copy svg {
+    width: 0.9rem;
+    height: 0.9rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+  }
+  .hero-platforms {
+    margin-top: 0.75rem;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
+  }
+  .hero-video {
+    width: 100%;
+    margin: clamp(2.5rem, 5vw, 4rem) 0 0;
+    padding: 0.5rem;
+    border-radius: 1.25rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    background: var(--ss-surface);
+    box-shadow:
+      0 40px 120px -30px var(--ss-glow-strong),
+      0 30px 60px -30px rgba(0, 0, 0, 0.6);
+  }
+  .hero-video video {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    border-radius: 0.8rem;
+    background: #0b0e10;
+  }
+  @media (max-width: 40rem) {
+    .hero-install {
+      width: 100%;
+    }
+    .copy-label {
+      display: none;
+    }
+    .hero-video {
+      padding: 0.25rem;
+      border-radius: 0.9rem;
+    }
+    .hero-video video {
+      border-radius: 0.65rem;
+    }
+  }
+</style>

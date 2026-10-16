@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sandbox Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      .term.small {
+        font-size: 19px;
+        line-height: 1.6;
+        padding: 22px 26px;
+      }
+      .cyan {
+        color: #5fb8cc;
+      }
+      .bold {
+        font-weight: 700;
+        color: #fff;
+      }
+      .link {
+        color: var(--green-2);
+        font-weight: 600;
+      }
+
+      /* 1 · Cold open */
+      .boot .term {
+        line-height: 1.3;
+      }
+      .boot {
+        left: 400px;
+        top: 290px;
+        width: 1120px;
+        height: 420px;
+      }
+      .logo {
+        position: absolute;
+        left: 865px;
+        top: 220px;
+        width: 190px;
+        height: 190px;
+      }
+      .logo svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .halo {
+        position: absolute;
+        left: 660px;
+        top: 15px;
+        width: 600px;
+        height: 600px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(63, 193, 104, 0.32), rgba(63, 193, 104, 0) 65%);
+      }
+      .mark {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 450px;
+        text-align: center;
+        font-size: 104px;
+        font-weight: 720;
+        letter-spacing: -0.048em;
+      }
+      .tagline {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 595px;
+        text-align: center;
+        font-size: 42px;
+        color: var(--muted);
+        letter-spacing: -0.015em;
+      }
+      .harnesses {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 700px;
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+      }
+      .harnesses .pill {
+        font-size: 22px;
+        padding: 10px 22px;
+        color: var(--fg);
+        font-family: var(--mono);
+      }
+
+      /* 2 · MicroVMs */
+      .center-copy {
+        left: 0;
+        right: 0;
+        top: 90px;
+        align-items: center;
+        text-align: center;
+        gap: 22px;
+      }
+      .center-copy .sub {
+        max-width: 1400px;
+      }
+      .vm {
+        top: 430px;
+        width: 500px;
+        height: 400px;
+        display: flex;
+        flex-direction: column;
+      }
+      .vm-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px 22px;
+        border-bottom: 1px solid var(--line);
+        font-size: 22px;
+        font-weight: 620;
+      }
+      .vm-head .harness {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 18px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .vm-cube {
+        width: 34px;
+        height: 34px;
+        flex: none;
+      }
+      .vm .term {
+        flex: 1;
+        font-size: 19px;
+        padding: 18px 22px;
+        line-height: 1.55;
+      }
+      .vm-foot {
+        display: flex;
+        gap: 10px;
+        padding: 0 22px 20px;
+        flex-wrap: wrap;
+      }
+      .vm-foot .pill {
+        font-size: 16px;
+        padding: 5px 12px;
+        font-family: var(--mono);
+      }
+      .snap {
+        position: absolute;
+        right: 18px;
+        top: 76px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 14px;
+        border-radius: 10px;
+        background: #13301f;
+        border: 1px solid rgba(63, 193, 104, 0.5);
+        color: var(--green-2);
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .snap svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      /* 3 · Egress */
+      .log {
+        left: 860px;
+        top: 120px;
+        width: 960px;
+      }
+      .log .rows {
+        padding: 14px 0;
+      }
+      .log-row {
+        display: grid;
+        grid-template-columns: 130px 380px 1fr;
+        align-items: center;
+        gap: 18px;
+        padding: 13px 28px;
+        font-family: var(--mono);
+        font-size: 20px;
+      }
+      .verdict {
+        display: inline-flex;
+        justify-content: center;
+        padding: 4px 0;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .v-allow {
+        background: rgba(63, 193, 104, 0.14);
+        color: var(--green-2);
+      }
+      .v-hold {
+        background: rgba(240, 180, 76, 0.14);
+        color: var(--amber);
+      }
+      .v-deny {
+        background: rgba(239, 100, 97, 0.15);
+        color: var(--red);
+      }
+      .log-row .why {
+        color: var(--muted);
+        font-family: "Inter", sans-serif;
+        font-size: 19px;
+      }
+      .chips {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .pat {
+        padding: 8px 16px;
+        border-radius: 9px;
+        border: 1px solid var(--line-2);
+        font-family: var(--mono);
+        font-size: 18px;
+        color: var(--muted);
+      }
+      .pat.on {
+        border-color: rgba(63, 193, 104, 0.6);
+        background: var(--green-low);
+        color: var(--green-2);
+      }
+
+      /* 4 · Secrets */
+      .env {
+        left: 110px;
+        top: 120px;
+        width: 920px;
+      }
+      .node.small .disc {
+        width: 116px;
+        height: 116px;
+        border-radius: 28px;
+      }
+      .node.small .disc svg {
+        width: 56px;
+        height: 56px;
+      }
+      .node.small {
+        font-size: 19px;
+        gap: 12px;
+      }
+      .node.bad .disc {
+        color: var(--red);
+      }
+      .track.diag {
+        transform-origin: 0 50%;
+      }
+      .verdict-tag {
+        position: absolute;
+        font-size: 18px;
+        font-weight: 600;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .verdict-tag svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      /* 5 · Git review */
+      .push {
+        left: 860px;
+        top: 90px;
+        width: 960px;
+      }
+      .review {
+        left: 860px;
+        top: 360px;
+        width: 960px;
+        padding: 26px 30px;
+      }
+      .review .title {
+        font-family: var(--mono);
+        font-size: 24px;
+        margin: 16px 0 6px;
+      }
+      .review .stats {
+        font-size: 19px;
+        color: var(--muted);
+        margin-bottom: 16px;
+      }
+      .review .stats b {
+        color: var(--green-2);
+        font-weight: 600;
+      }
+      .review .stats i {
+        color: var(--red);
+        font-style: normal;
+        font-weight: 600;
+      }
+      .diff {
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        overflow: hidden;
+        font-family: var(--mono);
+        font-size: 18px;
+        line-height: 1.75;
+        background: #0f1316;
+      }
+      .diff .file {
+        padding: 8px 18px;
+        background: var(--card-2);
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+      }
+      .diff .l {
+        padding: 0 18px;
+        white-space: pre;
+      }
+      .diff .hunk {
+        color: #6f8fb8;
+      }
+      .diff .del {
+        background: rgba(239, 100, 97, 0.12);
+        color: #f0a19f;
+      }
+      .diff .add {
+        background: rgba(63, 193, 104, 0.12);
+        color: #9fe0b5;
+      }
+      .review .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-top: 20px;
+      }
+      .review .row .ghost {
+        font-size: 19px;
+        color: var(--muted);
+        margin-right: auto;
+      }
+      .pushed {
+        position: absolute;
+        left: 30px;
+        bottom: 26px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 21px;
+        font-weight: 600;
+        color: var(--green-2);
+      }
+      .pushed svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      /* 6 · The rest */
+      .tiles {
+        position: absolute;
+        left: 150px;
+        top: 380px;
+        width: 1620px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+      }
+      .tile {
+        position: relative;
+        padding: 30px 30px 32px;
+        border-radius: 18px;
+        background: var(--card);
+        border: 1px solid var(--line-2);
+        min-height: 236px;
+      }
+      .tile .ic {
+        width: 54px;
+        height: 54px;
+        border-radius: 14px;
+        background: var(--green-low);
+        color: var(--green);
+        display: grid;
+        place-items: center;
+        margin-bottom: 20px;
+      }
+      .tile .ic svg {
+        width: 28px;
+        height: 28px;
+      }
+      .tile h4 {
+        margin: 0 0 8px;
+        font-size: 27px;
+        font-weight: 640;
+        letter-spacing: -0.02em;
+      }
+      .tile p {
+        margin: 0;
+        font-size: 21px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      /* 7 · Outro */
+      .install {
+        position: absolute;
+        left: 260px;
+        width: 1400px;
+        top: 640px;
+        height: 82px;
+        border-radius: 16px;
+        background: var(--card);
+        border: 1px solid var(--line-2);
+        display: flex;
+        align-items: center;
+        padding: 0 30px;
+        font-family: var(--mono);
+        font-size: 24px;
+        color: #d5ddd8;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .install .pr {
+        color: var(--green);
+        margin-right: 16px;
+        font-weight: 700;
+      }
+      .facts {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 770px;
+        text-align: center;
+        font-size: 24px;
+        color: var(--muted);
+      }
+      .repo {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 840px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 28px;
+        color: var(--green);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="bg-glow" id="glow1"></div>
+      <div class="bg-glow two" id="glow2"></div>
+      <div class="bg-grid" id="grid"></div>
+
+      <!-- 1 · Cold open -->
+      <section class="scene" id="s1">
+        <div class="win boot" id="s1-term">
+          <div class="win-bar"><div class="dots"><i></i><i></i><i></i></div>~</div>
+          <div class="term"><span class="pr">~ $</span> <span id="s1-cmd"></span><span class="caret" id="s1-caret"></span>
+<span id="s1-out"><span class="cyan">╭──────────────────────────────────────────────────────────╮</span>
+<span class="cyan">│</span>  <span class="bold">Sandbox Studio is running</span>                               <span class="cyan">│</span>
+<span class="cyan">│</span>                                                          <span class="cyan">│</span>
+<span class="cyan">│</span>  Open this one-time login link (valid for ten minutes):  <span class="cyan">│</span>
+<span class="cyan">│</span>  <span class="link">http://127.0.0.1:7878/#studio-login=f3k9q2m7x1</span>          <span class="cyan">│</span>
+<span class="cyan">│</span>                                                          <span class="cyan">│</span>
+<span class="cyan">│</span>  <span class="muted">Need another? Run: studio login-url</span>                     <span class="cyan">│</span>
+<span class="cyan">╰──────────────────────────────────────────────────────────╯</span></span></div>
+        </div>
+        <div class="halo" id="s1-halo"></div>
+        <div class="logo" id="s1-logo">
+          <svg viewBox="0 0 512 512">
+            <g stroke="#3fc168" stroke-width="16" stroke-linejoin="round">
+              <path id="s1-top" d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" />
+              <path id="s1-left" d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".35" />
+              <path id="s1-right" d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".65" />
+            </g>
+          </svg>
+        </div>
+        <div class="mark" id="s1-mark">Sandbox Studio</div>
+        <div class="tagline" id="s1-tag">Coding agents, in their own workspaces.</div>
+        <div class="harnesses">
+          <span class="pill" id="s1-h1">Claude Code</span>
+          <span class="pill" id="s1-h2">Codex</span>
+          <span class="pill" id="s1-h3">OpenCode</span>
+        </div>
+      </section>
+
+      <!-- 2 · One microVM per agent -->
+      <section class="scene" id="s2">
+        <div class="copy center-copy">
+          <div class="kicker" id="s2-k">Sandboxes</div>
+          <h2 class="h2" id="s2-h">One microVM per agent.</h2>
+          <p class="sub" id="s2-s">Persistent Linux with root and Docker inside. Workspaces survive restarts, with checkpoints and forks when you want them.</p>
+        </div>
+        <div class="win vm" id="s2-v1" style="left: 150px">
+          <div class="vm-head"><div class="avatar">A</div>Ada<span class="harness">claude code</span></div>
+          <div class="term"><span class="pr">$</span> <span id="s2-c1"></span>
+<span id="s2-o1"><span class="muted">Linux 6.12.111 x86_64</span></span>
+<span class="pr">$</span> <span id="s2-c1b"></span>
+<span id="s2-o1b"><span class="ok">postgres</span>  <span class="ok">redis</span>  <span class="ok">mailpit</span></span></div>
+          <div class="vm-foot"><span class="pill"><span class="dot"></span>running</span><span class="pill">2 vCPU · 4 GiB</span></div>
+        </div>
+        <div class="win vm" id="s2-v2" style="left: 710px">
+          <div class="vm-head"><div class="avatar" style="background: #1f6fa8">I</div>Iris<span class="harness">codex</span></div>
+          <div class="term"><span class="pr">$</span> <span id="s2-c2"></span>
+<span id="s2-o2"><span class="ok">✓</span> 214 tests passed <span class="muted">(8.2s)</span></span>
+<span class="pr">$</span> <span id="s2-c2b"></span>
+<span id="s2-o2b"><span class="muted">[main 4e1c9a2]</span> Add order totals</span></div>
+          <div class="vm-foot"><span class="pill"><span class="dot"></span>running</span><span class="pill">4 vCPU · 8 GiB</span></div>
+          <div class="snap" id="s2-snap"><span data-icon="clock"></span>Checkpoint saved</div>
+        </div>
+        <div class="win vm" id="s2-v3" style="left: 1270px">
+          <div class="vm-head"><div class="avatar" style="background: #8a5a1e">L</div>Linus<span class="harness">opencode</span></div>
+          <div class="term"><span class="pr">$</span> <span id="s2-c3"></span>
+<span id="s2-o3"><span class="muted">ok</span>  api/orders  <span class="muted">0.41s</span></span>
+<span class="pr">$</span> <span id="s2-c3b"></span>
+<span id="s2-o3b"><span class="path">api/</span>  <span class="path">web/</span>  go.mod  README.md</span></div>
+          <div class="vm-foot"><span class="pill"><span class="dot"></span>running</span><span class="pill">2 vCPU · 4 GiB</span></div>
+        </div>
+      </section>
+
+      <!-- 3 · Egress -->
+      <section class="scene" id="s3">
+        <div class="copy" style="left: 150px; top: 330px; width: 620px">
+          <div class="kicker" id="s3-k">Network</div>
+          <h2 class="h2" id="s3-h">Egress you decide.</h2>
+          <p class="sub" id="s3-s">Every TCP connection from the VM, Docker's included, goes through Studio's gateway. Unknown hosts wait for your answer.</p>
+        </div>
+        <div class="win log" id="s3-log">
+          <div class="win-bar">Activity · webshop</div>
+          <div class="rows">
+            <div class="log-row" id="s3-r1"><span class="verdict v-allow">allowed</span><span>registry.npmjs.org:443</span><span class="why">rule · environment</span></div>
+            <div class="log-row" id="s3-r2"><span class="verdict v-allow">allowed</span><span>github.com:443</span><span class="why">rule · Ada's sandboxes</span></div>
+            <div class="log-row" id="s3-r3"><span class="verdict v-allow">allowed</span><span>proxy.golang.org:443</span><span class="why">rule · environment</span></div>
+            <div class="log-row" id="s3-r4"><span class="verdict v-hold" id="s3-v4">held</span><span>paste.example.net:443</span><span class="why" id="s3-why4">waiting for you</span></div>
+          </div>
+        </div>
+        <div class="win approval" id="s3-card" style="left: 1180px; top: 560px; width: 640px">
+          <div class="head"><span class="badge"><span data-icon="globe"></span>Network access</span>webshop · just now</div>
+          <div class="host">paste.example.net:443</div>
+          <div class="chips"><span class="pat on">paste.example.net</span><span class="pat">*.example.net</span></div>
+          <div class="row"><span class="ghost">Ignore</span><span class="ghost" style="margin-right: 8px">Options</span><span class="btn" id="s3-deny">Deny</span><span class="btn primary">Allow</span></div>
+        </div>
+        <div class="ripple" id="s3-ripple" style="border-color: var(--red)"></div>
+        <div class="cursor" id="s3-cursor"><span data-icon="cursor"></span></div>
+      </section>
+
+      <!-- 4 · Secrets -->
+      <section class="scene" id="s4">
+        <div class="copy" style="left: 1100px; top: 320px; width: 760px">
+          <div class="kicker" id="s4-k">Secrets</div>
+          <h2 class="h2" id="s4-h" style="font-size: 64px">Keys never enter the VM.</h2>
+          <p class="sub" id="s4-s">The sandbox sees a placeholder. The gateway swaps in the real value on the way out, and only for the hosts the secret is bound to.</p>
+        </div>
+        <div class="win env" id="s4-term">
+          <div class="win-bar"><div class="dots"><i></i><i></i><i></i></div>agent@webshop: /workspace</div>
+          <div class="term small"><span class="pr">$</span> <span id="s4-c1"></span>
+<span id="s4-o1">OPENAI_API_KEY=<span class="warn">studio-9c1e4b7a2f0d4e5b8a61c3f7</span></span>
+<span class="pr">$</span> <span id="s4-c2"></span>
+<span id="s4-o2"><span class="ok">200 OK</span>  <span class="muted">{"object":"list","data":[…]}</span></span></div>
+        </div>
+        <div class="track" id="s4-t1" style="left: 220px; top: 700px; width: 330px"></div>
+        <div class="track diag" id="s4-t2"></div>
+        <div class="track diag" id="s4-t3"></div>
+        <div class="node small" id="s4-n1" style="left: 112px; top: 642px"><div class="disc">
+          <svg viewBox="0 0 512 512"><g stroke="#3fc168" stroke-width="22" stroke-linejoin="round"><path d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" /><path d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".35" /><path d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".65" /></g></svg>
+        </div>sandbox</div>
+        <div class="node small gate" id="s4-n2" style="left: 492px; top: 642px"><div class="disc" data-icon="shield"></div>gateway</div>
+        <div class="node small web" id="s4-n3" style="left: 860px; top: 532px"><div class="disc" data-icon="globe"></div>api.openai.com</div>
+        <div class="node small bad" id="s4-n4" style="left: 860px; top: 782px"><div class="disc" data-icon="globe"></div>paste.example.net</div>
+        <div class="flip" id="s4-flip">
+          <div class="packet stand" id="s4-stand"><span data-icon="key"></span>studio-9c1e…</div>
+          <div class="packet real" id="s4-real"><span data-icon="key"></span>sk-proj-••••</div>
+        </div>
+        <div class="packet stand" id="s4-p2"><span data-icon="key"></span>studio-9c1e…</div>
+        <div class="verdict-tag" id="s4-ok" style="left: 878px; top: 698px; color: var(--green-2)"><span data-icon="check"></span>real key</div>
+        <div class="verdict-tag" id="s4-bad" style="left: 840px; top: 948px; color: var(--red)"><span data-icon="x"></span>only the placeholder</div>
+      </section>
+
+      <!-- 5 · Git review -->
+      <section class="scene" id="s5">
+        <div class="copy" style="left: 150px; top: 330px; width: 620px">
+          <div class="kicker" id="s5-k">Git review</div>
+          <h2 class="h2" id="s5-h">Review every push.</h2>
+          <p class="sub" id="s5-s">Sandboxes hold no forge credentials. They push to Studio, you read the diff, and Studio pushes upstream.</p>
+        </div>
+        <div class="win push" id="s5-term">
+          <div class="term small"><span class="pr">$</span> <span id="s5-c1"></span>
+<span id="s5-o1"><span class="muted">remote:</span> Sandbox Studio: feature/checkout <span class="warn">queued for review</span>.
+<span class="muted">remote:</span> It reaches the forge once the user approves it.</span></div>
+        </div>
+        <div class="win review" id="s5-card">
+          <div class="head" style="display: flex; align-items: center; gap: 12px; font-size: 18px; color: var(--muted)"><span class="badge"><span data-icon="git" style="color: var(--green)"></span>Git push</span>Ada · webshop · just now</div>
+          <div class="title">feature/checkout → github.com/acme/webshop</div>
+          <div class="stats">2 commits · 3 files · <b>+42</b> <i>−7</i></div>
+          <div class="diff">
+            <div class="file">src/checkout.ts</div>
+            <div class="l hunk">@@ -12,7 +12,9 @@ export function totals(cart: Cart) {</div>
+            <div class="l del">-  const total = cart.items.reduce((s, i) => s + i.price, 0)</div>
+            <div class="l add">+  const total = cart.items.reduce((s, i) => s + i.price * i.qty, 0)</div>
+            <div class="l add">+  if (total &lt;= 0) throw new EmptyCartError(cart.id)</div>
+            <div class="l">   return { total, tax: total * TAX_RATE }</div>
+          </div>
+          <div class="row" id="s5-row"><span class="ghost">Comment on a line</span><span class="btn">Deny</span><span class="btn primary" id="s5-approve">Approve push</span></div>
+          <div class="pushed" id="s5-pushed"><span data-icon="check"></span>Pushed to github.com/acme/webshop</div>
+        </div>
+        <div class="ripple" id="s5-ripple"></div>
+        <div class="cursor" id="s5-cursor"><span data-icon="cursor"></span></div>
+      </section>
+
+      <!-- 6 · The rest -->
+      <section class="scene" id="s6">
+        <div class="copy center-copy">
+          <div class="kicker" id="s6-k">The workbench</div>
+          <h2 class="h2" id="s6-h">Everything an agent needs.<br /><span class="accent">Nothing it shouldn't have.</span></h2>
+        </div>
+        <div class="tiles">
+          <div class="tile" id="s6-t1"><div class="ic" data-icon="browser"></div><h4>A real browser</h4><p>Chromium in its own microVM. Actions ask first, logins come from your vault, and you can take the wheel.</p></div>
+          <div class="tile" id="s6-t2"><div class="ic" data-icon="clock"></div><h4>Checkpoints</h4><p>Disk snapshots on demand or on a schedule. Fork a sandbox, export it, or roll it back.</p></div>
+          <div class="tile" id="s6-t3"><div class="ic" data-icon="layers"></div><h4>Templates</h4><p>Describe a sandbox in YAML: toolchains, apt packages, a setup script. Built once, cached.</p></div>
+          <div class="tile" id="s6-t4"><div class="ic" data-icon="brain"></div><h4>Memory</h4><p>Teammates remember across sessions, sandboxes and harnesses. Embeddings run locally.</p></div>
+          <div class="tile" id="s6-t5"><div class="ic" data-icon="key"></div><h4>Your providers</h4><p>Anthropic and OpenAI keys, any OpenAI-compatible endpoint, or a Claude or ChatGPT subscription.</p></div>
+          <div class="tile" id="s6-t6"><div class="ic" data-icon="terminal"></div><h4>Web UI and TUI</h4><p>Approve, review and chat from the browser, or from the terminal with studio tui.</p></div>
+        </div>
+      </section>
+
+      <!-- 7 · Outro -->
+      <section class="scene" id="s7">
+        <div class="halo" id="s7-halo" style="top: -30px"></div>
+        <div class="logo" id="s7-logo" style="top: 170px; left: 875px; width: 170px; height: 170px">
+          <svg viewBox="0 0 512 512">
+            <g stroke="#3fc168" stroke-width="16" stroke-linejoin="round">
+              <path d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" />
+              <path d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".35" />
+              <path d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".65" />
+            </g>
+          </svg>
+        </div>
+        <div class="mark" id="s7-mark" style="top: 370px">Sandbox Studio</div>
+        <div class="tagline" id="s7-tag" style="top: 510px">Coding agents, in their own workspaces.</div>
+        <div class="install" id="s7-install"><span class="pr">$</span><span id="s7-cmd"></span><span class="caret" id="s7-caret"></span></div>
+        <div class="facts" id="s7-facts">Open source, Apache-2.0 · Linux · macOS · Windows (preview)</div>
+        <div class="repo" id="s7-repo">github.com/lukaskoebe/sandbox-studio</div>
+      </section>
+
+      <div class="bg-vignette"></div>
+      <svg class="grain" width="1920" height="1080"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" /></filter><rect width="100%" height="100%" filter="url(#n)" /></svg>
+    </div>
+
+    <script src="icons.js"></script>
+    <script src="engine.js"></script>
+    <script>
+      const { p, set, rise, reveal, type, caret, scene, each, ease, lerp } = M
+      const byId = (id) => document.getElementById(id)
+
+      each((t) => {
+        set(byId("glow1"), { x: Math.sin(t * 0.21) * 160, y: Math.cos(t * 0.17) * 90 })
+        set(byId("glow2"), { x: 600 + Math.cos(t * 0.13) * 220, y: 420 + Math.sin(t * 0.19) * 120 })
+        set(byId("grid"), { x: -((t * 6) % 40), y: -((t * 3) % 40) })
+      })
+
+      function exit(el, lt, len, d = 0.7) {
+        const k = p(lt, len - d, len, ease.inCubic)
+        set(el, { o: 1 - k, s: 1 + k * 0.03, blur: k * 10 })
+      }
+      function glide(el, lt, a, b, from, to, press, o = 1) {
+        const k = p(lt, a, b, ease.inOutCubic)
+        const down = press === undefined ? 0 : p(lt, press, press + 0.08) * (1 - p(lt, press + 0.12, press + 0.3))
+        set(el, { x: lerp(from[0], to[0], k), y: lerp(from[1], to[1], k), s: 1 - down * 0.18, o })
+      }
+      function ripple(el, lt, at, x, y) {
+        const k = p(lt, at, at + 0.6, ease.outCubic)
+        el.style.left = `${x}px`
+        el.style.top = `${y}px`
+        set(el, { o: lt < at ? 0 : 1 - k, s: 0.3 + k * 1.2 })
+      }
+      function press(el, lt, at) {
+        const d = p(lt, at, at + 0.08) * (1 - p(lt, at + 0.1, at + 0.35))
+        set(el, { s: 1 - d * 0.08 })
+        el.style.filter = d > 0.01 ? `brightness(${1 + d * 0.4})` : "none"
+      }
+      /** Types a command, then shows its output a moment after. */
+      function command(cmdEl, outEl, text, lt, at, cps = 30) {
+        type(cmdEl, text, lt, at, cps)
+        const done = at + text.length / cps
+        if (outEl) outEl.style.opacity = lt >= done + 0.25 ? "1" : "0"
+        return done
+      }
+      /** Places a track from one point to another. */
+      function track(el, x1, y1, x2, y2, k) {
+        const len = Math.hypot(x2 - x1, y2 - y1)
+        el.style.left = `${x1}px`
+        el.style.top = `${y1}px`
+        el.style.width = `${len}px`
+        el.style.transform = `rotate(${Math.atan2(y2 - y1, x2 - x1)}rad) scaleX(${k})`
+        el.style.opacity = String(k)
+      }
+
+      // 1 · Cold open, 0–7.4
+      scene(0, 7.4, byId("s1"), (lt, len) => {
+        const w = p(lt, 0, 0.6, ease.outQuart)
+        const gone = p(lt, 3.4, 4.0, ease.inCubic)
+        set(byId("s1-term"), { o: w * (1 - gone), y: (1 - w) * 30 - gone * 20, s: 0.97 + w * 0.03 - gone * 0.06, blur: gone * 14 })
+        const typed = type(byId("s1-cmd"), "studio", lt, 0.7, 12)
+        caret(byId("s1-caret"), lt, lt < 1.5, lt >= 0.7 && !typed)
+        byId("s1-out").style.display = lt >= 1.55 ? "inline" : "none"
+        set(byId("s1-out"), { o: p(lt, 1.55, 1.75) })
+
+        set(byId("s1-halo"), { o: p(lt, 3.8, 5.5) * 0.85, s: 0.6 + p(lt, 3.8, 6) * 0.4 })
+        const top = p(lt, 3.7, 4.5, ease.outBack)
+        const left = p(lt, 3.85, 4.65, ease.outBack)
+        const right = p(lt, 4.0, 4.8, ease.outBack)
+        set(byId("s1-top"), { o: p(lt, 3.7, 4.0), y: (1 - top) * -140 })
+        set(byId("s1-left"), { o: p(lt, 3.85, 4.15), x: (1 - left) * -120, y: (1 - left) * 70 })
+        set(byId("s1-right"), { o: p(lt, 4.0, 4.3), x: (1 - right) * 120, y: (1 - right) * 70 })
+        set(byId("s1-logo"), { y: Math.sin(lt * 1.6) * 5 * p(lt, 4.8, 5.4) })
+        reveal(byId("s1-mark"), lt, 4.4, undefined, 0.09)
+        reveal(byId("s1-tag"), lt, 5.0, undefined, 0.05)
+        ;[1, 2, 3].forEach((i) => rise(byId(`s1-h${i}`), lt, 5.5 + i * 0.12, undefined, 18, 0.5))
+        exit(byId("s1"), lt, len, 0.8)
+      })
+
+      // 2 · One microVM per agent, 6.6–15.4
+      scene(6.6, 15.4, byId("s2"), (lt, len) => {
+        rise(byId("s2-k"), lt, 0.3)
+        reveal(byId("s2-h"), lt, 0.4)
+        reveal(byId("s2-s"), lt, 0.9, undefined, 0.025)
+        ;[1, 2, 3].forEach((i) => {
+          const k = p(lt, 0.9 + i * 0.15, 1.8 + i * 0.15, ease.outQuart)
+          set(byId(`s2-v${i}`), { o: k, y: (1 - k) * 80, s: 0.95 + k * 0.05, blur: (1 - k) * 10 })
+        })
+        command(byId("s2-c1"), byId("s2-o1"), "uname -srm", lt, 2.0)
+        command(byId("s2-c1b"), byId("s2-o1b"), "docker ps --format '{{.Names}}'", lt, 3.2, 34)
+        command(byId("s2-c2"), byId("s2-o2"), "npm test", lt, 2.3)
+        command(byId("s2-c2b"), byId("s2-o2b"), "git commit -qam 'Add order totals'", lt, 3.5, 34)
+        command(byId("s2-c3"), byId("s2-o3"), "go test ./api/...", lt, 2.6)
+        command(byId("s2-c3b"), byId("s2-o3b"), "ls /workspace", lt, 3.9)
+        const sn = p(lt, 5.4, 5.9, ease.outBack)
+        set(byId("s2-snap"), { o: p(lt, 5.4, 5.6), s: 0.7 + sn * 0.3 })
+        exit(byId("s2"), lt, len)
+      })
+
+      // 3 · Egress, 14.8–23.6
+      scene(14.8, 23.6, byId("s3"), (lt, len) => {
+        rise(byId("s3-k"), lt, 0.3)
+        reveal(byId("s3-h"), lt, 0.4)
+        reveal(byId("s3-s"), lt, 0.9, undefined, 0.03)
+        const w = p(lt, 0.3, 1.2, ease.outQuart)
+        set(byId("s3-log"), { o: w, y: (1 - w) * 50, blur: (1 - w) * 10 })
+        ;[1.3, 1.7, 2.1, 2.6].forEach((at, i) => {
+          const k = p(lt, at, at + 0.45, ease.outQuart)
+          set(byId(`s3-r${i + 1}`), { o: k, x: (1 - k) * -30 })
+        })
+        // The held row pulses until it's answered.
+        const v4 = byId("s3-v4")
+        const denied = lt >= 5.0
+        v4.textContent = denied ? "denied" : "held"
+        v4.className = `verdict ${denied ? "v-deny" : "v-hold"}`
+        byId("s3-why4").textContent = denied ? "denied by you" : "waiting for you"
+        const pulse = !denied && lt > 2.6 ? (Math.sin(lt * 7) + 1) / 2 : 0
+        byId("s3-r4").style.background = denied
+          ? `rgba(239,100,97,${0.1 * (1 - p(lt, 5.0, 6.5))})`
+          : `rgba(240,180,76,${0.04 + pulse * 0.06})`
+
+        const c = p(lt, 2.9, 3.5, ease.outBack)
+        const cOut = p(lt, 4.9, 5.3, ease.inCubic)
+        set(byId("s3-card"), { o: p(lt, 2.9, 3.1) * (1 - cOut), y: (1 - c) * 40 - cOut * 20, s: 0.94 + c * 0.06 - cOut * 0.04 })
+        glide(byId("s3-cursor"), lt, 3.6, 4.5, [1500, 1060], [1620, 802], 4.6, p(lt, 3.4, 3.6) * (1 - p(lt, 5.1, 5.4)))
+        ripple(byId("s3-ripple"), lt, 4.63, 1626, 808)
+        press(byId("s3-deny"), lt, 4.6)
+        exit(byId("s3"), lt, len)
+      })
+
+      // 4 · Secrets, 23.0–31.8
+      scene(23.0, 31.8, byId("s4"), (lt, len) => {
+        rise(byId("s4-k"), lt, 0.3)
+        reveal(byId("s4-h"), lt, 0.4)
+        reveal(byId("s4-s"), lt, 0.9, undefined, 0.03)
+        const w = p(lt, 0.2, 1.0, ease.outQuart)
+        set(byId("s4-term"), { o: w, y: (1 - w) * 40, blur: (1 - w) * 10 })
+        command(byId("s4-c1"), byId("s4-o1"), "env | grep OPENAI", lt, 1.0, 26)
+        const sent = command(byId("s4-c2"), null, 'curl -s api.openai.com/v1/models -H "Authorization: Bearer $OPENAI_API_KEY"', lt, 2.0, 60)
+        byId("s4-o2").style.opacity = lt >= 5.1 ? "1" : "0"
+
+        ;[1, 2, 3, 4].forEach((i) => {
+          const k = p(lt, 1.0 + i * 0.12, 1.7 + i * 0.12, ease.outBack)
+          set(byId(`s4-n${i}`), { o: p(lt, 1.0 + i * 0.12, 1.3 + i * 0.12), s: 0.7 + k * 0.3 })
+        })
+        const tk = p(lt, 1.4, 2.2, ease.outQuart)
+        byId("s4-t1").style.transformOrigin = "0 50%"
+        set(byId("s4-t1"), { o: tk, sx: tk })
+        track(byId("s4-t2"), 610, 700, 918, 590, tk)
+        track(byId("s4-t3"), 610, 700, 918, 840, tk)
+
+        // The real request: the placeholder turns into the key at the gateway.
+        const fl = byId("s4-flip")
+        const a = p(lt, sent, sent + 0.8, ease.inOutCubic)
+        const b = p(lt, sent + 1.5, sent + 2.2, ease.inOutCubic)
+        const fx = lerp(lerp(170, 550, a), 918, b)
+        const fy = lerp(700, 590, b)
+        fl.style.left = `${fx - 95}px`
+        fl.style.top = `${fy - 23}px`
+        set(fl, { o: p(lt, sent - 0.1, sent + 0.1) * (1 - p(lt, sent + 2.1, sent + 2.4)) })
+        const turn = p(lt, sent + 0.9, sent + 1.4, ease.inOutCubic)
+        set(byId("s4-stand"), { ry: turn * 180 })
+        set(byId("s4-real"), { ry: 180 + turn * 180 })
+        rise(byId("s4-ok"), lt, sent + 2.2, undefined, 10, 0.5)
+
+        // The same placeholder sent elsewhere stays a placeholder.
+        const s2 = sent + 2.4
+        const pk = byId("s4-p2")
+        const a2 = p(lt, s2, s2 + 0.8, ease.inOutCubic)
+        const b2 = p(lt, s2 + 1.1, s2 + 1.8, ease.inOutCubic)
+        pk.style.left = `${lerp(lerp(170, 550, a2), 918, b2) - 95}px`
+        pk.style.top = `${lerp(700, 840, b2) - 23}px`
+        set(pk, { o: p(lt, s2 - 0.1, s2 + 0.1) * (1 - p(lt, s2 + 1.7, s2 + 2.0)) })
+        rise(byId("s4-bad"), lt, s2 + 1.8, undefined, 10, 0.5)
+        exit(byId("s4"), lt, len)
+      })
+
+      // 5 · Git review, 31.2–40.0
+      scene(31.2, 40.0, byId("s5"), (lt, len) => {
+        rise(byId("s5-k"), lt, 0.3)
+        reveal(byId("s5-h"), lt, 0.4)
+        reveal(byId("s5-s"), lt, 0.9, undefined, 0.03)
+        const w = p(lt, 0.2, 1.0, ease.outQuart)
+        set(byId("s5-term"), { o: w, y: (1 - w) * 40, blur: (1 - w) * 10 })
+        command(byId("s5-c1"), byId("s5-o1"), "git push origin feature/checkout", lt, 0.9, 30)
+        const c = p(lt, 2.6, 3.4, ease.outQuart)
+        set(byId("s5-card"), { o: c, y: (1 - c) * 60, blur: (1 - c) * 10 })
+        glide(byId("s5-cursor"), lt, 4.4, 5.3, [1500, 1060], [1740, 905], 5.4, p(lt, 4.2, 4.4) * (1 - p(lt, 6.0, 6.3)))
+        ripple(byId("s5-ripple"), lt, 5.43, 1746, 911)
+        press(byId("s5-approve"), lt, 5.4)
+        const done = p(lt, 5.8, 6.3, ease.outQuart)
+        set(byId("s5-row"), { o: 1 - done, y: -done * 10 })
+        const pd = p(lt, 6.0, 6.6, ease.outBack)
+        set(byId("s5-pushed"), { o: p(lt, 6.0, 6.2), y: (1 - pd) * 14 })
+        exit(byId("s5"), lt, len)
+      })
+
+      // 6 · The rest, 39.4–47.0
+      scene(39.4, 47.0, byId("s6"), (lt, len) => {
+        rise(byId("s6-k"), lt, 0.3)
+        reveal(byId("s6-h"), lt, 0.4, undefined, 0.06)
+        for (let i = 1; i <= 6; i++) {
+          const at = 1.2 + (i - 1) * 0.16
+          const k = p(lt, at, at + 0.8, ease.outQuart)
+          set(byId(`s6-t${i}`), { o: k, y: (1 - k) * 60, s: 0.96 + k * 0.04, blur: (1 - k) * 8 })
+        }
+        exit(byId("s6"), lt, len)
+      })
+
+      // 7 · Outro, 46.4–54
+      scene(46.4, 54, byId("s7"), (lt, len) => {
+        set(byId("s7-halo"), { o: p(lt, 0.2, 1.8) * 0.8, s: 0.7 + p(lt, 0.2, 2.2) * 0.3 })
+        const l = p(lt, 0.2, 1.1, ease.outBack)
+        set(byId("s7-logo"), { o: p(lt, 0.2, 0.5), s: 0.6 + l * 0.4, y: Math.sin(lt * 1.6) * 5 })
+        reveal(byId("s7-mark"), lt, 0.5, undefined, 0.09)
+        reveal(byId("s7-tag"), lt, 1.0, undefined, 0.04)
+        rise(byId("s7-install"), lt, 1.6)
+        const cmd = " curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh"
+        const typed = type(byId("s7-cmd"), cmd, lt, 2.0, 55)
+        caret(byId("s7-caret"), lt, lt >= 1.8, lt >= 2.0 && !typed)
+        rise(byId("s7-facts"), lt, 3.9)
+        rise(byId("s7-repo"), lt, 4.2)
+        set(byId("s7"), { o: 1 - p(lt, len - 0.6, len, ease.inCubic) })
+      })
+
+      M.start(54)
+    </script>
+  </body>
+</html>

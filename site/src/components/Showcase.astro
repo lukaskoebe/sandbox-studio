@@ -1,0 +1,90 @@
+---
+// A screenshot next to a short explanation; `flip` puts the screenshot on the left.
+import { Image } from 'astro:assets'
+import type { ImageMetadata } from 'astro'
+
+interface Props {
+  image: ImageMetadata
+  alt: string
+  kicker: string
+  title: string
+  flip?: boolean
+}
+const { image, alt, kicker, title, flip = false } = Astro.props
+---
+
+<div class:list={['showcase not-content', { flip }]}>
+  <div class="showcase-copy">
+    <p class="showcase-kicker">{kicker}</p>
+    <h3>{title}</h3>
+    <div class="showcase-text"><slot /></div>
+  </div>
+  <div class="showcase-shot">
+    <Image src={image} alt={alt} loading="lazy" />
+  </div>
+</div>
+
+<style>
+  .showcase {
+    display: grid;
+    gap: 1.75rem;
+    align-items: center;
+  }
+  .showcase + :global(.showcase) {
+    margin-top: clamp(3rem, 6vw, 5rem);
+  }
+  @media (min-width: 55rem) {
+    .showcase {
+      grid-template-columns: 5fr 7fr;
+      gap: 3.5rem;
+    }
+    .flip {
+      grid-template-columns: 7fr 5fr;
+    }
+    .flip .showcase-copy {
+      order: 2;
+    }
+  }
+  .showcase-kicker {
+    font-family: var(--__sl-font-mono);
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--sl-color-text-accent);
+  }
+  h3 {
+    margin-top: 0.6rem;
+    font-size: clamp(1.5rem, 1rem + 1.5vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    font-weight: 670;
+    color: var(--sl-color-white);
+    text-wrap: balance;
+  }
+  .showcase-text {
+    margin-top: 0.9rem;
+    color: var(--sl-color-gray-2);
+    line-height: 1.7;
+  }
+  .showcase-text :global(p + p) {
+    margin-top: 0.75rem;
+  }
+  .showcase-text :global(a) {
+    color: var(--sl-color-text-accent);
+    font-weight: 560;
+  }
+  .showcase-shot {
+    padding: 0.4rem;
+    border-radius: 1rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    background: var(--ss-surface);
+    box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.55);
+  }
+  .showcase-shot :global(img) {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 0.7rem;
+  }
+</style>

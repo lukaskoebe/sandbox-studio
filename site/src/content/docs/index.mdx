@@ -1,42 +1,166 @@
 ---
 title: Sandbox Studio
+description: AI teammates that work safely on your computer. Sandbox Studio runs Claude Code, Codex and OpenCode in their own microVM sandboxes, with network approvals, protected credentials and review before git pushes.
 template: splash
+pagefind: false
+editUrl: false
+prev: false
+next: false
 hero:
-  title: Coding agents, in their own workspaces.
-  tagline: Persistent Linux sandboxes with network controls, protected credentials, and review before configured Git pushes reach a forge.
-  image:
-    file: ../../assets/screenshots/hero-dark.jpg
-    alt: A sandbox's dashboard in Sandbox Studio's dark theme
+  title: AI teammates that work safely on your computer.
+  tagline: Sandbox Studio gives Claude Code, Codex and OpenCode a sandbox of their own. You decide what goes out, your keys stay on your machine, and nothing reaches your repositories until you approve it.
   actions:
     - text: Get started
       link: /sandbox-studio/getting-started/
       variant: primary
-    - text: Explore sandboxes
-      link: /sandbox-studio/sandboxes/
-      variant: minimal
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/lukaskoebe/sandbox-studio
+      variant: secondary
+      icon: github
 ---
 
-Sandbox Studio runs OpenCode, Claude Code, or Codex inside a microVM on your machine. Each sandbox keeps its workspace and Docker data between sessions. The Studio app stays on the host and handles network access, credentials, browser actions, and Git review.
+import { LinkCard, CardGrid } from '@astrojs/starlight/components'
+import Section from '../../components/Section.astro'
+import Features from '../../components/Features.astro'
+import Showcase from '../../components/Showcase.astro'
+import DevVideo from '../../components/DevVideo.astro'
+import Install from '../../components/Install.astro'
+import Closing from '../../components/Closing.astro'
+import approval from '../../assets/screenshots/approval.jpg'
+import browser from '../../assets/screenshots/browser.jpg'
 
-## A useful boundary
+<Section kicker="Why Studio" title="Let agents do real work, <span class='accent'>without the keys to everything</span>">
+  <Fragment slot="lede">
+    Agents are most useful with a real computer: a terminal, Docker, the web. Studio gives each
+    teammate one, and keeps everything that leaves it on your side of the line.
+  </Fragment>
+  <Features
+    items={[
+      {
+        icon: 'box',
+        title: 'A sandbox for every teammate',
+        text: 'Each teammate works in its own small virtual machine with a persistent workspace, a terminal and Docker. Your own files stay out of reach.',
+        link: 'sandboxes/',
+      },
+      {
+        icon: 'shield',
+        title: 'You decide what goes out',
+        text: 'Every connection leaves through Studio. A new site waits for your answer, and a rule remembers it for next time.',
+        link: 'network/',
+      },
+      {
+        icon: 'key',
+        title: 'Your keys stay with you',
+        text: 'API keys and passwords stay encrypted on your computer. The sandbox sees a stand-in that Studio swaps for the real value on the way out.',
+        link: 'secrets/',
+      },
+      {
+        icon: 'git',
+        title: 'Review before it ships',
+        text: 'Pushes wait as a diff until you approve them. Then Studio sends them on to GitHub, GitLab, Forgejo, any git host or a folder on your computer.',
+        link: 'git-review/',
+      },
+      {
+        icon: 'browser',
+        title: 'A browser of its own',
+        text: 'Teammates browse in a separate virtual machine. Watch live, take over any time, and approve the clicks that matter.',
+        link: 'browser/',
+      },
+      {
+        icon: 'brain',
+        title: 'Teammates that remember',
+        text: 'Each teammate keeps a memory across sessions and sandboxes, next to a shared team memory. Embeddings run locally.',
+        link: 'memory/',
+      },
+    ]}
+  />
+</Section>
 
-- **Your files stay in a sandbox.** Each sandbox has its own persistent Linux workspace and terminal.
-- **You control access out.** Network rules apply to sandbox traffic, including Docker containers. Unknown hosts wait for your decision.
-- **Secrets stay on the host.** Sandboxes receive placeholders; Studio substitutes secret values only for approved, host-bound HTTPS traffic.
-- **You review configured Git pushes.** Forges added under **Settings → Git** receive pushes only after you approve the staged change.
+<Section kicker="In practice" title="Stay in the loop, not in the way">
+  <Showcase
+    image={approval}
+    alt="A sandbox's terminal with a network approval card for example.com in the corner"
+    kicker="Approvals"
+    title="Questions come to you, where you are"
+  >
+    <p>
+      When a teammate reaches for a site it hasn't used before, the request waits and a card
+      pops up. Allow it once, for an hour or always. An answer that lasts becomes a rule, so
+      you aren't asked twice.
+    </p>
+    <p>
+      <a href="network/">Network rules and approvals →</a>
+    </p>
+  </Showcase>
+  <Showcase
+    image={browser}
+    alt="A teammate's browser showing a Wikipedia page, with per-site rules on the side"
+    kicker="Browser"
+    title="Watch it work, take the wheel any time"
+    flip
+  >
+    <p>
+      Reading pages is always fine. Clicks and typing on a new site ask first, password fields
+      are hidden from the agent, and stored logins are filled in by Studio, so the agent never
+      sees them.
+    </p>
+    <p>
+      <a href="browser/">Let an agent use a browser →</a>
+    </p>
+  </Showcase>
+</Section>
 
-![Sandbox Studio's Home page with two running sandboxes](../../assets/screenshots/overview.jpg)
+<Section kicker="Under the hood" title="Built for people who read the source">
+  <Fragment slot="lede">
+    One microVM per agent, a gateway that sees every connection, and policy that lives on the
+    host. Use the web UI, the TUI or the CLI.
+  </Fragment>
+  <DevVideo />
+  <Features
+    items={[
+      {
+        icon: 'terminal',
+        title: 'Real Linux, root included',
+        text: 'Persistent microVMs on KVM or Hypervisor.framework with Docker inside. Previews of any port, suspend and resume, fork, export and import.',
+        link: 'sandboxes/',
+      },
+      {
+        icon: 'globe',
+        title: 'Egress as policy',
+        text: 'Allow, proxy, deny, or write Caddy config, per environment, teammate or sandbox. Docker traffic goes through the same gateway.',
+        link: 'network/',
+      },
+      {
+        icon: 'layers',
+        title: 'Templates and checkpoints',
+        text: 'Describe a sandbox in a few lines of YAML and Studio builds a cached template. Disk checkpoints capture a sandbox while it runs.',
+        link: 'templates/',
+      },
+      {
+        icon: 'chat',
+        title: 'Your plan, your harness',
+        text: 'Bring an API key, an OpenAI-compatible endpoint, or sign in with a Claude or ChatGPT subscription. Pick OpenCode, Claude Code or Codex per teammate.',
+        link: 'teammates-providers/',
+      },
+    ]}
+    columns={2}
+  />
+</Section>
 
-## Choose a guide
+<Section kicker="Install" title="Up and running in a few minutes">
+  <Install />
+</Section>
 
-- [Install Studio and create your first teammate](./getting-started/)
-- [Understand environments](./environments/)
-- [Create sandboxes, use terminals, and open previews](./sandboxes/)
-- [Set up network rules and approvals](./network/)
-- [Keep API keys and other secrets out of sandboxes](./secrets/)
-- [Connect a provider and configure teammates](./teammates-providers/)
-- [Build a reusable sandbox template](./templates/)
-- [Save disk checkpoints](./checkpoints/)
-- [Use teammate and shared memory](./memory/)
-- [Let an agent use an isolated browser](./browser/)
-- [Review Git pushes](./git-review/)
+<Section kicker="Guides" title="Learn your way around">
+  <CardGrid>
+    <LinkCard title="Getting started" description="Install Studio and create your first teammate." href="getting-started/" />
+    <LinkCard title="Chat" description="Talk to a teammate, answer its questions, and undo its changes." href="chat/" />
+    <LinkCard title="Network rules and approvals" description="Decide which sites sandboxes can reach." href="network/" />
+    <LinkCard title="Secrets" description="Keep API keys and passwords out of sandboxes." href="secrets/" />
+    <LinkCard title="Git review" description="Approve pushes before they reach a forge." href="git-review/" />
+    <LinkCard title="Templates" description="Build reusable sandboxes from a short YAML spec." href="templates/" />
+  </CardGrid>
+</Section>
+
+<Closing />

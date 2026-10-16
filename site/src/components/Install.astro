@@ -1,0 +1,130 @@
+---
+// The landing page's install steps, with the command for each platform.
+import { Code, Tabs, TabItem } from '@astrojs/starlight/components'
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+---
+
+<div class="install not-content">
+  <ol class="install-steps">
+    <li>
+      <h3>Install the <code>studio</code> binary</h3>
+      <p>One file, installed to <code>~/.local/bin</code> without sudo.</p>
+      <Tabs syncKey="os">
+        <TabItem label="Linux and macOS">
+          <Code
+            lang="sh"
+            wrap
+            code="curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh"
+          />
+        </TabItem>
+        <TabItem label="Windows">
+          <p class="install-tab-text">
+            Turn on the Windows Hypervisor Platform and reboot. Then download the Windows archive
+            from <a href="https://github.com/lukaskoebe/sandbox-studio/releases">Releases</a>,
+            check it against <code>checksums.txt</code>, and put <code>studio.exe</code> on your
+            <code>PATH</code>.
+          </p>
+        </TabItem>
+      </Tabs>
+    </li>
+    <li>
+      <h3>Check the machine and start Studio</h3>
+      <p>Studio prints a one-time login link for its local UI.</p>
+      <Code lang="sh" code={'studio doctor\nstudio'} />
+    </li>
+    <li>
+      <h3>Follow the guided setup</h3>
+      <p>
+        Choose Chat or Terminal, connect an AI provider, meet your first teammate and create a
+        sandbox. Every step can be skipped and picked up later.
+      </p>
+    </li>
+  </ol>
+  <p class="install-note">
+    Needs Linux with KVM, macOS on Apple Silicon, or Windows 11 (preview), and about 5 GB of free
+    disk. <a href={`${base}getting-started/`}>Getting started</a> has the details.
+  </p>
+</div>
+
+<style>
+  .install {
+    max-width: 46rem;
+    margin-inline: auto;
+  }
+  .install-steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .install-steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 2.25rem 3.5rem;
+  }
+  .install-steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    border: 1px solid var(--ss-green-border);
+    background: var(--ss-green-soft);
+    color: var(--sl-color-text-accent);
+    font: 600 var(--sl-text-sm) / 1 var(--__sl-font-mono);
+  }
+  .install-steps > li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: calc(1.125rem - 0.5px);
+    top: 2.75rem;
+    bottom: 0.5rem;
+    width: 1px;
+    background: var(--sl-color-hairline-light);
+  }
+  h3 {
+    padding-top: 0.25rem;
+    font-size: var(--sl-text-xl);
+    font-weight: 640;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+  }
+  h3 code,
+  p code {
+    font-family: var(--__sl-font-mono);
+    font-size: 0.9em;
+    padding: 0.1em 0.35em;
+    border-radius: 0.3rem;
+    background: var(--sl-color-bg-inline-code);
+  }
+  p {
+    margin-top: 0.4rem;
+    color: var(--sl-color-gray-2);
+    line-height: 1.65;
+  }
+  .install-steps :global(starlight-tabs),
+  .install-steps :global(.expressive-code) {
+    margin-top: 1rem;
+  }
+  .install-tab-text {
+    margin-top: 1rem;
+  }
+  .install-tab-text a,
+  .install-note a {
+    color: var(--sl-color-text-accent);
+    font-weight: 560;
+  }
+  .install-note {
+    margin-top: 0;
+    padding: 1rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--sl-color-hairline-light);
+    background: var(--ss-surface);
+    font-size: var(--sl-text-sm);
+  }
+</style>

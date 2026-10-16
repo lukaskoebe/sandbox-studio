@@ -1,0 +1,64 @@
+---
+// The landing page's closing call to action.
+import { LinkButton } from '@astrojs/starlight/components'
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+---
+
+<section class="closing not-content">
+  <svg class="closing-mark" viewBox="112 104 288 328" aria-hidden="true">
+    <g stroke="currentColor" stroke-width="20" stroke-linejoin="round" fill="currentColor">
+      <path d="M256 120 384 194 256 268 128 194Z"></path>
+      <path d="M128 194 256 268V416L128 342Z" fill-opacity=".35"></path>
+      <path d="M384 194 256 268V416L384 342Z" fill-opacity=".65"></path>
+    </g>
+  </svg>
+  <h2>Give your agents a safe place to work.</h2>
+  <p>Free and open source under the Apache 2.0 license.</p>
+  <div class="closing-actions">
+    <LinkButton href={`${base}getting-started/`} icon="right-arrow">Get started</LinkButton>
+    <LinkButton href="https://github.com/lukaskoebe/sandbox-studio" variant="secondary" icon="github">
+      Star on GitHub
+    </LinkButton>
+  </div>
+</section>
+
+<style>
+  .closing {
+    position: relative;
+    overflow: hidden;
+    margin-top: clamp(4.5rem, 10vw, 7.5rem);
+    padding: clamp(2.5rem, 6vw, 4.5rem) 1.5rem;
+    border-radius: 1.5rem;
+    border: 1px solid var(--ss-green-border);
+    background:
+      radial-gradient(ellipse 70% 90% at 50% 0%, var(--ss-glow), transparent 70%),
+      var(--ss-surface);
+    text-align: center;
+  }
+  .closing-mark {
+    width: 3rem;
+    height: 3rem;
+    color: var(--ss-green);
+  }
+  h2 {
+    margin-top: 1.25rem;
+    font-size: clamp(1.8rem, 1rem + 2.6vw, 2.75rem);
+    line-height: 1.1;
+    letter-spacing: -0.035em;
+    font-weight: 690;
+    color: var(--sl-color-white);
+    text-wrap: balance;
+  }
+  p {
+    margin-top: 0.75rem;
+    color: var(--sl-color-gray-2);
+  }
+  .closing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 1.75rem;
+  }
+</style>

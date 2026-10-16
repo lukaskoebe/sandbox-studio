@@ -1,0 +1,1105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sandbox Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      /* Intro */
+      .logo-wrap {
+        position: absolute;
+        left: 830px;
+        top: 230px;
+        width: 260px;
+        height: 260px;
+      }
+      .logo-wrap svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .halo {
+        position: absolute;
+        left: 660px;
+        top: 60px;
+        width: 600px;
+        height: 600px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(63, 193, 104, 0.35), rgba(63, 193, 104, 0) 65%);
+      }
+      .wordmark {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 545px;
+        text-align: center;
+        font-size: 96px;
+        font-weight: 700;
+        letter-spacing: -0.045em;
+      }
+      .intro-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 690px;
+        text-align: center;
+        font-size: 40px;
+        color: var(--muted);
+        font-weight: 450;
+        letter-spacing: -0.015em;
+      }
+
+      /* Chat */
+      .chat {
+        left: 880px;
+        top: 110px;
+        width: 880px;
+        height: 700px;
+        display: flex;
+        flex-direction: column;
+      }
+      .chat .win-bar {
+        height: 78px;
+        color: var(--fg);
+        font-weight: 600;
+        font-size: 24px;
+      }
+      .chat .status {
+        margin-left: auto;
+      }
+      .thread {
+        flex: 1;
+        padding: 34px 34px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        position: relative;
+      }
+      .bubble {
+        align-self: flex-end;
+        max-width: 640px;
+        padding: 20px 26px;
+        border-radius: 22px 22px 6px 22px;
+        background: var(--green-low);
+        border: 1px solid rgba(63, 193, 104, 0.3);
+        font-size: 25px;
+        line-height: 1.45;
+        transform-origin: 100% 100%;
+      }
+      .reply {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+      }
+      .reply .text {
+        font-size: 25px;
+        line-height: 1.45;
+        padding-top: 4px;
+      }
+      .steps {
+        margin: 16px 0 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .step {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-size: 23px;
+        color: var(--muted);
+      }
+      .step .ic {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        position: relative;
+      }
+      .step .ic svg {
+        width: 20px;
+        height: 20px;
+      }
+      .spin {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.12);
+        border-top-color: var(--green);
+      }
+      .chk {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: var(--green-deep);
+        color: #fff;
+        display: grid;
+        place-items: center;
+      }
+      .composer {
+        margin: 24px 30px 28px;
+        height: 76px;
+        border-radius: 16px;
+        border: 1px solid var(--line-2);
+        background: var(--bg-2);
+        display: flex;
+        align-items: center;
+        padding: 0 14px 0 24px;
+        font-size: 24px;
+        gap: 12px;
+      }
+      .composer .field {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .composer .ph {
+        color: var(--dim);
+      }
+      .send {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        background: var(--green-deep);
+        display: grid;
+        place-items: center;
+        color: #fff;
+      }
+      .send svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      /* The bakery preview */
+      .preview {
+        left: 1200px;
+        top: 600px;
+        width: 640px;
+        height: 430px;
+      }
+      .preview .win-bar {
+        height: 50px;
+        font-size: 18px;
+      }
+      .bakery {
+        background: #fbf4ec;
+        height: 380px;
+        color: #3b2a22;
+        padding: 26px 30px;
+        position: relative;
+        overflow: hidden;
+      }
+      .bakery .nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 700;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+      }
+      .bakery .nav span {
+        font-weight: 500;
+        font-size: 15px;
+        color: #8a6d5e;
+        margin-left: 18px;
+      }
+      .bakery h3 {
+        margin: 18px 0 6px;
+        font-size: 38px;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        font-family: Georgia, serif;
+        font-weight: 600;
+      }
+      .bakery p {
+        margin: 0;
+        font-size: 16px;
+        color: #8a6d5e;
+      }
+      .cakes {
+        display: flex;
+        gap: 16px;
+        margin-top: 18px;
+      }
+      .cake {
+        flex: 1;
+        border-radius: 14px;
+        background: #fff;
+        padding: 14px;
+        box-shadow: 0 6px 16px rgba(80, 40, 20, 0.08);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .cake i {
+        display: block;
+        height: 64px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+      }
+      .cake small {
+        display: block;
+        font-weight: 500;
+        color: #a3826f;
+        margin-top: 2px;
+      }
+      .order {
+        position: absolute;
+        right: 30px;
+        top: 112px;
+        background: #c9563c;
+        color: #fff;
+        padding: 12px 20px;
+        border-radius: 999px;
+        font-size: 16px;
+        font-weight: 650;
+      }
+
+      /* Sandbox vs your computer */
+      .s3-copy {
+        left: 0;
+        right: 0;
+        top: 96px;
+        align-items: center;
+        text-align: center;
+      }
+      .s3-copy .sub {
+        max-width: 1400px;
+      }
+      .box {
+        position: absolute;
+        left: 300px;
+        top: 430px;
+        width: 420px;
+        height: 420px;
+      }
+      .box svg {
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .box-label {
+        position: absolute;
+        left: 300px;
+        width: 420px;
+        top: 880px;
+        text-align: center;
+        font-size: 26px;
+        font-weight: 600;
+      }
+      .box-label small {
+        display: block;
+        font-weight: 450;
+        color: var(--muted);
+        font-size: 21px;
+        margin-top: 4px;
+      }
+      .wall {
+        position: absolute;
+        left: 940px;
+        top: 420px;
+        width: 4px;
+        height: 520px;
+        border-radius: 4px;
+        background: linear-gradient(var(--green), rgba(63, 193, 104, 0.15));
+        box-shadow: 0 0 40px rgba(63, 193, 104, 0.6);
+        transform-origin: 50% 0;
+      }
+      .yours {
+        left: 1100px;
+        top: 450px;
+        width: 560px;
+        padding: 30px;
+      }
+      .yours h4 {
+        margin: 0 0 22px;
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .tile {
+        height: 130px;
+        border-radius: 14px;
+        background: var(--card-2);
+        border: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        font-size: 21px;
+        font-weight: 550;
+      }
+      .tile svg {
+        width: 40px;
+        height: 40px;
+        color: var(--muted);
+      }
+      .probe {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        margin: -9px 0 0 -9px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 22px var(--green);
+      }
+      .hit {
+        position: absolute;
+        width: 70px;
+        height: 70px;
+        margin: -35px 0 0 -35px;
+        border-radius: 50%;
+        border: 3px solid var(--green);
+      }
+
+      /* Secrets */
+      .vault {
+        left: 330px;
+        top: 230px;
+        width: 520px;
+        padding: 26px 28px;
+      }
+      .vault h4 {
+        margin: 0 0 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 22px;
+        font-weight: 600;
+      }
+      .vault h4 svg {
+        width: 24px;
+        height: 24px;
+        color: var(--green);
+      }
+      .secret {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 18px;
+        border-radius: 12px;
+        background: var(--card-2);
+        font-size: 21px;
+        margin-top: 10px;
+      }
+      .secret .mono {
+        color: var(--muted);
+        letter-spacing: 0.08em;
+      }
+      .secret small {
+        color: var(--dim);
+        font-size: 17px;
+        margin-left: 10px;
+      }
+      .flip {
+        position: absolute;
+        perspective: 800px;
+      }
+      .flip .packet {
+        position: absolute;
+        left: 0;
+        top: 0;
+        backface-visibility: hidden;
+      }
+      .packet.real {
+        background: #13301f;
+        border-color: rgba(63, 193, 104, 0.6);
+        color: var(--green-2);
+      }
+      .packet.stand {
+        color: var(--amber);
+      }
+
+      /* Browser */
+      .browser {
+        left: 900px;
+        top: 140px;
+        width: 900px;
+        height: 760px;
+      }
+      .browser .win-bar {
+        gap: 16px;
+      }
+      .shop {
+        background: #f6f7f5;
+        color: #1d2420;
+        height: 704px;
+        padding: 30px 36px;
+        position: relative;
+      }
+      .shop .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 750;
+        font-size: 26px;
+        letter-spacing: -0.03em;
+      }
+      .shop .top span {
+        font-weight: 500;
+        font-size: 17px;
+        color: #6a7570;
+      }
+      .shop h3 {
+        margin: 26px 0 18px;
+        font-size: 32px;
+        letter-spacing: -0.03em;
+      }
+      .item {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 18px;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+        margin-bottom: 14px;
+        font-size: 21px;
+        font-weight: 600;
+      }
+      .item i {
+        width: 66px;
+        height: 66px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #efe2c9, #d9c19a);
+        flex: none;
+      }
+      .item small {
+        display: block;
+        color: #6a7570;
+        font-weight: 500;
+        font-size: 17px;
+        margin-top: 3px;
+      }
+      .item .qty {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 19px;
+        color: #2a6b47;
+      }
+      .place {
+        position: absolute;
+        right: 36px;
+        bottom: 150px;
+        background: #1f6b43;
+        color: #fff;
+        padding: 16px 30px;
+        border-radius: 12px;
+        font-size: 21px;
+        font-weight: 650;
+      }
+      .total {
+        position: absolute;
+        left: 36px;
+        bottom: 160px;
+        font-size: 22px;
+        font-weight: 650;
+      }
+      .ask {
+        position: absolute;
+        left: 50%;
+        bottom: 26px;
+        width: 760px;
+        margin-left: -380px;
+        padding: 20px 24px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 21px;
+        background: #11171a;
+        color: var(--fg);
+        border: 1px solid rgba(63, 193, 104, 0.45);
+        box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.6);
+      }
+      .ask .q {
+        flex: 1;
+        line-height: 1.35;
+      }
+      .ask .q b {
+        font-weight: 650;
+      }
+      .ask .q small {
+        display: block;
+        font-size: 17px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .ask .btn {
+        height: 46px;
+        padding: 0 20px;
+        font-size: 19px;
+      }
+      .cursor.agent .tag {
+        left: auto;
+        right: 26px;
+        top: -24px;
+      }
+      .live {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--mono);
+        font-size: 16px;
+        color: var(--green);
+        letter-spacing: 0.08em;
+      }
+      .done-row {
+        position: absolute;
+        left: 36px;
+        bottom: 40px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        font-size: 21px;
+        font-weight: 600;
+        color: #1f6b43;
+      }
+      .done-row svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      /* Outro */
+      .end-logo {
+        position: absolute;
+        left: 870px;
+        top: 200px;
+        width: 180px;
+        height: 180px;
+      }
+      .end-mark {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 420px;
+        text-align: center;
+        font-size: 104px;
+        font-weight: 720;
+        letter-spacing: -0.048em;
+      }
+      .end-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 560px;
+        text-align: center;
+        font-size: 40px;
+        color: var(--muted);
+        letter-spacing: -0.015em;
+      }
+      .end-facts {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 680px;
+        display: flex;
+        justify-content: center;
+        gap: 18px;
+      }
+      .end-facts .pill {
+        font-size: 22px;
+        padding: 12px 22px;
+        color: var(--fg);
+      }
+      .end-facts .pill svg {
+        width: 22px;
+        height: 22px;
+        color: var(--green);
+      }
+      .end-url {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 820px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 28px;
+        color: var(--green);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="bg-glow" id="glow1"></div>
+      <div class="bg-glow two" id="glow2"></div>
+      <div class="bg-grid" id="grid"></div>
+
+      <!-- 1 · Intro -->
+      <section class="scene" id="s1">
+        <div class="halo" id="s1-halo"></div>
+        <div class="logo-wrap" id="s1-logo">
+          <svg viewBox="0 0 512 512">
+            <g stroke="#3fc168" stroke-width="16" stroke-linejoin="round">
+              <path id="s1-top" d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" />
+              <path id="s1-left" d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".35" />
+              <path id="s1-right" d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".65" />
+            </g>
+          </svg>
+        </div>
+        <div class="wordmark" id="s1-mark">Sandbox Studio</div>
+        <div class="intro-line" id="s1-line">AI teammates that work safely on your computer.</div>
+      </section>
+
+      <!-- 2 · Just ask -->
+      <section class="scene" id="s2">
+        <div class="copy" style="left: 150px; top: 330px; width: 660px">
+          <div class="kicker" id="s2-k">Chat</div>
+          <h2 class="h2" id="s2-h">Just ask.</h2>
+          <p class="sub" id="s2-s">Tell a teammate what you need in plain words. It gets to work and shows you the result.</p>
+        </div>
+        <div class="win chat" id="s2-chat">
+          <div class="win-bar">
+            <div class="avatar">A</div>
+            Ada
+            <div class="pill status" id="s2-status"><span class="dot" id="s2-dot"></span><span id="s2-state">Ready</span></div>
+          </div>
+          <div class="thread">
+            <div class="bubble" id="s2-bubble">Make a website for my bakery, with a page where people can order cakes.</div>
+            <div class="reply" id="s2-reply">
+              <div class="avatar">A</div>
+              <div>
+                <div class="text" id="s2-reply-text">On it! Here's what I'm doing:</div>
+                <div class="steps">
+                  <div class="step" id="s2-st1"><span class="ic"><span class="spin"></span><span class="chk" data-icon="check"></span></span>Design the home page</div>
+                  <div class="step" id="s2-st2"><span class="ic"><span class="spin"></span><span class="chk" data-icon="check"></span></span>Add an order form</div>
+                  <div class="step" id="s2-st3"><span class="ic"><span class="spin"></span><span class="chk" data-icon="check"></span></span>Open a preview for you</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="field"><span id="s2-typed"></span><span class="caret" id="s2-caret"></span><span class="ph" id="s2-ph">Message Ada…</span></div>
+            <div class="send" data-icon="send"></div>
+          </div>
+        </div>
+        <div class="win preview" id="s2-preview">
+          <div class="win-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">Preview · rosas-bakery</div></div>
+          <div class="bakery">
+            <div class="nav"><div>Rosa's Bakery</div><div><span>Cakes</span><span>Visit</span><span>Order</span></div></div>
+            <h3>Baked this morning,<br />for your table tonight.</h3>
+            <p>Fresh cakes, breads and pastries since 1998.</p>
+            <div class="order" id="s2-order">Order a cake</div>
+            <div class="cakes">
+              <div class="cake"><i style="background: linear-gradient(135deg, #f7c6c7, #e98a8d)"></i>Strawberry<small>from €24</small></div>
+              <div class="cake"><i style="background: linear-gradient(135deg, #6b4433, #3c241a)"></i>Chocolate<small>from €26</small></div>
+              <div class="cake"><i style="background: linear-gradient(135deg, #fbe7a1, #e9bf55)"></i>Lemon<small>from €22</small></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3 · Its own sandbox -->
+      <section class="scene" id="s3">
+        <div class="copy s3-copy">
+          <div class="kicker" id="s3-k">A space of its own</div>
+          <h2 class="h2" id="s3-h">Each teammate works in its own sandbox.</h2>
+          <p class="sub" id="s3-s">A separate computer, inside yours. Your files, photos and passwords stay out of its reach.</p>
+        </div>
+        <div class="box" id="s3-box">
+          <svg viewBox="0 0 512 512">
+            <g stroke="#3fc168" stroke-width="5" stroke-linejoin="round">
+              <path d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" fill-opacity=".22" />
+              <path d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".08" />
+              <path d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".14" />
+            </g>
+            <g id="s3-inner" transform="translate(256 300)">
+              <circle r="34" fill="#16834b" />
+              <text y="11" text-anchor="middle" font-size="32" font-weight="650" fill="#eafff1" font-family="Inter">A</text>
+            </g>
+          </svg>
+        </div>
+        <div class="box-label" id="s3-label">Ada's sandbox<small>Its own files, apps and browser</small></div>
+        <div class="wall" id="s3-wall"></div>
+        <div class="win yours" id="s3-yours">
+          <h4>Your computer</h4>
+          <div class="tiles">
+            <div class="tile" id="s3-t1"><span data-icon="folder"></span>Documents</div>
+            <div class="tile" id="s3-t2"><span data-icon="image"></span>Photos</div>
+            <div class="tile" id="s3-t3"><span data-icon="key"></span>Passwords</div>
+            <div class="tile" id="s3-t4"><span data-icon="mail"></span>Email</div>
+          </div>
+        </div>
+        <div class="probe" id="s3-p1"></div>
+        <div class="probe" id="s3-p2"></div>
+        <div class="probe" id="s3-p3"></div>
+        <div class="hit" id="s3-h1"></div>
+        <div class="hit" id="s3-h2"></div>
+        <div class="hit" id="s3-h3"></div>
+      </section>
+
+      <!-- 4 · You decide what goes out -->
+      <section class="scene" id="s4">
+        <div class="copy" style="left: 150px; top: 330px; width: 600px">
+          <div class="kicker" id="s4-k">Network</div>
+          <h2 class="h2" id="s4-h">You decide what goes out.</h2>
+          <p class="sub" id="s4-s">When a teammate wants to reach a new website, it asks you first. Allow it once, for an hour, or for good.</p>
+        </div>
+        <div class="track" id="s4-track" style="left: 960px; top: 660px; width: 760px"></div>
+        <div class="node" id="s4-n1" style="left: 885px; top: 585px"><div class="disc">
+          <svg viewBox="0 0 512 512"><g stroke="#3fc168" stroke-width="22" stroke-linejoin="round"><path d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" /><path d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".35" /><path d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".65" /></g></svg>
+        </div>Ada's sandbox</div>
+        <div class="node gate" id="s4-n2" style="left: 1265px; top: 585px"><div class="disc" data-icon="shield"></div>Studio</div>
+        <div class="node web" id="s4-n3" style="left: 1645px; top: 585px"><div class="disc" data-icon="globe"></div>stripe.com</div>
+        <div class="flash" id="s4-flash" style="left: 1645px; top: 585px"></div>
+        <div class="packet" id="s4-packet"><span data-icon="globe"></span>stripe.com</div>
+        <div class="win approval" id="s4-card" style="left: 1060px; top: 150px">
+          <div class="head"><span class="badge"><span data-icon="globe"></span>Network access</span>Ada · just now</div>
+          <div class="host">stripe.com</div>
+          <div class="why">Ada wants to connect to stripe.com to set up payments.</div>
+          <div class="row"><span class="ghost">Ignore</span><span class="btn">Deny</span><span class="btn primary" id="s4-allow">Allow</span></div>
+        </div>
+        <div class="chip" id="s4-chip" style="left: 1240px; top: 830px"><span data-icon="check"></span>Allowed · stripe.com</div>
+        <div class="ripple" id="s4-ripple"></div>
+        <div class="cursor" id="s4-cursor"><span data-icon="cursor"></span></div>
+      </section>
+
+      <!-- 5 · Passwords stay with you -->
+      <section class="scene" id="s5">
+        <div class="copy" style="left: 1120px; top: 320px; width: 680px">
+          <div class="kicker" id="s5-k">Secrets</div>
+          <h2 class="h2" id="s5-h">Your passwords stay with you.</h2>
+          <p class="sub" id="s5-s">Teammates only ever see a stand-in. Studio fills in the real key on its way out, and only for the site it belongs to.</p>
+        </div>
+        <div class="win vault" id="s5-vault">
+          <h4><span data-icon="lock"></span>Your secrets, on your computer</h4>
+          <div class="secret">Stripe key<span><span class="mono">sk_live_••••••</span></span></div>
+          <div class="secret">Email password<span><span class="mono">••••••••</span></span></div>
+        </div>
+        <div class="track" id="s5-track" style="left: 170px; top: 700px; width: 820px"></div>
+        <div class="node" id="s5-n1" style="left: 95px; top: 625px"><div class="disc">
+          <svg viewBox="0 0 512 512"><g stroke="#3fc168" stroke-width="22" stroke-linejoin="round"><path d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" /><path d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".35" /><path d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".65" /></g></svg>
+        </div>Ada's sandbox</div>
+        <div class="node gate" id="s5-n2" style="left: 515px; top: 625px"><div class="disc" data-icon="shield"></div>Studio</div>
+        <div class="node web" id="s5-n3" style="left: 915px; top: 625px"><div class="disc" data-icon="globe"></div>stripe.com</div>
+        <div class="flip" id="s5-flip">
+          <div class="packet stand" id="s5-stand"><span data-icon="key"></span>studio-7f3c…</div>
+          <div class="packet real" id="s5-real"><span data-icon="key"></span>sk_live_••••</div>
+        </div>
+        <div class="flash" id="s5-flash" style="left: 515px; top: 625px"></div>
+        <div class="flash" id="s5-flash2" style="left: 915px; top: 625px"></div>
+      </section>
+
+      <!-- 6 · The browser -->
+      <section class="scene" id="s6">
+        <div class="copy" style="left: 150px; top: 320px; width: 640px">
+          <div class="kicker" id="s6-k">Browser</div>
+          <h2 class="h2" id="s6-h">It uses the web<br>for you.</h2>
+          <p class="sub" id="s6-s">Watch it work in a browser of its own. Anything that matters, like placing an order, asks you first.</p>
+        </div>
+        <div class="win browser" id="s6-browser">
+          <div class="win-bar"><div class="dots"><i></i><i></i><i></i></div><div class="url">millers-market.com/cart</div><div class="live"><span class="dot"></span>LIVE</div></div>
+          <div class="shop">
+            <div class="top">Miller's Market<span>Flour · Sugar · Butter</span></div>
+            <h3>Your order</h3>
+            <div class="item" id="s6-i1"><i></i><div>Organic wheat flour<small>25 kg sack</small></div><div class="qty">2 × €38</div></div>
+            <div class="item" id="s6-i2"><i style="background: linear-gradient(135deg, #fff6e0, #f1dca8)"></i><div>Fine cane sugar<small>10 kg</small></div><div class="qty">1 × €19</div></div>
+            <div class="item" id="s6-i3"><i style="background: linear-gradient(135deg, #fff2b8, #f2d36b)"></i><div>Cultured butter<small>5 kg block</small></div><div class="qty">1 × €42</div></div>
+            <div class="total">Total <span id="s6-total">€137</span></div>
+            <div class="place" id="s6-place">Place order</div>
+            <div class="done-row" id="s6-done"><span data-icon="check"></span>Order placed. Delivery on Thursday.</div>
+            <div class="ask" id="s6-ask">
+              <div class="avatar">A</div>
+              <div class="q">Ada wants to click <b>Place order</b><small>millers-market.com</small></div>
+              <span class="btn">Deny</span><span class="btn primary" id="s6-allow">Allow</span>
+            </div>
+          </div>
+        </div>
+        <div class="ripple" id="s6-ripple"></div>
+        <div class="ripple" id="s6-ripple2"></div>
+        <div class="cursor agent" id="s6-agent"><span data-icon="cursor"></span><span class="tag">Ada</span></div>
+        <div class="cursor" id="s6-cursor"><span data-icon="cursor"></span></div>
+      </section>
+
+      <!-- 7 · Outro -->
+      <section class="scene" id="s7">
+        <div class="halo" id="s7-halo" style="left: 660px; top: -10px"></div>
+        <div class="end-logo" id="s7-logo">
+          <svg viewBox="0 0 512 512" style="width: 100%; height: 100%; overflow: visible">
+            <g stroke="#3fc168" stroke-width="16" stroke-linejoin="round">
+              <path d="M256 120 384 194 256 268 128 194Z" fill="#3fc168" />
+              <path d="M128 194 256 268V416L128 342Z" fill="#3fc168" fill-opacity=".35" />
+              <path d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".65" />
+            </g>
+          </svg>
+        </div>
+        <div class="end-mark" id="s7-mark">Sandbox Studio</div>
+        <div class="end-line" id="s7-line">AI teammates that work safely on your computer.</div>
+        <div class="end-facts">
+          <span class="pill" id="s7-f1"><span data-icon="check"></span>Free and open source</span>
+          <span class="pill" id="s7-f2"><span data-icon="check"></span>Works with your Claude or ChatGPT plan</span>
+        </div>
+        <div class="end-url" id="s7-url">lukaskoebe.github.io/sandbox-studio</div>
+      </section>
+
+      <div class="bg-vignette"></div>
+      <svg class="grain" width="1920" height="1080"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" /></filter><rect width="100%" height="100%" filter="url(#n)" /></svg>
+    </div>
+
+    <script src="icons.js"></script>
+    <script src="engine.js"></script>
+    <script>
+      const { p, set, rise, reveal, type, caret, scene, each, ease, lerp, clamp, $ } = M
+      const byId = (id) => document.getElementById(id)
+
+      // Background: the glow drifts slowly the whole time.
+      each((t) => {
+        set(byId("glow1"), { x: Math.sin(t * 0.21) * 160, y: Math.cos(t * 0.17) * 90 })
+        set(byId("glow2"), { x: 600 + Math.cos(t * 0.13) * 220, y: 420 + Math.sin(t * 0.19) * 120 })
+        set(byId("grid"), { x: -((t * 6) % 40), y: -((t * 3) % 40) })
+      })
+
+      /** Fades a whole scene out over its last moments. */
+      function exit(el, lt, len, d = 0.7) {
+        const k = p(lt, len - d, len, ease.inCubic)
+        set(el, { o: 1 - k, s: 1 + k * 0.03, blur: k * 10 })
+      }
+      /** A cursor's glide from one point to another, with a press. */
+      function glide(el, lt, a, b, from, to, press, o = 1) {
+        const k = p(lt, a, b, ease.inOutCubic)
+        const down = press === undefined ? 0 : p(lt, press, press + 0.08) * (1 - p(lt, press + 0.12, press + 0.3))
+        set(el, { x: lerp(from[0], to[0], k), y: lerp(from[1], to[1], k), s: 1 - down * 0.18, o })
+      }
+      function ripple(el, lt, at, x, y) {
+        const k = p(lt, at, at + 0.6, ease.outCubic)
+        el.style.left = `${x}px`
+        el.style.top = `${y}px`
+        set(el, { o: lt < at ? 0 : 1 - k, s: 0.3 + k * 1.2 })
+      }
+      function press(el, lt, at) {
+        const d = p(lt, at, at + 0.08) * (1 - p(lt, at + 0.1, at + 0.35))
+        set(el, { s: 1 - d * 0.08 })
+        el.style.filter = d > 0.01 ? `brightness(${1 + d * 0.4})` : "none"
+      }
+
+      // 1 · Intro, 0–5.2
+      scene(0, 5.2, byId("s1"), (lt, len) => {
+        set(byId("s1-halo"), { o: p(lt, 0.2, 2.2) * 0.9, s: 0.6 + p(lt, 0.2, 2.6) * 0.4 })
+        const top = p(lt, 0.15, 1.05, ease.outBack)
+        const left = p(lt, 0.35, 1.25, ease.outBack)
+        const right = p(lt, 0.55, 1.45, ease.outBack)
+        set(byId("s1-top"), { o: p(lt, 0.15, 0.5), y: (1 - top) * -140 })
+        set(byId("s1-left"), { o: p(lt, 0.35, 0.7), x: (1 - left) * -120, y: (1 - left) * 70 })
+        set(byId("s1-right"), { o: p(lt, 0.55, 0.9), x: (1 - right) * 120, y: (1 - right) * 70 })
+        // A gentle float once assembled.
+        set(byId("s1-logo"), { y: Math.sin(lt * 1.6) * 6 * p(lt, 1.4, 2.2), s: 1 + p(lt, 1.3, 1.6) * 0.04 - p(lt, 1.6, 2.0) * 0.04 })
+        reveal(byId("s1-mark"), lt, 1.25, undefined, 0.09)
+        reveal(byId("s1-line"), lt, 1.9, undefined, 0.05)
+        exit(byId("s1"), lt, len, 0.8)
+      })
+
+      // 2 · Just ask, 4.6–13.6
+      scene(4.6, 13.6, byId("s2"), (lt, len) => {
+        rise(byId("s2-k"), lt, 0.3)
+        reveal(byId("s2-h"), lt, 0.4)
+        reveal(byId("s2-s"), lt, 0.8, undefined, 0.03)
+        const w = p(lt, 0.2, 1.1, ease.outQuart)
+        const back = p(lt, 6.5, 7.4, ease.inOutCubic)
+        set(byId("s2-chat"), { o: w * (1 - back * 0.35), y: (1 - w) * 60 - back * 20, x: -back * 40, s: 0.96 + w * 0.04 - back * 0.03, blur: (1 - w) * 10 + back * 1.5 })
+
+        // Typing in the composer, then sending.
+        const msg = "Make a website for my bakery, with a page where people can order cakes."
+        const sent = 3.2
+        const typing = lt >= 1.2 && lt < sent
+        const done = type(byId("s2-typed"), lt < sent ? msg : "", lt, 1.2, 38)
+        byId("s2-ph").style.display = lt < 1.2 || lt >= sent ? "inline" : "none"
+        caret(byId("s2-caret"), lt, lt >= 0.9 && lt < sent, typing && !done)
+        const b = p(lt, sent, sent + 0.55, ease.outBack)
+        set(byId("s2-bubble"), { o: p(lt, sent, sent + 0.2), s: 0.85 + b * 0.15, y: (1 - b) * 40 })
+
+        byId("s2-state").textContent = lt < sent + 0.4 ? "Ready" : lt < 6.4 ? "Working" : "Done"
+        byId("s2-dot").style.background = lt >= sent + 0.4 && lt < 6.4 ? "var(--amber)" : "var(--green)"
+        rise(byId("s2-reply"), lt, sent + 0.5, undefined, 20, 0.6)
+        ;[3.9, 4.6, 5.4].forEach((at, i) => {
+          const st = byId(`s2-st${i + 1}`)
+          rise(st, lt, at - 0.35, undefined, 14, 0.5)
+          const spin = st.querySelector(".spin")
+          const chk = st.querySelector(".chk")
+          spin.style.transform = `rotate(${lt * 540}deg)`
+          spin.style.opacity = lt < at + 0.55 ? "1" : "0"
+          const c = p(lt, at + 0.55, at + 0.85, ease.outBack)
+          set(chk, { o: c, s: 0.4 + c * 0.6 })
+          st.style.color = lt >= at + 0.55 ? "var(--fg)" : "var(--muted)"
+        })
+
+        const pv = p(lt, 6.5, 7.4, ease.outQuart)
+        set(byId("s2-preview"), { o: pv, x: (1 - pv) * 120, y: (1 - pv) * 40 + Math.sin(lt * 1.3) * 3 * pv, s: 0.92 + pv * 0.08, blur: (1 - pv) * 12 })
+        const o = p(lt, 7.6, 8.1, ease.outBack)
+        set(byId("s2-order"), { s: 0.7 + 0.3 * o, o })
+        exit(byId("s2"), lt, len)
+      })
+
+      // 3 · Its own sandbox, 13.0–20.8
+      scene(13.0, 20.8, byId("s3"), (lt, len) => {
+        rise(byId("s3-k"), lt, 0.3)
+        reveal(byId("s3-h"), lt, 0.4)
+        reveal(byId("s3-s"), lt, 0.9, undefined, 0.03)
+        const b = p(lt, 0.5, 1.6, ease.outBack)
+        set(byId("s3-box"), { o: p(lt, 0.5, 0.9), s: 0.7 + b * 0.3, y: Math.sin(lt * 1.4) * 8 })
+        set(byId("s3-inner"), {})
+        rise(byId("s3-label"), lt, 1.2)
+        const wall = p(lt, 1.4, 2.3, ease.outQuart)
+        set(byId("s3-wall"), { o: wall, sy: wall })
+        const y = p(lt, 1.2, 2.1, ease.outQuart)
+        set(byId("s3-yours"), { o: y, x: (1 - y) * 60 })
+        ;[1, 2, 3, 4].forEach((i) => rise(byId(`s3-t${i}`), lt, 1.6 + i * 0.12, undefined, 16, 0.5))
+
+        // Probes fly from the sandbox toward your things, and stop at the wall.
+        const shots = [
+          { at: 2.8, y: 560 },
+          { at: 3.5, y: 700 },
+          { at: 4.2, y: 820 },
+        ]
+        shots.forEach((s, i) => {
+          const pr = byId(`s3-p${i + 1}`)
+          const k = p(lt, s.at, s.at + 0.55, ease.inCubic)
+          const sy = 640
+          pr.style.left = `${lerp(560, 932, k)}px`
+          pr.style.top = `${lerp(sy, s.y, k)}px`
+          set(pr, { o: lt >= s.at && lt < s.at + 0.6 ? 1 : 0 })
+          const h = byId(`s3-h${i + 1}`)
+          const hk = p(lt, s.at + 0.55, s.at + 1.2, ease.outCubic)
+          h.style.left = "942px"
+          h.style.top = `${s.y}px`
+          set(h, { o: lt < s.at + 0.55 ? 0 : 1 - hk, s: 0.3 + hk * 1.4 })
+        })
+        // The wall glows when it is hit.
+        const glow = shots.reduce((g, s) => g + Math.max(0, 1 - Math.abs(lt - s.at - 0.6) * 3), 0)
+        byId("s3-wall").style.boxShadow = `0 0 ${40 + glow * 60}px rgba(63,193,104,${0.6 + glow * 0.4})`
+        exit(byId("s3"), lt, len)
+      })
+
+      // 4 · You decide what goes out, 20.2–28.6
+      scene(20.2, 28.6, byId("s4"), (lt, len) => {
+        rise(byId("s4-k"), lt, 0.3)
+        reveal(byId("s4-h"), lt, 0.4)
+        reveal(byId("s4-s"), lt, 0.9, undefined, 0.03)
+        ;[1, 2, 3].forEach((i) => {
+          const k = p(lt, 0.4 + i * 0.15, 1.1 + i * 0.15, ease.outBack)
+          set(byId(`s4-n${i}`), { o: p(lt, 0.4 + i * 0.15, 0.8 + i * 0.15), s: 0.7 + k * 0.3 })
+        })
+        const tr = p(lt, 0.8, 1.6, ease.outQuart)
+        set(byId("s4-track"), { o: tr, sx: tr })
+        byId("s4-track").style.transformOrigin = "0 50%"
+
+        // The packet travels to Studio, waits, then goes on once allowed.
+        const pk = byId("s4-packet")
+        const toGate = p(lt, 1.7, 2.6, ease.inOutCubic)
+        const onward = p(lt, 5.0, 5.8, ease.inOutCubic)
+        const x = lerp(lerp(960, 1340, toGate), 1720, onward)
+        pk.style.left = `${x - 100}px`
+        pk.style.top = "637px"
+        const waiting = lt >= 2.6 && lt < 5.0
+        const pulse = waiting ? (Math.sin((lt - 2.6) * 7) + 1) / 2 : 0
+        pk.style.borderColor = waiting ? `rgba(240,180,76,${0.5 + pulse * 0.5})` : "rgba(255,255,255,0.14)"
+        pk.style.color = waiting ? "var(--amber)" : lt >= 5.0 ? "var(--green-2)" : "var(--fg)"
+        set(pk, { o: p(lt, 1.6, 1.8) * (1 - p(lt, 5.7, 5.95)), s: 1 + pulse * 0.04 })
+
+        // The approval card.
+        const c = p(lt, 2.7, 3.3, ease.outBack)
+        const cOut = p(lt, 4.6, 5.0, ease.inCubic)
+        set(byId("s4-card"), { o: p(lt, 2.7, 2.9) * (1 - cOut), y: (1 - c) * 40 - cOut * 20, s: 0.94 + c * 0.06 - cOut * 0.04 })
+        glide(byId("s4-cursor"), lt, 3.3, 4.2, [1800, 980], [1522, 352], 4.3, p(lt, 3.1, 3.3) * (1 - p(lt, 4.8, 5.1)))
+        ripple(byId("s4-ripple"), lt, 4.33, 1528, 358)
+        press(byId("s4-allow"), lt, 4.3)
+
+        const f = p(lt, 5.8, 6.5, ease.outCubic)
+        set(byId("s4-flash"), { o: lt < 5.8 ? 0 : 1 - f, s: 1 + f * 0.35 })
+        const ch = p(lt, 5.9, 6.5, ease.outBack)
+        set(byId("s4-chip"), { o: p(lt, 5.9, 6.1), y: (1 - ch) * 20, s: 0.9 + ch * 0.1 })
+        exit(byId("s4"), lt, len)
+      })
+
+      // 5 · Passwords stay with you, 28.0–36.0
+      scene(28.0, 36.0, byId("s5"), (lt, len) => {
+        rise(byId("s5-k"), lt, 0.3)
+        reveal(byId("s5-h"), lt, 0.4)
+        reveal(byId("s5-s"), lt, 0.9, undefined, 0.03)
+        const v = p(lt, 0.4, 1.2, ease.outQuart)
+        set(byId("s5-vault"), { o: v, y: (1 - v) * 40 })
+        ;[1, 2, 3].forEach((i) => {
+          const k = p(lt, 0.6 + i * 0.15, 1.3 + i * 0.15, ease.outBack)
+          set(byId(`s5-n${i}`), { o: p(lt, 0.6 + i * 0.15, 1.0 + i * 0.15), s: 0.7 + k * 0.3 })
+        })
+        const tr = p(lt, 1.0, 1.8, ease.outQuart)
+        byId("s5-track").style.transformOrigin = "0 50%"
+        set(byId("s5-track"), { o: tr, sx: tr })
+
+        // The stand-in travels to Studio, turns into the real key there, and goes on.
+        const fl = byId("s5-flip")
+        const toGate = p(lt, 2.0, 3.0, ease.inOutCubic)
+        const onward = p(lt, 4.3, 5.2, ease.inOutCubic)
+        const x = lerp(lerp(170, 590, toGate), 990, onward)
+        fl.style.left = `${x - 110}px`
+        fl.style.top = "677px"
+        set(fl, { o: p(lt, 1.9, 2.1) * (1 - p(lt, 5.1, 5.4)) })
+        const turn = p(lt, 3.3, 4.0, ease.inOutCubic)
+        set(byId("s5-stand"), { ry: turn * 180 })
+        set(byId("s5-real"), { ry: 180 + turn * 180 })
+        // The vault lights up as the key is filled in.
+        const lit = Math.max(0, 1 - Math.abs(lt - 3.65) * 2.2)
+        byId("s5-vault").style.borderColor = `rgba(63,193,104,${0.14 + lit * 0.7})`
+        byId("s5-vault").style.boxShadow = `0 40px 80px -20px rgba(0,0,0,.7), 0 0 ${lit * 60}px rgba(63,193,104,${lit * 0.35})`
+        const f = p(lt, 3.3, 4.0, ease.outCubic)
+        set(byId("s5-flash"), { o: lt < 3.3 ? 0 : 1 - f, s: 1 + f * 0.35 })
+        const f2 = p(lt, 5.2, 5.9, ease.outCubic)
+        set(byId("s5-flash2"), { o: lt < 5.2 ? 0 : 1 - f2, s: 1 + f2 * 0.35 })
+        exit(byId("s5"), lt, len)
+      })
+
+      // 6 · The browser, 35.4–43.6
+      scene(35.4, 43.6, byId("s6"), (lt, len) => {
+        rise(byId("s6-k"), lt, 0.3)
+        reveal(byId("s6-h"), lt, 0.4)
+        reveal(byId("s6-s"), lt, 0.9, undefined, 0.03)
+        const w = p(lt, 0.2, 1.1, ease.outQuart)
+        set(byId("s6-browser"), { o: w, y: (1 - w) * 60, s: 0.96 + w * 0.04, blur: (1 - w) * 10 })
+        ;[1, 2, 3].forEach((i) => rise(byId(`s6-i${i}`), lt, 0.9 + i * 0.25, undefined, 16, 0.5))
+        rise(byId("s6-place"), lt, 1.8, undefined, 10, 0.5)
+        rise(byId("s6-total").parentElement, lt, 1.8, undefined, 10, 0.5)
+
+        // Ada's cursor goes to Place order; the click waits for you.
+        const agent = byId("s6-agent")
+        const k = p(lt, 1.6, 2.8, ease.inOutCubic)
+        const hover = Math.sin(lt * 3) * 3
+        set(agent, { o: p(lt, 1.4, 1.7), x: lerp(1240, 1595, k), y: lerp(330, 706, k) + hover * p(lt, 2.8, 3.2) })
+        const ask = p(lt, 3.1, 3.7, ease.outBack)
+        const askOut = p(lt, 5.4, 5.8, ease.inCubic)
+        set(byId("s6-ask"), { o: p(lt, 3.1, 3.3) * (1 - askOut), y: (1 - ask) * 50 + askOut * 20 })
+        glide(byId("s6-cursor"), lt, 3.9, 4.9, [1500, 1060], [1650, 822], 5.0, p(lt, 3.7, 3.9) * (1 - p(lt, 5.5, 5.8)))
+        ripple(byId("s6-ripple"), lt, 5.03, 1656, 828)
+        press(byId("s6-allow"), lt, 5.0)
+        // Then Ada clicks, and the order goes through.
+        ripple(byId("s6-ripple2"), lt, 6.0, 1600, 712)
+        press(byId("s6-place"), lt, 5.95)
+        const d = p(lt, 6.3, 6.9, ease.outBack)
+        set(byId("s6-done"), { o: p(lt, 6.3, 6.5), y: (1 - d) * 16 })
+        exit(byId("s6"), lt, len)
+      })
+
+      // 7 · Outro, 43.0–50
+      scene(43.0, 50, byId("s7"), (lt, len) => {
+        set(byId("s7-halo"), { o: p(lt, 0.2, 1.8) * 0.8, s: 0.7 + p(lt, 0.2, 2.2) * 0.3 })
+        const l = p(lt, 0.2, 1.1, ease.outBack)
+        set(byId("s7-logo"), { o: p(lt, 0.2, 0.5), s: 0.6 + l * 0.4, y: Math.sin(lt * 1.6) * 5 })
+        reveal(byId("s7-mark"), lt, 0.6, undefined, 0.09)
+        reveal(byId("s7-line"), lt, 1.2, undefined, 0.04)
+        rise(byId("s7-f1"), lt, 2.0)
+        rise(byId("s7-f2"), lt, 2.2)
+        rise(byId("s7-url"), lt, 2.7)
+        // A fade to black at the very end, so the loop starts clean.
+        const k = p(lt, len - 0.6, len, ease.inCubic)
+        set(byId("s7"), { o: 1 - k })
+      })
+
+      M.start(50)
+    </script>
+  </body>
+</html>

@@ -1,0 +1,475 @@
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/inter-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+}
+@font-face {
+  font-family: "Source Code Pro";
+  src: url("fonts/SourceCodePro-Regular.ttf");
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Source Code Pro";
+  src: url("fonts/SourceCodePro-Medium.ttf");
+  font-weight: 500;
+}
+@font-face {
+  font-family: "Source Code Pro";
+  src: url("fonts/SourceCodePro-Bold.ttf");
+  font-weight: 700;
+}
+
+:root {
+  --bg: #0b0e10;
+  --bg-2: #101417;
+  --card: #151a1d;
+  --card-2: #1b2125;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --fg: #eef2f0;
+  --muted: #94a09a;
+  --dim: #5f6b66;
+  --green: #3fc168;
+  --green-2: #65c58b;
+  --green-deep: #16834b;
+  --green-low: rgba(63, 193, 104, 0.14);
+  --amber: #f0b44c;
+  --red: #ef6461;
+  --blue: #6aa8ff;
+  --mono: "Source Code Pro", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+body {
+  font-family: "Inter", sans-serif;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+.stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--bg);
+  transform-origin: 0 0;
+}
+
+/* Background: a slow green glow over a dotted grid, with a vignette and grain. */
+.bg-glow {
+  position: absolute;
+  width: 1400px;
+  height: 1400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(63, 193, 104, 0.16), rgba(63, 193, 104, 0) 62%);
+  left: 260px;
+  top: -260px;
+  will-change: transform;
+}
+.bg-glow.two {
+  background: radial-gradient(circle, rgba(70, 140, 255, 0.07), rgba(70, 140, 255, 0) 60%);
+}
+.bg-grid {
+  position: absolute;
+  inset: -40px;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1.2px, transparent 1.3px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 50%, #000 30%, transparent 100%);
+}
+.bg-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+  pointer-events: none;
+}
+.grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+}
+
+/* Type */
+.kicker {
+  font-family: var(--mono);
+  font-size: 22px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--green);
+  font-weight: 500;
+}
+.h1 {
+  font-size: 92px;
+  line-height: 1.02;
+  font-weight: 680;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.h2 {
+  font-size: 70px;
+  line-height: 1.04;
+  font-weight: 660;
+  letter-spacing: -0.035em;
+  margin: 0;
+}
+.sub {
+  font-size: 30px;
+  line-height: 1.42;
+  color: var(--muted);
+  font-weight: 420;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+.accent {
+  color: var(--green);
+}
+.w {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
+.copy {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+/* Windows and cards, after Studio's own UI. */
+.win {
+  position: absolute;
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: 18px;
+  box-shadow:
+    0 40px 80px -20px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+.win-bar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+  font-size: 20px;
+  color: var(--muted);
+}
+.dots {
+  display: flex;
+  gap: 9px;
+}
+.dots i {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #2b3236;
+}
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--green-deep);
+  color: #eafff1;
+  display: grid;
+  place-items: center;
+  font-weight: 650;
+  font-size: 19px;
+  flex: none;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  font-size: 19px;
+  color: var(--muted);
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  flex: none;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  padding: 0 26px;
+  border-radius: 10px;
+  font-size: 21px;
+  font-weight: 560;
+  border: 1px solid var(--line-2);
+  color: var(--fg);
+  background: var(--card-2);
+}
+.btn.primary {
+  background: var(--green-deep);
+  border-color: #23a35f;
+  color: #f2fff7;
+}
+.mono {
+  font-family: var(--mono);
+}
+
+/* The cursor that clicks things. */
+.cursor {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  z-index: 50;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+}
+.cursor .tag {
+  position: absolute;
+  left: 30px;
+  top: 30px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 17px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: var(--green-deep);
+  color: #f2fff7;
+}
+.ripple {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  margin: -40px 0 0 -40px;
+  border-radius: 50%;
+  border: 3px solid var(--green);
+  opacity: 0;
+  z-index: 49;
+}
+
+/* Terminal */
+.term {
+  font-family: var(--mono);
+  font-size: 23px;
+  line-height: 1.6;
+  padding: 26px 30px;
+  color: #d5ddd8;
+  white-space: pre;
+}
+.term .pr {
+  color: var(--green);
+  font-weight: 600;
+}
+.term .path {
+  color: var(--blue);
+}
+.term .muted {
+  color: var(--dim);
+}
+.term .ok {
+  color: var(--green-2);
+}
+.term .warn {
+  color: var(--amber);
+}
+.term .bad {
+  color: var(--red);
+}
+.caret {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  background: #d5ddd8;
+  margin-left: 1px;
+}
+
+.url {
+  flex: 1;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--card-2);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--muted);
+}
+/* Flow diagrams: a sandbox, Studio and the web, with packets and approval cards. */
+.node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.node .disc {
+  width: 150px;
+  height: 150px;
+  border-radius: 36px;
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.6);
+}
+.node .disc svg {
+  width: 74px;
+  height: 74px;
+}
+.node.gate .disc {
+  border-color: rgba(63, 193, 104, 0.5);
+  color: var(--green);
+}
+.node.web .disc {
+  color: var(--blue);
+}
+.track {
+  position: absolute;
+  height: 3px;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.22) 50%, transparent 50%);
+  background-size: 16px 3px;
+}
+.packet {
+  position: absolute;
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1f272b;
+  border: 1px solid var(--line-2);
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  transform-origin: 50% 50%;
+}
+.packet svg {
+  width: 20px;
+  height: 20px;
+}
+.approval {
+  width: 560px;
+  padding: 24px 26px;
+  border-radius: 18px;
+}
+.approval .head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  color: var(--muted);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: var(--card-2);
+  color: var(--fg);
+  font-weight: 600;
+  font-size: 17px;
+}
+.badge svg {
+  width: 17px;
+  height: 17px;
+  color: var(--blue);
+}
+.approval .host {
+  font-family: var(--mono);
+  font-size: 30px;
+  margin: 16px 0 6px;
+  font-weight: 500;
+}
+.approval .why {
+  font-size: 21px;
+  color: var(--muted);
+  margin-bottom: 22px;
+}
+.approval .row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.approval .row .ghost {
+  font-size: 19px;
+  color: var(--muted);
+  margin-right: auto;
+}
+.chip {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: var(--green-low);
+  border: 1px solid rgba(63, 193, 104, 0.35);
+  color: var(--green-2);
+  font-size: 20px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.chip svg {
+  width: 20px;
+  height: 20px;
+}
+.flash {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 36px;
+  border: 3px solid var(--green);
+}
+
+
+/* The preview scrub bar, only when playing in a browser. */
+.scrub {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  z-index: 100;
+  cursor: pointer;
+}
+.scrub-fill {
+  height: 100%;
+  background: rgba(63, 193, 104, 0.6);
+}
+.scrub-time {
+  position: absolute;
+  right: 8px;
+  top: 0;
+  font: 12px/18px var(--mono);
+  color: #fff;
+}
