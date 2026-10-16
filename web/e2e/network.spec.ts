@@ -215,6 +215,74 @@ test("a browser navigation asks with its site; Allow site lets it through withou
   await expect(page.getByRole("cell", { name: host, exact: true })).toBeHidden()
 })
 
+// A browser's request can be allowed for the browser session, without a rule, or by a rule for
+// the browser only: the sandbox's own connections to the host still ask.
+test("a browser request can be allowed for the session, or by a rule only in the browser", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const teammate = await addTeammate(api, env, `browser-${freshLabel()}`)
+  const id = await api.createSandbox(sandboxName("where"), teammate)
+  const label = freshLabel()
+  const session = `cdn.${label}.example.net`
+  const browserOnly = `api.${label}.example.org`
+  const request = (host: string) =>
+    api.json<{ outcome: string }>("POST", "/api/e2e/requests", {
+      sandboxId: id,
+      host,
+      port: 443,
+      method: "GET",
+      path: "/lib.js",
+    })
+
+  await page.goto(`/e/${env}`)
+  let decided = request(session)
+  let card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: session })
+  await card.getByRole("button", { name: "Options", exact: true }).click()
+  await card.getByRole("button", { name: session, exact: true }).click()
+  await card
+    .getByRole("button", { name: "Allow for this session", exact: true })
+    .click()
+  await expect(card).toBeHidden()
+  await expect(decided).resolves.toEqual({ outcome: "allowed" })
+  // The next request of the browser passes without asking.
+  await expect(request(session)).resolves.toEqual({ outcome: "allowed" })
+
+  decided = request(browserOnly)
+  card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: browserOnly })
+  await card.getByRole("button", { name: "Options", exact: true }).click()
+  await expect(
+    card.getByRole("button", { name: "Only in the browser", exact: true })
+  ).toHaveAttribute("aria-pressed", "true")
+  await card.getByRole("button", { name: browserOnly, exact: true }).click()
+  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(card).toBeHidden()
+  await expect(decided).resolves.toEqual({ outcome: "allowed" })
+
+  // The sandbox's own connection to the host still asks.
+  await api.connect(id, browserOnly)
+  await expect(
+    approvals(page)
+      .getByTestId("approval-card")
+      .filter({ hasText: browserOnly })
+  ).toBeVisible()
+  await api.dismissApprovals()
+
+  await page.goto(`/e/${env}/network/rules?q=${label}`)
+  await expect(
+    page.getByRole("row").filter({ hasText: browserOnly })
+  ).toContainText("browser only")
+  await expect(
+    page.getByRole("cell", { name: session, exact: true })
+  ).toBeHidden()
+})
+
 function freshLabel() {
   return Math.random().toString(36).slice(2, 8)
 }

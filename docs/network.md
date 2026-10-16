@@ -75,6 +75,14 @@ hosts as a decision of the level, not as a rule, and Activity shows it (see
 [security levels](#security-levels)). The origin is read-only and set when the rule is created;
 rules from before origins existed are `manual`.
 
+A rule can be browser-only (`browserOnly`). It covers the requests of the environment's browser
+VMs and none of the sandboxes' own connections: the policy leaves it out of matching for a
+connection or request that isn't a browser VM's (`Engine.active`), so it settles only
+`network.request` approvals, doesn't terminate a sandbox's connections, and doesn't refuse a
+sandbox's lookups. A browser request's card makes its rule browser-only unless the user picks
+"Browser and sandboxes" in Options; the rule dialog has "Only in the browser", the Rules tab marks
+such rules "browser only", and environment files keep the flag.
+
 A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
 within a minute. The approval card's Options offers "Allow for 1 hour"; the API takes
 `expiresAt` when a rule is created and on an allow or deny decision (it must be in the
@@ -220,14 +228,21 @@ isn't known for certain when several are open, so none may be unapproved). The a
 end with the browser session: when the browser VM stops, idles out or is removed. The pending
 requests of the page's site are approved with it.
 
+Any browser request's card also offers "Allow for this session" in its Options (`allow_session`,
+with the host pattern picked on the card). That allows the hosts the pattern covers in the
+teammate's browser until the session ends, whichever page asks (`browser.ApproveHost`), and makes
+no rule: the sandboxes' own connections to the hosts still ask, as do other teammates' browsers.
+The teammate's pending browser requests the pattern covers are approved with it. A sandbox's
+connection can't be allowed this way (`ErrNotBrowser`, 422).
+
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.
 
 ## Security levels
 
 Each environment has one level, which decides what happens when no rule matches. Explicit rules
-always win, in either direction, and so do the tracker list and the sites a browser session was
-approved for, which come before the level. Each teammate can override the level for its own
+always win, in either direction, and so do the tracker list and the sites and hosts a browser
+session was approved for, which come before the level. Each teammate can override the level for its own
 sandboxes; "Environment default" follows the environment. The level is set on the Network page's
 Rules tab, in the teammate's settings, and in the setup's network step.
 

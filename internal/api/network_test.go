@@ -76,6 +76,14 @@ func TestRulesCRUD(t *testing.T) {
 	if created.Host != "*.example.com" || !slices.Equal(created.Ports, []int{443}) || created.Action != store.ActionAllow || created.Note != "docs" || created.EnvironmentID != env.ID {
 		t.Fatalf("created: %+v", created)
 	}
+	// A rule can be limited to the browsers, and widened again.
+	for _, browserOnly := range []bool{true, false} {
+		body, _ := json.Marshal(map[string]any{"host": "*.example.com", "ports": []int{443}, "action": "allow", "note": "docs", "browserOnly": browserOnly})
+		rec := do(h, "PUT", rules+"/"+created.ID, string(body))
+		if got := decode[store.Rule](t, rec); rec.Code != http.StatusOK || got.BrowserOnly != browserOnly {
+			t.Fatalf("browser only %v: %d %+v", browserOnly, rec.Code, got)
+		}
+	}
 
 	if _, err := s.Vault.Create(context.Background(), store.Secret{EnvironmentID: env.ID, Name: "KEY", Hosts: []string{"api.example.org"}}, "value-of-key"); err != nil {
 		t.Fatal(err)

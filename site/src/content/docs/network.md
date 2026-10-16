@@ -49,6 +49,8 @@ On the Network page's **Rules** tab, choose **Add rule**. Enter a host such as `
 | **Caddy** | Apply a restricted Caddyfile rule to rewrite, answer, or proxy HTTP requests. |
 | **Deny** | Block matching connections. An environment-wide deny always wins. |
 
+Check **Only in the browser** to limit a rule to the pages Studio's browser loads: the sandboxes' own connections to the host still ask, or follow their other rules. The Rules tab marks such rules **browser only**.
+
 Environment-level deny rules take precedence as a safety boundary. Otherwise a sandbox-specific rule, then a teammate rule, then other environment rules are considered.
 
 Proxy and Caddy rules handle HTTP and HTTPS requests inside Studio. Studio installs a per-environment certificate authority in each sandbox so it can intercept TLS for these rules. A host-bound secret also uses this path when Studio needs to replace its placeholder.
@@ -83,6 +85,12 @@ Ports default to 80 and 443; list others, such as 22 for SSH. Each connection st
 ## Rules no sandbox can reach
 
 A rule for an address no sandbox can reach, such as `127.0.0.1`, this computer's own address, or a private address that isn't on the local network list, is saved, but it never applies. The Rules page marks such a rule with the reason and a link to the setting that changes it.
+
+## Requests from the browser
+
+When the browser asks for a host, the request card shows the page's request, such as `GET /npm/lib.js`. **Allow** and **Deny** make a rule that covers only the browser, so the agent can browse a site without its sandbox being able to download from it. To cover the sandboxes too, open **Options** and pick **Browser and sandboxes**.
+
+To allow a host only for now, open **Options** and choose **Allow for this session**. The host, or the pattern you picked on the card, is then allowed in that teammate's browser until the browser stops, and no rule is added. A navigation to a new site also offers **Allow site … for this browser session**, which allows the site and the pages on it.
 
 ## Browser and Git approvals are separate
 

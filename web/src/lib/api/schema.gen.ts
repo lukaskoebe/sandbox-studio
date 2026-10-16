@@ -2840,6 +2840,8 @@ export interface components {
              * @enum {string}
              */
             action: "allow" | "proxy" | "caddy" | "deny";
+            /** @description Limits the rule to the requests of the environment's browser VMs: the sandboxes' own connections aren't covered */
+            browserOnly?: boolean;
             config?: components["schemas"]["RuleConfigInput"];
             /**
              * Format: date-time
@@ -2909,10 +2911,12 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
+             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
              * @enum {string}
              */
-            action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once" | "allow_site";
+            action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once" | "allow_site" | "allow_session";
+            /** @description For network requests allowed or denied with a rule: the rule covers only the requests of the environment's browser VMs */
+            browserOnly?: boolean;
             /**
              * Format: date-time
              * @description For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires
@@ -3267,6 +3271,8 @@ export interface components {
         FileRule: {
             /** @enum {string} */
             action: "allow" | "proxy" | "caddy" | "deny";
+            /** @description The rule covers only the requests of the browser VMs */
+            browserOnly?: boolean;
             ca?: string;
             caddyfile?: string;
             headers?: {
@@ -4150,6 +4156,8 @@ export interface components {
         Rule: {
             /** @enum {string} */
             action: "allow" | "proxy" | "caddy" | "deny";
+            /** @description The rule covers only the requests of the environment's browser VMs, not the connections the sandboxes make themselves */
+            browserOnly?: boolean;
             config: components["schemas"]["RuleConfig"];
             /** Format: date-time */
             createdAt: string;
@@ -4222,6 +4230,8 @@ export interface components {
              * @enum {string}
              */
             action: "allow" | "proxy" | "caddy" | "deny";
+            /** @description Limits the rule to the requests of the environment's browser VMs: the sandboxes' own connections aren't covered */
+            browserOnly?: boolean;
             config?: components["schemas"]["RuleConfigInput"];
             /** @description example.com, *.example.com (includes example.com), or an IP address */
             host: string;

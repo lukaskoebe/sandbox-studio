@@ -16,6 +16,7 @@ type fakeSites struct {
 	mu       sync.Mutex
 	page     string
 	approved map[string]map[string]bool // teammate ID -> site
+	hosts    map[string][]string        // teammate ID -> host patterns
 }
 
 func (f *fakeSites) TopLevel(context.Context, string, string) string {
@@ -24,9 +25,14 @@ func (f *fakeSites) TopLevel(context.Context, string, string) string {
 	return f.page
 }
 
-func (f *fakeSites) Allows(_ context.Context, _, teammate string, r HTTPRequest) bool {
+func (f *fakeSites) Allows(_ context.Context, _, teammate, host string, r HTTPRequest) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for _, p := range f.hosts[teammate] {
+		if Covers(p, host) {
+			return true
+		}
+	}
 	if r.Navigation {
 		return f.approved[teammate][r.Site]
 	}
@@ -40,6 +46,15 @@ func (f *fakeSites) Approve(_ context.Context, _, teammate, site string) {
 		f.approved[teammate] = map[string]bool{}
 	}
 	f.approved[teammate][site] = true
+}
+
+func (f *fakeSites) ApproveHost(_ context.Context, _, teammate, pattern string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.hosts == nil {
+		f.hosts = map[string][]string{}
+	}
+	f.hosts[teammate] = append(f.hosts[teammate], pattern)
 }
 
 func (f *fakeSites) setPage(page string) {
@@ -262,6 +277,91 @@ func TestSiteApprovalCoversTheNavigationAndItsPage(t *testing.T) {
 	}
 	if _, err := e.Resolve(ctx, env.ID, docs.ID, Decision{Action: ActionAllowSite}); !errors.Is(err, ErrNotSite) {
 		t.Errorf("a subresource was allowed as a site: %v", err)
+	}
+}
+
+// Allowing a browser's request for the browser session makes no rule: the browser's requests to
+// the hosts the pattern covers pass, the ones it made while it waited too, and the sandboxes' own
+// connections to them still ask, as another teammate's browser does. A browser-only rule likewise
+// covers the browsers' requests and none of the sandboxes' connections.
+func TestBrowserSessionAndBrowserOnlyAllows(t *testing.T) {
+	ctx := context.Background()
+	e, env, _, sb, bob := newTeammateEngine(t) // the browser's teammate owns sb; bob's teammate owns bob
+	if err := e.Store.SetSecurityLevel(ctx, env.ID, store.LevelLocked); err != nil {
+		t.Fatal(err)
+	}
+	e.Browsers = &fakeSites{page: "docs.example.com", approved: map[string]map[string]bool{}}
+	held := make(chan heldResult, 4)
+	browser := func(sandbox, host string) {
+		r, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sandbox, Host: host, Port: 443, Browser: true, Deferred: true, HTTP: &HTTPRequest{Method: "GET", Path: "/lib.js"}})
+		held <- heldResult{r, err}
+	}
+	answered := func(what string) {
+		t.Helper()
+		select {
+		case r := <-held:
+			if r.err != nil || r.rule.Action != store.ActionAllow {
+				t.Errorf("%s: %+v %v", what, r.rule, r.err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: not answered", what)
+		}
+	}
+	go browser(sb.ID, "cdn.example.net")
+	go browser(sb.ID, "img.example.net")
+	pending := waitPending(t, e, env.ID, 2)
+	cdn, ok := pending["cdn.example.net:443 docs.example.com"]
+	if !ok {
+		t.Fatalf("subjects: %v", pending)
+	}
+	if _, err := e.Resolve(ctx, env.ID, cdn.ID, Decision{Action: ActionAllowSession, Host: "*.example.org"}); !errors.Is(err, ErrDoesNotCover) {
+		t.Errorf("a pattern that doesn't cover the host: %v", err)
+	}
+	if _, err := e.Resolve(ctx, env.ID, cdn.ID, Decision{Action: ActionAllowSession, Host: "*.example.net"}); err != nil {
+		t.Fatal(err)
+	}
+	answered("the request allowed for the session")
+	answered("the request the pattern covers")
+	if rules, _ := e.Store.Rules(ctx, env.ID); len(rules) != 0 {
+		t.Errorf("a session allow made rules: %+v", rules)
+	}
+	browser(sb.ID, "fonts.example.net")
+	answered("a later request of the browser")
+
+	e.Hold = 20 * time.Millisecond
+	if _, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: bob.ID, Host: "cdn.example.net", Port: 443, Browser: true, Deferred: true, HTTP: &HTTPRequest{Method: "GET", Path: "/lib.js"}}); !errors.Is(err, ErrUndecided) {
+		t.Errorf("another teammate's browser: %v", err)
+	}
+	if _, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "cdn.example.net", Port: 443}); !errors.Is(err, ErrUndecided) {
+		t.Errorf("the sandbox's own connection: %v", err)
+	}
+	pending = waitPending(t, e, env.ID, 2)
+	conn, ok := pending["cdn.example.net:443"]
+	if !ok {
+		t.Fatalf("subjects: %v", pending)
+	}
+	if _, err := e.Resolve(ctx, env.ID, conn.ID, Decision{Action: ActionAllowSession}); !errors.Is(err, ErrNotBrowser) {
+		t.Errorf("a connection was allowed for the browser session: %v", err)
+	}
+
+	// A browser-only rule answers bob's browser, and the sandbox's connection still asks.
+	if _, err := e.Resolve(ctx, env.ID, pending["cdn.example.net:443 docs.example.com"].ID, Decision{Action: store.ActionAllow, Host: "*.example.net", Scope: "environment", BrowserOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if rules, _ := e.Store.Rules(ctx, env.ID); len(rules) != 1 || !rules[0].BrowserOnly {
+		t.Errorf("rules: %+v", rules)
+	}
+	if a, _ := e.Store.Approval(ctx, env.ID, conn.ID); a.Status != store.StatusPending {
+		t.Errorf("a browser-only rule settled the sandbox's connection: %+v", a)
+	}
+	if r, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: bob.ID, Host: "img.example.net", Port: 443, Browser: true, Deferred: true, HTTP: &HTTPRequest{Method: "GET", Path: "/a.png"}}); err != nil || !r.BrowserOnly {
+		t.Errorf("a browser's request under a browser-only rule: %+v %v", r, err)
+	}
+	if _, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: bob.ID, Host: "img.example.net", Port: 443}); !errors.Is(err, ErrUndecided) {
+		t.Errorf("a sandbox's connection under a browser-only rule: %v", err)
+	}
+	if e.Terminates(ctx, Request{EnvironmentID: env.ID, SandboxID: bob.ID, Host: "img.example.net", Port: 443}) {
+		t.Error("a browser-only rule terminates a sandbox's connections")
 	}
 }
 

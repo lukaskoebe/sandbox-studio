@@ -10,7 +10,7 @@ import (
 
 // Site scope: what the policy asks of a browser about the pages it has open. The policy
 // decides the requests of a browser VM one at a time; the broker says which page each one
-// belongs to, and which sites the user approved for the browser session.
+// belongs to, and which sites and hosts the user approved for the browser session.
 
 // TopLevel returns the site of the page the teammate's browser drove last. Its requests are
 // attributed to that page: exactly while one page is open, and to the one used last otherwise.
@@ -34,15 +34,24 @@ func (s *Service) TopLevel(_ context.Context, envID, teammateID string) string {
 	return pageSite(last.url)
 }
 
-// Allows reports whether the sites the user approved for the teammate's browser session cover r.
-// A navigation is covered by its own site. A subresource is covered when every web page the
-// browser has open is on an approved site: which page loaded it is not known, so none may be
-// one the user has not approved. Nothing is covered before the user approves a site.
-func (s *Service) Allows(_ context.Context, envID, teammateID string, r policy.HTTPRequest) bool {
+// Allows reports whether what the user approved for the teammate's browser session covers r to
+// host. A host pattern allowed for the session covers its hosts. A navigation is covered by its
+// own site. A subresource is covered when every web page the browser has open is on an approved
+// site: which page loaded it is not known, so none may be one the user has not approved. Nothing
+// is covered before the user approves a site or a host.
+func (s *Service) Allows(_ context.Context, envID, teammateID, host string, r policy.HTTPRequest) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.states[teammateID]
-	if st == nil || st.env != envID || len(st.sites) == 0 {
+	if st == nil || st.env != envID {
+		return false
+	}
+	for _, p := range st.hosts {
+		if policy.Covers(p, host) {
+			return true
+		}
+	}
+	if len(st.sites) == 0 {
 		return false
 	}
 	if r.Navigation {
@@ -70,6 +79,17 @@ func (s *Service) Approve(_ context.Context, envID, teammateID, site string) {
 	st := s.stateLocked(envID, teammateID)
 	if !slices.Contains(st.sites, site) {
 		st.sites = append(st.sites, site)
+	}
+}
+
+// ApproveHost allows the hosts a pattern covers in the teammate's browser until the session
+// ends, whichever page asks for them.
+func (s *Service) ApproveHost(_ context.Context, envID, teammateID, pattern string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.stateLocked(envID, teammateID)
+	if !slices.Contains(st.hosts, pattern) {
+		st.hosts = append(st.hosts, pattern)
 	}
 }
 

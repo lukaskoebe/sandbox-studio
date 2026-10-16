@@ -143,15 +143,16 @@ func (s *Server) checkEnvironment(ctx context.Context, env string) error {
 
 // RuleInput is the editable part of a network rule.
 type RuleInput struct {
-	Host       string          `json:"host" minLength:"1" doc:"example.com, *.example.com (includes example.com), or an IP address"`
-	Ports      []int           `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
-	Action     string          `json:"action" enum:"allow,proxy,caddy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile"`
-	Config     RuleConfigInput `json:"config,omitempty"`
-	Method     string          `json:"method,omitempty" doc:"allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it"`
-	PathPrefix string          `json:"pathPrefix,omitempty" maxLength:"512" doc:"allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path"`
-	SandboxID  string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
-	TeammateID string          `json:"teammateId,omitempty" doc:"Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId"`
-	Note       string          `json:"note,omitempty" maxLength:"500"`
+	Host        string          `json:"host" minLength:"1" doc:"example.com, *.example.com (includes example.com), or an IP address"`
+	Ports       []int           `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Empty or omitted means any port"`
+	Action      string          `json:"action" enum:"allow,proxy,caddy,deny" doc:"allow passes connections through untouched; proxy lets Studio handle the HTTP requests, to set headers; caddy hands them to a Caddyfile"`
+	Config      RuleConfigInput `json:"config,omitempty"`
+	Method      string          `json:"method,omitempty" doc:"allow and deny rules only: the request method the rule covers, one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS; empty covers any method. Only requests on connections Studio terminates (a browser VM's HTTPS, and hosts of proxy rules) are matched against it"`
+	PathPrefix  string          `json:"pathPrefix,omitempty" maxLength:"512" doc:"allow and deny rules only: the request paths the rule covers, a prefix ending in * such as /repos/*; empty covers any path"`
+	SandboxID   string          `json:"sandboxId,omitempty" doc:"Limits the rule to one sandbox of this environment"`
+	TeammateID  string          `json:"teammateId,omitempty" doc:"Limits the rule to the sandboxes one teammate of this environment owns; excludes sandboxId"`
+	BrowserOnly bool            `json:"browserOnly,omitempty" doc:"Limits the rule to the requests of the environment's browser VMs: the sandboxes' own connections aren't covered"`
+	Note        string          `json:"note,omitempty" maxLength:"500"`
 }
 
 // RuleConfigInput is the editable part of a rule's config.
@@ -384,7 +385,7 @@ func (s *Server) ruleFrom(ctx context.Context, env string, in RuleInput) (store.
 	if err != nil {
 		return store.Rule{}, err
 	}
-	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, TeammateID: in.TeammateID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note, Method: method, PathPrefix: path}, nil
+	return store.Rule{EnvironmentID: env, SandboxID: in.SandboxID, TeammateID: in.TeammateID, Host: host, Ports: in.Ports, Action: in.Action, Config: config, Note: in.Note, Method: method, PathPrefix: path, BrowserOnly: in.BrowserOnly}, nil
 }
 
 // requestPattern checks the method and path a rule names: only allow and deny rules can name
@@ -465,15 +466,16 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action     string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once,allow_site" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
-			Host       string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
-			Ports      []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
-			Scope      string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
-			Note       string     `json:"note,omitempty" maxLength:"8000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments"`
-			Remember   bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
-			Method     string     `json:"method,omitempty" doc:"For network requests allowed or denied with a rule: the request method the rule covers; empty covers any"`
-			PathPrefix string     `json:"pathPrefix,omitempty" doc:"For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path"`
-			ExpiresAt  *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`
+			Action      string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once,allow_site,allow_session" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
+			Host        string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
+			Ports       []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
+			Scope       string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
+			Note        string     `json:"note,omitempty" maxLength:"8000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments"`
+			Remember    bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
+			Method      string     `json:"method,omitempty" doc:"For network requests allowed or denied with a rule: the request method the rule covers; empty covers any"`
+			PathPrefix  string     `json:"pathPrefix,omitempty" doc:"For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path"`
+			ExpiresAt   *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`
+			BrowserOnly bool       `json:"browserOnly,omitempty" doc:"For network requests allowed or denied with a rule: the rule covers only the requests of the environment's browser VMs"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -485,7 +487,7 @@ func (s *Server) registerNetwork(api huma.API) {
 			}
 			return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 		}
-		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope, Method: in.Body.Method, PathPrefix: in.Body.PathPrefix}
+		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope, Method: in.Body.Method, PathPrefix: in.Body.PathPrefix, BrowserOnly: in.Body.BrowserOnly}
 		if in.Body.ExpiresAt != nil {
 			d.ExpiresAt = *in.Body.ExpiresAt
 		}

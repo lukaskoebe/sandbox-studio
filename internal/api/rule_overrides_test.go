@@ -105,13 +105,13 @@ func TestProxyRuleOverrides(t *testing.T) {
 }
 
 // TestEnvironmentFileCarriesRuleOverrides: the export keeps where a proxy rule sends its requests,
-// and the import checks it like any rule.
+// and that it covers only the browsers, and the import checks it like any rule.
 func TestEnvironmentFileCarriesRuleOverrides(t *testing.T) {
 	h, s := newTestServer(t)
 	work := newEnvironment(t, s, "work")
 	ca := testCA(t)
 	body, _ := json.Marshal(map[string]any{
-		"host": "api.example.com", "action": "proxy",
+		"host": "api.example.com", "action": "proxy", "browserOnly": true,
 		"config": map[string]any{"upstream": "api.internal.example.net", "sni": "api.internal.example.net", "ca": ca},
 	})
 	if rec := do(h, "POST", testOrigin+"/api/environments/"+work.ID+"/rules", string(body)); rec.Code != http.StatusCreated {
@@ -122,7 +122,7 @@ func TestEnvironmentFileCarriesRuleOverrides(t *testing.T) {
 		t.Fatalf("export: %d %s", rec.Code, rec.Body)
 	}
 	file := decode[EnvironmentFile](t, rec)
-	if len(file.Rules) != 1 || file.Rules[0].Upstream != "api.internal.example.net" || file.Rules[0].SNI != "api.internal.example.net" || file.Rules[0].CA != ca {
+	if len(file.Rules) != 1 || file.Rules[0].Upstream != "api.internal.example.net" || file.Rules[0].SNI != "api.internal.example.net" || file.Rules[0].CA != ca || !file.Rules[0].BrowserOnly {
 		t.Fatalf("exported rules: %+v", file.Rules)
 	}
 	rec = do(h, "POST", environmentImportURL, rec.Body.String())
@@ -130,7 +130,7 @@ func TestEnvironmentFileCarriesRuleOverrides(t *testing.T) {
 		t.Fatalf("import: %d %s", rec.Code, rec.Body)
 	}
 	imported := testOrigin + "/api/environments/" + decode[ImportedEnvironment](t, rec).Environment.ID + "/rules"
-	if rules := decode[[]store.Rule](t, do(h, "GET", imported, "")); len(rules) != 1 || rules[0].Config.Upstream != "api.internal.example.net" || rules[0].Config.CA != ca {
+	if rules := decode[[]store.Rule](t, do(h, "GET", imported, "")); len(rules) != 1 || rules[0].Config.Upstream != "api.internal.example.net" || rules[0].Config.CA != ca || !rules[0].BrowserOnly {
 		t.Fatalf("imported rules: %+v", rules)
 	}
 }

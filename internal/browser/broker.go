@@ -124,6 +124,7 @@ type state struct {
 	lastUsed time.Time
 	grants   []grant
 	sites    []string // registrable domains the user approved for this browser session
+	hosts    []string // host patterns the user allowed for this browser session
 	page
 	eph map[string]*page // ephemeral sessions by ID
 }
@@ -401,7 +402,7 @@ func (st *state) reset() {
 			close(pg.resumed)
 		}
 	}
-	st.session, st.grants, st.eph, st.sites = "", nil, nil, nil
+	st.session, st.grants, st.eph, st.sites, st.hosts = "", nil, nil, nil, nil
 	st.fwdFrom, st.fwdPorts = "", nil
 	st.url, st.refs, st.credRefs, st.secrets, st.visible = "", nil, nil, nil, false
 }

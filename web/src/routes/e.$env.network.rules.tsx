@@ -279,11 +279,18 @@ function RulesTab() {
                         <RuleChip>{r.origin}</RuleChip>
                       </TableCell>
                       <TableCell>
-                        {r.sandboxId
-                          ? (names.get(r.sandboxId) ?? "Other sandbox")
-                          : r.teammateId
-                            ? `Teammate ${teammateNames.get(r.teammateId) ?? ""}`
-                            : "Environment"}
+                        <span className="inline-flex items-center gap-1.5">
+                          {r.sandboxId
+                            ? (names.get(r.sandboxId) ?? "Other sandbox")
+                            : r.teammateId
+                              ? `Teammate ${teammateNames.get(r.teammateId) ?? ""}`
+                              : "Environment"}
+                          {r.browserOnly && (
+                            <RuleChip title="Covers what the browsers load, not the sandboxes' own connections">
+                              browser only
+                            </RuleChip>
+                          )}
+                        </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         <span className="block max-w-48 truncate">
@@ -404,9 +411,18 @@ function ExpiryNote({ rule, now }: { rule: Rule; now: number }) {
 }
 
 /** A small monospace label on a rule: its action, origin or a flag. */
-function RuleChip({ children }: { children: ReactNode }) {
+function RuleChip({
+  children,
+  title,
+}: {
+  children: ReactNode
+  title?: string
+}) {
   return (
-    <span className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset">
+    <span
+      title={title}
+      className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset"
+    >
       {children}
     </span>
   )

@@ -240,10 +240,11 @@ func TestReviewerSeesBrowserRequestsWithTheirPage(t *testing.T) {
 type fakeBrowsers struct{ site string }
 
 func (f fakeBrowsers) TopLevel(context.Context, string, string) string { return f.site }
-func (f fakeBrowsers) Allows(context.Context, string, string, HTTPRequest) bool {
+func (f fakeBrowsers) Allows(context.Context, string, string, string, HTTPRequest) bool {
 	return false
 }
-func (f fakeBrowsers) Approve(context.Context, string, string, string) {}
+func (f fakeBrowsers) Approve(context.Context, string, string, string)     {}
+func (f fakeBrowsers) ApproveHost(context.Context, string, string, string) {}
 
 // A new prompt is a new task: the same host is asked about again for it.
 func TestReviewerAsksAgainForANewTask(t *testing.T) {

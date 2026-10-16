@@ -22,10 +22,12 @@ import { cn } from "@/lib/utils"
 type Action = "allow" | "deny" | "dismiss"
 
 /**
- * The buttons: an action; an allow whose rule expires after an hour; or an allow or deny for
- * the one connection, without a rule.
+ * The buttons: an action; an allow whose rule expires after an hour; an allow or deny for the
+ * one connection, without a rule; or, for a browser's request, an allow of its site or its host
+ * pattern for the browser session, without a rule.
  */
-type Choice = Action | "allowHour" | "allowOnce" | "denyOnce" | "allowSite"
+type Choice =
+  Action | "allowHour" | "allowOnce" | "denyOnce" | "allowSite" | "allowSession"
 
 const hour = 60 * 60 * 1000
 
@@ -69,6 +71,44 @@ export function useDecideApproval() {
         })
       },
     }
+  )
+}
+
+/** Where a browser request's rule applies: the browsers only, or the sandboxes too. */
+export function WhereToggle({
+  browserOnly,
+  onChange,
+}: {
+  browserOnly: boolean
+  onChange: (browserOnly: boolean) => void
+}) {
+  return (
+    <ToggleGroup
+      aria-label="Where"
+      variant="outline"
+      value={[browserOnly ? "browser" : "everywhere"]}
+      onValueChange={(v) => {
+        if (v[0]) onChange(v[0] === "browser")
+      }}
+      className="w-full"
+    >
+      <ToggleGroupItem
+        value="browser"
+        size="sm"
+        title="The rule covers what the browsers load, not the sandboxes' own connections"
+        className="min-w-0 flex-1 shrink"
+      >
+        <span className="truncate">Only in the browser</span>
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="everywhere"
+        size="sm"
+        title="The rule covers the sandboxes' own connections too"
+        className="min-w-0 flex-1 shrink"
+      >
+        <span className="truncate">Browser and sandboxes</span>
+      </ToggleGroupItem>
+    </ToggleGroup>
   )
 }
 
@@ -134,8 +174,10 @@ export function ScopeToggle({
 /**
  * Decides one network approval: the host pattern to allow or deny, any port or the default
  * ports, and whether the rule covers the whole environment or only the requesting sandbox.
- * Compact keeps the pattern and the buttons visible and folds the port, scope and lifetime
- * choices (an hour, or this connection only) behind an Options disclosure.
+ * A browser's request makes a rule for the browsers only, unless the sandboxes are picked too.
+ * Compact keeps the pattern and the buttons visible and folds the port, scope, where and
+ * lifetime choices (an hour, the browser session, or this connection only) behind an Options
+ * disclosure.
  */
 export function ApprovalDecision({
   approval,
@@ -162,12 +204,15 @@ export function ApprovalDecision({
   // A teammate's sandbox starts with the scope its teammate sets, the environment otherwise.
   const defaultScope: DecisionScope = owner?.approvalScope ?? "environment"
   const [scope, setScope] = useState<DecisionScope>(defaultScope)
+  // Only a browser's requests are named by their method; their rule starts out browser-only.
+  const browser = !!net?.method
+  const [browserOnly, setBrowserOnly] = useState(browser)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
   const [chosen, setChosen] = useState<Choice>()
   const busy = (choice: Choice) => decide.isPending && chosen === choice
   // A folded choice that differs from the default still shows on the Options button.
-  const changed = anyPort || scope !== defaultScope
+  const changed = anyPort || scope !== defaultScope || browserOnly !== browser
 
   const act = (choice: Choice) => {
     setChosen(choice)
@@ -178,6 +223,7 @@ export function ApprovalDecision({
       scope,
       host: pattern,
       ports: anyPort ? [] : undefined,
+      ...(browserOnly ? { browserOnly } : {}),
       ...(requestLevel && net?.method && net.pathPattern
         ? { method: net.method, pathPrefix: net.pathPattern }
         : {}),
@@ -189,6 +235,12 @@ export function ApprovalDecision({
         return decide.mutate({
           ...params,
           body: { action: "allow_site", scope },
+        })
+      // The session allow covers the host pattern in this teammate's browser until it stops.
+      case "allowSession":
+        return decide.mutate({
+          ...params,
+          body: { action: "allow_session", host: pattern, scope },
         })
       // A once decision answers this connection; the server ignores the rule's fields.
       case "allowOnce":
@@ -295,6 +347,9 @@ export function ApprovalDecision({
             sandboxName={net?.sandboxName}
             owner={owner?.name}
           />
+          {browser && (
+            <WhereToggle browserOnly={browserOnly} onChange={setBrowserOnly} />
+          )}
           <div className="flex flex-wrap justify-end gap-1.5">
             <Button
               variant="outline"
@@ -305,6 +360,26 @@ export function ApprovalDecision({
               {busy("allowHour") && <Spinner />}
               Allow for 1 hour
             </Button>
+            {browser && owner && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={decide.isPending}
+                      onClick={() => act("allowSession")}
+                    />
+                  }
+                >
+                  {busy("allowSession") && <Spinner />}
+                  Allow for this session
+                </TooltipTrigger>
+                <TooltipContent>
+                  {`Allow ${pattern} in ${owner.name}'s browser until it stops, without a rule`}
+                </TooltipContent>
+              </Tooltip>
+            )}
             <Button
               variant="outline"
               size="sm"

@@ -41,7 +41,7 @@ func TestSiteApprovalsLastTheBrowserSession(t *testing.T) {
 		return policy.HTTPRequest{Method: "GET", Path: "/", Navigation: true, Site: site}
 	}
 	subresource := policy.HTTPRequest{Method: "GET", Path: "/app.js"}
-	if s.Allows(ctx, env, tm, navigation("example.com")) {
+	if s.Allows(ctx, env, tm, "www.example.com", navigation("example.com")) {
 		t.Fatal("a browser with no approved site allowed a navigation")
 	}
 
@@ -51,10 +51,10 @@ func TestSiteApprovalsLastTheBrowserSession(t *testing.T) {
 	st.url = "https://docs.example.com/guides"
 	st.eph = map[string]*page{"eph-1": {id: "eph-1", url: "about:blank"}}
 	s.mu.Unlock()
-	if !s.Allows(ctx, env, tm, navigation("example.com")) || s.Allows(ctx, env, tm, navigation("other.example")) {
+	if !s.Allows(ctx, env, tm, "www.example.com", navigation("example.com")) || s.Allows(ctx, env, tm, "www.other.example", navigation("other.example")) {
 		t.Error("a navigation is covered by its own approved site only")
 	}
-	if !s.Allows(ctx, env, tm, subresource) {
+	if !s.Allows(ctx, env, tm, "cdn.example.net", subresource) {
 		t.Error("a subresource of a page on an approved site asked")
 	}
 
@@ -62,14 +62,14 @@ func TestSiteApprovalsLastTheBrowserSession(t *testing.T) {
 	s.mu.Lock()
 	st.eph["eph-1"].url = "https://evil.example/"
 	s.mu.Unlock()
-	if s.Allows(ctx, env, tm, subresource) {
+	if s.Allows(ctx, env, tm, "cdn.example.net", subresource) {
 		t.Error("a subresource was allowed while a page on an unapproved site was open")
 	}
 	s.Approve(ctx, env, tm, "evil.example")
-	if !s.Allows(ctx, env, tm, subresource) {
+	if !s.Allows(ctx, env, tm, "cdn.example.net", subresource) {
 		t.Error("a subresource asked after every open page was approved")
 	}
-	if s.Allows(ctx, "other-env", tm, navigation("example.com")) {
+	if s.Allows(ctx, "other-env", tm, "www.example.com", navigation("example.com")) {
 		t.Error("another environment is covered by the approvals")
 	}
 
@@ -77,7 +77,34 @@ func TestSiteApprovalsLastTheBrowserSession(t *testing.T) {
 	s.mu.Lock()
 	st.reset()
 	s.mu.Unlock()
-	if s.Allows(ctx, env, tm, navigation("example.com")) {
+	if s.Allows(ctx, env, tm, "www.example.com", navigation("example.com")) {
 		t.Error("an approval outlived the browser session")
+	}
+}
+
+func TestHostApprovalsLastTheBrowserSession(t *testing.T) {
+	ctx := context.Background()
+	s := &Service{}
+	const env, tm = "env", "tm"
+	req := policy.HTTPRequest{Method: "GET", Path: "/app.js"}
+	if s.Allows(ctx, env, tm, "cdn.example.net", req) {
+		t.Fatal("a browser with nothing approved allowed a request")
+	}
+	s.ApproveHost(ctx, env, tm, "*.example.net")
+	st := s.state(env, tm)
+	s.mu.Lock()
+	st.url = "https://unapproved.example/"
+	s.mu.Unlock()
+	if !s.Allows(ctx, env, tm, "cdn.example.net", req) || !s.Allows(ctx, env, tm, "example.net", policy.HTTPRequest{Method: "GET", Path: "/", Navigation: true, Site: "example.net"}) {
+		t.Error("a host the pattern covers asked, whatever page is open")
+	}
+	if s.Allows(ctx, env, tm, "example.org", req) || s.Allows(ctx, env, "other-tm", "cdn.example.net", req) || s.Allows(ctx, "other-env", tm, "cdn.example.net", req) {
+		t.Error("the host approval covers another host, teammate or environment")
+	}
+	s.mu.Lock()
+	st.reset()
+	s.mu.Unlock()
+	if s.Allows(ctx, env, tm, "cdn.example.net", req) {
+		t.Error("a host approval outlived the browser session")
 	}
 }

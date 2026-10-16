@@ -255,7 +255,7 @@ func (g *Gateway) handle(c net.Conn) {
 	handled := rule.Action == store.ActionProxy || rule.Action == store.ActionCaddy || browserTLS
 	// A request-level rule for an allowed host needs the requests, so the connection is terminated.
 	checked := rule.Action == store.ActionAllow && web && g.Policy.Terminates(context.Background(), policy.Request{
-		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, Host: host, Port: port,
+		EnvironmentID: decider.EnvironmentID, SandboxID: decider.ID, Host: host, Port: port, Browser: sb.Kind == store.SandboxKindBrowser,
 	})
 	if bound, _ := boundTo(all, host); handled || checked || len(bound) > 0 && web {
 		if !web {

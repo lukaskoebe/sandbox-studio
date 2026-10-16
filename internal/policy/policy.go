@@ -35,6 +35,9 @@ const (
 	ActionDenyOnce  = "deny_once"
 	// ActionAllowSite approves the top-level site of a browser navigation for the browser session.
 	ActionAllowSite = "allow_site"
+	// ActionAllowSession allows a host pattern in the browser for the browser session, without a
+	// rule: the sandboxes' own connections to it still ask.
+	ActionAllowSession = "allow_session"
 )
 
 // Errors returned by Decide and Resolve.
@@ -50,6 +53,7 @@ var (
 	// connection is not held, and its requests are decided one at a time (HTTP set).
 	ErrPerRequest = errors.New("the browser's requests are decided one at a time")
 	ErrNotSite    = errors.New("only a browser navigation to a new site can be allowed for its site")
+	ErrNotBrowser = errors.New("only a browser's request can be allowed for the browser session")
 	// ErrTracker is returned for a request of a browser VM to a host on the tracker list, while
 	// the environment blocks trackers and no rule allows the host.
 	ErrTracker = errors.New("the host is on the tracker list")
@@ -125,12 +129,14 @@ type Browsers interface {
 	// TopLevel returns the site of the page the browser of teammateID drove last, which the
 	// requests of the browser are attributed to, or "" if it has no page open.
 	TopLevel(ctx context.Context, envID, teammateID string) string
-	// Allows reports whether the sites the user approved for the browser session cover r: a
-	// top-level navigation to an approved site, or a subresource while every page the browser
-	// has open is on an approved site.
-	Allows(ctx context.Context, envID, teammateID string, r HTTPRequest) bool
+	// Allows reports whether what the user approved for the browser session covers r to host:
+	// a host pattern that covers host, a top-level navigation to an approved site, or a
+	// subresource while every page the browser has open is on an approved site.
+	Allows(ctx context.Context, envID, teammateID, host string, r HTTPRequest) bool
 	// Approve approves a site for the browser session of teammateID.
 	Approve(ctx context.Context, envID, teammateID, site string)
+	// ApproveHost allows the hosts a pattern covers for the browser session of teammateID.
+	ApproveHost(ctx context.Context, envID, teammateID, pattern string)
 }
 
 // Engine decides connections. Every change to rules or approvals must go through it (or
@@ -257,7 +263,7 @@ func (e *Engine) Terminates(ctx context.Context, req Request) bool {
 		return false
 	}
 	host := Normalize(req.Host)
-	for _, r := range e.active(rules) {
+	for _, r := range e.active(rules, req.Browser) {
 		if r.Method == "" && r.PathPrefix == "" {
 			continue
 		}
@@ -277,7 +283,7 @@ func (e *Engine) Terminates(ctx context.Context, req Request) bool {
 // is to a tracker and the environment blocks trackers; else the site the user approved for the
 // browser session.
 func (e *Engine) check(ctx context.Context, rules []store.Rule, req Request, teammate string) (store.Rule, bool, error) {
-	if r, ok := e.match(rules, req.SandboxID, teammate, req.Host, req.Port, req.HTTP); ok {
+	if r, ok := e.match(rules, req, teammate); ok {
 		return r, true, nil
 	}
 	if reason := ChromiumService(req.Host, req.HTTP); req.Browser && reason != "" {
@@ -294,7 +300,7 @@ func (e *Engine) check(ctx context.Context, rules []store.Rule, req Request, tea
 			return store.Rule{}, false, ErrTracker
 		}
 	}
-	if req.Browser && req.HTTP != nil && e.Browsers != nil && e.Browsers.Allows(ctx, req.EnvironmentID, teammate, *req.HTTP) {
+	if req.Browser && req.HTTP != nil && e.Browsers != nil && e.Browsers.Allows(ctx, req.EnvironmentID, teammate, Normalize(req.Host), *req.HTTP) {
 		return store.Rule{EnvironmentID: req.EnvironmentID, Host: Normalize(req.Host), Action: store.ActionAllow}, true, nil
 	}
 	return store.Rule{}, false, nil
@@ -382,6 +388,8 @@ type Decision struct {
 	// means any method and any path.
 	Method     string
 	PathPrefix string
+	// BrowserOnly limits the rule to the requests of browser VMs.
+	BrowserOnly bool
 }
 
 // Resolve answers a pending network approval, creating a rule unless it is dismissed.
@@ -407,6 +415,9 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if d.Action == ActionAllowSite {
 		return e.decideSite(ctx, a)
 	}
+	if d.Action == ActionAllowSession {
+		return e.decideSession(ctx, a, d.Host)
+	}
 	if d.Action != store.ActionAllow && d.Action != store.ActionDeny {
 		return a, fmt.Errorf("unsupported decision %q", d.Action)
 	}
@@ -414,7 +425,7 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if err := json.Unmarshal(a.Payload, &req); err != nil {
 		return a, fmt.Errorf("approval %s: %w", id, err)
 	}
-	rule := store.Rule{EnvironmentID: envID, Host: req.Host, Ports: d.Ports, Action: d.Action, Origin: store.OriginApproval}
+	rule := store.Rule{EnvironmentID: envID, Host: req.Host, Ports: d.Ports, Action: d.Action, Origin: store.OriginApproval, BrowserOnly: d.BrowserOnly}
 	if d.Host != "" {
 		rule.Host = d.Host
 	}
@@ -536,6 +547,60 @@ func (e *Engine) decideSite(ctx context.Context, a store.Approval) (store.Approv
 	return e.Store.Approval(ctx, a.EnvironmentID, a.ID)
 }
 
+// decideSession allows the hosts pattern covers (the requested host if empty) in the browser for
+// the browser session: no rule is made, so the sandboxes' own connections to them still ask, and
+// the allow ends with the browser VM. Pending requests of the teammate's browser to those hosts
+// are approved with it.
+func (e *Engine) decideSession(ctx context.Context, a store.Approval, pattern string) (store.Approval, error) {
+	var req NetworkRequest
+	if a.Kind != KindRequest || json.Unmarshal(a.Payload, &req) != nil {
+		return a, ErrNotBrowser
+	}
+	if pattern == "" {
+		pattern = req.Host
+	}
+	pattern, err := ValidPattern(pattern)
+	if err != nil {
+		return a, err
+	}
+	if !Covers(pattern, req.Host) {
+		return a, ErrDoesNotCover
+	}
+	teammate, err := e.teammate(ctx, a.EnvironmentID, a.SandboxID)
+	if err != nil {
+		return a, err
+	}
+	if teammate == "" || e.Browsers == nil {
+		return a, ErrNoTeammate
+	}
+	if err := e.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, store.StatusApproved, ""); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return a, ErrDecided
+		}
+		return a, err
+	}
+	e.Browsers.ApproveHost(ctx, a.EnvironmentID, teammate, pattern)
+	pending, err := e.Store.Approvals(ctx, a.EnvironmentID, store.StatusPending, 10000)
+	if err != nil {
+		return a, err
+	}
+	owners, err := e.Store.SandboxTeammates(ctx, a.EnvironmentID)
+	if err != nil {
+		return a, err
+	}
+	for _, p := range pending {
+		var pr NetworkRequest
+		if p.Kind != KindRequest || owners[p.SandboxID] != teammate || json.Unmarshal(p.Payload, &pr) != nil || !Covers(pattern, pr.Host) {
+			continue
+		}
+		if err := e.Store.DecideApproval(ctx, a.EnvironmentID, p.ID, store.StatusApproved, ""); err != nil && !errors.Is(err, store.ErrNotFound) {
+			return a, err
+		}
+	}
+	e.changed(a.EnvironmentID, false)
+	return e.Store.Approval(ctx, a.EnvironmentID, a.ID)
+}
+
 // Settle decides every pending network approval of an environment that a rule now covers,
 // then wakes held connections. Call it after changing rules.
 func (e *Engine) Settle(ctx context.Context, envID string) error {
@@ -556,11 +621,12 @@ func (e *Engine) Settle(ctx context.Context, envID string) error {
 		if !IsNetworkKind(a.Kind) || json.Unmarshal(a.Payload, &req) != nil {
 			continue
 		}
+		// Only a browser VM's requests are terminated, so only they ask as a KindRequest.
 		var http *HTTPRequest
 		if a.Kind == KindRequest {
 			http = &req.HTTPRequest
 		}
-		r, ok := matchRule(e.active(rules), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port, http)
+		r, ok := matchRule(e.active(rules, http != nil), a.SandboxID, teammates[a.SandboxID], req.Host, req.Port, http)
 		if !ok {
 			continue
 		}
@@ -591,7 +657,7 @@ func (e *Engine) Refused(ctx context.Context, envID, sandboxID, host string) (st
 		return store.Rule{}, false, err
 	}
 	host = Normalize(host)
-	live := e.active(rules)
+	live := e.active(rules, false)
 	for _, r := range live {
 		narrower := len(r.Ports) > 0 || r.Method != "" || r.PathPrefix != ""
 		if narrower && appliesTo(r, sandboxID, teammate) && hostSpecificity(r.Host, host) >= 0 {
@@ -665,13 +731,14 @@ func (e *Engine) now() time.Time {
 	return time.Now()
 }
 
-// active returns the rules that match at the current time. A rule stops matching at its
-// ExpiresAt, before the sweep deletes it.
-func (e *Engine) active(rules []store.Rule) []store.Rule {
+// active returns the rules that match at the current time, for a browser VM's connection or
+// request if browser is set. A rule stops matching at its ExpiresAt, before the sweep deletes
+// it, and a browser-only rule matches only a browser VM's.
+func (e *Engine) active(rules []store.Rule, browser bool) []store.Rule {
 	now := e.now()
 	var live []store.Rule
 	for _, r := range rules {
-		if r.ExpiresAt == nil || now.Before(*r.ExpiresAt) {
+		if (r.ExpiresAt == nil || now.Before(*r.ExpiresAt)) && (browser || !r.BrowserOnly) {
 			live = append(live, r)
 		}
 	}
@@ -680,8 +747,8 @@ func (e *Engine) active(rules []store.Rule) []store.Rule {
 
 // match returns the rule that decides a connection now, and counts the connection as a hit of
 // that rule.
-func (e *Engine) match(rules []store.Rule, sandboxID, teammateID, host string, port int, http *HTTPRequest) (store.Rule, bool) {
-	r, ok := matchRule(e.active(rules), sandboxID, teammateID, host, port, http)
+func (e *Engine) match(rules []store.Rule, req Request, teammateID string) (store.Rule, bool) {
+	r, ok := matchRule(e.active(rules, req.Browser), req.SandboxID, teammateID, req.Host, req.Port, req.HTTP)
 	if ok {
 		e.hit(r.ID)
 	}

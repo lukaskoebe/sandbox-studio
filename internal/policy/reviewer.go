@@ -132,7 +132,7 @@ func (e *Engine) liveRule(ctx context.Context, req Request, teammate, host strin
 	if err != nil {
 		return store.Rule{}, false, err
 	}
-	r, ok := matchRule(e.active(rules), req.SandboxID, teammate, host, req.Port, req.HTTP)
+	r, ok := matchRule(e.active(rules, req.Browser), req.SandboxID, teammate, host, req.Port, req.HTTP)
 	return r, ok, nil
 }
 

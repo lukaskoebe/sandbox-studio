@@ -72,6 +72,9 @@ change it.
   place even when several views are on the page. More than one card, or a narrow page, folds
   the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
+- A browser request's approval makes a browser-only rule unless Options says "Browser and
+  sandboxes" (`browserOnly`), and its Options also offer "Allow for this session"
+  (`allow_session`), which makes no rule (see [network](network.md#hold-and-ask)).
 - A browser request's approval also offers its method and first directory, such as "GET
   /repos/*". The decision then carries `method` and `pathPrefix`, and the rule covers only
   those requests ([network](network.md#request-rules)).

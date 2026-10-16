@@ -92,8 +92,8 @@ test("a repository folder on this computer becomes a local forge", async ({
     0
   )
   await row.getByRole("button", { name: "Test forge" }).click()
-  const test = page.getByRole("dialog", { name: "Test local" })
-  await test.getByLabel("Repository").fill("proj")
-  await test.getByRole("button", { name: "Test" }).click()
-  await expect(test).toContainText("proj has 1 branch.")
+  const tester = page.getByRole("dialog", { name: "Test local" })
+  await tester.getByLabel("Repository").fill("proj")
+  await tester.getByRole("button", { name: "Test" }).click()
+  await expect(tester).toContainText("proj has 1 branch.")
 })

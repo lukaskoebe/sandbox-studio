@@ -76,17 +76,18 @@ type FileTeammate struct {
 // FileRule is a network rule. Teammate names a teammate of the file; empty means the whole
 // environment. Rules scoped to one sandbox are not exported.
 type FileRule struct {
-	Host       string            `json:"host" minLength:"1" maxLength:"253"`
-	Ports      []int             `json:"ports,omitempty" maxItems:"64"`
-	Action     string            `json:"action" enum:"allow,proxy,caddy,deny"`
-	Headers    map[string]string `json:"headers,omitempty" maxProperties:"32"`
-	Caddyfile  string            `json:"caddyfile,omitempty" maxLength:"32768"`
-	Upstream   string            `json:"upstream,omitempty" maxLength:"261"`
-	HostHeader string            `json:"hostHeader,omitempty" maxLength:"253"`
-	SNI        string            `json:"sni,omitempty" maxLength:"253"`
-	CA         string            `json:"ca,omitempty" maxLength:"65536"`
-	Note       string            `json:"note,omitempty" maxLength:"500"`
-	Teammate   string            `json:"teammate,omitempty" maxLength:"64"`
+	Host        string            `json:"host" minLength:"1" maxLength:"253"`
+	Ports       []int             `json:"ports,omitempty" maxItems:"64"`
+	Action      string            `json:"action" enum:"allow,proxy,caddy,deny"`
+	Headers     map[string]string `json:"headers,omitempty" maxProperties:"32"`
+	Caddyfile   string            `json:"caddyfile,omitempty" maxLength:"32768"`
+	Upstream    string            `json:"upstream,omitempty" maxLength:"261"`
+	HostHeader  string            `json:"hostHeader,omitempty" maxLength:"253"`
+	SNI         string            `json:"sni,omitempty" maxLength:"253"`
+	CA          string            `json:"ca,omitempty" maxLength:"65536"`
+	Note        string            `json:"note,omitempty" maxLength:"500"`
+	Teammate    string            `json:"teammate,omitempty" maxLength:"64"`
+	BrowserOnly bool              `json:"browserOnly,omitempty" doc:"The rule covers only the requests of the browser VMs"`
 }
 
 // FileSecret is a secret without its value: the name a sandbox sees, the hosts it may be sent
@@ -182,7 +183,7 @@ func (s *Server) buildEnvironmentFile(ctx context.Context, envID string) (Enviro
 		f.Rules = append(f.Rules, FileRule{
 			Host: r.Host, Ports: ports, Action: r.Action, Headers: r.Config.Headers, Caddyfile: r.Config.Caddyfile,
 			Upstream: r.Config.Upstream, HostHeader: r.Config.HostHeader, SNI: r.Config.SNI, CA: r.Config.CA,
-			Note: r.Note, Teammate: teammateName[r.TeammateID],
+			Note: r.Note, Teammate: teammateName[r.TeammateID], BrowserOnly: r.BrowserOnly,
 		})
 	}
 	for _, sec := range secretList {
@@ -477,7 +478,7 @@ func (s *Server) checkEnvironmentFile(f EnvironmentFile) (importPlan, error) {
 		if !slices.Contains([]string{store.ActionAllow, store.ActionProxy, store.ActionCaddy, store.ActionDeny}, fr.Action) {
 			return plan, bad("rule for %s has an unknown action", fr.Host)
 		}
-		r := store.Rule{ID: store.NewID(), Host: host, Ports: fr.Ports, Action: fr.Action, Note: fr.Note}
+		r := store.Rule{ID: store.NewID(), Host: host, Ports: fr.Ports, Action: fr.Action, Note: fr.Note, BrowserOnly: fr.BrowserOnly}
 		if fr.Teammate != "" {
 			if r.TeammateID = teammateIDs[fr.Teammate]; r.TeammateID == "" {
 				return plan, bad("rule for %s is scoped to teammate %q, which the file does not list", fr.Host, fr.Teammate)

@@ -417,6 +417,9 @@ func (m *app) entryBody(w, h int) []string {
 		fact("Ports", rulePorts(r)),
 		fact("Covers", m.ruleScope(r)),
 	)
+	if r.BrowserOnly {
+		lines = append(lines, fact("Where", "the browsers only"))
+	}
 	if r.Method != "" || r.PathPrefix != "" {
 		lines = append(lines, fact("Requests", strings.TrimSpace(firstNonEmpty(r.Method, "any method")+" "+r.PathPrefix)))
 	}

@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Collapsible,
   CollapsibleContent,
@@ -199,6 +200,7 @@ function RuleForm({
     params: { path: { env } },
   })
   const teammateList = teammates.data ?? []
+  const [browserOnly, setBrowserOnly] = useState(rule?.browserOnly ?? false)
   const [note, setNote] = useState(rule?.note ?? "")
   const [formError, setFormError] = useState<string>()
   const clearFormError = () => setFormError(undefined)
@@ -278,6 +280,11 @@ function RuleForm({
       teammateId: scope.startsWith("teammate:")
         ? scope.slice("teammate:".length)
         : undefined,
+      browserOnly: browserOnly || undefined,
+      // The form doesn't show a rule's method and path; an allow or deny rule keeps them.
+      ...(action === "allow" || action === "deny"
+        ? { method: rule?.method, pathPrefix: rule?.pathPrefix }
+        : {}),
       note: note.trim() || undefined,
       config: Object.values(config).some((v) => v !== undefined)
         ? config
@@ -519,6 +526,22 @@ function RuleForm({
             A teammate rule covers every sandbox the teammate owns.
           </FieldDescription>
         )}
+      </Field>
+      <Field>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox
+            checked={browserOnly}
+            onCheckedChange={(v) => {
+              setBrowserOnly(v)
+              clearFormError()
+            }}
+          />
+          Only in the browser
+        </label>
+        <FieldDescription>
+          Covers what the browsers load, not the sandboxes&apos; own
+          connections.
+        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="rule-note">Note</FieldLabel>
