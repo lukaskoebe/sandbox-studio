@@ -11,7 +11,7 @@ Each teammate has its own Chromium browser running in a separate microVM. Agents
 
 Read-only actions such as snapshots and reading text are allowed. Opening a page still follows the sandbox's network rules. Actions that change a page, such as clicking or filling a field, ask for approval unless an allow rule matches. Uploads and downloads always ask. You can deny actions or add rules for an origin and action.
 
-Script execution, cookie access, storage access, and page state inspection are not available to the agent tools. Password-like and marked-sensitive fields are redacted from snapshots. When you approve **Fill credential**, Studio fills a host-side secret into the page without showing the value to the agent.
+Script execution, cookie access, storage access, and page state inspection are not available to the agent tools. Password-like and marked-sensitive fields are redacted from snapshots. When the agent asks to fill a credential, the **Browser credential** card names the secret; choose **Fill**, and Studio fills the host-side secret into the page without showing the value to the agent.
 
 Browser network requests use the environment's network rules. When an agent drives the browser, requests use the driving sandbox's policy. See [Network rules](../network/) and [Secrets](../secrets/).
 

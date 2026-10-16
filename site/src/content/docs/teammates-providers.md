@@ -1,23 +1,25 @@
 ---
 title: Teammates and providers
-description: Configure an agent identity and connect it to an API-key provider.
+description: Configure an agent identity and connect it to an API key or a subscription.
 ---
 
-A teammate is an agent identity in one environment. It has a name, role, optional Markdown instructions (“soul”), harness, provider, model, and Git author name and email. One teammate can own multiple sandboxes; a sandbox's owner is selected at creation and cannot be changed later.
+A teammate is an agent identity in one environment. It has a name, role, avatar, optional Markdown instructions (“soul”), harness, provider, model, and Git author name and email. **New rules from approvals apply to** sets the scope its approval cards preselect: this sandbox, this teammate, or the environment. One teammate can own multiple sandboxes; a sandbox's owner is selected at creation and cannot be changed later.
 
 ![The Teammates page listing agent names, harnesses, providers, models, and Git identities](../../assets/screenshots/teammates.jpg)
 
-Each teammate has a page of its own, reached from **Teammates** in the sidebar. It opens on your conversation with the teammate: its recent chats in brief, what it learned, its tasks and the approvals it waits for, in one thread. Below it, send a message, hand over a task that it starts on right away, or teach it something to remember. The other tabs hold its tasks, chats, private memory, browser, and settings, where you edit it or delete it.
+Each teammate has a page of its own, reached from **Teammates** in the sidebar. It opens on your conversation with the teammate: its recent chats in brief, what it learned, its tasks and the approvals it waits for, in one thread. Below it, send a message, hand over a task that it starts on right away, or teach it something to remember. The other tabs hold its tasks, chats, private memory, browser, and settings, where you edit it or delete it. To use the same teammate in another environment, choose **Copy to environment…** in its options menu; its sandboxes, chats, memory, secrets and keys stay behind.
 
 ## Choose a provider
 
-Studio supports API-key providers:
+Studio supports these providers:
 
 | Provider | Harnesses |
 | --- | --- |
 | Anthropic API key | Claude Code, OpenCode |
 | OpenAI API key | Codex, OpenCode |
 | OpenAI-compatible HTTPS endpoint | Codex, OpenCode |
+| Claude Pro/Max subscription | Claude Code |
+| ChatGPT Plus/Pro subscription | Codex |
 
 An OpenAI-compatible endpoint needs a public HTTPS base URL and a model. If you choose Codex, the endpoint must support the OpenAI Responses API.
 
@@ -34,11 +36,11 @@ Add or rotate provider keys under **Settings → Providers**. The key remains in
 
 ## Default teammate
 
-If an environment has no teammates when you add a provider, Studio adds a teammate named Iris on that provider. Iris is a generalist engineer that uses Claude Code with an Anthropic key, Codex with an OpenAI key, or OpenCode with a custom endpoint. The Git identity is `Iris (agent) <iris@agents.invalid>`. Iris is an ordinary teammate: you can edit or delete Iris. Studio adds Iris again only when the environment has no teammates and you add another provider.
+If an environment has no teammates when you add a provider, Studio adds a teammate named Iris on that provider. Iris is a generalist engineer that uses Claude Code with an Anthropic key or a Claude subscription, Codex with an OpenAI key or a ChatGPT subscription, or OpenCode with a custom endpoint. The Git identity is `Iris (agent) <iris@agents.invalid>`. Iris is an ordinary teammate: you can edit or delete Iris. Studio adds Iris again only when the environment has no teammates and you add another provider.
 
 ## Start a teammate session
 
-1. Add a provider and enter its API key.
+1. Add a provider and enter its API key, or sign in with a subscription.
 2. Add a teammate and select a supported harness, provider, and model. A teammate needs a provider for its model: in an environment without one, **New teammate** says so and leads to **Settings → Providers**.
 3. Create a sandbox and assign that teammate.
 4. Open the sandbox and choose **Start session**. Studio opens the harness in a terminal tab.

@@ -18,7 +18,7 @@ You can change it any time under **Settings → General → Work mode**. The cho
 
 A chat talks to the teammate that owns a sandbox, so you need:
 
-1. A provider: an Anthropic API key, an OpenAI API key, an OpenAI-compatible endpoint, or a signed-in Claude subscription. See [Teammates and providers](../teammates-providers/).
+1. A provider: an Anthropic API key, an OpenAI API key, an OpenAI-compatible endpoint, or a signed-in Claude or ChatGPT subscription. See [Teammates and providers](../teammates-providers/).
 2. A teammate that uses it.
 3. A sandbox owned by that teammate, running.
 

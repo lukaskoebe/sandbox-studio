@@ -21,9 +21,9 @@ On Linux and macOS, run the installer:
 curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh
 ```
 
-The script downloads the latest release for your platform, checks it against the release's `checksums.txt`, and installs `studio` to `~/.local/bin` without sudo. It then checks KVM or Hypervisor.framework access and tells you what to fix; it never installs other software. Set `SANDBOX_STUDIO_VERSION` (for example `v0.3.2`) to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to change the directory.
+The script downloads the latest release for your platform, checks it against the release's `checksums.txt` (and its build provenance, when the GitHub CLI `gh` is installed and signed in), and installs `studio` to `~/.local/bin` without sudo. If that directory is not on your `PATH`, it prints the line to add to your shell profile. It then checks KVM or Hypervisor.framework access and tells you what to fix; it never installs other software. Set `SANDBOX_STUDIO_VERSION` (for example `v0.3.4`) to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to change the directory.
 
-On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains a single `studio` executable; put it anywhere on your `PATH`.
+On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains a single `studio` executable (`studio.exe` on Windows); put it anywhere on your `PATH`.
 
 ### Build from source
 
@@ -61,6 +61,8 @@ This is the sign-in for your local Studio app. It does not sign an agent into an
 Studio listens on loopback, so other computers on your network cannot open its UI. The UI and the sandbox services stay on the machine running Studio.
 
 To give Studio a window and a dock or taskbar icon of its own, install it as an app: in Chrome or Edge, choose **Install Sandbox Studio** in the address bar or the browser menu; in Safari, choose **File → Add to Dock**. The app shows the number of approvals waiting on its icon. It belongs to the address you installed it from, so keep Studio on the same port.
+
+To start Studio when you log in, turn on **Start at login** under **Settings → General**, or run `studio autostart enable`. It is off by default, and so is the update check: turn on **Updates** on the same page to have Studio check GitHub for a newer release at most once a day; it never downloads or installs one by itself.
 
 On a first start, Studio opens a guided setup at `/setup`. It checks the host, asks whether you want Chat or Terminal, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
 

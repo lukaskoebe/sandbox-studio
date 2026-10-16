@@ -15,7 +15,7 @@ On first start, Studio may need to download the runtime and base image. Check th
 
 - Confirm the sandbox is running and has a teammate assigned.
 - Confirm the teammate's harness supports the selected provider.
-- Add an API key to the provider and verify it is still valid.
+- Add an API key to the provider and verify it is still valid. For a subscription, choose **Sign in** next to the provider under **Settings → Providers**; a ChatGPT sign-in can expire.
 - Confirm an environment network rule does not deny the provider's API host.
 
 Claude Pro/Max and ChatGPT subscriptions sign in from Settings → Providers. A Claude subscription works in terminal sessions and in chats.
@@ -23,6 +23,14 @@ Claude Pro/Max and ChatGPT subscriptions sign in from Settings → Providers. A 
 ## A command says it is waiting for network approval
 
 Open the approval inbox and decide the request. The refused connection will not resume by itself: retry the command after allowing the host. Check the Network page if the request is denied by a rule.
+
+## A sandbox cannot reach this computer or a host on the local network
+
+Sandboxes reach public addresses only, so `localhost`, this computer's own addresses, a NAS or a host behind a VPN fail by default, and a rule alone does not open them: the Rules page marks such a rule with the reason. Open the port under **This computer** on **Settings → Network** and connect to `host.studio.internal`, or add the host under **Local network**. See [Network rules](../network/#this-computer).
+
+## A page says "Is Studio older than this page?"
+
+The page sent something the running Studio doesn't know, which means the page is newer than that Studio. Stop Studio and start it again, so the version you installed last runs, then reload the page.
 
 ## A Git push is still pending
 

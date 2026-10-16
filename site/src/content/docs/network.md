@@ -3,13 +3,20 @@ title: Network rules and approvals
 description: Decide what sandbox traffic can reach, and what happens when a host is unknown.
 ---
 
-Every sandbox TCP connection goes through Studio's gateway, including connections made by Docker containers inside the sandbox. DNS uses Studio's resolver. UDP and ICMP are blocked; outbound connections are for public addresses.
+Every sandbox TCP connection goes through Studio's gateway, including connections made by Docker containers inside the sandbox. DNS uses Studio's resolver. UDP and ICMP are blocked. Outbound connections go to public addresses only, unless you open a port of [this computer](#this-computer) or list a host on the [local network](#local-network).
 
 ## Unknown hosts wait for you
 
 When a sandbox reaches a host not covered by a rule, Studio holds the connection and shows a request in the approval inbox. The request includes the host, port, sandbox, and teammate if there is one.
 
-You can allow or deny the request, or add a rule with a wider scope. Studio holds the original connection for up to 60 seconds. If you allow it before the hold expires and the client is still waiting, Studio releases that same connection and the original operation continues. If the client gives up or the 60-second hold expires first, the connection closes; retry the operation after approval.
+**Allow** and **Deny** add a rule, so the next connection to the host doesn't ask. When the card offers several host patterns, such as `registry.npmjs.org` and `*.npmjs.org`, pick one first. **Options** on the card has two rows:
+
+- **Who**: the whole **Environment**, the teammate's sandboxes, or only this sandbox. The teammate's **New rules from approvals apply to** setting picks the default. **Any port** makes the rule cover every port instead of the request's default ports.
+- **For**: **Always**, **1 hour**, or **Once**, which answers only this request and adds no rule.
+
+**Ignore** refuses the request this time without a rule.
+
+Studio holds the original connection for up to 60 seconds. If you allow it before the hold expires and the client is still waiting, Studio releases that same connection and the original operation continues. If the client gives up or the 60-second hold expires first, the connection closes; retry the operation after approval.
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
@@ -95,7 +102,7 @@ When you allow the browser to open a site, the site is allowed for the rest of t
 **Options** on the card has two rows:
 
 - **Who**: the teammate's browser, **All browsers** of the environment, or **Browsers and sandboxes**, which also lets the sandboxes connect to the host. The teammate's approval scope picks the default.
-- **For**: **Always**, **1 hour**, **This session** or **Once**. **This session** allows the site, or the host or pattern you picked on the card, in that teammate's browser until the browser stops, and adds no rule. **Once** answers only this request.
+- **For**: **Always**, **1 hour**, **This session** or **Once**. **This session** allows the site, or the host or pattern you picked on the card, in that teammate's browser until the browser stops, and adds no rule; with it, **Deny** denies once. **Once** answers only this request. **This session** and **Once** make no rule, so **Who** is off for them.
 
 The Allow and Deny buttons say how long they last, such as **Allow for 1 hour**.
 

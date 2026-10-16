@@ -88,7 +88,8 @@ A card lets you:
 
 - **Allow or deny** a network request. `y` and `n` make a rule for the host pattern and the
   scope you chose; `o` and `O` answer only this connection, with no rule; `1` allows it for
-  an hour; `i` ignores it.
+  an hour; `i` ignores it. When the browser opens a new site, `w` allows the site for the
+  rest of that browser session, with no rule.
 - **Choose what the rule covers:** `p` changes the host pattern (for a browser request, also
   its method and path), `s` the scope (the environment, your teammate's sandboxes, or this
   sandbox), and `x` any port instead of the default ports.

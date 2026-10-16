@@ -29,8 +29,8 @@ The session cookie is set after the first navigation in fixtures.ts, so a fast p
 | `studio start <sandbox>` | Starts a sandbox, or resumes it when it is suspended. |
 | `studio stop <sandbox>` | Stops a sandbox. Its disks stay. |
 | `studio suspend <sandbox>`, `studio resume <sandbox>` | Suspends a sandbox with its memory, and resumes it where it was. |
-| `studio create <name>` | Creates a sandbox and waits until it runs. `--teammate Finn` gives it an owner, `--template node@3` starts from a template, `--cpus` and `--memory` (in GiB) size it. |
-| `studio fork <sandbox> <name>` | Forks a sandbox into a new one with a copy of its disks. |
+| `studio create <name>` | Creates a sandbox and waits until it runs. `--teammate Finn` gives it an owner, `--template node@3` starts from a template, `--cpus` and `--memory` (in GiB) size it, and `--no-wait` returns once Studio has accepted it. |
+| `studio fork <sandbox> <name>` | Forks a sandbox into a new one with a copy of its disks, and waits until it runs, unless `--no-wait`. |
 | `studio rm <sandbox>` | Deletes a sandbox and its disks. Asks for its name first. |
 | `studio shell <sandbox>` | Opens the sandbox's terminal in yours. `Ctrl-]` detaches; the terminal keeps running. |
 | `studio ask <sandbox> <prompt>` | Asks the sandbox's teammate and prints the answer as it comes. |
@@ -44,6 +44,19 @@ The session cookie is set after the first navigation in fixtures.ts, so a fast p
 `studio help` (or `studio -h`, `studio --help`) lists every command, Studio's own included,
 and its flags. `studio help <command>` or `studio <command> -h` shows a command's arguments
 and flags. Sandboxes are named by name or ID.
+
+## Studio's own commands
+
+Unlike the commands above, these work without a running Studio, except `login-url` and `tui`.
+
+| Command | Does |
+|---|---|
+| `studio` | Starts Studio and prints a one-time login link. |
+| `studio doctor` | Checks that this machine can run Studio and says how to fix what can't. Exits 1 if a check fails. |
+| `studio login-url` | Prints a fresh one-time login link for the running Studio. |
+| `studio tui` | Opens the [terminal UI](../tui/). |
+| `studio autostart enable`, `disable`, `status` | Starts Studio when you log in, or stops doing so. It takes effect at the next login. |
+| `studio version` | Prints Studio's version and its base image. |
 
 ## Asking a teammate
 

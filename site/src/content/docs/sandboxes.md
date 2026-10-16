@@ -32,7 +32,11 @@ Start and stop are on the dashboard. The options menu (**⋯**, on both pages) h
 | --- | --- |
 | **Stop** | Powers off the VM. Files on its disks stay, but running processes and terminal sessions end. Use **Start** to boot it again. |
 | **Suspend** | Pauses a running VM with its memory and processes. **Resume** continues it, including terminal sessions. Suspended memory does not survive a host reboot. |
+| **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are copied; Docker images, containers and volumes are not. The fork gets its own network approvals. |
+| **Rebase** | Moves the sandbox onto another template (see below). |
 | **Delete** | Permanently removes the sandbox and its disks. Export the sandbox first if you need a portable backup. |
+
+To change a sandbox's CPUs or memory, choose **Resources** on its dashboard. A running sandbox takes the change live where its VM has room for it; anything else applies the next time it starts.
 
 ## Side panels
 
@@ -61,4 +65,4 @@ Each port keeps its own browser storage, so a service worker an app registered s
 
 ## Export a workspace
 
-Use **Export** in the options menu to save a `.studio-sandbox` file that can be imported in another environment or Studio install. It contains the template specification, resource settings, `/workspace`, and the home directory (`/home/agent`), which holds your agent's sessions and anything you saved there. Read the home directory before you share the file. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).
+Use **Export** in the options menu to save a `.studio-sandbox` file that can be imported in another environment or Studio install, with **Import sandbox** on Home. It contains the template specification, resource settings, `/workspace`, and the home directory (`/home/agent`), which holds your agent's sessions and anything you saved there. Read the home directory before you share the file. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).
