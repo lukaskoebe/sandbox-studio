@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -13,11 +14,11 @@ import (
 // RepoURL is a forge described by one of its repositories' URLs, as pasted into the Add
 // forge dialog.
 type RepoURL struct {
-	Kind    string `json:"kind" enum:"forgejo,github,gitlab,https,ssh"`
-	BaseURL string `json:"baseUrl" doc:"The forge's base URL, or SSH address for kind ssh"`
+	Kind    string `json:"kind" enum:"forgejo,github,gitlab,https,ssh,local"`
+	BaseURL string `json:"baseUrl" doc:"The forge's base URL, SSH address for kind ssh, or folder for kind local"`
 	Name    string `json:"name" doc:"A short name for the forge, not yet taken in the environment"`
 	Path    string `json:"path" doc:"The repository's path on the forge, without .git"`
-	Auth    string `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: the host's SSH agent"`
+	Auth    string `json:"auth,omitempty" enum:"agent,key,none" doc:"Kind ssh: the host's SSH agent"`
 }
 
 // apiHosts are hosts with an API Studio speaks, so their HTTPS URLs get that kind.
@@ -27,7 +28,8 @@ var apiHosts = map[string]string{"github.com": KindGitHub, "codeberg.org": KindF
 // or https://host/owner/repo(.git). SSH URLs make an ssh forge signing with the agent, also
 // for github.com; HTTPS URLs make a github or forgejo forge for hosts with that API, else
 // an https one. Name is the host's main label, such as github, and not checked for
-// uniqueness.
+// uniqueness. A path on this computer, /home/me/git/repo, ~/git/repo or file:///..., makes
+// a local forge for the folder the repository is in, named local.
 func ParseRepoURL(raw string) (RepoURL, error) {
 	raw = strings.TrimSpace(raw)
 	bad := func(why string) (RepoURL, error) {
@@ -71,6 +73,8 @@ func ParseRepoURL(raw string) (RepoURL, error) {
 			return RepoURL{}, err
 		}
 		r.Kind, r.BaseURL, r.Auth, path = KindSSH, u.Base, store.ForgeAuthAgent, p
+	case strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "~") || strings.HasPrefix(raw, "file://") || filepath.VolumeName(raw) != "":
+		return parseLocalRepo(raw)
 	case strings.Contains(raw, "://"):
 		return bad("use an https:// or ssh:// URL, or git@host:path")
 	default:
@@ -153,4 +157,22 @@ func FreeName(name string, taken []store.Forge) string {
 		candidate = fmt.Sprintf("%s-%d", name, i)
 	}
 	return candidate
+}
+
+// parseLocalRepo makes a local forge from a repository's path on this computer: the folder
+// it is in, and its name without .git.
+func parseLocalRepo(raw string) (RepoURL, error) {
+	u, err := CheckLocalPath(raw)
+	if err != nil {
+		return RepoURL{}, err
+	}
+	repo := strings.TrimSuffix(filepath.Base(u.Base), ".git")
+	if _, _, ok := splitPath(repo); !ok {
+		return RepoURL{}, fmt.Errorf("%w: the repository's folder name must be letters, digits, dots, dashes and underscores", ErrInvalid)
+	}
+	dir, err := CheckLocalPath(filepath.Dir(u.Base))
+	if err != nil {
+		return RepoURL{}, err
+	}
+	return RepoURL{Kind: KindLocal, BaseURL: dir.Base, Name: "local", Path: repo, Auth: store.ForgeAuthNone}, nil
 }

@@ -359,3 +359,45 @@ func TestGitApprovalsAreSettledByTheIntegration(t *testing.T) {
 		}
 	}
 }
+
+// TestLocalForges: a local forge is a folder on this computer, with no token, and the
+// pasted path of a repository fills one in.
+func TestLocalForges(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "work")
+	base := testOrigin + "/api/environments/" + env.ID + "/forges"
+	folder := t.TempDir()
+	if err := os.Mkdir(filepath.Join(folder, "proj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	quoted, _ := json.Marshal(folder)
+	for _, body := range []string{
+		`{"name":"here","kind":"local","baseUrl":"relative/path"}`,
+		`{"name":"here","kind":"local","baseUrl":"/"}`,
+		`{"name":"here","kind":"local","baseUrl":` + string(quoted) + `,"token":"x"}`,
+		`{"name":"here","kind":"local","baseUrl":` + strings.TrimSuffix(string(quoted), `"`) + `/missing"}`,
+	} {
+		if rec := do(h, "POST", base, body); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
+		}
+	}
+	rec := do(h, "POST", base, `{"name":"here","kind":"local","baseUrl":`+string(quoted)+`}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	f := decode[store.Forge](t, rec)
+	if f.BaseURL != folder || f.Auth != store.ForgeAuthNone || f.SecretID != "" {
+		t.Fatalf("forge: %+v", f)
+	}
+	if rec := do(h, "PUT", base+"/"+f.ID+"/token", `{"token":"x"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("token: %d %s", rec.Code, rec.Body)
+	}
+	repo, _ := json.Marshal(filepath.Join(folder, "proj"))
+	r := decode[gitreview.RepoURL](t, do(h, "POST", base+"/parse-url", `{"url":`+string(repo)+`}`))
+	if r.Kind != gitreview.KindLocal || r.BaseURL != folder || r.Path != "proj" || r.Name != "local" {
+		t.Fatalf("parsed: %+v", r)
+	}
+	if rec := do(h, "DELETE", base+"/"+f.ID, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+}

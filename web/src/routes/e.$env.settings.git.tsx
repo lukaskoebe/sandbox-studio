@@ -354,7 +354,7 @@ function ForgeRow({
             >
               Re-pin
             </Button>
-          ) : (
+          ) : forge.kind === "local" ? null : (
             <Button
               variant="ghost"
               size="icon-sm"
@@ -463,7 +463,8 @@ function TestForm({ env, forge }: { env: string; forge: Forge }) {
     }
   )
   const res = test.data
-  const needsRepo = !hasAPI(forge.kind)
+  const local = forge.kind === "local"
+  const needsRepo = !hasAPI(forge.kind) && !local
   const submit = (e: FormEvent) => {
     e.preventDefault()
     test.mutate({
@@ -476,9 +477,11 @@ function TestForm({ env, forge }: { env: string; forge: Forge }) {
       <DialogHeader>
         <DialogTitle>Test {forge.name}</DialogTitle>
         <DialogDescription>
-          {needsRepo
-            ? "Studio lists the branches of a repository with its credential."
-            : "Studio asks the forge whose token it has, and lists the branches of a repository if you name one."}
+          {local
+            ? "Studio checks the folder, and lists the branches of a repository in it if you name one."
+            : needsRepo
+              ? "Studio lists the branches of a repository with its credential."
+              : "Studio asks the forge whose token it has, and lists the branches of a repository if you name one."}
         </DialogDescription>
       </DialogHeader>
       <Field>
@@ -486,7 +489,13 @@ function TestForm({ env, forge }: { env: string; forge: Forge }) {
         <Input
           id="forge-test-repo"
           value={repo}
-          placeholder={needsRepo ? "group/project" : "owner/repo (optional)"}
+          placeholder={
+            local
+              ? "repo (optional)"
+              : needsRepo
+                ? "group/project"
+                : "owner/repo (optional)"
+          }
           autoComplete="off"
           onChange={(e) => setRepo(e.target.value)}
         />

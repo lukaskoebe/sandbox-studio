@@ -11,10 +11,11 @@ For a forge added in **Settings → Git**, Studio can act as the virtual Git rem
 
 ## Add a forge
 
-Studio supports GitHub, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, and SSH Git hosts. Add each forge to the environment where its sandboxes will use it. Forge hosts must be public; private and LAN hosts are refused. Paste a repository URL, such as `git@github.com:owner/repo.git`, and Studio fills in the rest of the form: an SSH URL keeps its user, here `git`. The SSH address of an **Other SSH** forge takes a clone URL too.
+Studio supports GitHub, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, SSH Git hosts, and folders of repositories on this computer. Add each forge to the environment where its sandboxes will use it. Forge hosts must be public; private and LAN hosts are refused. Paste a repository URL, such as `git@github.com:owner/repo.git`, and Studio fills in the rest of the form: an SSH URL keeps its user, here `git`. The SSH address of an **Other SSH** forge takes a clone URL too.
 
 - For GitHub or Forgejo/Gitea/Codeberg, add a token with access limited to the repositories the agent needs.
 - For another HTTPS host, provide its username and token.
+- For a folder on this computer, paste a repository's path, such as `~/git/app`: Studio makes a **Folder on this computer** forge for the folder it is in, with no token. Sandboxes can fetch every repository in the folder; an approved push goes in with your git, as `git push` to the folder would, so the repository's hooks run and a push to the branch a working copy has checked out is refused unless the repository sets `receive.denyCurrentBranch` to `updateInstead`.
 - For SSH, Studio signs with the keys in your SSH agent, the same ones `ssh` uses. Compare the scanned host-key fingerprint with the fingerprint published by the host, then confirm it. To keep a key for Studio alone, choose a Studio key instead: Studio creates it and shows its public key for you to add to the host.
 
 Forge tokens and Studio's SSH keys stay in Studio's host-side vault. Your SSH agent is only used on the host. Neither reaches a sandbox. If your agent asks you to confirm each signature, as hardware keys and password managers do, Studio's own fetch before a push runs at most once every 30 seconds per sandbox and repository, so a burst of pushes asks once. **Settings → Git** can test a forge connection and replace an expiring token.
@@ -27,7 +28,7 @@ When a sandbox pushes through a configured forge, Studio stages the push and ask
 
 To tell the agent what to change, comment on lines of the diff with the comment button that appears when you point at a line, and add a note below. A rejection and its note reach the agent the next time it fetches or gets a prompt. To tell it right away, choose one of the sandbox's chats or agent terminals under **Send to** before you decide: Studio sends the outcome, your note and your line comments there. A chat that is working gets them when its current turn ends. **Send without deciding** sends them and keeps the push waiting, so the agent can push a fix that replaces it. Plain shell terminals are not offered, since text typed into them would run as commands.
 
-GitHub and Forgejo/Gitea forges can also request approval to open a pull request after a reviewed push to a non-default branch. Other HTTPS and SSH forges do not provide pull-request proposals.
+GitHub and Forgejo/Gitea forges can also request approval to open a pull request after a reviewed push to a non-default branch. Other HTTPS, SSH and local forges do not provide pull-request proposals.
 
 If a host is not configured as a forge, access follows normal network rules and is not staged for Git review. Do not assume every arbitrary Git remote receives review protection.
 

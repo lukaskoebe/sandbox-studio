@@ -3313,11 +3313,11 @@ export interface components {
              */
             agentSlowAt?: string;
             /**
-             * @description Kind ssh: sign with the host's SSH agent, or with a key Studio generated
+             * @description Kind ssh: sign with the host's SSH agent, or with a key Studio generated; none for kind local
              * @enum {string}
              */
-            auth?: "agent" | "key";
-            /** @description https://host[/path], or ssh://user@host[:port] for kind ssh */
+            auth?: "agent" | "key" | "none";
+            /** @description https://host[/path], ssh://user@host[:port] for kind ssh, or a folder on this computer for kind local */
             baseUrl: string;
             /** Format: date-time */
             createdAt: string;
@@ -3330,7 +3330,7 @@ export interface components {
             hostKeyMismatch?: string;
             id: string;
             /** @enum {string} */
-            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh";
+            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh" | "local";
             /** @description The URL segment: https://git.studio.internal/<name>/<path>.git */
             name: string;
             /** @description The public half of the SSH key Studio generated (auth key), to add to the host */
@@ -3355,15 +3355,15 @@ export interface components {
              * @enum {string}
              */
             auth?: "agent" | "key";
-            /** @description The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222 */
+            /** @description The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222; for kind local a folder of repositories on this computer, such as ~/git */
             baseUrl: string;
             /** @description Kind ssh: the host key to pin, as scanned and confirmed by the user */
             hostKey?: string;
             /** @enum {string} */
-            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh";
+            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh" | "local";
             /** @description Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git */
             name: string;
-            /** @description Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it */
+            /** @description Every kind but ssh and local: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it */
             token?: string;
             /** @description Kind https: the user git authenticates as with the token; git if empty */
             username?: string;
@@ -4041,11 +4041,11 @@ export interface components {
              * @description Kind ssh: the host's SSH agent
              * @enum {string}
              */
-            auth?: "agent" | "key";
-            /** @description The forge's base URL, or SSH address for kind ssh */
+            auth?: "agent" | "key" | "none";
+            /** @description The forge's base URL, SSH address for kind ssh, or folder for kind local */
             baseUrl: string;
             /** @enum {string} */
-            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh";
+            kind: "forgejo" | "github" | "gitlab" | "https" | "ssh" | "local";
             /** @description A short name for the forge, not yet taken in the environment */
             name: string;
             /** @description The repository's path on the forge, without .git */

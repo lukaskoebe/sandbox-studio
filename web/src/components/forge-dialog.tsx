@@ -193,6 +193,7 @@ const defaultBaseURLs: Record<Kind, string> = {
   gitlab: "https://gitlab.com",
   https: "",
   ssh: "",
+  local: "",
 }
 
 const namePlaceholders: Record<Kind, string> = {
@@ -201,6 +202,7 @@ const namePlaceholders: Record<Kind, string> = {
   gitlab: "gitlab",
   https: "other",
   ssh: "myhost",
+  local: "local",
 }
 
 /**
@@ -255,10 +257,11 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
     setError(undefined)
   }, [parsed])
   const ssh = kind === "ssh"
+  const local = kind === "local"
   const canSave =
     name.trim() !== "" &&
     baseUrl.trim() !== "" &&
-    (ssh ? scanned !== undefined && confirmed : token !== "")
+    (local || (ssh ? scanned !== undefined && confirmed : token !== ""))
 
   const pickKind = (k: Kind) => {
     setKind(k)
@@ -281,7 +284,7 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
         ...(kind === "https" && username.trim()
           ? { username: username.trim() }
           : {}),
-        ...(ssh ? { hostKey: scanned?.key, auth } : { token }),
+        ...(local ? {} : ssh ? { hostKey: scanned?.key, auth } : { token }),
       },
     })
     setSaving(false)
@@ -301,7 +304,8 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
       <DialogHeader>
         <DialogTitle>Add forge</DialogTitle>
         <DialogDescription>
-          A git host Studio fetches from and pushes to for the sandboxes.
+          A git host, or a folder of repositories on this computer, that Studio
+          fetches from and pushes to for the sandboxes.
         </DialogDescription>
       </DialogHeader>
       <Field>
@@ -309,13 +313,13 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
         <Input
           id="forge-repo-url"
           value={repoURL}
-          placeholder="git@github.com:owner/repo.git"
+          placeholder="git@github.com:owner/repo.git or ~/git/repo"
           autoComplete="off"
           onChange={(e) => setRepoURL(e.target.value)}
         />
         <FieldDescription>
-          Paste a repository&apos;s clone URL. Studio fills in the rest, which
-          you can change.
+          Paste a repository&apos;s clone URL, or its folder on this computer.
+          Studio fills in the rest, which you can change.
         </FieldDescription>
         {repoURL.trim() !== "" && parse.error && (
           <FieldError>{errorMessage(parse.error)}</FieldError>
@@ -347,6 +351,8 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           {kind === "https" &&
             "Any host serving git over HTTPS with a token, such as Bitbucket. No pull requests."}
           {ssh && "Any host serving git over SSH. No pull requests."}
+          {local &&
+            "Repositories in a folder here, such as ~/git. Approved pushes go in with your git, as git push to the folder would; no pull requests."}
         </FieldDescription>
       </Field>
       <Field>
@@ -361,18 +367,24 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
         <FieldDescription>
           Used in sandbox remote URLs. Sandboxes use{" "}
           <Ident>
-            {`https://${remoteHost}/${name.trim() || "<name>"}/${repoPath || "owner/repo"}.git`}
+            {`https://${remoteHost}/${name.trim() || "<name>"}/${repoPath || (local ? "repo" : "owner/repo")}.git`}
           </Ident>
         </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor="forge-url">
-          {ssh ? "SSH address" : "URL"}
+          {ssh ? "SSH address" : local ? "Folder" : "URL"}
         </FieldLabel>
         <Input
           id="forge-url"
           value={baseUrl}
-          placeholder={ssh ? "git@git.example.org" : "https://git.example.org"}
+          placeholder={
+            ssh
+              ? "git@git.example.org"
+              : local
+                ? "~/git"
+                : "https://git.example.org"
+          }
           autoComplete="off"
           onChange={(e) => {
             const v = e.target.value
@@ -383,6 +395,12 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
             setConfirmed(false)
           }}
         />
+        {local && (
+          <FieldDescription>
+            The folder the repositories are in. Sandboxes can fetch every
+            repository in it; nothing goes in without your approval.
+          </FieldDescription>
+        )}
         {ssh && (
           <FieldDescription>
             user@host, or ssh://user@host:port. The user is git if you leave it
@@ -432,7 +450,7 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           </FieldDescription>
         </Field>
       )}
-      {ssh ? (
+      {local ? null : ssh ? (
         <HostKeyCheck
           env={env}
           baseUrl={baseUrl}

@@ -44,6 +44,8 @@ the transport (HTTPS or SSH) and whether there is an API for pull requests.
     username defaults to `git` (Bitbucket wants `x-token-auth`). No API: no pull requests,
     and the default branch isn't needed.
   - `ssh` (gitolite, a VPS, any host serving git over SSH): see [SSH forges](#ssh-forges).
+  - `local` (a folder of repositories on this computer, such as `~/git`): see
+    [Local forges](#local-forges).
 - Private, loopback, link-local and CGNAT hosts are refused, for HTTPS and SSH alike, and
   every upstream connection goes through `gateway.DialPublic`, so DNS can't rebind past the
   check. A LAN forge would let a sandbox drive requests into your network through Studio.
@@ -57,7 +59,7 @@ the transport (HTTPS or SSH) and whether there is an API for pull requests.
   pushes, since tokens expire.
 - "Test" asks the API whose token it is (`GET /api/v1/user`, GitHub `GET /user` with the
   token's expiry, amber under 14 days) and, given a repository, lists its branches over git.
-  Kinds without an API need the repository.
+  Kinds without an API need the repository, except `local`.
 - Deleting a forge also deletes its staging repos.
 
 ## Remote mapping
@@ -133,6 +135,29 @@ The config holds only these internal URLs, never a token or key.
 - A sandbox reaching an SSH host without a forge makes a plain TCP connection through the
   gateway, decided by the network policy like any host and port; it has no key unless the
   agent made one and someone registered it, which bypasses review.
+
+## Local forges
+
+A `local` forge is a folder on the host, so a sandbox can push to a repository you work on
+here, reviewed like any other push.
+
+- The base URL is the folder's absolute path; the dialog also takes `~/git` and
+  `file:///…`. It must exist, and can't be the file system's root. Pasting a repository's
+  path (`~/git/app`) fills in the form: the folder it is in, named `local`, path `app`.
+- `https://git.studio.internal/<forge>/<path>.git` is `<folder>/<path>.git` (bare) or
+  `<folder>/<path>` (a working copy, or bare). `splitPath` already refuses `..` and segments
+  starting with a dot, so the path stays in the folder. Every repository in the folder can
+  be fetched by the environment's sandboxes.
+- No credential: `auth` is `none` and there is no secret (migration 038 widens the CHECKs).
+- Studio runs the host's git, without git's own environment variables: `git upload-pack
+  --stateless-rpc` for the sandboxes' fetches, as `git http-backend` does (protocol v2 when
+  the sandbox asks), and go-git's file transport (`git-upload-pack`, `git-receive-pack`) for
+  the staging mirror and the approved push. The push is thus what `git push` to the folder
+  would do: the repository's config applies and its hooks run. A push to the branch a
+  working copy has checked out fails with git's "refusing to update checked out branch"
+  unless the repository sets `receive.denyCurrentBranch=updateInstead`.
+- The approval says "Approving pushes it to <folder>/<path> on this computer." No pull
+  requests. "Test" without a repository checks the folder.
 
 ## Fetch
 

@@ -12,6 +12,7 @@ export const kindLabels: Record<Kind, string> = {
   gitlab: "GitLab",
   https: "Other HTTPS",
   ssh: "Other SSH",
+  local: "Folder on this computer",
 }
 
 export const authLabels: Record<Auth, string> = {

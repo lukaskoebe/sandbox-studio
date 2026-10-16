@@ -260,6 +260,12 @@ func (s *Service) TestForge(ctx context.Context, f store.Forge, repo string) (Ch
 			return c, err
 		}
 	}
+	if repo == "" && f.Kind == KindLocal {
+		if _, err := CheckLocalPath(f.BaseURL); err != nil {
+			return c, err
+		}
+		return c, nil
+	}
 	if repo == "" {
 		if !hasAPI(f.Kind) {
 			return c, fmt.Errorf("%w: name a repository to test with", ErrInvalid)

@@ -2850,15 +2850,16 @@
             "type": "string"
           },
           "auth": {
-            "description": "Kind ssh: sign with the host's SSH agent, or with a key Studio generated",
+            "description": "Kind ssh: sign with the host's SSH agent, or with a key Studio generated; none for kind local",
             "enum": [
               "agent",
-              "key"
+              "key",
+              "none"
             ],
             "type": "string"
           },
           "baseUrl": {
-            "description": "https://host[/path], or ssh://user@host[:port] for kind ssh",
+            "description": "https://host[/path], ssh://user@host[:port] for kind ssh, or a folder on this computer for kind local",
             "type": "string"
           },
           "createdAt": {
@@ -2889,7 +2890,8 @@
               "github",
               "gitlab",
               "https",
-              "ssh"
+              "ssh",
+              "local"
             ],
             "type": "string"
           },
@@ -2967,8 +2969,8 @@
             "type": "string"
           },
           "baseUrl": {
-            "description": "The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222",
-            "maxLength": 2048,
+            "description": "The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222; for kind local a folder of repositories on this computer, such as ~/git",
+            "maxLength": 4096,
             "type": "string"
           },
           "hostKey": {
@@ -2982,7 +2984,8 @@
               "github",
               "gitlab",
               "https",
-              "ssh"
+              "ssh",
+              "local"
             ],
             "type": "string"
           },
@@ -2992,7 +2995,7 @@
             "type": "string"
           },
           "token": {
-            "description": "Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it",
+            "description": "Every kind but ssh and local: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it",
             "maxLength": 4096,
             "type": "string"
           },
@@ -5142,12 +5145,13 @@
             "description": "Kind ssh: the host's SSH agent",
             "enum": [
               "agent",
-              "key"
+              "key",
+              "none"
             ],
             "type": "string"
           },
           "baseUrl": {
-            "description": "The forge's base URL, or SSH address for kind ssh",
+            "description": "The forge's base URL, SSH address for kind ssh, or folder for kind local",
             "type": "string"
           },
           "kind": {
@@ -5156,7 +5160,8 @@
               "github",
               "gitlab",
               "https",
-              "ssh"
+              "ssh",
+              "local"
             ],
             "type": "string"
           },

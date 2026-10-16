@@ -21,10 +21,10 @@ type Forge struct {
 	ID                 string     `json:"id"`
 	EnvironmentID      string     `json:"environmentId"`
 	Name               string     `json:"name" doc:"The URL segment: https://git.studio.internal/<name>/<path>.git"`
-	Kind               string     `json:"kind" enum:"forgejo,github,gitlab,https,ssh"`
-	BaseURL            string     `json:"baseUrl" doc:"https://host[/path], or ssh://user@host[:port] for kind ssh"`
+	Kind               string     `json:"kind" enum:"forgejo,github,gitlab,https,ssh,local"`
+	BaseURL            string     `json:"baseUrl" doc:"https://host[/path], ssh://user@host[:port] for kind ssh, or a folder on this computer for kind local"`
 	Username           string     `json:"username,omitempty" doc:"The basic-auth user (https) or SSH user (ssh)"`
-	Auth               string     `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: sign with the host's SSH agent, or with a key Studio generated"`
+	Auth               string     `json:"auth,omitempty" enum:"agent,key,none" doc:"Kind ssh: sign with the host's SSH agent, or with a key Studio generated; none for kind local"`
 	SecretID           string     `json:"secretId,omitempty" doc:"The studio-only vault secret holding the token or SSH key; none for auth agent"`
 	PublicKey          string     `json:"publicKey,omitempty" doc:"The public half of the SSH key Studio generated (auth key), to add to the host"`
 	HostKey            string     `json:"hostKey,omitempty" doc:"The pinned SSH host key in authorized_keys format (ssh)"`
@@ -36,10 +36,12 @@ type Forge struct {
 	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
-// Authentication of ssh forges.
+// Authentication of ssh and local forges.
 const (
 	ForgeAuthAgent = "agent"
 	ForgeAuthKey   = "key"
+	// ForgeAuthNone is kind local's: a folder on this computer needs no credential.
+	ForgeAuthNone = "none"
 )
 
 const forgeCols = `id, environment_id, name, kind, base_url, username, auth, IFNULL(secret_id, ''), public_key, host_key,
@@ -69,8 +71,8 @@ func fingerprint(hostKey string) string {
 }
 
 // CreateForge inserts f and its token secret, which the caller sealed, in one transaction.
-// The secret is stored studio-only. An ssh forge names its auth; with auth agent there is
-// no secret and sec is ignored.
+// The secret is stored studio-only. An ssh forge names its auth; with auth agent, as with
+// auth none, there is no secret and sec is ignored.
 func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -79,7 +81,7 @@ func (s *Store) CreateForge(ctx context.Context, f Forge, sec Secret) (Forge, er
 	defer tx.Rollback()
 	t := now()
 	f.SecretID = ""
-	if f.Auth != ForgeAuthAgent {
+	if f.Auth != ForgeAuthAgent && f.Auth != ForgeAuthNone {
 		if err := insertForgeSecret(ctx, tx, f.EnvironmentID, sec, t); err != nil {
 			return f, err
 		}

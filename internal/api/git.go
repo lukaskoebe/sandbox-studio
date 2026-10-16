@@ -70,10 +70,10 @@ func (s *Server) forgeKey(env, name, host string) (string, store.Secret, error) 
 // ForgeInput describes a forge to add.
 type ForgeInput struct {
 	Name     string `json:"name" pattern:"^[a-z0-9][a-z0-9-]{0,31}$" doc:"Names the forge in the remote URL: https://git.studio.internal/<name>/<path>.git"`
-	Kind     string `json:"kind" enum:"forgejo,github,gitlab,https,ssh"`
-	BaseURL  string `json:"baseUrl" maxLength:"2048" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222"`
+	Kind     string `json:"kind" enum:"forgejo,github,gitlab,https,ssh,local"`
+	BaseURL  string `json:"baseUrl" maxLength:"4096" doc:"The forge's public HTTPS URL, such as https://codeberg.org or https://github.com; for kind ssh its SSH address, such as git@host or ssh://git@host:2222; for kind local a folder of repositories on this computer, such as ~/git"`
 	Username string `json:"username,omitempty" maxLength:"64" doc:"Kind https: the user git authenticates as with the token; git if empty"`
-	Token    string `json:"token,omitempty" maxLength:"4096" doc:"Every kind but ssh: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
+	Token    string `json:"token,omitempty" maxLength:"4096" doc:"Every kind but ssh and local: an access token with read and write access to the repositories; Studio keeps it and sandboxes never see it"`
 	HostKey  string `json:"hostKey,omitempty" maxLength:"16384" doc:"Kind ssh: the host key to pin, as scanned and confirmed by the user"`
 	Auth     string `json:"auth,omitempty" enum:"agent,key" doc:"Kind ssh: agent (the default) signs with the host's SSH agent; key makes Studio generate a key for the forge"`
 }
@@ -166,6 +166,11 @@ func (s *Server) registerForges(api huma.API) {
 					return nil, err
 				}
 			}
+		} else if b.Kind == gitreview.KindLocal {
+			if b.Token != "" || b.HostKey != "" || b.Auth != "" {
+				return nil, huma.Error422UnprocessableEntity("local forges are folders on this computer: no token, host key or auth")
+			}
+			f.Auth = store.ForgeAuthNone
 		} else if b.Token == "" || b.HostKey != "" || b.Auth != "" {
 			return nil, huma.Error422UnprocessableEntity("forges of kind " + b.Kind + " need a token, and no host key or auth")
 		} else if sec, err = s.Vault.Prepare(in.Env, secretName, value, []string{u.Host}, note); err != nil {
@@ -246,6 +251,9 @@ func (s *Server) registerForges(api huma.API) {
 		}
 		if f.Kind == gitreview.KindSSH {
 			return nil, huma.Error409Conflict("ssh forges have a key, not a token; to get a new key, remove the forge and add it again")
+		}
+		if f.Kind == gitreview.KindLocal {
+			return nil, huma.Error409Conflict("local forges have no token")
 		}
 		sealed, err := s.Vault.SealValue(f.SecretID, in.Body.Token)
 		if err != nil {

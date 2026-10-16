@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,13 +22,14 @@ import (
 
 // Forge kinds. forgejo, github and gitlab have an API (default branch, pull or merge requests);
 // https is any host speaking git over HTTPS with a token; ssh is any host speaking git over SSH
-// with a key Studio generated.
+// with a key Studio generated; local is a folder of repositories on this computer (local.go).
 const (
 	KindForgejo = "forgejo"
 	KindGitHub  = "github"
 	KindGitLab  = "gitlab"
 	KindHTTPS   = "https"
 	KindSSH     = "ssh"
+	KindLocal   = "local"
 )
 
 // hasAPI reports whether a kind has an API adapter, and so repository paths and PRs.
@@ -88,8 +90,8 @@ func adapter(f store.Forge, client *http.Client) (Adapter, error) {
 		return &GitLab{BaseURL: f.BaseURL, Client: client}, nil
 	case KindHTTPS:
 		return Plain{User: f.Username}, nil
-	case KindSSH:
-		return nil, fmt.Errorf("%w: ssh forges have no HTTPS adapter", ErrInvalid)
+	case KindSSH, KindLocal:
+		return nil, fmt.Errorf("%w: %s forges have no HTTPS adapter", ErrInvalid, f.Kind)
 	}
 	return nil, fmt.Errorf("%w: unknown kind %q", ErrInvalid, f.Kind)
 }
@@ -101,7 +103,7 @@ var (
 
 // ForgeURL is a forge's normalized base URL.
 type ForgeURL struct {
-	Base string // https://host[:port][/path], or ssh://user@host[:port]
+	Base string // https://host[:port][/path], ssh://user@host[:port], or a folder (local)
 	Host string // without port
 	Port int    // ssh only
 	User string // https and ssh: the basic-auth or SSH user
@@ -110,8 +112,9 @@ type ForgeURL struct {
 // CheckForge validates the name, kind, base URL and username of a new forge and returns
 // the normalized base URL. Hosts must be public names or addresses, for SSH as for HTTPS.
 // For kind ssh the base URL is ssh://user@host[:port] or scp-style user@host: (the user
-// defaults to git, the port to 22); username is ignored. For kind https the username
-// defaults to git; the other kinds have none.
+// defaults to git, the port to 22); username is ignored. For kind local it is a folder on
+// this computer (CheckLocalPath). For kind https the username defaults to git; the other
+// kinds have none.
 func CheckForge(name, kind, baseURL, username string) (ForgeURL, error) {
 	if !forgeName.MatchString(name) {
 		return ForgeURL{}, fmt.Errorf("%w: the name must be 1 to 32 lower-case letters, digits and dashes, starting with a letter or digit", ErrInvalid)
@@ -120,6 +123,8 @@ func CheckForge(name, kind, baseURL, username string) (ForgeURL, error) {
 	case KindForgejo, KindGitHub, KindGitLab, KindHTTPS:
 	case KindSSH:
 		return ParseSSHURL(baseURL)
+	case KindLocal:
+		return CheckLocalPath(baseURL)
 	default:
 		return ForgeURL{}, fmt.Errorf("%w: unknown kind %q", ErrInvalid, kind)
 	}
@@ -216,6 +221,9 @@ func ParseSSHURL(raw string) (ForgeURL, error) {
 
 // upstreamDescription says how Studio reaches a repository of f once a push is approved.
 func upstreamDescription(f store.Forge, path string) string {
+	if f.Kind == KindLocal {
+		return "to " + filepath.Join(f.BaseURL, filepath.FromSlash(path)) + " on this computer"
+	}
 	if f.Kind == KindSSH {
 		d := "over SSH to " + f.BaseURL + "/" + path
 		if f.HostKeyFingerprint != "" {

@@ -257,9 +257,10 @@ func (t target) upstreamURL(rest string) string {
 	return t.forge.BaseURL + "/" + t.path() + ".git" + rest
 }
 
-// token unseals f's token or SSH key. Forges that sign with the SSH agent have none.
+// token unseals f's token or SSH key. Forges that sign with the SSH agent, and local ones,
+// have none.
 func (s *Service) token(ctx context.Context, f store.Forge) (string, error) {
-	if f.Auth == store.ForgeAuthAgent {
+	if f.Auth == store.ForgeAuthAgent || f.Auth == store.ForgeAuthNone {
 		return "", nil
 	}
 	return s.Secrets.Value(ctx, f.EnvironmentID, f.SecretID)
@@ -281,8 +282,12 @@ func (s *Service) uploadPack(w http.ResponseWriter, r *http.Request, t target) {
 		refuse(w, http.StatusInternalServerError, "Sandbox Studio could not read the forge's credential.")
 		return
 	}
-	if t.forge.Kind == KindSSH {
+	switch t.forge.Kind {
+	case KindSSH:
 		s.sshUploadPack(w, r, t, token)
+		return
+	case KindLocal:
+		s.localUploadPack(w, r, t)
 		return
 	}
 	ad, err := adapter(t.forge, s.httpClient())
