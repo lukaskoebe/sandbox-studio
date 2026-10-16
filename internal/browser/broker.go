@@ -146,6 +146,7 @@ type page struct {
 	handback string
 	refs     map[string]refInfo
 	url      string
+	loading  string          // the site an allowed navigation is loading, until url is known
 	secrets  []string        // credential values filled in this run, for Scrub
 	credRefs map[string]bool // refs Studio filled with a credential
 	// visible is set when a credential went into a field that shows it: agent screenshots
@@ -404,12 +405,12 @@ func (st *state) reset() {
 	}
 	st.session, st.grants, st.eph, st.sites, st.hosts = "", nil, nil, nil, nil
 	st.fwdFrom, st.fwdPorts = "", nil
-	st.url, st.refs, st.credRefs, st.secrets, st.visible = "", nil, nil, nil, false
+	st.url, st.loading, st.refs, st.credRefs, st.secrets, st.visible = "", "", nil, nil, nil, false
 }
 
 // navigated forgets what belonged to the previous page.
 func (pg *page) navigated(url string) {
-	pg.url, pg.refs, pg.credRefs, pg.visible = url, nil, nil, false
+	pg.url, pg.loading, pg.refs, pg.credRefs, pg.visible = url, "", nil, nil, false
 	pg.turn.saw(url)
 }
 
@@ -419,6 +420,7 @@ func (pg *page) observedURL(url string) {
 	if url != pg.url {
 		pg.url, pg.refs, pg.credRefs = url, nil, nil
 	}
+	pg.loading = ""
 	pg.turn.saw(url)
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -100,10 +101,25 @@ func requestInfo(r *http.Request, host string) *policy.HTTPRequest {
 	if r.Header.Get("Sec-Fetch-Mode") == "navigate" && r.Header.Get("Sec-Fetch-Dest") == "document" {
 		info.Navigation, info.Site = true, policy.Site(host)
 	}
+	info.Report = isReport(r)
 	if ref, err := url.Parse(r.Header.Get("Referer")); err == nil && (ref.Scheme == "http" || ref.Scheme == "https") && ref.Host != "" {
 		info.Initiator = clip(ref.Scheme+"://"+ref.Host, 256)
 	}
 	return info
+}
+
+// isReport reports whether r uploads a report Chromium collected for the site: the Reporting
+// API's and Network Error Logging's uploads and CSP violation reports, or the preflight that
+// precedes one. Chromium sends the uploads itself, not through a page's fetch, so the
+// preflight carries no Sec-Fetch-Mode, which every HTTPS request of a page does.
+func isReport(r *http.Request) bool {
+	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if r.Method == http.MethodPost && (ct == "application/reports+json" || ct == "application/csp-report") {
+		return true
+	}
+	return r.Method == http.MethodOptions && r.TLS != nil && r.Header.Get("Sec-Fetch-Mode") == "" &&
+		strings.EqualFold(r.Header.Get("Access-Control-Request-Method"), http.MethodPost) &&
+		strings.EqualFold(strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")), "content-type")
 }
 
 // clip shortens s to n characters, keeping it valid UTF-8.

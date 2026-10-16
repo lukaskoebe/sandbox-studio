@@ -57,6 +57,10 @@ func (f *fakeSites) ApproveHost(_ context.Context, _, teammate, pattern string) 
 	f.hosts[teammate] = append(f.hosts[teammate], pattern)
 }
 
+func (f *fakeSites) Navigating(_ context.Context, _, _, site string) {
+	f.setPage(site)
+}
+
 func (f *fakeSites) setPage(page string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -365,6 +369,69 @@ func TestBrowserSessionAndBrowserOnlyAllows(t *testing.T) {
 	}
 }
 
+// A navigation the user allowed with a rule approves its site for the browser session, and the
+// page it loads is on that site at once: its requests to other hosts pass without asking. One
+// allowed once, or by the AI reviewer's rule, moves the page but approves nothing.
+func TestAllowedNavigationApprovesItsSite(t *testing.T) {
+	ctx := context.Background()
+	e, env, _, sb, _ := newTeammateEngine(t) // the browser's teammate owns sb
+	if err := e.Store.SetSecurityLevel(ctx, env.ID, store.LevelLocked); err != nil {
+		t.Fatal(err)
+	}
+	sites := &fakeSites{approved: map[string]map[string]bool{}}
+	e.Browsers = sites
+	navigate := func(site string) (store.Rule, error) {
+		return e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "www." + site, Port: 443, Browser: true, Deferred: true,
+			HTTP: &HTTPRequest{Method: "GET", Path: "/", Navigation: true, Site: site}})
+	}
+	subresource := func() error {
+		_, err := e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "cdn.example.net", Port: 443, Browser: true, Deferred: true,
+			HTTP: &HTTPRequest{Method: "GET", Path: "/app.js"}})
+		return err
+	}
+	approved := func(site string) bool {
+		sites.mu.Lock()
+		defer sites.mu.Unlock()
+		return sites.approved[sb.TeammateID][site]
+	}
+
+	held := make(chan heldResult, 1)
+	go func() {
+		r, err := navigate("news.example")
+		held <- heldResult{r, err}
+	}()
+	nav := waitPending(t, e, env.ID, 1)["www.news.example:443 news.example"]
+	if _, err := e.Resolve(ctx, env.ID, nav.ID, Decision{Action: store.ActionAllow, Scope: "environment"}); err != nil {
+		t.Fatal(err)
+	}
+	if r := <-held; r.err != nil || r.rule.Action != store.ActionAllow {
+		t.Fatalf("the navigation: %+v %v", r.rule, r.err)
+	}
+	if !approved("news.example") || sites.TopLevel(ctx, env.ID, sb.TeammateID) != "news.example" {
+		t.Fatal("an allowed navigation didn't approve its site, or the page isn't on it")
+	}
+	if err := subresource(); err != nil {
+		t.Errorf("a request of the approved page asked: %v", err)
+	}
+
+	e.Hold = 20 * time.Millisecond
+	if _, err := e.Store.CreateRule(ctx, store.Rule{EnvironmentID: env.ID, Host: "www.reviewed.example", Action: store.ActionAllow, Origin: store.OriginReviewer}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Settle(ctx, env.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := navigate("reviewed.example"); err != nil {
+		t.Fatal(err)
+	}
+	if approved("reviewed.example") || sites.TopLevel(ctx, env.ID, sb.TeammateID) != "reviewed.example" {
+		t.Error("the reviewer's rule approved the site, or the page didn't move")
+	}
+	if err := subresource(); !errors.Is(err, ErrUndecided) {
+		t.Errorf("a request of a page the reviewer allowed: %v", err)
+	}
+}
+
 // The tracker list denies a browser's requests to tracker hosts without asking, and an allow rule
 // for the host wins. Each denial is recorded for Activity; the environment can turn the list off.
 func TestBrowserTrackersAreDenied(t *testing.T) {
@@ -431,6 +498,13 @@ func TestBrowserChromiumServicesAreDenied(t *testing.T) {
 	var req NetworkRequest
 	if err := json.Unmarshal(denied[0].Payload, &req); err != nil || req.Decided != DecidedChromium || req.Reason == "" || req.Path != "/ListAccounts" {
 		t.Errorf("payload %+v %v", req, err)
+	}
+
+	// A report Chromium uploads is denied whichever host the site names.
+	report := Request{EnvironmentID: env.ID, SandboxID: sb.ID, Host: "a.nel.cloudflare.com", Port: 443, Browser: true, Deferred: true,
+		HTTP: &HTTPRequest{Method: "OPTIONS", Path: "/report/v4", Report: true}}
+	if _, err := e.Decide(ctx, report); !errors.Is(err, ErrChromium) {
+		t.Fatalf("a report upload: got %v, want ErrChromium", err)
 	}
 
 	signin := list

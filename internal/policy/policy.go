@@ -102,6 +102,9 @@ type HTTPRequest struct {
 	Navigation bool   `json:"navigation,omitempty" doc:"A top-level navigation: the page moves to another site"`
 	Site       string `json:"site,omitempty" doc:"The top-level site the request belongs to: the navigation's own, or the browser's page"`
 	Initiator  string `json:"initiator,omitempty" doc:"Origin of the Referer header, as the browser sent it; shown, never trusted"`
+	// Report is set for a report Chromium uploads to a site (Reporting API, Network Error
+	// Logging, CSP reports), which ChromiumService denies.
+	Report bool `json:"-"`
 }
 
 // NetworkRequest is the payload of a network approval.
@@ -137,6 +140,9 @@ type Browsers interface {
 	Approve(ctx context.Context, envID, teammateID, site string)
 	// ApproveHost allows the hosts a pattern covers for the browser session of teammateID.
 	ApproveHost(ctx context.Context, envID, teammateID, pattern string)
+	// Navigating says that the browser of teammateID is loading a page of site, so that the
+	// page's requests belong to site before its address is known.
+	Navigating(ctx context.Context, envID, teammateID, site string)
 }
 
 // Engine decides connections. Every change to rules or approvals must go through it (or
@@ -177,35 +183,61 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	if err != nil {
 		return store.Rule{}, err
 	}
+	r, chosen, err := e.decide(ctx, req, teammate)
+	if err == nil && r.Action != store.ActionDeny {
+		e.navigated(ctx, req, teammate, chosen)
+	}
+	return r, err
+}
+
+// navigated tells the teammate's browser where a navigation that was allowed goes, so that the
+// page's requests while it loads belong to its site. If the user chose to allow it, by a rule or
+// an answer other than once, the site is also approved for the browser session: the page's
+// requests are then allowed (see Browsers.Allows), as if the user had chosen Allow site. A
+// navigation the security level allowed approves nothing.
+func (e *Engine) navigated(ctx context.Context, req Request, teammate string, chosen bool) {
+	if !req.Browser || req.HTTP == nil || !req.HTTP.Navigation || req.HTTP.Site == "" || teammate == "" || e.Browsers == nil {
+		return
+	}
+	if chosen {
+		e.Browsers.Approve(ctx, req.EnvironmentID, teammate, req.HTTP.Site)
+	}
+	e.Browsers.Navigating(ctx, req.EnvironmentID, teammate, req.HTTP.Site)
+}
+
+// decide is Decide for the sandbox's teammate. chosen is set when the user chose to allow req:
+// by a rule of theirs or an approval's answer, not the security level, the AI reviewer's rule
+// or an answer for this connection only.
+func (e *Engine) decide(ctx context.Context, req Request, teammate string) (r store.Rule, chosen bool, err error) {
 	rules, wake, err := e.snapshot(ctx, req.EnvironmentID)
 	if err != nil {
-		return store.Rule{}, err
+		return store.Rule{}, false, err
 	}
 	if r, ok, err := e.check(ctx, rules, req, teammate); err != nil {
-		return store.Rule{}, err
+		return store.Rule{}, false, err
 	} else if ok {
-		return r, nil
+		return r, r.Origin != store.OriginReviewer, nil
 	}
 	if req.Allowed != nil {
 		if host := Normalize(req.Host); slices.Contains(req.Allowed, host) {
-			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, nil
+			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, false, nil
 		}
-		return store.Rule{}, ErrUndecided
+		return store.Rule{}, false, ErrUndecided
 	}
 	if host := Normalize(req.Host); (req.Port == 80 || req.Port == 443) && slices.Contains(req.Preapproved, host) {
-		return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, nil
+		return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, false, nil
 	}
 	if req.RulesOnly {
-		return store.Rule{}, ErrUndecided
+		return store.Rule{}, false, ErrUndecided
 	}
 	if req.Deferred && req.HTTP == nil {
-		return store.Rule{}, ErrPerRequest
+		return store.Rule{}, false, ErrPerRequest
 	}
 	host := Normalize(req.Host)
 	if r, ok, err := e.byLevel(ctx, req, teammate, host); err != nil {
-		return store.Rule{}, err
+		return store.Rule{}, false, err
 	} else if ok {
-		return r, nil
+		return r, false, nil
 	}
 	kind, subject, n := e.approvalOf(ctx, req, host, teammate)
 	payload, _ := json.Marshal(n)
@@ -217,7 +249,7 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 		Payload:       payload,
 	})
 	if err != nil {
-		return store.Rule{}, err
+		return store.Rule{}, false, err
 	}
 	e.Bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: req.EnvironmentID, ID: a.ID})
 
@@ -226,26 +258,27 @@ func (e *Engine) Decide(ctx context.Context, req Request) (store.Rule, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return store.Rule{}, ctx.Err()
+			return store.Rule{}, false, ctx.Err()
 		case <-timer.C:
-			return store.Rule{}, ErrUndecided
+			return store.Rule{}, false, ErrUndecided
 		case <-wake:
 		}
 		if rules, wake, err = e.snapshot(ctx, req.EnvironmentID); err != nil {
-			return store.Rule{}, err
+			return store.Rule{}, false, err
 		}
 		if r, ok, err := e.check(ctx, rules, req, teammate); err != nil {
-			return store.Rule{}, err
+			return store.Rule{}, false, err
 		} else if ok {
-			return r, nil
+			return r, r.Origin != store.OriginReviewer, nil
 		}
 		cur, err := e.Store.Approval(ctx, req.EnvironmentID, a.ID)
 		if err == nil && cur.Status == store.StatusApproved && cur.RuleID == "" && !cur.Once {
 			// Approved for its site (decideSite): no rule was made, and none is needed.
-			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, nil
+			return store.Rule{EnvironmentID: req.EnvironmentID, Host: host, Action: store.ActionAllow}, true, nil
 		}
 		if err != nil || cur.Status != store.StatusPending {
-			return onceAnswer(cur, err, host, req.Port)
+			r, err := onceAnswer(cur, err, host, req.Port)
+			return r, false, err
 		}
 	}
 }

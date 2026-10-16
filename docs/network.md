@@ -84,7 +84,7 @@ sandbox's lookups. A browser request's card makes its rule browser-only unless t
 such rules "browser only", and environment files keep the flag.
 
 A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
-within a minute. The approval card's Options offers "Allow for 1 hour"; the API takes
+within a minute. The approval card's Options offer "1 hour"; the API takes
 `expiresAt` when a rule is created and on an allow or deny decision (it must be in the
 future). The Rules tab counts down the time left.
 
@@ -155,6 +155,14 @@ without asking (`internal/policy/chromium.go`), after the rules, so an allow rul
 through. Each shows in Activity as "Denied · Chromium's own", with the reason. Other paths of
 the same hosts, such as a Google sign-in page, are decided as usual.
 
+Chromium also uploads reports to the sites it visits: Network Error Logging, the Reporting API
+and CSP violation reports, each to a host the site names, such as `a.nel.cloudflare.com`. They
+are denied the same way, by what they are rather than by host
+(`isReport` in `internal/gateway/request.go`): a POST with a `Content-Type` of
+`application/reports+json` or `application/csp-report`, and the CORS preflight before one (an
+OPTIONS with no `Sec-Fetch-Mode`, asking for POST with only `content-type`). A page's own
+requests carry `Sec-Fetch-Mode`, so its preflights are decided as usual.
+
 ## System VMs
 
 The VMs of subscription logins (`claude-login`, `codex-login`, `claude-utility` and
@@ -221,19 +229,30 @@ never trusted. A navigation's site is its own host; a subresource belongs to the
 browser drove last (`browser.TopLevel`). Approvals are keyed by host and site, so a page's
 requests to one host share one card.
 
-A navigation's card offers "Allow site <site> for this browser session". That approves the
-site for the browser session, not through a rule: its navigations are allowed, and so are its
-subresources while every page the browser has open is on an approved site (a subresource's page
-isn't known for certain when several are open, so none may be unapproved). The approved sites
-end with the browser session: when the browser VM stops, idles out or is removed. The pending
-requests of the page's site are approved with it.
+A page that is loading belongs to the site of the navigation that loads it. The broker clears
+a page's URL while it drives a command, so without that the requests of a page under way had no
+site. When a navigation is allowed, the policy tells the broker (`Browsers.Navigating`), which
+marks the page it drove last as loading that site until it reads the page's URL again.
 
-Any browser request's card also offers "Allow for this session" in its Options (`allow_session`,
-with the host pattern picked on the card). That allows the hosts the pattern covers in the
-teammate's browser until the session ends, whichever page asks (`browser.ApproveHost`), and makes
-no rule: the sandboxes' own connections to the hosts still ask, as do other teammates' browsers.
-The teammate's pending browser requests the pattern covers are approved with it. A sandbox's
-connection can't be allowed this way (`ErrNotBrowser`, 422).
+A navigation allowed by the user approves its site for the browser session, without a rule:
+its navigations are allowed, and so are its subresources while every page the browser has open
+is on an approved site (a subresource's page isn't known for certain when several are open, so
+none may be unapproved). That holds for the user's Allow on the card, which makes a rule, for
+any rule that matches it except the reviewer's, and for "This session" (`allow_site`). A
+reviewer's rule, the security level and Allow once don't approve the site (`chosen` in
+`policy.decide`). The approved sites end with the browser
+session: when the browser VM stops, idles out or is removed. The pending requests of the
+page's site are approved with it.
+
+The card's Options choose who a rule covers ("<teammate>'s browser", "All browsers" or
+"Browsers and sandboxes"; the teammate's approval scope picks the default) and for how long
+("Always", "1 hour", "This session" or "Once"); the Allow and Deny buttons name the lifetime.
+"This session" on a request that isn't a navigation (`allow_session`, with the host pattern
+picked on the card) allows the hosts the pattern covers in the teammate's browser until the
+session ends, whichever page asks (`browser.ApproveHost`), and makes no rule: the sandboxes'
+own connections to the hosts still ask, as do other teammates' browsers. The teammate's pending
+browser requests the pattern covers are approved with it. A sandbox's connection can't be
+allowed this way (`ErrNotBrowser`, 422). Denying for the session denies once.
 
 60 s comes from spike S6: it covers curl, git, npm and apt, and pip succeeds on retry. Node
 `fetch` gives up after 10 s, so the UI must show the request quickly.

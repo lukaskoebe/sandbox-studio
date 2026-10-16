@@ -245,6 +245,7 @@ func (f fakeBrowsers) Allows(context.Context, string, string, string, HTTPReques
 }
 func (f fakeBrowsers) Approve(context.Context, string, string, string)     {}
 func (f fakeBrowsers) ApproveHost(context.Context, string, string, string) {}
+func (f fakeBrowsers) Navigating(context.Context, string, string, string)  {}
 
 // A new prompt is a new task: the same host is asked about again for it.
 func TestReviewerAsksAgainForANewTask(t *testing.T) {

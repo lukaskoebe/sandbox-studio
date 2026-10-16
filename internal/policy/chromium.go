@@ -12,10 +12,14 @@ var chromiumServices = []struct{ host, path, reason string }{
 }
 
 // ChromiumService says why a browser's request is one Chromium makes for itself, or "" when
-// it isn't. Only a request's path tells, so a connection is never one.
+// it isn't. Only a request's path tells, so a connection is never one. A report upload goes to
+// whichever host a site names, so it is told by the request (HTTPRequest.Report), not the host.
 func ChromiumService(host string, r *HTTPRequest) string {
 	if r == nil {
 		return ""
+	}
+	if r.Report {
+		return "a report Chromium sends the site, such as Network Error Logging"
 	}
 	h := Normalize(host)
 	for _, s := range chromiumServices {

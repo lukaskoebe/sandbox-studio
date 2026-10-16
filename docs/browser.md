@@ -82,7 +82,9 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     rule covers after that, and never allows a request that carries a placeholder (see
     [security levels](network.md#security-levels)).
   - Site approvals last the browser session, and cover a page's requests once the user allows
-    its site (see [network](network.md#hold-and-ask)). So do host patterns allowed for the
+    a navigation to the site, by a rule or for the session (see
+    [network](network.md#hold-and-ask)). A page that is loading belongs to the site of its
+    navigation. So do host patterns allowed for the
     session. Both end when the VM stops, and neither covers the sandboxes' own connections.
   - A rule from a browser request's card is browser-only unless the user picks the sandboxes
     too (see [rules](network.md#rules)).

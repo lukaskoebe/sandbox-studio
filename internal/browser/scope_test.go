@@ -108,3 +108,34 @@ func TestHostApprovalsLastTheBrowserSession(t *testing.T) {
 		t.Error("a host approval outlived the browser session")
 	}
 }
+
+// While a command moves the page, its address is unknown: the navigation the policy allowed says
+// which site its requests belong to, until the address is known.
+func TestLoadingPageBelongsToItsNavigation(t *testing.T) {
+	ctx := context.Background()
+	s := &Service{}
+	const env, tm = "env", "tm"
+	req := policy.HTTPRequest{Method: "GET", Path: "/app.js"}
+	s.Approve(ctx, env, tm, "example.com")
+	st := s.state(env, tm)
+	s.mu.Lock()
+	st.url, st.used = "", time.Now() // a command is running
+	st.eph = map[string]*page{"eph-1": {id: "eph-1", url: "about:blank", used: time.Now().Add(-time.Minute)}}
+	s.mu.Unlock()
+	if s.Allows(ctx, env, tm, "cdn.example.net", req) || s.TopLevel(ctx, env, tm) != "" {
+		t.Fatal("a page with no address was on a site")
+	}
+	s.Navigating(ctx, env, tm, "example.com")
+	if !s.Allows(ctx, env, tm, "cdn.example.net", req) || s.TopLevel(ctx, env, tm) != "example.com" {
+		t.Error("the loading page's requests don't belong to the site it navigated to")
+	}
+	s.mu.Lock()
+	if st.eph["eph-1"].loading != "" {
+		t.Error("the navigation went to the page used earlier")
+	}
+	st.navigated("https://evil.example/") // the command returns where the page really is
+	s.mu.Unlock()
+	if s.Allows(ctx, env, tm, "cdn.example.net", req) || s.TopLevel(ctx, env, tm) != "evil.example" {
+		t.Error("the page's address didn't replace the navigation's site")
+	}
+}

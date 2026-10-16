@@ -32,7 +32,7 @@ function arrived(a: Approval) {
  * network requests from one sandbox form a group while each arrives within the window of the
  * one before it. A group takes the place of its first request. Requests in `split` were chosen
  * for individual review and stay single cards, and so does a navigation, which needs its own
- * decision (Allow site).
+ * decision: allowing it allows its site for the browser session.
  *
  * The server records when a request arrived to the second, so the window is approximate.
  */

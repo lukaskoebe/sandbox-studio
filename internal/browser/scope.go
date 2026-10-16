@@ -24,14 +24,14 @@ func (s *Service) TopLevel(_ context.Context, envID, teammateID string) string {
 	}
 	var last *page
 	for _, pg := range st.pages() {
-		if pageSite(pg.url) != "" && (last == nil || pg.used.After(last.used)) {
+		if pg.site() != "" && (last == nil || pg.used.After(last.used)) {
 			last = pg
 		}
 	}
 	if last == nil {
 		return ""
 	}
-	return pageSite(last.url)
+	return last.site()
 }
 
 // Allows reports whether what the user approved for the teammate's browser session covers r to
@@ -59,7 +59,7 @@ func (s *Service) Allows(_ context.Context, envID, teammateID, host string, r po
 	}
 	open := 0
 	for _, pg := range st.pages() {
-		site := pageSite(pg.url)
+		site := pg.site()
 		if site == "" {
 			continue
 		}
@@ -91,6 +91,31 @@ func (s *Service) ApproveHost(_ context.Context, envID, teammateID, pattern stri
 	if !slices.Contains(st.hosts, pattern) {
 		st.hosts = append(st.hosts, pattern)
 	}
+}
+
+// Navigating records that the teammate's browser is loading a page of site: the policy allowed a
+// navigation there. The page's address is only known once the command that moved it returns, or
+// never when a link or a script moved it, so until then its requests belong to the page used last,
+// on site. Without this they would belong to no page, and none would be covered by the site.
+func (s *Service) Navigating(_ context.Context, envID, teammateID, site string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.stateLocked(envID, teammateID)
+	var last *page
+	for _, pg := range st.pages() {
+		if last == nil || pg.used.After(last.used) {
+			last = pg
+		}
+	}
+	last.loading = site
+}
+
+// site is the site of the page: the one an allowed navigation is loading, else its address's.
+func (pg *page) site() string {
+	if pg.loading != "" {
+		return pg.loading
+	}
+	return pageSite(pg.url)
 }
 
 // pageSite is the site of a page's URL, or "" if the page is not a web page.
