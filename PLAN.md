@@ -33,8 +33,6 @@ says.
   [template builds](docs/template-builds.md#current-qualification-boundary)
 - Signed and notarized releases (the workflow exists, never exercised) →
   [release](docs/release.md)
-- Run the smoke workflow before a release; `release.yml` doesn't today, so a release can
-  ship without a real VM having booted it.
 - Studio inside Studio needs nested virtualization, which microsandbox 0.7.7 turns off
   (microsandbox #1778). Check again once microsandbox #823 (an opt-in setting, with
   snapshots) is merged and released, then expose it as a template setting.

@@ -4,12 +4,20 @@ name: smoke
 # first start), create a sandbox, wait until its guest agent connects, and delete it. Linux
 # boots the base image built from this commit; macOS and Windows, which can't build it, boot
 # the latest released one. A runner without a hypervisor skips the boot with a warning.
-# Linux then runs the browser tests of web/e2e-live against the same Studio.
+# Linux then runs the browser tests of web/e2e-live against the same Studio. release.yml
+# calls it with the base image it just pushed, which every host then boots, before it
+# publishes.
 
 on:
   schedule:
     - cron: "41 3 * * *"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      image:
+        description: A base image for every host to boot instead of the default
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -37,7 +45,7 @@ jobs:
       - run: make web agent
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: assets
+          name: smoke-assets
           if-no-files-found: error
           path: |
             internal/webui/static/app
@@ -68,7 +76,7 @@ jobs:
           go-version-file: go.mod
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: assets
+          name: smoke-assets
           path: internal
       - name: Give the runner user access to /dev/kvm
         if: runner.os == 'Linux'
@@ -84,13 +92,18 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: go build -trimpath -tags "$GO_TAGS" -o "$EXE" ./cmd/studio
+      - name: The given base image
+        if: inputs.image != ''
+        env:
+          GIVEN: ${{ inputs.image }}
+        run: echo "IMAGE=$GIVEN" >> "$GITHUB_ENV"
       - name: Latest released base image
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' && inputs.image == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: echo "IMAGE=ghcr.io/lukaskoebe/sandbox-studio-base:$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)" >> "$GITHUB_ENV"
       - name: The base image of this commit
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && inputs.image == ''
         run: echo "IMAGE=sandbox-studio-base:dev" >> "$GITHUB_ENV"
       - name: Start Studio
         if: runner.os != 'Windows'
@@ -130,7 +143,7 @@ jobs:
           Get-Content $log
           exit 1
       - name: Build the base image
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && inputs.image == ''
         run: PATH="$HOME/.microsandbox/bin:$PATH" make image
       - name: Host checks
         id: doctor

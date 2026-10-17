@@ -26,7 +26,12 @@ The workflow then:
    `internal/version.BrowserImage` to the image digests.
 4. Signs and notarizes the macOS binary, and signs the Windows binary, when the secrets below
    exist. Without them those steps are skipped and the binaries are unsigned.
-5. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives named
+5. Runs [`smoke.yml`](../.github/workflows/smoke.yml) with the pushed base image: on Linux,
+   macOS and Windows runners, Studio built from the tag creates a sandbox from that image
+   and waits for its guest agent, and Linux runs the live browser tests (`web/e2e-live`). The
+   macOS runners have no Hypervisor.framework, so they skip the boot with a warning. Nothing
+   is published unless this passes; if it fails on a flake, re-run the failed jobs.
+6. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives named
    `sandbox-studio_<tag>_<os>_<arch>`, each holding a directory of the same name with
    `studio`, `LICENSE` and `README.md`. It writes `checksums.txt`, adds build provenance
    attestations, and creates the GitHub release with generated notes.

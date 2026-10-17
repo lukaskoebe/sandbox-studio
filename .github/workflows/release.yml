@@ -215,8 +215,18 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
 
+  # Every host boots the pushed base image with Studio built from the tag, and Linux runs the
+  # live browser tests, before anything is published.
+  smoke:
+    needs: image
+    permissions:
+      contents: read
+    uses: ./.github/workflows/smoke.yml
+    with:
+      image: ${{ needs.image.outputs.ref }}
+
   release:
-    needs: [image, build]
+    needs: [image, build, smoke]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
