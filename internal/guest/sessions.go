@@ -88,8 +88,10 @@ func checkStartSession(req agentproto.StartSession) error {
 // same name exported by the profile can't replace them. The same tmux call marks the
 // session as an agent session and keeps its pane after the harness exits, so a harness that
 // dies right away leaves its output behind: tmux runs the commands of one call before it
-// notices the exit (verify (S7) against the image's tmux). checkStartSession refuses arguments ending in ";", which tmux would
-// read as a command separator.
+// notices the exit (tmux 3.5a of the image, checked in S7). The options target "=name:", not
+// "=name": set-option's -t is a pane target, and tmux 3.5a answers "no such session" to the
+// bare session name. checkStartSession refuses arguments ending in ";", which tmux would read
+// as a command separator.
 func startCommand(req agentproto.StartSession) []string {
 	args := []string{"-f", tmuxConfPath, "new-session", "-d", "-s", req.Name, "-c", Workdir,
 		"bash", "-lc", `exec env "$@"`, "studio-session"}
@@ -104,9 +106,9 @@ func startCommand(req agentproto.StartSession) []string {
 	args = append(args, req.Command...)
 	args = append(args,
 		";", "set-option", "-w", "-t", "="+req.Name+":", "remain-on-exit", "on",
-		";", "set-option", "-t", "="+req.Name, agentproto.HarnessOption, req.Harness)
+		";", "set-option", "-t", "="+req.Name+":", agentproto.HarnessOption, req.Harness)
 	if req.Chat != "" {
-		args = append(args, ";", "set-option", "-t", "="+req.Name, agentproto.ChatOption, req.Chat)
+		args = append(args, ";", "set-option", "-t", "="+req.Name+":", agentproto.ChatOption, req.Chat)
 	}
 	return args
 }

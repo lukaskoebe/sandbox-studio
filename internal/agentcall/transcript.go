@@ -206,9 +206,13 @@ func allowedTranscript(home string, stateDirs []string, path string) (string, er
 // injected matches the context Studio added, so it is not extracted again.
 var injected = regexp.MustCompile(`(?s)<studio-memory>.*?</studio-memory>`)
 
-// harnessNoise are messages the harnesses add themselves. verify (S7): Codex's
-// environment and instruction messages in rollout files of 0.162.1.
-var harnessNoise = []string{"<environment_context>", "<user_instructions>", "# AGENTS.md instructions", "<system-reminder>"}
+// harnessNoise are messages the harnesses add themselves: Codex's environment and
+// instruction messages in rollouts, and Claude Code's records of slash commands such as
+// /compact, as Codex 0.162.1 and Claude Code 2.1.287 write them (testdata, recorded in S7).
+var harnessNoise = []string{
+	"<environment_context>", "<user_instructions>", "# AGENTS.md instructions", "<system-reminder>",
+	"<command-name>", "<local-command-stdout>", "<local-command-caveat>",
+}
 
 // Condense turns transcript lines into "role: text" lines of the conversation: the user's
 // and the assistant's messages, without tool calls, tool output, thinking or Studio's own
@@ -268,7 +272,9 @@ type transcriptLine struct {
 	Type        string `json:"type"`
 	IsMeta      bool   `json:"isMeta"`
 	IsSidechain bool   `json:"isSidechain"`
-	Message     *struct {
+	// The summary a compaction leaves, which repeats the conversation.
+	IsCompactSummary bool `json:"isCompactSummary"`
+	Message          *struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
@@ -288,7 +294,7 @@ func messageOf(line []byte) (string, []string) {
 	var role string
 	var content json.RawMessage
 	switch {
-	case l.Message != nil && (l.Type == "user" || l.Type == "assistant") && !l.IsMeta && !l.IsSidechain:
+	case l.Message != nil && (l.Type == "user" || l.Type == "assistant") && !l.IsMeta && !l.IsSidechain && !l.IsCompactSummary:
 		role, content = l.Message.Role, l.Message.Content
 	case l.Type == "response_item" && l.Payload != nil && l.Payload.Type == "message":
 		role, content = l.Payload.Role, l.Payload.Content

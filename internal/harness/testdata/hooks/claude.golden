@@ -1,86 +1,49 @@
 == session-start
 -- stdin
-{
-  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
-  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
-  "cwd": "/workspace",
-  "hook_event_name": "SessionStart",
-  "source": "startup",
-  "model": "claude-opus-5"
-}
+{"session_id":"998237e6-3c99-46a1-9f0f-fff7845b26fc","transcript_path":"/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl","cwd":"/workspace","hook_event_name":"SessionStart","source":"startup"}
 
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
-{"harness":"claude","event":"session-start","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","source":"startup","cwd":"/workspace"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl")
+{"harness":"claude","event":"session-start","sessionId":"998237e6-3c99-46a1-9f0f-fff7845b26fc","source":"startup","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"SessionStart"}}
 == user-prompt
 -- stdin
-{
-  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
-  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
-  "cwd": "/workspace",
-  "permission_mode": "default",
-  "hook_event_name": "UserPromptSubmit",
-  "prompt": "How do we deploy to staging?"
-}
+{"session_id":"998237e6-3c99-46a1-9f0f-fff7845b26fc","transcript_path":"/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl","cwd":"/workspace","prompt_id":"888e8c09-dd57-4512-8a2b-f2dec27028ab","permission_mode":"bypassPermissions","hook_event_name":"UserPromptSubmit","prompt":"please run echo-please"}
 
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
-{"harness":"claude","event":"user-prompt","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","prompt":"How do we deploy to staging?","cwd":"/workspace"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl")
+{"harness":"claude","event":"user-prompt","sessionId":"998237e6-3c99-46a1-9f0f-fff7845b26fc","prompt":"please run echo-please","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {"hookSpecificOutput":{"additionalContext":"Remember: \"pnpm\" \u003cnot npm\u003e","hookEventName":"UserPromptSubmit"}}
 == pre-compact
 -- stdin
-{
-  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
-  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
-  "cwd": "/workspace",
-  "hook_event_name": "PreCompact",
-  "trigger": "manual",
-  "custom_instructions": null
-}
+{"session_id":"998237e6-3c99-46a1-9f0f-fff7845b26fc","transcript_path":"/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl","cwd":"/workspace","prompt_id":"1e80e1bb-09f1-4e4d-a213-8ced05d439a7","hook_event_name":"PreCompact","trigger":"manual","custom_instructions":null}
 
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
-{"harness":"claude","event":"pre-compact","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","cwd":"/workspace"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl")
+{"harness":"claude","event":"pre-compact","sessionId":"998237e6-3c99-46a1-9f0f-fff7845b26fc","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {}
 == stop
 -- stdin
-{
-  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
-  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
-  "cwd": "/workspace",
-  "permission_mode": "default",
-  "hook_event_name": "Stop",
-  "stop_hook_active": false,
-  "last_assistant_message": "The staging deploy runs make deploy-staging after the integration tests pass.",
-  "background_tasks": [],
-  "session_crons": []
-}
+{"session_id":"998237e6-3c99-46a1-9f0f-fff7845b26fc","transcript_path":"/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl","cwd":"/workspace","prompt_id":"888e8c09-dd57-4512-8a2b-f2dec27028ab","permission_mode":"bypassPermissions","hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"Done: it printed hi.","background_tasks":[],"session_crons":[]}
 
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
-{"harness":"claude","event":"stop","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","cwd":"/workspace"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl")
+{"harness":"claude","event":"stop","sessionId":"998237e6-3c99-46a1-9f0f-fff7845b26fc","cwd":"/workspace"}
 -- neutral
 {}
 -- with context
 {}
 == session-end
 -- stdin
-{
-  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
-  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
-  "cwd": "/workspace",
-  "hook_event_name": "SessionEnd",
-  "reason": "other"
-}
+{"session_id":"998237e6-3c99-46a1-9f0f-fff7845b26fc","transcript_path":"/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl","cwd":"/workspace","prompt_id":"1e80e1bb-09f1-4e4d-a213-8ced05d439a7","hook_event_name":"SessionEnd","reason":"other"}
 
--- parsed (transcript path "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl")
-{"harness":"claude","event":"session-end","sessionId":"5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10","cwd":"/workspace"}
+-- parsed (transcript path "/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl")
+{"harness":"claude","event":"session-end","sessionId":"998237e6-3c99-46a1-9f0f-fff7845b26fc","cwd":"/workspace"}
 -- neutral
 {}
 -- with context

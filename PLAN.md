@@ -43,7 +43,9 @@ says.
   [harnesses](docs/harnesses.md#subscription-logins-built-pending-live-verification)
 - The chat adapters' assumptions against the pinned CLIs →
   [chat mode](docs/design/chat-mode.md) ("Unverified")
-- Live hook verification for all three harnesses; spike S7
+- What spike S7 left: OpenCode's V2 hook delivery (the pinned 1.18.35 uses V1), and the
+  `gpt-6-luna` utility model's ID and price, which need an OpenAI key →
+  [harnesses](docs/harnesses.md#verified-vs-pending)
 - An OpenCode session started before a rebase resumes after it (the home disk's acceptance
   check, not yet run live)
 

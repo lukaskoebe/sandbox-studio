@@ -73,7 +73,8 @@ func utilityModelOf(p store.Provider) (UtilityModel, bool) {
 		return UtilityModel{Kind: p.Kind, Model: "claude-haiku-4-5", PriceInPerM: 1, PriceOutPerM: 5, Priced: true}, true
 	case teammates.KindOpenAIAPI:
 		// TODO verify (S7): gpt-6-luna is OpenAI's small model per third-party listings;
-		// confirm the ID and price against the API before relying on it.
+		// confirm the ID and price against the API before relying on it. S7 needed no
+		// credentials, so it couldn't; Codex 0.162.1 itself titles chats with gpt-5.6-luna.
 		return UtilityModel{Kind: p.Kind, Model: "gpt-6-luna", PriceInPerM: 0.10, PriceOutPerM: 0.50, Priced: true}, true
 	case teammates.KindOpenAICompatible:
 		return UtilityModel{Kind: p.Kind, Model: p.Model, Note: "the endpoint's single model; price unknown, so calls are capped instead"}, p.Model != "" && p.BaseURL != ""

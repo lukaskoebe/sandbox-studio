@@ -14,7 +14,7 @@ written; current behavior is in the component pages linked from the [index](READ
 | S4 | CA injection: guest trust store, runtimes, nested Docker | curl, node, python, git and a container trust intercepted hosts | ✅ | n/a (guest-side) | n/a |
 | S5 | Owned vs named volumes in snapshots and forks; rebase mechanism | decision recorded | ✅ (one upstream gap) | ⏳ | ⏳ |
 | S6 | Client timeouts while a connection is held | defaults chosen per client | ✅ | n/a (guest-side) | n/a |
-| S7 | Harness hooks for the pinned versions, without trust prompts | context injection proven in all three harnesses | ⏳ | | |
+| S7 | Harness hooks for the pinned versions, without trust prompts | context injection proven in all three harnesses | ✅ 2026-10-17 (OpenCode V2 pending) | n/a (guest-side) | n/a |
 | S8 | Subscription auth (Claude OAuth token via placeholder, Codex ChatGPT login, headless utility calls) | a login-based teammate runs without the long-lived credential in the guest, or the fallback is documented | ⏳ built, awaiting the owner's accounts | | |
 | S9 | yzma + embeddinggemma latency and memory | under 50 ms per short query on CPU | ✅ works; 70 ms per query, over the target | ⏳ | ⏳ |
 
@@ -357,8 +357,8 @@ and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze
   the live browser test (Docker inside, the gateway and DNS with an approval, the guest
   agent, a preview), which covers S1–S3. S9's model runs in that workflow on Linux, macOS and
   Windows (`TestLlamaEmbeds`); its timing on the Mac (Metal) is still unmeasured.
-- S7: verify hook payloads and context injection for OpenCode, Claude Code and Codex against
-  a fake model endpoint (no credentials needed).
+- S7: OpenCode V2 hook delivery, and the `gpt-6-luna` model ID and price, which need an
+  OpenAI key ([harnesses](harnesses.md#verified-vs-pending)).
 - S8: subscription logins are built, and the Claude sign-in worked on the owner's machine
   (2026-10-17). A Claude session and chat on it and the ChatGPT login are still to be run, with
   the steps in [harnesses](harnesses.md#subscription-logins-built-pending-live-verification).

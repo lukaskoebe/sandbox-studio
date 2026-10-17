@@ -97,8 +97,13 @@ Every hook runs `/opt/studio/bin/studio-agent hook <event> --harness <h>` (docs/
   `UserPromptSubmit`, `PreCompact`, `Stop` and `SessionEnd`, with timeouts of 15, 10, 15, 15
   and 3 seconds. They read `session_id`, `transcript_path`, `cwd`, `source` and `prompt`
   and answer `hookSpecificOutput.additionalContext` for session start and prompts.
-- Codex's hooks are in the home, not the system layer, so the TUI starts with
-  `--dangerously-bypass-hook-trust` instead of a trust prompt.
+- Codex's hooks are in the home, not the system layer. Codex runs such hooks only once they
+  are trusted, also in `codex exec` and the app-server behind codex-acp, where untrusted hooks
+  are skipped silently. So `config.toml` gets a `[hooks.state]` entry per hook with the
+  `trusted_hash` Codex computes for it. The TUI also starts with
+  `--dangerously-bypass-hook-trust`, as a fallback if the hash ever changes.
+- Codex's app-server also runs a short titling thread per chat. Its hooks come with
+  `transcript_path` null and Codex's own title prompt, so studio-agent answers them neutrally.
 - OpenCode's plugin default-exports `sandbox-studio.memory` with both V2 `setup(ctx)` and
   V1 `server()` entrypoints (V1 object plugins require 1.18.29+). V2 uses the `prompt`,
   `context` and `compaction` hooks plus an abortable event subscription; both APIs inject
@@ -116,12 +121,13 @@ Every hook runs `/opt/studio/bin/studio-agent hook <event> --harness <h>` (docs/
   define `location.directory`. Event payloads use `data`; a move refreshes the cached
   directory and session context.
 - Hook fixtures: `internal/harness/testdata/hooks/<harness>/<event>.json` hold one payload
-  per harness and hook event (15 in all). They are documentation-derived, not live
-  recordings: Claude Code's hooks reference and Codex's hooks page give the stdin fields,
-  and the OpenCode fixtures follow what the plugin writes. No harness was run to record
-  them; live recording is spike S7. `TestHookFixtures` checks the neutral event each one
-  parses to. OpenCode's plugin sends no `session-end` today (its `session.deleted` handler
-  only clears caches), so that fixture is the shape the parser accepts.
+  per harness and hook event, recorded from the pinned versions in spike S7 (2026-10-17).
+  `session-start-compact.json` is the session start after a compaction, and Codex's
+  `user-prompt-title.json` is its titling thread. `TestHookFixtures` and
+  `TestHookFixtureVariants` check the neutral event each one parses to. OpenCode's plugin
+  sends no `session-end` (its `session.deleted` handler only clears caches), so that fixture
+  is the shape the parser accepts, with the recorded session ID.
+  `internal/agentcall/testdata` holds a trimmed recorded Claude transcript and Codex rollout.
 - Golden files: `internal/harness/testdata/hooks/<harness>.golden`, the rendered answers
   for the fixtures (`go test ./internal/harness -run TestHookGolden -args -update` after a
   deliberate change).
@@ -250,41 +256,57 @@ The docs were checked, not a binary: the flags, the plugin layout and tool names
 stream-json fields and the transcript location come from the Claude Code docs at
 code.claude.com. `internal/claudeacp/testdata` holds fixtures written from those docs, not
 recordings. The tests run a fake `claude` (the test binary) that prints them and asks the real
-permissions server over MCP. No real `claude` ran, and no model was called.
+permissions server over MCP. Spike S7 then ran the real Claude Code 2.1.287 through
+`studio-agent claude-acp`, with an API key and a fake model (below).
 
 ## Verified vs pending
 
-The updated OpenCode plugin was loaded as active in an existing OpenCode 2.0.26 VM.
-Compatibility tests cover the V1 hooks and V2 lifecycle, context, compaction and subprocess
-failure handling. End-to-end model-driven hook delivery still needs qualification.
+Spike S7 ran the pinned versions on 2026-10-17: OpenCode 1.18.35, Claude Code 2.1.287 and
+Codex 0.162.1, in the v0.3.2 base image, against a fake model endpoint (Anthropic Messages
+and OpenAI Responses) with placeholder keys. Verified:
 
-Pending S7 (`// verify (S7)` in the code):
+- Hook payloads. The fixtures are now those recordings. Claude Code and Codex send the field
+  names Studio reads, plus more it ignores (`turn_id`, `model`, `permission_mode`,
+  `last_assistant_message`).
+- Context injection in all three: Claude Code shows `additionalContext` to the model in a
+  system reminder, Codex as a developer message, OpenCode in the system prompt.
+- Hooks fire in the TUI, in `claude -p` and `codex exec`, and through each ACP adapter.
+- After a compaction: Claude Code and OpenCode fire SessionStart with source `compact` right
+  away, Codex at the next turn. Codex and OpenCode fire PreCompact. `--resume` gives source
+  `resume`.
+- Claude Code: no onboarding, trust or bypass prompt; the API key approved by the last 20
+  characters of its placeholder (without them it asks); `--mcp-config` servers connect without
+  an approval prompt; `~/.claude/CLAUDE.md` is loaded.
+- Codex: `env_key` needs no `codex login`; Responses API with tool calls; which rollout lines
+  are noise. Its compaction summary is an ordinary assistant message, so the condensed
+  transcript keeps it.
+- OpenCode: the V1 plugin path, `client.session.messages`, and the global rules path
+  `~/.config/opencode/AGENTS.md`.
+- Every auto-approve setting: a shell command ran without a prompt in each harness.
+- Resume: each ACP session ID is the ID the TUI resumes (`opencode --session`,
+  `claude --resume`, `codex resume`).
+- Claude chats through `studio-agent claude-acp`: the stream-json input, `--session-id` and
+  `--resume`, the permission prompt tool's request and answer, and "Resource not found" for an
+  unknown session.
 
-- Hook payloads as the pinned versions send them: the fixtures under
-  `internal/harness/testdata/hooks/` are documentation-derived, not recordings.
+Fixed by S7:
 
-- Claude Code keeps its onboarding state in `~/.claude.json`, which it owns. Without
-  `hasCompletedOnboarding` a fresh home asks to sign in with a Claude or a Console account
-  although the provider's variable is set. Studio merges that key, and the workspace's
-  `hasTrustDialogAccepted`, into the file (a home file
-  with `keys`: the rest of the file is kept), and for an API key also approves the key by the
-  last 20 characters of its placeholder in `customApiKeyResponses`. That Claude Code matches
-  approved keys this way is unverified.
-- Whether Codex's custom provider with `env_key` needs no `codex login`.
-- The OpenCode global rules path.
-- Whether each auto-approve setting takes effect without a prompt.
-- Live hook and event delivery for the pinned versions; OpenCode V2 event and session
-  payload shapes are source-checked against the v2.0.26 schemas above. Claude Code's
-  `--mcp-config` servers starting without an approval prompt; Codex's
-  `--dangerously-bypass-hook-trust` flag; V1 `client.session.messages`; which lines of
-  Codex rollouts are noise.
-- The resume commands for chats opened in the terminal, and that each harness's ACP session
-  ID is the ID its TUI resumes.
-- The model ID `gpt-6-luna` and its price (third-party listings only).
-- Claude subscription chats, as above: the stream-json input shape (from the Agent SDK example),
-  the `--session-id` and `--resume` lifecycle, the permission prompt tool's MCP tool name and
-  answer format, `--allowedTools` on plugin tools, "Resource not found" detection, and whether
-  the subscription's token is accepted by `claude -p` in the sandbox.
+- Codex ran no Studio hooks without `--dangerously-bypass-hook-trust`, so chats through
+  codex-acp had no memory. Studio now writes the trust state into `config.toml`.
+- Codex's titling thread sent its own prompt as a user prompt. studio-agent skips it.
+- tmux 3.5a rejects `set-option -t "=name"`, which failed every agent session start. The
+  session options now target `=name:`.
+- Claude transcripts: `/compact` summaries and local command lines are no longer condensed as
+  conversation.
+
+Still pending:
+
+- OpenCode V2: payload shapes are source-checked against the v2.0.26 schemas above, and the
+  plugin loaded in a 2.0.26 VM, but model-driven hook delivery is unrun.
+- The model ID `gpt-6-luna` and its price: S7 had no OpenAI credentials. Codex itself titles
+  chats with `gpt-5.6-luna`.
+- Claude subscription chats: whether the subscription's token is accepted by `claude -p` in
+  the sandbox (S8), `--allowedTools` on plugin tools, and cancelling a turn by SIGTERM.
 
 ## Subscription logins: built, pending live verification
 

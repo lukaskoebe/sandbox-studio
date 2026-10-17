@@ -72,8 +72,9 @@ func (Claude) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, err
 // them a fresh home starts with the onboarding screens, which ask to sign in with a Claude
 // account or a Console account although the provider's variable is set, and with
 // ANTHROPIC_API_KEY Claude Code asks once whether to use the key. Objects merge key by key, so
-// the other projects' state stays. verify (S7): Claude Code
-// remembers an approved key by its last 20 characters, here the placeholder's.
+// the other projects' state stays. Claude Code remembers an approved key by its last 20
+// characters, here the placeholder's: 2.1.287 starts without the question with them and asks
+// without them (S7).
 func claudeState(provider Provider) map[string]any {
 	state := map[string]any{
 		"hasCompletedOnboarding": true,
@@ -88,8 +89,8 @@ func claudeState(provider Provider) map[string]any {
 	return state
 }
 
-// TUICommand loads Studio's MCP server from its own file. verify (S7): servers passed with
-// --mcp-config need no approval prompt, unlike a project's .mcp.json.
+// TUICommand loads Studio's MCP server from its own file. Servers passed with --mcp-config
+// connect without an approval prompt (2.1.287, S7), unlike a project's .mcp.json.
 func (Claude) TUICommand(opts SessionOpts) []string {
 	if opts.Resume != "" {
 		return []string{"claude", "--resume", opts.Resume, "--mcp-config", Home + "/" + claudeMCPConfig}
@@ -97,8 +98,8 @@ func (Claude) TUICommand(opts SessionOpts) []string {
 	return []string{"claude", "--mcp-config", Home + "/" + claudeMCPConfig}
 }
 
-// ParseHook reads Claude Code's hook stdin. verify (S7): the field names and that
-// SessionStart fires with source "compact" after compaction, against 2.1.287.
+// ParseHook reads Claude Code's hook stdin. The field names, and SessionStart firing with
+// source "compact" right after a compaction, are recorded from 2.1.287 (S7).
 func (Claude) ParseHook(event string, stdin []byte) (HookEvent, error) {
 	return hookFormat(teammates.HarnessClaude).Parse(event, stdin)
 }

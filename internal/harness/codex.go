@@ -1,10 +1,15 @@
 package harness
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
+	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 )
 
@@ -55,8 +60,8 @@ func (Codex) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, erro
 	}
 	if baseURL != "" {
 		// An own provider rather than the built-in one: it reads the key from env_key, so
-		// no `codex login` is needed. verify (S7): the endpoint must speak the Responses
-		// API, the only wire_api Codex supports.
+		// no `codex login` is needed. The endpoint must speak the Responses API, the only
+		// wire_api Codex supports.
 		fmt.Fprintf(&b, "model_provider = %s\n", tomlString(codexProvider))
 		fmt.Fprintf(&b, "\n[model_providers.%s]\n", codexProvider)
 		b.WriteString("name = \"Sandbox Studio\"\n")
@@ -69,9 +74,15 @@ func (Codex) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, erro
 	// Memory tools.
 	fmt.Fprintf(&b, "\n[mcp_servers.%s]\ncommand = %s\nargs = [\"mcp\"]\n", mcpServerName, tomlString(AgentPath))
 
+	vendorHooks := claudeStyleHooks(teammates.HarnessCodex)
+	trust, err := codexHookTrust(vendorHooks)
+	if err != nil {
+		return nil, err
+	}
+	b.WriteString(trust)
 	hooks, err := marshalJSON(map[string]any{
 		"description": "Managed by Sandbox Studio: rewritten when a session starts. Forwards to Studio's memory.",
-		"hooks":       claudeStyleHooks(teammates.HarnessCodex),
+		"hooks":       vendorHooks,
 	})
 	if err != nil {
 		return nil, err
@@ -84,6 +95,50 @@ func (Codex) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, erro
 		{Path: ".codex/hooks.json", Content: hooks, Mode: 0o644},
 		agents,
 	}, nil
+}
+
+// codexHooksPath is where Codex reads the user layer's hooks; its trust state is keyed by it.
+const codexHooksPath = Home + "/.codex/hooks.json"
+
+// codexHookKeys are Codex's own names of the events, as its trust state keys them.
+var codexHookKeys = map[string]string{
+	HookSessionStart: "session_start", HookUserPrompt: "user_prompt_submit", HookPreCompact: "pre_compact",
+	HookStop: "stop", HookSessionEnd: "session_end",
+}
+
+// codexHookTrust is the [hooks.state] tables that mark Studio's hooks as trusted. Codex runs a
+// user-layer hook only while its trusted_hash matches; otherwise the TUI asks for a review and
+// codex app-server (chats) skips it without a word. The key is
+// "<hooks.json>:<event>:<group>:<handler>" and the hash is SHA-256 over the hook's normalized
+// identity as compact JSON with sorted keys (codex-rs/hooks/src/engine/discovery.rs, hook_hash,
+// in 0.162.1). Checked against the hashes 0.162.1 writes when the hooks are trusted in the TUI.
+func codexHookTrust(hooks map[string]any) (string, error) {
+	var b strings.Builder
+	b.WriteString("\n[hooks.state]\n")
+	for _, event := range agenthook.Events {
+		groups, _ := hooks[agenthook.VendorEvents[event]].([]any)
+		if len(groups) != 1 {
+			return "", fmt.Errorf("codex hooks: %s has %d groups", event, len(groups))
+		}
+		handler := groups[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
+		timeout := handler["timeout"].(int)
+		if event == HookSessionEnd {
+			timeout = min(max(timeout, 1), 3) // Codex clamps SessionEnd before hashing
+		}
+		identity := map[string]any{"event_name": codexHookKeys[event], "hooks": []any{map[string]any{
+			"type": "command", "command": handler["command"], "timeout": timeout, "async": false,
+		}}}
+		var j bytes.Buffer
+		enc := json.NewEncoder(&j)
+		enc.SetEscapeHTML(false) // serde_json escapes only quotes, backslashes and control characters
+		if err := enc.Encode(identity); err != nil {
+			return "", err
+		}
+		sum := sha256.Sum256(bytes.TrimSuffix(j.Bytes(), []byte("\n")))
+		key := fmt.Sprintf("%s:%s:0:0", codexHooksPath, codexHookKeys[event])
+		fmt.Fprintf(&b, "\n[hooks.state.%s]\ntrusted_hash = %s\n", tomlString(key), tomlString("sha256:"+hex.EncodeToString(sum[:])))
+	}
+	return b.String(), nil
 }
 
 // tomlString is s as a TOML basic string.
@@ -105,10 +160,11 @@ func tomlString(s string) string {
 	return b.String()
 }
 
-// TUICommand skips the hook trust review: user-layer hooks run only once trusted by hash,
-// and the managed layer (requirements.toml) is outside the home. Studio rewrites hooks.json
-// on every start and the VM is the sandbox. verify (S7): the flag is accepted by the
-// interactive TUI of 0.162.1.
+// TUICommand also skips the hook trust review, in case the trust state written by Render no
+// longer matches (a Codex that hashes differently): user-layer hooks run only once trusted by
+// hash, and the managed layer (requirements.toml) is outside the home. Studio rewrites
+// hooks.json on every start and the VM is the sandbox. The TUI of 0.162.1 accepts the flag and
+// then runs without its shared background server.
 func (Codex) TUICommand(opts SessionOpts) []string {
 	if opts.Resume != "" {
 		return []string{"codex", "resume", opts.Resume, "--dangerously-bypass-hook-trust"}
@@ -116,8 +172,8 @@ func (Codex) TUICommand(opts SessionOpts) []string {
 	return []string{"codex", "--dangerously-bypass-hook-trust"}
 }
 
-// ParseHook reads Codex's hook stdin, which uses Claude Code's field names. verify (S7):
-// the payloads of 0.162.1.
+// ParseHook reads Codex's hook stdin, which uses Claude Code's field names (recorded from
+// 0.162.1).
 func (Codex) ParseHook(event string, stdin []byte) (HookEvent, error) {
 	return hookFormat(teammates.HarnessCodex).Parse(event, stdin)
 }

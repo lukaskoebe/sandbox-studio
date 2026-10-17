@@ -1,0 +1,33 @@
+{"type":"attachment","attachment":{"type":"hook_success"}}
+{"type":"attachment","attachment":{"type":"hook_additional_context","content":["<studio-memory>S7-claude-session-start-MARK</studio-memory>"],"hookEvent":"SessionStart"}}
+{"type":"user","isSidechain":false,"promptSource":"sdk","message":{"role":"user","content":"please run echo-please"}}
+{"type":"attachment","attachment":{"type":"environment"}}
+{"type":"attachment","attachment":{"type":"model"}}
+{"type":"attachment","attachment":{"type":"agent_listing_delta"}}
+{"type":"attachment","attachment":{"type":"mcp_instructions_delta"}}
+{"type":"attachment","attachment":{"type":"skill_listing"}}
+{"type":"attachment","attachment":{"type":"total_tokens_reminder"}}
+{"type":"attachment","attachment":{"type":"hook_additional_context","content":["<studio-memory>S7-claude-user-prompt-MARK</studio-memory>"],"hookEvent":"UserPromptSubmit"}}
+{"type":"attachment","attachment":{"type":"instructions"}}
+{"type":"attachment","attachment":{"type":"session_context"}}
+{"type":"attachment","attachment":{"type":"date"}}
+{"type":"attachment","attachment":{"type":"remote_session_change"}}
+{"type":"attachment","attachment":{"type":"prompt_snapshot"}}
+{"type":"assistant","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"echo hi"}}]}}
+{"type":"user","isSidechain":false,"message":{"role":"user","content":[{"tool_use_id":"toolu_1","type":"tool_result","content":"hi","is_error":false}]}}
+{"type":"attachment","attachment":{"type":"prompt_snapshot"}}
+{"type":"attachment","attachment":{"type":"total_tokens_reminder"}}
+{"type":"assistant","isSidechain":false,"message":{"role":"assistant","content":[{"type":"text","text":"Done: it printed hi."}]}}
+{"type":"attachment","attachment":{"type":"hook_success"}}
+{"type":"system","subtype":"stop_hook_summary"}
+{"type":"system","subtype":"compact_boundary"}
+{"type":"user","isSidechain":false,"isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nDone: it printed hi.\n\nIf you need specific details from before compaction (like exact c…"}}
+{"type":"user","isSidechain":false,"isMeta":true,"message":{"role":"user","content":"<local-command-caveat>The command below was run directly in Claude Code, not sent to you as a request, and its output goes straight to the user. It's recorded here as context for later messages.</local-command-caveat>"}}
+{"type":"user","isSidechain":false,"message":{"role":"user","content":"<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>"}}
+{"type":"user","isSidechain":false,"message":{"role":"user","content":"<local-command-stdout>Compacted (ctrl+o to see full summary)\nPreCompact [/home/agent/s7/rec.sh pre-compact --harness claude] completed successfully: {}</local-command-stdout>"}}
+{"type":"attachment","attachment":{"type":"agent_listing_delta"}}
+{"type":"attachment","attachment":{"type":"mcp_instructions_delta"}}
+{"type":"attachment","attachment":{"type":"environment"}}
+{"type":"attachment","attachment":{"type":"model"}}
+{"type":"attachment","attachment":{"type":"hook_success"}}
+{"type":"attachment","attachment":{"type":"hook_additional_context","content":["<studio-memory>S7-claude-session-start-MARK</studio-memory>"],"hookEvent":"SessionStart"}}

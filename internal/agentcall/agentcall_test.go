@@ -399,3 +399,43 @@ func TestCondenseCodex(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// TestCondenseRecorded condenses transcripts the pinned harnesses wrote in S7 (trimmed to the
+// lines and fields that matter): Claude Code 2.1.287 with a /compact, a Codex 0.162.1 rollout
+// with a compaction and two later turns. Hook context, instructions, environment, tool calls
+// and the records of slash commands stay out. Codex's own compaction summary stays: it is an
+// assistant message like any other.
+func TestCondenseRecorded(t *testing.T) {
+	for file, want := range map[string]string{
+		"claude-transcript.jsonl": "user: please run echo-please\nassistant: Done: it printed hi.\n",
+		"codex-rollout.jsonl": "user: please run echo-please\nassistant: Done: it printed hi.\n" +
+			"assistant: Summary: the user ran echo hi.\nuser: hello again\nassistant: Done: it printed hi.\n" +
+			"user: third\nassistant: Done: it printed hi.\n",
+	} {
+		b, err := os.ReadFile(filepath.Join("testdata", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := Condense(b); got != want {
+			t.Errorf("%s: %q, want %q", file, got, want)
+		}
+	}
+}
+
+// TestHookEphemeral: the hooks of codex app-server's titling thread (transcript_path null,
+// recorded in S7) get the neutral answer without a call to Studio.
+func TestHookEphemeral(t *testing.T) {
+	h, _ := agenthook.Lookup("codex")
+	fc := &fakeCaller{}
+	stdin := `{"session_id":"t","turn_id":"u","transcript_path":null,"cwd":"/workspace","hook_event_name":"UserPromptSubmit","model":"gpt-5.6-luna","prompt":"Your task is to generate a very short title"}`
+	for _, event := range []string{agenthook.UserPrompt, agenthook.Stop} {
+		in := strings.Replace(stdin, "UserPromptSubmit", agenthook.VendorEvents[event], 1)
+		var out bytes.Buffer
+		if err := RunHook(context.Background(), h, event, strings.NewReader(in), &out, HookOptions{Caller: fc, Home: guestHome(t)}); err != nil || out.String() != "{}\n" {
+			t.Fatalf("%s: %v %q", event, err, out.String())
+		}
+	}
+	if len(fc.calls) != 0 {
+		t.Fatalf("Studio was called: %+v", fc.calls)
+	}
+}

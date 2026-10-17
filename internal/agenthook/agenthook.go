@@ -62,6 +62,10 @@ type Event struct {
 	TranscriptOffset int64  `json:"transcriptOffset,omitempty"`
 	// TranscriptSkipped counts bytes of a long delta that were dropped to bound the size.
 	TranscriptSkipped int64 `json:"transcriptSkipped,omitempty"`
+	// Ephemeral is a session the harness keeps no transcript of: codex app-server's thread
+	// that titles a chat sends its hooks with transcript_path null. The guest agent answers
+	// its hooks without asking Studio.
+	Ephemeral bool `json:"-"`
 }
 
 // Result is Studio's answer to a hook: context to add to the conversation, if any.
@@ -75,14 +79,14 @@ var ErrUnknownEvent = errors.New("unknown hook event")
 
 // claudeStyle is the hook stdin of Claude Code and Codex: both use the same field names
 // for the events Studio uses (https://code.claude.com/docs/en/hooks,
-// https://learn.chatgpt.com/docs/hooks).
+// https://learn.chatgpt.com/docs/hooks; recorded from Claude Code 2.1.287 and Codex 0.162.1).
 type claudeStyle struct {
-	SessionID      string `json:"session_id"`
-	TranscriptPath string `json:"transcript_path"`
-	Cwd            string `json:"cwd"`
-	HookEventName  string `json:"hook_event_name"`
-	Source         string `json:"source"`
-	Prompt         string `json:"prompt"`
+	SessionID      string  `json:"session_id"`
+	TranscriptPath *string `json:"transcript_path"` // null for an ephemeral session
+	Cwd            string  `json:"cwd"`
+	HookEventName  string  `json:"hook_event_name"`
+	Source         string  `json:"source"`
+	Prompt         string  `json:"prompt"`
 }
 
 // VendorEvents maps the neutral events to the event names of Claude Code and Codex.
@@ -101,16 +105,18 @@ func parseClaudeStyle(harness, event string, stdin []byte) (Event, error) {
 	if len(stdin) > MaxInput {
 		return Event{}, fmt.Errorf("hook input larger than %d bytes", MaxInput)
 	}
-	var in claudeStyle
+	in := claudeStyle{TranscriptPath: new(string)}
 	if err := json.Unmarshal(stdin, &in); err != nil {
 		return Event{}, fmt.Errorf("hook input: %w", err)
 	}
 	if in.HookEventName != "" && in.HookEventName != VendorEvents[event] {
 		return Event{}, fmt.Errorf("hook %s got a %s payload", event, in.HookEventName)
 	}
-	ev := Event{
-		Harness: harness, Event: event, SessionID: in.SessionID, Source: in.Source, Cwd: in.Cwd,
-		TranscriptPath: in.TranscriptPath,
+	ev := Event{Harness: harness, Event: event, SessionID: in.SessionID, Source: in.Source, Cwd: in.Cwd}
+	if in.TranscriptPath == nil {
+		ev.Ephemeral = true
+	} else {
+		ev.TranscriptPath = *in.TranscriptPath
 	}
 	if event == UserPrompt {
 		ev.Prompt = in.Prompt

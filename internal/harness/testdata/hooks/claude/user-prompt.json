@@ -1,8 +1,1 @@
-{
-  "session_id": "5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10",
-  "transcript_path": "/home/agent/.claude/projects/-workspace/5b1c2e0a-7d3f-4c8e-9a61-2f0d4e8b7c10.jsonl",
-  "cwd": "/workspace",
-  "permission_mode": "default",
-  "hook_event_name": "UserPromptSubmit",
-  "prompt": "How do we deploy to staging?"
-}
+{"session_id":"998237e6-3c99-46a1-9f0f-fff7845b26fc","transcript_path":"/home/agent/.claude/projects/-workspace/998237e6-3c99-46a1-9f0f-fff7845b26fc.jsonl","cwd":"/workspace","prompt_id":"888e8c09-dd57-4512-8a2b-f2dec27028ab","permission_mode":"bypassPermissions","hook_event_name":"UserPromptSubmit","prompt":"please run echo-please"}

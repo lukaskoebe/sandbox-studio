@@ -200,12 +200,12 @@ func TestStartSessionCommand(t *testing.T) {
 	want := []string{"-f", tmuxConfPath, "new-session", "-d", "-s", "claude", "-c", Workdir,
 		"bash", "-lc", `exec env "$@"`, "studio-session", "ANTHROPIC_API_KEY=studio-abc", "B=1", "claude",
 		";", "set-option", "-w", "-t", "=claude:", "remain-on-exit", "on",
-		";", "set-option", "-t", "=claude", agentproto.HarnessOption, "claude"}
+		";", "set-option", "-t", "=claude:", agentproto.HarnessOption, "claude"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("command:\n got %q\nwant %q", got, want)
 	}
 	req.Chat = "abc7"
-	if got := startCommand(req); !slices.Equal(got[len(got)-6:], []string{";", "set-option", "-t", "=claude", agentproto.ChatOption, "abc7"}) {
+	if got := startCommand(req); !slices.Equal(got[len(got)-6:], []string{";", "set-option", "-t", "=claude:", agentproto.ChatOption, "abc7"}) {
 		t.Fatalf("chat tag: %q", got)
 	}
 	for _, bad := range []agentproto.StartSession{

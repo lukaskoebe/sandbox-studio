@@ -95,6 +95,10 @@ func hook(ctx context.Context, h agenthook.Format, event string, stdin io.Reader
 	if err != nil {
 		return neutral, err
 	}
+	if ev.Ephemeral {
+		// Codex's chat titling: its prompt is Codex's own and it has no transcript.
+		return neutral, nil
+	}
 	if !agenthook.Extracts(event) {
 		if event == agenthook.SessionStart && ev.Cwd != "" {
 			ev.GitRemote = agenthook.NormalizeRemote(o.GitRemote(ctx, ev.Cwd))

@@ -1,0 +1,23 @@
+{"type":"session_meta","payload":{"type":null}}
+{"type":"event_msg","payload":{"type":"task_started"}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<skills_instructions>\n## Skills\nA skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below is the list of skills that can be used. Each entry includes a name, description, and a short path that can be expand…"},{"type":"input_text","text":"<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `danger-full-access`: No filesystem sandboxing - all commands are permitted. Network access is enabled.\nApproval policy is curren…"},{"type":"input_text","text":"<collaboration_mode># Collaboration Mode: Default\n\nYou are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.\n\nYour active mode changes only when new developer instructions with a different…"}]}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions\n\n<INSTRUCTIONS>\n<!-- sandbox-studio:begin -->\n<!-- Managed by Sandbox Studio: this block is rewritten when a session starts. Edit the teammate in Studio instead; text outside the block is kept. -->\n\n# You are Tess\n\n…"},{"type":"input_text","text":"<environment_context>\n  <cwd>/workspace</cwd>\n  <shell>bash</shell>\n  <current_date>2026-10-17</current_date>\n  <timezone>Etc/UTC</timezone>\n  <filesystem><workspace_roots><root>/workspace</root></workspace_roots><permission_profile type=\"d…"}]}}
+{"type":"world_state","payload":{"type":null}}
+{"type":"turn_context","payload":{"type":null}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<studio-memory>S7-codex-session-start-MARK</studio-memory>"}]}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"please run echo-please"}]}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<studio-memory>S7-codex-user-prompt-MARK</studio-memory>"}]}}
+{"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_8","arguments":"{\"cmd\": \"echo hi\"}"}}
+{"type":"token_usage_record","payload":{"type":null}}
+{"type":"response_item","payload":{"type":"function_call_output","call_id":"call_8","output":"Chunk ID: 3dca27\nWall time: 0.0001 seconds\nProcess exited with code 0\nOriginal token count: 1\nOutput:\nhi\n"}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done: it printed hi."}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Summary: the user ran echo hi."}]}}
+{"type":"compacted","payload":{"type":null}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<studio-memory>S7-codex-session-start-MARK</studio-memory>"}]}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello again"}]}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<studio-memory>S7-codex-user-prompt-MARK</studio-memory>"}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done: it printed hi."}]}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<studio-memory>S7-codex-session-start-MARK</studio-memory>"}]}}
+{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"third"}]}}
+{"type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<studio-memory>S7-codex-user-prompt-MARK</studio-memory>"}]}}
+{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done: it printed hi."}]}}

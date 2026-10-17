@@ -1,6 +1,1 @@
-{
-  "sessionID": "ses_2f9b7c1d0e4a8KQx",
-  "cwd": "/workspace",
-  "transcript": "user: use pnpm\nassistant: ok\n",
-  "transcriptOffset": 0
-}
+{"sessionID":"ses_eb5f524b2ffeSfgwe2MdoL2d4p","cwd":"/workspace","transcript":"user: \"please run echo-please\"\nassistant: Done: it printed hi.\n","transcriptOffset":0}
