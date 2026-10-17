@@ -45,7 +45,7 @@ func recordingClient(t *testing.T) (*Client, *recorder) {
 			answer = "{}"
 		}
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, answer)
+		_, _ = io.WriteString(w, answer)
 	}))
 	t.Cleanup(srv.Close)
 	return &Client{addr: strings.TrimPrefix(srv.URL, "http://"), http: srv.Client()}, rec
@@ -286,7 +286,7 @@ func TestChatAnswersItsAsksInPlace(t *testing.T) {
 	if got := rec.last(t); got.path != "/api/environments/env1/chats/c1/items/q1/answer" || got.body != `{"action":"accept","content":{"port":8080}}` {
 		t.Fatalf("answer: %+v", got)
 	}
-	m = pressRun(t, m, "i")
+	pressRun(t, m, "i")
 	if got := rec.last(t); got.body != `{"action":"decline"}` {
 		t.Fatalf("skip: %+v", got)
 	}

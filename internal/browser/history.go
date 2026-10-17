@@ -68,6 +68,9 @@ func (s *Service) record(ctx context.Context, st *state, pg *page, e entry) {
 		return
 	}
 	s.prune(ctx, st.env, st.teammate)
+	if s.Logged != nil {
+		s.Logged(st.env, st.teammate)
+	}
 }
 
 func (s *Service) saveShot(data []byte) (string, error) {

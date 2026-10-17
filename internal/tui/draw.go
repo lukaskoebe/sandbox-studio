@@ -134,15 +134,6 @@ func cardBox(lines []string, w int, rule, frame lipgloss.Style) []string {
 	return append(out, frame.Render("╰"+strings.Repeat("─", w-2)+"╯"))
 }
 
-// ruled puts the area's rule before each line, as the detail pane's approval does.
-func ruled(lines []string, rule lipgloss.Style) []string {
-	out := make([]string, len(lines))
-	for i, l := range lines {
-		out[i] = rule.Render("▌") + " " + l
-	}
-	return out
-}
-
 // tab is a tab of the header: a screen reached with one key.
 type tab int
 

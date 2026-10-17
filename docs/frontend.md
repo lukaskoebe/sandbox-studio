@@ -16,7 +16,8 @@ binary embeds (`//go:embed`) and serves at `/`.
   to `/api/events` and invalidates the affected queries. Lineage views don't poll: every
   sandbox start, stop, suspend, resume, rebase, checkpoint change and history change
   publishes on the `sandboxes` topic. A VM that stops on its own publishes nothing, so its
-  lineage status updates at the next change or reload.
+  lineage status updates at the next change or reload. Each new entry in a teammate's browser
+  action log publishes on the `browser` topic, so the activity shows a step as it lands.
 - Terminals: xterm.js, attached to tmux in the guest (mouse on). A drag selects in tmux, which
   copies with OSC 52; the terminal writes any OSC 52 clipboard to the browser's and refuses
   reads. Right-click opens Studio's Copy/Paste menu and never reaches tmux.

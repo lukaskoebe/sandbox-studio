@@ -266,9 +266,9 @@ func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile) {
 		}
 		if strings.HasPrefix(l, "@@") {
 			hunk = true
-			fmt.Sscanf(l, "@@ -%d", &oldN)
+			_, _ = fmt.Sscanf(l, "@@ -%d", &oldN)
 			if i := strings.Index(l, " +"); i >= 0 {
-				fmt.Sscanf(l[i+2:], "%d", &newN)
+				_, _ = fmt.Sscanf(l[i+2:], "%d", &newN)
 			}
 		}
 		if f := len(files) - 1; f >= 0 && hunk {

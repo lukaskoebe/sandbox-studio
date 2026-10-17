@@ -32,6 +32,7 @@ const stale: Record<string, string[]> = {
     "/api/environments/{env}/sandboxes/{id}/lineage",
     "/api/environments/{env}/lineage",
   ],
+  browser: ["/api/environments/{env}/teammates/{teammate}/browser/actions"],
   builds: [
     "/api/environments/{env}/builds",
     "/api/environments/{env}/builds/{id}",

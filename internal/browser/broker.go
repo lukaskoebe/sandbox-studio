@@ -95,6 +95,8 @@ type Service struct {
 	Log    *slog.Logger
 	// Notify, when set, is told that an environment has a new approval.
 	Notify func(envID string)
+	// Logged, when set, is told that a teammate's action log has a new entry.
+	Logged func(envID, teammateID string)
 	Now    func() time.Time
 
 	// Bounds; zero means the default.

@@ -124,7 +124,11 @@ test("the workspace marks only the chats with something new", async ({
   const id = await api.createSandbox(sandboxName("marks"), teammate)
   await api.guestReady(id)
   const chats = `/api/environments/${env}/sandboxes/${id}/chats`
-  await api.json("POST", chats)
+  const first = (await api.json<{ createdAt: string }>("POST", chats))!
+  // Chats from the second of the first visit count as new, as createdAt has whole seconds, so
+  // the visit waits for the next one.
+  const next = Date.parse(first.createdAt) + 1000 - Date.now()
+  if (next > 0) await page.waitForTimeout(next)
 
   await page.goto(`/e/${env}/sandboxes/${id}/work`)
   const menu = page.getByRole("button", { name: /^Chats/ })

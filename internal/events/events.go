@@ -17,6 +17,8 @@ const (
 	TopicSandboxes = "sandboxes"
 	// TopicTasks: a teammate's task list or heartbeat log changed, by the user or the teammate.
 	TopicTasks = "tasks"
+	// TopicBrowser: a teammate's browser action log has a new entry; TeammateID names it.
+	TopicBrowser = "browser"
 )
 
 // Event is one change notification.

@@ -26,6 +26,9 @@ func newBrowser(st *store.Store, vault *secrets.Vault, bus *events.Bus, data, im
 	return &browser.Service{
 		Store: st, Keys: vault, Log: log, Image: browserImage(image), Dir: filepath.Join(data, "browser"),
 		Notify: func(envID string) { bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: envID}) },
+		Logged: func(envID, teammateID string) {
+			bus.Publish(events.Event{Topic: events.TopicBrowser, EnvironmentID: envID, TeammateID: teammateID})
+		},
 	}
 }
 
