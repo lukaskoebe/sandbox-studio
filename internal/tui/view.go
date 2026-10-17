@@ -35,6 +35,7 @@ func (m *app) frame() string {
 	w, h := m.size()
 	m.keys.SetWidth(w)
 	m.mouse.rows = m.mouse.rows[:0]
+	m.mouse.keys = m.mouse.keys[:0]
 	m.mouse.tabs = nil
 	rule := styleDim.Render(strings.Repeat("─", w))
 	head, top := m.header(w), rule
@@ -48,7 +49,8 @@ func (m *app) frame() string {
 	}
 	lines := []string{head, top}
 	lines = append(lines, pad(m.body(w, max(h-5, 1)), max(h-5, 1))...)
-	lines = append(lines, bottom, m.keyBar(w), m.noticeLine(w))
+	lines = append(lines, bottom)
+	lines = append(lines, m.keyBar(w, len(lines)), m.noticeLine(w))
 	for i, line := range lines {
 		lines[i] = lipgloss.NewStyle().MaxWidth(w).Render(line)
 	}
@@ -115,10 +117,13 @@ func (m *app) body(w, h int) []string {
 	return m.homeBody(w, h)
 }
 
-// keyBar is the keys that apply here, in the key bar's style: grouped in the visual look.
-func (m *app) keyBar(w int) string {
+// keyBar is the keys that apply here, in the key bar's style: grouped in the visual look, where
+// it records them on row y for the mouse.
+func (m *app) keyBar(w, y int) string {
 	if !m.look.plain {
-		return m.groupedKeys(m.bindings(), w)
+		line, spans := m.groupedKeys(m.bindings(), w)
+		m.hitKeys(y, 0, spans)
+		return line
 	}
 	return m.keys.ShortHelpView(m.bindings())
 }

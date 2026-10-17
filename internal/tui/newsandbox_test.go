@@ -218,7 +218,7 @@ func TestForkAsksForANameAndFollowsTheFork(t *testing.T) {
 	if m.typing == nil || m.typing.text.value() != "blub-fork" {
 		t.Fatalf("f asks nothing: %+v", m.typing)
 	}
-	if bar := stripANSI(m.keyBar(m.width)); !strings.HasPrefix(bar, "enter fork") {
+	if bar := stripANSI(m.keyBar(m.width, 0)); !strings.HasPrefix(bar, "enter fork") {
 		t.Fatalf("bar: %q", bar)
 	}
 	m = press(m, "backspace", "backspace", "backspace", "backspace", "backspace", "_", "enter")

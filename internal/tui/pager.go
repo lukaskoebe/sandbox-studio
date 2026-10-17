@@ -239,17 +239,29 @@ func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile) {
 	var dels, adds []string
 	var delAt, addAt []int
 	oldN, newN := 0, 0
-	// flush pairs the removed lines of a run with the added ones, row by row.
+	// flush pairs the removed lines of a run with the added ones, row by row, and marks the words
+	// each pair changes: side by side, or the removed lines above the added ones.
 	flush := func() {
-		for i := range max(len(dels), len(adds)) {
-			left, right := strings.Repeat(" ", half), ""
-			if i < len(dels) {
-				left = num(delAt[i]) + removed.Render(fit(dels[i], half-5))
+		left, right := pairedLines(dels, adds, removed, added)
+		if !side {
+			for _, l := range left {
+				out = append(out, removed.Render("-")+l)
 			}
-			if i < len(adds) {
-				right = num(addAt[i]) + added.Render(fit(adds[i], half-5))
+			for _, l := range right {
+				out = append(out, added.Render("+")+l)
 			}
-			out = append(out, left+styleDim.Render("│")+right)
+			dels, adds, delAt, addAt = nil, nil, nil, nil
+			return
+		}
+		for i := range max(len(left), len(right)) {
+			l, r := strings.Repeat(" ", half), ""
+			if i < len(left) {
+				l = num(delAt[i]) + fitStyled(left[i], half-5)
+			}
+			if i < len(right) {
+				r = num(addAt[i]) + fitStyled(right[i], half-5)
+			}
+			out = append(out, l+styleDim.Render("│")+r)
 		}
 		dels, adds, delAt, addAt = nil, nil, nil, nil
 	}
@@ -279,13 +291,17 @@ func (m *app) diffLines(diff string, w int, side bool) ([]string, []diffFile) {
 				files[f].dels++
 			}
 		}
-		if !side || !hunk {
+		// The plain look shows the diff as it comes; the visual one marks changed words.
+		if !hunk || (!side && m.look.plain) {
 			flush()
 			out = append(out, diffLine(l, added, removed))
 			continue
 		}
 		text := strings.ReplaceAll(l, "\t", "    ")
 		switch {
+		case !side && !strings.HasPrefix(l, "+") && !strings.HasPrefix(l, "-"):
+			flush()
+			out = append(out, diffLine(l, added, removed))
 		case strings.HasPrefix(l, "@@"):
 			flush()
 			out = append(out, styleAccent.Render(clip(text, w)))

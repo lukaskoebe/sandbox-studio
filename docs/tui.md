@@ -305,7 +305,9 @@ and [design/tui-visual.md](design/tui-visual.md)):
   pane shows its facts, CPU and memory, the first approval waiting as a card, terminals, ports,
   and a history line from its lineage. The git review gains a file list with +/− bars, where
   `[` and `]` jump between files. From 160 columns the diff is side by side, and `v` toggles
-  it.
+  it. Inside a changed line, the words it changes are in reverse video. They come from a
+  diff of the words of each removed line and the added line paired with it (`worddiff.go`),
+  and lines that share no word, or have more than 300, keep their line's color only.
 - **Live numbers.** From 100 columns, Home's list has a CPU sparkline per running sandbox.
   The pane and the detail screen show CPU and a memory bar. Usage is read every 2 seconds,
   and only while Home or the detail is on show, for running sandboxes. A runtime that
@@ -315,7 +317,8 @@ and [design/tui-visual.md](design/tui-visual.md)):
   selection. A click selects a row: a sandbox, card, log entry, chat, checkpoint, environment,
   fold or file. A double click opens it as `enter` does. The wheel scrolls the review and the
   transcript, and moves the cursor in lists. A click on a tab acts as its key, and a click on
-  the environment opens the picker.
+  the environment opens the picker. A click on a card's keycap or a key of the key bar presses
+  that key; the bar's arrows and keys with a modifier take no clicks.
 
 No key changed between the looks. Only `[`, `]` and `v` in the git review are new.
 
@@ -344,8 +347,8 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   styled text. `draw.go` has the visual look's pieces: dots, keycaps, card frames,
   sparklines, bars, the spinner, the tab header and the grouped key bar. `cards.go` is the
   approvals' cards, and `live.go` the usage, lineage and spinner reads. `mouse.go` maps
-  clicks and the wheel to what each row of the frame leads to. Each body records those rows
-  as it draws them.
+  clicks and the wheel to what each row and key of the frame leads to. Each body records
+  those rows and keycaps as it draws them, and the frame the key bar's keys.
 - `terminal.go` is the attachment: a `tea.ExecCommand`, so Bubble Tea releases the terminal
   while it runs. It bridges the websocket and reads the keys itself, which is what lets Ctrl-]
   return without a goroutine left reading the terminal.

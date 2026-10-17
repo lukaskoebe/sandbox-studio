@@ -114,13 +114,25 @@ type choiceCap struct {
 	key, label string
 }
 
-// capsLine lays the choices of a card out as keycaps on one line.
-func (p *palette) capsLine(caps []choiceCap) string {
+// keySpan is where a key sits on a line, the cells from x0 to x1 (excluded), and the key a
+// click on it presses.
+type keySpan struct {
+	x0, x1 int
+	key    string
+}
+
+// capsLine lays the choices of a card out as keycaps on one line, and says where each sits.
+func (p *palette) capsLine(caps []choiceCap) (string, []keySpan) {
 	parts := make([]string, 0, len(caps))
+	spans := make([]keySpan, 0, len(caps))
+	x := 0
 	for _, c := range caps {
-		parts = append(parts, p.cap(c.key)+" "+c.label)
+		part := p.cap(c.key) + " " + c.label
+		spans = append(spans, keySpan{x0: x, x1: x + lipgloss.Width(part), key: c.key})
+		x += lipgloss.Width(part) + 2
+		parts = append(parts, part)
 	}
-	return strings.Join(parts, "  ")
+	return strings.Join(parts, "  "), spans
 }
 
 // cardBox draws lines in a card of w cells: a rounded frame in frame's style with the area's
@@ -253,6 +265,16 @@ const (
 	groupApp
 )
 
+// barKey is the key a click on a binding of the key bar presses, or "" for one a click doesn't
+// press: the arrows that scroll, and the keys with a modifier.
+func barKey(b key.Binding) string {
+	keys := b.Keys()
+	if len(keys) == 0 || keys[0] == "up" || keys[0] == "down" || strings.Contains(keys[0], "+") {
+		return ""
+	}
+	return keys[0]
+}
+
 // keyGroup is the group a key of the key bar belongs to.
 func keyGroup(b key.Binding) int {
 	h := b.Help()
@@ -269,8 +291,11 @@ func keyGroup(b key.Binding) int {
 // on with a dim │ between the groups. Help reads "more", since it lists the keys the bar has no
 // room for. When the separators leave too little room the groups go without them, as the plain
 // bar has, and what still doesn't fit is cut with an ellipsis.
-func (m *app) groupedKeys(bindings []key.Binding, w int) string {
-	var groups [3][]string
+func (m *app) groupedKeys(bindings []key.Binding, w int) (string, []keySpan) {
+	type item struct {
+		text, key string
+	}
+	var groups [3][]item
 	for _, b := range bindings {
 		if !b.Enabled() || b.Help().Key == "" {
 			continue
@@ -281,13 +306,17 @@ func (m *app) groupedKeys(bindings []key.Binding, w int) string {
 			desc = "more"
 		}
 		g := keyGroup(b)
-		groups[g] = append(groups[g], styleBold.Render(h.Key)+" "+styleDim.Render(desc))
+		groups[g] = append(groups[g], item{styleBold.Render(h.Key) + " " + styleDim.Render(desc), barKey(b)})
 	}
-	join := func(between string) (string, bool) {
-		var pieces []string
+	join := func(between string) (string, []keySpan, bool) {
+		type piece struct {
+			text, key string
+			sep       int // the cells of the separator the piece starts with
+		}
+		var pieces []piece
 		total := 0
 		for _, g := range groups {
-			for i, item := range g {
+			for i, it := range g {
 				sep := "  "
 				switch {
 				case len(pieces) == 0:
@@ -295,27 +324,37 @@ func (m *app) groupedKeys(bindings []key.Binding, w int) string {
 				case i == 0:
 					sep = between
 				}
-				pieces = append(pieces, sep+item)
-				total += lipgloss.Width(sep + item)
+				pieces = append(pieces, piece{sep + it.text, it.key, lipgloss.Width(sep)})
+				total += lipgloss.Width(sep + it.text)
 			}
 		}
-		if total <= w {
-			return strings.Join(pieces, ""), true
+		fits := total <= w
+		limit := w
+		if !fits {
+			limit = w - 2
 		}
 		var b strings.Builder
+		var spans []keySpan
 		used := 0
 		for _, p := range pieces {
-			if used+lipgloss.Width(p) > w-2 {
+			pw := lipgloss.Width(p.text)
+			if used+pw > limit {
 				break
 			}
-			b.WriteString(p)
-			used += lipgloss.Width(p)
+			b.WriteString(p.text)
+			if p.key != "" {
+				spans = append(spans, keySpan{x0: used + p.sep, x1: used + pw, key: p.key})
+			}
+			used += pw
 		}
-		return b.String() + styleDim.Render(" …"), false
+		if !fits {
+			b.WriteString(styleDim.Render(" …"))
+		}
+		return b.String(), spans, fits
 	}
-	if line, ok := join(styleDim.Render(" │ ")); ok {
-		return line
+	if line, spans, ok := join(styleDim.Render(" │ ")); ok {
+		return line, spans
 	}
-	line, _ := join("  ")
-	return line
+	line, spans, _ := join("  ")
+	return line, spans
 }

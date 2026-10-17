@@ -230,11 +230,11 @@ func TestSparklineAndBar(t *testing.T) {
 // TestGroupedKeyBar puts a dim │ between the key groups and calls help "more".
 func TestGroupedKeyBar(t *testing.T) {
 	m := visualApp(100, 24)
-	got := ansi.Strip(m.keyBar(100))
+	got := ansi.Strip(m.keyBar(100, 0))
 	if got != "enter open  n new  s start/stop │ a approvals  t terminal  c chat │ ? more  q quit" {
 		t.Errorf("key bar: %q", got)
 	}
-	if got := ansi.Strip(m.keyBar(40)); !strings.HasSuffix(got, " …") || len([]rune(got)) > 40 {
+	if got := ansi.Strip(m.keyBar(40, 0)); !strings.HasSuffix(got, " …") || len([]rune(got)) > 40 {
 		t.Errorf("a narrow key bar is cut: %q", got)
 	}
 }
@@ -380,5 +380,46 @@ func TestClickingACardSelectsIt(t *testing.T) {
 	next, _ := m.Update(tea.MouseClickMsg{X: 20, Y: y, Button: tea.MouseLeft})
 	if got := next.(*app).approvalCursor; got != 2 {
 		t.Errorf("the click selected card %d, want 2", got)
+	}
+}
+
+func TestGoldenVisualPagerWords(t *testing.T) {
+	m := visualApp(80, 24)
+	samplePush(m)
+	goldenVisual(t, "visual_pager_words", press(m, "a", "enter", "G"), true)
+}
+
+func TestClickingAKeycapPressesIt(t *testing.T) {
+	m := visualApp(120, 30)
+	sampleApprovals(m)
+	m = press(m, "a")
+	// at finds the key's place on the screen, and checks the screen shows the key there.
+	at := func(k, label string) keyHit {
+		t.Helper()
+		lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+		for _, h := range m.mouse.keys {
+			if h.key == k {
+				if cells := ansi.Cut(lines[h.y], h.x0, h.x1); !strings.Contains(cells, label) {
+					t.Fatalf("the key %s covers %q, not %q", k, cells, label)
+				}
+				return h
+			}
+		}
+		t.Fatalf("no key %s among %+v", k, m.mouse.keys)
+		return keyHit{}
+	}
+	h := at("enter", "Review the diff")
+	next, _ := m.Update(tea.MouseClickMsg{X: h.x0 + 1, Y: h.y, Button: tea.MouseLeft})
+	m = next.(*app)
+	if m.screen != screenPager {
+		t.Fatalf("the git card's keycap opens the review: screen %v", m.screen)
+	}
+	h = at("esc", "back")
+	if h.y != 28 {
+		t.Errorf("the key bar's esc is on row %d, want 28", h.y)
+	}
+	next, _ = m.Update(tea.MouseClickMsg{X: h.x1 - 1, Y: h.y, Button: tea.MouseLeft})
+	if m = next.(*app); m.screen != screenApprovals {
+		t.Errorf("the key bar's esc goes back: screen %v", m.screen)
 	}
 }

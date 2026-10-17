@@ -1,0 +1,23 @@
+[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m●[m 1 approval
+[2m────────────────────────────────────────────────────────────────────────────────[m
+   return (
+     <form onSubmit={submit}>
+       <input name="user" />
+[38;5;203m-[m[38;5;203m      <[m[7;38;5;203mdiv[m[38;5;203m [m[7;38;5;203monClick[m[38;5;203m=[m[7;38;5;203m{[m[38;5;203msubmit[m[7;38;5;203m}[m[38;5;203m>Sign in</[m[7;38;5;203mdiv[m[38;5;203m>[m
+[38;5;77m+[m[38;5;77m      <[m[7;38;5;77mbutton[m[38;5;77m [m[7;38;5;77mtype[m[38;5;77m=[m[7;38;5;77m"[m[38;5;77msubmit[m[7;38;5;77m"[m[38;5;77m>Sign in</[m[7;38;5;77mbutton[m[38;5;77m>[m
+     </form>
+   )
+ }
+[1mdiff --git a/src/login.test.tsx b/src/login.test.tsx[m
+new file mode 100644
+[2m--- /dev/null[m
+[2m+++ b/src/login.test.tsx[m
+[36m@@ -0,0 +1,6 @@[m
+[38;5;77m+[m[38;5;77mimport { render } from "@testing-library/react"[m
+[38;5;77m+[m[38;5;77m[m
+[38;5;77m+[m[38;5;77mtest("enter submits", () => {[m
+[38;5;77m+[m[38;5;77m    const form = render(<Login />)[m
+[38;5;77m+[m[38;5;77m    expect(form).toBeTruthy()[m
+[38;5;77m+[m[38;5;77m})[m
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1my[m [2mapprove and push[m  [1mn[m [2mreject[m  [1mi[m [2mignore[m  [1m↑↓/pgdn[m [2mscroll[m  [1m[/][m [2mfile[m  [1mesc/q[m [2mback[m[2m …[m

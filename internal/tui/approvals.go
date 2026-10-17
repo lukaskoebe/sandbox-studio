@@ -458,12 +458,18 @@ func (m *app) approvalsBody(w, h int) []string {
 	lines := []string{styleBold.Render("Approvals") + styleDim.Render(" from every environment, newest first"), ""}
 	cursorAt, cursorLen := len(lines), 0
 	starts := make([]int, 0, len(cards)+1)
+	var keys []keyHit // the cursor's card's keycaps, on the lines of the list
 	for i, c := range cards {
 		var block []string
 		if m.look.plain {
 			block = m.cardLines(c, i == m.approvalCursor, w)
 		} else {
-			block = m.visualCard(c, i == m.approvalCursor, w)
+			var caps []keyHit
+			block, caps = m.visualCard(c, i == m.approvalCursor, w)
+			for _, k := range caps {
+				k.y += len(lines)
+				keys = append(keys, k)
+			}
 		}
 		if i == m.approvalCursor {
 			cursorAt, cursorLen = len(lines), len(block)
@@ -480,6 +486,11 @@ func (m *app) approvalsBody(w, h int) []string {
 	for i := range cards {
 		for line := max(starts[i], offset); line < starts[i+1] && line-offset < h; line++ {
 			m.hitRow(line-offset, 0, w, rowCard, i)
+		}
+	}
+	for _, k := range keys {
+		if line := k.y - offset; line >= 0 && line < h {
+			m.hitKeys(bodyTop+line, k.x0, []keySpan{{x1: k.x1 - k.x0, key: k.key}})
 		}
 	}
 	return lines[offset:]

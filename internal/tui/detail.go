@@ -114,7 +114,8 @@ func (m *app) waitingCard(sb sandboxes.View, w int) []string {
 	if n > 1 {
 		more = fmt.Sprintf("%d more · a approvals", n-1)
 	}
-	return append(m.visualCard(*first, false, w), "  "+styleDim.Render(more))
+	block, _ := m.visualCard(*first, false, w) // not the cursor's card, so it draws no keycaps
+	return append(block, "  "+styleDim.Render(more))
 }
 
 // terminalsText names the terminals of the detail pane's sandbox and counts them.

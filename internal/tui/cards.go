@@ -42,8 +42,9 @@ func kindChip(a api.ApprovalView) string {
 	return firstNonEmpty(glyph, "•") + " " + strings.ToUpper(name)
 }
 
-// visualCard is one card of the approvals screen in the visual look, w cells wide.
-func (m *app) visualCard(c card, selected bool, w int) []string {
+// visualCard is one card of the approvals screen in the visual look, w cells wide, and where its
+// keycaps sit in it.
+func (m *app) visualCard(c card, selected bool, w int) ([]string, []keyHit) {
 	a := c.first()
 	hue := m.pal.hue(cardArea(a))
 	frame := styleDim
@@ -101,12 +102,20 @@ func (m *app) visualCard(c card, selected bool, w int) []string {
 	head := chip + "   " + clip(title, max(inner-lipgloss.Width(chip)-lipgloss.Width(right)-5, 8))
 	lines := []string{spread(head, right, inner)}
 	lines = append(lines, body...)
+	var keys []keyHit
 	if selected {
 		if caps := cardCaps(c, *ch); len(caps) > 0 {
-			lines = append(lines, m.pal.capsLine(caps))
+			line, spans := m.pal.capsLine(caps)
+			for _, k := range spans {
+				// The box's top is the card's first row, and its rule and a space start each line.
+				if k.x1 <= inner {
+					keys = append(keys, keyHit{y: 1 + len(lines), x0: 2 + k.x0, x1: 2 + k.x1, key: k.key})
+				}
+			}
+			lines = append(lines, line)
 		}
 	}
-	return cardBox(lines, w, hue, frame)
+	return cardBox(lines, w, hue, frame), keys
 }
 
 // cardCaps are a card's choices as keycaps: the decisions its keys make.

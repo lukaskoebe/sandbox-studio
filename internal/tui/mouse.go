@@ -33,10 +33,18 @@ type rowHit struct {
 	index     int
 }
 
-// mouseState is where the rows of the frame on show lead, and the last click, to tell a double
-// click.
+// keyHit is a key drawn on the screen: a keycap of a card or a key of the key bar, on row y from
+// x0 to x1. A click on it presses the key.
+type keyHit struct {
+	y, x0, x1 int
+	key       string
+}
+
+// mouseState is where the rows and keys of the frame on show lead, and the last click, to tell
+// a double click.
 type mouseState struct {
 	rows  []rowHit
+	keys  []keyHit
 	tabs  []tabSpan
 	last  time.Time
 	lastX int
@@ -46,6 +54,34 @@ type mouseState struct {
 // hitRow records that line of the body, from x0 to x1, leads to the target's index-th item.
 func (m *app) hitRow(line, x0, x1 int, target rowTarget, index int) {
 	m.mouse.rows = append(m.mouse.rows, rowHit{y: bodyTop + line, x0: x0, x1: x1, target: target, index: index})
+}
+
+// hitKeys records the keys of a line on row y of the screen, the line starting at column x.
+func (m *app) hitKeys(y, x int, spans []keySpan) {
+	for _, k := range spans {
+		m.mouse.keys = append(m.mouse.keys, keyHit{y: y, x0: x + k.x0, x1: x + k.x1, key: k.key})
+	}
+}
+
+// pressOf is the key press of a key's name as a binding has it, such as "enter" or "A".
+func pressOf(k string) tea.KeyPressMsg {
+	switch k {
+	case "enter":
+		return enterKey
+	case "esc":
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "space":
+		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+	case "pgup":
+		return tea.KeyPressMsg{Code: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyPressMsg{Code: tea.KeyPgDown}
+	case "home":
+		return tea.KeyPressMsg{Code: tea.KeyHome}
+	case "end":
+		return tea.KeyPressMsg{Code: tea.KeyEnd}
+	}
+	return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
 }
 
 // typingKeys reports whether a field takes the keys, so a click would land in the middle of it.
@@ -58,8 +94,8 @@ func (m *app) typingKeys() bool {
 // enterKey is the key a double click presses.
 var enterKey = tea.KeyPressMsg{Code: tea.KeyEnter}
 
-// click answers a click: on a tab it acts as the tab's key, on a row it selects it, and a double
-// click opens it as enter does.
+// click answers a click: on a tab or a key it acts as that key, on a row it selects it, and a
+// double click opens it as enter does.
 func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 	if msg.Button != tea.MouseLeft || m.look.plain || m.typingKeys() {
 		return m, nil
@@ -77,6 +113,12 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	}
+	for _, k := range m.mouse.keys {
+		if k.y == msg.Y && msg.X >= k.x0 && msg.X < k.x1 {
+			m.mouse.last = time.Time{} // a key is pressed once per click
+			return m.key(pressOf(k.key))
+		}
 	}
 	for _, r := range m.mouse.rows {
 		if r.y == msg.Y && msg.X >= r.x0 && msg.X < r.x1 {

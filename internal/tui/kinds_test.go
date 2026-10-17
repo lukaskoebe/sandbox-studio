@@ -346,7 +346,7 @@ func TestKindBindingsFollowTheCard(t *testing.T) {
 	var bars []string
 	for i := range m.approvals {
 		m.approvalCursor = i
-		bars = append(bars, stripANSI(m.keyBar(m.width)))
+		bars = append(bars, stripANSI(m.keyBar(m.width, 0)))
 	}
 	for i, want := range []string{"r always", "y fill", "y share", "1 keep A", "1-3 choose"} {
 		if !strings.Contains(bars[i], want) {
