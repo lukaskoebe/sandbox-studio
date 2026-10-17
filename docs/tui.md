@@ -71,8 +71,8 @@ way the web card starts them: the pattern level and the scope its teammate last 
 
 | Card | Keys |
 |---|---|
-| Network request | `y` allow · `n` deny (each makes a rule) · `o` allow once · `O` deny once (no rule) · `1` allow for 1 hour · `i` ignore · `p` cycle the host pattern, then a browser request's method and path · `s` scope: environment, the teammate's sandboxes or this sandbox · `x` any port instead of the default ports · `w` allow the navigation's site for this browser session |
-| Group | `A` allow all · `D` deny all · `r` review one by one · `s` scope |
+| Network request | `y` allow · `n` deny (each makes a rule) · `o` allow once · `O` deny once (no rule) · `1` allow for 1 hour · `i` ignore · `p` cycle the host pattern, then a browser request's method and path · `s` scope: environment, the teammate's sandboxes or this sandbox; for a browser request, who: its browser, all browsers, or browsers and sandboxes · `x` any port instead of the default ports · `w` allow the navigation's site for this browser session |
+| Group | `A` allow all · `D` deny all · `r` review one by one · `s` scope, or who for a browser page's requests |
 | Git push or pull request | `enter` opens the git review; it is decided there, after the diff |
 | Browser, memory, chat | `enter` prints the URL of the page that decides it |
 

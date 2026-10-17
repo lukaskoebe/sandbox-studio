@@ -491,8 +491,9 @@ func (c *call) sandboxName(env, id string) string {
 }
 
 type decideOpts struct {
-	once  bool
-	scope string
+	once      bool
+	scope     string
+	sandboxes bool
 }
 
 func decideFlags(fs *flag.FlagSet, c *call) {
@@ -500,9 +501,11 @@ func decideFlags(fs *flag.FlagSet, c *call) {
 	c.extra = o
 	fs.BoolVar(&o.once, "once", false, "for a network request: decide this one connection, without a rule")
 	fs.StringVar(&o.scope, "scope", "", "for a network rule: sandbox, teammate or environment (default: the teammate's usual scope)")
+	fs.BoolVar(&o.sandboxes, "sandboxes", false, "for a browser request: the rule also covers the sandboxes' own connections")
 }
 
-// decide answers an approval of any environment: the ID is enough to find it.
+// decide answers an approval of any environment: the ID is enough to find it. A browser
+// request's rule covers only the browsers, as in the web card, unless --sandboxes.
 func decide(action string) func(*call, []string) error {
 	return func(c *call, rest []string) error {
 		if err := args(rest, "approval"); err != nil {
@@ -524,11 +527,19 @@ func decide(action string) func(*call, []string) error {
 		}
 		body := map[string]any{"action": action}
 		network := found.Network != nil
+		browser := network && found.Network.Method != ""
 		switch {
 		case o.once && !network:
 			return usagef("--once is for network requests")
+		case o.sandboxes && (!browser || o.once):
+			return usagef("--sandboxes is for a browser request's rule")
 		case o.once:
 			body["action"] = action + "_once"
+		case browser:
+			body["scope"] = browserScope(found, o)
+			if !o.sandboxes {
+				body["browserOnly"] = true
+			}
 		case network:
 			if o.scope != "" {
 				body["scope"] = o.scope
@@ -547,6 +558,23 @@ func decide(action string) func(*call, []string) error {
 		fmt.Fprintf(c.opts.Stdout, "%s: %s\n", out.Status, clean(out.Subject))
 		return nil
 	}
+}
+
+// browserScope is the scope of a browser request's rule, as the web card starts it: the
+// teammate's browser (the sandbox's, without a teammate), every browser when the teammate
+// decides for the environment, and the environment with --sandboxes. --scope wins.
+func browserScope(a *api.ApprovalView, o *decideOpts) string {
+	switch {
+	case o.scope != "":
+		return o.scope
+	case o.sandboxes:
+		return "environment"
+	case a.Teammate == nil:
+		return "sandbox"
+	case a.Teammate.ApprovalScope == "environment":
+		return "environment"
+	}
+	return "teammate"
 }
 
 // --- checkpoints ---

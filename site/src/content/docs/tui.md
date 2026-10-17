@@ -92,7 +92,8 @@ A card lets you:
   rest of that browser session, with no rule.
 - **Choose what the rule covers:** `p` changes the host pattern (for a browser request, also
   its method and path), `s` the scope (the environment, your teammate's sandboxes, or this
-  sandbox), and `x` any port instead of the default ports.
+  sandbox), and `x` any port instead of the default ports. For a browser request, `s` picks
+  who the rule covers: its browser, all browsers, or the browsers and the sandboxes.
 - **Decide a group:** `A` allows every host, `D` denies every host, and `r` reviews them one by
   one.
 - **Review a git push:** `enter` opens the push in a pager: the repository, branch and change,

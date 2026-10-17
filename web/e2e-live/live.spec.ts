@@ -27,12 +27,13 @@ function terminal(page: Page) {
     },
     /**
      * Waits for a line "<key>=<value>" a command printed and returns the value. The command
-     * prints it as "<key>=$..." so that its own echo never matches.
+     * prints it as "<key>=$..." so that its own echo never matches. The rows are read as
+     * inner text, one line each: their text content runs a line into the next row's prompt.
      */
     async result(key: string, timeout: number) {
       const pattern = new RegExp(`${key}=([\\w-]+)`)
-      await expect(rows).toContainText(pattern, { timeout })
-      return pattern.exec((await rows.textContent()) ?? "")![1]
+      await expect(rows).toContainText(pattern, { timeout, useInnerText: true })
+      return pattern.exec(await rows.innerText())![1]
     },
   }
 }

@@ -85,7 +85,11 @@ k2j4h6g8f0d1s  network  api   registry.npmjs.org:443  12s
 studio approve k2j4h6g8f0d1s            # a rule, with the scope the teammate's cards preselect
 studio approve k2j4h6g8f0d1s --once     # this connection only
 studio deny k2j4h6g8f0d1s --scope environment
+studio approve k2j4h6g8f0d1s --sandboxes  # a browser request: the sandboxes may connect too
 ```
+
+A browser request's rule covers only the browsers, as on the web. `--sandboxes` makes it
+cover the sandboxes' own connections too.
 
 ## Environments
 

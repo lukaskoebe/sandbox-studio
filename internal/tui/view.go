@@ -173,6 +173,7 @@ func (m *app) helpBody() []string {
 			{"i", "ignore: refuse this time, with no rule"},
 			{"p", "cycle the host pattern, then a browser request's method and path"},
 			{"s", "scope: the environment, the teammate's sandboxes or this sandbox"},
+			{"", "for a browser request: its browser, all browsers or sandboxes too"},
 			{"x", "any port, instead of the default ports"},
 			{"w", "allow the navigation's site for this browser session"},
 			{"A / D", "allow or deny every host of a group"},

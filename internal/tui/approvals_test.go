@@ -143,6 +143,76 @@ func TestDecisionBodiesOnTheWire(t *testing.T) {
 	}
 }
 
+// browserApproval is a pending request of sandbox sb1's browser, on a page of example.com.
+func browserApproval(id, host string, at time.Time) api.ApprovalView {
+	a := netApproval(id, host, at, host)
+	a.Kind = "network.request"
+	a.Network.Method, a.Network.Path, a.Network.PathPattern, a.Network.Site = "GET", "/app.js", "/app.js", "example.com"
+	return a
+}
+
+// A browser request decides as the web card does: its reach picks the scope, and its rule covers
+// only the browsers unless it reaches the sandboxes too.
+func TestBrowserRequestDecisionBodies(t *testing.T) {
+	a := browserApproval("b", "cdn.example.com", time.Now())
+	body := func(a api.ApprovalView, c choice, action string) string {
+		data, err := json.Marshal(decisionFor(a, c, action))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	c := defaultChoice(a)
+	if c.reach != "browser" {
+		t.Fatalf("default reach without a teammate: %q", c.reach)
+	}
+	if got := body(a, c, "allow"); got != `{"action":"allow","host":"cdn.example.com","scope":"sandbox","browserOnly":true}` {
+		t.Errorf("this browser: %s", got)
+	}
+	c.reach = "browsers"
+	if got := body(a, c, "deny"); got != `{"action":"deny","host":"cdn.example.com","scope":"environment","browserOnly":true}` {
+		t.Errorf("all browsers: %s", got)
+	}
+	c.reach = "everywhere"
+	if got := body(a, c, "allow"); got != `{"action":"allow","host":"cdn.example.com","scope":"environment"}` {
+		t.Errorf("browsers and sandboxes: %s", got)
+	}
+	if got := body(a, defaultChoice(a), "allow_once"); got != `{"action":"allow_once","scope":"sandbox"}` {
+		t.Errorf("once: %s", got)
+	}
+
+	a.Teammate = &api.ApprovalTeammate{ID: "t1", Name: "Iris", ApprovalScope: "teammate"}
+	if got := body(a, defaultChoice(a), "allow"); got != `{"action":"allow","host":"cdn.example.com","scope":"teammate","browserOnly":true}` {
+		t.Errorf("the teammate's browser: %s", got)
+	}
+	a.Teammate.ApprovalScope = "environment"
+	if c := defaultChoice(a); c.reach != "browsers" {
+		t.Errorf("default reach of a teammate that decides for the environment: %q", c.reach)
+	}
+}
+
+// The scope key cycles a browser request's reach, and the card says who its rule covers.
+func TestScopeKeyCyclesABrowserRequestsReach(t *testing.T) {
+	m := sampleApp()
+	a := browserApproval("b", "cdn.example.com", m.now)
+	a.Teammate = &api.ApprovalTeammate{ID: "t1", Name: "Iris", ApprovalScope: "teammate"}
+	m.approvals = []api.ApprovalView{a}
+	m.screen = screenApprovals
+	var seen []string
+	for range 3 {
+		seen = append(seen, stripANSI(strings.Join(m.cardLines(m.cards()[0], true, 120), "\n")))
+		m = press(m, "s")
+	}
+	for i, want := range []string{"who Iris's browser", "who all browsers", "who browsers and sandboxes"} {
+		if !strings.Contains(seen[i], want) || strings.Contains(seen[i], "scope ") {
+			t.Errorf("after %d presses: %q, want %q", i, seen[i], want)
+		}
+	}
+	if got := m.choiceOf(m.cards()[0]).reach; got != "browser" {
+		t.Errorf("reach after a full cycle: %q", got)
+	}
+}
+
 func TestNetworkKeysMakeTheirDecision(t *testing.T) {
 	m := sampleApp()
 	sampleApprovals(m)
@@ -255,6 +325,47 @@ func TestApprovalsScreenDecidesThroughTheServer(t *testing.T) {
 	m = run(m, m.loadApprovals()) // the refresh a decision starts
 	if len(m.approvals) != 0 {
 		t.Fatalf("decided approvals still on the stack: %d", len(m.approvals))
+	}
+}
+
+// Allow all on a browser page's group makes rules for the browser only: the sandbox that asked
+// gets no rule for its own connections.
+func TestBrowserPageGroupAllowsTheBrowserOnly(t *testing.T) {
+	ctx := context.Background()
+	s := startStudio(t)
+	sb := s.addSandbox(t, "api-refactor", runtime.StatusRunning)
+	request := func(host string) {
+		payload, _ := json.Marshal(map[string]any{"host": host, "port": 443, "sandboxName": sb.Name, "patterns": []string{host},
+			"method": "GET", "path": "/app.js", "site": "example.com", "pathPattern": "/app.js"})
+		if _, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: s.Env.ID, SandboxID: sb.ID, Kind: "network.request", Subject: host + ":443 example.com", Payload: payload}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	request("cdn.example.com")
+	request("fonts.example.com")
+
+	m := newApp(ctx, connect(t, s), s.Addr)
+	m = run(m, m.loadApprovals())
+	m = press(m, "a")
+	if cards := m.cards(); len(cards) != 1 || !cards[0].group {
+		t.Fatalf("one page's requests: %d cards", len(cards))
+	}
+	m, cmd := pressCmd(m, "A")
+	m = run(m, cmd)
+	if m.notice.text != "Allowed 2 hosts." || m.notice.failed {
+		t.Fatalf("allow all notice: %+v", m.notice)
+	}
+	rules, err := s.Store.Rules(ctx, s.Env.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) != 2 {
+		t.Fatalf("allow all made %d rules, want 2", len(rules))
+	}
+	for _, r := range rules {
+		if !r.BrowserOnly || r.SandboxID != sb.ID {
+			t.Errorf("rule %s: browser only %v, sandbox %q", r.Host, r.BrowserOnly, r.SandboxID)
+		}
 	}
 }
 

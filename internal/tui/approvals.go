@@ -26,13 +26,47 @@ type card struct {
 
 func (c card) first() api.ApprovalView { return c.approvals[0] }
 
-// choice is what a network card would decide: the host pattern, the scope, the ports and whether
-// the rule covers only the request's method and path. It starts as the web card does.
+// choice is what a network card would decide: the host pattern, the scope (a browser request's
+// reach), the ports and whether the rule covers only the request's method and path. It starts as
+// the web card does.
 type choice struct {
 	pattern int    // index into patterns(a): the host the rule covers
 	scope   string // environment, teammate or sandbox
+	reach   string // a browser request's: browser, browsers or everywhere
 	anyPort bool
 	request bool // the rule covers the method and path of a browser request, not every request
+}
+
+// isBrowserRequest reports whether an approval is a browser's request, which names its method.
+func isBrowserRequest(a api.ApprovalView) bool {
+	return a.Network != nil && a.Network.Method != ""
+}
+
+// reaches are who a browser request's rule covers: the teammate's browser (the sandbox's,
+// without a teammate), every browser of the environment, or the browsers and the sandboxes.
+var reaches = []string{"browser", "browsers", "everywhere"}
+
+// defaultReach is where a browser request's choice starts: the teammate's choice of scope, else
+// its browser.
+func defaultReach(a api.ApprovalView) string {
+	if a.Teammate != nil && a.Teammate.ApprovalScope == "environment" {
+		return "browsers"
+	}
+	return "browser"
+}
+
+// scopeOf is the scope a rule gets from a card's choice. A browser request's comes from its
+// reach, as in the web card.
+func scopeOf(a api.ApprovalView, c choice) string {
+	switch {
+	case !isBrowserRequest(a):
+		return c.scope
+	case c.reach != "browser":
+		return "environment"
+	case a.Teammate != nil:
+		return "teammate"
+	}
+	return "sandbox"
 }
 
 // requestAvailable reports whether a browser request names a method and path a rule could cover.
@@ -150,9 +184,9 @@ func patternLevel(pattern string) string {
 }
 
 // defaultChoice is a card's first choice: the pattern level its teammate chose last, the scope
-// its teammate sets, and the default ports.
+// its teammate sets (a browser request's reach from it), and the default ports.
 func defaultChoice(a api.ApprovalView) choice {
-	c := choice{scope: "environment"}
+	c := choice{scope: "environment", reach: defaultReach(a)}
 	if a.Teammate != nil && a.Teammate.ApprovalScope != "" {
 		c.scope = a.Teammate.ApprovalScope
 	}
@@ -197,22 +231,28 @@ func hostOf(a api.ApprovalView) string {
 }
 
 // Decision is the body of a decide call. Ports nil means the default ports of the request, and
-// an empty list any port. Method and PathPrefix narrow a rule to a browser request.
+// an empty list any port. Method and PathPrefix narrow a rule to a browser request, and
+// BrowserOnly keeps the sandboxes' own connections out of it.
 type Decision struct {
-	Action     string     `json:"action"`
-	Host       string     `json:"host,omitempty"`
-	Ports      *[]int     `json:"ports,omitempty"`
-	Scope      string     `json:"scope,omitempty"`
-	Method     string     `json:"method,omitempty"`
-	PathPrefix string     `json:"pathPrefix,omitempty"`
-	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	Action      string     `json:"action"`
+	Host        string     `json:"host,omitempty"`
+	Ports       *[]int     `json:"ports,omitempty"`
+	Scope       string     `json:"scope,omitempty"`
+	Method      string     `json:"method,omitempty"`
+	PathPrefix  string     `json:"pathPrefix,omitempty"`
+	BrowserOnly bool       `json:"browserOnly,omitempty"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
 }
 
-// decisionFor is the decide call a key of a network card makes, with the card's choice.
+// decisionFor is the decide call a key of a network card makes, with the card's choice. A
+// browser request's rule covers only the browsers, unless its reach is everywhere.
 func decisionFor(a api.ApprovalView, c choice, action string) Decision {
-	d := Decision{Action: action, Scope: c.scope}
+	d := Decision{Action: action, Scope: scopeOf(a, c)}
 	switch action {
+	case "dismiss":
+		d.Scope = c.scope
 	case "allow", "deny":
+		d.BrowserOnly = isBrowserRequest(a) && c.reach != "everywhere"
 		pats := patterns(a)
 		if c.pattern < len(pats) {
 			d.Host = pats[c.pattern]
@@ -241,7 +281,7 @@ func (m *app) decide(c card, d Decision, verb, what string) tea.Cmd {
 		for _, a := range c.approvals {
 			body := d
 			if c.group {
-				body = Decision{Action: d.Action, Scope: d.Scope, Host: a.Network.Host}
+				body = Decision{Action: d.Action, Scope: d.Scope, Host: a.Network.Host, BrowserOnly: d.BrowserOnly}
 			}
 			if _, err := client.Decide(rctx, a.EnvironmentID, a.ID, body); err != nil {
 				if apiStatus(err) == http.StatusConflict {
@@ -312,7 +352,7 @@ func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyPattern):
 		ch.nextPattern(a)
 	case key.Matches(msg, keyScope):
-		ch.scope = nextOf(ch.scope, scopes(a))
+		ch.cycleScope(a)
 	case key.Matches(msg, keyPort):
 		ch.anyPort = !ch.anyPort
 	case key.Matches(msg, keyAllow):
@@ -331,8 +371,7 @@ func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyIgnore):
 		return m, m.decide(c, decisionFor(a, *ch, "dismiss"), "Ignored", "")
 	case key.Matches(msg, keySite) && a.Network != nil && a.Network.Navigation && a.Network.Site != "":
-		d := Decision{Action: "allow_site", Scope: ch.scope}
-		return m, m.decide(c, d, "Allowed", "site "+a.Network.Site+" for this browser session")
+		return m, m.decide(c, decisionFor(a, *ch, "allow_site"), "Allowed", "site "+a.Network.Site+" for this browser session")
 	}
 	return m, nil
 }
@@ -350,11 +389,11 @@ func (m *app) otherCardKey(msg tea.KeyPressMsg, c card) (tea.Model, tea.Cmd) {
 	ch := m.choiceOf(c)
 	switch {
 	case key.Matches(msg, keyScope):
-		ch.scope = nextOf(ch.scope, scopes(a))
+		ch.cycleScope(a)
 	case key.Matches(msg, keyAllowAll):
-		return m, m.decide(c, Decision{Action: "allow", Scope: ch.scope}, "Allowed", "")
+		return m, m.decide(c, decisionFor(a, *ch, "allow"), "Allowed", "")
 	case key.Matches(msg, keyDenyAll):
-		return m, m.decide(c, Decision{Action: "deny", Scope: ch.scope}, "Denied", "")
+		return m, m.decide(c, decisionFor(a, *ch, "deny"), "Denied", "")
 	case key.Matches(msg, keySplit):
 		for _, x := range c.approvals {
 			m.split[x.ID] = true
@@ -362,6 +401,15 @@ func (m *app) otherCardKey(msg tea.KeyPressMsg, c card) (tea.Model, tea.Cmd) {
 		m.approvalCursor = 0
 	}
 	return m, nil
+}
+
+// cycleScope steps the card's scope, or a browser request's reach.
+func (c *choice) cycleScope(a api.ApprovalView) {
+	if isBrowserRequest(a) {
+		c.reach = nextOf(c.reach, reaches)
+		return
+	}
+	c.scope = nextOf(c.scope, scopes(a))
 }
 
 // nextOf is the option after cur in opts, wrapping around.
@@ -456,12 +504,12 @@ func (m *app) cardLines(c card, selected bool, w int) []string {
 			hosts = append(hosts, hostOf(x))
 		}
 		lines = append(lines, "    "+strings.Join(hosts, " · "))
-		lines = append(lines, "    "+styleDim.Render("scope ")+scopeLabel(a, m.choiceOf(c).scope))
+		lines = append(lines, "    "+whoText(a, *m.choiceOf(c)))
 	case isNetwork(a):
 		ch := m.choiceOf(c)
 		lines = append(lines, "    "+styleBold.Render(hostOf(a)))
 		lines = append(lines, "    "+styleDim.Render("pattern ")+patternText(a, *ch)+
-			"   "+styleDim.Render("scope ")+scopeLabel(a, ch.scope)+
+			"   "+whoText(a, *ch)+
 			"   "+styleDim.Render("ports ")+portsText(*ch))
 	case isGit(a):
 		lines = append(lines, "    "+summary(a))
@@ -482,6 +530,27 @@ func patternText(a api.ApprovalView, ch choice) string {
 		return pats[ch.pattern]
 	}
 	return ""
+}
+
+// whoText says who a card's rule covers: its scope, or a browser request's reach.
+func whoText(a api.ApprovalView, ch choice) string {
+	if isBrowserRequest(a) {
+		return styleDim.Render("who ") + reachLabel(a, ch.reach)
+	}
+	return styleDim.Render("scope ") + scopeLabel(a, ch.scope)
+}
+
+// reachLabel names who a browser request's rule covers, as the web's toggle does.
+func reachLabel(a api.ApprovalView, reach string) string {
+	switch {
+	case reach == "browsers":
+		return "all browsers"
+	case reach == "everywhere":
+		return "browsers and sandboxes"
+	case a.Teammate != nil:
+		return a.Teammate.Name + "'s browser"
+	}
+	return "this browser"
 }
 
 // scopeLabel names the scope a rule covers, as the card's toggle does.
