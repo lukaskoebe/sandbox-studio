@@ -503,6 +503,16 @@ browser VM (2026-10-15):**
   request headers, the screen 1920×1080; `--input-mode human` clicks were trusted events with
   a curved path (8 moves instead of 1), 162 ms instead of 33 ms.
 
+**Verified against a real Chromium in the e2e suite (2026-10-17,
+`web/e2e/browser-clicks.spec.ts`):** the live view's click mapping. A Chromium of its own
+answers the live view's socket with its screencast frames and their metadata, and takes the
+view's `input_mouse` as CDP mouse events, as agent-browser does. Known targets at the page's
+corners, middle and inside are hit within 3 CSS pixels from viewers of 1280×800 at 1x,
+1600×1000 at 1.25x, 1024×720 at 2x and 820×900 at 1.5x, with the page at 1x and pinch-zoomed
+to 1.5x from its top left. CDP's mouse coordinates are the page's CSS pixels, and the frame's
+`pageScaleFactor` follows the pinch, as `pointerToPage` assumes. agent-browser itself is not
+in that loop; a browser VM is.
+
 **Pending a live run:**
 
 - Browser commands with screenshots over the channel, since the 2026-10-13 fix. The channel

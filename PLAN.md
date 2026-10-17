@@ -61,8 +61,10 @@ says.
   restarting the browser under a connected live view → [browser](docs/browser.md#stealth-mode)
 - A stronger stealth engine than Chromium's stealth mode: Obscura keeps no profile, CA or live
   view, so Camoufox (Firefox) would mean replacing agent-browser → [browser](docs/browser.md#stealth-mode)
-- A Playwright run that clicks known targets in a real browser at several viewport sizes and
-  zoom levels; the e2e suite checks the mapping against the fake only
+- On a short window (1024×720) the Browser tab's live view is taller than the room it has,
+  so the bottom of the page is reached by scrolling the window's body; fitting the frame to
+  the room (letterboxed) would show the whole page at once. Found by the click test
+  (`web/e2e/browser-clicks.spec.ts`), which scrolls as a user would
 
 **Git**
 - The host-agent acceptance check: an agent in a sandbox pushes to `git@github.com:…`
