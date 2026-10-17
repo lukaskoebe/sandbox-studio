@@ -17,6 +17,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
@@ -322,6 +323,20 @@ func (c *Client) Connections(ctx context.Context, env, sandbox string) ([]gatewa
 	return out, err
 }
 
+// Browser reports a teammate's browser: its VM's state and the page it is on.
+func (c *Client) Browser(ctx context.Context, env, teammate string) (browser.BrowserStatus, error) {
+	var out browser.BrowserStatus
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/teammates/"+teammate+"/browser", nil, nil, &out)
+	return out, err
+}
+
+// BrowserFrame is the latest picture of the page a teammate's browser shows, as a JPEG.
+func (c *Client) BrowserFrame(ctx context.Context, env, teammate string) ([]byte, error) {
+	var out []byte
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/teammates/"+teammate+"/browser/frame", nil, nil, &out)
+	return out, err
+}
+
 // Do makes one API call for clients other than the TUI, such as the command line: in, when not
 // nil, is sent as JSON, and a success answer is decoded into out when out is not nil.
 func (c *Client) Do(ctx context.Context, method, path string, in, out any) error {
@@ -456,7 +471,7 @@ func decodeChatEvent(name string, rev int64, data string) (ChatEvent, bool) {
 }
 
 // send makes one request. in, when not nil, is sent as JSON, and a success answer is decoded
-// into out when out is not nil. The response is returned with its body read and closed, so
+// into out when out is not nil, or kept as it is when out is a *[]byte. The response is returned with its body read and closed, so
 // its headers, such as cookies, stay available.
 func (c *Client) send(ctx context.Context, method, path string, header http.Header, in, out any) (*http.Response, error) {
 	var body io.Reader
@@ -489,6 +504,10 @@ func (c *Client) send(ctx context.Context, method, path string, header http.Head
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return resp, apiError(resp.StatusCode, data)
+	}
+	if raw, ok := out.(*[]byte); ok {
+		*raw = data
+		return resp, nil
 	}
 	if out != nil && len(data) > 0 {
 		if err := json.Unmarshal(data, out); err != nil {

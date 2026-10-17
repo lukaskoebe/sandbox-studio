@@ -322,6 +322,36 @@ func (s *Server) browserScreenshot(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", time.Time{}, f)
 }
 
+// browserFrame serves the latest screencast frame of a session of the teammate's browser
+// (?session= an ephemeral session's ID, else the persistent profile) as a JPEG.
+func (s *Server) browserFrame(w http.ResponseWriter, r *http.Request) {
+	if s.Browser == nil {
+		http.Error(w, "the browser broker is not running", http.StatusServiceUnavailable)
+		return
+	}
+	env, teammate := r.PathValue("env"), r.PathValue("teammate")
+	if _, err := s.Store.Teammate(r.Context(), env, teammate); err != nil {
+		http.Error(w, "teammate not found", http.StatusNotFound)
+		return
+	}
+	jpeg, err := s.Browser.Frame(r.Context(), env, teammate, r.URL.Query().Get("session"))
+	switch {
+	case errors.Is(err, browser.ErrNoSession):
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrHidden):
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	case err != nil:
+		http.Error(w, "the browser's picture could not be read", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(jpeg)
+}
+
 // browserLive relays the screencast of a session of the teammate's browser (?session= an
 // ephemeral session's ID, else the persistent profile) and, while the user has taken that
 // session over, the user's input.

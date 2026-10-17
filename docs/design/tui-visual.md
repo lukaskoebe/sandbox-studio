@@ -1,9 +1,12 @@
 # A more visual TUI (design)
 
-Status: Phases 1–3, the mouse and the motion are built (2026-10-17); [tui.md](../tui.md#look) describes
-the TUI as it is. Left out:
+Status: built (2026-10-17); [tui.md](../tui.md#look) describes the TUI as it is. Left out:
 
-- Phase 4, pictures: it needs the browser frame endpoint and a graphics encoder.
+- Pictures in a graphics protocol (kitty, iTerm2, sixel). Bubble Tea v2 draws the screen
+  as cells and diffs them between frames, so an image placed with escape sequences would be
+  overwritten or left behind. Half blocks show the same picture on every terminal of 256
+  colors or more.
+- App previews: only the browser has a picture.
 
 Where the build differs from the text:
 
@@ -16,6 +19,9 @@ Where the build differs from the text:
   the notice line, where they can be read and copied.
 - Word highlights mark the unified diff as well as side by side; the plain look shows the diff
   as it comes. Lines that share no word keep their line's color only.
+- The picture is in Home's detail pane, under the page's address, and needs 256 colors, not
+  truecolor. It keeps the frame's shape, so a 1280×577 page is 40×9 cells. The page's title
+  isn't shown: Studio doesn't know it.
 
 Today's `studio tui` is deliberately plain: one screen at a time, the terminal's own colors
 plus one cyan accent, laid out for 80×24 ([tui.md](../tui.md#look)). It works everywhere,

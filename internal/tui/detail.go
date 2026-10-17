@@ -90,7 +90,11 @@ func (m *app) detailPane(sb sandboxes.View, w, h int) []string {
 	for _, l := range history[1:] {
 		lines = append(lines, strings.Repeat(" ", 11)+l)
 	}
-	return append(lines, label("ID")+styleDim.Render(sb.ID))
+	lines = append(lines, label("ID")+styleDim.Render(sb.ID))
+	if more := m.browserLines(sb.TeammateID, w, h-len(lines)-1); more != nil {
+		lines = append(append(lines, ""), more...)
+	}
+	return lines
 }
 
 // waitingCard is the first approval waiting on a sandbox as its card, and how many

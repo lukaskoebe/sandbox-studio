@@ -111,6 +111,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	mux.HandleFunc("GET /api/environments/{env}/sandboxes/{id}/terminals/{name}/attach", s.attachTerminal)
 	mux.HandleFunc("GET /api/environments/{env}/providers/{id}/login/terminal", s.attachLoginTerminal)
 	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/live", s.browserLive)
+	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/frame", s.browserFrame)
 	mux.HandleFunc("GET /api/environments/{env}/teammates/{teammate}/browser/actions/{id}/screenshot", s.browserScreenshot)
 	return api
 }

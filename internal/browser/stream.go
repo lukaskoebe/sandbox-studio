@@ -33,45 +33,15 @@ const (
 // Relay bridges the UI's live-view socket and a session of the teammate's browser ("" for
 // the persistent profile) until either ends.
 func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, client *websocket.Conn) error {
-	st := s.state(envID, teammateID)
-	// Watching must not wait for an agent command or approval. Remember this run so a
-	// concurrent Stop cannot be undone by adopting the VM from a stale status response.
-	s.mu.Lock()
-	previousVM, previousSession := st.vm, st.session
-	pg := st.pageFor(session)
-	s.mu.Unlock()
-	if pg == nil {
-		return ErrNoSession
-	}
-	sb, status, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
+	t, err := s.streamTarget(ctx, envID, teammateID, session)
 	if err != nil {
 		return err
 	}
-	if status != runtime.StatusRunning {
-		return ErrNotLive
-	}
-	s.mu.Lock()
-	if !s.streamCurrentLocked(st, pg, envID, previousVM, previousSession) {
-		s.mu.Unlock()
-		return ErrNotLive
-	}
-	if st.vm != "" && st.vm != sb.ID {
-		st.reset()
-	}
-	if st.pageFor(session) != pg {
-		s.mu.Unlock()
-		return ErrNoSession
-	}
-	st.vm = sb.ID
-	if st.session == "" {
-		st.session = store.NewID()
-	}
-	streamSession := st.session
-	s.mu.Unlock()
+	st, pg, sb, streamSession := t.st, t.pg, t.vm, t.session
 	port := agentproto.BrowserStreamPort + pg.slot
-	guest, err := s.dialStream(ctx, sb.ID, port)
+	guest, err := s.dialStream(ctx, sb, port)
 	if err != nil {
-		if guest, err = s.startStream(ctx, st, pg, envID, sb.ID, streamSession); err != nil {
+		if guest, err = s.startStream(ctx, st, pg, envID, sb, streamSession); err != nil {
 			return err
 		}
 	}
@@ -95,7 +65,7 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 			if typ != websocket.MessageText {
 				continue
 			}
-			if !s.syncStreamURL(st, pg, envID, sb.ID, streamSession, data) {
+			if !s.syncStreamURL(st, pg, envID, sb, streamSession, data) {
 				return
 			}
 			if client.Write(ctx, websocket.MessageText, data) != nil {
@@ -105,7 +75,7 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 				// Someone watching keeps the browser from idling out.
 				last = now
 				s.mu.Lock()
-				if s.streamCurrentLocked(st, pg, envID, sb.ID, streamSession) {
+				if s.streamCurrentLocked(st, pg, envID, sb, streamSession) {
 					st.lastUsed = now
 				}
 				s.mu.Unlock()
@@ -124,7 +94,7 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 				continue
 			}
 			s.mu.Lock()
-			if !s.streamCurrentLocked(st, pg, envID, sb.ID, streamSession) {
+			if !s.streamCurrentLocked(st, pg, envID, sb, streamSession) {
 				s.mu.Unlock()
 				return
 			}
@@ -142,6 +112,131 @@ func (s *Service) Relay(ctx context.Context, envID, teammateID, session string, 
 	}()
 	wg.Wait()
 	return nil
+}
+
+// streamOf is a session of a teammate's browser whose stream can be read: its state and page,
+// its VM's ID, and the run of the browser it belongs to.
+type streamOf struct {
+	st      *state
+	pg      *page
+	vm      string
+	session string
+}
+
+// streamTarget finds the running browser VM of a teammate's session, adopting it as the
+// browser's VM.
+func (s *Service) streamTarget(ctx context.Context, envID, teammateID, session string) (streamOf, error) {
+	st := s.state(envID, teammateID)
+	// Watching must not wait for an agent command or approval. Remember this run so a
+	// concurrent Stop cannot be undone by adopting the VM from a stale status response.
+	s.mu.Lock()
+	previousVM, previousSession := st.vm, st.session
+	pg := st.pageFor(session)
+	s.mu.Unlock()
+	if pg == nil {
+		return streamOf{}, ErrNoSession
+	}
+	sb, status, err := s.VMs.BrowserStatus(ctx, envID, teammateID)
+	if err != nil {
+		return streamOf{}, err
+	}
+	if status != runtime.StatusRunning {
+		return streamOf{}, ErrNotLive
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.streamCurrentLocked(st, pg, envID, previousVM, previousSession) {
+		return streamOf{}, ErrNotLive
+	}
+	if st.vm != "" && st.vm != sb.ID {
+		st.reset()
+	}
+	if st.pageFor(session) != pg {
+		return streamOf{}, ErrNoSession
+	}
+	st.vm = sb.ID
+	if st.session == "" {
+		st.session = store.NewID()
+	}
+	return streamOf{st: st, pg: pg, vm: sb.ID, session: st.session}, nil
+}
+
+const (
+	frameFresh = 2 * time.Second // how old a relayed frame Frame still returns
+	frameWait  = 5 * time.Second // how long Frame reads a stream for a frame
+)
+
+// Frame is the latest screencast frame of a session of the teammate's browser as a JPEG. While
+// a live view watches, it is the frame last relayed; otherwise Frame opens the session's
+// stream and reads one. Neither counts as using the browser, so a picture on show doesn't keep
+// the browser from idling out, and a browser with no page yet has no frame (ErrNotLive).
+func (s *Service) Frame(ctx context.Context, envID, teammateID, session string) ([]byte, error) {
+	st := s.state(envID, teammateID)
+	s.mu.Lock()
+	pg := st.pageFor(session)
+	var cached []byte
+	hidden := pg != nil && pg.visible
+	if pg != nil && pg.frame != nil && s.now().Sub(pg.frameAt) < frameFresh {
+		cached = pg.frame
+	}
+	s.mu.Unlock()
+	switch {
+	case pg == nil:
+		return nil, ErrNoSession
+	case hidden:
+		return nil, ErrHidden
+	case cached != nil:
+		return frameJPEG(cached)
+	}
+	t, err := s.streamTarget(ctx, envID, teammateID, session)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, frameWait)
+	defer cancel()
+	guest, err := s.dialStream(ctx, t.vm, agentproto.BrowserStreamPort+t.pg.slot)
+	if err != nil {
+		return nil, ErrNotLive
+	}
+	defer guest.CloseNow()
+	guest.SetReadLimit(maxGuestMessage)
+	for {
+		typ, data, err := guest.Read(ctx)
+		if err != nil {
+			return nil, ErrNotLive
+		}
+		if typ != websocket.MessageText {
+			continue
+		}
+		if kind, _, _ := parseStream(data); kind != "frame" {
+			continue
+		}
+		s.mu.Lock()
+		current := s.streamCurrentLocked(t.st, t.pg, envID, t.vm, t.session)
+		hidden := t.pg.visible
+		if current && !hidden {
+			t.pg.frame, t.pg.frameAt = data, s.now()
+		}
+		s.mu.Unlock()
+		switch {
+		case !current:
+			return nil, ErrNotLive
+		case hidden:
+			return nil, ErrHidden
+		}
+		return frameJPEG(data)
+	}
+}
+
+// frameJPEG is the JPEG of a stream's frame message.
+func frameJPEG(data []byte) ([]byte, error) {
+	var m struct {
+		Data []byte `json:"data"` // base64, which encoding/json decodes
+	}
+	if err := json.Unmarshal(data, &m); err != nil || len(m.Data) == 0 {
+		return nil, errors.New("the browser sent a frame that could not be read")
+	}
+	return m.Data, nil
 }
 
 // Only bootstrapping the daemon needs the command slot. An existing stream is readable
@@ -178,6 +273,13 @@ func (s *Service) startStream(ctx context.Context, st *state, pg *page, envID, v
 }
 
 func streamPageURL(data []byte) (string, bool) {
+	_, url, ok := parseStream(data)
+	return url, ok
+}
+
+// parseStream reads a message of the guest's stream: its type, and the page's URL if it tells
+// one.
+func parseStream(data []byte) (typ, url string, ok bool) {
 	var message struct {
 		Type string `json:"type"`
 		URL  string `json:"url"`
@@ -187,26 +289,26 @@ func streamPageURL(data []byte) (string, bool) {
 		} `json:"tabs"`
 	}
 	if json.Unmarshal(data, &message) != nil {
-		return "", false
+		return "", "", false
 	}
 	if message.Type == "url" {
-		return message.URL, message.URL != ""
+		return message.Type, message.URL, message.URL != ""
 	}
 	if message.Type != "tabs" {
-		return "", false
+		return message.Type, "", false
 	}
 	var activeURL string
 	activeCount := 0
 	for _, tab := range message.Tabs {
 		if tab.Active {
 			if tab.URL == "" {
-				return "", false
+				return message.Type, "", false
 			}
 			activeURL = tab.URL
 			activeCount++
 		}
 	}
-	return activeURL, activeCount == 1
+	return message.Type, activeURL, activeCount == 1
 }
 
 func (s *Service) streamCurrentLocked(st *state, pg *page, envID, vmID, sessionID string) bool {
@@ -215,11 +317,17 @@ func (s *Service) streamCurrentLocked(st *state, pg *page, envID, vmID, sessionI
 }
 
 func (s *Service) syncStreamURL(st *state, pg *page, envID, vmID, sessionID string, data []byte) bool {
-	url, ok := streamPageURL(data)
+	typ, url, ok := parseStream(data)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.streamCurrentLocked(st, pg, envID, vmID, sessionID) {
 		return false
+	}
+	if typ == "frame" {
+		pg.frame, pg.frameAt = data, s.now()
+		if pg.visible {
+			pg.frame = nil
+		}
 	}
 	if ok {
 		pg.observedURL(url)

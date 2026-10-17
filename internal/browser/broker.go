@@ -39,6 +39,7 @@ var (
 	ErrNoTakeover = errors.New("take over the browser before navigating")
 	ErrBadURL     = errors.New("url must be an absolute http or https URL with a host, no userinfo, and at most 4000 characters")
 	ErrNoSession  = errors.New("there is no such browser session")
+	ErrHidden     = errors.New("the page shows a credential, so its picture is hidden until it changes")
 	ErrBadMove    = errors.New("to must be back, forward or reload")
 )
 
@@ -151,9 +152,12 @@ type page struct {
 	loading  string          // the site an allowed navigation is loading, until url is known
 	secrets  []string        // credential values filled in this run, for Scrub
 	credRefs map[string]bool // refs Studio filled with a credential
-	// visible is set when a credential went into a field that shows it: agent screenshots
-	// and history screenshots stop until the page changes.
+	// visible is set when a credential went into a field that shows it: agent screenshots,
+	// history screenshots and frames stop until the page changes.
 	visible bool
+	// frame is the latest screencast frame relayed, as the guest sent it, and when.
+	frame   []byte
+	frameAt time.Time
 }
 
 type refInfo struct {
@@ -408,6 +412,7 @@ func (st *state) reset() {
 	st.session, st.grants, st.eph, st.sites, st.hosts = "", nil, nil, nil, nil
 	st.fwdFrom, st.fwdPorts = "", nil
 	st.url, st.loading, st.refs, st.credRefs, st.secrets, st.visible = "", "", nil, nil, nil, false
+	st.frame, st.frameAt = nil, time.Time{}
 }
 
 // navigated forgets what belonged to the previous page.

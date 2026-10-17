@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -169,5 +170,65 @@ func TestActiveTabsURLAndStaleStream(t *testing.T) {
 	f.svc.mu.Unlock()
 	if got != "" {
 		t.Errorf("stale stream changed reset browser URL to %q", got)
+	}
+}
+
+// A frame is the latest one relayed while it is fresh, else one read from the stream; neither
+// counts as use, and none shows while a credential does.
+func TestFrame(t *testing.T) {
+	f := newFixture(t)
+	dials := 0
+	guest := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		for _, m := range []string{
+			`{"type":"tabs","tabs":[{"url":"https://example.com/","active":true}]}`,
+			`{"type":"frame","data":"/9j/","metadata":{}}`,
+		} {
+			if c.Write(r.Context(), websocket.MessageText, []byte(m)) != nil {
+				return
+			}
+		}
+		_, _, _ = c.Read(r.Context()) // until the reader goes
+	}))
+	defer guest.Close()
+	f.fb.dial = func(int) (net.Conn, error) {
+		dials++
+		return net.Dial("tcp", strings.TrimPrefix(guest.URL, "http://"))
+	}
+	if _, err := f.svc.Frame(f.ctx, f.env, f.ada.ID, "eph-0000000f"); !errors.Is(err, ErrNoSession) {
+		t.Errorf("an unknown session: %v", err)
+	}
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	st := f.svc.state(f.env, f.ada.ID)
+	f.svc.mu.Lock()
+	used := st.lastUsed
+	f.svc.mu.Unlock()
+	for range 2 {
+		jpeg, err := f.svc.Frame(f.ctx, f.env, f.ada.ID, "")
+		if err != nil || string(jpeg) != "\xff\xd8\xff" {
+			t.Fatalf("frame %q, %v", jpeg, err)
+		}
+	}
+	if dials != 1 {
+		t.Errorf("the stream was opened %d times, want once: the second frame is the first", dials)
+	}
+	f.svc.mu.Lock()
+	if !st.lastUsed.Equal(used) {
+		t.Error("a frame counted as using the browser")
+	}
+	st.frameAt = st.frameAt.Add(-time.Minute)
+	f.svc.mu.Unlock()
+	if _, err := f.svc.Frame(f.ctx, f.env, f.ada.ID, ""); err != nil || dials != 2 {
+		t.Errorf("a stale frame: %d dials, %v", dials, err)
+	}
+	f.svc.mu.Lock()
+	st.visible = true
+	f.svc.mu.Unlock()
+	if _, err := f.svc.Frame(f.ctx, f.env, f.ada.ID, ""); !errors.Is(err, ErrHidden) {
+		t.Errorf("a frame showed while a credential does: %v", err)
 	}
 }

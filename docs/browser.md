@@ -291,6 +291,13 @@ disconnecting clears the local input buffer.
     while the user drives.
   - Messages are re-encoded from an allow-listed shape, so nothing else reaches the
     stream.
+- **Frame.** `GET .../browser/frame` (`?session=` an ephemeral session's ID) is the session's
+  latest screencast frame as a JPEG, which the TUI draws in Home's detail pane. While a live
+  view watches, it is the frame the relay saw last, if under 2 s old. Otherwise Studio opens
+  the stream for up to 5 s and reads one frame. Neither counts as using the browser, so a
+  picture on show doesn't keep it from idling out. Studio doesn't start the daemon for a frame:
+  a browser that hasn't opened a page yet answers 409. Like screenshots, frames stop while a
+  credential shows in the page (409 too), and the one kept is dropped.
 - **Takeover.** Taking the wheel pauses agents. Agent calls wait up to 20 s, then fail with "the
   user is driving the browser…". The user types passwords straight into the page. Hand
   back resumes agent calls.

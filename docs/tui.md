@@ -307,7 +307,10 @@ and [design/tui-visual.md](design/tui-visual.md)):
   `[` and `]` jump between files. From 160 columns Home adds a third column, the selected
   sandbox's network: its connections newest first, with their verdict's dot, age, host and
   verdict, read from `GET .../sandboxes/{id}/connections` every 2 seconds while it shows
-  (`dash.go`). From 160 columns the diff is side by side, and `v` toggles
+  (`dash.go`). When the sandbox's teammate's browser runs, the pane ends with its page's
+  address and, on terminals with 256 colors or more, a picture of the page about 40×9 cells,
+  drawn in half blocks (`▀`, two pixels a cell) from `GET .../browser/frame` every 3 seconds
+  (`picture.go`). A picture that doesn't fit the pane's height is left out. From 160 columns the diff is side by side, and `v` toggles
   it. Inside a changed line, the words it changes are in reverse video. They come from a
   diff of the words of each removed line and the added line paired with it (`worddiff.go`),
   and lines that share no word, or have more than 300, keep their line's color only.
@@ -336,8 +339,9 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 
 - `client.go` is the typed client. It adds no endpoints; its results are the API's own Go
   types (`sandboxes.View`, `api.ApprovalView`, `store.Chat`, `chat.Log`, `gateway.Conn`,
-  `store.Rule`, `events.Event`). Changes arrive on `/api/events`; a burst of them refetches
-  once, after 300 ms. `ChatStream` reads a chat's SSE stream into `ChatEvent`s.
+  `store.Rule`, `browser.BrowserStatus`, `events.Event`). Changes arrive on `/api/events`; a
+  burst of them refetches once, after 300 ms. `ChatStream` reads a chat's SSE stream into
+  `ChatEvent`s.
 - `app.go`, `keys.go`, `view.go`, `home.go`, `detail.go` are the Bubble Tea v2 model: state,
   messages, key handling and the frame. The key bar is Bubbles' `help`, and the bindings are
   Bubbles' `key`, so the bar and the handlers come from one list.
@@ -354,8 +358,9 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 - `style.go` holds the styles: the look, the palette of each color profile, and the fitting of
   styled text. `draw.go` has the visual look's pieces: dots, keycaps, card frames,
   sparklines, bars, the spinner, the tab header and the grouped key bar. `cards.go` is the
-  approvals' cards, `live.go` the usage, lineage and spinner reads, and `motion.go` the
-  toasts and the cards' slide-in. `mouse.go` maps
+  approvals' cards, `live.go` the usage, lineage and spinner reads, `motion.go` the
+  toasts and the cards' slide-in, `dash.go` the network column, and `picture.go` the browser's
+  page and its picture in half blocks. `mouse.go` maps
   clicks and the wheel to what each row and key of the frame leads to. Each body records
   those rows and keycaps as it draws them, and the frame the key bar's keys.
 - `terminal.go` is the attachment: a `tea.ExecCommand`, so Bubble Tea releases the terminal
