@@ -70,5 +70,3 @@ says.
 - What the visual look left out: pictures (phase 4, which needs the browser frame endpoint),
   toasts, clickable keycaps, the 160-column Home and word-level diff highlights →
   [design](docs/design/tui-visual.md)
-- The site's terminal UI page shows a hand-copied text block, not one generated from the
-  golden test

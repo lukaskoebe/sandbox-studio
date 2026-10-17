@@ -1,0 +1,109 @@
+---
+// A terminal screen from its ANSI text, such as a golden file of the TUI's tests, drawn as
+// colored spans on a dark terminal in both site themes. It knows the SGR codes the TUI
+// writes: reset, bold, dim, the 16 basic colors and the 256-color palette.
+interface Props {
+  ansi: string
+  label: string
+}
+const { ansi, label } = Astro.props
+
+const basic = ['#1c2023', '#e06c75', '#7ec699', '#e5c07b', '#61afef', '#c678dd', '#56b6c2', '#d7dae0']
+const bright = ['#5c6370', '#ff7b86', '#98e0b0', '#ffd68a', '#7cc4ff', '#d99bf0', '#76d4e0', '#ffffff']
+
+// palette returns color n of the xterm 256-color palette.
+function palette(n: number): string {
+  if (n < 8) return basic[n]
+  if (n < 16) return bright[n - 8]
+  if (n < 232) {
+    const steps = [0, 95, 135, 175, 215, 255]
+    const i = n - 16
+    const hex = (v: number) => v.toString(16).padStart(2, '0')
+    return `#${hex(steps[Math.floor(i / 36)])}${hex(steps[Math.floor(i / 6) % 6])}${hex(steps[i % 6])}`
+  }
+  const v = (8 + (n - 232) * 10).toString(16).padStart(2, '0')
+  return `#${v}${v}${v}`
+}
+
+type Style = { bold?: boolean; dim?: boolean; fg?: string; bg?: string }
+type Run = { text: string; style: Style }
+
+function apply(style: Style, params: number[]): Style {
+  const s = { ...style }
+  for (let i = 0; i < params.length; i++) {
+    const p = params[i]
+    if (p === 0) Object.keys(s).forEach((k) => delete s[k as keyof Style])
+    else if (p === 1) s.bold = true
+    else if (p === 2) s.dim = true
+    else if (p === 22) s.bold = s.dim = false
+    else if (p >= 30 && p <= 37) s.fg = basic[p - 30]
+    else if (p >= 90 && p <= 97) s.fg = bright[p - 90]
+    else if (p === 39) delete s.fg
+    else if (p >= 40 && p <= 47) s.bg = basic[p - 40]
+    else if (p === 49) delete s.bg
+    else if ((p === 38 || p === 48) && params[i + 1] === 5) {
+      s[p === 38 ? 'fg' : 'bg'] = palette(params[i + 2])
+      i += 2
+    }
+  }
+  return s
+}
+
+const lines: Run[][] = ansi.replace(/\n$/, '').split('\n').map((line) => {
+  const runs: Run[] = []
+  let style: Style = {}
+  for (const part of line.split(/(\x1b\[[0-9;]*m)/)) {
+    const sgr = /^\x1b\[([0-9;]*)m$/.exec(part)
+    if (sgr) style = apply(style, sgr[1] === '' ? [0] : sgr[1].split(';').map(Number))
+    else if (part) runs.push({ text: part, style })
+  }
+  return runs
+})
+
+// Symbols the mono font lacks come from a fallback font of another width; each keeps to one
+// cell so the columns stay aligned.
+const cells = (text: string) => text.split(/([\u2190-\u24ff\u2580-\u2bff])/).filter(Boolean)
+const symbol = (t: string) => /^[\u2190-\u24ff\u2580-\u2bff]$/.test(t)
+
+const css = (s: Style) =>
+  [
+    s.fg && `color:${s.fg}`,
+    s.bg && `background:${s.bg}`,
+    s.bold && 'font-weight:700',
+    s.dim && 'opacity:0.6',
+  ]
+    .filter(Boolean)
+    .join(';')
+---
+
+<figure class="terminal-screen not-content" aria-label={label}>
+  <pre>{lines.map((runs) => (<span class="line">{runs.map((r) => (<span style={css(r.style)}>{cells(r.text).map((t) => (symbol(t) ? <span class="cell">{t}</span> : t))}</span>))}{'\n'}</span>))}</pre>
+</figure>
+
+<style>
+  .terminal-screen {
+    margin: 1.5rem 0;
+    border: 1px solid var(--sl-color-hairline-light);
+    border-radius: 0.5rem;
+    background: #0f1417;
+    overflow-x: auto;
+  }
+  pre {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    width: max-content;
+    min-width: 100%;
+    font-family: var(--sl-font-mono);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: #d7dae0;
+    background: transparent;
+  }
+  .cell {
+    display: inline-block;
+    width: 1ch;
+    overflow: hidden;
+    text-align: center;
+    vertical-align: bottom;
+  }
+</style>

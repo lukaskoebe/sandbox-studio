@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "internal/tui/testdata/visual_home.golden"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "site/**"
+      - "internal/tui/testdata/visual_home.golden"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
