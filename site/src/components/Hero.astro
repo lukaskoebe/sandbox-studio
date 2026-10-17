@@ -1,57 +1,101 @@
 ---
 // The landing page's hero: the headline and actions from the page's frontmatter, the install
-// command, and the overview video. Only the landing page sets `hero`, so this replaces
-// Starlight's hero there and nowhere else.
+// command, and the two videos behind tabs, the technical one first. Only the landing page sets
+// `hero`, so this replaces Starlight's hero there and nowhere else.
 import { LinkButton } from '@astrojs/starlight/components'
 
 const { data } = Astro.locals.starlightRoute.entry
 const { title = data.title, tagline, actions = [] } = data.hero || {}
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
 const install = 'curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh'
+
+const videos = [
+  {
+    name: 'developers',
+    label: 'Technical tour',
+    length: '0:54',
+    alt: 'Coding agents in their own microVMs, with egress approvals, credentials that never enter the VM, and review before a push reaches the forge',
+  },
+  {
+    name: 'everyone',
+    label: 'Without the jargon',
+    length: '0:50',
+    alt: 'A teammate builds a bakery website in its own sandbox, asks before reaching a new site, keeps passwords on your computer, and asks before placing an order',
+  },
+]
 ---
 
 <div class="landing-hero not-content">
-  <div class="hero-backdrop" aria-hidden="true"></div>
-  <a class="hero-eyebrow" href="https://github.com/lukaskoebe/sandbox-studio/releases">
-    <span class="eyebrow-dot"></span>
-    Free and open source
-    <span class="eyebrow-sep">·</span>
-    <span class="eyebrow-link">Latest release →</span>
-  </a>
+  <p class="hero-meta">
+    <a href="https://github.com/lukaskoebe/sandbox-studio/releases">Releases</a>
+    <span aria-hidden="true">/</span>
+    Apache-2.0
+    <span aria-hidden="true">/</span>
+    Linux, macOS, Windows (preview)
+  </p>
   <h1 id="_top" data-page-title set:html={title} />
-  {tagline && <p class="hero-tagline" set:html={tagline} />}
-  <div class="hero-actions">
-    {
-      actions.map(({ link: href, text, variant, icon }) => (
-        <LinkButton href={href} variant={variant} icon={icon?.name}>
-          {text}
-        </LinkButton>
-      ))
-    }
+  <div class="hero-body">
+    {tagline && <p class="hero-tagline" set:html={tagline} />}
+    <div class="hero-start">
+      <div class="hero-actions">
+        {
+          actions.map(({ link: href, text, variant, icon }) => (
+            <LinkButton href={href} variant={variant} icon={icon?.name}>
+              {text}
+            </LinkButton>
+          ))
+        }
+      </div>
+      <div class="hero-install">
+        <code><span class="install-prompt" aria-hidden="true">$ </span>{install}</code>
+        <button type="button" class="install-copy" data-copy={install} aria-label="Copy the install command">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>
+          <span class="copy-label">Copy</span>
+        </button>
+      </div>
+    </div>
   </div>
-  <div class="hero-install">
-    <span class="install-prompt" aria-hidden="true">$</span>
-    <code>{install}</code>
-    <button type="button" class="install-copy" data-copy={install} aria-label="Copy the install command">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"></path></svg>
-      <span class="copy-label">Copy</span>
-    </button>
-  </div>
-  <p class="hero-platforms">Linux · macOS on Apple Silicon · Windows 11 (preview)</p>
 
-  <figure class="hero-video">
+  <figure class="hero-player" data-player>
+    <div class="player-bar">
+      <div class="player-tabs" role="tablist" aria-label="Videos">
+        {
+          videos.map((v, i) => (
+            <button
+              type="button"
+              role="tab"
+              class="player-tab"
+              aria-selected={i === 0 ? 'true' : 'false'}
+              aria-controls="hero-video"
+              data-video={v.name}
+              data-alt={v.alt}
+            >
+              {v.label}
+              <span class="player-length">{v.length}</span>
+            </button>
+          ))
+        }
+      </div>
+      <button type="button" class="player-toggle" data-toggle aria-label="Pause the video">
+        <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
+        <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"></path></svg>
+      </button>
+    </div>
+    <div class="player-progress" aria-hidden="true"><span data-progress></span></div>
     <video
-      class="landing-video"
+      id="hero-video"
+      role="tabpanel"
       autoplay
       muted
       loop
       playsinline
       preload="auto"
-      poster={`${base}video/everyone.jpg`}
-      aria-label="A teammate builds a bakery website in its own sandbox, asks before reaching a new site, keeps passwords on your computer, and asks before placing an order"
+      poster={`${base}video/${videos[0].name}.jpg`}
+      aria-label={videos[0].alt}
+      data-base={`${base}video/`}
     >
-      <source src={`${base}video/everyone.webm`} type="video/webm" />
-      <source src={`${base}video/everyone.mp4`} type="video/mp4" />
+      <source src={`${base}video/${videos[0].name}.webm`} type="video/webm" />
+      <source src={`${base}video/${videos[0].name}.mp4`} type="video/mp4" />
     </video>
   </figure>
 </div>
@@ -70,109 +114,145 @@ const install = 'curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox
       setTimeout(() => (label.textContent = 'Copy'), 1600)
     })
   }
-  // Respect reduced motion: show the first frame with controls instead of playing on its own.
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    for (const video of document.querySelectorAll<HTMLVideoElement>('video[autoplay]')) {
+
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches
+  for (const player of document.querySelectorAll<HTMLElement>('[data-player]')) {
+    const video = player.querySelector('video')!
+    const toggle = player.querySelector<HTMLButtonElement>('[data-toggle]')!
+    const progress = player.querySelector<HTMLElement>('[data-progress]')!
+    const tabs = [...player.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+    const base = video.dataset.base ?? ''
+
+    // Reduced motion: show the first frame and the video's own controls instead of playing.
+    if (reduced) {
       video.removeAttribute('autoplay')
       video.pause()
       video.controls = true
+      toggle.hidden = true
     }
+    const sync = () => {
+      player.toggleAttribute('data-paused', video.paused)
+      toggle.setAttribute('aria-label', video.paused ? 'Play the video' : 'Pause the video')
+    }
+    video.addEventListener('play', sync)
+    video.addEventListener('pause', sync)
+    video.addEventListener('timeupdate', () => {
+      progress.style.transform = `scaleX(${video.duration ? video.currentTime / video.duration : 0})`
+    })
+    const flip = () => (video.paused ? video.play().catch(() => (video.controls = true)) : video.pause())
+    toggle.addEventListener('click', flip)
+    video.addEventListener('click', () => !video.controls && flip())
+
+    const select = (tab: HTMLButtonElement) => {
+      if (tab.getAttribute('aria-selected') === 'true') return
+      for (const t of tabs) t.setAttribute('aria-selected', String(t === tab))
+      const name = tab.dataset.video
+      video.poster = `${base}${name}.jpg`
+      video.setAttribute('aria-label', tab.dataset.alt ?? '')
+      video.replaceChildren(
+        Object.assign(document.createElement('source'), { src: `${base}${name}.webm`, type: 'video/webm' }),
+        Object.assign(document.createElement('source'), { src: `${base}${name}.mp4`, type: 'video/mp4' })
+      )
+      progress.style.transform = 'scaleX(0)'
+      video.load()
+      if (!reduced) video.play().catch(() => (video.controls = true))
+    }
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(tab))
+      tab.addEventListener('keydown', (e) => {
+        const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+        if (!step) return
+        const next = tabs[(i + step + tabs.length) % tabs.length]
+        next.focus()
+        select(next)
+      })
+    })
+    sync()
   }
 </script>
 
 <style>
   .landing-hero {
-    position: relative;
+    padding-block: clamp(2.5rem, 6vw, 4.5rem) 0;
+  }
+  .hero-meta {
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding-block: clamp(2.5rem, 7vw, 5.5rem) 1rem;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+    font-family: var(--__sl-font-mono);
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-3);
   }
-  .hero-backdrop {
-    position: absolute;
-    inset: -6rem -50vw auto;
-    height: 46rem;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse 50% 60% at 50% 30%, var(--ss-glow), transparent 70%),
-      radial-gradient(circle, var(--ss-dot) 1px, transparent 1.2px) 0 0 / 28px 28px;
-    mask-image: radial-gradient(ellipse 60% 70% at 50% 35%, #000 25%, transparent 75%);
-  }
-  .hero-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.3rem 0.85rem;
-    border-radius: 999px;
-    border: 1px solid var(--sl-color-hairline-light);
-    background: var(--ss-surface);
-    color: var(--sl-color-gray-2);
-    font-size: var(--sl-text-sm);
-    text-decoration: none;
-    transition: border-color 0.15s;
-  }
-  .hero-eyebrow:hover {
-    border-color: var(--sl-color-accent);
-  }
-  .eyebrow-dot {
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 50%;
-    background: var(--ss-green);
-    box-shadow: 0 0 0 3px var(--ss-green-ring);
-  }
-  .eyebrow-sep {
+  .hero-meta span {
     color: var(--sl-color-gray-4);
   }
-  .eyebrow-link {
-    color: var(--sl-color-text-accent);
-    font-weight: 550;
+  .hero-meta a {
+    color: var(--sl-color-gray-2);
+    text-decoration: underline;
+    text-decoration-color: var(--sl-color-gray-5);
+    text-underline-offset: 3px;
+  }
+  .hero-meta a:hover {
+    color: var(--sl-color-white);
   }
   h1 {
-    margin-top: 1.5rem;
-    max-width: 16ch;
-    font-size: clamp(2.4rem, 1rem + 5.4vw, 4.75rem);
+    margin-top: 1.25rem;
+    max-width: 18ch;
+    font-size: clamp(2.5rem, 1rem + 5vw, 4.5rem);
     line-height: 1.02;
     letter-spacing: -0.045em;
-    font-weight: 700;
+    font-weight: 680;
     color: var(--sl-color-white);
     text-wrap: balance;
   }
+  .hero-body {
+    display: grid;
+    gap: 2rem;
+    margin-top: 1.75rem;
+  }
+  @media (min-width: 62rem) {
+    .hero-body {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 4rem;
+      align-items: end;
+    }
+  }
   .hero-tagline {
-    margin-top: 1.4rem;
-    max-width: 40rem;
-    font-size: clamp(1.05rem, 0.9rem + 0.6vw, 1.3rem);
-    line-height: 1.55;
+    max-width: 36rem;
+    font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.2rem);
+    line-height: 1.6;
     color: var(--sl-color-gray-2);
     text-wrap: pretty;
+  }
+  .hero-start {
+    display: grid;
+    gap: 1rem;
+    min-width: 0;
   }
   .hero-actions {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
     gap: 0.75rem;
-    margin-top: 2rem;
   }
   .hero-install {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    max-width: 100%;
-    margin-top: 1.75rem;
-    padding: 0.5rem 0.5rem 0.5rem 1rem;
-    border-radius: 0.75rem;
+    min-width: 0;
+    padding: 0.45rem 0.45rem 0.45rem 0.9rem;
+    border-radius: 0.5rem;
     border: 1px solid var(--sl-color-hairline-light);
     background: var(--ss-code-bg);
     font-family: var(--__sl-font-mono);
-    font-size: var(--sl-text-sm);
+    font-size: var(--sl-text-xs);
   }
   .install-prompt {
-    color: var(--ss-green);
-    font-weight: 600;
+    color: var(--sl-color-gray-4);
+    user-select: none;
   }
   .hero-install code {
+    flex: 1;
+    min-width: 0;
     overflow-x: auto;
     white-space: nowrap;
     color: var(--sl-color-gray-1);
@@ -183,8 +263,8 @@ const install = 'curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox
     align-items: center;
     gap: 0.35rem;
     flex: none;
-    padding: 0.35rem 0.65rem;
-    border-radius: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 0.35rem;
     border: 1px solid var(--sl-color-hairline-light);
     background: var(--ss-surface);
     color: var(--sl-color-gray-2);
@@ -196,49 +276,121 @@ const install = 'curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox
     border-color: var(--sl-color-gray-4);
   }
   .install-copy svg {
-    width: 0.9rem;
-    height: 0.9rem;
+    width: 0.85rem;
+    height: 0.85rem;
     fill: none;
     stroke: currentColor;
     stroke-width: 2;
   }
-  .hero-platforms {
-    margin-top: 0.75rem;
-    font-size: var(--sl-text-xs);
-    color: var(--sl-color-gray-3);
-  }
-  .hero-video {
-    width: 100%;
-    margin: clamp(2.5rem, 5vw, 4rem) 0 0;
-    padding: 0.5rem;
-    border-radius: 1.25rem;
+
+  .hero-player {
+    margin: clamp(2.5rem, 5vw, 3.5rem) 0 0;
+    border-radius: 0.75rem;
     border: 1px solid var(--sl-color-hairline-light);
     background: var(--ss-surface);
-    box-shadow:
-      0 40px 120px -30px var(--ss-glow-strong),
-      0 30px 60px -30px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
   }
-  .hero-video video {
+  .player-bar {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+  }
+  .player-tabs {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .player-tab {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex: none;
+    padding: 0.7rem 1rem;
+    border: 0;
+    border-inline-end: 1px solid var(--sl-color-hairline-light);
+    background: none;
+    color: var(--sl-color-gray-3);
+    font: 550 var(--sl-text-sm) / 1.2 var(--__sl-font);
+    cursor: pointer;
+    box-shadow: inset 0 -2px 0 transparent;
+  }
+  .player-tab:hover {
+    color: var(--sl-color-white);
+  }
+  .player-tab[aria-selected='true'] {
+    color: var(--sl-color-white);
+    background: var(--sl-color-black);
+    box-shadow: inset 0 -2px 0 var(--ss-green);
+  }
+  .player-tab:focus-visible,
+  .player-toggle:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: -2px;
+  }
+  .player-length {
+    font-family: var(--__sl-font-mono);
+    font-size: var(--sl-text-xs);
+    font-weight: 400;
+    color: var(--sl-color-gray-4);
+  }
+  .player-toggle {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.75rem;
+    border: 0;
+    border-inline-start: 1px solid var(--sl-color-hairline-light);
+    background: none;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+  }
+  .player-toggle:hover {
+    color: var(--sl-color-white);
+  }
+  .player-toggle svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .icon-play,
+  [data-paused] .icon-pause {
+    display: none;
+  }
+  [data-paused] .icon-play {
+    display: block;
+  }
+  .player-progress {
+    height: 1px;
+    background: var(--sl-color-hairline-light);
+  }
+  .player-progress span {
+    display: block;
+    height: 100%;
+    background: var(--sl-color-gray-3);
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  .hero-player video {
     display: block;
     width: 100%;
     height: auto;
     aspect-ratio: 16 / 9;
-    border-radius: 0.8rem;
     background: #0b0e10;
+    cursor: pointer;
   }
   @media (max-width: 40rem) {
-    .hero-install {
-      width: 100%;
-    }
     .copy-label {
       display: none;
     }
-    .hero-video {
-      padding: 0.25rem;
-      border-radius: 0.9rem;
-    }
-    .hero-video video {
-      border-radius: 0.65rem;
+    .player-tab {
+      padding-inline: 0.8rem;
     }
   }
 </style>

@@ -60,8 +60,6 @@
   --ss-green-ring: rgba(63, 193, 104, 0.2);
   --ss-surface: #11161a;
   --ss-code-bg: #0f1417;
-  --ss-glow: rgba(63, 193, 104, 0.16);
-  --ss-glow-strong: rgba(63, 193, 104, 0.22);
   --ss-dot: rgba(255, 255, 255, 0.09);
 }
 
@@ -92,8 +90,6 @@
   --ss-green-ring: rgba(22, 131, 75, 0.16);
   --ss-surface: #ffffff;
   --ss-code-bg: #f6f8f7;
-  --ss-glow: rgba(63, 193, 104, 0.16);
-  --ss-glow-strong: rgba(22, 131, 75, 0.18);
   --ss-dot: rgba(13, 19, 17, 0.09);
 }
 

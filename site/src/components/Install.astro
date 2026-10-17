@@ -14,6 +14,7 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
         <TabItem label="Linux and macOS">
           <Code
             lang="sh"
+            frame="none"
             wrap
             code="curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh"
           />
@@ -31,7 +32,7 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
     <li>
       <h3>Check the machine and start Studio</h3>
       <p>Studio prints a one-time login link for its local UI.</p>
-      <Code lang="sh" code={'studio doctor\nstudio'} />
+      <Code lang="sh" frame="none" code={'studio doctor\nstudio'} />
     </li>
     <li>
       <h3>Follow the guided setup</h3>
@@ -48,10 +49,6 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
 </div>
 
 <style>
-  .install {
-    max-width: 46rem;
-    margin-inline: auto;
-  }
   .install-steps {
     counter-reset: step;
     list-style: none;
@@ -60,38 +57,27 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
   }
   .install-steps > li {
     counter-increment: step;
-    position: relative;
-    padding: 0 0 2.25rem 3.5rem;
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+  }
+  .install-steps > li:first-child {
+    padding-top: 0;
   }
   .install-steps > li::before {
-    content: counter(step);
-    position: absolute;
-    left: 0;
-    top: 0;
-    display: grid;
-    place-items: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 50%;
-    border: 1px solid var(--ss-green-border);
-    background: var(--ss-green-soft);
+    content: counter(step, decimal-leading-zero);
+    padding-top: 0.2rem;
     color: var(--sl-color-text-accent);
-    font: 600 var(--sl-text-sm) / 1 var(--__sl-font-mono);
+    font: 500 var(--sl-text-sm) / 1.4 var(--__sl-font-mono);
   }
-  .install-steps > li:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    left: calc(1.125rem - 0.5px);
-    top: 2.75rem;
-    bottom: 0.5rem;
-    width: 1px;
-    background: var(--sl-color-hairline-light);
+  .install-steps > li > :global(*) {
+    grid-column: 2;
   }
   h3 {
-    padding-top: 0.25rem;
-    font-size: var(--sl-text-xl);
-    font-weight: 640;
-    letter-spacing: -0.02em;
+    font-size: var(--sl-text-lg);
+    font-weight: 620;
+    letter-spacing: -0.015em;
     color: var(--sl-color-white);
   }
   h3 code,
@@ -103,7 +89,8 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
     background: var(--sl-color-bg-inline-code);
   }
   p {
-    margin-top: 0.4rem;
+    margin-top: 0.35rem;
+    font-size: var(--sl-text-sm);
     color: var(--sl-color-gray-2);
     line-height: 1.65;
   }
@@ -117,14 +104,11 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
   .install-tab-text a,
   .install-note a {
     color: var(--sl-color-text-accent);
-    font-weight: 560;
+    font-weight: 550;
   }
   .install-note {
-    margin-top: 0;
-    padding: 1rem 1.25rem;
-    border-radius: 0.75rem;
-    border: 1px solid var(--sl-color-hairline-light);
-    background: var(--ss-surface);
+    margin-top: 1.25rem;
     font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
   }
 </style>

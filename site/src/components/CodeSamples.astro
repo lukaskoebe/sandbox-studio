@@ -1,0 +1,60 @@
+---
+// The landing page's "Under the hood" samples: a template spec and a session with the CLI.
+import { Code } from '@astrojs/starlight/components'
+
+const template = `resources:
+  cpus: 2
+  memory: 4GiB
+  workspace: 20GiB
+  docker: 20GiB
+tools:
+  node: "22"
+  python: "3.13"
+apt:
+  - postgresql-client
+setup: |
+  corepack enable`
+
+// Commands after a green prompt, their output dimmed, as in a real terminal.
+const cmd = (c: string) => `\x1b[32m$\x1b[0m ${c}`
+const out = (lines: string) => lines.split('\n').map((l) => `\x1b[90m${l}\x1b[0m`).join('\n')
+const session = [
+  cmd('studio ls'),
+  out(`NAME       STATUS   TEAMMATE  TEMPLATE  UPTIME
+api        running  Finn      go@2      2h 14m
+docs-site  stopped  Iris      node@3    –`),
+  '',
+  cmd('studio approvals'),
+  out(`ID             KIND     FROM  REQUEST                 AGE
+k2j4h6g8f0d1s  network  api   registry.npmjs.org:443  12s`),
+  '',
+  cmd('studio approve k2j4h6g8f0d1s'),
+  out('approved: registry.npmjs.org:443'),
+].join('\n')
+---
+
+<div class="samples not-content">
+  <Code code={template} lang="yaml" title="web-app.yaml" />
+  <Code code={session} lang="ansi" frame="terminal" title="Terminal" />
+</div>
+
+<style>
+  .samples {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (min-width: 72rem) {
+    .samples {
+      grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+      align-items: start;
+    }
+  }
+  .samples :global(.expressive-code) {
+    margin: 0;
+  }
+  .samples :global(.frame.is-terminal .header::before) {
+    display: none;
+  }
+</style>

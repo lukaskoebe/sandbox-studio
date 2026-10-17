@@ -1,0 +1,77 @@
+---
+// The landing page's list of guides: a title and a line each, divided by hairlines.
+interface Props {
+  items: { title: string; text: string; link: string }[]
+}
+const { items } = Astro.props
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
+---
+
+<ul class="guides">
+  {
+    items.map((g) => (
+      <li>
+        <a href={`${base}${g.link}`}>
+          <span class="guide-title">
+            {g.title}
+            <span class="guide-arrow" aria-hidden="true">
+              →
+            </span>
+          </span>
+          <span class="guide-text">{g.text}</span>
+        </a>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .guides {
+    display: grid;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+  li:first-child a {
+    padding-top: 0;
+  }
+  @media (min-width: 45rem) {
+    .guides {
+      grid-template-columns: repeat(2, 1fr);
+      column-gap: 2rem;
+    }
+    li:nth-child(2) a {
+      padding-top: 0;
+    }
+  }
+  li {
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+  }
+  a {
+    display: grid;
+    gap: 0.2rem;
+    padding: 1rem 0;
+    text-decoration: none;
+  }
+  .guide-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-weight: 600;
+    color: var(--sl-color-white);
+  }
+  .guide-arrow {
+    color: var(--sl-color-gray-4);
+    transition:
+      color 0.15s,
+      transform 0.15s;
+  }
+  a:hover .guide-arrow {
+    color: var(--sl-color-text-accent);
+    transform: translateX(3px);
+  }
+  .guide-text {
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+</style>

@@ -49,16 +49,16 @@ const { image, alt, kicker, title, flip = false } = Astro.props
     font-family: var(--__sl-font-mono);
     font-size: var(--sl-text-xs);
     font-weight: 500;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--sl-color-text-accent);
+    color: var(--sl-color-gray-3);
   }
   h3 {
-    margin-top: 0.6rem;
-    font-size: clamp(1.5rem, 1rem + 1.5vw, 2rem);
-    line-height: 1.15;
-    letter-spacing: -0.03em;
-    font-weight: 670;
+    margin-top: 0.75rem;
+    font-size: clamp(1.4rem, 1rem + 1.2vw, 1.75rem);
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    font-weight: 640;
     color: var(--sl-color-white);
     text-wrap: balance;
   }
@@ -72,19 +72,21 @@ const { image, alt, kicker, title, flip = false } = Astro.props
   }
   .showcase-text :global(a) {
     color: var(--sl-color-text-accent);
-    font-weight: 560;
+    font-weight: 550;
+    text-decoration: none;
+  }
+  .showcase-text :global(a:hover) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .showcase-shot {
-    padding: 0.4rem;
-    border-radius: 1rem;
+    border-radius: 0.75rem;
     border: 1px solid var(--sl-color-hairline-light);
-    background: var(--ss-surface);
-    box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
   }
   .showcase-shot :global(img) {
     display: block;
     width: 100%;
     height: auto;
-    border-radius: 0.7rem;
   }
 </style>

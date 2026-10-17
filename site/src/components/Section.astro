@@ -1,53 +1,85 @@
 ---
-// A landing page section: a kicker, a headline and a lede, then the section's content.
+// A landing page section under a hairline: a numbered label, a headline and a lede, then the
+// section's content. `split` puts the heading in a column of its own on wide screens.
 interface Props {
+  number?: string
   kicker?: string
   title: string
   id?: string
+  split?: boolean
 }
-const { kicker, title, id } = Astro.props
+const { number, kicker, title, id, split = false } = Astro.props
 ---
 
-<section class="landing-section not-content" id={id}>
+<section class:list={['landing-section not-content', { split }]} id={id}>
   <header class="section-head">
-    {kicker && <p class="section-kicker">{kicker}</p>}
+    {
+      kicker && (
+        <p class="section-kicker">
+          {number && <span class="section-number">{number}</span>}
+          {kicker}
+        </p>
+      )
+    }
     <h2 set:html={title} />
     {Astro.slots.has('lede') && <div class="section-lede"><slot name="lede" /></div>}
   </header>
-  <slot />
+  <div class="section-body"><slot /></div>
 </section>
 
 <style>
   .landing-section {
-    margin-top: clamp(4.5rem, 10vw, 7.5rem);
+    margin-top: clamp(4.5rem, 9vw, 7rem);
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--sl-color-hairline-light);
   }
   .section-head {
-    max-width: 44rem;
-    margin: 0 auto clamp(2rem, 4vw, 3rem);
-    text-align: center;
+    max-width: 42rem;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+  @media (min-width: 62rem) {
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+      gap: 4rem;
+    }
+    .split .section-head {
+      margin-bottom: 0;
+    }
+    .split h2 {
+      font-size: clamp(1.75rem, 1rem + 1.6vw, 2.25rem);
+    }
   }
   .section-kicker {
+    display: flex;
+    gap: 0.75rem;
     font-family: var(--__sl-font-mono);
     font-size: var(--sl-text-xs);
     font-weight: 500;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
+    color: var(--sl-color-gray-3);
+  }
+  .section-number {
     color: var(--sl-color-text-accent);
   }
   h2 {
-    margin-top: 0.75rem;
-    font-size: clamp(1.9rem, 1rem + 3vw, 3rem);
-    line-height: 1.08;
+    margin-top: 1.5rem;
+    font-size: clamp(1.9rem, 1rem + 2.6vw, 2.75rem);
+    line-height: 1.1;
     letter-spacing: -0.035em;
-    font-weight: 680;
+    font-weight: 660;
     color: var(--sl-color-white);
     text-wrap: balance;
   }
   .section-lede {
     margin-top: 1rem;
-    font-size: var(--sl-text-lg);
-    line-height: 1.6;
+    font-size: var(--sl-text-base);
+    line-height: 1.65;
     color: var(--sl-color-gray-2);
     text-wrap: pretty;
+  }
+  .section-body {
+    min-width: 0;
   }
 </style>

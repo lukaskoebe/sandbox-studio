@@ -18,7 +18,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             property: 'og:image',
-            content: 'https://lukaskoebe.github.io/sandbox-studio/video/everyone.jpg',
+            content: 'https://lukaskoebe.github.io/sandbox-studio/video/developers.jpg',
           },
         },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
