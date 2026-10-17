@@ -102,6 +102,7 @@ type app struct {
 	mouse    mouseState   // the last click, and where the screen's rows lead
 	toast    toastState   // the result or error the visual look shows at the top right
 	slide    slideState   // the new cards sliding in
+	net      netState     // the connections of the sandbox in Home's network column
 }
 
 // newApp returns the model for a session with the Studio at addr. Its first screen loads on Init.
@@ -145,7 +146,7 @@ func (m *app) Init() tea.Cmd {
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
-		m.watchToast(), m.watchSlide())
+		m.watchToast(), m.watchSlide(), m.watchNet())
 }
 
 // update applies one message to the model.
@@ -166,6 +167,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.liveUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.netUpdate(msg); ok {
 		return m, cmd
 	}
 	if m.motionUpdate(msg) {

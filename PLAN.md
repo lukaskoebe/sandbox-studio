@@ -67,6 +67,5 @@ says.
   through review, with the key only in the host agent
 
 **Terminal UI**
-- What the visual look left out: pictures (phase 4, which needs the browser frame endpoint),
-  the 160-column Home →
+- What the visual look left out: pictures (phase 4, which needs the browser frame endpoint) →
   [design](docs/design/tui-visual.md)

@@ -304,7 +304,10 @@ and [design/tui-visual.md](design/tui-visual.md)):
 - **Wide layouts.** From 120 columns, Home is the list beside the selected sandbox's pane. The
   pane shows its facts, CPU and memory, the first approval waiting as a card, terminals, ports,
   and a history line from its lineage. The git review gains a file list with +/− bars, where
-  `[` and `]` jump between files. From 160 columns the diff is side by side, and `v` toggles
+  `[` and `]` jump between files. From 160 columns Home adds a third column, the selected
+  sandbox's network: its connections newest first, with their verdict's dot, age, host and
+  verdict, read from `GET .../sandboxes/{id}/connections` every 2 seconds while it shows
+  (`dash.go`). From 160 columns the diff is side by side, and `v` toggles
   it. Inside a changed line, the words it changes are in reverse video. They come from a
   diff of the words of each removed line and the added line paired with it (`worddiff.go`),
   and lines that share no word, or have more than 300, keep their line's color only.

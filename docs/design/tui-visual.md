@@ -1,11 +1,9 @@
 # A more visual TUI (design)
 
-Status: Phases 1–3 and the mouse are built (2026-10-17); [tui.md](../tui.md#look) describes
+Status: Phases 1–3, the mouse and the motion are built (2026-10-17); [tui.md](../tui.md#look) describes
 the TUI as it is. Left out:
 
 - Phase 4, pictures: it needs the browser frame endpoint and a graphics encoder.
-- The 160-column three-column Home (the open question below). From 120 columns Home is the
-  list and the detail.
 
 Where the build differs from the text:
 
@@ -221,5 +219,6 @@ Each phase is useful alone, and none changes what a key does.
   them.
 - **Windows Terminal** supports truecolor, mouse and (since 1.22) sixel; conhost supports
   none of them and gets the 16-color layout.
-- **Open:** should the 160-column dashboard be Home, or its own screen (`D`)? A busy
-  three-column Home may be too much for people who use the TUI only to answer approvals.
+- **Decided:** the 160-column dashboard is Home, not its own screen. Its third column is
+  only the selected sandbox's connections, so it stays quiet for people who use the TUI to
+  answer approvals, and a narrower terminal never sees it.

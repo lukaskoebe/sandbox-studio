@@ -246,8 +246,15 @@ func (m *app) splitHome(visible []sandboxes.View, w, h int) []string {
 		left = append(left, m.paneRow(visible[i], i == m.cursor, listW-1))
 	}
 	var right []string
+	detailW := w - listW - 2
+	if m.homeDash(w) {
+		detailW -= netPaneWidth(w) + 2
+	}
 	if sb := m.selected(); sb != nil {
-		right = m.detailPane(*sb, w-listW-3, h)
+		right = m.detailPane(*sb, detailW-1, h)
+	}
+	if m.homeDash(w) {
+		right = joinPanes(right, m.netPane(netPaneWidth(w), h), detailW, h)
 	}
 	return joinPanes(left, right, listW, h)
 }

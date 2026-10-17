@@ -44,8 +44,14 @@ func (m *app) frame() string {
 		top = m.tabRule(w, m.mouse.tabs)
 	}
 	bottom := rule
-	if col := m.paneColumn(w); col > 0 && col < w {
-		bottom = styleDim.Render(strings.Repeat("─", col) + "┴" + strings.Repeat("─", w-col-1))
+	if cols := m.paneColumns(w); len(cols) > 0 {
+		cells := []rune(strings.Repeat("─", w))
+		for _, c := range cols {
+			if c > 0 && c < w {
+				cells[c] = '┴'
+			}
+		}
+		bottom = styleDim.Render(string(cells))
 	}
 	lines := []string{head, top}
 	lines = append(lines, pad(m.body(w, max(h-5, 1)), max(h-5, 1))...)
@@ -77,16 +83,20 @@ func (m *app) header(w int) string {
 	return spread(left, right, w)
 }
 
-// paneColumn is the column of the line between two panes of the screen on show, or -1 when it
-// has one pane: Home's list and detail, and the git review's files and diff, on wide terminals.
-func (m *app) paneColumn(w int) int {
+// paneColumns are the columns of the lines between the panes of the screen on show, none when it
+// has one pane: Home's list, detail and network, and the git review's files and diff, on wide
+// terminals.
+func (m *app) paneColumns(w int) []int {
 	switch {
+	case m.screen == screenHome && m.homeDash(w):
+		list := homeListWidth(w)
+		return []int{list, w - netPaneWidth(w) - 2}
 	case m.screen == screenHome && m.homeSplit(w):
-		return homeListWidth(w)
+		return []int{homeListWidth(w)}
 	case m.screen == screenPager && m.pagerSplit(w):
-		return pagerListWidth(w)
+		return []int{pagerListWidth(w)}
 	}
-	return -1
+	return nil
 }
 
 // body is the screen's lines, at most h of them.

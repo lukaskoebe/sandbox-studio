@@ -15,6 +15,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
+	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -57,6 +58,18 @@ func visualApp(w, h int) *app {
 		})
 	}
 	return m
+}
+
+// withNetwork gives api-refactor's network column a few connections.
+func withNetwork(m *app) {
+	at := func(d time.Duration) time.Time { return m.now.Add(-d) }
+	m.net = netState{sandbox: "sb2", loaded: true, busy: true, conns: []gateway.Conn{
+		{ID: 1, Started: at(40 * time.Minute), Host: "github.com", Port: 443, Verdict: gateway.VerdictAllowed},
+		{ID: 2, Started: at(12 * time.Minute), Host: "registry.npmjs.org", Port: 443, Verdict: gateway.VerdictAllowed},
+		{ID: 3, Started: at(9 * time.Minute), Host: "telemetry.example.com", Port: 443, Verdict: gateway.VerdictDenied},
+		{ID: 4, Started: at(2 * time.Minute), Host: "pypi.org", Port: 443, Verdict: gateway.VerdictPending},
+		{ID: 5, Started: at(20 * time.Second), Host: "files.pythonhosted.org", Port: 443, Verdict: gateway.VerdictFailed},
+	}}
 }
 
 // withDetailData gives the detail pane of api-refactor its ports, terminals and history.
@@ -127,7 +140,9 @@ func TestGoldenWideHome(t *testing.T) {
 }
 
 func TestGoldenWideHome180(t *testing.T) {
-	goldenVisual(t, "wide_home_180x50", withDetailData(press(visualApp(180, 50), "j")), false)
+	m := withDetailData(press(visualApp(180, 50), "j"))
+	withNetwork(m)
+	goldenVisual(t, "wide_home_180x50", m, false)
 }
 
 func TestGoldenWidePager(t *testing.T) {
@@ -421,5 +436,36 @@ func TestClickingAKeycapPressesIt(t *testing.T) {
 	next, _ = m.Update(tea.MouseClickMsg{X: h.x1 - 1, Y: h.y, Button: tea.MouseLeft})
 	if m = next.(*app); m.screen != screenApprovals {
 		t.Errorf("the key bar's esc goes back: screen %v", m.screen)
+	}
+}
+
+func TestNetworkColumnReadsTheSelectedSandbox(t *testing.T) {
+	m := visualApp(180, 50)
+	m = press(m, "j")
+	if got := m.netWanted(); got != "sb2" {
+		t.Fatalf("Home at 180 columns reads the selected sandbox's connections: %q", got)
+	}
+	if visualApp(159, 50).netWanted() != "" || press(visualApp(180, 50), "a").netWanted() != "" {
+		t.Error("the network column is read below 160 columns, or off Home")
+	}
+	if cmd := m.watchNet(); cmd != nil || m.net.sandbox != "sb2" || !m.net.busy {
+		// press already started the read through Update; a second watch starts nothing
+		t.Fatalf("a second read of the same sandbox: %v, %+v", cmd != nil, m.net)
+	}
+	gen := m.net.gen
+	m.netUpdate(netLoaded{gen: gen - 1, conns: []gateway.Conn{{Host: "old.example"}}})
+	if m.net.loaded {
+		t.Error("a read for the sandbox before took effect")
+	}
+	if cmd, _ := m.netUpdate(netLoaded{gen: gen, conns: []gateway.Conn{{Host: "pypi.org", Port: 443}}}); cmd == nil || !m.net.loaded {
+		t.Fatal("a read shows no connections, or schedules no next read")
+	}
+	m = press(m, "j") // another sandbox: read at once, a new generation
+	if m.net.sandbox == "sb2" || m.net.gen == gen || m.net.loaded {
+		t.Errorf("moving the cursor keeps the old sandbox's column: %+v", m.net)
+	}
+	m.netUpdate(netTick{gen: gen})
+	if !m.net.busy {
+		t.Error("a tick for the sandbox before ended the new one's read")
 	}
 }

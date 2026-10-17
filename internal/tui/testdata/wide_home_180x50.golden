@@ -1,49 +1,49 @@
  ◆ Studio  Default ▾   Sandboxes   Approvals 1   Activity   Git                                                                                                               12:00 
 ───────────────────────━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-SANDBOXES  4                                                      │ api-refactor                                                                                        ● Running  
-  ● Running   blub                      Iris    ▁▁▁▁▁▁▁▁ 2h       │ ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-▌ ● Running   api-refactor              Finn    ▂▄▅▆▆▄▃▄ 12m  ●1  │ Finn · go@2 · 2 CPUs · 2 GiB · up 12m
-  ○ Stopped   docs-site                 Iris                      │ 
-  ◐ Booting   demo                      —       ▓▒░░░░░░          │ CPU  ·········▁▂▃▅▇▅▃▂▄▅▆▆▄▃▄  38 %  ┊  MEM ███████░░░ 1.4 / 2 GiB
-                                                                  │ 
-                                                                  │ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-                                                                  │ ┃ ⇅ NETWORK   A sandbox wants                                                                                 │
-                                                                  │ ┃ pattern  ‹p›   scope environment ‹s›   ports default ‹x›                                                    │
-                                                                  │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-                                                                  │   a approvals
-                                                                  │ 
-                                                                  │ TERMINALS  main · claude · 2
-                                                                  │ PORTS      :3000 · :8080
-                                                                  │ HISTORY    ○──·──●──◇──○──◆ now
-                                                                  │            created 3d ago · 2 checkpoints · 1 fork · 1 restore                                                 
-                                                                  │ ID         sb2
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-                                                                  │ 
-──────────────────────────────────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+SANDBOXES  4                                                      │ api-refactor                                         ● Running   │ NETWORK  5 connections · 2 refused or failed
+  ● Running   blub                      Iris    ▁▁▁▁▁▁▁▁ 2h       │ ──────────────────────────────────────────────────────────────── │ ● 20s  files.pythonhosted.org:443  failed    
+▌ ● Running   api-refactor              Finn    ▂▄▅▆▆▄▃▄ 12m  ●1  │ Finn · go@2 · 2 CPUs · 2 GiB · up 12m                            │ ● 2m   pypi.org:443                waiting   
+  ○ Stopped   docs-site                 Iris                      │                                                                  │ ● 9m   telemetry.example.com:443   denied    
+  ◐ Booting   demo                      —       ▓▒░░░░░░          │ CPU  ······▁▂▃▅▇▅▃▂▄▅▆▆▄▃▄  38 %  ┊  MEM ███████░░░ 1.4 / 2 GiB  │ ● 12m  registry.npmjs.org:443      allowed   
+                                                                  │                                                                  │ ● 40m  github.com:443              allowed   
+                                                                  │ ╭──────────────────────────────────────────────────────────────╮ │ 
+                                                                  │ ┃ ⇅ NETWORK   A sandbox wants                                  │ │ 
+                                                                  │ ┃ pattern  ‹p›   scope environment ‹s›   ports default ‹x›     │ │ 
+                                                                  │ ╰──────────────────────────────────────────────────────────────╯ │ 
+                                                                  │   a approvals                                                    │ 
+                                                                  │                                                                  │ 
+                                                                  │ TERMINALS  main · claude · 2                                     │ 
+                                                                  │ PORTS      :3000 · :8080                                         │ 
+                                                                  │ HISTORY    ○──·──●──◇──○──◆ now                                  │ 
+                                                                  │            created 3d ago · 2 checkpoints · 1 fork · 1 restore   │ 
+                                                                  │ ID         sb2                                                   │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+                                                                  │                                                                  │ 
+──────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────
 enter open  n new  s start/stop │ a approvals  t terminal  c chat │ ? more  q quit
