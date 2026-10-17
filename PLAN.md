@@ -15,7 +15,7 @@ says.
 ## Backlog
 
 **Platforms and runtime**
-- S1–S3 and S9 on macOS and Windows; arm64 guests; a Windows cloud VM →
+- S1–S3 on a real Mac (the macOS runners can't boot VMs); arm64 guests →
   [spikes](docs/spikes.md#still-open)
 - Checkpoint restore, blocked by microsandbox #1736 →
   [sandboxes](docs/sandboxes.md#checkpoints). The lineage timeline's Restore and "Fork from

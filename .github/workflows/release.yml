@@ -215,8 +215,8 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
 
-  # Every host boots the pushed base image with Studio built from the tag, and Linux runs the
-  # live browser tests, before anything is published.
+  # Every host that can boots the pushed base image with Studio built from the tag, and runs
+  # the live browser tests, before anything is published.
   smoke:
     needs: image
     permissions:

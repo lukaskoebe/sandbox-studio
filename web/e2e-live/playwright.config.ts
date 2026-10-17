@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test"
 
 // End-to-end tests against a real Studio that is already running and boots real VMs, as the
-// smoke workflow's Linux job runs it. STUDIO_LOGIN_URL is a fresh link from `studio
+// smoke workflow's Linux and Windows jobs run it. STUDIO_LOGIN_URL is a fresh link from `studio
 // login-url`; Studio's address is taken from it. The fake-runtime suite is in ../e2e.
 const login = process.env.STUDIO_LOGIN_URL
 

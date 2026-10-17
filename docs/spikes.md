@@ -351,7 +351,12 @@ and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze
 
 ## Still open
 
-- S1–S3 and S9 on the Mac; Windows needs a cloud VM with nested virtualization.
+- S1–S3 on the Mac: GitHub's macOS runners have no Hypervisor.framework, so this needs a
+  real Mac. Windows needs no cloud VM: the hosted `windows-2025` runner has the Windows
+  Hypervisor Platform, and since 2026-10-17 the smoke workflow there boots a sandbox and runs
+  the live browser test (Docker inside, the gateway and DNS with an approval, the guest
+  agent, a preview), which covers S1–S3. S9's model runs in that workflow on Linux, macOS and
+  Windows (`TestLlamaEmbeds`); its timing on the Mac (Metal) is still unmeasured.
 - S7: verify hook payloads and context injection for OpenCode, Claude Code and Codex against
   a fake model endpoint (no credentials needed).
 - S8: subscription logins are built, and the Claude sign-in worked on the owner's machine
