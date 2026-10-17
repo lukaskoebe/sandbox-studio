@@ -354,7 +354,8 @@ and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze
 - S1–S3 and S9 on the Mac; Windows needs a cloud VM with nested virtualization.
 - S7: verify hook payloads and context injection for OpenCode, Claude Code and Codex against
   a fake model endpoint (no credentials needed).
-- S8: subscription logins are built; the owner's Claude and ChatGPT accounts verify them, with
+- S8: subscription logins are built, and the Claude sign-in worked on the owner's machine
+  (2026-10-17). A Claude session and chat on it and the ChatGPT login are still to be run, with
   the steps in [harnesses](harnesses.md#subscription-logins-built-pending-live-verification).
 - Template builds: live qualification of the exec export path including network installs,
   cold-cache base pulls, a build on a release base, arm64 guests, oversized or backpressured

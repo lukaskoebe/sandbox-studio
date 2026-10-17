@@ -40,8 +40,8 @@ says.
   snapshots) is merged and released, then expose it as a template setting.
 
 **Agents and providers**
-- Subscription logins (Claude Pro/Max, ChatGPT/Codex) and CLI-based utility calls: built,
-  pending the owner's accounts (spike S8) →
+- Subscription logins and CLI-based utility calls (spike S8): the Claude sign-in works; a
+  Claude session and chat on it, the ChatGPT/Codex login and the refresh are still to be run →
   [harnesses](docs/harnesses.md#subscription-logins-built-pending-live-verification)
 - The chat adapters' assumptions against the pinned CLIs →
   [chat mode](docs/design/chat-mode.md) ("Unverified")

@@ -291,7 +291,10 @@ Pending S7 (`// verify (S7)` in the code):
 The sign-in flows, the placeholders, the refresh and the utility calls of
 [subscription logins](teammates.md#subscription-logins) are built and covered by fakes in tests.
 No test ran a vendor CLI or reached a vendor's host. The owner checks them with their own
-accounts. Each assumption is marked `verify (S8)` in the code. The steps:
+accounts. Each assumption is marked `verify (S8)` in the code.
+
+Verified: the Claude sign-in (step 1) worked on the owner's machine on 2026-10-17. Steps 2 to 7
+are still to be run. The steps:
 
 1. Claude Pro/Max. In Settings → Providers, Add provider → Claude subscription → Add. Choose
    Sign in with Claude. Expect the dialog's steps: open the sign-in page, sign in and authorize,
