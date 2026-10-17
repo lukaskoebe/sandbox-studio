@@ -2,16 +2,20 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 )
 
-// The look is the terminal's own: its foreground and background, one accent for focus and
+// The plain look is the terminal's own: its foreground and background, one accent for focus and
 // status, and dim text for secondary facts. Colors are ANSI, so the user's palette applies, and
-// Bubble Tea's renderer drops them when NO_COLOR is set.
+// Bubble Tea's renderer drops them when NO_COLOR is set. The visual look (docs/design/tui-visual.md)
+// adds the palette below on top of these.
 var (
 	styleBold   = lipgloss.NewStyle().Bold(true)
 	styleDim    = lipgloss.NewStyle().Faint(true)
@@ -95,4 +99,120 @@ func plural(n int, one, many string) string {
 		return one
 	}
 	return many
+}
+
+// fitStyled is fit for text that is styled already: it cuts by cells, keeping the escapes whole.
+func fitStyled(s string, w int) string {
+	if w <= 0 {
+		return ""
+	}
+	if n := lipgloss.Width(s); n <= w {
+		return s + strings.Repeat(" ", w-n)
+	}
+	cut := ansi.Truncate(s, w, "…")
+	return cut + strings.Repeat(" ", max(w-lipgloss.Width(cut), 0))
+}
+
+// clip cuts s to w cells with an ellipsis, keeping its escapes whole, and pads nothing.
+func clip(s string, w int) string {
+	return ansi.Truncate(s, max(w, 0), "…")
+}
+
+// look is how the screens are drawn: today's plain look, or the visual one with the web's area
+// hues and status colors, the tab header, cards, wide layouts and the mouse. The visual look needs
+// a terminal with colors; STUDIO_TUI=plain, NO_COLOR or a terminal without colors keep the plain
+// one.
+type look struct {
+	plain   bool                 // today's look
+	forced  bool                 // STUDIO_TUI=plain asked for it
+	profile colorprofile.Profile // the colors the terminal shows
+	light   bool                 // the terminal's background is light
+}
+
+// lookFor is the look for a terminal's color profile; forced is STUDIO_TUI=plain.
+func lookFor(profile colorprofile.Profile, forced, light bool) look {
+	return look{plain: forced || profile < colorprofile.ANSI, forced: forced, profile: profile, light: light}
+}
+
+// plainSetting reports whether the STUDIO_TUI setting asks for the plain look.
+func plainSetting(setting string) bool {
+	return strings.EqualFold(strings.TrimSpace(setting), "plain")
+}
+
+// area is the part of Studio a thing belongs to, which gives it its hue, as on the web.
+type area int
+
+const (
+	areaNone area = iota
+	areaNetwork
+	areaGit
+	areaBrowser
+	areaMemory
+	areaChat
+)
+
+// palette is the visual look's colors, resolved for the terminal: the web's oklch values as sRGB
+// on truecolor terminals (light or dark, as the background is), the nearest xterm color on 256
+// colors, and the ANSI colors on 16, so the user's palette applies there.
+type palette struct {
+	areas   [areaChat + 1]lipgloss.Style
+	running lipgloss.Style
+	waiting lipgloss.Style
+	failed  lipgloss.Style
+	stopped lipgloss.Style
+	brand   lipgloss.Style // Studio's green, for the ◆ of the header
+	added   lipgloss.Style
+	removed lipgloss.Style
+	keycap  lipgloss.Style
+	capBg   bool // keycaps sit on a background; on 16 colors they are bracketed instead
+}
+
+// newPalette resolves the palette for a look.
+func newPalette(l look) palette {
+	complete := lipgloss.Complete(l.profile)
+	// hue picks a role's color: the ANSI color, the xterm color, and the web's light and dark values.
+	hue := func(ansi, x256 int, light, dark string) color.Color {
+		tc := dark
+		if l.light {
+			tc = light
+		}
+		return complete(lipgloss.Color(fmt.Sprint(ansi)), lipgloss.Color(fmt.Sprint(x256)), lipgloss.Color(tc))
+	}
+	fg := func(c color.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground(c) }
+	p := palette{
+		running: fg(hue(2, 77, "#0fa44d", "#47c86e")),
+		waiting: fg(hue(3, 221, "#e2af27", "#f0c551")).Bold(true),
+		failed:  fg(hue(1, 203, "#db2c2b", "#fa6863")),
+		stopped: fg(hue(7, 245, "#9a9fa5", "#6e7277")),
+		brand:   fg(hue(2, 77, "#008238", "#3fc168")).Bold(true),
+		keycap:  lipgloss.NewStyle().Bold(true),
+	}
+	p.areas[areaNone] = styleDim
+	p.areas[areaNetwork] = fg(hue(4, 74, "#3a89b3", "#6eb9dc"))
+	p.areas[areaGit] = fg(hue(5, 141, "#795bbf", "#b09de9"))
+	p.areas[areaBrowser] = fg(hue(3, 215, "#c67447", "#eea471"))
+	p.areas[areaMemory] = fg(hue(6, 72, "#35877d", "#76c5bb"))
+	p.areas[areaChat] = fg(hue(2, 114, "#3b834e", "#76c788"))
+	p.added, p.removed = p.running, p.failed
+	if l.profile == colorprofile.ANSI {
+		p.stopped = styleDim // the user's palette: dim, not a gray of ours
+	}
+	if l.profile >= colorprofile.ANSI256 {
+		bg := "#33363b"
+		if l.light {
+			bg = "#e4e6ea"
+		}
+		x256 := 237
+		if l.light {
+			x256 = 254
+		}
+		p.keycap = p.keycap.Background(complete(nil, lipgloss.Color(fmt.Sprint(x256)), lipgloss.Color(bg)))
+		p.capBg = true
+	}
+	return p
+}
+
+// hue is the style of an area.
+func (p *palette) hue(a area) lipgloss.Style {
+	return p.areas[a]
 }

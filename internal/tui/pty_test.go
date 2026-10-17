@@ -26,74 +26,116 @@ import (
 func TestTerminalSmoke(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusStopped)
+	tui := startTUI(t, s, defaultWidth, defaultHeight)
+	tui.waitFor("Home", "Sandbox Studio", "blub")
 
+	// l opens Activity; q returns to Home, where q quits.
+	tui.write("l")
+	tui.waitFor("Activity", "Activity")
+	tui.write("q")
+	tui.write("q")
+	tui.quit()
+}
+
+// TestTerminalSmokeWide runs the visual look on a wide 256-color terminal: Home splits into the
+// list and the selected sandbox's detail, and a click on the Activity tab opens the log.
+func TestTerminalSmokeWide(t *testing.T) {
+	s := startStudio(t)
+	s.addSandbox(t, "blub", runtime.StatusStopped)
+	tui := startTUI(t, s, 140, 40)
+	tui.waitFor("the wide Home", "◆", "Studio", "SANDBOXES", "blub", "HISTORY")
+
+	// A click on the tab, in SGR mouse coordinates that count from 1, acts as l.
+	x := len([]rune(" ◆ Studio  Default ▾   Sandboxes   Approvals   "))
+	tui.write(fmt.Sprintf("\x1b[<0;%d;1M\x1b[<0;%d;1m", x+2, x+2))
+	tui.waitFor("Activity", "connections and decisions")
+	tui.write("q")
+	tui.write("q")
+	tui.quit()
+}
+
+// ptyTUI is the TUI running in a pseudo-terminal, and what it has drawn so far.
+type ptyTUI struct {
+	t      *testing.T
+	cmd    *exec.Cmd
+	ptmx   *os.File
+	mu     sync.Mutex
+	screen bytes.Buffer
+}
+
+// startTUI runs the TUI against s in a pseudo-terminal of cols×rows that says it has 256 colors.
+func startTUI(t *testing.T, s *testStudio, cols, rows uint16) *ptyTUI {
+	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestTUIChild$")
 	cmd.Env = append(os.Environ(), "STUDIO_TUI_CHILD=1", "STUDIO_TUI_ADDR="+s.Addr, "STUDIO_TUI_CONTROL="+s.Control, "TERM=xterm-256color")
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: defaultHeight, Cols: defaultWidth})
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: rows, Cols: cols})
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ptmx.Close()
-
-	var mu sync.Mutex
-	var screen bytes.Buffer
+	t.Cleanup(func() { ptmx.Close() })
+	p := &ptyTUI{t: t, cmd: cmd, ptmx: ptmx}
 	go func() {
 		chunk := make([]byte, 4096)
 		for {
 			n, err := ptmx.Read(chunk)
-			mu.Lock()
-			screen.Write(chunk[:n])
-			mu.Unlock()
+			p.mu.Lock()
+			p.screen.Write(chunk[:n])
+			p.mu.Unlock()
 			if err != nil {
 				return
 			}
 		}
 	}()
-	seen := func() string {
-		mu.Lock()
-		defer mu.Unlock()
-		return screen.String()
-	}
-	waitFor := func(what string, want ...string) {
-		t.Helper()
-		deadline := time.Now().Add(15 * time.Second)
-		for {
-			all := true
-			for _, w := range want {
-				all = all && strings.Contains(seen(), w)
-			}
-			if all {
-				return
-			}
-			if time.Now().After(deadline) {
-				t.Fatalf("%s did not show; the terminal said:\n%q", what, seen())
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-	}
-	waitFor("Home", "Sandbox Studio", "blub")
+	return p
+}
 
-	// l opens Activity; q returns to Home, where q quits.
-	if _, err := ptmx.Write([]byte("l")); err != nil {
-		t.Fatal(err)
+// seen is all the TUI has written to the terminal.
+func (p *ptyTUI) seen() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.screen.String()
+}
+
+// write types into the terminal.
+func (p *ptyTUI) write(s string) {
+	p.t.Helper()
+	if _, err := p.ptmx.Write([]byte(s)); err != nil {
+		p.t.Fatal(err)
 	}
-	waitFor("Activity", "Activity")
-	if _, err := ptmx.Write([]byte("q")); err != nil {
-		t.Fatal(err)
+}
+
+// waitFor waits until the terminal has shown each of want.
+func (p *ptyTUI) waitFor(what string, want ...string) {
+	p.t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		all := true
+		for _, w := range want {
+			all = all && strings.Contains(p.seen(), w)
+		}
+		if all {
+			return
+		}
+		if time.Now().After(deadline) {
+			p.t.Fatalf("%s did not show; the terminal said:\n%q", what, p.seen())
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	if _, err := ptmx.Write([]byte("q")); err != nil {
-		t.Fatal(err)
-	}
+}
+
+// quit waits for the TUI to exit, after the keys that quit it.
+func (p *ptyTUI) quit() {
+	p.t.Helper()
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go func() { done <- p.cmd.Wait() }()
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Fatalf("the TUI exited with %v; the terminal said:\n%q", err, seen())
+			p.t.Fatalf("the TUI exited with %v; the terminal said:\n%q", err, p.seen())
 		}
 	case <-time.After(15 * time.Second):
-		cmd.Process.Kill()
-		t.Fatal("the TUI did not quit on q")
+		p.cmd.Process.Kill()
+		p.t.Fatal("the TUI did not quit on q")
 	}
 }
 

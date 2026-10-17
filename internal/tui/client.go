@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
@@ -192,6 +193,28 @@ func (c *Client) RestoreCheckpoint(ctx context.Context, env, sandbox, checkpoint
 func (c *Client) Ports(ctx context.Context, env, sandbox string) ([]api.PreviewPort, error) {
 	var out []api.PreviewPort
 	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/ports", nil, nil, &out)
+	return out, err
+}
+
+// Terminals lists a running sandbox's terminals: its tmux sessions.
+func (c *Client) Terminals(ctx context.Context, env, sandbox string) ([]agentproto.Session, error) {
+	var out []agentproto.Session
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/terminals", nil, nil, &out)
+	return out, err
+}
+
+// Usage reads a running sandbox's CPU and memory use, as the workspace's status line does. A
+// runtime that reports none answers 501, a sandbox that doesn't run 409.
+func (c *Client) Usage(ctx context.Context, env, sandbox string) (sandboxes.ResourceUse, error) {
+	var out sandboxes.ResourceUse
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/usage", nil, nil, &out)
+	return out, err
+}
+
+// Lineage reads a sandbox's history: its events, its forks and its checkpoints.
+func (c *Client) Lineage(ctx context.Context, env, sandbox string) (sandboxes.Lineage, error) {
+	var out sandboxes.Lineage
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/lineage", nil, nil, &out)
 	return out, err
 }
 

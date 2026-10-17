@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 )
 
@@ -17,26 +18,30 @@ const portsEvery = 3 * time.Second
 // maxPorts bounds the ports the detail screen lists; the rest are counted.
 const maxPorts = 6
 
-// portsState is what the detail screen knows of its sandbox's open ports.
+// portsState is what the detail screen knows of its sandbox's open ports, and, for the visual
+// look's detail pane, of its terminals.
 type portsState struct {
-	sandbox string // the sandbox the list is of
-	list    []api.PreviewPort
-	loaded  bool // the list of sandbox arrived
-	busy    bool // a read or the wait for the next one is under way
+	sandbox   string // the sandbox the list is of
+	list      []api.PreviewPort
+	terminals []agentproto.Session
+	loaded    bool // the list of sandbox arrived
+	busy      bool // a read or the wait for the next one is under way
 }
 
 type (
 	portsLoaded struct {
-		sandbox string
-		list    []api.PreviewPort
-		err     error
+		sandbox   string
+		list      []api.PreviewPort
+		terminals []agentproto.Session
+		err       error
 	}
 	portsTick struct{ sandbox string }
 )
 
-// portsWanted is the sandbox whose ports the screen on show lists: the detail's, while it runs.
+// portsWanted is the sandbox whose ports the screen on show lists, while it runs: the detail's,
+// or the one in the detail pane of Home's wide layout.
 func (m *app) portsWanted() string {
-	if m.screen != screenDetail {
+	if m.screen != screenDetail && (m.screen != screenHome || !m.homeSplit(m.width)) {
 		return ""
 	}
 	sb := m.selected()
@@ -60,14 +65,19 @@ func (m *app) watchPorts() tea.Cmd {
 	return m.loadPorts(id)
 }
 
-// loadPorts reads the open ports of a sandbox.
+// loadPorts reads the open ports of a sandbox, and in the visual look its terminals, which only
+// it draws. A failed read of the terminals leaves them out.
 func (m *app) loadPorts(id string) tea.Cmd {
-	ctx, client, env := m.ctx, m.client, m.env.ID
+	ctx, client, env, terminals := m.ctx, m.client, m.env.ID, !m.look.plain
 	return func() tea.Msg {
 		rctx, cancel := requestContext(ctx)
 		defer cancel()
 		list, err := client.Ports(rctx, env, id)
-		return portsLoaded{sandbox: id, list: list, err: err}
+		out := portsLoaded{sandbox: id, list: list, err: err}
+		if terminals && err == nil {
+			out.terminals, _ = client.Terminals(rctx, env, id)
+		}
+		return out
 	}
 }
 
@@ -78,7 +88,7 @@ func (m *app) portsUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 	switch msg := msg.(type) {
 	case portsLoaded:
 		if msg.sandbox == p.sandbox && msg.err == nil {
-			p.list, p.loaded = msg.list, true
+			p.list, p.terminals, p.loaded = msg.list, msg.terminals, true
 		}
 		if m.portsWanted() != msg.sandbox {
 			p.busy = false

@@ -1,0 +1,23 @@
+[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m●[m 1 approval
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1mapi-refactor[m                                                         [38;5;77m●[m Running  
+
+  [2mTeammate   [mFinn
+  [2mTemplate   [mgo@2
+  [2mResources  [m2 CPUs, 2048 MiB of memory
+  [2mUptime     [mup 12m
+  [2mUsage      [m[2mCPU  ·······[m[38;5;77m▁▂▃▅▇▅▃▂▄▅▆▆▄▃▄[m  38 %[2m  ┊  [m[2mMEM [m[38;5;72m███████[m[2m░░░[m 1.4 / 2 GiB
+  [2mApprovals  [m[1;38;5;221m●[m 1 approval waiting
+  [2mID         [msb2
+  [2mHistory    [m○[2m──[m·[2m──[m●[2m──[m◇[2m──[m○[2m──[m[36m◆[m now
+  [2m           [m[2mcreated 3d ago · 2 checkpoints · 1 fork · 1 restore                [m
+  [2mPorts      [m:3000  ]8;;http://3000-sb2.localhost:7878/http://3000-sb2.localhost:7878/]8;;
+  [2m           [m:8080  ]8;;http://8080-sb2.localhost:7878/http://8080-sb2.localhost:7878/]8;;
+
+
+
+
+
+
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1ms[m [2mstart/stop[m  [1md[m [2mdelete[m  [1mz[m [2msuspend[m  [1mf[m [2mfork[m  [1mt[m [2mterminal[m  [1mc[m [2mchat[m  [1ml[m [2mactivity[m[2m …[m

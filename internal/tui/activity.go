@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
@@ -34,6 +35,7 @@ type activityState struct {
 	filter    string // narrows the entries to the sandboxes whose name has it
 	gen       int    // counts the times the screen opened, so a tick of an earlier visit stops
 	entry     *activityEntry
+	at        time.Time // when the log was read, which the busy hosts count back from
 }
 
 // activityEntry is one line of the log: a connection, or the decision on a network request.
@@ -52,6 +54,7 @@ type activityEntry struct {
 
 type (
 	activityLoaded struct {
+		at        time.Time
 		env       string
 		conns     map[string][]gateway.Conn
 		decisions []api.ApprovalView
@@ -86,7 +89,7 @@ func (m *app) loadActivity() tea.Cmd {
 	return func() tea.Msg {
 		rctx, cancel := requestContext(ctx)
 		defer cancel()
-		out := activityLoaded{env: env, conns: map[string][]gateway.Conn{}}
+		out := activityLoaded{at: time.Now(), env: env, conns: map[string][]gateway.Conn{}}
 		if out.decisions, out.err = client.Approvals(rctx, env); out.err != nil {
 			return out
 		}
@@ -131,7 +134,7 @@ func (m *app) activityUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		if list := m.activityEntries(); a.cursor < len(list) {
 			prev = list[a.cursor].key
 		}
-		a.loaded, a.conns, a.decisions = true, msg.conns, msg.decisions
+		a.loaded, a.conns, a.decisions, a.at = true, msg.conns, msg.decisions, msg.at
 		a.rules = make(map[string]store.Rule, len(msg.rules))
 		for _, r := range msg.rules {
 			a.rules[r.ID] = r
@@ -350,17 +353,21 @@ func (m *app) activityBody(w, h int) []string {
 	rest := w - 2 - colWhen - colSandbox - colVerdict - 4
 	ruleW := max(rest/3, 12)
 	hostW := max(rest-ruleW, 12)
-	rows := max(h-1, 1)
+	lines := []string{head}
+	if strip := m.busyHosts(w, h); len(strip) > 0 {
+		lines = append(append(lines, strip...), "")
+	}
+	rows := max(h-len(lines), 1)
 	offset := 0
 	if a.cursor >= rows {
 		offset = a.cursor - rows + 1
 	}
-	lines := []string{head}
-	for i := offset; i < len(list) && len(lines) <= rows; i++ {
+	for i := offset; i < len(list) && len(lines) < h; i++ {
+		m.hitRow(len(lines), 0, w, rowEntry, i)
 		e := list[i]
 		cursor, host := "  ", fit(e.host, hostW)
 		if i == a.cursor {
-			cursor, host = styleAccent.Render("▸")+" ", styleBold.Render(host)
+			cursor, host = m.cursorMark(true), styleBold.Render(host)
 		}
 		// The rule column names the curated list or the level, so the verdict needn't.
 		word := e.verdict
@@ -369,6 +376,8 @@ func (m *app) activityBody(w, h int) []string {
 		}
 		verdict := fit(word, colVerdict)
 		switch {
+		case !m.look.plain:
+			verdict = m.verdictDot(e) + " " + fit(word, colVerdict-2)
 		case e.bad:
 			verdict = styleFailed.Render(verdict)
 		case e.decision:
@@ -379,6 +388,107 @@ func (m *app) activityBody(w, h int) []string {
 			styleDim.Render(fit(m.ruleCell(e), ruleW)))
 	}
 	return lines
+}
+
+// busyBuckets is how many minutes back the busy hosts' sparklines go, one cell a minute.
+const busyBuckets = 10
+
+// busyHosts is the visual look's strip above the log: one row per busy host, the sparkline of its
+// connections over the last ten minutes, and the verdict and rule of its latest one. A short
+// screen leaves it out.
+func (m *app) busyHosts(w, h int) []string {
+	a := &m.activity
+	if m.look.plain || h < 14 {
+		return nil
+	}
+	limit := 3
+	if h >= 30 {
+		limit = 5
+	}
+	now := a.at
+	if now.IsZero() {
+		now = m.now
+	}
+	names := map[string]string{}
+	for _, sb := range m.sandboxes {
+		names[sb.ID] = sb.Name
+	}
+	type busy struct {
+		host    string
+		counts  []float64
+		total   int
+		latest  time.Time
+		verdict string
+		rule    string
+	}
+	hosts := map[string]*busy{}
+	for id, list := range a.conns {
+		if a.filter != "" && !matches(a.filter, names[id]) {
+			continue
+		}
+		for _, c := range list {
+			ago := max(now.Sub(c.Started), 0)
+			if ago >= busyBuckets*time.Minute {
+				continue
+			}
+			name := hostPortOf(c.Host, c.Port)
+			b := hosts[name]
+			if b == nil {
+				b = &busy{host: name, counts: make([]float64, busyBuckets)}
+				hosts[name] = b
+			}
+			b.counts[busyBuckets-1-int(ago/time.Minute)]++
+			b.total++
+			if c.Started.After(b.latest) || b.verdict == "" {
+				b.latest, b.verdict = c.Started, connVerdict(c.Verdict)
+				b.rule = m.ruleCell(activityEntry{ruleID: c.RuleID})
+			}
+		}
+	}
+	list := make([]*busy, 0, len(hosts))
+	for _, b := range hosts {
+		list = append(list, b)
+	}
+	slices.SortFunc(list, func(x, y *busy) int {
+		if x.total != y.total {
+			return y.total - x.total
+		}
+		return strings.Compare(x.host, y.host)
+	})
+	if len(list) > limit {
+		list = list[:limit]
+	}
+	hostW := min(max(w-2-busyBuckets-colVerdict-6-20, 16), 32)
+	if len(list) == 0 {
+		return nil
+	}
+	lines := []string{styleDim.Render(fit("  Busiest hosts", hostW+2) + " " + fit("10 min", busyBuckets))}
+	for _, b := range list {
+		top := slices.Max(b.counts)
+		style := m.verdictStyle(b.verdict)
+		lines = append(lines, "  "+fit(b.host, hostW)+" "+style.Render(sparkline(b.counts, top, busyBuckets))+"   "+
+			style.Render("●")+" "+fit(b.verdict, colVerdict-2)+" "+styleDim.Render(clip(b.rule, max(w-2-hostW-busyBuckets-colVerdict-6, 0))))
+	}
+	return lines
+}
+
+// verdictStyle is the status color of a verdict: allowed is running, denied and failed are
+// failed, waiting is waiting, the rest stopped.
+func (m *app) verdictStyle(verdict string) lipgloss.Style {
+	switch word, _, _ := strings.Cut(strings.ToLower(verdict), " "); word {
+	case "allowed":
+		return m.pal.running
+	case "denied", "failed", "reverted":
+		return m.pal.failed
+	case "waiting":
+		return m.pal.waiting
+	}
+	return m.pal.stopped
+}
+
+// verdictDot is an entry's verdict as a status dot.
+func (m *app) verdictDot(e activityEntry) string {
+	return m.verdictStyle(e.verdict).Render("●")
 }
 
 // entryBody is one entry of the log and the rule that decided it.

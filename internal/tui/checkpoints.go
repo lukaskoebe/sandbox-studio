@@ -243,10 +243,11 @@ func (m *app) checkpointsBody(w, h int) []string {
 		offset = c.cursor - room + 1
 	}
 	for i := offset; i < len(c.list) && len(lines) < h; i++ {
+		m.hitRow(len(lines), 0, w, rowCheckpoint, i)
 		cp := c.list[i]
 		cursor, name := "  ", fit(cp.Name, nameW)
 		if i == c.cursor {
-			cursor, name = styleAccent.Render("▸")+" ", styleBold.Render(name)
+			cursor, name = m.cursorMark(true), styleBold.Render(name)
 		}
 		kind := "manual"
 		if cp.Auto {

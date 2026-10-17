@@ -92,6 +92,14 @@ type app struct {
 	typing         *linePrompt        // the line of text the notice line asks for, if any
 	notice         notice
 	keys           help.Model
+
+	look     look         // plain, or visual with the palette
+	pal      palette      // the visual look's colors
+	spin     int          // the spinner's frame
+	spinning bool         // a tick of the spinner is on its way
+	usage    usageState   // the CPU and memory of the running sandboxes, for the sparklines
+	lineage  lineageState // the history of the sandbox in the detail pane
+	mouse    mouseState   // the last click, and where the screen's rows lead
 }
 
 // newApp returns the model for a session with the Studio at addr. Its first screen loads on Init.
@@ -109,19 +117,32 @@ func newApp(ctx context.Context, client *Client, addr string) *app {
 		keys:      h,
 		width:     defaultWidth,
 		height:    defaultHeight,
+		look:      look{plain: true},
 	}
 }
 
-// Init starts the first loads, the event stream and the clock that refreshes uptimes.
+// setLook switches between the plain and the visual look, and resolves the palette for it.
+func (m *app) setLook(l look) {
+	m.look = l
+	m.pal = newPalette(l)
+}
+
+// Init starts the first loads, the event stream and the clock that refreshes uptimes. The
+// visual look asks the terminal for its background, to pick the web's light or dark hues.
 func (m *app) Init() tea.Cmd {
-	return tea.Batch(m.loadEnvs(), m.loadApprovals(), m.subscribe(), clock())
+	cmds := []tea.Cmd{m.loadEnvs(), m.loadApprovals(), m.subscribe(), clock()}
+	if !m.look.forced {
+		cmds = append(cmds, tea.RequestBackgroundColor)
+	}
+	return tea.Batch(cmds...)
 }
 
 // Update applies one message to the model and returns the commands it starts. The detail
-// screen's ports are read while it is on show, whichever way the user got there.
+// screen's ports are read while it is on show, whichever way the user got there, as are the
+// usage and history the visual look draws, and the spinner turns while something on show runs.
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
-	return next, tea.Batch(cmd, m.watchPorts())
+	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin())
 }
 
 // update applies one message to the model.
@@ -141,7 +162,20 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.portsUpdate(msg); ok {
 		return m, cmd
 	}
+	if cmd, ok := m.liveUpdate(msg); ok {
+		return m, cmd
+	}
 	switch msg := msg.(type) {
+	case tea.ColorProfileMsg:
+		m.setLook(lookFor(msg.Profile, m.look.forced, m.look.light))
+	case tea.BackgroundColorMsg:
+		l := m.look
+		l.light = !msg.IsDark()
+		m.setLook(l)
+	case tea.MouseClickMsg:
+		return m.click(msg)
+	case tea.MouseWheelMsg:
+		m.wheel(msg)
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.keys.SetWidth(msg.Width)
@@ -186,6 +220,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setNotice("That sandbox was deleted.", true)
 		}
 		m.followProgress()
+		m.lineage.stale = true // a checkpoint, a fork or a restore adds to the history
 	case approvalsLoaded:
 		if msg.err != nil {
 			m.fail(msg.err)

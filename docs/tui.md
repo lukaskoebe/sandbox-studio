@@ -106,7 +106,9 @@ from the approval's `git` detail: the repository, sandbox and teammate, the bran
 it is new), the change with its file count and line totals, the commits, and the unified diff,
 colored as on the web (`+` green, `-` red, hunks in the accent). A pull request shows its
 branches, title and body instead. The review is a pager: `↑/↓` `j/k` scroll a line,
-`pgup/pgdn` (or `b`/`space`) a page, `g`/`G` jump to the start or the end.
+`pgup/pgdn` (or `b`/`space`) a page, `g`/`G` jump to the start or the end. In the visual look,
+`[` and `]` jump to the previous or next file. From 120 columns a file list sits beside the
+review, and from 160 columns the diff is side by side, which `v` toggles.
 
 `y` approves and pushes (or opens the pull request), `n` rejects, `i` ignores. Each decides with
 `{action, scope: "sandbox"}`, as the web does, and returns to the approvals. The web's note for
@@ -269,10 +271,53 @@ gives the browser's address for the rest.
 
 ## Look
 
-The terminal's own foreground and background, one accent (ANSI cyan) for focus and status,
-and dim text for secondary facts; diffs add green and red. Colors are ANSI, so the user's
-palette applies. Bubble Tea's renderer drops them when `NO_COLOR` is set, and the TUI is laid
-out for 80×24.
+There are two looks. The visual look is the default on a terminal with colors. The plain look
+is used under `STUDIO_TUI=plain`, under `NO_COLOR`, or on a terminal without colors.
+
+The plain look uses:
+
+- the terminal's own foreground and background;
+- one accent (ANSI cyan) for focus and status;
+- dim text for secondary facts;
+- green and red in diffs.
+
+Every screen is laid out for 80×24.
+
+The visual look carries the web's visual language ([design/ui-style.md](design/ui-style.md)
+and [design/tui-visual.md](design/tui-visual.md)):
+
+- **Colors.** One hue per area: network, git, browser, memory and chat. The status set is
+  running, waiting, failed and stopped. The status dot is colored and the word never is;
+  stopped is a hollow `○`. Truecolor terminals get the web's values, with light and dark
+  variants chosen from the terminal's background. 256-color terminals get the nearest xterm
+  colors. 16-color terminals get ANSI colors, so the user's palette still applies there.
+  Focus stays the one cyan accent.
+- **Header and key bar.** From 81 columns the header is a tab bar: `◆ Studio`, the
+  environment, Sandboxes, Approvals, Activity and Git, with counts in the waiting color, and
+  the clock. Below 100 columns the tabs shorten to their initials. At 80 columns the header
+  is the plain one. The key bar groups keys with a dim `│` between the groups and calls `?`
+  "more". When the separators don't fit, it drops them.
+- **Cards.** Approvals are rounded cards with their area's rule, a kind chip, and the
+  choices as keycaps on the card under the cursor.
+- **Chat.** Prompts have a green rule and tool calls a glyph for their kind. A running call or
+  turn spins. Code blocks have a dim rule and their language, and a plan is a checklist.
+- **Wide layouts.** From 120 columns, Home is the list beside the selected sandbox's pane. The
+  pane shows its facts, CPU and memory, the first approval waiting as a card, terminals, ports,
+  and a history line from its lineage. The git review gains a file list with +/− bars, where
+  `[` and `]` jump between files. From 160 columns the diff is side by side, and `v` toggles
+  it.
+- **Live numbers.** From 100 columns, Home's list has a CPU sparkline per running sandbox.
+  The pane and the detail screen show CPU and a memory bar. Usage is read every 2 seconds,
+  and only while Home or the detail is on show, for running sandboxes. A runtime that
+  reports no usage stops the reads. Activity has a strip of the busiest hosts, with 10-minute
+  connection sparklines.
+- **Mouse.** Bubble Tea's cell-motion mode is on, and holding shift keeps the terminal's own
+  selection. A click selects a row: a sandbox, card, log entry, chat, checkpoint, environment,
+  fold or file. A double click opens it as `enter` does. The wheel scrolls the review and the
+  transcript, and moves the cursor in lists. A click on a tab acts as its key, and a click on
+  the environment opens the picker.
+
+No key changed between the looks. Only `[`, `]` and `v` in the git review are new.
 
 ## Code
 
@@ -295,6 +340,12 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 - `activity.go` is the Activity log and an entry's rule. `newsandbox.go` is the new sandbox's
   form, the fork, and the progress of both. `checkpoints.go` is the checkpoints screen, and
   `ports.go` the detail's ports.
+- `style.go` holds the styles: the look, the palette of each color profile, and the fitting of
+  styled text. `draw.go` has the visual look's pieces: dots, keycaps, card frames,
+  sparklines, bars, the spinner, the tab header and the grouped key bar. `cards.go` is the
+  approvals' cards, and `live.go` the usage, lineage and spinner reads. `mouse.go` maps
+  clicks and the wheel to what each row of the frame leads to. Each body records those rows
+  as it draws them.
 - `terminal.go` is the attachment: a `tea.ExecCommand`, so Bubble Tea releases the terminal
   while it runs. It bridges the websocket and reads the keys itself, which is what lets Ctrl-]
   return without a goroutine left reading the terminal.
@@ -305,13 +356,17 @@ stream event or a tick of a screen the user has left is dropped.
 Tests:
 
 - Model tests drive `Update` with key and result messages.
-- Golden views (`testdata/*.golden`) are the screens at 80×24 with `NO_COLOR`. After an
-  intended change, `go test ./internal/tui -run Golden -update` rewrites them; review the diff.
+- Golden views (`testdata/*.golden`) are the screens at 80×24 with `NO_COLOR`, which is the
+  plain look. The `visual_*` goldens hold the visual look's 256-color ANSI at 80×24. The
+  `wide_*` goldens hold its text at 96×24, 140×40 and 180×50. All of them run with a fixed
+  clock, profile and spinner frame. After an intended change,
+  `go test ./internal/tui -run Golden -update` rewrites them; review the diff.
 - The client and the commands run against an in-process Studio: the API behind the same guards
   and an in-memory catalog, with a fake VM runtime, the chat service and a connection log. The
   test Studio never touches the real one. Where that Studio can't answer (an agent that is
   connected, a runtime that restores), a server that records the calls checks the paths and
   bodies the keys send.
 - A pseudo-terminal test runs the TUI as a child process: it shows Home, opens Activity, goes
-  back and quits. Another runs the attachment on a real terminal and checks that unbuffered
+  back and quits. A second one does the same at 140×40, where Home splits, and opens Activity
+  by clicking its tab. Another runs the attachment on a real terminal and checks that unbuffered
   input reaches the sandbox and that Ctrl-] detaches. Both are skipped on Windows.

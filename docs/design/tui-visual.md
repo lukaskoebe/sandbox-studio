@@ -1,7 +1,24 @@
 # A more visual TUI (design)
 
-Status: Proposed (2026-10-15). Nothing here is built yet; [tui.md](../tui.md) describes the
-TUI as it is.
+Status: Phases 1–3 and the mouse are built (2026-10-17); [tui.md](../tui.md#look) describes
+the TUI as it is. Left out:
+
+- Phase 4, pictures: it needs the browser frame endpoint and a graphics encoder.
+- Toasts and the new card's slide-in. The notice line still reports decisions and errors, and
+  nothing moves except the spinner and the booting shimmer.
+- Clicking a keycap. Cards and the key bar draw keys but record no click targets, so a key is
+  only pressed by its key. Rows, tabs and the wheel work.
+- The 160-column three-column Home (the open question below). From 120 columns Home is the
+  list and the detail.
+- Word-level highlights inside changed diff lines. Side by side pairs the removed and added
+  lines of a hunk, with line numbers.
+
+Where the build differs from the text:
+
+- `NO_COLOR`, a terminal without colors, and `STUDIO_TUI=plain` all give today's look. That
+  look is what the 80×24 goldens record.
+- Usage is also read for the detail screen's sandbox, not only on Home.
+- The Activity strip shows up to 3 hosts, or 5 on 30 rows and more, and needs 14 rows.
 
 Today's `studio tui` is deliberately plain: one screen at a time, the terminal's own colors
 plus one cyan accent, laid out for 80×24 ([tui.md](../tui.md#look)). It works everywhere,

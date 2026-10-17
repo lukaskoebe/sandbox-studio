@@ -14,22 +14,41 @@ const (
 	defaultHeight = 24
 )
 
-// View draws the screen. The TUI owns the alternate screen while it runs.
+// View draws the screen. The TUI owns the alternate screen while it runs. The visual look takes
+// the mouse's clicks and wheel (cell motion, so holding shift keeps the terminal's selection).
 func (m *app) View() tea.View {
 	v := tea.NewView(m.frame())
 	v.AltScreen = true
+	if !m.look.plain {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
 	return v
 }
 
+// bodyTop is the row the body starts on: under the header and its rule.
+const bodyTop = 2
+
 // frame lays the screen out in the terminal's size: a header and a rule, the body, a rule, the
-// key bar and the notice line. The body gets the rows the others leave.
+// key bar and the notice line. The body gets the rows the others leave. Drawing it also records
+// where the rows lead, for the mouse.
 func (m *app) frame() string {
 	w, h := m.size()
 	m.keys.SetWidth(w)
+	m.mouse.rows = m.mouse.rows[:0]
+	m.mouse.tabs = nil
 	rule := styleDim.Render(strings.Repeat("─", w))
-	lines := []string{m.header(w), rule}
+	head, top := m.header(w), rule
+	if !m.look.plain && w > defaultWidth {
+		head, m.mouse.tabs = m.tabHeader(w)
+		top = m.tabRule(w, m.mouse.tabs)
+	}
+	bottom := rule
+	if col := m.paneColumn(w); col > 0 && col < w {
+		bottom = styleDim.Render(strings.Repeat("─", col) + "┴" + strings.Repeat("─", w-col-1))
+	}
+	lines := []string{head, top}
 	lines = append(lines, pad(m.body(w, max(h-5, 1)), max(h-5, 1))...)
-	lines = append(lines, rule, m.keyBar(), m.noticeLine(w))
+	lines = append(lines, bottom, m.keyBar(w), m.noticeLine(w))
 	for i, line := range lines {
 		lines[i] = lipgloss.NewStyle().MaxWidth(w).Render(line)
 	}
@@ -37,16 +56,32 @@ func (m *app) frame() string {
 }
 
 // header is the product, the environment on show, and the approvals waiting in every
-// environment, which count from every screen.
+// environment, which count from every screen. The visual look marks them in the waiting color;
+// on a terminal wider than 80 columns it draws the tab header instead.
 func (m *app) header(w int) string {
 	left := styleBold.Render("Sandbox Studio") + styleDim.Render(" · ") + m.env.Name
 	var right string
-	if n := len(m.approvals); n == 0 {
+	switch n := len(m.approvals); {
+	case n == 0:
 		right = styleDim.Render("no approvals")
-	} else {
+	case !m.look.plain:
+		right = m.pal.waiting.Render("●") + fmt.Sprintf(" %d %s", n, plural(n, "approval", "approvals"))
+	default:
 		right = styleAccent.Render(fmt.Sprintf("● %d %s", n, plural(n, "approval", "approvals")))
 	}
 	return spread(left, right, w)
+}
+
+// paneColumn is the column of the line between two panes of the screen on show, or -1 when it
+// has one pane: Home's list and detail, and the git review's files and diff, on wide terminals.
+func (m *app) paneColumn(w int) int {
+	switch {
+	case m.screen == screenHome && m.homeSplit(w):
+		return homeListWidth(w)
+	case m.screen == screenPager && m.pagerSplit(w):
+		return pagerListWidth(w)
+	}
+	return -1
 }
 
 // body is the screen's lines, at most h of them.
@@ -80,8 +115,11 @@ func (m *app) body(w, h int) []string {
 	return m.homeBody(w, h)
 }
 
-// keyBar is the keys that apply here, in the key bar's style.
-func (m *app) keyBar() string {
+// keyBar is the keys that apply here, in the key bar's style: grouped in the visual look.
+func (m *app) keyBar(w int) string {
+	if !m.look.plain {
+		return m.groupedKeys(m.bindings(), w)
+	}
 	return m.keys.ShortHelpView(m.bindings())
 }
 
@@ -216,6 +254,8 @@ func (m *app) helpBody() []string {
 			{"↑/↓, j/k", "scroll a line"},
 			{"pgup/pgdn", "scroll a page; b and space too"},
 			{"g / G", "the start or the end"},
+			{"[ / ]", "the previous or the next file"},
+			{"v", "side by side or unified, from 160 columns"},
 			{"esc / q", "back to the approvals"},
 		}
 		footer = []string{

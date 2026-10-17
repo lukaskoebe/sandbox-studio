@@ -128,7 +128,7 @@ func TestRestoreAsksFirst(t *testing.T) {
 	if line := stripANSI(m.noticeLine(80)); !strings.Contains(line, "Restore docs-site to Checkpoint 2026-10-16 03:00:00 UTC?") {
 		t.Fatalf("question: %q", line)
 	}
-	if bar := stripANSI(m.keyBar()); !strings.HasPrefix(bar, "y restore") {
+	if bar := stripANSI(m.keyBar(m.width)); !strings.HasPrefix(bar, "y restore") {
 		t.Fatalf("bar: %q", bar)
 	}
 	m = press(m, "x")

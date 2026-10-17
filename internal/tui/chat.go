@@ -678,7 +678,10 @@ func (m *app) transcript(w int) transcriptView {
 			}
 			for i, line := range wrapText(text, w-2) {
 				mark := "  "
-				if i == 0 {
+				switch {
+				case !m.look.plain:
+					mark = m.pal.hue(areaChat).Render("┃") + " " // the prompt's rule, as the web marks a turn
+				case i == 0:
 					mark = styleAccent.Render("›") + " "
 				}
 				out.lines = append(out.lines, mark+styleBold.Render(line))
@@ -687,7 +690,7 @@ func (m *app) transcript(w int) transcriptView {
 			if it.Text == nil {
 				continue
 			}
-			out.lines = append(out.lines, markdownLines(it.Text.Text, w)...)
+			out.lines = append(out.lines, renderMarkdown(it.Text.Text, w, !m.look.plain)...)
 			if it.Text.Truncated {
 				out.lines = append(out.lines, styleDim.Render("The rest of this message was too long to keep."))
 			}
@@ -695,7 +698,11 @@ func (m *app) transcript(w int) transcriptView {
 			out.addFold(m.foldLines(it, it.ID == liveID, w))
 			out.folds[len(out.folds)-1].id = it.ID
 		case chat.KindPlan:
-			out.lines = append(out.lines, planLines(it, w)...)
+			if m.look.plain {
+				out.lines = append(out.lines, planLines(it, w)...)
+			} else {
+				out.lines = append(out.lines, m.checklist(it, w)...)
+			}
 		case chat.KindPermission:
 			out.lines = append(out.lines, permissionLine(it, w))
 			if it.ID == askID && it.Permission != nil {
@@ -708,7 +715,11 @@ func (m *app) transcript(w int) transcriptView {
 		}
 	}
 	if c.running() && liveID == "" {
-		out.lines = append(out.lines, "", styleDim.Render(m.teammateName()+" is starting…"))
+		starting := styleDim.Render(m.teammateName() + " is starting…")
+		if !m.look.plain {
+			starting = m.pal.running.Render(m.spinner()) + " " + starting
+		}
+		out.lines = append(out.lines, "", starting)
 	}
 	// The cursor's folded item is marked on its first line.
 	if c.fold >= 0 && c.fold < len(out.folds) {
@@ -736,6 +747,25 @@ func (m *app) teammateName() string {
 var toolLabels = map[string]string{
 	"read": "Read", "edit": "Edit", "delete": "Delete", "move": "Move", "search": "Search",
 	"execute": "Run a command", "think": "Think", "fetch": "Fetch", "switch_mode": "Switch mode",
+}
+
+// toolGlyphs mark each kind of tool call in the visual look.
+var toolGlyphs = map[string]string{
+	"read": "≡", "edit": "✎", "delete": "×", "move": "→", "search": "⌕",
+	"execute": "▶", "think": "…", "fetch": "↯", "switch_mode": "⇄",
+}
+
+// toolDot is a tool call's state as a status dot: a spinner while it works.
+func (m *app) toolDot(status string) string {
+	switch status {
+	case "working":
+		return m.pal.running.Render(m.spinner())
+	case "done":
+		return m.pal.dot("running")
+	case "failed":
+		return m.pal.dot("failed")
+	}
+	return m.pal.dot("waiting")
 }
 
 // toolStatus is a tool call's status as a word.
@@ -770,6 +800,9 @@ func (m *app) foldLines(it chat.Item, live bool, w int) []string {
 			title = "Thinking…"
 		}
 		lines := []string{"  " + styleDim.Render(mark+" "+title)}
+		if live && !m.look.plain {
+			lines[0] = "  " + styleDim.Render(mark+" ") + m.pal.running.Render(m.spinner()) + " " + styleDim.Render(title)
+		}
 		if open {
 			for _, line := range wrapText(it.Text.Text, w-4) {
 				lines = append(lines, "    "+styleDim.Render(line))
@@ -787,10 +820,13 @@ func (m *app) foldLines(it chat.Item, live bool, w int) []string {
 	}
 	status := toolStatus(tool.Status)
 	statusCell := styleDim.Render(status)
-	switch status {
-	case "failed":
+	switch {
+	case !m.look.plain:
+		statusCell = m.toolDot(status) + " " + status
+		title = firstNonEmpty(toolGlyphs[tool.Kind], "•") + " " + title
+	case status == "failed":
 		statusCell = styleFailed.Render(status)
-	case "working":
+	case status == "working":
 		statusCell = styleAccent.Render(status)
 	}
 	lines := []string{spread("  "+mark+" "+title, statusCell, w)}
@@ -881,6 +917,33 @@ func planLines(it chat.Item, w int) []string {
 	return lines
 }
 
+// checklist is the agent's plan in the visual look: its steps as boxes that fill in as the turn
+// runs, and how many are done.
+func (m *app) checklist(it chat.Item, w int) []string {
+	if it.Plan == nil || len(it.Plan.Entries) == 0 {
+		return nil
+	}
+	done := 0
+	for _, e := range it.Plan.Entries {
+		if e.Status == "completed" {
+			done++
+		}
+	}
+	lines := []string{"  " + styleBold.Render("Plan") + styleDim.Render(fmt.Sprintf("  %d of %d done", done, len(it.Plan.Entries)))}
+	for _, e := range it.Plan.Entries {
+		text := fit(oneLine(e.Content), w-6)
+		switch e.Status {
+		case "completed":
+			lines = append(lines, "    "+m.pal.running.Render("☑")+" "+styleDim.Render(text))
+		case "in_progress":
+			lines = append(lines, "    "+styleAccent.Render("☐")+" "+styleBold.Render(text))
+		default:
+			lines = append(lines, "    "+styleDim.Render("☐")+" "+text)
+		}
+	}
+	return lines
+}
+
 // questionLines are a question of the agent: what it asks, and for the one the keys answer, its
 // choices or how to answer it.
 func (m *app) questionLines(it chat.Item, keys bool, w int) []string {
@@ -951,15 +1014,26 @@ func markerLine(it chat.Item, w int) string {
 // markdownLines styles an agent's answer lightly, with no markdown renderer: headings are bold
 // and code blocks are indented, as they come. The rest is wrapped to w.
 func markdownLines(text string, w int) []string {
+	return renderMarkdown(text, w, false)
+}
+
+// renderMarkdown is markdownLines; ruled gives code blocks the visual look's dim left rule, with
+// the block's language as its label.
+func renderMarkdown(text string, w int, ruled bool) []string {
 	var lines []string
 	code := false
 	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
 			code = !code
+			if lang := strings.TrimSpace(strings.TrimLeft(trimmed, "`~")); code && ruled && lang != "" {
+				lines = append(lines, styleDim.Render("  │ "+lang))
+			}
 			continue
 		}
 		switch {
+		case code && ruled:
+			lines = append(lines, styleDim.Render("  │ ")+strings.ReplaceAll(line, "\t", "    "))
 		case code:
 			lines = append(lines, "    "+strings.ReplaceAll(line, "\t", "    "))
 		case isHeading(trimmed):
@@ -1039,10 +1113,11 @@ func (m *app) chatsBody(w, h int) []string {
 		offset = c.cursor - (h - 2) + 1
 	}
 	for i := offset; i < len(c.list); i++ {
+		m.hitRow(len(lines), 0, w, rowChat, i)
 		x := c.list[i]
 		cursor, title := "  ", fit(chatTitle(x), max(w-2-colStatus-1-colUptime-1, 8))
 		if i == c.cursor {
-			cursor, title = styleAccent.Render("▸")+" ", styleBold.Render(title)
+			cursor, title = m.cursorMark(true), styleBold.Render(title)
 		}
 		mark, style := "○", styleDim
 		if x.State == store.ChatRunning {
@@ -1064,6 +1139,8 @@ func (m *app) chatBody(w, h int) []string {
 		switch {
 		case c.gone:
 			state = styleFailed.Render("deleted")
+		case c.running() && !m.look.plain:
+			state = m.pal.running.Render(m.spinner()) + " " + chatStateWords[c.chat.State]
 		case c.running():
 			state = styleAccent.Render("◐ " + chatStateWords[c.chat.State])
 		case c.loaded:
@@ -1090,6 +1167,11 @@ func (m *app) chatBody(w, h int) []string {
 	}
 	end := max(len(t.lines)-scroll, 0)
 	start := max(end-rows, 0)
+	for i, f := range t.folds {
+		if f.line >= start && f.line < end {
+			m.hitRow(len(lines)+f.line-start, 0, w, rowFold, i)
+		}
+	}
 	return append(lines, t.lines[start:end]...)
 }
 

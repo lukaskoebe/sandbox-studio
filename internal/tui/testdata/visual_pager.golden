@@ -1,0 +1,23 @@
+[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m●[m 1 approval
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1;38;5;141m± GIT PUSH[m  [1mPush 2 commits to fix-login on GitHub/acme/web[m
+2 files  [38;5;77m+7[m [38;5;203m−1[m  [38;5;77m█████████████[m[38;5;203m▒▒[m
+
+  [2mRepository [mGitHub/acme/web
+  [2mSandbox    [mapi-refactor[2m · teammate [mFinn
+  [2mBranch     [mfix-login[2m · new branch[m
+  [2mChange     [m∅ → a4c2f0d · 2 files [32m+7[m [31m−1[m
+
+[2mNothing reaches the forge until you approve; the agent sees a rejection on[m
+[2mits next fetch.[m
+[2mApproving pushes it over SSH to ssh://git@github.com/acme/web.git.[m
+
+[1mCommits (2)[m
+  [2ma4c2f0d[m Test that enter submits the login form                   [2mFinn · 2m ago[m
+  [2m77d0b2c[m Submit the login form on enter                           [2mFinn · 5m ago[m
+          [2mThe sign-in control was a div.[m
+
+[1mDiff[m
+[1mdiff --git a/src/login.tsx b/src/login.tsx[m
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1my[m [2mapprove and push[m  [1mn[m [2mreject[m  [1mi[m [2mignore[m  [1m↑↓/pgdn[m [2mscroll[m  [1m[/][m [2mfile[m  [1mesc/q[m [2mback[m[2m …[m

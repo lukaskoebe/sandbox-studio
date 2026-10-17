@@ -1,0 +1,39 @@
+ ◆ Studio  Default ▾   Sandboxes   Approvals 1   Activity   Git                                                                       12:00 
+─────────────────────────────────────────────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────
+Activity · connections and decisions, newest first
+  Busiest hosts                    10 min    
+  nope.invalid                     ▁▁▁▁▁▁█▁▁▁   ● failed            —
+  proxy.golang.org:443             ▁▁▁▁▁▁▁▁▁█   ● allowed           —
+  registry.npmjs.org:443           ▁▁▁▁▁▁▁▁▁█   ● allowed           *.npmjs.org
+  tracker.example.com:443          ▁▁▁▁▁▁▁▁▁█   ● denied            tracker.example.com
+
+▌ just now blub         registry.npmjs.org:443                                           ● allowed           *.npmjs.org                    
+  20s ago  api-refactor proxy.golang.org:443                                             ● allowed           —                              
+  21s ago  api-refactor proxy.golang.org:443                                             ● Allowed           curated list                   
+  40s ago  blub         tracker.example.com:443                                          ● denied            tracker.example.com            
+  1m ago   blub         registry.npmjs.org:443                                           ● Allowed           *.npmjs.org                    
+  2m ago   api-refactor api.github.com:443                                               ● Allowed once      no rule                        
+  3m ago   blub         nope.invalid                                                     ● failed            —                              
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+enter rule  ↑/k up │ / sandbox  r rules (browser) │ esc/q back  ? more

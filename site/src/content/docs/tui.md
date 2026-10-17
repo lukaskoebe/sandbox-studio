@@ -200,6 +200,29 @@ from, its hits and when it expires. Without a rule, it says what decided instead
 curated list or a once decision. The log refreshes every two seconds. Rules are edited in the
 browser; `r` prints the address.
 
+## Look, wide terminals and the mouse
+
+On a terminal with colors, the TUI uses the web's colors. Each area has its own hue: network,
+git, browser, memory and chat. Status dots are colored, and approvals show as cards. From 81
+columns, the header becomes tabs.
+
+Wider terminals use the extra room:
+
+- From 120 columns, Home shows the selected sandbox beside the list, with its CPU and memory,
+  the first approval waiting, its terminals and ports, and its history.
+- The git review lists the changed files, and `[` and `]` jump between them.
+- From 160 columns, the diff is side by side, and `v` toggles it.
+
+The mouse works too:
+
+- A click selects a row, and a double click opens it.
+- The wheel scrolls.
+- A click on a tab opens it.
+- Hold shift to select text as usual.
+
+`STUDIO_TUI=plain studio tui` gives the plain look shown above, with no mouse. So do
+`NO_COLOR` and terminals without colors. Every screen still fits 80×24.
+
 ## Terminal
 
 `t` opens the sandbox's main terminal, the one the browser opens first. The sandbox's screen

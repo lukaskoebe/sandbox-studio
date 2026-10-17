@@ -457,17 +457,30 @@ func (m *app) approvalsBody(w, h int) []string {
 	}
 	lines := []string{styleBold.Render("Approvals") + styleDim.Render(" from every environment, newest first"), ""}
 	cursorAt, cursorLen := len(lines), 0
+	starts := make([]int, 0, len(cards)+1)
 	for i, c := range cards {
-		block := m.cardLines(c, i == m.approvalCursor, w)
+		var block []string
+		if m.look.plain {
+			block = m.cardLines(c, i == m.approvalCursor, w)
+		} else {
+			block = m.visualCard(c, i == m.approvalCursor, w)
+		}
 		if i == m.approvalCursor {
 			cursorAt, cursorLen = len(lines), len(block)
 		}
+		starts = append(starts, len(lines))
 		lines = append(lines, block...)
 	}
+	starts = append(starts, len(lines))
 	// Keep the cursor's card in view: the list scrolls just far enough to show it.
 	offset := 0
 	if cursorAt+cursorLen > h {
 		offset = min(cursorAt+cursorLen-h, cursorAt)
+	}
+	for i := range cards {
+		for line := max(starts[i], offset); line < starts[i+1] && line-offset < h; line++ {
+			m.hitRow(line-offset, 0, w, rowCard, i)
+		}
 	}
 	return lines[offset:]
 }

@@ -1,0 +1,23 @@
+[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m●[m 1 approval
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1mFix the login form[2m · blub[m[m                                                  [2mReady[m
+[38;5;114m┃[m [1mThe login form doesn't submit on enter. Can you fix it?[m
+
+  [2m▸ Thought it through[m
+  ▸ ≡ Read src/login.tsx                                                  [38;5;77m●[m done
+  ▸ ✎ Edit src/login.tsx                                                  [38;5;77m●[m done
+
+[1mFixed[m
+
+The form used a `div` as its button, so enter did nothing. It is a real submit
+button now:
+
+[2m  │ tsx[m
+[2m  │ [m<button type="submit">Sign in</button>
+
+- Enter submits the form.
+- The button is focusable.
+
+
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1mp[m [2mprompt[m  [1m↑/↓[m [2mtools[m  [1mpgup[m [2mscroll[m  [1mn[m [2mnew chat[m[2m │ [m[1mesc/q[m [2mback[m  [1m?[m [2mmore[m

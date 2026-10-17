@@ -1,0 +1,23 @@
+[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m●[m 1 approval
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1mActivity[m[2m · connections and decisions, newest first[m
+[2m  Busiest hosts           10 min    [m
+  nope.invalid            [38;5;203m▁▁▁▁▁▁█▁▁▁[m   [38;5;203m●[m failed            [2m—[m
+  proxy.golang.org:443    [38;5;77m▁▁▁▁▁▁▁▁▁█[m   [38;5;77m●[m allowed           [2m—[m
+  registry.npmjs.org:443  [38;5;77m▁▁▁▁▁▁▁▁▁█[m   [38;5;77m●[m allowed           [2m*.npmjs.org[m
+
+[36m▌[m [2mjust now[m blub         [1mregistry.npmjs.org:443 [m [38;5;77m●[m allowed           [2m*.npmjs.org [m
+  [2m20s ago [m api-refactor proxy.golang.org:443    [38;5;77m●[m allowed           [2m—           [m
+  [2m21s ago [m api-refactor proxy.golang.org:443    [38;5;77m●[m Allowed           [2mcurated list[m
+  [2m40s ago [m blub         tracker.example.com:443 [38;5;203m●[m denied            [2mtracker.exa…[m
+  [2m1m ago  [m blub         registry.npmjs.org:443  [38;5;77m●[m Allowed           [2m*.npmjs.org [m
+  [2m2m ago  [m api-refactor api.github.com:443      [38;5;77m●[m Allowed once      [2mno rule     [m
+  [2m3m ago  [m blub         nope.invalid            [38;5;203m●[m failed            [2m—           [m
+
+
+
+
+
+
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1menter[m [2mrule[m  [1m↑/k[m [2mup[m[2m │ [m[1m/[m [2msandbox[m  [1mr[m [2mrules (browser)[m[2m │ [m[1mesc/q[m [2mback[m  [1m?[m [2mmore[m

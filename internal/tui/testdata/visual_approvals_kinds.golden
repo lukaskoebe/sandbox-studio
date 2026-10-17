@@ -1,0 +1,23 @@
+[1mSandbox Studio[m[2m · [mDefault                                           [1;38;5;221m●[m 5 approvals
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1mApprovals[m[2m from every environment, newest first[m
+
+[36m╭──────────────────────────────────────────────────────────────────────────────╮[m
+[38;5;215m┃[m [1;38;5;215m▣ BROWSER ACTION[m   click “Buy now” on https://shop…  [2mblub · Default · 1m ago[m [36m│[m
+[38;5;215m┃[m [2mdecides [mthis one                                                             [36m│[m
+[38;5;215m┃[m [1;48;5;237m y [m Allow  [1;48;5;237m n [m Deny  [1;48;5;237m i [m Ignore  [1;48;5;237m r [m Always                                  [36m│[m
+[36m╰──────────────────────────────────────────────────────────────────────────────╯[m
+[2m╭──────────────────────────────────────────────────────────────────────────────╮[m
+[38;5;215m┃[m [1;38;5;215m▣ BROWSER CREDENTIAL[m   Fill SHOP_PASSWORD on https…  [2mblub · Default · 2m ago[m [2m│[m
+[38;5;215m┃[m [2mStudio fills the secret into “Password”; Iris sees only its name.           [m [2m│[m
+[2m╰──────────────────────────────────────────────────────────────────────────────╯[m
+[2m╭──────────────────────────────────────────────────────────────────────────────╮[m
+[38;5;72m┃[m [1;38;5;72m◈ MEMORY SHARE[m   Iris wants to share a fact with e…  [2mIris · Default · 3m ago[m [2m│[m
+[38;5;72m┃[m The staging database is reset every night.                                   [2m│[m
+[38;5;72m┃[m [2mIris · fact · agent                                                         [m [2m│[m
+[2m╰──────────────────────────────────────────────────────────────────────────────╯[m
+[2m╭──────────────────────────────────────────────────────────────────────────────╮[m
+[38;5;72m┃[m [1;38;5;72m◈ MEMORY CONFLICT[m   Two memory facts contradict each other  [2mDefault · 4m ago[m [2m│[m
+[38;5;72m┃[m [1mA [mDeploys go out on Fridays.                                        [2m · user[m  [2m│[m
+[2m────────────────────────────────────────────────────────────────────────────────[m
+[1my[m [2mallow[m  [1mn[m [2mdeny[m  [1mi[m [2mignore[m  [1mr[m [2malways[m[2m │ [m[1mesc/q[m [2mback[m

@@ -131,7 +131,7 @@ func TestPagerNamesThePullRequest(t *testing.T) {
 			t.Errorf("the review lacks %q:\n%s", want, body)
 		}
 	}
-	if bar := m.keyBar(); !strings.Contains(bar, "open pull request") {
+	if bar := m.keyBar(m.width); !strings.Contains(bar, "open pull request") {
 		t.Errorf("key bar: %s", bar)
 	}
 }

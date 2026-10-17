@@ -2,8 +2,10 @@ package tui
 
 import (
 	"context"
+	"os"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 )
 
 // Options are what the terminal UI needs to reach a running Studio.
@@ -20,6 +22,10 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 	defer client.Close(context.WithoutCancel(ctx))
-	_, err = tea.NewProgram(newApp(ctx, client, opts.Addr), tea.WithContext(ctx)).Run()
+	m := newApp(ctx, client, opts.Addr)
+	// The program reports the profile again once it runs; reading it here spares the first frame
+	// a switch of look.
+	m.setLook(lookFor(colorprofile.Detect(os.Stdout, os.Environ()), plainSetting(os.Getenv("STUDIO_TUI")), false))
+	_, err = tea.NewProgram(m, tea.WithContext(ctx)).Run()
 	return err
 }

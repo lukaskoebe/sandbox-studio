@@ -264,7 +264,7 @@ func (m *app) newBody(w, h int) []string {
 		for i := offset; i < len(rows) && len(lines) < h; i++ {
 			mark, row := "  ", rows[i]
 			if i == cursor {
-				mark, row = styleAccent.Render("▸")+" ", styleBold.Render(row)
+				mark, row = m.cursorMark(true), styleBold.Render(row)
 			}
 			lines = append(lines, mark+row)
 		}
