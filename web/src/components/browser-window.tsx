@@ -466,7 +466,8 @@ export function BrowserWindow({
       {running && <DriverBar w={w} />}
       <div
         className={cn(
-          "relative flex min-h-0 flex-1 flex-col overflow-auto bg-muted/50",
+          // A size container: the live view fits its frame into the room it has (cqw, cqh).
+          "[container-type:size] relative flex min-h-0 flex-1 flex-col overflow-auto bg-muted/50",
           size === "full" ? "p-4" : "p-0"
         )}
       >
@@ -523,9 +524,9 @@ export function BrowserWindow({
             )}
             <div
               className={cn(
-                "group relative w-full",
+                "group relative mx-auto w-fit max-w-full",
                 size === "full" &&
-                  "mx-auto max-w-6xl overflow-hidden rounded-md shadow-sm ring-1 ring-border"
+                  "overflow-hidden rounded-md shadow-sm ring-1 ring-border [--live-max:72rem]"
               )}
             >
               <BrowserLive

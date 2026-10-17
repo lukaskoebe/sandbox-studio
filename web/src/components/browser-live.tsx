@@ -152,7 +152,20 @@ export function BrowserLive({
   const [automaticKeyboardControls, setAutomaticKeyboardControls] =
     useState(false)
   const [desktopControlsOpen, setDesktopControlsOpen] = useState(false)
+  // The height of the controls under the frame, which wrap on a narrow window.
+  const [controlsHeight, setControlsHeight] = useState(0)
   const canDrive = driving && inputEnabled
+  const measureControls = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return
+    const observer = new ResizeObserver(() =>
+      setControlsHeight(el.getBoundingClientRect().height)
+    )
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+      setControlsHeight(0)
+    }
+  }, [])
 
   const primeMobileInput = (input: HTMLTextAreaElement | null) => {
     if (!input) return
@@ -308,6 +321,7 @@ export function BrowserLive({
           if (c.width !== img.width || c.height !== img.height) {
             c.width = img.width
             c.height = img.height
+            c.style.setProperty("--aspect", String(img.width / img.height))
           }
           const context = c.getContext("2d")
           if (!context) return
@@ -778,12 +792,25 @@ export function BrowserLive({
 
   return (
     <div className={cn("relative bg-muted", className)}>
+      {/* The frame keeps its shape and fills the room it has, so the whole page shows without
+          scrolling: as wide as the browser window's body (cqw), or as its height (cqh) less
+          the controls under the frame allows, and no wider than --live-max. Until the first
+          frame, the canvas has the shape of a browser VM's page. */}
       <canvas
         ref={canvas}
+        width={1280}
+        height={577}
         tabIndex={canDrive ? 0 : -1}
         aria-label="Live view of the browser"
+        style={
+          {
+            "--controls": `${controlsHeight}px`,
+            width:
+              "min(100cqw, var(--live-max, 100cqw), calc((100cqh - var(--controls)) * var(--aspect, 1280 / 577)))",
+          } as React.CSSProperties
+        }
         className={cn(
-          "block h-auto w-full touch-none outline-none",
+          "block h-auto touch-none outline-none",
           canDrive
             ? "cursor-default ring-2 ring-primary"
             : "pointer-events-none",
@@ -852,7 +879,10 @@ export function BrowserLive({
         onCompositionEnd={mobileCompositionEnd}
       />
       {canDrive && state === "live" && (
-        <div className="flex flex-wrap items-center gap-2 border-t bg-background p-2">
+        <div
+          ref={measureControls}
+          className="flex flex-wrap items-center gap-2 border-t bg-background p-2"
+        >
           {!automaticKeyboardControls && (
             <button
               type="button"

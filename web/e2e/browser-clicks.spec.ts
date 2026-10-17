@@ -11,7 +11,7 @@ import { addTeammate, expect, sandboxName, test, type Api } from "./fixtures"
 // screencast frames with their own metadata go to the live view, as agent-browser relays them,
 // and the live view's input_mouse goes back as CDP mouse events, as agent-browser sends them.
 // Known targets are clicked at several viewer sizes and pixel ratios (a zoomed or HiDPI
-// viewer), and with the page pinch-zoomed.
+// viewer), and with the page pinch-zoomed, each with the whole frame in view.
 
 /** The page the far browser shows: buttons at known places, each click recorded. */
 const targets = [
@@ -49,7 +49,7 @@ ${targets
 async function relay(page: Page, cdp: CDPSession) {
   let socket: WebSocketRoute | undefined
   let last: string | undefined
-  let zoom = 1
+  let zoom: number | undefined // until the first frame
   await page.routeWebSocket(/\/browser\/live/, (ws) => {
     socket = ws
     if (last) ws.send(last)
@@ -161,14 +161,12 @@ for (const viewer of viewers) {
           for (const t of shown) {
             const cx = t.x + targetW / 2
             const cy = t.y + targetH / 2
-            // A short window scrolls the live view, as a user would to reach the page's bottom.
-            await canvas.evaluate(
-              (c, end) => c.scrollIntoView({ block: end ? "end" : "start" }),
-              cy * zoom > far.height / 2
-            )
             // Where the target's centre is drawn: the frame is fitted into the canvas and
             // centred, and shows the page from its top left, zoom times larger.
             const box = (await canvas.boundingBox())!
+            // The live view fits the room it has, so the whole frame shows without scrolling.
+            expect(box.y).toBeGreaterThanOrEqual(0)
+            expect(box.y + box.height).toBeLessThanOrEqual(viewer.height)
             const fw = await canvas.evaluate((c: HTMLCanvasElement) => c.width)
             const fh = await canvas.evaluate((c: HTMLCanvasElement) => c.height)
             const fit = Math.min(box.width / fw, box.height / fh)

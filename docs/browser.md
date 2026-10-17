@@ -319,6 +319,11 @@ disconnecting clears the local input buffer.
 - **Back, forward, reload.** `POST .../browser/go` with `to` `back`, `forward` or `reload`
   moves in the session's history under user takeover, like navigate, and answers with the
   status; anything else is 422.
+- **Fit.** The frame keeps its shape and fills the room the browser window has, so the whole
+  page shows without scrolling: as wide as the window's body, or as its height less the
+  controls under the frame allows (the body is a CSS size container, `cqw` and `cqh`), and on
+  the teammate's page at most 72rem wide. The controls' height is measured, since they wrap
+  on a narrow window.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
   (device width, offset and page scale), its shape, and the letterbox of the canvas. The
   page's height comes from the frame's shape, not the metadata: agent-browser 0.39 reports
@@ -516,7 +521,7 @@ answers the live view's socket with its screencast frames and their metadata, an
 view's `input_mouse` as CDP mouse events, as agent-browser does. Known targets at the page's
 corners, middle and inside are hit within 3 CSS pixels from viewers of 1280×800 at 1x,
 1600×1000 at 1.25x, 1024×720 at 2x and 820×900 at 1.5x, with the page at 1x and pinch-zoomed
-to 1.5x from its top left. CDP's mouse coordinates are the page's CSS pixels, and the frame's
+to 1.5x from its top left, and the whole frame in view without scrolling. CDP's mouse coordinates are the page's CSS pixels, and the frame's
 `pageScaleFactor` follows the pinch, as `pointerToPage` assumes. agent-browser itself is not
 in that loop; a browser VM is.
 
