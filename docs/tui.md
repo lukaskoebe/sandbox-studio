@@ -367,6 +367,7 @@ Tests:
   connected, a runtime that restores), a server that records the calls checks the paths and
   bodies the keys send.
 - A pseudo-terminal test runs the TUI as a child process: it shows Home, opens Activity, goes
-  back and quits. A second one does the same at 140×40, where Home splits, and opens Activity
-  by clicking its tab. Another runs the attachment on a real terminal and checks that unbuffered
+  back, opens the approvals, allows a waiting host with `y` (the server then has its rule) and
+  quits. A second one runs at 140×40, where Home splits, and opens Activity by clicking its
+  tab. Another runs the attachment on a real terminal and checks that unbuffered
   input reaches the sandbox and that Ctrl-] detaches. Both are skipped on Windows.

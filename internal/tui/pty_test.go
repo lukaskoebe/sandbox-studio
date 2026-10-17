@@ -5,6 +5,7 @@ package tui
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,20 +19,46 @@ import (
 	"github.com/creack/pty"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // TestTerminalSmoke runs the TUI in a pseudo-terminal, as a child process of this test binary,
-// against a test Studio. It shows Home with the sandboxes, l opens Activity, q goes back and q
-// quits it.
+// against a test Studio. It shows Home with the sandboxes, l opens Activity, a opens the
+// approvals, where y allows the waiting host with a rule on the server, and q quits it.
 func TestTerminalSmoke(t *testing.T) {
+	ctx := context.Background()
 	s := startStudio(t)
-	s.addSandbox(t, "blub", runtime.StatusStopped)
+	sb := s.addSandbox(t, "blub", runtime.StatusRunning)
+	payload, _ := json.Marshal(map[string]any{"host": "registry.npmjs.org", "port": 443, "sandboxName": sb.Name, "patterns": []string{"registry.npmjs.org"}})
+	if _, _, err := s.Store.RequestApproval(ctx, store.Approval{EnvironmentID: s.Env.ID, SandboxID: sb.ID, Kind: "network", Subject: "registry.npmjs.org:443", Payload: payload}); err != nil {
+		t.Fatal(err)
+	}
 	tui := startTUI(t, s, defaultWidth, defaultHeight)
 	tui.waitFor("Home", "Sandbox Studio", "blub")
 
-	// l opens Activity; q returns to Home, where q quits.
+	// l opens Activity; q returns to Home.
 	tui.write("l")
 	tui.waitFor("Activity", "Activity")
+	tui.write("q")
+
+	// a opens the approvals; y allows the host, which the server keeps as a rule.
+	tui.write("a")
+	tui.waitFor("the approval", "registry.npmjs.org")
+	tui.write("y")
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		rules, err := s.Store.Rules(ctx, s.Env.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rules) == 1 && rules[0].Host == "registry.npmjs.org" && rules[0].Action == "allow" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no allow rule after y: %+v; the terminal said:\n%q", rules, tui.seen())
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	tui.write("q")
 	tui.write("q")
 	tui.quit()
