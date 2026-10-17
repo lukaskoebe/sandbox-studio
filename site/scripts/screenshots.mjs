@@ -32,7 +32,7 @@ const browser = await chromium.launch({
 })
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
-  colorScheme: "light",
+  colorScheme: "dark",
   baseURL: base,
   storageState: saved?.state,
 })
@@ -311,36 +311,6 @@ await step("build-dialog", async () => {
   await page.waitForTimeout(500)
   await shot("build-dialog")
   await closeDialog()
-})
-
-// Home once both sandboxes run and the denied request shows in its activity.
-await step("overview", async () => {
-  await running(webshop)
-  await running(storefront)
-  await clearApprovals()
-  await go("")
-  await shot("overview")
-})
-
-// A dark hero for the landing page.
-await step("hero-dark", async () => {
-  await running(webshop)
-  await clearApprovals()
-  const dark = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
-    colorScheme: "dark",
-    baseURL: base,
-    storageState: await context.storageState(),
-  })
-  const p = await dark.newPage()
-  await p.goto(`/e/${env}/sandboxes/${webshop.id}/work`)
-  await p.locator(".xterm").first().click()
-  await p.keyboard.type("clear\n")
-  await p.waitForTimeout(1000)
-  await p.keyboard.type("cd /workspace && uname -srm && docker --version && node --version\n", { delay: 15 })
-  await p.waitForTimeout(8000)
-  await shot("hero-dark", p)
-  await dark.close()
 })
 
 // Ada's browser on a real page, which you drive from the address bar, with her sites beside
