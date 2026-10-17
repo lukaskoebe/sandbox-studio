@@ -9,11 +9,12 @@
 // Chromium (CHROMIUM, default /snap/bin/chromium) and ffmpeg with libx264 and libvpx-vp9.
 //
 // The lossless master is kept in $TMPDIR/sandbox-studio-video/<name>.mkv until both encodings
-// are done, and a later run encodes from it instead of rendering again. Point TMPDIR at a
+// are done, and a later run encodes from it instead of rendering again; a run that stops
+// while rendering continues from its last complete ten-second segment. Point TMPDIR at a
 // disk: the master is several hundred MB, and /tmp is often memory.
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
-import { mkdir, rename, rm } from "node:fs/promises"
+import { mkdir, rename, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -67,35 +68,44 @@ function ffmpeg(argv) {
   return { stdin: p.stdin, done }
 }
 
-// Frames go into a lossless master first, which both encodings are made from.
+// Frames go into a lossless master first, which both encodings are made from. It is rendered
+// in segments of ten seconds, each written under a temporary name and renamed when complete,
+// so an interrupted run picks up at the first missing segment.
 const work = join(process.env.TMPDIR ?? tmpdir(), "sandbox-studio-video")
 await mkdir(work, { recursive: true })
 const master = join(work, `${name}.mkv`)
 if (existsSync(master)) {
   console.log(`${name}: encoding the master from an earlier run, ${master}`)
-  await browser.close()
 } else {
-  // Frames go to a partial file first, so an interrupted run never leaves a short master.
-  const partial = `${master}.partial.mkv`
-  const enc = ffmpeg(["-f", "image2pipe", "-framerate", String(fps), "-c:v", "png", "-i", "-",
-    "-c:v", "libx264", "-preset", "ultrafast", "-qp", "0", "-pix_fmt", "yuv444p", partial])
   const frames = Math.round(duration * fps)
+  const perSegment = fps * 10
+  const segments = []
   const started = Date.now()
-  for (let i = 0; i < frames; i++) {
-    await page.evaluate((t) => window.seek(t), i / fps)
-    const png = await stage.screenshot({ type: "png" })
-    if (!enc.stdin.write(png)) await new Promise((r) => enc.stdin.once("drain", r))
-    if (i % fps === 0) {
-      const s = (Date.now() - started) / 1000
-      process.stdout.write(`\r${name}: ${i}/${frames} frames, ${s.toFixed(0)} s`)
+  for (let first = 0; first < frames; first += perSegment) {
+    const segment = join(work, `${name}.${String(first / perSegment).padStart(3, "0")}.mkv`)
+    segments.push(segment)
+    if (existsSync(segment)) continue
+    const partial = `${segment}.partial.mkv`
+    const enc = ffmpeg(["-f", "image2pipe", "-framerate", String(fps), "-c:v", "png", "-i", "-",
+      "-c:v", "libx264", "-preset", "ultrafast", "-qp", "0", "-pix_fmt", "yuv444p", partial])
+    for (let i = first; i < Math.min(frames, first + perSegment); i++) {
+      await page.evaluate((t) => window.seek(t), i / fps)
+      const png = await stage.screenshot({ type: "png" })
+      if (!enc.stdin.write(png)) await new Promise((r) => enc.stdin.once("drain", r))
     }
+    enc.stdin.end()
+    await enc.done
+    await rename(partial, segment)
+    const s = (Date.now() - started) / 1000
+    console.log(`${name}: ${Math.min(frames, first + perSegment)}/${frames} frames, ${s.toFixed(0)} s`)
   }
-  enc.stdin.end()
-  await enc.done
-  await browser.close()
-  await rename(partial, master)
-  process.stdout.write(`\r${name}: ${frames} frames in ${((Date.now() - started) / 1000).toFixed(0)} s\n`)
+  const list = join(work, `${name}.txt`)
+  await writeFile(list, segments.map((f) => `file '${f}'`).join("\n"))
+  await ffmpeg(["-f", "concat", "-safe", "0", "-i", list, "-c", "copy", `${master}.partial.mkv`]).done
+  await rename(`${master}.partial.mkv`, master)
+  for (const f of [...segments, list]) await rm(f, { force: true })
 }
+await browser.close()
 
 await mkdir(publicDir, { recursive: true })
 const out = (ext) => join(publicDir, `${name}.${ext}`)
