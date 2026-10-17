@@ -74,6 +74,8 @@ func (m *app) body(w, h int) []string {
 		return m.newBody(w, h)
 	case screenProgress:
 		return m.progressBody(w, h)
+	case screenCheckpoints:
+		return m.checkpointsBody(w, h)
 	}
 	return m.homeBody(w, h)
 }
@@ -89,12 +91,17 @@ func (m *app) noticeLine(w int) string {
 	switch {
 	case m.filtering:
 		return styleBold.Render("/ ") + *m.filterTarget() + styleAccent.Render("▏")
+	case m.typing != nil:
+		return m.typing.view(w)
 	case m.screen == screenChat && m.chats.composing:
 		return m.chats.draft.line("› ", w)
 	case m.screen == screenChat && m.chats.sending && m.notice.text == "":
 		return styleDim.Render("Sending…")
 	case m.confirm != nil:
 		return styleBold.Render("Delete "+m.confirm.Name+"?") + styleDim.Render(" This removes its disks.")
+	case m.checkpoints.restoring != nil && m.screen == screenCheckpoints:
+		return styleBold.Render("Restore "+m.checkpointSandbox().Name+" to "+m.checkpoints.restoring.Name+"?") +
+			styleDim.Render(" What changed since is lost.")
 	case m.notice.text != "" && m.notice.failed:
 		return styleFailed.Render(m.notice.text)
 	case m.notice.text != "":
@@ -111,9 +118,11 @@ func (m *app) noticeLine(w int) string {
 // Studio lives.
 func (m *app) helpBody() []string {
 	keys := [][2]string{
-		{"enter", "open the sandbox"},
-		{"s", "start, stop or resume the sandbox"},
+		{"enter", "open the sandbox, with its ports"},
+		{"s / z", "start, stop or resume the sandbox; z suspends it"},
 		{"d", "delete the sandbox, after asking"},
+		{"f", "fork the sandbox: a new one with a copy of its disks"},
+		{"h", "the sandbox's checkpoints: save one, or restore one"},
 		{"t", "the sandbox's terminal; Ctrl-] returns here"},
 		{"c", "the chats with the sandbox's teammate"},
 		{"n", "new sandbox: a teammate, a template and a name"},
@@ -122,8 +131,7 @@ func (m *app) helpBody() []string {
 		{"a", "approvals, from every environment"},
 		{"l", "Activity: the connections and decisions log"},
 		{"↑/↓, j/k", "move the cursor"},
-		{"esc", "clear the filter, or go back"},
-		{"q", "go back, or quit from the list"},
+		{"esc / q", "go back; esc clears the filter, q quits from the list"},
 		{"?", "this help"},
 	}
 	title := "Keys"
@@ -132,6 +140,19 @@ func (m *app) helpBody() []string {
 		"stay in the browser, at " + m.browserURL("/") + ".",
 	}
 	switch m.helpBack {
+	case screenCheckpoints:
+		title = "Checkpoints"
+		keys = [][2]string{
+			{"↑/↓, j/k", "move the cursor"},
+			{"n", "save a checkpoint; enter alone names it after the time"},
+			{"r", "restore the checkpoint under the cursor, after asking"},
+			{"a", "approvals, from every environment"},
+			{"esc / q", "back"},
+		}
+		footer = []string{
+			"A checkpoint saves the disks, not running processes. A sandbox saves one",
+			"while it runs or is stopped, and goes back to one only while stopped.",
+		}
 	case screenActivity, screenEntry:
 		title = "Activity"
 		keys = [][2]string{
@@ -157,12 +178,13 @@ func (m *app) helpBody() []string {
 			{"g / G", "the start or the end of the chat"},
 			{"x", "stop the running turn"},
 			{"n", "start a new chat"},
+			{"1-9", "answer the permission or question waiting: a numbered choice"},
+			{"i / r", "ignore the permission or skip the question; r types an answer"},
 			{"a", "approvals, from every environment"},
 			{"esc / q", "back to the chats, then to the sandbox"},
 		}
 		footer = []string{
-			"Permissions and questions of a chat are answered in the browser, and the",
-			"approvals screen (a) prints where.",
+			"A question that is a form of several fields is answered in the browser.",
 		}
 	case screenApprovals:
 		title = "Approvals"
@@ -179,6 +201,10 @@ func (m *app) helpBody() []string {
 			{"A / D", "allow or deny every host of a group"},
 			{"r", "review a group's hosts one by one"},
 			{"enter", "review a git push's diff, or open another kind in the browser"},
+			{"y / n / i", "browser action: allow, deny, ignore; r: always for its origin"},
+			{"", "credential: y fills it; memory share: y shares, n declines"},
+			{"1 / 2", "memory conflict: keep A or B; i later; enter for the rest"},
+			{"1-9", "an agent's permission: its numbered choices; i ignores it"},
 			{"esc / q", "back"},
 		}
 	case screenPager:

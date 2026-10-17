@@ -1,9 +1,10 @@
 # Terminal UI
 
 `studio tui` is a keyboard client of the running Studio, in the same binary. It covers the
-daily loop: see and create sandboxes, answer approvals and review git pushes, chat with a
-sandbox's teammate, follow the network Activity, and drop into a sandbox's terminal. Everything
-else stays in the browser, and the TUI prints the URL where it applies. Plain `studio` is still
+daily loop: see, create, fork and suspend sandboxes, save and restore their checkpoints, see
+their open ports, answer approvals of every kind and review git pushes, chat with a sandbox's
+teammate, follow the network Activity, and drop into a sandbox's terminal. Everything else
+stays in the browser, and the TUI prints the URL where it applies. Plain `studio` is still
 the server; `studio tui` only ever connects to one.
 
 The user page is [Terminal UI](../site/src/content/docs/tui.md). A proposal for a richer look
@@ -50,9 +51,10 @@ Keys are the same on every screen and cannot be changed. The key bar shows the o
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | the sandboxes of the environment on show: status dot and word, name, teammate, template, uptime and the approvals waiting on each | `↑/↓` `j/k` move · `enter` open · `n` new · `t` terminal · `s` start, stop or resume · `d` delete (asks first) · `c` chat · `a` approvals · `l` Activity · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
-| **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID | `t` terminal · `s` start, stop or resume · `d` delete · `c` chat · `l` its Activity · `a` approvals · `esc` back |
-| **New sandbox** (from `n`) | a teammate, a template, a name; then the create's steps | see below |
+| **Home** | the sandboxes of the environment on show: status dot and word, name, teammate, template, uptime and the approvals waiting on each | `↑/↓` `j/k` move · `enter` open · `n` new · `t` terminal · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` chat · `a` approvals · `l` Activity · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
+| **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID, and the open ports with their preview addresses | `t` terminal · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` chat · `l` its Activity · `a` approvals · `esc` back |
+| **Checkpoints** (from `h`) | the sandbox's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
+| **New sandbox** (from `n`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
 | **Chats** (from `c`) | the chats of the sandbox's teammate in that sandbox, newest activity first | `enter` open · `n` new chat · `esc` back |
 | **Chat** | the transcript, streaming | see below |
 | **Approvals** (from `a` anywhere) | every pending approval of every environment, grouped like the web stack | see below |
@@ -74,10 +76,28 @@ way the web card starts them: the pattern level and the scope its teammate last 
 | Network request | `y` allow · `n` deny (each makes a rule) · `o` allow once · `O` deny once (no rule) · `1` allow for 1 hour · `i` ignore · `p` cycle the host pattern, then a browser request's method and path · `s` scope: environment, the teammate's sandboxes or this sandbox; for a browser request, who: its browser, all browsers, or browsers and sandboxes · `x` any port instead of the default ports · `w` allow the navigation's site for this browser session |
 | Group | `A` allow all · `D` deny all · `r` review one by one · `s` scope, or who for a browser page's requests |
 | Git push or pull request | `enter` opens the git review; it is decided there, after the diff |
-| Browser, memory, chat | `enter` prints the URL of the page that decides it |
+| Browser action | `y` allow · `n` deny · `i` ignore · `r` toggles whether the decision holds for every such action on the origin (the web's "always") |
+| Browser credential | `y` fill · `n` deny · `i` ignore |
+| Memory share | `y` share with every teammate · `n` decline · `i` ignore |
+| Memory conflict | `1` keep fact A · `2` keep fact B · `i` later (it stays open on the memory page) · `enter` prints the memory page's URL, for keep both or an edit |
+| Agent permission | `1`–`9` pick one of the agent's options, numbered as listed · `i` ignore |
+| Any other kind | `enter` prints the URL of the page that decides it |
 
 The decisions go to the same endpoint as the web card (`POST
-/api/environments/{env}/approvals/{id}/decide`), with the same bodies.
+/api/environments/{env}/approvals/{id}/decide`), with the same bodies:
+
+- a browser action: `{action, scope: "teammate", remember}`, with `remember` left out for an
+  ignore;
+- a browser credential: `{action, scope: "teammate"}`;
+- a memory share, and a memory conflict put off: `{action, scope: "environment"}`;
+- an agent permission: `{action, scope: "environment", remember}`. Each option maps to an action
+  and `remember` by its kind (allow once, allow always, reject once, reject always), and Studio
+  maps them back to the option, as it does for the web's buttons.
+
+Keeping one fact of a memory conflict resolves the conflict itself, as the web's conflict sheet
+does: `POST .../memory/conflicts/{id}/resolve` with `{resolution: "keep_a" | "keep_b"}`. Studio
+then closes the approval. Keeping both facts, or editing one, needs a text editor for two
+facts, so it stays in the browser.
 
 ### Git review
 
@@ -112,8 +132,15 @@ The transcript:
   right. `↑/↓` moves a cursor between them, `enter` (or `space`) expands one: a tool call's
   locations, its diffs (`-`/`+` lines) and text output, at most 40 lines. With no cursor the
   transcript follows the end; `↓` past the last fold returns there.
-- Plans, permission requests and questions show as one line each. Permissions and questions are
-  answered in the browser.
+- Plans, permission requests and questions show as one line each. The first one that waits
+  is answered in place, with its choices listed under it:
+  - a permission request: `1`–`9` pick an option, `i` ignores it. It is decided as its card
+    on the approvals screen is.
+  - a question: `i` skips it (`decline`). One with no field takes `1` for OK; a choice, or yes
+    or no, takes `1`–`9`; text or a number takes `r`, which opens a line for the answer in the
+    notice line. The answer goes to `POST .../chats/{chat}/items/{item}/answer` with
+    `{action: "accept", content: {field: value}}`, as the web's form sends it. A question with
+    several fields, or a list, is a form; its keys print the chat's URL instead.
 - `pgup/pgdn` (or `b`/`space`) scroll a page, `g`/`G` jump to the start or the end.
 
 `p` (or `enter` with no fold selected) opens the composer in the notice line: `enter` sends,
@@ -163,6 +190,37 @@ pull's bytes or layers), and those to come. Once the create is over it opens the
 failed create shows the step that failed and why, and `d` deletes the sandbox. `esc` leaves
 the create running on its own.
 
+### Fork, suspend and checkpoints
+
+`f` on Home or a sandbox asks for the fork's name in the notice line, starting from the web's
+suggestion (the name, cut to 35 characters, with `-fork`). The name is checked against the
+API's pattern before the fork. `POST .../sandboxes/{id}/fork` answers at once with the new
+sandbox in state `creating`, and the progress screen follows it as it does a create.
+
+`z` suspends a running sandbox (`POST .../sandboxes/{id}/suspend`); `s` resumes it.
+
+`h` opens the sandbox's checkpoints (`GET .../sandboxes/{id}/checkpoints`). They are copies of
+its disks, not of its running processes. `n` asks for a name in the notice line; an empty one
+takes the web's suggestion from the time (`Checkpoint 2026-10-17 09:30:00 UTC`, with ` (2)` and
+on when taken). It saves while the sandbox runs or is stopped. `r` restores the checkpoint under
+the cursor after a `y`: only a stopped sandbox goes back, on a runtime that can restore
+(`checkpointRestoreSupported`), and what changed since is lost. Deleting and renaming checkpoints,
+and the schedule, stay in the browser.
+
+### Ports
+
+The detail of a running sandbox lists its open ports (`GET .../sandboxes/{id}/ports`) with each
+one's preview address, `http://{port}-{id}.localhost:{studio port}/`. Where the terminal shows
+links, the address is one (OSC 8). Studio announces no change to the ports, so the screen
+reads them again every three seconds while it is on show, as the web's Ports region does. It
+lists six and counts the rest.
+
+The previews need a preview login. The web opens a preview through a one-time link
+(`POST .../previews/{port}/open`), which sets a preview cookie for eight hours. The TUI doesn't
+print those links: each is a one-time token, too long for an 80-column line, and only good
+in a browser anyway. A preview opened once from the web's Ports region opens from the TUI's
+address after that.
+
 ## Sign-in
 
 `studio tui` signs in as the local owner, the way `studio login-url` does:
@@ -199,10 +257,15 @@ The attachment uses the same websocket as the web terminal (`.../terminals/{name
 ## Stays in the browser
 
 Settings, providers, teammates, templates and the template editor, rules, the network page,
-memory, the browser, lineage and checkpoints, secrets, and the git settings. Chat permissions
-and questions, browser actions and memory approvals are answered there too. Where a screen has
-a key for one, it prints `open in browser: <url>` in the notice line. `?` gives the browser's
-address for the rest.
+memory, the browser, lineage, deleting or renaming checkpoints and their schedule, secrets, and
+the git settings. Some answers stay there too, because they need more than a key:
+
+- keeping both facts of a memory conflict, or editing one: two texts to edit;
+- a chat question that is a form of several fields, or a list: a form to fill;
+- a preview's first login: a one-time link for a browser.
+
+Where a screen has a key for one, it prints `open in browser: <url>` in the notice line. `?`
+gives the browser's address for the rest.
 
 ## Look
 
@@ -223,11 +286,15 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   messages, key handling and the frame. The key bar is Bubbles' `help`, and the bindings are
   Bubbles' `key`, so the bar and the handlers come from one list.
 - `approvals.go` ports the web's card grouping (`web/src/lib/approval-groups.ts`) and the
-  decision choices of `web/src/components/approval-decision.tsx`. `pager.go` is the git review.
+  decision choices of `web/src/components/approval-decision.tsx`. `kinds.go` decides the other
+  kinds (browser, memory, agent permissions) and reads a question's schema into the one field
+  the TUI answers. `pager.go` is the git review.
 - `chat.go` is the chat screens: the stream, the transcript's layout and folds, the composer.
-  `input.go` is the line editor the composer and the new sandbox's name use.
+  `input.go` is the line editor the composer and the new sandbox's name use, and `linePrompt`,
+  the one-line question of the notice line (a fork's name, a checkpoint's name, an answer).
 - `activity.go` is the Activity log and an entry's rule. `newsandbox.go` is the new sandbox's
-  form and the create's progress.
+  form, the fork, and the progress of both. `checkpoints.go` is the checkpoints screen, and
+  `ports.go` the detail's ports.
 - `terminal.go` is the attachment: a `tea.ExecCommand`, so Bubble Tea releases the terminal
   while it runs. It bridges the websocket and reads the keys itself, which is what lets Ctrl-]
   return without a goroutine left reading the terminal.
@@ -242,7 +309,9 @@ Tests:
   intended change, `go test ./internal/tui -run Golden -update` rewrites them; review the diff.
 - The client and the commands run against an in-process Studio: the API behind the same guards
   and an in-memory catalog, with a fake VM runtime, the chat service and a connection log. The
-  test Studio never touches the real one.
+  test Studio never touches the real one. Where that Studio can't answer (an agent that is
+  connected, a runtime that restores), a server that records the calls checks the paths and
+  bodies the keys send.
 - A pseudo-terminal test runs the TUI as a child process: it shows Home, opens Activity, goes
   back and quits. Another runs the attachment on a real terminal and checks that unbuffered
   input reaches the sandbox and that Ctrl-] detaches. Both are skipped on Windows.

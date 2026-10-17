@@ -2,7 +2,8 @@ package tui
 
 import "fmt"
 
-// detailBody is the sandbox on the cursor, with the facts the list does not have room for.
+// detailBody is the sandbox on the cursor, with the facts the list does not have room for and
+// the ports it listens on.
 func (m *app) detailBody(w, h int) []string {
 	sb := m.selected()
 	if sb == nil {
@@ -31,7 +32,7 @@ func (m *app) detailBody(w, h int) []string {
 		fact("Approvals", approvals),
 		fact("ID", sb.ID),
 	}
-	return lines
+	return append(lines, m.portLines(sb.ID, ph == phaseReady)...)
 }
 
 // fact is a label and its value on one line of the detail.

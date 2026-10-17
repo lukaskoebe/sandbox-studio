@@ -108,3 +108,13 @@ func TestPendingApprovalsOfEveryEnvironment(t *testing.T) {
 		t.Fatalf("approvals: %+v", list)
 	}
 }
+
+func TestSuspendGoesThroughTheServer(t *testing.T) {
+	ctx := context.Background()
+	s := startStudio(t)
+	sb := s.addSandbox(t, "blub", runtime.StatusRunning)
+	view, err := connect(t, s).Lifecycle(ctx, s.Env.ID, sb.ID, "suspend")
+	if err != nil || string(view.Status) != "suspended" {
+		t.Fatalf("suspend: %+v, %v", view, err)
+	}
+}

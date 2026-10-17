@@ -8,7 +8,7 @@ api-refactor                                                         ● Running
   Uptime     up 12m
   Approvals  1 approval waiting
   ID         sb2
-
+  Ports      …
 
 
 
@@ -20,4 +20,4 @@ api-refactor                                                         ● Running
 
 
 ────────────────────────────────────────────────────────────────────────────────
-t terminal  s start/stop  d delete  c chat  l activity  esc/q back  ? help
+t terminal  s start/stop  d delete  c chat  l activity  esc/q back  ? help …

@@ -123,8 +123,8 @@ func listen(ch <-chan events.Event) tea.Cmd {
 	}
 }
 
-// lifecycle starts, stops or resumes a sandbox. A start returns when the VM is up, so the
-// command has no timeout of its own: it ends with the program.
+// lifecycle starts, stops, suspends or resumes a sandbox. A start returns when the VM is up, so
+// the command has no timeout of its own: it ends with the program.
 func (m *app) lifecycle(sb sandboxes.View, action, verb string) tea.Cmd {
 	ctx, client, env := m.ctx, m.client, m.env.ID
 	return func() tea.Msg {
@@ -155,6 +155,8 @@ func pastTense(verb string) string {
 		return "Stopped"
 	case "resume":
 		return "Resumed"
+	case "suspend":
+		return "Suspended"
 	default:
 		return "Started"
 	}

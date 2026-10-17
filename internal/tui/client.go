@@ -138,8 +138,8 @@ func (c *Client) PendingApprovals(ctx context.Context) ([]api.ApprovalView, erro
 	return out, err
 }
 
-// Lifecycle starts, stops or resumes a sandbox and returns it as it is then. A start or resume
-// returns when the VM is up, which can take a while.
+// Lifecycle starts, stops, suspends or resumes a sandbox and returns it as it is then. A start or
+// resume returns when the VM is up, which can take a while.
 func (c *Client) Lifecycle(ctx context.Context, env, id, action string) (sandboxes.View, error) {
 	var out sandboxes.View
 	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+id+"/"+action, nil, nil, &out)
@@ -157,6 +157,63 @@ func (c *Client) Decide(ctx context.Context, env, id string, d Decision) (api.Ap
 	var out api.ApprovalView
 	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/approvals/"+id+"/decide", nil, d, &out)
 	return out, err
+}
+
+// Fork copies a sandbox into a new one named name. It returns at once, with the new sandbox in
+// state creating; the copy and the boot go on in Studio, as a create's do.
+func (c *Client) Fork(ctx context.Context, env, id, name string) (sandboxes.View, error) {
+	var out sandboxes.View
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+id+"/fork", nil, map[string]string{"name": name}, &out)
+	return out, err
+}
+
+// Checkpoints lists a sandbox's checkpoints.
+func (c *Client) Checkpoints(ctx context.Context, env, sandbox string) ([]store.Checkpoint, error) {
+	var out []store.Checkpoint
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/checkpoints", nil, nil, &out)
+	return out, err
+}
+
+// CreateCheckpoint saves a checkpoint of a sandbox's disks. It returns once they are captured.
+func (c *Client) CreateCheckpoint(ctx context.Context, env, sandbox, name string) (store.Checkpoint, error) {
+	var out store.Checkpoint
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+sandbox+"/checkpoints", nil, map[string]string{"name": name}, &out)
+	return out, err
+}
+
+// RestoreCheckpoint puts a stopped sandbox's disks back to a checkpoint.
+func (c *Client) RestoreCheckpoint(ctx context.Context, env, sandbox, checkpoint string) (sandboxes.View, error) {
+	var out sandboxes.View
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+sandbox+"/checkpoints/"+checkpoint+"/restore", nil, nil, &out)
+	return out, err
+}
+
+// Ports lists the ports a running sandbox listens on, with their preview addresses.
+func (c *Client) Ports(ctx context.Context, env, sandbox string) ([]api.PreviewPort, error) {
+	var out []api.PreviewPort
+	_, err := c.send(ctx, http.MethodGet, "/api/environments/"+env+"/sandboxes/"+sandbox+"/ports", nil, nil, &out)
+	return out, err
+}
+
+// ResolveConflict settles a memory conflict: keep_a or keep_b retracts the other fact. Studio
+// closes the conflict's approval with it.
+func (c *Client) ResolveConflict(ctx context.Context, env, id, resolution string) error {
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/memory/conflicts/"+id+"/resolve", nil, map[string]string{"resolution": resolution}, nil)
+	return err
+}
+
+// Answer is the body of an answer to a chat's question: accept with the form's values, or
+// decline.
+type Answer struct {
+	Action  string `json:"action"`
+	Content any    `json:"content,omitempty"`
+}
+
+// AnswerQuestion answers a question the agent of a chat waits on. Studio answers 409 once the
+// agent no longer waits.
+func (c *Client) AnswerQuestion(ctx context.Context, env, chatID, item string, a Answer) error {
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/chats/"+chatID+"/items/"+item+"/answer", nil, a, nil)
+	return err
 }
 
 // Templates lists an environment's ready templates, which a new sandbox can start from.

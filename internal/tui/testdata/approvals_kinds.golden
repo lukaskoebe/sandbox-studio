@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                           ● 5 approvals
+────────────────────────────────────────────────────────────────────────────────
+Approvals from every environment, newest first
+
+▸ Browser action  blub · Default · 1m ago                                       
+    click “Buy now” on https://shop.example                                     
+    decides this one
+
+  Browser credential  blub · Default · 2m ago                                   
+    Fill SHOP_PASSWORD on https://shop.example                                  
+    Studio fills the secret into “Password”; Iris sees only its name.           
+
+  Memory share  Iris · Default · 3m ago                                         
+    The staging database is reset every night.                                  
+    Iris · fact · agent                                                         
+
+  Memory conflict  Default · 4m ago                                             
+    Two memory facts contradict each other                                      
+    A Deploys go out on Fridays.                                         · user
+    B Deploys never go out on Fridays.                                  · agent
+
+────────────────────────────────────────────────────────────────────────────────
+y allow  n deny  i ignore  r always  esc/q back

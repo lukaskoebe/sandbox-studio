@@ -11,6 +11,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/resources"
+	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -203,5 +204,67 @@ func TestNewSandboxCreatesOnTheServer(t *testing.T) {
 	m = run(m, m.loadSandboxes())
 	if m.screen != screenHome || len(m.sandboxes) != 0 {
 		t.Fatalf("deleted: screen %v, %d sandboxes, notice %q", m.screen, len(m.sandboxes), m.notice.text)
+	}
+}
+
+// f asks for the fork's name, starting from the sandbox's; enter forks it and the progress
+// screen follows the fork.
+func TestForkAsksForANameAndFollowsTheFork(t *testing.T) {
+	client, rec := recordingClient(t)
+	rec.answers["POST /api/environments/env1/sandboxes/sb1/fork"] = `{"id":"sb9","name":"blub-fork","status":"creating"}`
+	m := sampleApp()
+	m.client = client
+	m = press(m, "f")
+	if m.typing == nil || m.typing.text.value() != "blub-fork" {
+		t.Fatalf("f asks nothing: %+v", m.typing)
+	}
+	if bar := stripANSI(m.keyBar()); !strings.HasPrefix(bar, "enter fork") {
+		t.Fatalf("bar: %q", bar)
+	}
+	m = press(m, "backspace", "backspace", "backspace", "backspace", "backspace", "_", "enter")
+	if m.typing == nil || !strings.Contains(stripANSI(m.noticeLine(120)), "lowercase letters, digits and dashes") {
+		t.Fatalf("a bad name was taken: %q", stripANSI(m.noticeLine(120)))
+	}
+	m = press(m, "backspace", "-", "T", "w", "o")
+	if got := m.typing.text.value(); got != "blub-two" {
+		t.Fatalf("name: %q", got)
+	}
+	m = pressRun(t, m, "enter")
+	if got := rec.last(t); got.path != "/api/environments/env1/sandboxes/sb1/fork" || got.body != `{"name":"blub-two"}` {
+		t.Fatalf("fork: %+v", got)
+	}
+	if m.screen != screenProgress || m.newSb.created == nil || m.newSb.created.ID != "sb9" {
+		t.Fatalf("progress: screen %v, %+v", m.screen, m.newSb.created)
+	}
+}
+
+func TestForkNameStaysAName(t *testing.T) {
+	if got := forkName(strings.Repeat("a", 34) + "-b-c"); got != strings.Repeat("a", 34)+"-fork" {
+		t.Fatalf("long: %q", got)
+	}
+	m := sampleApp()
+	m.cursor = 3 // demo, which is still being created
+	m.sandboxes[3].Status = "creating"
+	if m = press(m, "f"); m.typing != nil || !m.notice.failed {
+		t.Fatalf("forked while creating: %+v", m.notice)
+	}
+	m = press(sampleApp(), "f", "esc")
+	if m.typing != nil || m.screen != screenHome {
+		t.Fatalf("esc: typing %v, screen %v", m.typing != nil, m.screen)
+	}
+}
+
+// Studio's answer to a fork reaches the notice line; the runtime of the tests can't copy disks.
+func TestForkGoesThroughTheServer(t *testing.T) {
+	ctx := context.Background()
+	s := startStudio(t)
+	s.addSandbox(t, "blub", runtime.StatusStopped)
+	m := newApp(ctx, connect(t, s), s.Addr)
+	m.env = s.Env
+	m = run(m, m.loadSandboxes())
+	m = press(m, "f")
+	m = pressRun(t, m, "enter")
+	if !m.notice.failed || !strings.Contains(m.notice.text, "fork blub: this runtime cannot copy workspaces") {
+		t.Fatalf("fork: %+v", m.notice)
 	}
 }

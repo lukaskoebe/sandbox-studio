@@ -25,6 +25,7 @@ var (
 	keyEnv       = key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "env"))
 	keyNew       = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new"))
 	keyLifecycle = key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "start/stop"))
+	keySuspend   = key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "suspend"))
 	keyDelete    = key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete"))
 	keyChat      = key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "chat"))
 	keyYes       = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "delete"))
@@ -56,8 +57,12 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case m.filtering:
 		return m.filterKey(msg)
+	case m.typing != nil:
+		return m.typingKey(msg)
 	case m.confirm != nil:
 		return m.confirmKey(msg)
+	case m.checkpoints.restoring != nil && m.screen == screenCheckpoints:
+		return m.restoreKey(msg)
 	}
 	switch m.screen {
 	case screenHome:
@@ -82,6 +87,8 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.newKey(msg)
 	case screenProgress:
 		return m.progressKey(msg)
+	case screenCheckpoints:
+		return m.checkpointsKey(msg)
 	default: // help: any key closes it
 		m.screen = m.helpBack
 		return m, nil
@@ -106,6 +113,12 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, keyLifecycle):
 		return m, m.toggle(m.selected())
+	case key.Matches(msg, keySuspend):
+		return m, m.suspend(m.selected())
+	case key.Matches(msg, keyFork):
+		m.askFork(m.selected())
+	case key.Matches(msg, keyCheckpoints):
+		return m, m.openCheckpoints(m.selected())
 	case key.Matches(msg, keyDelete):
 		m.askDelete(m.selected())
 	case key.Matches(msg, keyChat):
@@ -137,6 +150,12 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenHome
 	case key.Matches(msg, keyLifecycle):
 		return m, m.toggle(m.selected())
+	case key.Matches(msg, keySuspend):
+		return m, m.suspend(m.selected())
+	case key.Matches(msg, keyFork):
+		m.askFork(m.selected())
+	case key.Matches(msg, keyCheckpoints):
+		return m, m.openCheckpoints(m.selected())
 	case key.Matches(msg, keyDelete):
 		m.askDelete(m.selected())
 	case key.Matches(msg, keyChat):
@@ -249,6 +268,23 @@ func (m *app) toggle(sb *sandboxes.View) tea.Cmd {
 	return nil
 }
 
+// suspend suspends a running sandbox: its memory is saved, and s resumes it where it was.
+func (m *app) suspend(sb *sandboxes.View) tea.Cmd {
+	if sb == nil {
+		return nil
+	}
+	switch phaseOf(*sb) {
+	case phaseReady:
+		m.setNotice("Suspending "+sb.Name+"…", false)
+		return m.lifecycle(*sb, "suspend", "suspend")
+	case phaseSuspended:
+		m.setNotice(sb.Name+" is suspended already. s resumes it.", false)
+	default:
+		m.setNotice("Only a running sandbox can be suspended.", false)
+	}
+	return nil
+}
+
 func (m *app) askDelete(sb *sandboxes.View) {
 	if sb == nil {
 		return
@@ -289,12 +325,14 @@ func (m *app) bindings() []key.Binding {
 	switch {
 	case m.filtering:
 		return []key.Binding{keyKeep, keyClear}
+	case m.typing != nil:
+		return []key.Binding{m.typing.enter, keyCancel}
 	case m.confirm != nil:
 		return []key.Binding{keyYes, keyNo}
 	}
 	switch m.screen {
 	case screenDetail:
-		return []key.Binding{keyTerminal, keyLifecycle, keyDelete, keyChat, keyActivity, keyBack, keyHelp}
+		return m.detailBindings()
 	case screenEnvs:
 		return []key.Binding{keyUp, keyChoose, keyCancel}
 	case screenHelp:
@@ -309,8 +347,20 @@ func (m *app) bindings() []key.Binding {
 		return m.pagerBindings()
 	case screenNew, screenProgress:
 		return m.newBindings()
+	case screenCheckpoints:
+		return m.checkpointBindings()
 	}
 	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyApprovals, keyTerminal, keyChat, keyHelp, keyQuit}
+}
+
+// detailBindings are the keys the key bar shows on a sandbox's detail: suspend only while it runs.
+// Back and help come before the keys that fit on a wider terminal only; help lists them all.
+func (m *app) detailBindings() []key.Binding {
+	bindings := []key.Binding{keyTerminal, keyLifecycle, keyDelete, keyChat, keyActivity, keyBack, keyHelp}
+	if sb := m.selected(); sb != nil && phaseOf(*sb) == phaseReady {
+		bindings = append(bindings, keySuspend)
+	}
+	return append(bindings, keyCheckpoints, keyFork)
 }
 
 // approvalBindings are the keys the key bar shows for the approvals card under the cursor.
@@ -328,5 +378,5 @@ func (m *app) approvalBindings() []key.Binding {
 	case isGit(c.first()):
 		return []key.Binding{keyReview, keyBack}
 	}
-	return []key.Binding{keyOpen, keyBack}
+	return kindBindings(c.first())
 }

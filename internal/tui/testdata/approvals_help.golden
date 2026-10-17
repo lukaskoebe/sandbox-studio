@@ -13,11 +13,11 @@ Approvals
   A / D      allow or deny every host of a group
   r          review a group's hosts one by one
   enter      review a git push's diff, or open another kind in the browser
+  y / n / i  browser action: allow, deny, ignore; r: always for its origin
+             credential: y fills it; memory share: y shares, n declines
+  1 / 2      memory conflict: keep A or B; i later; enter for the rest
+  1-9        an agent's permission: its numbered choices; i ignores it
   esc / q    back
-
-Settings, providers, teammates, templates, rules, memory and the browser
-stay in the browser, at http://127.0.0.1:7878/.
-
 
 ────────────────────────────────────────────────────────────────────────────────
 esc/q back

@@ -1,0 +1,23 @@
+Sandbox Studio · Default                                            ● 1 approval
+────────────────────────────────────────────────────────────────────────────────
+Fix the login form · blub                                                  Ready
+
+  ▸ Thought it through
+  ▸ Read src/login.tsx                                                      done
+  ▸ Edit src/login.tsx                                                      done
+
+Fixed
+
+The form used a `div` as its button, so enter did nothing. It is a real submit
+button now:
+
+    <button type="submit">Sign in</button>
+
+- Enter submits the form.
+- The button is focusable.
+
+  ? Asks to run npm test · waiting for you
+    1 Allow once  2 Reject  i ignore
+  ? Iris asks: Which port should the dev server use?
+────────────────────────────────────────────────────────────────────────────────
+1-2 choose  i ignore  p prompt  ↑/↓ tools  pgup scroll  n new chat  esc/q back  

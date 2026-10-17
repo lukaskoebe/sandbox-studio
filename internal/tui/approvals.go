@@ -30,11 +30,12 @@ func (c card) first() api.ApprovalView { return c.approvals[0] }
 // reach), the ports and whether the rule covers only the request's method and path. It starts as
 // the web card does.
 type choice struct {
-	pattern int    // index into patterns(a): the host the rule covers
-	scope   string // environment, teammate or sandbox
-	reach   string // a browser request's: browser, browsers or everywhere
-	anyPort bool
-	request bool // the rule covers the method and path of a browser request, not every request
+	pattern  int    // index into patterns(a): the host the rule covers
+	scope    string // environment, teammate or sandbox
+	reach    string // a browser request's: browser, browsers or everywhere
+	anyPort  bool
+	request  bool // the rule covers the method and path of a browser request, not every request
+	remember bool // a browser action's decision holds for the action on its origin from now on
 }
 
 // isBrowserRequest reports whether an approval is a browser's request, which names its method.
@@ -232,7 +233,8 @@ func hostOf(a api.ApprovalView) string {
 
 // Decision is the body of a decide call. Ports nil means the default ports of the request, and
 // an empty list any port. Method and PathPrefix narrow a rule to a browser request, and
-// BrowserOnly keeps the sandboxes' own connections out of it.
+// BrowserOnly keeps the sandboxes' own connections out of it. Remember makes a browser action's
+// or an agent permission's decision hold from now on.
 type Decision struct {
 	Action      string     `json:"action"`
 	Host        string     `json:"host,omitempty"`
@@ -242,6 +244,7 @@ type Decision struct {
 	PathPrefix  string     `json:"pathPrefix,omitempty"`
 	BrowserOnly bool       `json:"browserOnly,omitempty"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	Remember    bool       `json:"remember,omitempty"`
 }
 
 // decisionFor is the decide call a key of a network card makes, with the card's choice. A
@@ -376,15 +379,12 @@ func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// otherCardKey answers the keys of a group card, or of a card decided elsewhere: the group
-// decides all its hosts or splits into single cards, and any other card is decided in the browser.
+// otherCardKey answers the keys of a group card, or of a card of another kind: the group decides
+// all its hosts or splits into single cards, and the other kinds decide as kindKey says.
 func (m *app) otherCardKey(msg tea.KeyPressMsg, c card) (tea.Model, tea.Cmd) {
 	a := c.first()
 	if !c.group {
-		if key.Matches(msg, keyOpen, keyAllow, keyDeny, keyOnce, keyIgnore) {
-			m.setNotice("open in browser: "+m.approvalURL(a), false)
-		}
-		return m, nil
+		return m, m.kindKey(msg, c)
 	}
 	ch := m.choiceOf(c)
 	switch {
@@ -515,8 +515,9 @@ func (m *app) cardLines(c card, selected bool, w int) []string {
 		lines = append(lines, "    "+summary(a))
 		lines = append(lines, "    "+styleDim.Render("enter opens its diff"))
 	default:
-		lines = append(lines, "    "+summary(a))
-		lines = append(lines, "    "+styleDim.Render("enter opens it in the browser"))
+		for _, line := range m.kindLines(c, w-4) {
+			lines = append(lines, "    "+line)
+		}
 	}
 	return append(lines, "")
 }

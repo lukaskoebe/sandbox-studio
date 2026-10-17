@@ -292,14 +292,25 @@ func TestWrapKeepsListIndents(t *testing.T) {
 	}
 }
 
-// stripANSI drops the escape sequences of styled text.
+// stripANSI drops the escape sequences of styled text, and the links' too: an OSC sequence
+// runs from ESC ] to a BEL or ESC \.
 func stripANSI(s string) string {
 	var b strings.Builder
-	esc := false
+	esc, osc := false, false
 	for _, r := range s {
 		switch {
+		case osc && r == '\a':
+			osc = false
+		case osc && r == 0x1b:
+			esc = true
+		case osc && esc && r == '\\':
+			osc, esc = false, false
+		case osc:
+			esc = false
 		case r == 0x1b:
 			esc = true
+		case esc && r == ']':
+			esc, osc = false, true
 		case esc && (r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z'):
 			esc = false
 		case !esc:

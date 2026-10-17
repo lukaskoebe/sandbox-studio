@@ -38,28 +38,30 @@ func sampleApp() *app {
 
 func press(m *app, keys ...string) *app {
 	for _, k := range keys {
-		var msg tea.KeyPressMsg
-		switch k {
-		case "enter":
-			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
-		case "esc":
-			msg = tea.KeyPressMsg{Code: tea.KeyEscape}
-		case "backspace":
-			msg = tea.KeyPressMsg{Code: tea.KeyBackspace}
-		case "down":
-			msg = tea.KeyPressMsg{Code: tea.KeyDown}
-		case "up":
-			msg = tea.KeyPressMsg{Code: tea.KeyUp}
-		case "ctrl+c":
-			msg = tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
-		default:
-			r := []rune(k)[0]
-			msg = tea.KeyPressMsg{Code: r, Text: k}
-		}
-		next, _ := m.Update(msg)
+		next, _ := m.Update(keyMsg(k))
 		m = next.(*app)
 	}
 	return m
+}
+
+// keyMsg is the key press of a key's name, as press takes it.
+func keyMsg(k string) tea.KeyPressMsg {
+	switch k {
+	case "enter":
+		return tea.KeyPressMsg{Code: tea.KeyEnter}
+	case "esc":
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "backspace":
+		return tea.KeyPressMsg{Code: tea.KeyBackspace}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "ctrl+c":
+		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
+	default:
+		return tea.KeyPressMsg{Code: []rune(k)[0], Text: k}
+	}
 }
 
 // run executes a command and applies its message, the way the program does.
@@ -315,4 +317,20 @@ func names(list []sandboxes.View) string {
 		out = append(out, sb.Name)
 	}
 	return strings.Join(out, ",")
+}
+
+// z suspends a running sandbox, and says why it doesn't for one that isn't.
+func TestSuspendFollowsThePhase(t *testing.T) {
+	m := sampleApp()
+	if _, cmd := pressCmd(m, "z"); cmd == nil || m.notice.text != "Suspending blub…" {
+		t.Fatalf("z on a running sandbox: %+v", m.notice)
+	}
+	m.cursor = 2 // docs-site, stopped
+	if _, cmd := pressCmd(m, "z"); cmd != nil || m.notice.text != "Only a running sandbox can be suspended." {
+		t.Fatalf("z on a stopped sandbox: %+v", m.notice)
+	}
+	m.sandboxes[2].Status = "suspended"
+	if _, cmd := pressCmd(m, "z"); cmd != nil || m.notice.text != "docs-site is suspended already. s resumes it." {
+		t.Fatalf("z on a suspended sandbox: %+v", m.notice)
+	}
 }

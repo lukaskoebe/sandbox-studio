@@ -132,6 +132,8 @@ func (m *app) newUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		m.setNotice("", false)
 		m.filter = ""
 		return m.refresh(), true
+	case sandboxForked:
+		return m.forked(msg), true
 	}
 	return nil, false
 }
@@ -398,3 +400,83 @@ func (m *app) newBindings() []key.Binding {
 }
 
 var keyStepBack = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))
+
+// The keys of a fork.
+var (
+	keyFork     = key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "fork"))
+	keyForkName = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "fork"))
+)
+
+// sandboxForked is the answer to a fork: the new sandbox, in state creating.
+type sandboxForked struct {
+	sb  sandboxes.View
+	err error
+}
+
+// askFork asks for the name of a fork of the sandbox on the notice line, starting from the
+// web's suggestion. The fork copies the sandbox's disks into a new sandbox, which the progress
+// screen then follows as it does a create.
+func (m *app) askFork(sb *sandboxes.View) {
+	if sb == nil {
+		return
+	}
+	if ph := phaseOf(*sb); ph == phaseCreating || ph == phaseFailed {
+		m.setNotice(sb.Name+" can't be forked until it is created.", true)
+		return
+	}
+	p := &linePrompt{
+		label: "Fork " + sb.Name + " as: ",
+		enter: keyForkName,
+		name:  true,
+		submit: func(name string) (string, tea.Cmd) {
+			if !namePattern.MatchString(name) {
+				return "lowercase letters, digits and dashes", nil
+			}
+			m.setNotice("Forking "+sb.Name+" as "+name+"…", false)
+			return "", m.fork(*sb, name)
+		},
+	}
+	p.text.set(forkName(sb.Name))
+	m.ask(p)
+}
+
+// forkName is the name a fork starts from: the sandbox's, with -fork, short enough to be a name.
+func forkName(name string) string {
+	runes := []rune(name)
+	if len(runes) > 35 {
+		runes = runes[:35]
+	}
+	return strings.TrimRight(string(runes), "-") + "-fork"
+}
+
+// fork asks Studio for the fork, which answers at once.
+func (m *app) fork(sb sandboxes.View, name string) tea.Cmd {
+	ctx, client, env := m.ctx, m.client, m.env.ID
+	return func() tea.Msg {
+		rctx, cancel := requestContext(ctx)
+		defer cancel()
+		forked, err := client.Fork(rctx, env, sb.ID, name)
+		if err != nil {
+			err = fmt.Errorf("fork %s: %w", sb.Name, err)
+		}
+		return sandboxForked{sb: forked, err: err}
+	}
+}
+
+// forked follows a fork Studio accepted on the progress screen, unless the user went on to
+// something other than the sandboxes.
+func (m *app) forked(msg sandboxForked) tea.Cmd {
+	if msg.err != nil {
+		m.setNotice(msg.err.Error(), true)
+		return nil
+	}
+	if m.screen != screenHome && m.screen != screenDetail {
+		m.setNotice("Forking "+msg.sb.Name+"…", false)
+		return m.refresh()
+	}
+	m.newSb = newState{created: &msg.sb}
+	m.screen = screenProgress
+	m.setNotice("", false)
+	m.filter = ""
+	return m.refresh()
+}

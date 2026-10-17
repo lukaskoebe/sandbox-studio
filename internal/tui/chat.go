@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -334,6 +335,17 @@ func (c *chatState) sortedItems() []chat.Item {
 	return out
 }
 
+// pendingAsk is the first permission request or question the agent waits on, which the number
+// keys answer.
+func (c *chatState) pendingAsk() (chat.Item, bool) {
+	for _, it := range c.sortedItems() {
+		if (it.Kind == chat.KindPermission || it.Kind == chat.KindQuestion) && it.Status == chat.StatusPending {
+			return it, true
+		}
+	}
+	return chat.Item{}, false
+}
+
 // running reports whether the chat on show has a turn underway.
 func (c *chatState) running() bool {
 	return c.chat.State == store.ChatRunning
@@ -369,6 +381,9 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	c := &m.chats
 	if c.composing {
 		return m.composeKey(msg)
+	}
+	if cmd, ok := m.askKey(msg); ok {
+		return m, cmd
 	}
 	folds := len(m.transcript(m.width).folds)
 	switch {
@@ -419,6 +434,72 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.openHelp()
 	}
 	return m, nil
+}
+
+// askKey answers the permission request or question the agent waits on, as the web's cards in
+// the chat do: a number picks a choice, i ignores the request or skips the question, and r types
+// the answer to a question that asks for text. ok is false when the key is not for it.
+func (m *app) askKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
+	c := &m.chats
+	it, pending := c.pendingAsk()
+	if !pending {
+		return nil, false
+	}
+	n := digit(msg)
+	if it.Kind == chat.KindPermission && it.Permission != nil && it.ApprovalID != "" {
+		title := firstNonEmpty(oneLine(it.Permission.ToolCall.Title), "the tool call")
+		picks := permissionPicks(it.Permission.Options)
+		switch {
+		case n > 0 && n <= len(picks):
+			p := picks[n-1]
+			d := Decision{Action: p.action, Scope: "environment", Remember: p.remember}
+			return m.decideApproval(it.ApprovalID, d, "Chose “"+oneLine(p.label)+"” for", title), true
+		case key.Matches(msg, keyIgnore):
+			return m.decideApproval(it.ApprovalID, Decision{Action: "dismiss", Scope: "environment"}, "Ignored", "the permission request"), true
+		}
+		return nil, false
+	}
+	if it.Kind != chat.KindQuestion || it.Question == nil {
+		return nil, false
+	}
+	f, answerable := questionForm(it.Question.Schema)
+	switch {
+	case key.Matches(msg, keySkip):
+		return m.answerQuestion(c.id, it.ID, Answer{Action: "decline"}, "Skipped the question."), true
+	case !answerable:
+		if n > 0 || key.Matches(msg, keyReply) {
+			m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/chats/"+c.id), false)
+			return nil, true
+		}
+	case n > 0 && n <= len(f.picks):
+		p := f.picks[n-1]
+		return m.answerQuestion(c.id, it.ID, Answer{Action: "accept", Content: answerContent(f, p.value)}, "Answered “"+p.label+"”."), true
+	case key.Matches(msg, keyReply) && (f.kind == "text" || f.kind == "number"):
+		m.askAnswer(it.ID, f)
+		return nil, true
+	}
+	return nil, false
+}
+
+// askAnswer types the answer to a question that asks for text or a number on the notice line.
+func (m *app) askAnswer(item string, f questionField) {
+	chatID := m.chats.id
+	m.ask(&linePrompt{
+		label: "Answer: ",
+		enter: keyAnswer,
+		submit: func(text string) (string, tea.Cmd) {
+			text = strings.TrimSpace(text)
+			var value any = text
+			if f.kind == "number" {
+				n, err := strconv.ParseFloat(text, 64)
+				if err != nil {
+					return "a number", nil
+				}
+				value = n
+			}
+			return "", m.answerQuestion(chatID, item, Answer{Action: "accept", Content: answerContent(f, value)}, "Answered.")
+		},
+	})
 }
 
 // composeKey types the prompt: enter sends it, ctrl+j starts a new line, esc puts it aside.
@@ -577,6 +658,8 @@ func (m *app) transcript(w int) transcriptView {
 			}
 		}
 	}
+	ask, _ := c.pendingAsk()
+	askID := ask.ID
 	prevKind := ""
 	for _, it := range items {
 		gap := prevKind != "" && (it.Kind == chat.KindUser || it.Kind == chat.KindAgent || prevKind == chat.KindUser || prevKind == chat.KindAgent)
@@ -615,14 +698,11 @@ func (m *app) transcript(w int) transcriptView {
 			out.lines = append(out.lines, planLines(it, w)...)
 		case chat.KindPermission:
 			out.lines = append(out.lines, permissionLine(it, w))
-		case chat.KindQuestion:
-			if it.Question != nil {
-				what := "asked: " + oneLine(it.Question.Message)
-				if it.Status == chat.StatusPending {
-					what = "asks: " + oneLine(it.Question.Message) + " (answer in the browser)"
-				}
-				out.lines = append(out.lines, "  "+styleAccent.Render("?")+" "+m.teammateName()+" "+what)
+			if it.ID == askID && it.Permission != nil {
+				out.lines = append(out.lines, "    "+picksText(permissionPicks(it.Permission.Options))+styleDim.Render("  i ignore"))
 			}
+		case chat.KindQuestion:
+			out.lines = append(out.lines, m.questionLines(it, it.ID == askID, w)...)
 		case chat.KindMarker:
 			out.lines = append(out.lines, markerLine(it, w))
 		}
@@ -801,15 +881,45 @@ func planLines(it chat.Item, w int) []string {
 	return lines
 }
 
-// permissionLine is a tool call the agent asks to run. The approvals screen sends it to the
-// browser, where it is decided.
+// questionLines are a question of the agent: what it asks, and for the one the keys answer, its
+// choices or how to answer it.
+func (m *app) questionLines(it chat.Item, keys bool, w int) []string {
+	if it.Question == nil {
+		return nil
+	}
+	if it.Status != chat.StatusPending {
+		return []string{"  " + styleDim.Render(m.teammateName()+" asked: "+oneLine(it.Question.Message))}
+	}
+	var lines []string
+	for i, l := range wrapText(m.teammateName()+" asks: "+it.Question.Message, w-4) {
+		mark := "  "
+		if i == 0 {
+			mark = styleAccent.Render("?") + " "
+		}
+		lines = append(lines, "  "+mark+l)
+	}
+	if !keys {
+		return lines
+	}
+	f, ok := questionForm(it.Question.Schema)
+	switch {
+	case !ok:
+		return append(lines, "    "+styleDim.Render("A form: answer it in the browser.  i skip"))
+	case len(f.picks) > 0:
+		return append(lines, "    "+picksText(f.picks)+styleDim.Render("  i skip"))
+	}
+	return append(lines, "    "+styleBold.Render("r")+" answer"+styleDim.Render("  i skip"))
+}
+
+// permissionLine is a tool call the agent asks to run. The number keys under it decide the first
+// one waiting, here or on the approvals screen.
 func permissionLine(it chat.Item, w int) string {
 	title := "a tool"
 	if it.Permission != nil && it.Permission.ToolCall.Title != "" {
 		title = oneLine(it.Permission.ToolCall.Title)
 	}
 	if it.Status == chat.StatusPending {
-		return "  " + styleAccent.Render("?") + " Asks to run " + title + styleDim.Render(" · waiting for you (a)")
+		return "  " + styleAccent.Render("?") + " Asks to run " + title + styleDim.Render(" · waiting for you")
 	}
 	outcome := "answered"
 	if it.Permission != nil && it.Permission.Outcome != "" {
@@ -995,7 +1105,11 @@ func (m *app) chatBindings() []key.Binding {
 	if c.composing {
 		return []key.Binding{keySend, keyNewline, keyLeave}
 	}
-	bindings := []key.Binding{keyPrompt}
+	var bindings []key.Binding
+	if it, ok := c.pendingAsk(); ok {
+		bindings = append(bindings, askBindings(it)...)
+	}
+	bindings = append(bindings, keyPrompt)
 	if c.fold >= 0 {
 		bindings = append(bindings, keyExpand)
 	}
@@ -1004,4 +1118,22 @@ func (m *app) chatBindings() []key.Binding {
 		bindings = append(bindings, keyStop)
 	}
 	return append(bindings, keyNewChat, keyBack, keyHelp)
+}
+
+// askBindings are the keys of the permission request or question the agent waits on.
+func askBindings(it chat.Item) []key.Binding {
+	if it.Kind == chat.KindPermission && it.Permission != nil {
+		return []key.Binding{keyPick(len(permissionPicks(it.Permission.Options))), keyIgnore}
+	}
+	if it.Question == nil {
+		return nil
+	}
+	f, ok := questionForm(it.Question.Schema)
+	switch {
+	case !ok:
+		return []key.Binding{keySkip}
+	case len(f.picks) > 0:
+		return []key.Binding{keyPick(len(f.picks)), keySkip}
+	}
+	return []key.Binding{keyReply, keySkip}
 }

@@ -371,10 +371,6 @@ func TestBrowserPageGroupAllowsTheBrowserOnly(t *testing.T) {
 
 // pressCmd is press for one key, returning the command the key starts.
 func pressCmd(m *app, key string) (*app, tea.Cmd) {
-	var msg tea.KeyPressMsg
-	if len(key) == 1 {
-		msg = tea.KeyPressMsg{Code: rune(key[0]), Text: key}
-	}
-	next, cmd := m.Update(msg)
+	next, cmd := m.Update(keyMsg(key))
 	return next.(*app), cmd
 }

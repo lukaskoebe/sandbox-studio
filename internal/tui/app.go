@@ -24,13 +24,14 @@ const (
 	screenEnvs
 	screenHelp
 	screenApprovals
-	screenChats    // a sandbox's chats
-	screenChat     // one chat's transcript
-	screenActivity // the connections and decisions log
-	screenEntry    // one entry of the log, and its rule
-	screenPager    // the review of a git push or pull request
-	screenNew      // the form of a new sandbox
-	screenProgress // a new sandbox's create, until it is ready
+	screenChats       // a sandbox's chats
+	screenChat        // one chat's transcript
+	screenActivity    // the connections and decisions log
+	screenEntry       // one entry of the log, and its rule
+	screenPager       // the review of a git push or pull request
+	screenNew         // the form of a new sandbox
+	screenProgress    // a new sandbox's create or a fork, until it is ready
+	screenCheckpoints // a sandbox's checkpoints
 )
 
 // notice is the one line under the key bar: what the last action did, or what went wrong.
@@ -78,6 +79,8 @@ type app struct {
 	activity       activityState      // the Activity screens
 	pager          pagerState         // the review of a git approval
 	newSb          newState           // a new sandbox, from its form to its create's end
+	checkpoints    checkpointState    // the checkpoints screen
+	ports          portsState         // the open ports of the sandbox on the detail screen
 	cursor         int                // the selected sandbox, among the visible ones
 	approvalCursor int                // the selected card of the approvals screen
 	choices        map[string]*choice // the approvals' choices, by the ID of a card's first approval
@@ -86,6 +89,7 @@ type app struct {
 	filter         string             // the text the filter narrows the list by: a name, teammate or template
 	filtering      bool               // the filter takes the keys
 	confirm        *sandboxes.View    // the sandbox a delete waits for y or n about
+	typing         *linePrompt        // the line of text the notice line asks for, if any
 	notice         notice
 	keys           help.Model
 }
@@ -113,8 +117,15 @@ func (m *app) Init() tea.Cmd {
 	return tea.Batch(m.loadEnvs(), m.loadApprovals(), m.subscribe(), clock())
 }
 
-// Update applies one message to the model and returns the commands it starts.
+// Update applies one message to the model and returns the commands it starts. The detail
+// screen's ports are read while it is on show, whichever way the user got there.
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	return next, tea.Batch(cmd, m.watchPorts())
+}
+
+// update applies one message to the model.
+func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.chatUpdate(msg); ok {
 		return m, cmd
 	}
@@ -122,6 +133,12 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.newUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.checkpointsUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.portsUpdate(msg); ok {
 		return m, cmd
 	}
 	switch msg := msg.(type) {
@@ -219,15 +236,23 @@ func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // approvals of every environment, and the list of the screen on show.
 func (m *app) refresh() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSandboxes(), m.loadApprovals()}
-	if m.screen == screenChats {
+	switch m.screen {
+	case screenChats:
 		cmds = append(cmds, m.loadChats())
+	case screenCheckpoints:
+		cmds = append(cmds, m.loadCheckpoints())
 	}
 	return tea.Batch(cmds...)
 }
 
-// paste takes pasted text into the field that takes the keys: the filter or the composer.
+// paste takes pasted text into the field that takes the keys: the filter, the notice line's
+// prompt or the composer.
 func (m *app) paste(text string) {
 	switch {
+	case m.typing != nil && m.typing.name:
+		m.typing.text.paste(strings.ToLower(strings.Join(strings.Fields(text), "")))
+	case m.typing != nil:
+		m.typing.text.paste(strings.Join(strings.Fields(text), " "))
 	case m.filtering:
 		id := m.selectedID()
 		*m.filterTarget() += strings.Join(strings.Fields(text), " ")
@@ -324,4 +349,14 @@ func (m *app) size() (int, int) {
 // browserURL is the address of a page of the web UI, for hints that send the user there.
 func (m *app) browserURL(path string) string {
 	return "http://" + m.addr + path
+}
+
+// sandboxByID is the sandbox with the ID in the list of the environment on show.
+func (m *app) sandboxByID(id string) (sandboxes.View, bool) {
+	for _, sb := range m.sandboxes {
+		if sb.ID == id {
+			return sb, true
+		}
+	}
+	return sandboxes.View{}, false
 }

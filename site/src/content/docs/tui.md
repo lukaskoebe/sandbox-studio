@@ -1,11 +1,11 @@
 ---
 title: Terminal UI
-description: Create and check sandboxes, answer approvals, review git pushes, chat with a teammate and open a sandbox's terminal, from the terminal on the Studio machine or over SSH.
+description: Create, fork and check sandboxes, save checkpoints, answer approvals, review git pushes, chat with a teammate and open a sandbox's terminal, from the terminal on the Studio machine or over SSH.
 ---
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. It
-shows the sandboxes of an environment and creates new ones, answers approvals and reviews git
-pushes, chats with a sandbox's teammate, follows the network Activity, and opens a sandbox's
+shows the sandboxes of an environment, creates, forks and suspends them, and saves and restores
+their checkpoints. It answers approvals and reviews git pushes, chats with a sandbox's teammate, follows the network Activity, and opens a sandbox's
 terminal in full screen. Everything else stays in the browser, and the TUI prints the address
 of the page where you need it.
 
@@ -56,10 +56,13 @@ shows the ones that apply where you are, and `?` lists them all.
 | Key | On the sandbox list |
 |---|---|
 | `↑` `↓` or `j` `k` | move the cursor |
-| `enter` | open the sandbox: its facts, and the same keys |
+| `enter` | open the sandbox: its facts, its open ports, and the same keys |
 | `n` | create a new sandbox |
 | `t` | open the sandbox's terminal (it must be running) |
 | `s` | start, stop or resume the sandbox |
+| `z` | suspend the sandbox; `s` resumes it |
+| `f` | fork the sandbox |
+| `h` | the sandbox's checkpoints |
 | `d` | delete the sandbox; the TUI asks first |
 | `c` | the sandbox's chats with its teammate |
 | `a` | approvals, from every environment |
@@ -80,6 +83,34 @@ digits and dashes. `enter` goes on and `esc` goes back a step. Studio then creat
 and the TUI shows the steps as they happen, the image pull with its progress, as the browser
 does. Once the sandbox is ready it opens. If the create fails, you see the step and the reason,
 and `d` deletes the sandbox so you can try again. `esc` leaves the create to finish on its own.
+
+## Fork, suspend and checkpoints
+
+`f` forks the sandbox: a new sandbox with a copy of its disks. The TUI asks for the name at the
+bottom, and suggests one that ends in `-fork`. `enter` forks, `esc` cancels. The fork's
+progress then shows as a new sandbox's does.
+
+`z` suspends a running sandbox. `s` resumes it.
+
+`h` lists the sandbox's checkpoints, newest first. Each shows its name, whether the schedule
+took it (auto) or you did (manual), and its age. A checkpoint holds the disks, not the running
+programs.
+
+- `n` saves a checkpoint. Type a name, or press `enter` alone to name it after the time. The
+  sandbox must be running or stopped.
+- `r` restores the checkpoint under the cursor. The TUI asks first, and `y` restores. Stop the
+  sandbox first. What changed since the checkpoint is lost.
+
+Deleting and renaming checkpoints, and their schedule, are in the browser.
+
+## Ports
+
+A running sandbox's page lists its open ports, with each one's preview address. In a terminal
+that shows links, you can open the address from there. The list refreshes every three seconds.
+
+A preview needs a login the first time. Open it once from the Ports section of the sandbox's
+page in the browser. After that, the address from the TUI opens in that browser for eight
+hours.
 
 ## Approvals
 
@@ -102,8 +133,17 @@ A card lets you:
   rejects it, and `i` ignores it. A pull request shows its title and description, and `y`
   opens it.
 
-Browser actions, memory and chat permissions are decided in the browser. On their card,
-`enter` prints the address of the page to open.
+The other cards are decided with their own keys:
+
+- **Browser action:** `y` allows the click or the typing, `n` denies it, `i` ignores it. `r`
+  makes the answer hold for every such action on that site.
+- **Browser credential:** `y` fills the secret, `n` denies it, `i` ignores it. The agent sees
+  only the secret's name.
+- **Memory share:** `y` shares the fact with every teammate, `n` declines, `i` ignores it.
+- **Memory conflict:** `1` keeps fact A and `2` keeps fact B; the other one is retracted. `i`
+  leaves it for later. To keep both or edit one, `enter` prints the address of the memory page.
+- **Agent permission:** the agent's options are numbered. Press the number of the one you
+  want, or `i` to ignore the request.
 
 ## Chat
 
@@ -140,8 +180,15 @@ The transcript streams as the agent works. Thoughts and tool calls are folded to
 `↑` and `↓` move between them, and `enter` expands one to show its files, its diff or its
 output. `p` writes a prompt at the bottom: `enter` sends it, `ctrl+j` starts a new line, and
 `esc` puts it aside. `x` stops the turn that runs. Headings are bold and code is indented;
-there is no other formatting. When the agent asks for a permission or a question, the
-transcript says so, and you answer it in the browser.
+there is no other formatting.
+
+When the agent asks for a permission or asks a question, you answer it in the chat. The
+choices are listed under it.
+
+- A permission: press the number of an option, or `i` to ignore it.
+- A question: press the number of a choice, or `r` to type an answer and `enter` to send it.
+  `i` skips the question. A question with several fields is answered in the browser; its keys
+  print the chat's address.
 
 ## Activity
 
@@ -163,6 +210,6 @@ terminal, you see that, and the next key returns you to the TUI.
 ## Stays in the browser
 
 Settings, providers, teammates, templates, the rules editor, the network page, memory, the
-browser, secrets and the git settings are in the browser, and so are answers to chat
-permissions and questions. The TUI prints their addresses where it has a key for them, and `?`
-shows where the browser is.
+browser, secrets and the git settings are in the browser. So are a few answers: keeping both
+facts of a memory conflict, questions with several fields, and a preview's first login. The
+TUI prints their addresses where it has a key for them, and `?` shows where the browser is.
