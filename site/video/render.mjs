@@ -115,10 +115,11 @@ const encode = async (ext, argv) => {
   await ffmpeg(["-i", master, ...argv, "-an", `${out(ext)}.part.${ext}`]).done
   await rename(`${out(ext)}.part.${ext}`, out(ext))
 }
-await encode("mp4", ["-c:v", "libx264", "-preset", "veryslow", "-crf", "20", "-tune", "animation",
-  "-threads", "4", "-pix_fmt", "yuv420p", "-movflags", "+faststart"])
+await encode("mp4", ["-c:v", "libx264", "-preset", "slower", "-crf", "20", "-tune", "animation",
+  "-threads", "2", "-x264-params", "rc-lookahead=30", "-pix_fmt", "yuv420p", "-movflags",
+  "+faststart"])
 await encode("webm", ["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "34", "-row-mt", "1",
-  "-threads", "4", "-deadline", "good", "-cpu-used", "2", "-pix_fmt", "yuv420p"])
+  "-threads", "2", "-deadline", "good", "-cpu-used", "2", "-pix_fmt", "yuv420p"])
 const poster = Number(opt("--poster", Math.min(duration - 0.1, 3.5)))
 await ffmpeg(["-ss", String(poster), "-i", master, "-frames:v", "1", "-q:v", "3", out("jpg")]).done
 await rm(master, { force: true })
