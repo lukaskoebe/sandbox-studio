@@ -38,6 +38,10 @@ says.
 - Studio inside Studio needs nested virtualization, which microsandbox 0.7.7 turns off
   (microsandbox #1778). Check again once microsandbox #823 (an opt-in setting, with
   snapshots) is merged and released, then expose it as a template setting.
+- Local embeddings crashed once on a Windows runner: in the v0.3.5 release's smoke run,
+  `TestLlamaEmbeds` died after 6 s with no output, and passed on the re-run and on the
+  runner before. Find the CPU it fails on; llama.cpp's win-cpu-x64 build picks a backend
+  per CPU → [release](docs/release.md)
 
 **Agents and providers**
 - Subscription logins and CLI-based utility calls (spike S8): the Claude sign-in works; a
