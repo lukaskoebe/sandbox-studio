@@ -319,6 +319,11 @@ and [design/tui-visual.md](design/tui-visual.md)):
   transcript, and moves the cursor in lists. A click on a tab acts as its key, and a click on
   the environment opens the picker. A click on a card's keycap or a key of the key bar presses
   that key; the bar's arrows and keys with a modifier take no clicks.
+- **Motion.** The result of an action (a start, a stop, a decision, a detach) and the errors
+  of background loads show as a toast at the top right for 3 seconds, in the running or the
+  failed color, and clear the notice line's "Stopping…". The plain look keeps them on the
+  notice line. A new approval's card slides in from the top over about 150 ms while the
+  approvals show. Nothing else moves but the spinner and the booting shimmer.
 
 No key changed between the looks. Only `[`, `]` and `v` in the git review are new.
 
@@ -346,7 +351,8 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 - `style.go` holds the styles: the look, the palette of each color profile, and the fitting of
   styled text. `draw.go` has the visual look's pieces: dots, keycaps, card frames,
   sparklines, bars, the spinner, the tab header and the grouped key bar. `cards.go` is the
-  approvals' cards, and `live.go` the usage, lineage and spinner reads. `mouse.go` maps
+  approvals' cards, `live.go` the usage, lineage and spinner reads, and `motion.go` the
+  toasts and the cards' slide-in. `mouse.go` maps
   clicks and the wheel to what each row and key of the frame leads to. Each body records
   those rows and keycaps as it draws them, and the frame the key bar's keys.
 - `terminal.go` is the attachment: a `tea.ExecCommand`, so Bubble Tea releases the terminal

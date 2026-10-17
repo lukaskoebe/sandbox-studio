@@ -4,8 +4,6 @@ Status: Phases 1–3 and the mouse are built (2026-10-17); [tui.md](../tui.md#lo
 the TUI as it is. Left out:
 
 - Phase 4, pictures: it needs the browser frame endpoint and a graphics encoder.
-- Toasts and the new card's slide-in. The notice line still reports decisions and errors, and
-  nothing moves except the spinner and the booting shimmer.
 - The 160-column three-column Home (the open question below). From 120 columns Home is the
   list and the detail.
 
@@ -15,6 +13,9 @@ Where the build differs from the text:
   look is what the 80×24 goldens record.
 - Usage is also read for the detail screen's sandbox, not only on Home.
 - The Activity strip shows up to 3 hosts, or 5 on 30 rows and more, and needs 14 rows.
+- Toasts report what `actionDone` and `attachDone` carry and the errors of background loads.
+  Notices of a form or a prompt, progress ("Stopping…") and `open in browser:` URLs stay on
+  the notice line, where they can be read and copied.
 - Word highlights mark the unified diff as well as side by side; the plain look shows the diff
   as it comes. Lines that share no word keep their line's color only.
 

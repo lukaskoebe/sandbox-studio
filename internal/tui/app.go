@@ -100,6 +100,8 @@ type app struct {
 	usage    usageState   // the CPU and memory of the running sandboxes, for the sparklines
 	lineage  lineageState // the history of the sandbox in the detail pane
 	mouse    mouseState   // the last click, and where the screen's rows lead
+	toast    toastState   // the result or error the visual look shows at the top right
+	slide    slideState   // the new cards sliding in
 }
 
 // newApp returns the model for a session with the Studio at addr. Its first screen loads on Init.
@@ -142,7 +144,8 @@ func (m *app) Init() tea.Cmd {
 // usage and history the visual look draws, and the spinner turns while something on show runs.
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
-	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin())
+	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
+		m.watchToast(), m.watchSlide())
 }
 
 // update applies one message to the model.
@@ -164,6 +167,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if cmd, ok := m.liveUpdate(msg); ok {
 		return m, cmd
+	}
+	if m.motionUpdate(msg) {
+		return m, nil
 	}
 	switch msg := msg.(type) {
 	case tea.ColorProfileMsg:
@@ -217,7 +223,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if !m.reselect(prev) && m.screen == screenDetail {
 			m.screen = screenHome // the sandbox on show is gone
-			m.setNotice("That sandbox was deleted.", true)
+			m.report("That sandbox was deleted.", true)
 		}
 		m.followProgress()
 		m.lineage.stale = true // a checkpoint, a fork or a restore adds to the history
@@ -251,16 +257,16 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.refresh()
 	case actionDone:
 		if msg.err != nil {
-			m.setNotice(msg.err.Error(), true)
+			m.report(msg.err.Error(), true)
 		} else {
-			m.setNotice(msg.done, false)
+			m.report(msg.done, false)
 		}
 		return m, m.refresh()
 	case attachDone:
 		if msg.err != nil {
-			m.setNotice("Could not open the terminal: "+msg.err.Error(), true)
+			m.report("Could not open the terminal: "+msg.err.Error(), true)
 		} else {
-			m.setNotice("Detached from "+msg.sandbox+".", false)
+			m.report("Detached from "+msg.sandbox+".", false)
 		}
 		return m, m.refresh()
 	}
@@ -302,16 +308,19 @@ func (m *app) paste(text string) {
 // setApprovals stores the pending approvals. The first load announces nothing; a later load
 // that brings an approval the last one did not have rings the terminal bell once.
 func (m *app) setApprovals(list []api.ApprovalView) tea.Cmd {
-	fresh := false
+	var fresh []string
 	known := make(map[string]bool, len(list))
 	for _, a := range list {
 		known[a.ID] = true
 		if m.primed && !m.known[a.ID] {
-			fresh = true
+			fresh = append(fresh, a.ID)
 		}
 	}
 	m.approvals, m.known, m.primed = list, known, true
-	if fresh {
+	if len(fresh) > 0 {
+		if m.screen == screenApprovals {
+			m.slideIn(fresh)
+		}
 		return bell()
 	}
 	return nil
@@ -319,7 +328,7 @@ func (m *app) setApprovals(list []api.ApprovalView) tea.Cmd {
 
 // fail shows an error from a background load. The screens keep the data they had.
 func (m *app) fail(err error) {
-	m.setNotice(err.Error(), true)
+	m.report(err.Error(), true)
 }
 
 func (m *app) setNotice(text string, failed bool) {

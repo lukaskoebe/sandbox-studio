@@ -466,9 +466,13 @@ func (m *app) approvalsBody(w, h int) []string {
 		} else {
 			var caps []keyHit
 			block, caps = m.visualCard(c, i == m.approvalCursor, w)
+			hidden := len(block) - m.sliding(c, len(block))
+			block = block[hidden:]
 			for _, k := range caps {
-				k.y += len(lines)
-				keys = append(keys, k)
+				if k.y >= hidden {
+					k.y += len(lines) - hidden
+					keys = append(keys, k)
+				}
 			}
 		}
 		if i == m.approvalCursor {

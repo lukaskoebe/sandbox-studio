@@ -49,6 +49,9 @@ func (m *app) frame() string {
 	}
 	lines := []string{head, top}
 	lines = append(lines, pad(m.body(w, max(h-5, 1)), max(h-5, 1))...)
+	if box := m.toastBox(w); box != nil && len(box) <= max(h-5, 1) {
+		overlay(lines, box, bodyTop, w)
+	}
 	lines = append(lines, bottom)
 	lines = append(lines, m.keyBar(w, len(lines)), m.noticeLine(w))
 	for i, line := range lines {

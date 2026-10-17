@@ -68,5 +68,5 @@ says.
 
 **Terminal UI**
 - What the visual look left out: pictures (phase 4, which needs the browser frame endpoint),
-  toasts and the 160-column Home →
+  the 160-column Home →
   [design](docs/design/tui-visual.md)
