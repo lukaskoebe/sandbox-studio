@@ -78,6 +78,7 @@ type HostKey struct {
 	Key         string `json:"hostKey" doc:"The host key in authorized_keys form"`
 	Fingerprint string `json:"fingerprint" doc:"Its SHA256 fingerprint, to compare with the forge's published one"`
 	Algorithm   string `json:"algorithm"`
+	PublishedBy string `json:"publishedBy,omitempty" doc:"The forge that publishes this key, such as GitHub, when Studio has its published keys built in"`
 }
 
 // CheckHostKey parses a host key in authorized_keys form and returns it normalized.
@@ -148,7 +149,8 @@ func (s *Service) ScanHostKey(ctx context.Context, baseURL string) (ForgeURL, Ho
 	if got == nil {
 		return u, HostKey{}, fmt.Errorf("%s did not offer a host key: %w", addr, err)
 	}
-	return u, hostKey(got), nil
+	hk, err := CheckPublished(u, hostKey(got))
+	return u, hk, err
 }
 
 // HostKeyChangedError is a forge offering another host key than the pinned one.

@@ -63,8 +63,6 @@ says.
   zoom levels; the e2e suite checks the mapping against the fake only
 
 **Git**
-- Built-in pinned host keys for github.com, gitlab.com and bitbucket.org; today every SSH
-  forge goes through scan-and-confirm → [git review](docs/git-review.md#ssh-forges)
 - The host-agent acceptance check: an agent in a sandbox pushes to `git@github.com:…`
   through review, with the key only in the host agent
 

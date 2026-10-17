@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { CopyIcon } from "@phosphor-icons/react"
+import { CopyIcon, ShieldCheckIcon } from "@phosphor-icons/react"
 import { Ident } from "@/components/ident"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -38,9 +38,18 @@ import {
   type Kind,
 } from "@/lib/forges"
 
-export type Scanned = { key: string; fingerprint: string; algorithm: string }
+export type Scanned = {
+  key: string
+  fingerprint: string
+  algorithm: string
+  /** The forge whose published key this is, such as GitHub; nothing to compare then. */
+  publishedBy?: string
+}
 
-/** Scans an SSH host for its key and asks the user to confirm the fingerprint. */
+/**
+ * Scans an SSH host for its key and asks the user to confirm the fingerprint, unless it is a
+ * key Studio knows the forge publishes.
+ */
 export function HostKeyCheck({
   env,
   baseUrl,
@@ -57,15 +66,18 @@ export function HostKeyCheck({
   onConfirmed: (confirmed: boolean) => void
 }) {
   const scan = $api.useMutation("post", "/api/environments/{env}/forges/scan", {
-    onSuccess: (res) =>
+    onSuccess: (res) => {
       onScanned(
         {
           key: res.hostKey,
           fingerprint: res.fingerprint,
           algorithm: res.algorithm,
+          publishedBy: res.publishedBy,
         },
         res.baseUrl
-      ),
+      )
+      if (res.publishedBy) onConfirmed(true)
+    },
     onError: () => onScanned(undefined),
   })
   return (
@@ -77,13 +89,23 @@ export function HostKeyCheck({
             <span className="text-muted-foreground">{scanned.algorithm}</span>{" "}
             <Ident copy>{scanned.fingerprint}</Ident>
           </p>
-          <label className="flex items-center gap-2 text-xs">
-            <Checkbox
-              checked={confirmed}
-              onCheckedChange={(c) => onConfirmed(c === true)}
-            />
-            This is the fingerprint the host publishes
-          </label>
+          {scanned.publishedBy ? (
+            <p className="flex items-center gap-2 text-xs">
+              <ShieldCheckIcon
+                className="size-3.5 shrink-0 text-primary"
+                aria-hidden
+              />
+              The key {scanned.publishedBy} publishes
+            </p>
+          ) : (
+            <label className="flex items-center gap-2 text-xs">
+              <Checkbox
+                checked={confirmed}
+                onCheckedChange={(c) => onConfirmed(c === true)}
+              />
+              This is the fingerprint the host publishes
+            </label>
+          )}
         </>
       ) : (
         <div>

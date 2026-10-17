@@ -3382,6 +3382,8 @@ export interface components {
             fingerprint: string;
             /** @description The host key in authorized_keys form */
             hostKey: string;
+            /** @description The forge that publishes this key, such as GitHub, when Studio has its published keys built in */
+            publishedBy?: string;
         };
         ForgeScanInput: {
             /** @description The forge's SSH address, such as git@host or ssh://git@host:2222 */

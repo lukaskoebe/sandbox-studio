@@ -154,6 +154,9 @@ func (s *Server) registerForges(api huma.API) {
 				return nil, huma.Error422UnprocessableEntity("ssh forges sign with the SSH agent or a key Studio generates, not a token")
 			}
 			hk, err := gitreview.CheckHostKey(b.HostKey)
+			if err == nil {
+				_, err = gitreview.CheckPublished(u, hk)
+			}
 			if err != nil {
 				return nil, apiError(err)
 			}
@@ -306,6 +309,12 @@ func (s *Server) registerForges(api huma.API) {
 			return nil, huma.Error409Conflict("only ssh forges have a host key")
 		}
 		hk, err := gitreview.CheckHostKey(in.Body.HostKey)
+		if err == nil {
+			var u gitreview.ForgeURL
+			if u, err = gitreview.ParseSSHURL(f.BaseURL); err == nil {
+				_, err = gitreview.CheckPublished(u, hk)
+			}
+		}
 		if err != nil {
 			return nil, apiError(err)
 		}

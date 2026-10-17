@@ -112,6 +112,14 @@ The config holds only these internal URLs, never a token or key.
   with "the host key of <host> changed (pinned …, offered …)", the forge row shows the
   offered fingerprint, and "Re-pin" scans again and pins the key you confirm
   (`PUT …/forges/{id}/host-key`).
+- **Published keys:** Studio has the host keys GitHub (`github.com:22`, `ssh.github.com:443`),
+  GitLab (`gitlab.com:22`, `altssh.gitlab.com:443`) and Bitbucket (`bitbucket.org:22`,
+  `altssh.bitbucket.org:443`) publish built in (`internal/gitreview/knownhosts.go`). A scan of
+  one of them that sees a published key returns `publishedBy`, and the dialog shows "The key
+  GitHub publishes" with nothing to confirm. A scan that sees any other key fails, and creating
+  or re-pinning such a forge with a key it doesn't publish is refused (422), as that means
+  someone may be intercepting the connection. When one of them rotates its keys, the list
+  needs updating; until then, scanning that host fails.
 - **Client:** Studio's own client on `golang.org/x/crypto/ssh` over a `DialPublic`
   connection (go-git's SSH transport reads `~/.ssh/config` and proxies from the
   environment, so it isn't used). It runs `git-upload-pack '<path>'` and

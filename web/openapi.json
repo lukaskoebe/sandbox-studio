@@ -3042,6 +3042,10 @@
           "hostKey": {
             "description": "The host key in authorized_keys form",
             "type": "string"
+          },
+          "publishedBy": {
+            "description": "The forge that publishes this key, such as GitHub, when Studio has its published keys built in",
+            "type": "string"
           }
         },
         "required": [

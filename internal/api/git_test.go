@@ -173,6 +173,23 @@ func TestSSHForges(t *testing.T) {
 			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
 		}
 	}
+	// GitHub's keys are built in: a scan that sees another key fails, and so does pinning one.
+	if rec := do(h, "POST", base+"/scan", `{"baseUrl":"git@github.com"}`); rec.Code != http.StatusUnprocessableEntity ||
+		!strings.Contains(rec.Body.String(), "not one GitHub publishes") {
+		t.Fatalf("scan of github.com offering another key: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", base, `{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":`+string(hk)+`}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("github.com with another key: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(h, "POST", base, `{"name":"gh","kind":"ssh","baseUrl":"git@github.com","hostKey":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"}`)
+	if gh := decode[store.Forge](t, rec); rec.Code != http.StatusCreated {
+		t.Fatalf("github.com with its key: %d %s", rec.Code, rec.Body)
+	} else if rec := do(h, "PUT", base+"/"+gh.ID+"/host-key", `{"hostKey":`+string(hk)+`}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("re-pin github.com to another key: %d %s", rec.Code, rec.Body)
+	} else if rec := do(h, "DELETE", base+"/"+gh.ID, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+
 	rec = do(h, "POST", base, `{"name":"olite","kind":"ssh","auth":"key","baseUrl":"gitolite@git.example.org","hostKey":`+string(hk)+`}`)
 	f := decode[store.Forge](t, rec)
 	if rec.Code != http.StatusCreated || f.HostKeyFingerprint != scan.Fingerprint || f.Username != "gitolite" ||
