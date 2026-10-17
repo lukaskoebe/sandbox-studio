@@ -36,7 +36,7 @@ Start and stop are on the dashboard. The options menu (**⋯**, on both pages) h
 | **Rebase** | Moves the sandbox onto another template (see below). |
 | **Delete** | Permanently removes the sandbox and its disks. Export the sandbox first if you need a portable backup. |
 
-To change a sandbox's CPUs or memory, choose **Resources** on its dashboard. A running sandbox takes the change live where its VM has room for it; anything else applies the next time it starts.
+To change a sandbox's CPUs or memory, choose **Resources** on its dashboard. The change applies the next time the sandbox starts: the microsandbox version Studio uses can't resize a running VM, so stop and start a running sandbox to get it.
 
 ## Side panels
 

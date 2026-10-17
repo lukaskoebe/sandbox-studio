@@ -17,7 +17,7 @@ three are the same binary. The user page is [Command line](../site/src/content/d
 | `ask <sandbox> <prompt>` | a chat with the sandbox's teammate, the answer printed as it streams; `-` reads the prompt from stdin, `--chat <id>` continues a chat |
 | `approvals` | the pending approvals of every environment |
 | `approve`, `deny <approval>` | decides one; a network request gets a rule with the teammate's usual scope (`--scope` to choose), or `--once` for this connection only. A browser request's rule covers only the browsers, as on the web; `--sandboxes` lets it cover the sandboxes too |
-| `checkpoints <sandbox>`, `checkpoint <sandbox> [name]` | lists or saves checkpoints |
+| `checkpoints <sandbox>`, `checkpoint <sandbox> [name]` | lists or saves checkpoints; a checkpoint saved without a name is named `Checkpoint YYYY-MM-DD HH:MM:SS UTC`, as on the web |
 | `restore <sandbox> <checkpoint>` | puts the sandbox back to a checkpoint, by name or ID; asks first |
 | `envs` | the environments |
 | `completion bash\|zsh\|fish` | the completion script |

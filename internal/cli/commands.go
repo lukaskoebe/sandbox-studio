@@ -39,7 +39,7 @@ func init() {
 		{name: "approve", args: "<approval>", summary: "Allow a pending request. A network request gets a rule, unless --once.", flags: decideFlags, run: decide("allow")},
 		{name: "deny", args: "<approval>", summary: "Deny a pending request. A network request gets a rule, unless --once.", flags: decideFlags, run: decide("deny")},
 		{name: "checkpoints", args: "<sandbox>", summary: "List a sandbox's checkpoints.", run: (*call).checkpoints},
-		{name: "checkpoint", args: "<sandbox> [name]", summary: "Save a checkpoint of a sandbox.", run: (*call).checkpoint},
+		{name: "checkpoint", args: "<sandbox> [name]", summary: "Save a checkpoint of a sandbox, named after the time unless a name is given.", run: (*call).checkpoint},
 		{name: "restore", args: "<sandbox> <checkpoint>", summary: "Put a sandbox back to a checkpoint. Asks first, unless --yes.", flags: yesFlag, run: (*call).restore},
 		{name: "envs", args: "", summary: "List the environments.", run: (*call).envs},
 		{name: "completion", args: "bash|zsh|fish", summary: "Print the shell completion script.", offline: true, run: (*call).completion},
@@ -626,19 +626,42 @@ func (c *call) checkpoint(rest []string) error {
 	if err != nil {
 		return err
 	}
+	name := strings.TrimSpace(rest[1])
+	if name == "" {
+		list, err := c.checkpointList(sb.ID)
+		if err != nil {
+			return err
+		}
+		name = suggestedCheckpointName(time.Now(), list)
+	}
 	p, err := c.path("/sandboxes/%s/checkpoints", sb.ID)
 	if err != nil {
 		return err
 	}
 	var out store.Checkpoint
-	if err := c.client.Do(c.ctx, http.MethodPost, p, map[string]string{"name": rest[1]}, &out); err != nil {
+	if err := c.client.Do(c.ctx, http.MethodPost, p, map[string]string{"name": name}, &out); err != nil {
 		return err
 	}
 	if c.json {
 		return c.printJSON(out)
 	}
-	fmt.Fprintf(c.opts.Stdout, "Checkpoint %s of %s is %s\n", clean(orDash(out.Name)), clean(sb.Name), out.State)
+	fmt.Fprintf(c.opts.Stdout, "Checkpoint \"%s\" of %s is %s\n", clean(orDash(out.Name)), clean(sb.Name), out.State)
 	return nil
+}
+
+// suggestedCheckpointName names a checkpoint saved without a name as the web's dialog does:
+// "Checkpoint YYYY-MM-DD HH:MM:SS UTC", with " (2)" and up when a checkpoint has that name.
+func suggestedCheckpointName(now time.Time, existing []store.Checkpoint) string {
+	base := "Checkpoint " + now.UTC().Format("2006-01-02 15:04:05") + " UTC"
+	taken := map[string]bool{}
+	for _, cp := range existing {
+		taken[cp.Name] = true
+	}
+	name := base
+	for n := 2; taken[name]; n++ {
+		name = fmt.Sprintf("%s (%d)", base, n)
+	}
+	return name
 }
 
 func (c *call) restore(rest []string) error {

@@ -120,23 +120,33 @@ CPUs (1–64) and the memory size (at least 512 MiB). The sandbox dashboard's Re
 calls it. Studio asks msb's `modify` for a dry run and applies each changed resource as the
 plan says:
 
-- **live**: a running sandbox's VM takes the change now. msb allows this up to the VM's
-  boot-time capacity: its memory ceiling, and its CPU maximum, which Studio sets to the CPU
-  count the VM boots with.
+- **live**: a running sandbox's VM takes the change now, where msb offers it (msb 0.7.7
+  doesn't, see below), up to the VM's boot-time capacity: its memory ceiling, and its CPU
+  maximum, which Studio sets to the CPU count the VM boots with.
 - **nextStart**: the change is saved in the sandbox's config and used at its next start, and
   the running VM is left alone. Stopped and suspended sandboxes always get this, and so does a
   running sandbox's change above its boot-time capacity.
 
 The response's `applied` says how each resource changed: `live`, `nextStart` or `unchanged`.
-Live changes are made one resource per call, and the rest in one call with msb's no-restart
+Live changes are made one resource per call, and the rest in one call with msb's next-start
 policy, so a resize never restarts a running VM. A memory size above the ceiling raises the
-ceiling to match, as msb requires. If a step fails, the steps before it stay in effect, and the
-catalog records what took effect.
+ceiling to match, as msb requires, and a CPU count above the maximum raises the maximum. If a
+step fails, the steps before it stay in effect, and the catalog records what took effect.
 
-Verified vs. pending: the Studio side is covered by fake-runtime and API tests. Nothing has run
-against a live VM yet. A live run should check that a CPU decrease and a memory decrease apply
-to the running VM without a restart, and that a growth above the boot-time capacity reports
-`nextStart` and takes effect at the next start.
+**msb 0.7.7 has no live resize.** Its dry run marks every CPU or memory change to a running
+VM "requires restart", with the reason "live CPU and memory resize are not available in this
+runtime yet". So with the pinned msb every change to a running sandbox is `nextStart`,
+decreases included. `live` shows only when the running VM already has the new value (for
+example after a change saved for the next start is set back). The live path is kept for an msb
+that offers it.
+
+Verified on 2026-10-17 with msb 0.7.7 and base images v0.3.2 and v0.3.4, on a running sandbox
+created with 2 CPUs and 2 GiB: a decrease to 1 CPU and 1 GiB answered `nextStart` for both;
+the guest kept 2 CPUs, 2 GiB and its boot ID, and after a stop and start it had 1 CPU and
+1 GiB. A growth to 3 CPUs and 2.5 GiB, above the boot-time maximum of 2 CPUs and 2 GiB, also
+answered `nextStart`, raised both maximums, and took effect at the next start. A resize of a
+stopped and of a suspended sandbox answered `nextStart`, and the same request again
+`unchanged`. The Studio side is also covered by fake-runtime and API tests.
 
 ### Live use
 
@@ -153,9 +163,11 @@ A sandbox that doesn't run answers 409, and a runtime without metrics 501. The w
 status line polls it every 5 seconds while the sandbox runs. The e2e runtime reports half a
 vCPU and 768 MiB for every running VM.
 
-Verified vs. pending: the scaling and the API are covered by fake-runtime tests; the meaning of
-msb's `memory_bytes` (guest-used memory) is taken from its metrics crate and has not been
-checked against a live VM.
+Verified vs. pending: the scaling and the API are covered by fake-runtime tests. On 2026-10-17
+an idle sandbox with 3 CPUs and 2.5 GiB answered `cpuPercent` 0.1–0.4 and `memoryBytes` 173 MiB,
+while the guest's `MemTotal − MemAvailable` was 137 MiB and the VM process's host RSS 314 MiB.
+So `memoryBytes` follows the guest's own use, not the host's, but it is not exactly a
+`/proc/meminfo` figure; what msb counts in it is still taken from its metrics crate.
 
 ## Checkpoints
 
@@ -195,6 +207,21 @@ at once, so the first checkpoint is taken right away.
   waits for the next minute. A systemd sandbox, which can't be checkpointed while it runs,
   gets its note while running and its checkpoint once it stopped.
 - Turning the schedule off keeps the checkpoints it took.
+
+Verified on 2026-10-17 with msb 0.7.7, in a short run of a few minutes rather than a day: an
+hourly schedule on a sandbox with 1 CPU and 1 GiB, with the scheduled checkpoints' times (and
+once the sandbox's start time) moved back in the scratch catalog between ticks, so that each
+minute tick, or a kick from setting the schedule again, found one due. Over 12 ticks the
+schedule took 10 checkpoints of the running, then stopped, VM, each in under a second, and
+pruned 5, none of them the group's head, so each went with force. It took the first at once
+when turned on; took one on a plain minute tick; named a second one in the same minute
+`Auto … (2)`; pruned the oldest of today beyond the newest 3, a 9-day-old one, and the older
+of two from yesterday while keeping the newer; kept one from 2 days ago; took none while the
+sandbox was suspended and one right after it resumed; took none of a stopped sandbox that had
+not started since, and one after a start and stop. A checkpoint taken by hand and one renamed
+during the run stayed. `studio checkpoints` and `GET .../checkpoints` listed the same 6
+checkpoints as `msb snapshot ls` and the group's directory, and turning the schedule off kept
+them. A day-long run on real time is still to be done.
 
 **Restore is disabled.** With microsandbox 0.7.7 a restored VM gets msb's default network
 (no resolver, no gateway proxy); restore options can't set either
@@ -258,6 +285,17 @@ survive a host reboot. The agent session is dropped on suspend and reconnects on
 Fork, rebase and checkpoints refuse a suspended sandbox; Stop and Delete resume it first.
 A resize of a suspended sandbox is saved for its next start (see [resources](#resources)).
 
+Verified on 2026-10-17 with msb 0.7.7 and base images v0.3.2 and v0.3.4: `studio suspend`
+took 0.2 s and left the VM `paused` in `msb list`, with its process still resident. A tmux
+session writing a counter and the time every second stopped while suspended and went on after
+`studio resume` (0.4 s) with the same process and no restart: the log showed a gap the length
+of the suspension and then one line a second again. The guest's clock matched the host's
+right after resume, and the agent had reconnected by the time resume answered (the files API
+worked at once). While suspended, a checkpoint and a fork answered 409, and a resize
+`nextStart`. `studio stop` of a suspended sandbox stopped it in 2.6 s, and `studio rm` of one
+deleted it with its VM and checkpoints. Resume resets the uptime shown, as a start does.
+Rebase of a suspended sandbox was not tried.
+
 Suspend to disk (a full memory snapshot, then the VM's process freed) is not built. A memory
 snapshot resumes only through restore, and restore can't set the sandbox's gateway proxy or DNS
 resolver (see [checkpoints](#checkpoints)). Studio never restores a VM without them, so the
@@ -282,30 +320,44 @@ connects over SSH, such as VS Code Remote-SSH.
    sandbox ID shown in its workspace status line and the generation is 1 until the sandbox is
    rebased. `msb list` shows the names (every VM Studio owns starts with `ss-`). Studio shows
    the name nowhere yet, so it is not in the API or the UI.
-2. **Authorize your key.** `msb ssh authorize --file ~/.ssh/id_ed25519.pub` adds your own
-   public key to microsandbox's SSH authorization. Use your own key only. Studio's keys and
-   secrets never go into a sandbox; an SSH login shell gets the same placeholders as a terminal
-   (see [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest)).
-3. **Connect.** `msb ssh connect ss-<id>-g1` opens a shell. For Remote-SSH, add a host to
-   `~/.ssh/config` that serves the connection over stdio:
+2. **Quick shell.** `msb ssh connect ss-<id>-g1` opens a root shell in the VM. It needs no
+   key: it goes through msb's own local connection, as `msb exec` does.
+3. **Authorize your key** for an SSH client. `msb ssh authorize --file ~/.ssh/id_ed25519.pub`
+   adds your own public key to `~/.microsandbox/ssh/authorized_keys`. That file is msb's, not
+   Studio's, and covers every msb VM on this machine; remove the line to take the key back. Use
+   your own key only. Studio's keys and secrets never go into a sandbox.
+4. **Connect with OpenSSH or Remote-SSH.** Add a host to `~/.ssh/config` that serves the
+   connection over stdio. Set `User agent`: the login user is the SSH user name, and without it
+   your local user name is used and the session fails with "guest user not found".
 
    ```
    Host studio-<id>
        HostName ss-<id>-g1
+       User agent
        ProxyCommand msb ssh serve --stdio ss-<id>-g1
        IdentityFile ~/.ssh/id_ed25519
    ```
 
    `msb ssh serve --port <port> <name>` listens on a host port instead, for clients that can't
-   run a ProxyCommand.
+   run a ProxyCommand. Without `--port` it listens on `127.0.0.1:2222`.
+
+An SSH session's shell is `/bin/sh`, not a login shell, and starts in `/`, whatever the
+user's login shell is. It reads no profile, so it has neither the CA variables
+(`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS` and the others) nor the secret placeholders a terminal
+has (see [guest agent](guest-agent.md#ca-trust-and-placeholders-in-the-guest)). The system CA
+bundle still includes Studio's CA. For the terminal's environment, run `bash -l`, for example
+`ssh -t studio-<id> bash -l`.
 
 SSH sessions run inside the sandbox's VM, so the network policy applies to them as it does to
 terminals: egress is fixed when the VM is created, and only what it allows gets out (see
 [network](network.md)).
 
-Verified vs. pending: the commands and flags come from `msb 0.7.7 --help`. Nothing here has
-been run against a live VM. The login user, the default port and the `ProxyCommand` form are
-unverified until someone connects once.
+Verified on 2026-10-17 with msb 0.7.7 and base images v0.3.2 and v0.3.4: `msb ssh connect`
+without any authorized key (root, in `/`); `ssh` through the `ProxyCommand` host above as
+`agent` and as `root`, with a key added by `msb ssh authorize`; a key that was not authorized
+refused with "Permission denied (publickey…)"; an `ssh -p` login through
+`msb ssh serve --port`, which listens on `127.0.0.1:2222` without `--port`; and `ssh -t … bash -l` giving a login shell with the CA variables. VS Code
+Remote-SSH itself was not tried.
 
 ## Base image
 

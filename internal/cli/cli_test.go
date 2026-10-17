@@ -25,12 +25,13 @@ import (
 // fakeStudio answers the API calls the commands make, from fixed data. It records the bodies
 // of the calls that change something.
 type fakeStudio struct {
-	mu      sync.Mutex
-	calls   []string         // "METHOD path" of every API call after the sign-in
-	bodies  map[string]any   // the decoded body of each changing call, by "METHOD path"
-	polls   int              // GET calls of the chat so far
-	answers []string         // the agent's text at each poll of the chat
-	marker  *chat.MarkerBody // how the turn ends
+	mu          sync.Mutex
+	calls       []string           // "METHOD path" of every API call after the sign-in
+	bodies      map[string]any     // the decoded body of each changing call, by "METHOD path"
+	polls       int                // GET calls of the chat so far
+	answers     []string           // the agent's text at each poll of the chat
+	marker      *chat.MarkerBody   // how the turn ends
+	checkpoints []store.Checkpoint // the sandbox's checkpoints
 }
 
 var (
@@ -108,6 +109,17 @@ func (f *fakeStudio) handler(t *testing.T) http.Handler {
 			reply(w, store.Chat{ID: "ch1", EnvironmentID: envID, SandboxID: sbID, State: store.ChatRunning})
 		case "GET /api/environments/env1/chats/ch1":
 			reply(w, f.chatLog())
+		case "GET /api/environments/env1/sandboxes/sb1/checkpoints":
+			reply(w, f.checkpoints)
+		case "POST /api/environments/env1/sandboxes/sb1/checkpoints":
+			f.mu.Lock()
+			name, _ := f.bodies[key].(map[string]any)["name"].(string)
+			f.mu.Unlock()
+			if name == "" { // The API requires a name.
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				return
+			}
+			reply(w, store.Checkpoint{ID: "cp1", Name: name, State: store.CheckpointStateReady})
 		default:
 			t.Errorf("unexpected call %s", key)
 			w.WriteHeader(http.StatusNotFound)
@@ -199,6 +211,29 @@ func TestLifecycleFindsTheSandboxByName(t *testing.T) {
 }
 
 // Deleting asks for the sandbox's name in a terminal and needs --yes elsewhere.
+func TestCheckpointWithoutANameIsNamedAfterTheTime(t *testing.T) {
+	f := &fakeStudio{}
+	status, out, errOut := f.run(t, "", false, "checkpoint", "finn", "before the upgrade")
+	if status != ExitOK || out != "Checkpoint \"before the upgrade\" of finn is ready\n" {
+		t.Fatalf("checkpoint with a name: %d %q %q", status, out, errOut)
+	}
+	status, out, errOut = f.run(t, "", false, "checkpoint", "finn")
+	if status != ExitOK || !strings.HasPrefix(out, "Checkpoint \"Checkpoint 20") || !strings.HasSuffix(out, " UTC\" of finn is ready\n") {
+		t.Fatalf("checkpoint without a name: %d %q %q", status, out, errOut)
+	}
+}
+
+func TestSuggestedCheckpointNameSkipsTakenNames(t *testing.T) {
+	now := time.Date(2026, 10, 17, 16, 10, 5, 0, time.FixedZone("CEST", 2*3600))
+	if got := suggestedCheckpointName(now, nil); got != "Checkpoint 2026-10-17 14:10:05 UTC" {
+		t.Fatalf("name: %q", got)
+	}
+	taken := []store.Checkpoint{{Name: "Checkpoint 2026-10-17 14:10:05 UTC"}, {Name: "Checkpoint 2026-10-17 14:10:05 UTC (2)"}}
+	if got := suggestedCheckpointName(now, taken); got != "Checkpoint 2026-10-17 14:10:05 UTC (3)" {
+		t.Fatalf("name with two taken: %q", got)
+	}
+}
+
 func TestRemoveAsksFirst(t *testing.T) {
 	f := &fakeStudio{}
 	if status, _, errOut := f.run(t, "", false, "rm", "finn"); status != ExitUsage || !strings.Contains(errOut, "--yes") {

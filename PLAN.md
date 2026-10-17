@@ -20,14 +20,16 @@ says.
 - Checkpoint restore, blocked by microsandbox #1736 →
   [sandboxes](docs/sandboxes.md#checkpoints). The lineage timeline's Restore and "Fork from
   here" wait on it: the menu items are always disabled and there is no backend for either.
-- Scheduled checkpoints run against the fake runtime only; a live run on a real VM should
-  take, prune (oldest first, with force) and list them over a day →
+- Scheduled checkpoints over a day on real time: a short live run with the times moved back
+  took, pruned (oldest first, with force) and listed them on 2026-10-17 →
   [sandboxes](docs/sandboxes.md#scheduled-checkpoints)
 - Full-snapshot suspend instead of in-place pause (a restored VM can't get Studio's proxy
   and DNS) → [sandboxes](docs/sandboxes.md#suspend-and-resume)
-- Live runs of what is built but only checked against fakes: CPU and memory resize
-  ([sandboxes](docs/sandboxes.md#resources)), suspend and resume, and the SSH access
-  commands ([sandboxes](docs/sandboxes.md#ssh-access))
+- Live CPU and memory resize of a running VM, once an msb release offers it: msb 0.7.7 saves
+  every change for the next start, which was verified live on 2026-10-17 →
+  [sandboxes](docs/sandboxes.md#resources)
+- VS Code Remote-SSH through the SSH host config; the `msb ssh` commands themselves were
+  verified live on 2026-10-17 → [sandboxes](docs/sandboxes.md#ssh-access)
 - Template build qualifications: release base, cold-cache pulls, live exec export with
   network installs, oversized captures →
   [template builds](docs/template-builds.md#current-qualification-boundary)

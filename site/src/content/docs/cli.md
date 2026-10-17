@@ -37,7 +37,7 @@ The session cookie is set after the first navigation in fixtures.ts, so a fast p
 | `studio approvals` | Lists what is waiting for you, in every environment. |
 | `studio approve <id>`, `studio deny <id>` | Decides an approval. |
 | `studio checkpoints <sandbox>` | Lists a sandbox's checkpoints. |
-| `studio checkpoint <sandbox> [name]` | Saves a checkpoint. |
+| `studio checkpoint <sandbox> [name]` | Saves a checkpoint. Without a name, it is named after the time. |
 | `studio restore <sandbox> <checkpoint>` | Puts a sandbox back to a checkpoint. Asks first. Studio refuses it for now, because the current runtime cannot restore checkpoints. |
 | `studio envs` | Lists the environments. |
 
