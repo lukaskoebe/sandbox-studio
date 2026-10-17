@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.3.5 — 2026-10-17
+
+A terminal UI that looks like Studio and decides every approval, Codex memory that works
+in chats, and releases checked on real VMs before they go out.
+
+- **Terminal UI:** on color terminals, `studio tui` has the web's look: area colors and status
+  dots, tabs, approvals as cards with their choices as keys, a shaped chat, CPU and memory
+  sparklines, and an Activity strip. Wide terminals show the selected sandbox beside the
+  list, with a picture of its teammate's browser, and from 160 columns its network as it
+  happens. The git review gets a file list, side by side diffs and the changed words
+  highlighted. The mouse works: click a row, a tab or a key. What an action did, or an error,
+  shows at the top right for 3 seconds. `STUDIO_TUI=plain` and `NO_COLOR` keep the plain look.
+- **Terminal UI:** every kind of approval can be decided there: browser actions and
+  credentials, memory shares and conflicts, and an agent's permissions and questions. New are
+  checkpoints, fork, suspend and a running sandbox's ports. Allowing a browser request covers
+  only the browsers, as on the web (`s` picks who; `--sandboxes` in the CLI).
+- **Codex:** its memory hooks run in chats too; Codex skipped them silently there because
+  they weren't trusted. Its chat-titling requests no longer get the chat's memory.
+- **Agents:** an agent started in a terminal is recognized as an agent session, with its chat.
+  Claude's compaction summaries and slash-command lines no longer show up in what memory
+  learns from a chat.
+- **Browser:** a teammate's browser activity updates as each step lands, not every 10
+  seconds. `GET .../browser/frame` returns the page's latest picture as a JPEG.
+- **Command line:** `studio checkpoint <sandbox>` without a name works; it failed with
+  "validation failed". The checkpoint is named after the time, as on the web.
+- **Sandboxes:** resize, suspend and resume, SSH access and scheduled checkpoints were run on
+  real VMs. A resize of a running sandbox applies at its next start: the microsandbox
+  version Studio uses can't resize a running VM. The SSH steps in the docs now set
+  `User agent`, which the login needs.
+- **Git:** the SSH host keys GitHub, GitLab and Bitbucket publish are built in, so adding one
+  of those forges needs no fingerprint check, and any other key for those hosts is refused.
+- **Releases:** each release is published only after Studio built from it boots a sandbox on
+  Linux and Windows, runs the live browser tests there, and embeds with the real model on
+  every host.
+- **Docs:** the site and its landing page are redesigned, with overview videos.
+
 ## v0.3.4 — 2026-10-16
 
 A browser that asks far less, messages you can send while the agent works, and sandboxes that
