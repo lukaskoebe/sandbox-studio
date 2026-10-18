@@ -22,7 +22,7 @@ export default defineConfig({
           },
         },
         { tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
-        { tag: 'meta', attrs: { name: 'theme-color', content: '#0b0e10' } },
+        { tag: 'meta', attrs: { name: 'theme-color', content: '#0e1214' } },
       ],
       components: {
         // The landing page's hero, with the install command and the overview video.
@@ -30,7 +30,7 @@ export default defineConfig({
       },
       expressiveCode: {
         styleOverrides: {
-          borderRadius: '0.75rem',
+          borderRadius: '8px',
           borderColor: 'var(--sl-color-hairline-light)',
           codeFontFamily: 'var(--__sl-font-mono)',
           uiFontFamily: 'var(--__sl-font)',

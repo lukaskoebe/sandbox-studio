@@ -1,100 +1,139 @@
-/* Sandbox Studio's docs theme: the green and near-black of the app and the videos, Inter for
-   text and Source Code Pro for code. Starlight's own rules sit in cascade layers, so these
-   unlayered rules win without extra specificity. */
+/* Sandbox Studio's docs theme, the TUI's look as the landing page and the app have it: calm
+   cool grays with one teal accent, Instrument Sans for text and JetBrains Mono for headings,
+   labels and code, and terminal panels in the TUI's own palette (--t-*). Green is the brand's
+   and "ok"'s only. Starlight's own rules sit in cascade layers, so these unlayered rules win
+   without extra specificity. */
 
 @font-face {
-  font-family: 'Inter Variable';
-  src: url('../fonts/inter-latin-wght-normal.woff2') format('woff2');
-  font-weight: 100 900;
+  font-family: 'Instrument Sans';
+  src: url('../fonts/instrument-sans-latin-wght-normal.woff2') format('woff2');
+  font-weight: 400 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'Source Code Pro';
-  src: url('../fonts/SourceCodePro-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Source Code Pro';
-  src: url('../fonts/SourceCodePro-Medium.ttf') format('truetype');
-  font-weight: 500 700;
+  font-family: 'JetBrains Mono';
+  src: url('../fonts/jetbrains-mono-wght-normal.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
   font-display: swap;
 }
 
 :root {
-  --sl-font: 'Inter Variable';
-  --sl-font-mono: 'Source Code Pro';
+  --sl-font: 'Instrument Sans';
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --ss-font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --sl-line-height: 1.7;
-  --sl-text-h1: 2.5rem;
-  --sl-text-h2: 1.75rem;
-  --sl-text-h3: 1.3rem;
+  --sl-text-h1: 2.25rem;
+  --sl-text-h2: 1.6rem;
+  --sl-text-h3: 1.25rem;
   --sl-text-h4: 1.1rem;
   --sl-content-width: 46rem;
   --sl-sidebar-width: 17.5rem;
   --sl-nav-height: 3.75rem;
+  --ss-dot: rgba(255, 255, 255, 0.09);
 
   /* Dark (the default). */
-  --sl-color-white: #ffffff;
-  --sl-color-gray-1: #e8eeeb;
-  --sl-color-gray-2: #b9c3be;
-  --sl-color-gray-3: #8b9690;
-  --sl-color-gray-4: #5d6863;
-  --sl-color-gray-5: #283030;
-  --sl-color-gray-6: #151a1c;
-  --sl-color-black: #0b0e10;
-  --sl-color-accent-low: #10301f;
-  --sl-color-accent: #3fc168;
-  --sl-color-accent-high: #bff0cf;
-  --sl-color-text-accent: #65c58b;
-  --sl-color-bg-nav: rgba(11, 14, 16, 0.78);
-  --sl-color-bg-sidebar: #0b0e10;
-  --sl-color-bg-inline-code: #1a2023;
-  --sl-color-hairline: #1a2022;
-  --sl-color-hairline-light: #252c2e;
-  --sl-color-hairline-shade: #070909;
+  --ss-bg: #0e1214;
+  --ss-surface: #151b1e;
+  --ss-fg: #e1e7ea;
+  --ss-muted: #93a1a9;
+  --ss-line: #263035;
+  --ss-accent: #5cc3d1;
+  --ss-on-accent: #06181b;
 
-  --ss-green: #3fc168;
-  --ss-green-soft: rgba(63, 193, 104, 0.12);
-  --ss-green-border: rgba(63, 193, 104, 0.32);
-  --ss-green-ring: rgba(63, 193, 104, 0.2);
-  --ss-surface: #11161a;
-  --ss-code-bg: #0f1417;
-  --ss-dot: rgba(255, 255, 255, 0.09);
+  --t-bg: #15171b;
+  --t-fg: #d7dade;
+  --t-dim: #858b94;
+  --t-dim-opacity: 1;
+  --t-faint: #353a41;
+  --t-rule: #464c54;
+  --t-acc: #58b8c8;
+  --t-ok: #47c86e;
+  --t-warn: #f0c551;
+  --t-bad: #fa6863;
+  --t-off: #6e7277;
+  --t-brand: #3fc168;
+  --t-key: #33363b;
+  --t-orange: #eea471;
+  --t-violet: #b09de9;
+  --t-chat: #76c788;
+  --t-edge: #2a3035;
+
+  --sl-color-gray-1: #d3dbdf;
+  --sl-color-gray-2: #b3c0c6;
+  --sl-color-gray-4: #5f6d74;
+  --sl-color-gray-6: var(--ss-surface);
+  --sl-color-accent-low: #10303a;
+  --sl-color-accent-high: #c4ecf1;
+  --sl-color-bg-nav: rgba(14, 18, 20, 0.8);
+  --sl-color-hairline: #1c2428;
+  --sl-color-hairline-shade: #080b0c;
+
+  /* The site's accent, still named for the green it was (--ss-green itself is set below). */
+  --ss-green-soft: rgba(92, 195, 209, 0.12);
+  --ss-green-border: rgba(92, 195, 209, 0.34);
+  --ss-green-ring: rgba(92, 195, 209, 0.22);
 }
-
 :root[data-theme='light'] {
-  --sl-color-white: #0d1311;
-  --sl-color-gray-1: #1b2320;
-  --sl-color-gray-2: #39433f;
-  --sl-color-gray-3: #5d6964;
-  --sl-color-gray-4: #8a9590;
-  --sl-color-gray-5: #cdd4d1;
-  --sl-color-gray-6: #eaeeec;
-  --sl-color-gray-7: #f5f7f6;
-  --sl-color-black: #ffffff;
-  --sl-color-accent-low: #dcf3e4;
-  --sl-color-accent: #16834b;
-  --sl-color-accent-high: #0b3c23;
-  --sl-color-text-accent: #127440;
-  --sl-color-bg-nav: rgba(255, 255, 255, 0.8);
-  --sl-color-bg-sidebar: #fafbfa;
-  --sl-color-bg-inline-code: #eef2f0;
-  --sl-color-hairline: #edf0ef;
-  --sl-color-hairline-light: #e1e6e4;
-  --sl-color-hairline-shade: #cfd6d3;
+  --ss-bg: #eef1f2;
+  --ss-surface: #f8fafa;
+  --ss-fg: #172024;
+  --ss-muted: #56636b;
+  --ss-line: #d3dade;
+  --ss-accent: #0f7686;
+  --ss-on-accent: #ffffff;
 
-  --ss-green: #16834b;
-  --ss-green-soft: rgba(22, 131, 75, 0.09);
-  --ss-green-border: rgba(22, 131, 75, 0.28);
-  --ss-green-ring: rgba(22, 131, 75, 0.16);
-  --ss-surface: #ffffff;
-  --ss-code-bg: #f6f8f7;
-  --ss-dot: rgba(13, 19, 17, 0.09);
+  --t-bg: #fafbfb;
+  --t-fg: #23272c;
+  --t-dim: #80868e;
+  --t-faint: #d3d7dc;
+  --t-rule: #c3c8ce;
+  --t-acc: #1b8797;
+  --t-ok: #0fa44d;
+  --t-warn: #c8951a;
+  --t-bad: #db2c2b;
+  --t-off: #9a9fa5;
+  --t-brand: #008238;
+  --t-key: #e4e6ea;
+  --t-orange: #c67447;
+  --t-violet: #795bbf;
+  --t-chat: #3b834e;
+  --t-edge: #d9dee2;
+
+  --sl-color-gray-1: #1f2a2f;
+  --sl-color-gray-2: #3a474e;
+  --sl-color-gray-4: #8a979e;
+  --sl-color-gray-6: #e4e9eb;
+  --sl-color-gray-7: var(--ss-surface);
+  --sl-color-accent-low: #d3ecef;
+  --sl-color-accent-high: #0a3d45;
+  --sl-color-bg-nav: rgba(238, 241, 242, 0.82);
+  --sl-color-hairline: #e1e6e8;
+  --sl-color-hairline-shade: #c3ccd1;
+
+  --ss-green-soft: rgba(15, 118, 134, 0.09);
+  --ss-green-border: rgba(15, 118, 134, 0.3);
+  --ss-green-ring: rgba(15, 118, 134, 0.16);
+  --ss-dot: rgba(23, 32, 36, 0.09);
 }
-
+/* Starlight's colors from the tokens above, in both themes. */
+:root,
+:root[data-theme='light'] {
+  --sl-color-white: var(--ss-fg);
+  --sl-color-gray-3: var(--ss-muted);
+  --sl-color-gray-5: var(--ss-line);
+  --sl-color-black: var(--ss-bg);
+  --sl-color-accent: var(--ss-accent);
+  --sl-color-text-accent: var(--ss-accent);
+  --sl-color-bg-sidebar: var(--ss-bg);
+  --sl-color-bg-inline-code: var(--ss-surface);
+  --sl-color-hairline-light: var(--ss-line);
+  --ss-green: var(--ss-accent);
+  --ss-code-bg: var(--t-bg);
+}
 body {
-  font-feature-settings: 'cv11', 'ss01';
+  background: var(--ss-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -120,7 +159,7 @@ header.header {
   width: auto;
 }
 site-search button[data-open-modal] {
-  border-radius: 0.6rem;
+  border-radius: 8px;
   border-color: var(--sl-color-hairline-light);
   background: var(--ss-surface);
 }
@@ -137,7 +176,7 @@ site-search button[data-open-modal] {
   font-family: var(--__sl-font-mono);
   font-size: 0.7rem;
   font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--sl-color-gray-3);
 }
@@ -180,14 +219,21 @@ starlight-toc a[aria-current='true']:hover {
   border-top-color: var(--sl-color-hairline-light);
 }
 h1#_top {
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
+  font-family: var(--ss-font-mono);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 .sl-markdown-content :is(h2, h3, h4, h5):not(:where(.not-content *)) {
   font-weight: 650;
-  letter-spacing: -0.022em;
+  letter-spacing: -0.01em;
   color: var(--sl-color-white);
+}
+/* Page and section titles in mono, as the TUI and the app set them; smaller headings stay in
+   the text face. */
+.sl-markdown-content h2:not(:where(.not-content *)) {
+  font-family: var(--ss-font-mono);
+  font-weight: 650;
 }
 .sl-markdown-content h2:not(:where(.not-content *)) {
   margin-top: 2.75rem;
@@ -227,7 +273,7 @@ h1#_top {
 /* Screenshots: a frame like the app's windows. */
 .sl-markdown-content img:not(:where(.not-content *)) {
   border: 1px solid var(--sl-color-hairline-light);
-  border-radius: 0.85rem;
+  border-radius: 10px;
   box-shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.55);
 }
 
@@ -238,7 +284,7 @@ h1#_top {
   border-collapse: separate;
   border-spacing: 0;
   border: 1px solid var(--sl-color-hairline-light);
-  border-radius: 0.75rem;
+  border-radius: 8px;
   overflow: hidden;
   font-size: var(--sl-text-sm);
 }
@@ -264,7 +310,7 @@ h1#_top {
 
 /* Asides. */
 .starlight-aside {
-  border-radius: 0.75rem;
+  border-radius: 8px;
   border: 1px solid var(--sl-color-asides-border);
   border-inline-start-width: 3px;
 }
@@ -272,7 +318,7 @@ h1#_top {
 /* Cards and link cards. */
 .card,
 .sl-link-card {
-  border-radius: 0.9rem;
+  border-radius: 10px;
   border-color: var(--sl-color-hairline-light);
   background: var(--ss-surface);
   box-shadow: none;
@@ -291,7 +337,7 @@ h1#_top {
 
 /* Buttons. */
 .sl-link-button {
-  border-radius: 0.65rem;
+  border-radius: 8px;
   font-weight: 580;
   font-size: var(--sl-text-base);
   padding: 0.65rem 1.25rem;
@@ -303,10 +349,7 @@ h1#_top {
 .sl-link-button.primary {
   background: var(--ss-green);
   border-color: var(--ss-green);
-  color: #06140c;
-}
-:root[data-theme='light'] .sl-link-button.primary {
-  color: #ffffff;
+  color: var(--ss-on-accent);
 }
 .sl-link-button.primary:hover {
   filter: brightness(1.08);
@@ -335,7 +378,7 @@ starlight-tabs [role='tab'][aria-selected='true'] {
 
 /* Footer: pagination and the edit link. */
 .pagination-links a {
-  border-radius: 0.85rem;
+  border-radius: 10px;
   border-color: var(--sl-color-hairline-light);
   box-shadow: none;
 }
@@ -343,137 +386,9 @@ starlight-tabs [role='tab'][aria-selected='true'] {
   border-color: var(--ss-green-border);
 }
 
-/* The landing page: wider, with the hero's backdrop allowed past the column. It has a look of
-   its own, the TUI mock's: JetBrains Mono for headings and terminals, Instrument Sans for text,
-   calm grays with a teal accent, and terminal panels in the TUI's own palette (--t-*). The
-   tokens below remap Starlight's on this page only, so the header and code frames follow. */
-@font-face {
-  font-family: 'Instrument Sans';
-  src: url('../fonts/instrument-sans-latin-wght-normal.woff2') format('woff2');
-  font-weight: 400 700;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'JetBrains Mono';
-  src: url('../fonts/jetbrains-mono-wght-normal.woff2') format('woff2');
-  font-weight: 100 800;
-  font-style: normal;
-  font-display: swap;
-}
-
+/* The landing page: wider, with the hero's backdrop allowed past the column. */
 html[data-has-hero] {
   --sl-content-width: 72rem;
-  --sl-font: 'Instrument Sans';
-  --sl-font-mono: 'JetBrains Mono', 'Source Code Pro', ui-monospace, monospace;
-  --ss-font-mono: 'JetBrains Mono', 'Source Code Pro', ui-monospace, monospace;
-
-  /* Dark (the default). */
-  --ss-bg: #0e1214;
-  --ss-surface: #151b1e;
-  --ss-fg: #e1e7ea;
-  --ss-muted: #93a1a9;
-  --ss-line: #263035;
-  --ss-accent: #5cc3d1;
-  --ss-on-accent: #06181b;
-
-  --t-bg: #15171b;
-  --t-fg: #d7dade;
-  --t-dim: #858b94;
-  --t-dim-opacity: 1;
-  --t-faint: #353a41;
-  --t-rule: #464c54;
-  --t-acc: #58b8c8;
-  --t-ok: #47c86e;
-  --t-warn: #f0c551;
-  --t-bad: #fa6863;
-  --t-off: #6e7277;
-  --t-brand: #3fc168;
-  --t-key: #33363b;
-  --t-orange: #eea471;
-  --t-violet: #b09de9;
-  --t-chat: #76c788;
-  --t-edge: #2a3035;
-
-  --sl-color-gray-1: #d3dbdf;
-  --sl-color-gray-2: #b3c0c6;
-  --sl-color-gray-4: #5f6d74;
-  --sl-color-gray-6: var(--ss-surface);
-  --sl-color-accent-low: #10303a;
-  --sl-color-accent-high: #c4ecf1;
-  --sl-color-bg-nav: rgba(14, 18, 20, 0.8);
-  --sl-color-hairline: #1c2428;
-  --sl-color-hairline-shade: #080b0c;
-
-  /* The rest of the site's green accent, in teal here (--ss-green itself is set below). */
-  --ss-green-soft: rgba(92, 195, 209, 0.12);
-  --ss-green-border: rgba(92, 195, 209, 0.34);
-  --ss-green-ring: rgba(92, 195, 209, 0.22);
-}
-html[data-has-hero][data-theme='light'] {
-  --ss-bg: #eef1f2;
-  --ss-surface: #f8fafa;
-  --ss-fg: #172024;
-  --ss-muted: #56636b;
-  --ss-line: #d3dade;
-  --ss-accent: #0f7686;
-  --ss-on-accent: #ffffff;
-
-  --t-bg: #fafbfb;
-  --t-fg: #23272c;
-  --t-dim: #80868e;
-  --t-faint: #d3d7dc;
-  --t-rule: #c3c8ce;
-  --t-acc: #1b8797;
-  --t-ok: #0fa44d;
-  --t-warn: #c8951a;
-  --t-bad: #db2c2b;
-  --t-off: #9a9fa5;
-  --t-brand: #008238;
-  --t-key: #e4e6ea;
-  --t-orange: #c67447;
-  --t-violet: #795bbf;
-  --t-chat: #3b834e;
-  --t-edge: #d9dee2;
-
-  --sl-color-gray-1: #1f2a2f;
-  --sl-color-gray-2: #3a474e;
-  --sl-color-gray-4: #8a979e;
-  --sl-color-gray-6: #e4e9eb;
-  --sl-color-gray-7: var(--ss-surface);
-  --sl-color-accent-low: #d3ecef;
-  --sl-color-accent-high: #0a3d45;
-  --sl-color-bg-nav: rgba(238, 241, 242, 0.82);
-  --sl-color-hairline: #e1e6e8;
-  --sl-color-hairline-shade: #c3ccd1;
-
-  --ss-green-soft: rgba(15, 118, 134, 0.09);
-  --ss-green-border: rgba(15, 118, 134, 0.3);
-  --ss-green-ring: rgba(15, 118, 134, 0.16);
-}
-/* Starlight's colors from the tokens above, in both themes (the site's light theme sets them
-   on :root[data-theme='light'], which would win over html[data-has-hero] alone). */
-html[data-has-hero],
-html[data-has-hero][data-theme='light'] {
-  --sl-color-white: var(--ss-fg);
-  --sl-color-gray-3: var(--ss-muted);
-  --sl-color-gray-5: var(--ss-line);
-  --sl-color-black: var(--ss-bg);
-  --sl-color-accent: var(--ss-accent);
-  --sl-color-text-accent: var(--ss-accent);
-  --sl-color-bg-sidebar: var(--ss-bg);
-  --sl-color-bg-inline-code: var(--ss-surface);
-  --sl-color-hairline-light: var(--ss-line);
-  --ss-green: var(--ss-accent);
-  --ss-code-bg: var(--t-bg);
-}
-html[data-has-hero] body {
-  background: var(--ss-bg);
-  /* The site's Inter alternates (cv11, ss01) would pick other glyphs in Instrument Sans. */
-  font-feature-settings: normal;
-}
-html[data-has-hero] .sl-link-button.primary {
-  color: var(--ss-on-accent);
 }
 html[data-has-hero] main {
   overflow-x: clip;
@@ -493,7 +408,7 @@ html[data-has-hero] .landing-section .card-grid {
   margin-top: 0;
 }
 
-/* The landing page's shared pieces: mono eyebrows and headings, keycaps, inline code. */
+/* Shared pieces: mono eyebrows, keycaps, inline code and terminal panels. */
 .landing-eyebrow {
   font: 600 0.75rem / 1.2 var(--ss-font-mono);
   letter-spacing: 0.08em;
@@ -504,7 +419,8 @@ html[data-has-hero] .not-content :is(code, kbd) {
   font-family: var(--ss-font-mono);
   font-size: 0.88em;
 }
-html[data-has-hero] .not-content kbd {
+html[data-has-hero] .not-content kbd,
+.sl-markdown-content kbd {
   padding: 0 0.32rem;
   border: 1px solid var(--ss-line);
   border-bottom-width: 2px;
@@ -513,11 +429,11 @@ html[data-has-hero] .not-content kbd {
   color: var(--ss-fg);
   white-space: nowrap;
 }
-html[data-has-hero] .terminal-screen {
+.terminal-screen {
   margin: 0;
   border-radius: 8px;
 }
-html[data-has-hero] .terminal-screen pre {
+.terminal-screen pre {
   padding: 0.75rem 0.9rem;
   font-size: 0.78rem;
   line-height: 1.3;
