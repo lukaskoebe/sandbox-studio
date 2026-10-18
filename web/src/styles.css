@@ -1,13 +1,29 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/inter";
+
+/* The fonts of the TUI's look, as on the landing page: Instrument Sans for text, JetBrains
+   Mono for headings, labels, identifiers and terminals. Both are OFL (fonts/OFL.txt). */
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("./fonts/instrument-sans-latin-wght-normal.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./fonts/jetbrains-mono-wght-normal.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: "Inter Variable", sans-serif;
+  --font-heading: var(--font-mono);
+  --font-sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -54,42 +70,42 @@
  * same on every page.
  */
 :root {
-  --background: oklch(0.993 0.001 255);
-  --foreground: oklch(0.21 0.008 255);
-  --card: oklch(1 0 0);
+  --background: #f8fafa;
+  --foreground: #172024;
+  --card: #ffffff;
   --card-foreground: var(--foreground);
-  --popover: oklch(1 0 0);
+  --popover: #ffffff;
   --popover-foreground: var(--foreground);
-  --primary: oklch(0.53 0.15 150);
-  --primary-foreground: oklch(0.99 0.01 150);
-  --secondary: oklch(0.955 0.004 255);
+  --primary: #0f7686;
+  --primary-foreground: #ffffff;
+  --secondary: #eaeff0;
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.962 0.003 255);
-  --muted-foreground: oklch(0.52 0.014 255);
-  --accent: oklch(0.95 0.005 255);
+  --muted: #eef1f2;
+  --muted-foreground: #56636b;
+  --accent: #e8edef;
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.912 0.005 255);
-  --input: oklch(0.89 0.006 255);
-  --ring: oklch(0.62 0.12 150);
+  --border: #dbe1e4;
+  --input: #cfd7db;
+  --ring: #1b8797;
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
-  --code-keyword: oklch(0.5 0.14 150);
+  --code-keyword: oklch(0.5 0.1 205);
   --code-meta: oklch(0.52 0.2 300);
   --code-string: oklch(0.55 0.13 60);
   --code-variable: oklch(0.52 0.2 260);
   --code-operator: oklch(0.55 0.18 25);
-  --radius: 0.3rem;
-  --sidebar: oklch(0.97 0.003 255);
+  --radius: 0.375rem;
+  --sidebar: #eef1f2;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-  --sidebar-accent: oklch(0.925 0.005 255);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #e1e7e9;
   --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: oklch(0.912 0.005 255);
+  --sidebar-border: #dbe1e4;
   --sidebar-ring: var(--ring);
   /* Accents: one hue per area, toned down from the first design mockups. */
   --acc-network: oklch(0.6 0.1 235);
@@ -107,58 +123,58 @@
   --term-path: oklch(0.76 0.11 240);
   --term-ok: oklch(0.78 0.15 150);
   --term-warn: oklch(0.82 0.14 75);
-  --term-accent: oklch(0.76 0.12 230);
+  --term-accent: #58b8c8;
   --term-add: oklch(0.78 0.15 150);
   --term-del: oklch(0.72 0.17 25);
   /* Workbench density: table rows, table headers, the sandbox status bar. */
   --wb-row: 2.125rem;
   --wb-header: 2.5rem;
   --wb-statusbar: 1.625rem;
-  --wb-term-bg: oklch(0.2 0.008 255);
-  --wb-term-fg: oklch(0.9 0.006 255);
-  --wb-grid: oklch(0.21 0.008 255 / 4%);
+  --wb-term-bg: #15171b;
+  --wb-term-fg: #d7dade;
+  --wb-grid: rgb(23 32 36 / 4%);
   --font-mono:
-    ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas,
+    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas,
     "DejaVu Sans Mono", monospace;
 }
 
 .dark {
-  --background: oklch(0.168 0.006 255);
-  --foreground: oklch(0.94 0.004 255);
-  --card: oklch(0.198 0.007 255);
-  --card-foreground: oklch(0.985 0.001 106.423);
-  --popover: oklch(0.215 0.008 255);
-  --popover-foreground: oklch(0.985 0.001 106.423);
-  --primary: oklch(0.72 0.17 150);
-  --primary-foreground: oklch(0.2 0.04 150);
-  --secondary: oklch(0.24 0.008 255);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.225 0.008 255);
-  --muted-foreground: oklch(0.67 0.012 255);
-  --accent: oklch(0.25 0.008 255);
-  --accent-foreground: oklch(0.985 0.001 106.423);
+  --background: #0f1416;
+  --foreground: #e1e7ea;
+  --card: #151b1e;
+  --card-foreground: var(--foreground);
+  --popover: #182024;
+  --popover-foreground: var(--foreground);
+  --primary: #5cc3d1;
+  --primary-foreground: #06181b;
+  --secondary: #1a2226;
+  --secondary-foreground: var(--foreground);
+  --muted: #172024;
+  --muted-foreground: #93a1a9;
+  --accent: #1d272b;
+  --accent-foreground: var(--foreground);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 8.5%);
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.6 0.13 150);
+  --border: #263035;
+  --input: #303c42;
+  --ring: #58b8c8;
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
-  --code-keyword: oklch(0.78 0.15 150);
+  --code-keyword: oklch(0.79 0.09 205);
   --code-meta: oklch(0.76 0.14 300);
   --code-string: oklch(0.82 0.12 75);
   --code-variable: oklch(0.76 0.13 250);
   --code-operator: oklch(0.76 0.14 25);
-  --sidebar: oklch(0.148 0.006 255);
-  --sidebar-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-primary: oklch(0.723 0.219 149.579);
-  --sidebar-primary-foreground: oklch(0.982 0.018 155.826);
-  --sidebar-accent: oklch(0.23 0.008 255);
-  --sidebar-accent-foreground: oklch(0.985 0.001 106.423);
-  --sidebar-border: oklch(1 0 0 / 7%);
-  --sidebar-ring: oklch(0.553 0.013 58.071);
+  --sidebar: #0c1012;
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #1a2226;
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: #1f282c;
+  --sidebar-ring: var(--ring);
   --acc-network: oklch(0.75 0.09 230);
   --acc-git: oklch(0.74 0.11 295);
   --acc-browser: oklch(0.78 0.11 55);
@@ -168,8 +184,8 @@
   --st-waiting: oklch(0.84 0.14 88);
   --st-failed: oklch(0.7 0.18 25);
   --st-stopped: oklch(0.55 0.01 255);
-  --wb-term-bg: oklch(0.13 0.006 255);
-  --wb-grid: oklch(1 0 0 / 3%);
+  --wb-term-bg: #15171b;
+  --wb-grid: rgb(225 231 234 / 3%);
 }
 
 @layer base {
@@ -178,12 +194,30 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings:
-      "tnum" 1,
-      "cv11" 1;
+    font-feature-settings: "tnum" 1;
+    /* Instrument Sans is set tight for display sizes; the app's 12 to 14 px text reads
+       better with a little air. */
+    letter-spacing: 0.01em;
   }
   html {
     @apply font-sans;
+  }
+  /* A page's title is a heading in mono, as the TUI's and the landing page's are. */
+  [data-slot="page-header"] h1 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+  }
+  /* Keys, as the TUI draws them: a keycap with a deeper bottom edge. */
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 0 0.3em;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--muted);
+    color: var(--foreground);
+    white-space: nowrap;
   }
   /* Scrollers that can't be a ScrollArea (tab strips, code blocks, editors, terminals) get
      the same thin bar in the border color, so every scrollbar in Studio looks alike. */

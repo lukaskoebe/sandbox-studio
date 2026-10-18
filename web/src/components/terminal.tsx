@@ -19,13 +19,30 @@ import {
 import { copyText } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
 
+// The TUI's terminal palette, so a sandbox's terminal looks the same in the browser and in
+// `studio tui`.
 const theme = {
-  background: "#1c1917",
-  foreground: "#e7e5e4",
-  cursor: "#e7e5e4",
-  selectionBackground: "#57534e",
-  black: "#292524",
-  brightBlack: "#78716c",
+  background: "#15171b",
+  foreground: "#d7dade",
+  cursor: "#58b8c8",
+  cursorAccent: "#15171b",
+  selectionBackground: "#353a41",
+  black: "#23272c",
+  red: "#fa6863",
+  green: "#47c86e",
+  yellow: "#f0c551",
+  blue: "#6aa8ff",
+  magenta: "#b09de9",
+  cyan: "#58b8c8",
+  white: "#d7dade",
+  brightBlack: "#858b94",
+  brightRed: "#ff8a85",
+  brightGreen: "#6fdc8f",
+  brightYellow: "#f6d77f",
+  brightBlue: "#8fbfff",
+  brightMagenta: "#c8b9f2",
+  brightCyan: "#7fd0dc",
+  brightWhite: "#f2f4f5",
 }
 
 const controlArrowKeys: Record<string, string> = {
@@ -394,7 +411,7 @@ export function Terminal({
     // No ScrollArea: xterm.js scrolls its own scrollback.
     <div
       className={cn(
-        "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#1c1917] p-2",
+        "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#15171b] p-2",
         !active && "hidden",
         className
       )}
@@ -433,7 +450,7 @@ export function Terminal({
       {copied && (
         <span
           role="status"
-          className="pointer-events-none absolute top-3 right-4 rounded-md bg-stone-700 px-2 py-0.5 text-xs text-stone-100 shadow"
+          className="pointer-events-none absolute top-3 right-4 rounded-md bg-[#33363b] px-2 py-0.5 text-xs text-[#d7dade] shadow"
         >
           Copied
         </span>

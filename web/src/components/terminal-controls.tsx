@@ -27,7 +27,7 @@ export function TerminalControls({
     <div
       role="group"
       aria-label="Terminal keys"
-      className="flex shrink-0 items-center justify-between gap-1 overflow-x-auto overscroll-x-contain border-t border-stone-700 px-1 pt-1 pb-[env(safe-area-inset-bottom)] md:hidden [@media(pointer:coarse)]:!flex"
+      className="flex shrink-0 items-center justify-between gap-1 overflow-x-auto overscroll-x-contain border-t border-[#2a3035] px-1 pt-1 pb-[env(safe-area-inset-bottom)] md:hidden [@media(pointer:coarse)]:!flex"
     >
       <KeyButton
         aria-label="Control key. Applies to the next key."
