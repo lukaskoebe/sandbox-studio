@@ -446,8 +446,11 @@ func (m *app) stateMark(st agentState) string {
 // sessionWords say what a session is and how it is.
 func (m *app) sessionWords(x session, st agentState) string {
 	kind := map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "terminal"}[x.kind]
-	if x.kind == sessionChat && x.chat.Heartbeat {
+	switch {
+	case x.kind == sessionChat && x.chat.Heartbeat:
 		kind = "check-in"
+	case x.kind == sessionChat && x.chat.TaskID != "":
+		kind = "scheduled"
 	}
 	switch {
 	case x.kind == sessionOlder:

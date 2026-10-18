@@ -73,8 +73,8 @@ Under each sandbox, Home lists what can be entered in it, indented:
 
 - its agent terminals: tmux sessions that run a harness, such as `claude` or `codex-2`;
 - the chats of its teammate in it, the newest three, then a `+ n older` row that shows the
-  rest. A check-in's chat says so. A chat continued in a terminal is listed once, as its
-  terminal;
+  rest. A check-in's chat says so, and so does a scheduled task's run. A chat continued in a
+  terminal is listed once, as its terminal;
 - its other terminals, `main` among them.
 
 The first nine sessions get the numbers `1` to `9`, top to bottom. On Home, a number goes

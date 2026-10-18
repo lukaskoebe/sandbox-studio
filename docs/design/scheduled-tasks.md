@@ -1,13 +1,10 @@
 # Scheduled tasks (design)
 
 Status: built (2026-10-18); [teammates](../teammates.md#scheduled-tasks) describes it as it is.
-Left out:
-
-- The TUI's `⟳` mark on a run's chat (section 7). A chat's `taskId` says it is a run, so Home
-  can mark it later.
-
 Where the build differs from the text:
 
+- Home names a run's chat "scheduled" where a chat says "chat" (section 7), in place of a `⟳`,
+  since the mark's column holds the session's state.
 - An `hours` window ends before `toHour`, as a check-in's does: "Every 4 hours, 08:00–20:00"
   runs at 08:00, 12:00 and 16:00.
 - Run now refuses with a 409 for any reason a run can't start, not only busy, and logs

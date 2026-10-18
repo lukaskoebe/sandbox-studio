@@ -15,7 +15,7 @@ import (
 
 // withSessions gives the sample app's sandboxes their sessions: blub an agent that finished, a
 // chat and main; api-refactor a working agent, a chat that waits on a permission and main;
-// docs-site, which is stopped, five chats.
+// docs-site, which is stopped, five chats, the newest a scheduled task's run.
 func withSessions(m *app) *app {
 	ago := func(d time.Duration) time.Time { return m.now.Add(-d) }
 	m.sess = sessionsState{
@@ -28,7 +28,7 @@ func withSessions(m *app) *app {
 			"sb1": {{ID: "c1", SandboxID: "sb1", Title: "Fix the login form", State: store.ChatIdle, UpdatedAt: ago(3 * time.Minute)}},
 			"sb2": {{ID: "c2", SandboxID: "sb2", Title: "Port the parser to go", State: store.ChatRunning, UpdatedAt: ago(time.Minute)}},
 			"sb3": {
-				{ID: "c3", SandboxID: "sb3", Title: "Update the deploy notes", State: store.ChatIdle, UpdatedAt: ago(26 * time.Hour)},
+				{ID: "c3", SandboxID: "sb3", Title: "Update the deploy notes", State: store.ChatIdle, TaskID: "t9", UpdatedAt: ago(26 * time.Hour)},
 				{ID: "c4", SandboxID: "sb3", Title: "Check-in", State: store.ChatIdle, Heartbeat: true, UpdatedAt: ago(30 * time.Hour)},
 				{ID: "c5", SandboxID: "sb3", Title: "Rename the guides", State: store.ChatOrphaned, UpdatedAt: ago(50 * time.Hour)},
 				{ID: "c6", SandboxID: "sb3", Title: "Old one", State: store.ChatIdle, UpdatedAt: ago(70 * time.Hour)},

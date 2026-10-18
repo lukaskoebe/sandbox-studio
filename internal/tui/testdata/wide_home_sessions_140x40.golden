@@ -10,7 +10,7 @@ SANDBOXES  4                                            │ blub                
     5  ▲      Port the parser to go   chat · blocked    │ PORTS      …
     6         main                    terminal          │ HISTORY    …
   ○ Stopped   docs-site       Iris                      │ ID         sb1
-    7  ○      Update the deploy notes chat · 1d ago     │ 
+    7  ○      Update the deploy notes scheduled · 1d ago│ 
     8  ○      Check-in                check-in · 1d ago │ 
     9  ○      Rename the guides       chat · ended      │ 
               + 2 older                                 │ 
