@@ -2,6 +2,8 @@ package agentmem
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +106,8 @@ func TestChatExtraction(t *testing.T) {
 
 func TestChatExtractionWaitsForMore(t *testing.T) {
 	f := newFixture(t)
+	start := time.Now().Add(time.Hour) // the store's times are the wall clock's; the chat is idle by now
+	f.now = start
 	c, _ := f.st.CreateChat(f.ctx, store.Chat{EnvironmentID: f.env, SandboxID: f.sbAda.ID, TeammateID: f.ada.ID, Harness: "claude"})
 	f.turn(c, "hi", "Hello!")
 	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil || f.llm.n() != 0 {
@@ -112,12 +116,17 @@ func TestChatExtractionWaitsForMore(t *testing.T) {
 	if seq, _ := f.st.ChatMemorySeq(f.ctx, c.ID); seq != 0 {
 		t.Fatalf("cursor moved past a short user turn: %d", seq)
 	}
-	// The startup scan finds it; with more conversation it is extracted, under chat-<id>.
-	f.turn(c, chatUser, "Sure.")
-	list, err := f.st.ChatsToRemember(f.ctx, f.now.Add(-time.Hour))
-	if err != nil || len(list) != 1 || list[0].ID != c.ID {
-		t.Fatalf("to remember: %v %+v", err, list)
+	// The sweep leaves it for chatShortWait, then looks again.
+	f.now = start.Add(time.Hour)
+	if due := f.svc.sweepChats(f.ctx); len(due) != 0 {
+		t.Fatalf("swept a short chat at once: %+v", due)
 	}
+	f.now = start.Add(chatShortWait)
+	if due := f.svc.sweepChats(f.ctx); len(due) != 1 || due[0].chat != c.ID {
+		t.Fatalf("swept %+v", due)
+	}
+	// With more conversation it is extracted, under chat-<id>.
+	f.turn(c, chatUser, "Sure.")
 	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil || f.llm.n() != 1 {
 		t.Fatalf("longer chat: %v, %d calls", err, f.llm.n())
 	}
@@ -128,8 +137,143 @@ func TestChatExtractionWaitsForMore(t *testing.T) {
 	if len(sessions) != 1 || sessions[0].SessionRef != "chat-"+c.ID {
 		t.Fatalf("sessions %+v", sessions)
 	}
-	if list, _ := f.st.ChatsToRemember(f.ctx, f.now.Add(-time.Hour)); len(list) != 0 {
-		t.Fatalf("still to remember: %+v", list)
+	if due := f.svc.sweepChats(f.ctx); len(due) != 0 {
+		t.Fatalf("still to remember: %+v", due)
+	}
+}
+
+// A failed call leaves the cursor where it was: the sweep tries again after chatRetry, then four
+// times as long, and gives up after maxChatAttempts.
+func TestChatExtractionRetries(t *testing.T) {
+	f := newFixture(t)
+	start := time.Now().Add(time.Hour)
+	f.now = start
+	c := f.newChat("acp-1")
+	f.llm.err = errors.New("overloaded")
+	swept := func(want bool) {
+		t.Helper()
+		due := f.svc.sweepChats(f.ctx)
+		if got := len(due) == 1 && due[0].chat == c.ID; got != want || len(due) > 1 {
+			t.Fatalf("at +%s swept %+v", f.now.Sub(start), due)
+		}
+	}
+	swept(true)
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err == nil || !strings.Contains(err.Error(), "attempt 1 of 3") {
+		t.Fatalf("first attempt: %v", err)
+	}
+	if seq, _ := f.st.ChatMemorySeq(f.ctx, c.ID); seq != 0 {
+		t.Fatalf("the cursor moved on a failed call: %d", seq)
+	}
+	swept(false)
+	f.now = start.Add(chatRetry)
+	swept(true)
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err == nil {
+		t.Fatal("second attempt passed")
+	}
+	f.now = start.Add(chatRetry + 3*chatRetry)
+	swept(false)
+	f.now = start.Add(chatRetry + 4*chatRetry)
+	swept(true)
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err == nil || !strings.Contains(err.Error(), "given up after 3 attempts") {
+		t.Fatalf("third attempt: %v", err)
+	}
+	if seq, _ := f.st.ChatMemorySeq(f.ctx, c.ID); seq == 0 {
+		t.Fatal("the cursor stayed after the last attempt")
+	}
+	f.now = f.now.Add(24 * time.Hour)
+	swept(false)
+	if f.llm.n() != 3 {
+		t.Fatalf("%d calls", f.llm.n())
+	}
+
+	// Once the cursor moves, the count starts over.
+	f.turn(c, strings.Repeat("The staging database needs the VPN. ", 10), "Noted.")
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err == nil || !strings.Contains(err.Error(), "attempt 1 of 3") {
+		t.Fatalf("after giving up: %v", err)
+	}
+	f.llm.err = nil
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil {
+		t.Fatal(err)
+	}
+	swept(false)
+}
+
+// A chat over the daily budget waits for the next day's, without counting as a failure.
+func TestChatExtractionWaitsForTheBudget(t *testing.T) {
+	f := newFixture(t)
+	start := time.Now().Add(time.Hour)
+	f.now = start
+	c := f.newChat("acp-1")
+	f.svc.Budget = Budget{}
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil || f.llm.n() != 0 {
+		t.Fatalf("over budget: %v, %d calls", err, f.llm.n())
+	}
+	y, m, d := start.UTC().Date()
+	tomorrow := time.Date(y, m, d+1, 0, 0, 0, 0, time.UTC)
+	f.now = tomorrow.Add(-time.Second)
+	if due := f.svc.sweepChats(f.ctx); len(due) != 0 {
+		t.Fatalf("swept on the same day: %+v", due)
+	}
+	f.now = tomorrow
+	if due := f.svc.sweepChats(f.ctx); len(due) != 1 {
+		t.Fatalf("not swept the next day: %+v", due)
+	}
+	f.svc.Budget = DefaultBudget
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil || f.llm.n() != 1 {
+		t.Fatalf("the next day: %v, %d calls", err, f.llm.n())
+	}
+}
+
+// A call the host has no memory for is no call: it isn't charged and waits for the next sweep.
+func TestChatExtractionWaitsForMemory(t *testing.T) {
+	f := newFixture(t)
+	start := time.Now().Add(time.Hour)
+	f.now = start
+	c := f.newChat("acp-1")
+	f.llm.err = ErrLowMemory
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := f.svc.usage(f.ctx, f.env); u.Calls != 0 {
+		t.Fatalf("charged %+v", u)
+	}
+	if due := f.svc.sweepChats(f.ctx); len(due) != 0 {
+		t.Fatalf("swept at once: %+v", due)
+	}
+	f.now = start.Add(chatSweep)
+	if due := f.svc.sweepChats(f.ctx); len(due) != 1 {
+		t.Fatalf("not swept after chatSweep: %+v", due)
+	}
+	f.llm.err = nil
+	if err := f.svc.extractChat(f.ctx, chatDue{env: f.env, chat: c.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if seq, _ := f.st.ChatMemorySeq(f.ctx, c.ID); seq == 0 {
+		t.Fatal("the cursor stayed")
+	}
+}
+
+// The sweep reads a few chats at a time, the oldest first, and only idle ones.
+func TestSweepChatsInBatches(t *testing.T) {
+	f := newFixture(t)
+	var ids []string
+	for i := range chatSweepBatch + 2 {
+		ids = append(ids, f.newChat(fmt.Sprintf("acp-%d", i)).ID)
+		time.Sleep(1100 * time.Millisecond) // updated_at is in seconds
+	}
+	f.now = time.Now()
+	if due := f.svc.sweepChats(f.ctx); len(due) != 0 {
+		t.Fatalf("swept chats idle for less than ChatIdle: %+v", due)
+	}
+	f.now = time.Now().Add(time.Hour)
+	due := f.svc.sweepChats(f.ctx)
+	if len(due) != chatSweepBatch {
+		t.Fatalf("swept %d chats", len(due))
+	}
+	for i, d := range due {
+		if d.chat != ids[i] {
+			t.Fatalf("swept out of order: %+v", due)
+		}
 	}
 }
 

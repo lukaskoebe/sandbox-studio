@@ -246,6 +246,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	e.svc = New(st, e.vault, e.vms, e.guest, nil)
 	e.svc.Poll = 5 * time.Millisecond
 	e.svc.Timeout = 5 * time.Second
+	e.svc.FreeMemory = func() (int, bool) { return 8192, true } // the test host's own doesn't count
 	e.svc.Notify = func(string) { e.vault.mu.Lock(); e.notified++; e.vault.mu.Unlock() }
 	return e
 }

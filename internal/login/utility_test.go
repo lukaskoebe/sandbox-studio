@@ -3,6 +3,7 @@ package login
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -160,6 +161,49 @@ func TestIdleUtilityVMsStop(t *testing.T) {
 	e.svc.stopIdleUtility(ctx)
 	if len(e.vms.stopped) != 1 || e.vms.stopped[0] != "utility-"+p.ID {
 		t.Fatalf("stopped after 11 minutes: %v", e.vms.stopped)
+	}
+}
+
+// A stopped utility VM isn't started while the host has too little free memory; a running one
+// still takes calls.
+func TestUtilityWaitsForFreeMemory(t *testing.T) {
+	ctx := context.Background()
+	e := newTestEnv(t)
+	p := e.provider(t, "Max", teammates.KindClaudeSubscription)
+	if err := e.svc.storeKey(ctx, p, tokenText, []string{"api.anthropic.com"}); err != nil {
+		t.Fatal(err)
+	}
+	p, _ = e.st.Provider(ctx, e.env, p.ID)
+	e.guest.cli = agentproto.RunResult{Stdout: `{"result":"ok"}`}
+	llm, _, err := e.svc.Utility(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	free := 1024
+	e.svc.FreeMemory = func() (int, bool) { return free, true }
+	if _, err := llm.Complete(ctx, agentmem.Request{System: "S", User: "U"}); !errors.Is(err, agentmem.ErrLowMemory) {
+		t.Fatalf("with 1 GiB free: %v", err)
+	}
+	if len(e.vms.ensured) != 0 || len(e.guest.calls) != 0 {
+		t.Fatalf("started %v, called %d", e.vms.ensured, len(e.guest.calls))
+	}
+	free = 4096
+	if _, err := llm.Complete(ctx, agentmem.Request{System: "S", User: "U"}); err != nil {
+		t.Fatal(err)
+	}
+	free = 512
+	if _, err := llm.Complete(ctx, agentmem.Request{System: "S", User: "U"}); err != nil {
+		t.Fatalf("the running VM: %v", err)
+	}
+	if len(e.guest.calls) != 2 {
+		t.Fatalf("%d CLI calls", len(e.guest.calls))
+	}
+}
+
+func TestHostFreeMemory(t *testing.T) {
+	mib, ok := hostFreeMemory()
+	if _, err := os.Stat("/proc/meminfo"); err == nil && (!ok || mib <= 0) {
+		t.Fatalf("MemAvailable: %d, %v", mib, ok)
 	}
 }
 

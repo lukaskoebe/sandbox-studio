@@ -120,3 +120,22 @@ func TestDecideApprovalAndUpdateChatItemBindingAndRollback(t *testing.T) {
 		t.Fatalf("failed decision was not rolled back: rev %d to %d, err %v", initial.Rev, after.Rev, err)
 	}
 }
+
+// ChatItemsAfter reads the newest items after the cursor, in order, and no more than asked.
+func TestChatItemsAfterKeepsTheNewest(t *testing.T) {
+	f := newChatApprovalFixture(t)
+	ctx := context.Background()
+	for range 4 {
+		if _, err := f.store.AddChatItem(ctx, ChatItem{ChatID: f.chat.ID, TurnID: f.turn.ID, Kind: "agent", Body: json.RawMessage(`{"text":"x"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := f.store.ChatItemsAfter(ctx, f.chat.ID, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last, err := f.store.ChatItemsAfter(ctx, f.chat.ID, all[0].Seq, 2)
+	if err != nil || len(last) != 2 || last[0].Seq != all[len(all)-2].Seq || last[1].Seq != all[len(all)-1].Seq {
+		t.Fatalf("the last two of %d: %+v, %v", len(all), last, err)
+	}
+}

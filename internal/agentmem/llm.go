@@ -55,6 +55,10 @@ func (m UtilityModel) cost(in, out int) int64 {
 // ErrNoUtility means the provider has no utility model Studio can call.
 var ErrNoUtility = errors.New("no utility model for this provider")
 
+// ErrLowMemory means a call would start a utility VM the host has no memory for; it is tried
+// again later.
+var ErrLowMemory = errors.New("too little free memory to start the utility VM")
+
 // UtilityFor is the utility model of a provider; ok is false for a kind without one, for an
 // endpoint without a model, and for a provider whose key or login was never added, since its
 // calls would carry no credential.

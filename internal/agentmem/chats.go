@@ -18,13 +18,28 @@ import (
 // the way a terminal does, and Studio has the whole conversation already. A chat's new turns
 // are read once it has stayed idle for ChatIdle; a cursor on the chat (memory_seq) marks what
 // was read. Hooks from a chat's session still pack context and recall, but don't extract.
+//
+// The cursor moves once the turns are read, so what wasn't is read later: a sweep every
+// chatSweep catches up on the chats whose time came while Studio was stopped or busy. A failed
+// call is tried again after chatRetry, then four times as long, and given up after
+// maxChatAttempts; a run over the daily budget waits for the next day, and one the host has no
+// memory for, for the next sweep.
 const (
 	// ChatIdle is how long a chat stays idle before its new turns are extracted.
 	ChatIdle = 3 * time.Minute
-	// minChatDelta is the least conversation worth an extraction call; less waits for more.
-	minChatDelta = 200
-	// chatLookback bounds the chats the startup scan reads: older ones are left as they are.
+	// minChatDelta is the least conversation worth an extraction call; less waits for more,
+	// or chatShortWait before the sweep looks again.
+	minChatDelta  = 200
+	chatShortWait = 6 * time.Hour
+	// chatLookback bounds the chats the sweep reads: older ones are left as they are.
 	chatLookback = 7 * 24 * time.Hour
+	// chatSweep is how often the sweep runs, and chatSweepBatch the most chats it reads at once.
+	chatSweep       = 15 * time.Minute
+	chatSweepBatch  = 4
+	chatRetry       = 15 * time.Minute
+	maxChatAttempts = 3
+	// maxChatItems is the most items one extraction loads: the newest, enough for maxTranscript.
+	maxChatItems = 500
 	maxToolLine  = 200
 )
 
@@ -43,7 +58,7 @@ func (s *Service) ChatIdled(envID, chatID string) {
 		s.chatMu.Unlock()
 		select {
 		case s.chatsDue <- chatDue{env: envID, chat: chatID}:
-		default: // the startup scan of the next start finds it
+		default: // the sweep finds it
 		}
 	})
 }
@@ -57,17 +72,20 @@ func (s *Service) chatIdle() time.Duration {
 
 type chatDue struct{ env, chat string }
 
-// scanChats queues the chats that went idle with turns not yet extracted, as when Studio
-// stopped before their time came.
-func (s *Service) scanChats(ctx context.Context) {
-	list, err := s.Store.ChatsToRemember(ctx, s.now().Add(-chatLookback))
+// sweepChats lists the chats to catch up on, the oldest first: idle for ChatIdle with turns after
+// their cursor, changed within chatLookback and not put off.
+func (s *Service) sweepChats(ctx context.Context) []chatDue {
+	now := s.now()
+	list, err := s.Store.ChatsToRemember(ctx, now.Add(-chatLookback), now.Add(-s.chatIdle()), now, chatSweepBatch)
 	if err != nil {
 		s.Log.Warn("memory: listing chats to extract failed", "err", err)
-		return
+		return nil
 	}
+	out := make([]chatDue, 0, len(list))
 	for _, c := range list {
-		s.ChatIdled(c.EnvironmentID, c.ID)
+		out = append(out, chatDue{env: c.EnvironmentID, chat: c.ID})
 	}
+	return out
 }
 
 // extractChat extracts the chat's turns after its cursor, if it is still idle.
@@ -86,7 +104,7 @@ func (s *Service) extractChat(ctx context.Context, d chatDue) error {
 	if err != nil {
 		return err
 	}
-	items, err := s.Store.ChatItemsAfter(ctx, c.ID, from)
+	items, err := s.Store.ChatItemsAfter(ctx, c.ID, from, maxChatItems)
 	if err != nil || len(items) == 0 {
 		return err
 	}
@@ -96,24 +114,54 @@ func (s *Service) extractChat(ctx context.Context, d chatDue) error {
 		if !hasUser(items) {
 			return s.Store.SetChatMemorySeq(ctx, c.ID, last) // nothing the user said: nothing to wait for
 		}
-		return nil
+		return s.Store.PostponeChatMemory(ctx, c.ID, s.now().Add(chatShortWait))
 	}
 	cl, err := s.chatCaller(ctx, c)
-	if err != nil {
-		if errors.Is(err, ErrNoTeammate) || errors.Is(err, store.ErrNotFound) {
-			return s.Store.SetChatMemorySeq(ctx, c.ID, last)
+	if errors.Is(err, ErrNoTeammate) || errors.Is(err, store.ErrNotFound) {
+		return s.Store.SetChatMemorySeq(ctx, c.ID, last)
+	}
+	if err == nil {
+		var se session
+		if se, err = s.session(ctx, cl, chatSessionRef(c), ""); err == nil {
+			err = s.extract(ctx, extractJob{c: cl, se: se, ev: agenthook.Event{Event: eventChatIdle, SessionID: se.ref, Transcript: transcript}})
 		}
-		return err
 	}
-	se, err := s.session(ctx, cl, chatSessionRef(c), "")
-	if err != nil {
-		return err
+	return s.settle(ctx, c.ID, last, err)
+}
+
+// settle moves the chat's cursor past last once its turns were read, or puts the chat off by
+// what kept them from being read.
+func (s *Service) settle(ctx context.Context, chatID string, last int, err error) error {
+	if err != nil && errors.Is(ctx.Err(), context.Canceled) {
+		return err // Studio stops: the sweep of its next start reads them
 	}
-	// The cursor moves first: a failed call is logged and not repeated, as with hooks.
-	if err := s.Store.SetChatMemorySeq(ctx, c.ID, last); err != nil {
-		return err
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second) // ctx may have timed out
+	defer cancel()
+	now := s.now()
+	switch {
+	case err == nil:
+		return s.Store.SetChatMemorySeq(wctx, chatID, last)
+	case errors.Is(err, errOverBudget):
+		y, m, d := now.Date()
+		return s.Store.PostponeChatMemory(wctx, chatID, time.Date(y, m, d+1, 0, 0, 0, 0, time.UTC))
+	case errors.Is(err, ErrLowMemory):
+		s.Log.Info("memory extraction of a chat waits for free memory", "chat", chatID)
+		return s.Store.PostponeChatMemory(wctx, chatID, now.Add(chatSweep))
 	}
-	return s.extract(ctx, extractJob{c: cl, se: se, ev: agenthook.Event{Event: eventChatIdle, SessionID: se.ref, Transcript: transcript}})
+	attempts, perr := s.Store.ChatMemoryFailed(wctx, chatID)
+	if perr != nil {
+		return errors.Join(err, perr)
+	}
+	if attempts >= maxChatAttempts {
+		if perr := s.Store.SetChatMemorySeq(wctx, chatID, last); perr != nil {
+			return errors.Join(err, perr)
+		}
+		return fmt.Errorf("given up after %d attempts: %w", attempts, err)
+	}
+	if perr := s.Store.PostponeChatMemory(wctx, chatID, now.Add(chatRetry<<(2*(attempts-1)))); perr != nil {
+		return errors.Join(err, perr)
+	}
+	return fmt.Errorf("attempt %d of %d, tried again later: %w", attempts, maxChatAttempts, err)
 }
 
 // eventChatIdle names a chat extraction in the log, where hooks put their event.

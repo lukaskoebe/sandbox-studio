@@ -104,6 +104,9 @@ type Service struct {
 	HTTP *http.Client
 	// TokenURL is where refreshes go; tests replace it.
 	TokenURL string
+	// FreeMemory is the host's available memory in MiB, ok false when it can't tell; nil reads
+	// /proc/meminfo. A stopped utility VM isn't started while too little is free.
+	FreeMemory func() (mib int, ok bool)
 
 	mu       sync.Mutex
 	callMu   sync.Mutex      // one CLI call at a time: calls start and stop the utility VMs

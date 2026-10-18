@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,6 +92,9 @@ func (s *Service) complete(ctx context.Context, p store.Provider, model string, 
 	// Dream and extraction may ask at once; the utility VM is started and run one call at a time.
 	s.callMu.Lock()
 	defer s.callMu.Unlock()
+	if !s.utilityRunning(p) && !s.roomForUtility() {
+		return agentmem.Response{}, agentmem.ErrLowMemory
+	}
 	sb, err := s.VMs.EnsureSystem(ctx, p.EnvironmentID, utilityKind(p), utilityVM(p))
 	if err != nil {
 		return agentmem.Response{}, fmt.Errorf("the utility VM didn't start: %w", err)
@@ -221,6 +226,42 @@ func (s *Service) touchUtility(p store.Provider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.idle[p.ID] = utilityUse{envID: p.EnvironmentID, kind: utilityKind(p), name: utilityVM(p), at: s.now()}
+}
+
+// utilityRoomMiB is the free host memory a utility VM is started with: its 1 GiB and some to spare.
+const utilityRoomMiB = 1536
+
+// utilityRunning reports whether the provider's utility VM ran a call and wasn't stopped since.
+func (s *Service) utilityRunning(p store.Provider) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.idle[p.ID]
+	return ok
+}
+
+// roomForUtility reports whether the host has the memory to start a utility VM, or can't tell.
+func (s *Service) roomForUtility() bool {
+	free := s.FreeMemory
+	if free == nil {
+		free = hostFreeMemory
+	}
+	mib, ok := free()
+	return !ok || mib >= utilityRoomMiB
+}
+
+// hostFreeMemory reads MemAvailable from /proc/meminfo: what the host can give without swapping.
+func hostFreeMemory() (int, bool) {
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0, false
+	}
+	for line := range strings.Lines(string(b)) {
+		if rest, found := strings.CutPrefix(line, "MemAvailable:"); found {
+			kib, err := strconv.Atoi(strings.TrimSuffix(strings.TrimSpace(rest), " kB"))
+			return kib / 1024, err == nil
+		}
+	}
+	return 0, false
 }
 
 // stopIdleUtility stops the utility VMs that made no call for utilityIdle; the next call starts

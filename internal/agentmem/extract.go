@@ -29,6 +29,10 @@ const (
 	dupJaccard        = 0.8  // word overlap, when vectors are not there yet
 )
 
+// errOverBudget is what extract returns when it skipped a run for today's budget, so a chat
+// can wait for the next day's.
+var errOverBudget = errors.New("over the daily budget")
+
 type extractJob struct {
 	c  caller
 	se session
@@ -50,26 +54,53 @@ func (s *Service) enqueue(c caller, se session, ev agenthook.Event) error {
 }
 
 // Run extracts queued transcripts and idle chats until ctx ends. One worker, so the daily
-// budget is checked and spent in order.
+// budget is checked and spent in order, and at most one extraction, and one utility VM for it,
+// is in memory at a time. Every chatSweep it also catches up on the chats that weren't read to
+// the end (sweepChats), a few at a time between the other work.
 func (s *Service) Run(ctx context.Context) {
-	s.scanChats(ctx)
+	sweep := time.NewTimer(s.chatIdle()) // the first once Studio has settled
+	defer sweep.Stop()
+	var backlog []chatDue
 	for {
+		var next <-chan time.Time // ready while the backlog has a chat
+		if len(backlog) > 0 {
+			next = ready
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case d := <-s.chatsDue:
-			jctx, cancel := context.WithTimeout(ctx, extractTimeout)
-			if err := s.extractChat(jctx, d); err != nil {
-				s.Log.Warn("memory extraction of a chat failed", "chat", d.chat, "err", err)
+		case <-sweep.C:
+			if len(backlog) == 0 {
+				backlog = s.sweepChats(ctx)
 			}
-			cancel()
+			sweep.Reset(chatSweep)
+		case <-next:
+			s.runChat(ctx, backlog[0])
+			backlog = backlog[1:]
+		case d := <-s.chatsDue:
+			s.runChat(ctx, d)
 		case j := <-s.jobs:
 			jctx, cancel := context.WithTimeout(ctx, extractTimeout)
-			if err := s.extract(jctx, j); err != nil {
+			if err := s.extract(jctx, j); err != nil && !errors.Is(err, errOverBudget) {
 				s.Log.Warn("memory extraction failed", "sandbox", j.c.sandbox.ID, "teammate", j.c.teammate.ID, "err", err)
 			}
 			cancel()
 		}
+	}
+}
+
+// ready is always ready to receive from.
+var ready = func() <-chan time.Time {
+	c := make(chan time.Time)
+	close(c)
+	return c
+}()
+
+func (s *Service) runChat(ctx context.Context, d chatDue) {
+	jctx, cancel := context.WithTimeout(ctx, extractTimeout)
+	defer cancel()
+	if err := s.extractChat(jctx, d); err != nil && ctx.Err() == nil {
+		s.Log.Warn("memory extraction of a chat failed", "chat", d.chat, "err", err)
 	}
 }
 
@@ -120,7 +151,8 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 	if reason, err := s.overBudget(ctx, c.env, model, estIn); err != nil {
 		return err
 	} else if reason != "" {
-		return skip(reason)
+		_ = skip(reason)
+		return errOverBudget
 	}
 	key := ""
 	if p.SecretID != "" {
@@ -137,6 +169,9 @@ func (s *Service) extract(ctx context.Context, j extractJob) error {
 		return skip(err.Error())
 	}
 	resp, err := llm.Complete(ctx, Request{System: system, User: user, Schema: factsSchema, MaxTokens: maxOutputTokens})
+	if errors.Is(err, ErrLowMemory) {
+		return err // no call was made
+	}
 	in, out := resp.InputTokens, resp.OutputTokens
 	if in == 0 && out == 0 { // no usage reported: charge the estimate
 		in, out = estIn, len(resp.Text)/3

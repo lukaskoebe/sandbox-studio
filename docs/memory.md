@@ -268,11 +268,31 @@ the extraction's model, tokens, cost and any rejection.
 waits 3 minutes; another turn moves that out. Then it condenses the chat's items after its
 cursor (`chats.memory_seq`, migration `034_session_summaries.sql`) the way the guest condenses
 a transcript: user and agent text, and one `[tool] <title>` line per tool call, without
-thoughts or tool output, the last 64 KiB. Less than 200 characters waits for more if the user
-said something, and is passed over otherwise. The cursor moves before the call, so a failed
-call is not repeated, as with hooks. The memory session is the chat's harness session (its
-hooks name it too), or `chat-<id>` before it has one. Heartbeat chats are not extracted. At
-startup Studio queues the idle chats of the last 7 days with items after their cursor.
+thoughts or tool output, the last 64 KiB of at most the newest 500 items, so a long stretch
+is read in bounded memory. Less than 200 characters waits for more if the user said
+something, and is passed over otherwise. The memory session is the chat's harness session
+(its hooks name it too), or `chat-<id>` before it has one. Heartbeat chats are not extracted.
+
+**Catching up on chats.** The cursor moves once the turns were read: after the call, after
+an answer that was rejected, or when there is nothing to read (no teammate, no provider or
+utility model). What wasn't read is read later (`chats.memory_retry_at` and
+`memory_attempts`, migration `041_chat_memory_retry.sql`):
+
+- A failed call (an error, a timeout, a utility VM that didn't start) is tried again after 15
+  minutes, then after an hour, and given up after the third failure: the cursor moves past
+  those turns and the log says so.
+- A run over the daily budget waits for the next UTC day and doesn't count as a failure.
+- A stretch too short to extract waits 6 hours, or for the chat's next idle.
+- A subscription's utility VM that is stopped isn't started while the host has less than
+  1.5 GiB available (`MemAvailable`); the run is no call, isn't charged, and waits for the
+  next sweep. A running utility VM still takes calls. A hook's transcript is dropped
+  then, as on any failed call.
+
+Every 15 minutes, and 3 minutes after Studio starts, a sweep picks up to 4 chats the timers
+missed or that are due again: idle for 3 minutes, changed within the last 7 days, with items
+after their cursor and not put off, the oldest first. They run on the one extraction worker
+between hook jobs, so at most one extraction and one utility VM for it are in memory at a time.
+A chat whose idle timer finds the queue full is left to the sweep.
 
 **Session summaries.** Each extraction also returns `summary`: the session so far in at most
 400 characters (cut at 600), updated from the previous summary, which the prompt includes.

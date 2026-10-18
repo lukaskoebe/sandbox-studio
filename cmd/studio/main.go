@@ -323,8 +323,6 @@ func run(addr, image string, log *slog.Logger) error {
 	// channel; extraction runs in the background.
 	agentMem := agentmem.New(st, mem, vault, log)
 	agentMem.Notify = func(envID string) { bus.Publish(events.Event{Topic: events.TopicApprovals, EnvironmentID: envID}) }
-	go agentMem.Run(ctx)
-	go agentMem.RunDreams(ctx)        // nightly, after enough new facts, and interrupted runs
 	integs = append(integs, agentMem) // settles memory.share and memory.conflict approvals; it serves no hosts
 
 	hub := agentchan.NewHub(log)
@@ -419,6 +417,9 @@ func run(addr, image string, log *slog.Logger) error {
 		}
 		return agentmem.DefaultUtility(p, key)
 	}
+	// Extraction and dreams start once they know the utility models.
+	go agentMem.Run(ctx)
+	go agentMem.RunDreams(ctx) // nightly, after enough new facts, and interrupted runs
 
 	mux := http.NewServeMux()
 	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,

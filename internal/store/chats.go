@@ -190,12 +190,14 @@ func (s *Store) ChatsInState(ctx context.Context, state string) ([]Chat, error) 
 	return s.chats(ctx, "SELECT "+chatCols+" FROM chats WHERE state = ?", state)
 }
 
-// ChatsToRemember lists the idle chats, heartbeats and scheduled runs aside, with items after their memory cursor
-// that changed since since: the chats memory extraction hasn't read to the end.
-func (s *Store) ChatsToRemember(ctx context.Context, since time.Time) ([]Chat, error) {
-	return s.chats(ctx, "SELECT "+chatCols+` FROM chats c WHERE state = ? AND heartbeat = 0 AND task_id = '' AND updated_at >= ?
-		AND (SELECT IFNULL(MAX(seq), 0) FROM chat_items i WHERE i.chat_id = c.id) > memory_seq ORDER BY updated_at`,
-		ChatIdle, since.Unix())
+// ChatsToRemember lists up to limit idle chats of teammates, heartbeats and scheduled runs aside, with items
+// after their memory cursor: the chats memory extraction hasn't read to the end. A chat counts
+// if it changed between since and idleBefore, and isn't put off past now; the oldest come first.
+func (s *Store) ChatsToRemember(ctx context.Context, since, idleBefore, now time.Time, limit int) ([]Chat, error) {
+	return s.chats(ctx, "SELECT "+chatCols+` FROM chats c WHERE state = ? AND heartbeat = 0 AND task_id = '' AND teammate_id != ''
+		AND updated_at >= ? AND updated_at <= ? AND memory_retry_at <= ?
+		AND (SELECT IFNULL(MAX(seq), 0) FROM chat_items i WHERE i.chat_id = c.id) > memory_seq ORDER BY updated_at LIMIT ?`,
+		ChatIdle, since.Unix(), idleBefore.Unix(), now.Unix(), limit)
 }
 
 // ChatMemorySeq is the seq of the last item memory extraction read; items after it are new.
@@ -208,15 +210,34 @@ func (s *Store) ChatMemorySeq(ctx context.Context, chatID string) (int, error) {
 	return seq, err
 }
 
-// SetChatMemorySeq moves the memory cursor. It doesn't count as a change of the chat.
+// SetChatMemorySeq moves the memory cursor and clears what PostponeChatMemory set. It doesn't
+// count as a change of the chat.
 func (s *Store) SetChatMemorySeq(ctx context.Context, chatID string, seq int) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE chats SET memory_seq = ? WHERE id = ?", seq, chatID)
+	_, err := s.db.ExecContext(ctx, "UPDATE chats SET memory_seq = ?, memory_retry_at = 0, memory_attempts = 0 WHERE id = ?", seq, chatID)
 	return err
 }
 
-// ChatItemsAfter lists a chat's items after seq, in order.
-func (s *Store) ChatItemsAfter(ctx context.Context, chatID string, seq int) ([]ChatItem, error) {
-	return s.chatItems(ctx, "SELECT "+chatItemCols+" FROM chat_items WHERE chat_id = ? AND seq > ? ORDER BY seq", chatID, seq)
+// PostponeChatMemory keeps ChatsToRemember from listing the chat before until; its cursor stays.
+func (s *Store) PostponeChatMemory(ctx context.Context, chatID string, until time.Time) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE chats SET memory_retry_at = ? WHERE id = ?", until.Unix(), chatID)
+	return err
+}
+
+// ChatMemoryFailed counts a failed extraction of the chat's turns after its cursor, and returns
+// how many failed since the cursor last moved.
+func (s *Store) ChatMemoryFailed(ctx context.Context, chatID string) (int, error) {
+	var attempts int
+	err := s.db.QueryRowContext(ctx, "UPDATE chats SET memory_attempts = memory_attempts + 1 WHERE id = ? RETURNING memory_attempts", chatID).Scan(&attempts)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	return attempts, err
+}
+
+// ChatItemsAfter lists a chat's last limit items after seq, in order: the newest, so a long
+// stretch is read in bounded memory.
+func (s *Store) ChatItemsAfter(ctx context.Context, chatID string, seq, limit int) ([]ChatItem, error) {
+	return s.chatItems(ctx, "SELECT "+chatItemCols+" FROM (SELECT * FROM chat_items WHERE chat_id = ? AND seq > ? ORDER BY seq DESC LIMIT ?) ORDER BY seq", chatID, seq, limit)
 }
 
 // ChatBySession finds a sandbox's chat by its harness session ID.

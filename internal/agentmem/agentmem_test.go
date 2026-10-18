@@ -401,7 +401,7 @@ func (f *fixture) stop(sandbox, session, text string) {
 	f.hook(sandbox, map[string]any{"event": agenthook.Stop, "sessionId": session, "transcript": text})
 	select {
 	case j := <-f.svc.jobs:
-		if err := f.svc.extract(f.ctx, j); err != nil {
+		if err := f.svc.extract(f.ctx, j); err != nil && !errors.Is(err, errOverBudget) {
 			f.t.Fatal(err)
 		}
 	default:

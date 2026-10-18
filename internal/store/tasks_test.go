@@ -130,7 +130,7 @@ func TestTaskSchedulesAndRuns(t *testing.T) {
 	if _, err := s.SetChatState(ctx, work.ID, c.ID, ChatIdle, ChatRunning); err != nil {
 		t.Fatal(err)
 	}
-	if chats, _ := s.ChatsToRemember(ctx, time.Unix(0, 0)); slices.ContainsFunc(chats, func(x Chat) bool { return x.ID == c.ID }) {
+	if chats, _ := s.ChatsToRemember(ctx, time.Unix(0, 0), time.Now().Add(time.Hour), time.Now().Add(time.Hour), 10); slices.ContainsFunc(chats, func(x Chat) bool { return x.ID == c.ID }) {
 		t.Fatalf("memory reads a run's chat")
 	}
 	if ok, err := s.FinishTaskRun(ctx, work.ID, task.ID); err != nil || !ok {
