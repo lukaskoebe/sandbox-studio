@@ -59,6 +59,8 @@ Check-ins are off until you turn them on under the teammate's **Settings**. With
 
 A check-in that can't run is listed under **Activity** on the Tasks tab with the reason: the teammate has no sandbox, its provider has no key, approvals are waiting in its sandbox, or its sandbox isn't ready.
 
+A task can also get a schedule of its own in its dialog: once at a day and time, on some weekdays at a time, or every few hours inside a window. At each time Studio starts a new chat for that task in the teammate's latest sandbox, or the one you pick, and the chat list marks it as scheduled. If the teammate is busy then, the run waits up to 30 minutes. Each run starts with a clean chat, so the teammate keeps what the next run should know in the task's notes. Check-ins leave scheduled tasks to their own runs. The task list shows each schedule and its next run, and **Run now** starts a run at once. Runs, including the skipped and missed ones, are listed under **Activity**. Only you set schedules; the teammate can't.
+
 ## Ownership and deletion
 
 Teammate rules apply only to sandboxes owned by that teammate. A teammate with sandboxes cannot be deleted until those sandboxes are removed. Deleting a teammate also removes its teammate-scoped network rules.

@@ -9,6 +9,13 @@
   new terminal, `c` opens the newest chat and `C` a new one. The Chats screen is gone.
 - **Command line:** `studio shell <sandbox> [terminal]` opens any of a sandbox's terminals,
   such as an agent's.
+- **Scheduled tasks:** a task can get a schedule in its dialog: once at a day and time, on
+  some weekdays at a time, or every few hours inside a window. At each time the teammate works
+  on that task in a new chat, marked as scheduled, in its latest sandbox or the one you pick. A
+  busy teammate makes the run wait up to 30 minutes; a time Studio was off for runs if it is less
+  than an hour late and is logged as missed otherwise. The task list shows each schedule with its
+  next and last run, **Run now** starts one at once, and Activity lists the runs. Check-ins leave
+  scheduled tasks out. Only the user sets schedules.
 - **Fix:** `studio tui` and `studio login-url` read the Studio's key without opening the
   catalog for writing, so a newer binary no longer migrates the catalog of the Studio it talks to.
 

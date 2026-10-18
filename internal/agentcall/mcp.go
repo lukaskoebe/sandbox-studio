@@ -110,7 +110,7 @@ var Tools = []Tool{
 		obj([]string{"fact_id"}, map[string]any{
 			"fact_id": str("The fact to retract"),
 		})},
-	{agentproto.MethodTasksList, "List your tasks: the ones not done, or all of them with include_done.",
+	{agentproto.MethodTasksList, "List your tasks: the ones not done, or all of them with include_done. A task the user scheduled shows its schedule and its next run.",
 		obj(nil, map[string]any{
 			"include_done": map[string]any{"type": "boolean", "description": "Include the done tasks too; default false"},
 		})},
@@ -120,7 +120,7 @@ var Tools = []Tool{
 			"details": str("Markdown: context, steps, what done means", "maxLength", 8192),
 			"due":     str("A day, YYYY-MM-DD", "maxLength", 10),
 		})},
-	{agentproto.MethodTaskUpdateStatus, "Set the status of one of your tasks.",
+	{agentproto.MethodTaskUpdateStatus, "Set the status of one of your tasks. Done on a task that repeats on a schedule ends only the current run.",
 		obj([]string{"task_id", "status"}, map[string]any{
 			"task_id": str("A task ID from tasks_list"),
 			"status":  str("open, in_progress or done", "enum", []string{"open", "in_progress", "done"}),

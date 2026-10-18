@@ -1,6 +1,28 @@
 # Scheduled tasks (design)
 
-Status: proposed 2026-10-18.
+Status: built (2026-10-18); [teammates](../teammates.md#scheduled-tasks) describes it as it is.
+Left out:
+
+- The TUI's `⟳` mark on a run's chat (section 7). A chat's `taskId` says it is a run, so Home
+  can mark it later.
+
+Where the build differs from the text:
+
+- An `hours` window ends before `toHour`, as a check-in's does: "Every 4 hours, 08:00–20:00"
+  runs at 08:00, 12:00 and 16:00.
+- Run now refuses with a 409 for any reason a run can't start, not only busy, and logs
+  nothing. The API takes it for any task not done; the web shows it for scheduled ones.
+- A run waits from the minute it first finds the teammate busy. The wait is kept in memory, so
+  a restart begins it again.
+- At most 24 missed runs are logged at once.
+- A check-in leaves out every task with a schedule, a paused one too.
+- A paused schedule has no `nextRunAt`.
+- `lastRun` is a whole run: it also has its `id`, `taskId` and `dueAt`.
+- A task marked done by the user or the teammate logs its current run done too. On a repeating
+  task, `task_update_status done` answers with a note that the task stays and when it runs next.
+- A run's chat keeps its title: the harness doesn't rename it.
+- `GET .../teammates/{id}/task-runs` lists the latest 20 runs of all the teammate's tasks, for
+  the Activity list.
 
 A task on a teammate's list can get a schedule. At the scheduled time, the teammate works on
 that task in a chat of its own: once, on a date and time, or again and again (on some days at

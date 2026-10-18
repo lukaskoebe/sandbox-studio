@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
 )
 
 func TestTeammateTasksAndHeartbeatAPI(t *testing.T) {
@@ -90,5 +92,69 @@ func TestTeammateTasksAndHeartbeatAPI(t *testing.T) {
 	var beats []store.Beat
 	if err := json.Unmarshal(rec.Body.Bytes(), &beats); rec.Code != http.StatusOK || err != nil || len(beats) != 0 {
 		t.Fatalf("beats: %d %s (%v)", rec.Code, rec.Body, err)
+	}
+}
+
+// busyRunner refuses every run, as the heartbeat service does while the teammate is busy.
+type busyRunner struct{}
+
+func (busyRunner) RunNow(context.Context, string, string, string) (store.TaskRun, error) {
+	return store.TaskRun{}, fmt.Errorf("%w: a turn is running in sandbox dev", tasks.ErrCannotRun)
+}
+
+func TestTaskScheduleAPI(t *testing.T) {
+	ctx := context.Background()
+	h, s := newTestServer(t)
+	env, err := s.Store.CreateEnvironment(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	iris, err := s.Store.CreateTeammate(ctx, store.Teammate{EnvironmentID: env.ID, Name: "Iris", Harness: "claude", GitName: "Iris", GitEmail: "iris@agents.invalid"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := "http://localhost:7878/api/environments/" + env.ID + "/teammates/" + iris.ID
+
+	rec := do(h, "POST", base+"/tasks", `{"title":"CI triage","schedule":{"repeat":"days","days":["mon","fri"],"time":"09:00"}}`)
+	var task store.Task
+	if err := json.Unmarshal(rec.Body.Bytes(), &task); rec.Code != http.StatusCreated || err != nil || task.Schedule == nil || task.NextRunAt == nil {
+		t.Fatalf("create: %d %s (%v)", rec.Code, rec.Body, err)
+	}
+	for _, body := range []string{
+		`{"title":"x","schedule":{"repeat":"cron"}}`,
+		`{"title":"x","schedule":{"repeat":"hours","everyHours":0,"fromHour":8,"toHour":20}}`,
+		`{"title":"x","schedule":{"repeat":"days","days":["someday"],"time":"09:00"}}`,
+		`{"title":"x","schedule":{"repeat":"once","date":"2026-10-24","time":"14:00"},"sandboxId":"nope"}`,
+	} {
+		if rec := do(h, "POST", base+"/tasks", body); rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: %d %s", body, rec.Code, rec.Body)
+		}
+	}
+
+	// Run now: 503 without the scheduler, 409 with why while the teammate is busy.
+	if rec := do(h, "POST", base+"/tasks/"+task.ID+"/run", ""); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("run now without a scheduler: %d %s", rec.Code, rec.Body)
+	}
+	s.TaskRuns = busyRunner{}
+	if rec := do(h, "POST", base+"/tasks/"+task.ID+"/run", ""); rec.Code != http.StatusConflict {
+		t.Fatalf("run now while busy: %d %s", rec.Code, rec.Body)
+	}
+
+	for _, path := range []string{"/tasks/" + task.ID + "/runs", "/task-runs"} {
+		rec := do(h, "GET", base+path, "")
+		var runs []store.TaskRun
+		if err := json.Unmarshal(rec.Body.Bytes(), &runs); rec.Code != http.StatusOK || err != nil || len(runs) != 0 {
+			t.Fatalf("%s: %d %s (%v)", path, rec.Code, rec.Body, err)
+		}
+	}
+	if rec := do(h, "GET", base+"/tasks/nope/runs", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("runs of an unknown task: %d %s", rec.Code, rec.Body)
+	}
+
+	// A PUT without a schedule removes it.
+	rec = do(h, "PUT", base+"/tasks/"+task.ID, `{"title":"CI triage","status":"open"}`)
+	var edited store.Task
+	if err := json.Unmarshal(rec.Body.Bytes(), &edited); rec.Code != http.StatusOK || err != nil || edited.Schedule != nil || edited.NextRunAt != nil {
+		t.Fatalf("unscheduled: %d %s (%v)", rec.Code, rec.Body, err)
 	}
 }

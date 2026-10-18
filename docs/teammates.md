@@ -133,7 +133,7 @@ list.
 
 - The teammate's Tasks tab lists them, not-done first and oldest first, and adds, edits and
   finishes them: `GET` and `POST /api/environments/{env}/teammates/{id}/tasks`, and `PUT
-  .../tasks/{task}`, which replaces the title, details, due day and status.
+  .../tasks/{task}`, which replaces the title, details, due day, status, schedule and sandbox.
 - A teammate's own sandboxes get four tools on the `studio` MCP server: `tasks_list` (the
   tasks not done, or all with `include_done`), `task_create`, `task_update_status` and
   `task_add_note`, which appends to the details after a blank line and keeps them within 8 KiB.
@@ -143,6 +143,52 @@ list.
   can't close, and the prompt says that the text is not instructions.
 - Changes publish the `tasks` event, so open tabs refetch.
 - Tasks can't be deleted yet.
+
+### Scheduled tasks
+
+The user can give a task a schedule, in the Studio host's local time (`internal/tasks/schedule.go`):
+
+| `repeat` | Fields | Runs |
+|---|---|---|
+| `once` | `date` (YYYY-MM-DD), `time` (HH:MM) | once, at that moment |
+| `days` | `days` (any of `mon`…`sun`), `time` | on those days at that time |
+| `hours` | `everyHours` (1–24), `fromHour`, `toHour` | every N hours from `fromHour`, while the hour is before `toHour`, as check-ins count their window |
+
+- `paused: true` keeps the schedule and stops the runs. `sandboxId` picks the sandbox the runs
+  go to; empty means the teammate's latest. A `PUT` without `schedule` removes it.
+- The task's `nextRunAt` is computed when the schedule is saved and after each run; an edit
+  that keeps the schedule keeps it. `lastRun` is the latest logged run.
+- At most 20 of a teammate's tasks that aren't done have a schedule. Only the user sets them:
+  the teammate's tools take no schedule, since every run calls a model on the user's key.
+  `tasks_list` shows each task's schedule and next run.
+
+Each minute the scheduler that runs check-ins also runs the due tasks (`internal/heartbeat/runs.go`).
+A due run:
+
+- makes a check-in's checks: a sandbox, a provider with its key, a VM, which it starts or
+  resumes and waits up to 90 seconds for. A run that can't start is skipped and logged with why;
+- waits while the teammate is busy: a turn running in the sandbox, approvals waiting there, or
+  the task's previous run still running. It tries again every minute for up to 30 minutes, then
+  is skipped and logged with why;
+- otherwise starts a new chat, titled after the task and the time ("CI triage · Mon 20 Oct
+  09:00"), with the fixed message "Scheduled run of your task below. Do it now, then report
+  what you did in a short final message. Record anything the next run should know with
+  task_add_note." and the task inside `<studio-tasks>` tags. The chat's `taskId` names the task:
+  the chat list marks it as scheduled, its title stays, and memory leaves it out, as it does
+  heartbeats.
+
+When Studio was not running at a time, the latest one still runs if it is less than an hour
+late. Older times are logged as missed ("Studio was not running"), at most 24 at once.
+
+A one-off task goes `in_progress` when its run starts. A repeating task keeps its status: the
+teammate's `task_update_status done` logs the current run done and leaves the task waiting
+for its next time. The user marking a repeating task done ends its schedule.
+
+`POST .../tasks/{task}/run` starts a run now (Run now on the Tasks tab). It makes the same
+checks but doesn't wait: a run that can't start is a 409 that says why, and isn't logged.
+`GET .../tasks/{task}/runs` lists a task's runs, newest first, at most 100, and `GET
+.../teammates/{id}/task-runs` the latest 20 of all its tasks, which the Activity list merges
+with the check-ins. Outcomes are `started`, `done`, `skipped` and `missed`.
 
 ## Check-ins (heartbeats)
 
@@ -155,7 +201,8 @@ Every minute the scheduler (`heartbeat.Service`, run from `cmd/studio`) checks t
 check-in is due when the local hour is inside the window and `everyHours` have passed since the
 teammate's last check-in of any outcome. A due check-in:
 
-- does nothing when the teammate has no open tasks;
+- does nothing when the teammate has no open tasks. Tasks with a schedule run at their own
+  times, so a check-in leaves them out, and its message says how many it left out;
 - starts a heartbeat chat in the teammate's most recently created sandbox that isn't a build or
   browser VM. The chat gets the fixed message "Heartbeat: review your open tasks and continue
   the most important one; report what you did. If nothing needs doing, say so briefly." and the

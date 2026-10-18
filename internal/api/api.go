@@ -31,6 +31,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
+	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
 	"github.com/lukaskoebe/sandbox-studio/internal/teammates"
 	"github.com/lukaskoebe/sandbox-studio/internal/templatespec"
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
@@ -61,6 +62,8 @@ type Server struct {
 	Chats        *chat.Service // its endpoints answer 503 without it
 	// Login runs the subscription sign-ins; their endpoints answer 503 without it.
 	Login *login.Service
+	// TaskRuns starts the runs of scheduled tasks for Run now; it answers 503 without it.
+	TaskRuns TaskRunner
 	// Reach says why no sandbox can make the connections a rule allows (Rule.Unreachable); nil
 	// leaves rules without warnings.
 	Reach interface {
@@ -337,7 +340,7 @@ func apiError(err error) error {
 		errors.Is(err, sandboxes.ErrCheckpointState),
 		errors.Is(err, sandboxes.ErrLifecycleState),
 		errors.Is(err, sandboxes.ErrWorkspaceTooLarge), errors.Is(err, sandboxes.ErrHomeTooLarge),
-		errors.Is(err, sandboxes.ErrTemplateWithoutHome):
+		errors.Is(err, sandboxes.ErrTemplateWithoutHome), errors.Is(err, tasks.ErrCannotRun):
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, agentchan.ErrNotConnected):
 		return huma.Error409Conflict("the sandbox is not running or still booting")

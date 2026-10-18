@@ -79,7 +79,7 @@ func (s *Service) extractChat(ctx context.Context, d chatDue) error {
 	if err != nil {
 		return err
 	}
-	if c.State != store.ChatIdle || c.Heartbeat || c.TeammateID == "" {
+	if c.State != store.ChatIdle || c.Heartbeat || c.TaskID != "" || c.TeammateID == "" {
 		return nil // a running chat is scheduled again when its turn ends
 	}
 	from, err := s.Store.ChatMemorySeq(ctx, c.ID)

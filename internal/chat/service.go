@@ -166,16 +166,22 @@ func (s *Service) Watch(chatID string) (<-chan struct{}, func()) {
 
 // Create adds an idle chat with the sandbox's owner teammate.
 func (s *Service) Create(ctx context.Context, sb store.Sandbox, harnessName string) (store.Chat, error) {
-	return s.create(ctx, sb, harnessName, false)
+	return s.create(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName})
 }
 
 // CreateHeartbeat adds an idle chat that a heartbeat opens, which the chat list marks as one.
 func (s *Service) CreateHeartbeat(ctx context.Context, sb store.Sandbox, harnessName string) (store.Chat, error) {
-	return s.create(ctx, sb, harnessName, true)
+	return s.create(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName, Heartbeat: true})
 }
 
-func (s *Service) create(ctx context.Context, sb store.Sandbox, harnessName string, heartbeat bool) (store.Chat, error) {
-	c, err := s.Store.CreateChat(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName, Heartbeat: heartbeat})
+// CreateRun adds an idle chat for a scheduled run of a task, titled title, which the chat
+// list marks as scheduled. Its title stays.
+func (s *Service) CreateRun(ctx context.Context, sb store.Sandbox, harnessName, taskID, title string) (store.Chat, error) {
+	return s.create(ctx, store.Chat{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, TeammateID: sb.TeammateID, Harness: harnessName, TaskID: taskID, Title: title})
+}
+
+func (s *Service) create(ctx context.Context, c store.Chat) (store.Chat, error) {
+	c, err := s.Store.CreateChat(ctx, c)
 	if err == nil {
 		s.changed(c.EnvironmentID, c.ID, true)
 	}
@@ -795,8 +801,9 @@ func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Atta
 	return t, nil
 }
 
+// retitle names a chat. A scheduled run's chat keeps the title of its task and time.
 func (s *Service) retitle(c store.Chat, title string) {
-	if title == "" || title == c.Title {
+	if title == "" || title == c.Title || c.TaskID != "" {
 		return
 	}
 	if err := s.Store.SetChatTitle(context.Background(), c.ID, title); err == nil {

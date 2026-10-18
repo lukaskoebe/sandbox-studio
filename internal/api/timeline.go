@@ -46,6 +46,7 @@ type TeammateTurn struct {
 	TurnID     string         `json:"turnId"`
 	Origin     string         `json:"origin" enum:"chat,terminal"`
 	Heartbeat  bool           `json:"heartbeat" doc:"A check-in the teammate started on its own"`
+	TaskID     string         `json:"taskId,omitempty" doc:"The task whose scheduled run this turn is"`
 	Prompt     string         `json:"prompt"`
 	Answer     string         `json:"answer"`
 	Tools      []TeammateTool `json:"tools"`
@@ -116,7 +117,7 @@ func (s *Server) timeline(ctx context.Context, env, teammate string, since time.
 		return nil, err
 	}
 	for _, d := range turns {
-		t := &TeammateTurn{ChatID: d.ChatID, ChatTitle: d.ChatTitle, TurnID: d.TurnID, Origin: d.Origin, Heartbeat: d.Heartbeat,
+		t := &TeammateTurn{ChatID: d.ChatID, ChatTitle: d.ChatTitle, TurnID: d.TurnID, Origin: d.Origin, Heartbeat: d.Heartbeat, TaskID: d.TaskID,
 			Prompt: clipText(d.Prompt, timelinePrompt), Answer: clipText(strings.Join(d.Answer, "\n\n"), timelineAnswer),
 			Tools: []TeammateTool{}, ToolCount: len(d.Tools), EndedAt: d.EndedAt}
 		for _, tool := range d.Tools[max(len(d.Tools)-timelineTools, 0):] {

@@ -40,6 +40,8 @@ type Chat struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 	// Heartbeat marks a chat a heartbeat opened (heartbeats.go).
 	Heartbeat bool `json:"heartbeat"`
+	// TaskID marks a chat a scheduled run of that task opened (tasks.go).
+	TaskID string `json:"taskId,omitempty" doc:"The task whose scheduled run opened the chat"`
 }
 
 // ChatTurn is one prompt and everything the agent did for it.
@@ -73,12 +75,12 @@ type ChatItem struct {
 	Rev        int64           `json:"rev"`
 }
 
-const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at, heartbeat"
+const chatCols = "id, environment_id, sandbox_id, teammate_id, harness, acp_session_id, title, state, rev, created_at, updated_at, heartbeat, task_id"
 
 func scanChat(row interface{ Scan(...any) error }) (Chat, error) {
 	var c Chat
 	var created, updated int64
-	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated, &c.Heartbeat)
+	err := row.Scan(&c.ID, &c.EnvironmentID, &c.SandboxID, &c.TeammateID, &c.Harness, &c.ACPSessionID, &c.Title, &c.State, &c.Rev, &created, &updated, &c.Heartbeat, &c.TaskID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -163,8 +165,8 @@ func (s *Store) CreateChat(ctx context.Context, c Chat) (Chat, error) {
 		c.ID = NewID()
 	}
 	t := now()
-	_, err := s.db.ExecContext(ctx, "INSERT INTO chats (id, environment_id, sandbox_id, teammate_id, harness, title, state, rev, created_at, updated_at, heartbeat) VALUES (?, ?, ?, ?, ?, ?, 'idle', 1, ?, ?, ?)",
-		c.ID, c.EnvironmentID, c.SandboxID, c.TeammateID, c.Harness, c.Title, t, t, c.Heartbeat)
+	_, err := s.db.ExecContext(ctx, "INSERT INTO chats (id, environment_id, sandbox_id, teammate_id, harness, title, state, rev, created_at, updated_at, heartbeat, task_id) VALUES (?, ?, ?, ?, ?, ?, 'idle', 1, ?, ?, ?, ?)",
+		c.ID, c.EnvironmentID, c.SandboxID, c.TeammateID, c.Harness, c.Title, t, t, c.Heartbeat, c.TaskID)
 	if err != nil {
 		return c, err
 	}
@@ -188,10 +190,10 @@ func (s *Store) ChatsInState(ctx context.Context, state string) ([]Chat, error) 
 	return s.chats(ctx, "SELECT "+chatCols+" FROM chats WHERE state = ?", state)
 }
 
-// ChatsToRemember lists the idle chats, heartbeats aside, with items after their memory cursor
+// ChatsToRemember lists the idle chats, heartbeats and scheduled runs aside, with items after their memory cursor
 // that changed since since: the chats memory extraction hasn't read to the end.
 func (s *Store) ChatsToRemember(ctx context.Context, since time.Time) ([]Chat, error) {
-	return s.chats(ctx, "SELECT "+chatCols+` FROM chats c WHERE state = ? AND heartbeat = 0 AND updated_at >= ?
+	return s.chats(ctx, "SELECT "+chatCols+` FROM chats c WHERE state = ? AND heartbeat = 0 AND task_id = '' AND updated_at >= ?
 		AND (SELECT IFNULL(MAX(seq), 0) FROM chat_items i WHERE i.chat_id = c.id) > memory_seq ORDER BY updated_at`,
 		ChatIdle, since.Unix())
 }
@@ -531,6 +533,7 @@ type TurnDigest struct {
 	ChatTitle  string
 	SandboxID  string
 	Heartbeat  bool
+	TaskID     string
 	TurnID     string
 	Origin     string
 	StartedAt  time.Time
@@ -552,7 +555,7 @@ type ToolDigest struct {
 // TeammateTurns digests the latest turns of a teammate's chats since since, newest first, at
 // most limit; turns undone are left out. Bodies are read only for the fields shown.
 func (s *Store) TeammateTurns(ctx context.Context, envID, teammateID string, since time.Time, limit int) ([]TurnDigest, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT t.id, t.chat_id, c.title, c.sandbox_id, c.heartbeat, t.origin, t.started_at, t.ended_at
+	rows, err := s.db.QueryContext(ctx, `SELECT t.id, t.chat_id, c.title, c.sandbox_id, c.heartbeat, c.task_id, t.origin, t.started_at, t.ended_at
 		FROM chat_turns t JOIN chats c ON c.id = t.chat_id
 		WHERE c.environment_id = ? AND c.teammate_id = ? AND t.started_at >= ? AND t.undone_at IS NULL
 		ORDER BY t.started_at DESC, t.seq DESC LIMIT ?`, envID, teammateID, since.Unix(), limit)
@@ -565,7 +568,7 @@ func (s *Store) TeammateTurns(ctx context.Context, envID, teammateID string, sin
 		var d TurnDigest
 		var started int64
 		var ended sql.NullInt64
-		if err := rows.Scan(&d.TurnID, &d.ChatID, &d.ChatTitle, &d.SandboxID, &d.Heartbeat, &d.Origin, &started, &ended); err != nil {
+		if err := rows.Scan(&d.TurnID, &d.ChatID, &d.ChatTitle, &d.SandboxID, &d.Heartbeat, &d.TaskID, &d.Origin, &started, &ended); err != nil {
 			rows.Close()
 			return nil, err
 		}
