@@ -29,8 +29,28 @@
   requests waiting for review, then the decided ones; before, the tab opened the approvals.
 - **Website:** the landing page takes the TUI's look: monospace headings, a teal accent and
   the TUI's Home among the code samples.
+- **Web app, docs and videos:** the same look as the TUI and the landing page. Text is set in
+  Instrument Sans, and titles, keys and identifiers in JetBrains Mono, both bundled. The grays
+  are cooler, buttons and links are teal (green now only means running or ok), keys are drawn as
+  keycaps, and terminals use the TUI's colors.
 - **Command line:** `studio shell <sandbox> [terminal]` opens any of a sandbox's terminals,
   such as an agent's.
+- **Web app:** Settings is a dialog over the page you are on instead of a page of its own,
+  with its sections down the side. `?settings=<section>` opens it, so a section can be linked,
+  and the old `/settings/…` addresses open it over Home.
+- **Web app:** form dialogs such as the git forge, provider, secret, teammate and task dialogs
+  are wider on large screens and set short fields side by side, so they are no longer tall and
+  narrow.
+- **Command line:** `studio shell` answers approvals too. When the sandbox asks for something,
+  the terminal's title says so and the bell rings; `Ctrl-]` then shows the request instead of
+  detaching, and `o`, `y` or `n` allows it once, allows it or denies it before the terminal is
+  attached again. `enter` goes back to the terminal and `q` detaches.
+- **Memory:** a chat whose turns weren't read into memory is read later instead of being
+  skipped. A failed call is tried again after 15 minutes and an hour, a run over the daily
+  budget waits for the next day, and every 15 minutes a sweep catches up on up to 4 chats that
+  went idle while Studio was stopped or busy, one at a time. A stopped utility VM isn't started
+  while the host has less than 1.5 GiB of memory free, and one extraction reads at most a chat's
+  newest 500 items.
 - **Scheduled tasks:** a task can get a schedule in its dialog: once at a day and time, on
   some weekdays at a time, or every few hours inside a window. At each time the teammate works
   on that task in a new chat, marked as scheduled, in its latest sandbox or the one you pick. A

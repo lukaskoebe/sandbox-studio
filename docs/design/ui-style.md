@@ -5,6 +5,11 @@ Status: Chosen: A Workbench (2026-10-13), accents toned down. The app theme in
 shared primitives and the rules for rolling it out page by page behind the e2e suite.
 Direction B, not chosen, is kept below as a design record.
 
+Since 2026-10-18 the app shares one look with the TUI, the website, the docs and the videos:
+Instrument Sans for text, JetBrains Mono for headings, labels, keys, identifiers and terminals,
+cool grays with one teal accent, and terminals in the TUI's palette. Green is kept for the
+brand mark and for running and ok, so it always means "good".
+
 The stock shadcn look (`base-mira`, stone base color, 0.45 rem radius, a green primary) is
 clean but interchangeable. The chosen direction adds three things shadcn does not give:
 
@@ -51,8 +56,12 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
 
 ## Shared rules
 
-- **Type.** Inter for UI text. The mono stack (`--font-mono`: `ui-monospace`, SF Mono,
-  JetBrains Mono, Menlo, Consolas) for identifiers. No new font files.
+- **Type.** Instrument Sans for UI text, with 0.01 em tracking, since it sets tight at 12 to
+  13 px. JetBrains Mono (`--font-mono`, also `--font-heading`) for page and section titles,
+  identifiers, keys and terminals. Both are variable fonts bundled with the app
+  (`web/src/fonts`, SIL OFL); the docs and the videos bundle the same files.
+- **Keys.** A `kbd` is a keycap: mono, a 1 px border with a 2 px bottom edge, on the muted
+  background, as the TUI draws its keys.
 - **Dark mode.** A three-way control (system, light, dark) for the sidebar footer, see
   `ThemeToggle` below. The choice is stored in the browser as `studio.theme`; "system" follows
   the OS preference. Dark neutrals are tinted, never pure black. Accent and status hues keep
@@ -106,13 +115,14 @@ Pitch: a tool you keep open all day. Dense, tabular, graphite neutrals, identifi
   none wait. Egress and host load wait for endpoints that do not exist yet.
 - **Presence.** Teammates use the status colors: working is running (pulsing), waiting for
   you is waiting, idle is stopped.
-- **Tokens** (`web/src/styles.css`). Background `oklch(0.993 0.001 255)` / `oklch(0.168 0.006
-  255)`. Card `oklch(1 0 0)` / `oklch(0.198 0.007 255)`. Border `oklch(0.912 0.005 255)` /
-  `oklch(1 0 0 / 8.5%)`. Foreground `oklch(0.21 0.008 255)` / `oklch(0.94 0.004 255)`. Muted
-  text `oklch(0.52 0.014 255)` / `oklch(0.67 0.012 255)`. Primary `oklch(0.53 0.15 150)` /
-  `oklch(0.72 0.17 150)`. The light primary was `0.56` lightness: button labels were 4.2:1, now
-  4.8:1 (AA needs 4.5:1). Sidebar `oklch(0.97 0.003 255)` / `oklch(0.148 0.006 255)`. Radius
-  0.3 rem (buttons 3 to 4 px). Terminal `oklch(0.2 0.008 255)` / `oklch(0.13 0.006 255)`.
+- **Tokens** (`web/src/styles.css`), light / dark. Background `#f8fafa` / `#0f1416`. Card
+  `#ffffff` / `#151b1e`. Border `#dbe1e4` / `#263035`. Foreground `#172024` / `#e1e7ea`. Muted
+  text `#56636b` / `#93a1a9`. Primary teal `#0f7686` / `#5cc3d1`, with white / `#06181b`
+  labels (5.3:1 and 8.8:1). Sidebar `#eef1f2` / `#0c1012`. Radius 0.375 rem.
+- **Terminals** use the TUI's palette in both themes: background `#15171b`, text `#d7dade`,
+  cursor and cyan `#58b8c8`, red `#fa6863`, green `#47c86e`, yellow `#f0c551`, magenta
+  `#b09de9`, selection `#353a41`. The docs' and the videos' terminal panels use the same
+  colors (`--t-*` in `site/src/styles/custom.css`).
 
 ## Primitives
 
@@ -196,6 +206,10 @@ primitives above and keeps the e2e selectors it had.
   action, not a centred empty state.
 
 ## Open points
+
+- **Teal twice.** The primary is teal (hue about 200) and so is the memory accent (185). The
+  primary only marks the action and the current place, so they have not clashed yet; if they
+  do, move memory greener.
 
 - **Two greens.** Chat green (chroma 0.11 light, 0.12 dark) and running green (0.17) are
   further apart than before the toning. If they still blur on Home, shift the chat hue, not
