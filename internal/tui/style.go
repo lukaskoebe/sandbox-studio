@@ -161,7 +161,7 @@ type palette struct {
 	waiting lipgloss.Style
 	failed  lipgloss.Style
 	stopped lipgloss.Style
-	brand   lipgloss.Style // Studio's green, for the ◆ of the header
+	brand   lipgloss.Style // Studio's teal, for the ◆ of the header
 	added   lipgloss.Style
 	removed lipgloss.Style
 	keycap  lipgloss.Style
@@ -186,7 +186,7 @@ func newPalette(l look) palette {
 		waiting: fg(hue(3, 221, "#e2af27", "#f0c551")).Bold(true),
 		failed:  fg(hue(1, 203, "#db2c2b", "#fa6863")),
 		stopped: fg(hue(7, 245, "#9a9fa5", "#6e7277")),
-		brand:   fg(hue(2, 77, "#008238", "#3fc168")).Bold(true),
+		brand:   fg(hue(6, 74, "#0f7686", "#5cc3d1")).Bold(true),
 		keycap:  lipgloss.NewStyle().Bold(true),
 	}
 	p.areas[areaNone] = styleDim

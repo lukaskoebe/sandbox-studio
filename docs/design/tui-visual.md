@@ -75,7 +75,7 @@ waiting color when something waits.
  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-`◆` is Studio's cube in the brand green. Below 100 columns the tabs shorten to their initial
+`◆` is Studio's cube in the brand teal. Below 100 columns the tabs shorten to their initial
 and count (`S  A3  L  G1`); at 80 columns the header is today's.
 
 The key bar stays, but groups keys by what they act on, with a dim `│` between the groups,

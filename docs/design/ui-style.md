@@ -7,8 +7,9 @@ Direction B, not chosen, is kept below as a design record.
 
 Since 2026-10-18 the app shares one look with the TUI, the website, the docs and the videos:
 Instrument Sans for text, JetBrains Mono for headings, labels, keys, identifiers and terminals,
-cool grays with one teal accent, and terminals in the TUI's palette. Green is kept for the
-brand mark and for running and ok, so it always means "good".
+cool grays with one teal accent, and terminals in the TUI's palette. The brand mark, the cube
+of the app icon, favicon and logo, is teal too (`#5cc3d1` on the dark background, `#0f7686` for
+the light logo). Green is kept for running and ok, so it always means "good".
 
 The stock shadcn look (`base-mira`, stone base color, 0.45 rem radius, a green primary) is
 clean but interchangeable. The chosen direction adds three things shadcn does not give:

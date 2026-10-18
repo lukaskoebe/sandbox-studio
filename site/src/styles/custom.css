@@ -1,7 +1,7 @@
 /* Sandbox Studio's docs theme, the TUI's look as the landing page and the app have it: calm
    cool grays with one teal accent, Instrument Sans for text and JetBrains Mono for headings,
-   labels and code, and terminal panels in the TUI's own palette (--t-*). Green is the brand's
-   and "ok"'s only. Starlight's own rules sit in cascade layers, so these unlayered rules win
+   labels and code, and terminal panels in the TUI's own palette (--t-*). The brand is teal
+   too; green means "ok" only. Starlight's own rules sit in cascade layers, so these unlayered rules win
    without extra specificity. */
 
 @font-face {
@@ -53,7 +53,7 @@
   --t-warn: #f0c551;
   --t-bad: #fa6863;
   --t-off: #6e7277;
-  --t-brand: #3fc168;
+  --t-brand: #5cc3d1;
   --t-key: #33363b;
   --t-orange: #eea471;
   --t-violet: #b09de9;
@@ -94,7 +94,7 @@
   --t-warn: #c8951a;
   --t-bad: #db2c2b;
   --t-off: #9a9fa5;
-  --t-brand: #008238;
+  --t-brand: #0f7686;
   --t-key: #e4e6ea;
   --t-orange: #c67447;
   --t-violet: #795bbf;

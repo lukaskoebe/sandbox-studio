@@ -12,7 +12,7 @@ export default defineConfig({
       title: 'Sandbox Studio',
       description:
         'AI teammates that work safely on your computer: Claude Code, Codex and OpenCode in their own microVM sandboxes.',
-      logo: { src: './src/assets/logo.svg' },
+      logo: { light: './src/assets/logo-light.svg', dark: './src/assets/logo-dark.svg' },
       head: [
         {
           tag: 'meta',
