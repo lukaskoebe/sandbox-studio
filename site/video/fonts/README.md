@@ -1,6 +1,7 @@
-Fonts for the landing page videos, both under the SIL Open Font License 1.1:
+Fonts for the landing page videos, the same as the landing page's, both under the SIL Open Font
+License 1.1 (the license text and both copyright notices are in `OFL.txt`):
 
-- Inter (`inter-latin-wght-normal.woff2`), from `@fontsource-variable/inter`; its license is in
-  `OFL-Inter.txt`.
-- Source Code Pro (`SourceCodePro-*.ttf`), Copyright 2010, 2012 Adobe Systems Incorporated,
-  from https://github.com/adobe-fonts/source-code-pro under the same license.
+- Instrument Sans (`instrument-sans-latin-wght-normal.woff2`), by Rodrigo Fuenzalida and The
+  Instrument Sans Project Authors, https://github.com/Instrument/instrument-sans, for text.
+- JetBrains Mono (`jetbrains-mono-wght-normal.woff2`), by JetBrains,
+  https://github.com/JetBrains/JetBrainsMono, for headings, labels and terminals.

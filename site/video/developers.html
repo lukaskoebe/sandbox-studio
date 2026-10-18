@@ -11,14 +11,14 @@
         padding: 22px 26px;
       }
       .cyan {
-        color: #5fb8cc;
+        color: var(--t-acc);
       }
       .bold {
         font-weight: 700;
-        color: #fff;
+        color: #f2f4f5;
       }
       .link {
-        color: var(--green-2);
+        color: var(--t-acc);
         font-weight: 600;
       }
 
@@ -51,7 +51,7 @@
         width: 600px;
         height: 600px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(63, 193, 104, 0.32), rgba(63, 193, 104, 0) 65%);
+        background: radial-gradient(circle, rgba(92, 195, 209, 0.22), rgba(92, 195, 209, 0) 65%);
       }
       .mark {
         position: absolute;
@@ -59,9 +59,10 @@
         right: 0;
         top: 450px;
         text-align: center;
+        font-family: var(--mono);
         font-size: 104px;
-        font-weight: 720;
-        letter-spacing: -0.048em;
+        font-weight: 700;
+        letter-spacing: -0.01em;
       }
       .tagline {
         position: absolute;
@@ -71,7 +72,6 @@
         text-align: center;
         font-size: 42px;
         color: var(--muted);
-        letter-spacing: -0.015em;
       }
       .harnesses {
         position: absolute;
@@ -115,7 +115,7 @@
         padding: 20px 22px;
         border-bottom: 1px solid var(--line);
         font-size: 22px;
-        font-weight: 620;
+        font-weight: 600;
       }
       .vm-head .harness {
         margin-left: auto;
@@ -154,10 +154,10 @@
         align-items: center;
         gap: 8px;
         padding: 7px 14px;
-        border-radius: 10px;
-        background: #13301f;
-        border: 1px solid rgba(63, 193, 104, 0.5);
-        color: var(--green-2);
+        border-radius: 6px;
+        background: #15291d;
+        border: 1px solid var(--ok-line);
+        color: var(--ok);
         font-size: 16px;
         font-weight: 600;
       }
@@ -188,27 +188,27 @@
         display: inline-flex;
         justify-content: center;
         padding: 4px 0;
-        border-radius: 8px;
+        border-radius: 4px;
         font-size: 16px;
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
       }
       .v-allow {
-        background: rgba(63, 193, 104, 0.14);
-        color: var(--green-2);
+        background: var(--ok-low);
+        color: var(--ok);
       }
       .v-hold {
-        background: rgba(240, 180, 76, 0.14);
+        background: rgba(240, 197, 81, 0.14);
         color: var(--amber);
       }
       .v-deny {
-        background: rgba(239, 100, 97, 0.15);
+        background: rgba(250, 104, 99, 0.15);
         color: var(--red);
       }
       .log-row .why {
         color: var(--muted);
-        font-family: "Inter", sans-serif;
+        font-family: var(--sans);
         font-size: 19px;
       }
       .chips {
@@ -218,16 +218,16 @@
       }
       .pat {
         padding: 8px 16px;
-        border-radius: 9px;
+        border-radius: 6px;
         border: 1px solid var(--line-2);
         font-family: var(--mono);
         font-size: 18px;
         color: var(--muted);
       }
       .pat.on {
-        border-color: rgba(63, 193, 104, 0.6);
-        background: var(--green-low);
-        color: var(--green-2);
+        border-color: var(--accent-line);
+        background: var(--accent-low);
+        color: var(--accent);
       }
 
       /* 4 · Secrets */
@@ -239,7 +239,7 @@
       .node.small .disc {
         width: 116px;
         height: 116px;
-        border-radius: 28px;
+        border-radius: 20px;
       }
       .node.small .disc svg {
         width: 56px;
@@ -292,7 +292,7 @@
         margin-bottom: 16px;
       }
       .review .stats b {
-        color: var(--green-2);
+        color: var(--ok);
         font-weight: 600;
       }
       .review .stats i {
@@ -301,33 +301,34 @@
         font-weight: 600;
       }
       .diff {
-        border-radius: 12px;
-        border: 1px solid var(--line);
+        border-radius: 8px;
+        border: 1px solid var(--t-edge);
         overflow: hidden;
         font-family: var(--mono);
         font-size: 18px;
         line-height: 1.75;
-        background: #0f1316;
+        background: var(--t-bg);
+        color: var(--t-fg);
       }
       .diff .file {
         padding: 8px 18px;
-        background: var(--card-2);
-        color: var(--muted);
-        border-bottom: 1px solid var(--line);
+        background: #1b1e23;
+        color: var(--t-dim);
+        border-bottom: 1px solid var(--t-edge);
       }
       .diff .l {
         padding: 0 18px;
         white-space: pre;
       }
       .diff .hunk {
-        color: #6f8fb8;
+        color: var(--t-acc);
       }
       .diff .del {
-        background: rgba(239, 100, 97, 0.12);
-        color: #f0a19f;
+        background: rgba(250, 104, 99, 0.12);
+        color: #f6a6a3;
       }
       .diff .add {
-        background: rgba(63, 193, 104, 0.12);
+        background: rgba(71, 200, 110, 0.12);
         color: #9fe0b5;
       }
       .review .row {
@@ -350,7 +351,7 @@
         gap: 12px;
         font-size: 21px;
         font-weight: 600;
-        color: var(--green-2);
+        color: var(--ok);
       }
       .pushed svg {
         width: 24px;
@@ -370,7 +371,7 @@
       .tile {
         position: relative;
         padding: 30px 30px 32px;
-        border-radius: 18px;
+        border-radius: 10px;
         background: var(--card);
         border: 1px solid var(--line-2);
         min-height: 236px;
@@ -378,9 +379,9 @@
       .tile .ic {
         width: 54px;
         height: 54px;
-        border-radius: 14px;
-        background: var(--green-low);
-        color: var(--green);
+        border-radius: 8px;
+        background: var(--accent-low);
+        color: var(--accent);
         display: grid;
         place-items: center;
         margin-bottom: 20px;
@@ -392,8 +393,7 @@
       .tile h4 {
         margin: 0 0 8px;
         font-size: 27px;
-        font-weight: 640;
-        letter-spacing: -0.02em;
+        font-weight: 600;
       }
       .tile p {
         margin: 0;
@@ -409,20 +409,20 @@
         width: 1400px;
         top: 640px;
         height: 82px;
-        border-radius: 16px;
-        background: var(--card);
-        border: 1px solid var(--line-2);
+        border-radius: 8px;
+        background: var(--t-bg);
+        border: 1px solid var(--t-edge);
         display: flex;
         align-items: center;
         padding: 0 30px;
         font-family: var(--mono);
         font-size: 24px;
-        color: #d5ddd8;
+        color: var(--t-fg);
         white-space: nowrap;
         overflow: hidden;
       }
       .install .pr {
-        color: var(--green);
+        color: var(--ok);
         margin-right: 16px;
         font-weight: 700;
       }
@@ -443,7 +443,7 @@
         text-align: center;
         font-family: var(--mono);
         font-size: 28px;
-        color: var(--green);
+        color: var(--accent);
       }
     </style>
   </head>
@@ -455,7 +455,7 @@
 
       <!-- 1 · Cold open -->
       <section class="scene" id="s1">
-        <div class="win boot" id="s1-term">
+        <div class="win tty boot" id="s1-term">
           <div class="win-bar"><div class="dots"><i></i><i></i><i></i></div>~</div>
           <div class="term"><span class="pr">~ $</span> <span id="s1-cmd"></span><span class="caret" id="s1-caret"></span>
 <span id="s1-out"><span class="cyan">╭──────────────────────────────────────────────────────────╮</span>
@@ -522,7 +522,7 @@
 
       <!-- 3 · Egress -->
       <section class="scene" id="s3">
-        <div class="copy" style="left: 150px; top: 330px; width: 620px">
+        <div class="copy" style="left: 150px; top: 330px; width: 690px">
           <div class="kicker" id="s3-k">Network</div>
           <h2 class="h2" id="s3-h">Egress you decide.</h2>
           <p class="sub" id="s3-s">Every TCP connection from the VM, Docker's included, goes through Studio's gateway. Unknown hosts wait for your answer.</p>
@@ -550,10 +550,10 @@
       <section class="scene" id="s4">
         <div class="copy" style="left: 1100px; top: 320px; width: 760px">
           <div class="kicker" id="s4-k">Secrets</div>
-          <h2 class="h2" id="s4-h" style="font-size: 64px">Keys never enter the VM.</h2>
+          <h2 class="h2" id="s4-h">Keys never enter the VM.</h2>
           <p class="sub" id="s4-s">The sandbox sees a placeholder. The gateway swaps in the real value on the way out, and only for the hosts the secret is bound to.</p>
         </div>
-        <div class="win env" id="s4-term">
+        <div class="win tty env" id="s4-term">
           <div class="win-bar"><div class="dots"><i></i><i></i><i></i></div>agent@webshop: /workspace</div>
           <div class="term small"><span class="pr">$</span> <span id="s4-c1"></span>
 <span id="s4-o1">OPENAI_API_KEY=<span class="warn">studio-9c1e4b7a2f0d4e5b8a61c3f7</span></span>
@@ -574,7 +574,7 @@
           <div class="packet real" id="s4-real"><span data-icon="key"></span>sk-proj-••••</div>
         </div>
         <div class="packet stand" id="s4-p2"><span data-icon="key"></span>studio-9c1e…</div>
-        <div class="verdict-tag" id="s4-ok" style="left: 878px; top: 698px; color: var(--green-2)"><span data-icon="check"></span>real key</div>
+        <div class="verdict-tag" id="s4-ok" style="left: 878px; top: 698px; color: var(--ok)"><span data-icon="check"></span>real key</div>
         <div class="verdict-tag" id="s4-bad" style="left: 840px; top: 948px; color: var(--red)"><span data-icon="x"></span>only the placeholder</div>
       </section>
 
@@ -585,13 +585,13 @@
           <h2 class="h2" id="s5-h">Review every push.</h2>
           <p class="sub" id="s5-s">Sandboxes hold no forge credentials. They push to Studio, you read the diff, and Studio pushes upstream.</p>
         </div>
-        <div class="win push" id="s5-term">
+        <div class="win tty push" id="s5-term">
           <div class="term small"><span class="pr">$</span> <span id="s5-c1"></span>
 <span id="s5-o1"><span class="muted">remote:</span> Sandbox Studio: feature/checkout <span class="warn">queued for review</span>.
 <span class="muted">remote:</span> It reaches the forge once the user approves it.</span></div>
         </div>
         <div class="win review" id="s5-card">
-          <div class="head" style="display: flex; align-items: center; gap: 12px; font-size: 18px; color: var(--muted)"><span class="badge"><span data-icon="git" style="color: var(--green)"></span>Git push</span>Ada · webshop · just now</div>
+          <div class="head" style="display: flex; align-items: center; gap: 12px; font-size: 18px; color: var(--muted)"><span class="badge"><span data-icon="git" style="color: var(--violet)"></span>Git push</span>Ada · webshop · just now</div>
           <div class="title">feature/checkout → github.com/acme/webshop</div>
           <div class="stats">2 commits · 3 files · <b>+42</b> <i>−7</i></div>
           <div class="diff">
@@ -621,7 +621,7 @@
           <div class="tile" id="s6-t3"><div class="ic" data-icon="layers"></div><h4>Templates</h4><p>Describe a sandbox in YAML: toolchains, apt packages, a setup script. Built once, cached.</p></div>
           <div class="tile" id="s6-t4"><div class="ic" data-icon="brain"></div><h4>Memory</h4><p>Teammates remember across sessions, sandboxes and harnesses. Embeddings run locally.</p></div>
           <div class="tile" id="s6-t5"><div class="ic" data-icon="key"></div><h4>Your providers</h4><p>Anthropic and OpenAI keys, any OpenAI-compatible endpoint, or a Claude or ChatGPT subscription.</p></div>
-          <div class="tile" id="s6-t6"><div class="ic" data-icon="terminal"></div><h4>Web UI and TUI</h4><p>Approve, review and chat from the browser, or from the terminal with studio tui.</p></div>
+          <div class="tile" id="s6-t6"><div class="ic" data-icon="terminal"></div><h4>Web UI and TUI</h4><p>Approve, review and chat from the browser, or from the terminal with <span class="mono">studio tui</span>.</p></div>
         </div>
       </section>
 
@@ -760,8 +760,8 @@
         byId("s3-why4").textContent = denied ? "denied by you" : "waiting for you"
         const pulse = !denied && lt > 2.6 ? (Math.sin(lt * 7) + 1) / 2 : 0
         byId("s3-r4").style.background = denied
-          ? `rgba(239,100,97,${0.1 * (1 - p(lt, 5.0, 6.5))})`
-          : `rgba(240,180,76,${0.04 + pulse * 0.06})`
+          ? `rgba(250,104,99,${0.1 * (1 - p(lt, 5.0, 6.5))})`
+          : `rgba(240,197,81,${0.04 + pulse * 0.06})`
 
         const c = p(lt, 2.9, 3.5, ease.outBack)
         const cOut = p(lt, 4.9, 5.3, ease.inCubic)

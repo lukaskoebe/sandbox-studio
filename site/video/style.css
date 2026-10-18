@@ -1,42 +1,49 @@
 @font-face {
-  font-family: "Inter";
-  src: url("fonts/inter-latin-wght-normal.woff2") format("woff2");
-  font-weight: 100 900;
+  font-family: "Instrument Sans";
+  src: url("fonts/instrument-sans-latin-wght-normal.woff2") format("woff2");
+  font-weight: 400 700;
 }
 @font-face {
-  font-family: "Source Code Pro";
-  src: url("fonts/SourceCodePro-Regular.ttf");
-  font-weight: 400;
-}
-@font-face {
-  font-family: "Source Code Pro";
-  src: url("fonts/SourceCodePro-Medium.ttf");
-  font-weight: 500;
-}
-@font-face {
-  font-family: "Source Code Pro";
-  src: url("fonts/SourceCodePro-Bold.ttf");
-  font-weight: 700;
+  font-family: "JetBrains Mono";
+  src: url("fonts/jetbrains-mono-wght-normal.woff2") format("woff2");
+  font-weight: 100 800;
 }
 
+/* The landing page's dark look: Instrument Sans for text, JetBrains Mono for headings, labels
+   and terminals, a teal accent. Green is the brand mark and "ok". */
 :root {
-  --bg: #0b0e10;
-  --bg-2: #101417;
-  --card: #151a1d;
-  --card-2: #1b2125;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-2: rgba(255, 255, 255, 0.14);
-  --fg: #eef2f0;
-  --muted: #94a09a;
-  --dim: #5f6b66;
-  --green: #3fc168;
-  --green-2: #65c58b;
-  --green-deep: #16834b;
-  --green-low: rgba(63, 193, 104, 0.14);
-  --amber: #f0b44c;
-  --red: #ef6461;
+  --bg: #0e1214;
+  --bg-2: #11171a;
+  --card: #151b1e;
+  --card-2: #1a2226;
+  --line: #263035;
+  --line-2: #2e3a40;
+  --fg: #e1e7ea;
+  --muted: #93a1a9;
+  --dim: #5f6d74;
+  --accent: #5cc3d1;
+  --on-accent: #06181b;
+  --accent-low: rgba(92, 195, 209, 0.12);
+  --accent-line: rgba(92, 195, 209, 0.34);
+  --brand: #3fc168;
+  --ok: #47c86e;
+  --ok-low: rgba(71, 200, 110, 0.13);
+  --ok-line: rgba(71, 200, 110, 0.4);
+  --amber: #f0c551;
+  --red: #fa6863;
   --blue: #6aa8ff;
-  --mono: "Source Code Pro", ui-monospace, monospace;
+  --violet: #b09de9;
+  --avatar: #1d4f57;
+  --on-avatar: #d5f3f7;
+  /* Terminal panels, in the TUI's palette. */
+  --t-bg: #15171b;
+  --t-fg: #d7dade;
+  --t-dim: #858b94;
+  --t-faint: #353a41;
+  --t-acc: #58b8c8;
+  --t-edge: #2a3035;
+  --sans: "Instrument Sans", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 * {
@@ -50,10 +57,11 @@ body {
   overflow: hidden;
 }
 body {
-  font-family: "Inter", sans-serif;
+  font-family: var(--sans);
   color: var(--fg);
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "cv11", "ss01";
+  /* JetBrains Mono's code ligatures would turn => and <= into arrows. */
+  font-variant-ligatures: no-contextual;
 }
 
 .stage {
@@ -67,13 +75,13 @@ body {
   transform-origin: 0 0;
 }
 
-/* Background: a slow green glow over a dotted grid, with a vignette and grain. */
+/* Background: a slow teal glow over a dotted grid, with a vignette and grain. */
 .bg-glow {
   position: absolute;
   width: 1400px;
   height: 1400px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(63, 193, 104, 0.16), rgba(63, 193, 104, 0) 62%);
+  background: radial-gradient(circle, rgba(92, 195, 209, 0.11), rgba(92, 195, 209, 0) 62%);
   left: 260px;
   top: -260px;
   will-change: transform;
@@ -112,35 +120,37 @@ body {
 .kicker {
   font-family: var(--mono);
   font-size: 22px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--green);
-  font-weight: 500;
+  color: var(--accent);
+  font-weight: 600;
 }
-.h1 {
-  font-size: 92px;
-  line-height: 1.02;
-  font-weight: 680;
-  letter-spacing: -0.04em;
-  margin: 0;
-}
+.h1,
 .h2 {
-  font-size: 70px;
-  line-height: 1.04;
-  font-weight: 660;
-  letter-spacing: -0.035em;
-  margin: 0;
-}
-.sub {
-  font-size: 30px;
-  line-height: 1.42;
-  color: var(--muted);
-  font-weight: 420;
+  font-family: var(--mono);
+  font-weight: 700;
   letter-spacing: -0.01em;
   margin: 0;
 }
+.h1 {
+  font-size: 84px;
+  line-height: 1.08;
+}
+.h2 {
+  font-size: 60px;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+.sub {
+  font-size: 30px;
+  line-height: 1.45;
+  color: var(--muted);
+  font-weight: 400;
+  margin: 0;
+  text-wrap: pretty;
+}
 .accent {
-  color: var(--green);
+  color: var(--accent);
 }
 .w {
   display: inline-block;
@@ -158,11 +168,27 @@ body {
   position: absolute;
   background: var(--card);
   border: 1px solid var(--line-2);
-  border-radius: 18px;
+  border-radius: 10px;
   box-shadow:
     0 40px 80px -20px rgba(0, 0, 0, 0.7),
     0 0 0 1px rgba(0, 0, 0, 0.4);
   overflow: hidden;
+}
+/* A terminal window, in the TUI's colors. */
+.win.tty {
+  background: var(--t-bg);
+  border-color: var(--t-edge);
+  border-radius: 8px;
+}
+.win.tty .dots i {
+  background: var(--t-faint);
+}
+.win.tty .win-bar {
+  background: var(--t-bg);
+  border-bottom-color: var(--t-edge);
+  font-family: var(--mono);
+  font-size: 18px;
+  color: var(--t-dim);
 }
 .win-bar {
   height: 56px;
@@ -183,14 +209,14 @@ body {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: #2b3236;
+  background: var(--line-2);
 }
 .avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--green-deep);
-  color: #eafff1;
+  background: var(--avatar);
+  color: var(--on-avatar);
   display: grid;
   place-items: center;
   font-weight: 650;
@@ -212,7 +238,7 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--ok);
   flex: none;
 }
 .btn {
@@ -221,17 +247,17 @@ body {
   justify-content: center;
   height: 52px;
   padding: 0 26px;
-  border-radius: 10px;
+  border-radius: 6px;
   font-size: 21px;
-  font-weight: 560;
+  font-weight: 600;
   border: 1px solid var(--line-2);
   color: var(--fg);
   background: var(--card-2);
 }
 .btn.primary {
-  background: var(--green-deep);
-  border-color: #23a35f;
-  color: #f2fff7;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
 }
 .mono {
   font-family: var(--mono);
@@ -254,8 +280,8 @@ body {
   font-size: 17px;
   font-weight: 600;
   white-space: nowrap;
-  background: var(--green-deep);
-  color: #f2fff7;
+  background: var(--accent);
+  color: var(--on-accent);
 }
 .ripple {
   position: absolute;
@@ -263,7 +289,7 @@ body {
   height: 80px;
   margin: -40px 0 0 -40px;
   border-radius: 50%;
-  border: 3px solid var(--green);
+  border: 3px solid var(--accent);
   opacity: 0;
   z-index: 49;
 }
@@ -274,21 +300,21 @@ body {
   font-size: 23px;
   line-height: 1.6;
   padding: 26px 30px;
-  color: #d5ddd8;
+  color: var(--t-fg);
   white-space: pre;
 }
 .term .pr {
-  color: var(--green);
-  font-weight: 600;
+  color: var(--ok);
+  font-weight: 700;
 }
 .term .path {
-  color: var(--blue);
+  color: var(--t-acc);
 }
 .term .muted {
-  color: var(--dim);
+  color: var(--t-dim);
 }
 .term .ok {
-  color: var(--green-2);
+  color: var(--ok);
 }
 .term .warn {
   color: var(--amber);
@@ -301,14 +327,14 @@ body {
   width: 0.6em;
   height: 1.15em;
   vertical-align: -0.2em;
-  background: #d5ddd8;
+  background: var(--t-fg);
   margin-left: 1px;
 }
 
 .url {
   flex: 1;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--card-2);
   display: flex;
   align-items: center;
@@ -331,7 +357,7 @@ body {
 .node .disc {
   width: 150px;
   height: 150px;
-  border-radius: 36px;
+  border-radius: 24px;
   background: var(--card);
   border: 1px solid var(--line-2);
   display: grid;
@@ -343,8 +369,8 @@ body {
   height: 74px;
 }
 .node.gate .disc {
-  border-color: rgba(63, 193, 104, 0.5);
-  color: var(--green);
+  border-color: var(--accent-line);
+  color: var(--accent);
 }
 .node.web .disc {
   color: var(--blue);
@@ -363,7 +389,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #1f272b;
+  background: #1b2327;
   border: 1px solid var(--line-2);
   font-family: var(--mono);
   font-size: 20px;
@@ -378,7 +404,7 @@ body {
 .approval {
   width: 560px;
   padding: 24px 26px;
-  border-radius: 18px;
+  border-radius: 10px;
 }
 .approval .head {
   display: flex;
@@ -392,7 +418,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 5px 12px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--card-2);
   color: var(--fg);
   font-weight: 600;
@@ -430,12 +456,12 @@ body {
   align-items: center;
   gap: 10px;
   padding: 10px 18px;
-  border-radius: 12px;
-  background: var(--green-low);
-  border: 1px solid rgba(63, 193, 104, 0.35);
-  color: var(--green-2);
+  border-radius: 8px;
+  background: var(--ok-low);
+  border: 1px solid var(--ok-line);
+  color: var(--ok);
   font-size: 20px;
-  font-weight: 550;
+  font-weight: 600;
   white-space: nowrap;
 }
 .chip svg {
@@ -446,8 +472,8 @@ body {
   position: absolute;
   width: 150px;
   height: 150px;
-  border-radius: 36px;
-  border: 3px solid var(--green);
+  border-radius: 24px;
+  border: 3px solid var(--accent);
 }
 
 
@@ -464,7 +490,7 @@ body {
 }
 .scrub-fill {
   height: 100%;
-  background: rgba(63, 193, 104, 0.6);
+  background: rgba(92, 195, 209, 0.6);
 }
 .scrub-time {
   position: absolute;

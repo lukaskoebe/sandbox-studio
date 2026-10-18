@@ -25,7 +25,7 @@
         width: 600px;
         height: 600px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(63, 193, 104, 0.35), rgba(63, 193, 104, 0) 65%);
+        background: radial-gradient(circle, rgba(92, 195, 209, 0.24), rgba(92, 195, 209, 0) 65%);
       }
       .wordmark {
         position: absolute;
@@ -33,9 +33,10 @@
         right: 0;
         top: 545px;
         text-align: center;
+        font-family: var(--mono);
         font-size: 96px;
         font-weight: 700;
-        letter-spacing: -0.045em;
+        letter-spacing: -0.01em;
       }
       .intro-line {
         position: absolute;
@@ -45,8 +46,7 @@
         text-align: center;
         font-size: 40px;
         color: var(--muted);
-        font-weight: 450;
-        letter-spacing: -0.015em;
+        font-weight: 400;
       }
 
       /* Chat */
@@ -79,9 +79,9 @@
         align-self: flex-end;
         max-width: 640px;
         padding: 20px 26px;
-        border-radius: 22px 22px 6px 22px;
-        background: var(--green-low);
-        border: 1px solid rgba(63, 193, 104, 0.3);
+        border-radius: 14px 14px 4px 14px;
+        background: var(--accent-low);
+        border: 1px solid var(--accent-line);
         font-size: 25px;
         line-height: 1.45;
         transform-origin: 100% 100%;
@@ -126,21 +126,21 @@
         inset: 0;
         border-radius: 50%;
         border: 3px solid rgba(255, 255, 255, 0.12);
-        border-top-color: var(--green);
+        border-top-color: var(--accent);
       }
       .chk {
         position: absolute;
         inset: 0;
         border-radius: 50%;
-        background: var(--green-deep);
-        color: #fff;
+        background: var(--ok);
+        color: #0b1a10;
         display: grid;
         place-items: center;
       }
       .composer {
         margin: 24px 30px 28px;
         height: 76px;
-        border-radius: 16px;
+        border-radius: 8px;
         border: 1px solid var(--line-2);
         background: var(--bg-2);
         display: flex;
@@ -160,11 +160,11 @@
       .send {
         width: 50px;
         height: 50px;
-        border-radius: 12px;
-        background: var(--green-deep);
+        border-radius: 6px;
+        background: var(--accent);
         display: grid;
         place-items: center;
-        color: #fff;
+        color: var(--on-accent);
       }
       .send svg {
         width: 24px;
@@ -301,8 +301,8 @@
         width: 4px;
         height: 520px;
         border-radius: 4px;
-        background: linear-gradient(var(--green), rgba(63, 193, 104, 0.15));
-        box-shadow: 0 0 40px rgba(63, 193, 104, 0.6);
+        background: linear-gradient(var(--accent), rgba(92, 195, 209, 0.15));
+        box-shadow: 0 0 40px rgba(92, 195, 209, 0.6);
         transform-origin: 50% 0;
       }
       .yours {
@@ -324,7 +324,7 @@
       }
       .tile {
         height: 130px;
-        border-radius: 14px;
+        border-radius: 8px;
         background: var(--card-2);
         border: 1px solid var(--line);
         display: flex;
@@ -333,7 +333,7 @@
         align-items: center;
         gap: 12px;
         font-size: 21px;
-        font-weight: 550;
+        font-weight: 600;
       }
       .tile svg {
         width: 40px;
@@ -346,8 +346,8 @@
         height: 18px;
         margin: -9px 0 0 -9px;
         border-radius: 50%;
-        background: var(--green);
-        box-shadow: 0 0 22px var(--green);
+        background: var(--accent);
+        box-shadow: 0 0 22px var(--accent);
       }
       .hit {
         position: absolute;
@@ -355,7 +355,7 @@
         height: 70px;
         margin: -35px 0 0 -35px;
         border-radius: 50%;
-        border: 3px solid var(--green);
+        border: 3px solid var(--accent);
       }
 
       /* Secrets */
@@ -376,21 +376,21 @@
       .vault h4 svg {
         width: 24px;
         height: 24px;
-        color: var(--green);
+        color: var(--accent);
       }
       .secret {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 16px 18px;
-        border-radius: 12px;
+        border-radius: 8px;
         background: var(--card-2);
         font-size: 21px;
         margin-top: 10px;
       }
       .secret .mono {
         color: var(--muted);
-        letter-spacing: 0.08em;
+        letter-spacing: 0.04em;
       }
       .secret small {
         color: var(--dim);
@@ -408,9 +408,9 @@
         backface-visibility: hidden;
       }
       .packet.real {
-        background: #13301f;
-        border-color: rgba(63, 193, 104, 0.6);
-        color: var(--green-2);
+        background: #15291d;
+        border-color: var(--ok-line);
+        color: var(--ok);
       }
       .packet.stand {
         color: var(--amber);
@@ -508,14 +508,14 @@
         width: 760px;
         margin-left: -380px;
         padding: 20px 24px;
-        border-radius: 16px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         gap: 16px;
         font-size: 21px;
-        background: #11171a;
+        background: var(--card);
         color: var(--fg);
-        border: 1px solid rgba(63, 193, 104, 0.45);
+        border: 1px solid var(--accent-line);
         box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.6);
       }
       .ask .q {
@@ -548,7 +548,8 @@
         gap: 8px;
         font-family: var(--mono);
         font-size: 16px;
-        color: var(--green);
+        font-weight: 600;
+        color: var(--ok);
         letter-spacing: 0.08em;
       }
       .done-row {
@@ -581,9 +582,10 @@
         right: 0;
         top: 420px;
         text-align: center;
+        font-family: var(--mono);
         font-size: 104px;
-        font-weight: 720;
-        letter-spacing: -0.048em;
+        font-weight: 700;
+        letter-spacing: -0.01em;
       }
       .end-line {
         position: absolute;
@@ -593,7 +595,6 @@
         text-align: center;
         font-size: 40px;
         color: var(--muted);
-        letter-spacing: -0.015em;
       }
       .end-facts {
         position: absolute;
@@ -612,7 +613,7 @@
       .end-facts .pill svg {
         width: 22px;
         height: 22px;
-        color: var(--green);
+        color: var(--ok);
       }
       .end-url {
         position: absolute;
@@ -622,7 +623,7 @@
         text-align: center;
         font-family: var(--mono);
         font-size: 28px;
-        color: var(--green);
+        color: var(--accent);
       }
     </style>
   </head>
@@ -711,8 +712,8 @@
               <path d="M384 194 256 268V416L384 342Z" fill="#3fc168" fill-opacity=".14" />
             </g>
             <g id="s3-inner" transform="translate(256 300)">
-              <circle r="34" fill="#16834b" />
-              <text y="11" text-anchor="middle" font-size="32" font-weight="650" fill="#eafff1" font-family="Inter">A</text>
+              <circle r="34" fill="#1d4f57" />
+              <text y="11" text-anchor="middle" font-size="32" font-weight="650" fill="#d5f3f7" font-family="Instrument Sans">A</text>
             </g>
           </svg>
         </div>
@@ -915,7 +916,7 @@
         set(byId("s2-bubble"), { o: p(lt, sent, sent + 0.2), s: 0.85 + b * 0.15, y: (1 - b) * 40 })
 
         byId("s2-state").textContent = lt < sent + 0.4 ? "Ready" : lt < 6.4 ? "Working" : "Done"
-        byId("s2-dot").style.background = lt >= sent + 0.4 && lt < 6.4 ? "var(--amber)" : "var(--green)"
+        byId("s2-dot").style.background = lt >= sent + 0.4 && lt < 6.4 ? "var(--amber)" : "var(--ok)"
         rise(byId("s2-reply"), lt, sent + 0.5, undefined, 20, 0.6)
         ;[3.9, 4.6, 5.4].forEach((at, i) => {
           const st = byId(`s2-st${i + 1}`)
@@ -972,7 +973,7 @@
         })
         // The wall glows when it is hit.
         const glow = shots.reduce((g, s) => g + Math.max(0, 1 - Math.abs(lt - s.at - 0.6) * 3), 0)
-        byId("s3-wall").style.boxShadow = `0 0 ${40 + glow * 60}px rgba(63,193,104,${0.6 + glow * 0.4})`
+        byId("s3-wall").style.boxShadow = `0 0 ${40 + glow * 60}px rgba(92,195,209,${0.6 + glow * 0.4})`
         exit(byId("s3"), lt, len)
       })
 
@@ -998,8 +999,8 @@
         pk.style.top = "637px"
         const waiting = lt >= 2.6 && lt < 5.0
         const pulse = waiting ? (Math.sin((lt - 2.6) * 7) + 1) / 2 : 0
-        pk.style.borderColor = waiting ? `rgba(240,180,76,${0.5 + pulse * 0.5})` : "rgba(255,255,255,0.14)"
-        pk.style.color = waiting ? "var(--amber)" : lt >= 5.0 ? "var(--green-2)" : "var(--fg)"
+        pk.style.borderColor = waiting ? `rgba(240,197,81,${0.5 + pulse * 0.5})` : "var(--line-2)"
+        pk.style.color = waiting ? "var(--amber)" : lt >= 5.0 ? "var(--ok)" : "var(--fg)"
         set(pk, { o: p(lt, 1.6, 1.8) * (1 - p(lt, 5.7, 5.95)), s: 1 + pulse * 0.04 })
 
         // The approval card.
@@ -1045,8 +1046,8 @@
         set(byId("s5-real"), { ry: 180 + turn * 180 })
         // The vault lights up as the key is filled in.
         const lit = Math.max(0, 1 - Math.abs(lt - 3.65) * 2.2)
-        byId("s5-vault").style.borderColor = `rgba(63,193,104,${0.14 + lit * 0.7})`
-        byId("s5-vault").style.boxShadow = `0 40px 80px -20px rgba(0,0,0,.7), 0 0 ${lit * 60}px rgba(63,193,104,${lit * 0.35})`
+        byId("s5-vault").style.borderColor = lit > 0 ? `rgba(92,195,209,${0.2 + lit * 0.6})` : "var(--line-2)"
+        byId("s5-vault").style.boxShadow = `0 40px 80px -20px rgba(0,0,0,.7), 0 0 ${lit * 60}px rgba(92,195,209,${lit * 0.3})`
         const f = p(lt, 3.3, 4.0, ease.outCubic)
         set(byId("s5-flash"), { o: lt < 3.3 ? 0 : 1 - f, s: 1 + f * 0.35 })
         const f2 = p(lt, 5.2, 5.9, ease.outCubic)
