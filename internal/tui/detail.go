@@ -60,43 +60,6 @@ func (m *app) detailBody(w, h int) []string {
 	return append(lines, m.portLines(sb.ID, ph == phaseReady)...)
 }
 
-// detailPane is the selected sandbox beside Home's list, in w cells: its status, its facts, its
-// CPU and memory, the first approval waiting on it, its terminals, ports and history.
-func (m *app) detailPane(sb sandboxes.View, w, h int) []string {
-	ph := phaseOf(sb)
-	facts := []string{firstNonEmpty(m.teammates[sb.TeammateID], "no teammate")}
-	facts = append(facts, nonEmpty(sb.TemplateName)...)
-	facts = append(facts, fmt.Sprintf("%d %s", sb.CPUs, plural(sb.CPUs, "CPU", "CPUs")), sizeText(uint64(sb.MemoryMiB)<<20))
-	if (ph == phaseReady || ph == phaseBooting) && sb.StartedAt != nil {
-		facts = append(facts, uptime(m.now.Sub(*sb.StartedAt)))
-	}
-	lines := []string{
-		spread(styleBold.Render(sb.Name), m.statusCell(ph, colStatus), w),
-		styleDim.Render(strings.Repeat("─", w)),
-		clip(strings.Join(facts, " · "), w),
-		"",
-	}
-	lines = append(lines, m.usageLines(sb, w)...)
-	if card := m.waitingCard(sb, w); card != nil {
-		lines = append(append(lines, ""), card...)
-	}
-	lines = append(lines, "")
-	label := func(name string) string { return styleDim.Render(fit(name, 11)) }
-	if ph == phaseReady {
-		lines = append(lines, label("TERMINALS")+m.terminalsText(sb.ID), label("PORTS")+m.portsText(sb.ID, w-11))
-	}
-	history := m.historyLine(sb, w-11)
-	lines = append(lines, label("HISTORY")+history[0])
-	for _, l := range history[1:] {
-		lines = append(lines, strings.Repeat(" ", 11)+l)
-	}
-	lines = append(lines, label("ID")+styleDim.Render(sb.ID))
-	if more := m.browserLines(sb.TeammateID, w, h-len(lines)-1); more != nil {
-		lines = append(append(lines, ""), more...)
-	}
-	return lines
-}
-
 // waitingCard is the first approval waiting on a sandbox as its card, and how many
 // more wait; nil when none does.
 func (m *app) waitingCard(sb sandboxes.View, w int) []string {

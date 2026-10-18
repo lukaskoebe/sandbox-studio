@@ -1,22 +1,22 @@
 Sandbox Studio · Default                               2 blocked · ● 2 approvals
 ────────────────────────────────────────────────────────────────────────────────
-  ● Running   blub             Iris      node-22+python-… up 2h 14m  
-    1  ✓      claude                     agent · done
-▸   2  ○      Fix the login form         chat · 3m ago
-    3         main                       terminal · attached
-  ● Running   api-refactor     Finn      go@2             up 12m     2 approvals
-    4  ▲      codex                      agent · blocked
-    5  ▲      Port the parser to go      chat · blocked
-    6         main                       terminal
-  ○ Stopped   docs-site        Iris      node@3                      
-    7  ○      Update the deploy notes    scheduled · 1d ago
-    8  ○      Check-in                   check-in · 1d ago
-    9  ○      Rename the guides          chat · ended
-              + 2 older                  
-  ◐ Booting   demo             —         base                        
+  blub · Iris  node-22+python-3.13@2 ─────────────────────────────── ● up 2h 14m
+  1 ✓ claude                                                        agent · done
+▸ 2 ○ Fix the login form                                           chat · 3m ago
+  3   main                                                   terminal · attached
 
+  api-refactor · Finn  go@2 ──────────────────────────── ▲ 2 approvals  ● up 12m
+  4 ▲ codex                                                      agent · blocked
+  5 ▲ Port the parser to go                                       chat · blocked
+  6   main                                                              terminal
 
+  docs-site · Iris  node@3 ─────────────────────────────────────────── ○ stopped
+  7 ○ Update the deploy notes                                 scheduled · 1d ago
+  8 ○ Check-in                                                 check-in · 1d ago
+  9 ○ Rename the guides                                             chat · ended
+      + 2 older
 
+  demo  base ───────────────────────────────────────────────────────── ◐ booting
 
 
 ────────────────────────────────────────────────────────────────────────────────

@@ -10,10 +10,6 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 )
 
-// From dashWidth columns, Home is a dashboard: the list, the selected sandbox's detail, and a
-// third column with that sandbox's network as it happens, read as the Activity screen reads it.
-const dashWidth = 160
-
 // netState is the connections of the sandbox the network column shows.
 type netState struct {
 	sandbox string
@@ -32,19 +28,9 @@ type (
 	netTick struct{ gen int }
 )
 
-// homeDash reports whether Home shows the network column.
-func (m *app) homeDash(w int) bool {
-	return w >= dashWidth && m.homeSplit(w)
-}
-
-// netPaneWidth is the width of the network column at w columns.
-func netPaneWidth(w int) int {
-	return min(max(w/4, 40), 56)
-}
-
 // netWanted is the sandbox whose connections the screen on show draws.
 func (m *app) netWanted() string {
-	if m.screen != screenHome || !m.homeDash(m.width) {
+	if !m.dashShows() {
 		return ""
 	}
 	return m.selectedID()

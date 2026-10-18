@@ -11,6 +11,9 @@ build differs from the text:
 - Sandbox rows don't repeat their sessions' most urgent state, since the sessions are listed
   right under them. The header counts working and blocked sessions.
 - `studio shell <sandbox> [terminal]` attaches a terminal by its name from a shell.
+- From 100 columns a session opens in a pane beside the list instead of taking the screen,
+  and the terminal preview of section 6 is that pane, live
+  ([tui-home-panes.md](tui-home-panes.md)).
 
 The TUI should put the agents one key away. Today they sit several screens deep, and an agent
 that runs in a terminal can't be reached from the TUI at all. This concept flattens Home into

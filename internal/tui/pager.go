@@ -76,6 +76,9 @@ func (m *app) sideBySide() bool {
 	return !m.look.plain && m.width >= sideWidth && !m.pager.unified
 }
 
+// splitWidth is the width from which the git review shows its file list beside the diff.
+const splitWidth = 120
+
 // pagerSplit reports whether the review shows its file list beside the diff.
 func (m *app) pagerSplit(w int) bool {
 	a := m.pager.approval

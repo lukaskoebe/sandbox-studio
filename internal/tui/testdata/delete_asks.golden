@@ -1,12 +1,12 @@
 Sandbox Studio · Default                                            ● 1 approval
 ────────────────────────────────────────────────────────────────────────────────
-▸ ● Running   blub             Iris      node-22+python-… up 2h 14m  
-  ● Running   api-refactor     Finn      go@2             up 12m     1 approval
-  ○ Stopped   docs-site        Iris      node@3                      
-  ◐ Booting   demo             —         base                        
+▸ blub · Iris  node-22+python-3.13@2 ─────────────────────────────── ● up 2h 14m
 
+  api-refactor · Finn  go@2 ───────────────────────────── ▲ 1 approval  ● up 12m
 
+  docs-site · Iris  node@3 ─────────────────────────────────────────── ○ stopped
 
+  demo  base ───────────────────────────────────────────────────────── ◐ booting
 
 
 

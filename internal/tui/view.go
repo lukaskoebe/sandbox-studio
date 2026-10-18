@@ -19,6 +19,7 @@ const (
 func (m *app) View() tea.View {
 	v := tea.NewView(m.frame())
 	v.AltScreen = true
+	v.Cursor = m.paneCursor()
 	if !m.look.plain {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
@@ -84,15 +85,11 @@ func (m *app) header(w int) string {
 }
 
 // paneColumns are the columns of the lines between the panes of the screen on show, none when it
-// has one pane: Home's list, detail and network, and the git review's files and diff, on wide
-// terminals.
+// has one pane: Home's sidebar and pane, and the git review's files and diff, on wide terminals.
 func (m *app) paneColumns(w int) []int {
 	switch {
-	case m.screen == screenHome && m.homeDash(w):
-		list := homeListWidth(w)
-		return []int{list, w - netPaneWidth(w) - 2}
-	case m.screen == screenHome && m.homeSplit(w):
-		return []int{homeListWidth(w)}
+	case m.screen == screenHome && m.homeSplit(w) && !m.zoomed():
+		return []int{sidebarWidth(w)}
 	case m.screen == screenPager && m.pagerSplit(w):
 		return []int{pagerListWidth(w)}
 	}
@@ -147,9 +144,9 @@ func (m *app) noticeLine(w int) string {
 		return styleBold.Render("/ ") + *m.filterTarget() + styleAccent.Render("▏")
 	case m.typing != nil:
 		return m.typing.view(w)
-	case m.screen == screenChat && m.chats.composing:
+	case m.chatShows() && m.chats.composing:
 		return m.chats.draft.line("› ", w)
-	case m.screen == screenChat && m.chats.sending && m.notice.text == "":
+	case m.chatShows() && m.chats.sending && m.notice.text == "":
 		return styleDim.Render("Sending…")
 	case m.confirm != nil:
 		return styleBold.Render("Delete "+m.confirm.Name+"?") + styleDim.Render(" This removes its disks.")
@@ -160,6 +157,9 @@ func (m *app) noticeLine(w int) string {
 		return styleFailed.Render(m.notice.text)
 	case m.notice.text != "":
 		return m.notice.text
+	case m.paneFocused() && !m.chats.inPane:
+		x, _ := m.paneTarget()
+		return styleDim.Render(clip("Typing into "+x.title()+". Ctrl-] gives the keys back to the list.", w))
 	case m.filter != "" && m.screen == screenHome:
 		return styleDim.Render("filtered by “" + m.filter + "”")
 	case m.offline:
@@ -172,18 +172,18 @@ func (m *app) noticeLine(w int) string {
 // Studio lives.
 func (m *app) helpBody() []string {
 	keys := [][2]string{
-		{"1-9", "go into that session: its terminal (Ctrl-] returns) or its chat"},
+		{"1-9", "go into that session; Ctrl-] returns to the list"},
 		{"enter", "go into the session under the cursor, or open the sandbox"},
+		{"alt+1-9", "from a session, go into another; alt+z: full screen"},
 		{"tab", "the next session that waits for you: blocked, then done"},
+		{"y / o / n", "an agent's banner: allow, allow once or deny what blocks it"},
 		{"t / T", "the sandbox's main terminal; T starts its teammate's agent"},
 		{"c / C", "the newest chat with the sandbox's teammate; C a new one"},
 		{"s / z / d", "start, stop or resume; z suspends; d deletes, after asking"},
 		{"f / h", "fork the sandbox; its checkpoints, to save or restore one"},
 		{"n", "new sandbox: a teammate, a template and a name"},
-		{"e", "switch environment"},
-		{"/", "filter by name, teammate or template"},
-		{"a", "approvals, from every environment"},
-		{"l", "Activity: the connections and decisions log"},
+		{"e / /", "switch environment; filter by name, teammate or template"},
+		{"a / l", "approvals, from every environment; Activity, the log"},
 		{"↑/↓, j/k", "move the cursor"},
 		{"esc / q", "go back; esc clears the filter, q quits from the list"},
 		{"?", "this help"},

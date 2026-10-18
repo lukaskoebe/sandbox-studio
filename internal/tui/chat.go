@@ -31,6 +31,7 @@ type chatState struct {
 	sandbox sandboxes.View // the sandbox whose chat this is
 	back    screen         // where esc returns to
 	picking bool           // c waits for the sandbox's chats, to open the newest
+	inPane  bool           // the chat shows in Home's pane, not on its own screen
 
 	id     string // the chat on show; "" for a new chat, which the first prompt starts
 	gen    int    // counts the chats opened, so the messages of a stream left behind are dropped
@@ -109,7 +110,7 @@ func (m *app) openChats(sb *sandboxes.View) tea.Cmd {
 		return nil
 	}
 	m.stopChat()
-	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, picking: true}
+	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, picking: true, gen: m.chats.gen}
 	return m.loadChats()
 }
 
@@ -119,7 +120,7 @@ func (m *app) newChat(sb *sandboxes.View) tea.Cmd {
 		return nil
 	}
 	m.stopChat()
-	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1}
+	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, gen: m.chats.gen}
 	return m.openChat("")
 }
 
@@ -156,7 +157,9 @@ func (m *app) openChat(id string) tea.Cmd {
 	c.chat, c.rev = store.Chat{}, 0
 	c.turns, c.items, c.expanded = map[string]chat.Turn{}, map[string]chat.Item{}, map[string]bool{}
 	c.fold, c.scroll = -1, 0
-	m.screen = screenChat
+	if !c.inPane {
+		m.screen = screenChat
+	}
 	if id == "" {
 		c.composing = true
 		return nil
@@ -213,7 +216,7 @@ func retryChat(gen int, after time.Duration) tea.Cmd {
 func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 	c := &m.chats
 	current := func(gen int) bool {
-		return gen == c.gen && m.screen == screenChat && c.id != ""
+		return gen == c.gen && m.chatShows() && c.id != ""
 	}
 	switch msg := msg.(type) {
 	case chatsListed:
@@ -294,7 +297,7 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		}
 		c.draft.set("")
 		m.setNotice("", false)
-		if m.screen != screenChat || c.id != "" {
+		if !m.chatShows() || c.id != "" {
 			return nil, true
 		}
 		return m.openChat(msg.chat.ID), true
@@ -370,7 +373,7 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.askKey(msg); ok {
 		return m, cmd
 	}
-	folds := len(m.transcript(m.width).folds)
+	folds := len(m.transcript(m.chatWidth()).folds)
 	switch {
 	case key.Matches(msg, keyBack):
 		m.stopChat()
@@ -395,7 +398,7 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, keyExpand) && c.fold >= 0 && folds > 0:
 		c.fold = min(c.fold, folds-1)
-		id := m.transcript(m.width).folds[c.fold].id
+		id := m.transcript(m.chatWidth()).folds[c.fold].id
 		c.expanded[id] = !c.expanded[id]
 		c.scroll = m.foldScroll(c.fold)
 	case key.Matches(msg, keyPrompt), key.Matches(msg, keyOpen):
@@ -405,7 +408,7 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyPageDn):
 		m.scrollTranscript(1)
 	case key.Matches(msg, keyTop):
-		c.fold, c.scroll = -1, len(m.transcript(m.width).lines)
+		c.fold, c.scroll = -1, len(m.transcript(m.chatWidth()).lines)
 	case key.Matches(msg, keyBottom):
 		c.fold, c.scroll = -1, 0
 	case key.Matches(msg, keyStop):
@@ -568,7 +571,7 @@ func (m *app) stopTurn() tea.Cmd {
 func (m *app) scrollTranscript(dir int) {
 	c := &m.chats
 	rows := m.transcriptRows()
-	total := len(m.transcript(m.width).lines)
+	total := len(m.transcript(m.chatWidth()).lines)
 	if c.fold >= 0 {
 		c.scroll = m.foldScroll(c.fold)
 		c.fold = -1
@@ -578,12 +581,25 @@ func (m *app) scrollTranscript(dir int) {
 
 // transcriptRows is how many rows the transcript gets: the body less the chat's title line.
 func (m *app) transcriptRows() int {
-	return max(m.height-5-1, 1)
+	return max(m.bodyRows()-1, 1)
+}
+
+// chatShows reports whether the chat is on show: on its screen, or in Home's pane.
+func (m *app) chatShows() bool {
+	return m.screen == screenChat || m.chats.inPane
+}
+
+// chatWidth is the width the chat on show is laid out in: the screen's, or the pane's.
+func (m *app) chatWidth() int {
+	if m.chats.inPane {
+		return m.paneW()
+	}
+	return m.width
 }
 
 // lastFoldInView is the last folded item the transcript shows, or the last one above the view.
 func (m *app) lastFoldInView() int {
-	t := m.transcript(m.width)
+	t := m.transcript(m.chatWidth())
 	end := max(len(t.lines)-m.chats.scroll, 0)
 	pick := 0
 	for i, f := range t.folds {
@@ -597,7 +613,7 @@ func (m *app) lastFoldInView() int {
 // foldScroll is the scroll that shows the fold at index i: the view moves only as far as it
 // needs to, and keeps the item's open body in view when it fits.
 func (m *app) foldScroll(i int) int {
-	t := m.transcript(m.width)
+	t := m.transcript(m.chatWidth())
 	rows := m.transcriptRows()
 	if i < 0 || i >= len(t.folds) {
 		return m.chats.scroll

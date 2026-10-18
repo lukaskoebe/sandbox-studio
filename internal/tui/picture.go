@@ -49,7 +49,7 @@ type (
 
 // pictureWanted is the teammate whose browser the screen on show draws.
 func (m *app) pictureWanted() string {
-	if m.screen != screenHome || !m.homeSplit(m.width) {
+	if !m.dashShows() {
 		return ""
 	}
 	if sb := m.selected(); sb != nil {

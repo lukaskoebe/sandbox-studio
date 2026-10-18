@@ -1,18 +1,18 @@
 Sandbox Studio · Default                                            ● 1 approval
 ────────────────────────────────────────────────────────────────────────────────
 Keys
-  1-9        go into that session: its terminal (Ctrl-] returns) or its chat
+  1-9        go into that session; Ctrl-] returns to the list
   enter      go into the session under the cursor, or open the sandbox
+  alt+1-9    from a session, go into another; alt+z: full screen
   tab        the next session that waits for you: blocked, then done
+  y / o / n  an agent's banner: allow, allow once or deny what blocks it
   t / T      the sandbox's main terminal; T starts its teammate's agent
   c / C      the newest chat with the sandbox's teammate; C a new one
   s / z / d  start, stop or resume; z suspends; d deletes, after asking
   f / h      fork the sandbox; its checkpoints, to save or restore one
   n          new sandbox: a teammate, a template and a name
-  e          switch environment
-  /          filter by name, teammate or template
-  a          approvals, from every environment
-  l          Activity: the connections and decisions log
+  e / /      switch environment; filter by name, teammate or template
+  a / l      approvals, from every environment; Activity, the log
   ↑/↓, j/k   move the cursor
   esc / q    go back; esc clears the filter, q quits from the list
   ?          this help

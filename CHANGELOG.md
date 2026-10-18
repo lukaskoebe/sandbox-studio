@@ -7,6 +7,14 @@
   done. A number from 1 to 9 goes straight into a session, `Ctrl-]` (or `esc` in a chat) comes
   back, and `tab` finds the next one that waits for you. `T` starts the teammate's agent in a
   new terminal, `c` opens the newest chat and `C` a new one. The Chats screen is gone.
+- **Terminal UI:** from 100 columns, Home is a sidebar of sandboxes with their sessions, each
+  marked agent, chat, term, sched or check, beside a pane that shows the session under the
+  cursor live: an agent's or a terminal's screen, or a chat. `enter`, a number or a click gives
+  the pane the keys, `Ctrl-]` gives them back, `alt+1`–`alt+9` switch session and `alt+z` goes
+  full screen. A blocked agent's pane shows its approval in a banner, and `y`, `o` or `n` in
+  the sidebar decide a network request. A sandbox's header shows its dashboard, with CPU over
+  2 minutes as an area chart and memory as a gauge and history. The 120-column detail pane and
+  the 160-column network column are gone; the dashboard has both.
 - **Command line:** `studio shell <sandbox> [terminal]` opens any of a sandbox's terminals,
   such as an agent's.
 - **Scheduled tasks:** a task can get a schedule in its dialog: once at a day and time, on

@@ -9,8 +9,9 @@ stays in the browser, and the TUI prints the URL where it applies. Plain `studio
 the server; `studio tui` only ever connects to one.
 
 The user page is [Terminal UI](../site/src/content/docs/tui.md). The design of the visual look
-is in [design/tui-visual.md](design/tui-visual.md), and that of Home's sessions in
-[design/tui-sessions.md](design/tui-sessions.md).
+is in [design/tui-visual.md](design/tui-visual.md), that of Home's sessions in
+[design/tui-sessions.md](design/tui-sessions.md), and that of Home's sidebar and pane in
+[design/tui-home-panes.md](design/tui-home-panes.md).
 
 ## Why a terminal client
 
@@ -53,7 +54,7 @@ Keys are the same on every screen and cannot be changed. The key bar shows the o
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | the sandboxes of the environment on show: status dot and word, name, teammate, template, uptime and the approvals waiting on each; under each, its [sessions](#sessions) | `↑/↓` `j/k` move over sandboxes and sessions · `1`–`9` go into that session · `enter` go into the session, or open the sandbox · `tab` the next session that waits · `n` new · `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest chat · `C` a new chat · `a` approvals · `l` Activity · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
+| **Home** | the sandboxes of the environment on show: status, name, teammate, template, uptime and the approvals waiting on each; under each, its [sessions](#sessions). From 100 columns, a sidebar of them beside [the pane](#the-pane) | `↑/↓` `j/k` move over sandboxes and sessions · `1`–`9` go into that session · `enter` go into the session, or open the sandbox · `alt+z` the pane in full screen · `y` `o` `n` decide the [banner](#the-pane)'s approval · `tab` the next session that waits · `n` new · `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest chat · `C` a new chat · `a` approvals · `l` Activity · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
 | **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID, and the open ports with their preview addresses | `t` terminal · `T` agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` chat · `C` new chat · `l` its Activity · `a` approvals · `esc` back |
 | **Checkpoints** (from `h`) | the sandbox's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
 | **New sandbox** (from `n`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
@@ -78,10 +79,12 @@ Under each sandbox, Home lists what can be entered in it, indented:
 - its other terminals, `main` among them.
 
 The first nine sessions get the numbers `1` to `9`, top to bottom. On Home, a number goes
-straight into its session, and so does `enter` on a session's row. A terminal is attached
-(any of them, by its name), and `Ctrl-]` returns to Home with the cursor on it. A chat opens,
-an idle one with the composer ready; `esc` closes the composer and a second `esc` returns.
-So switching to another session takes two keys: `Ctrl-]` (or `esc`), then its number.
+straight into its session, and so does `enter` on a session's row. From 100 columns the
+session opens in [the pane](#the-pane) beside the list. Narrower, it takes the screen: a
+terminal is attached (any of them, by its name), and `Ctrl-]` returns to Home with the cursor
+on it. A chat opens, an idle one with the composer ready; `esc` closes the composer and a
+second `esc` returns. Either way, switching to another session takes two keys: `Ctrl-]` (or
+`esc`), then its number; in the pane, `alt+1` to `alt+9` take one.
 
 Each agent terminal and chat shows its agent's state, as herdr words them:
 
@@ -106,6 +109,42 @@ again. Done lives in the TUI's memory only.
 `T` starts the teammate's harness in a new terminal (`POST .../sandboxes/{id}/sessions`, the
 web's Start agent) and attaches it. `c` opens the sandbox's newest chat, or a new one when it
 has none, and `C` always starts a new one.
+
+### The pane
+
+From 100 columns, Home is a sidebar and a pane. The sidebar lists each sandbox as a group
+header, `blub · Iris ───── ▁▂▄ ● 2h` (name, teammate, CPU sparkline, approvals waiting as `▲ n`,
+status and uptime), with its numbered sessions under it, each with its state and its kind on
+the right: `agent`, `chat`, `term`, `sched` for a scheduled task's run, or `check` for a
+check-in's. The pane shows what the cursor is on:
+
+- **A sandbox's header**: its dashboard. It has the facts, CPU over the last 2 minutes as an
+  area chart with its mean and peak, memory as a gauge and a one-row history, and the first
+  approval waiting as a card. Then come its terminals, ports, history, ID, newest connections
+  and its teammate's browser. A pane under 20 rows shows CPU and memory on one line each, and
+  the plain look has no charts.
+- **A terminal or an agent's terminal**: its screen, live. The pane attaches it once the
+  cursor has rested on it for 150 ms, and lets it go when the cursor moves on; the tmux
+  session keeps running.
+- **A chat**: its transcript, streaming.
+
+`enter`, the session's number or a click on the pane gives the pane the keys. The split
+between the columns turns into the accent `┃`, and every key goes to the terminal, `q` and
+`ctrl+c` included, except:
+
+- `Ctrl-]` gives the keys back to the sidebar (in a chat, `esc` does too, once the composer is
+  closed);
+- `alt+1` to `alt+9` switch to that session and keep the keys in the pane;
+- `alt+z` puts the pane in full screen, and back. It works from the sidebar too.
+
+Alt keys need a terminal that sends them as `ESC` and the key; on macOS, set Option to act as
+Meta. The pane sends its size when it attaches and when it changes. tmux sizes a session to
+its latest client, so a terminal open in the web too follows whichever was resized last.
+
+When an approval blocks an agent in the pane, a box over the top of its screen says what
+waits, such as `api-refactor wants proxy.golang.org:443`. For a single network request, `y`,
+`o` and `n` in the sidebar allow it, allow it once or deny it. Other kinds say `a approvals`.
+While the pane has the keys, they go to the agent, so the box says `Ctrl-] then y allow …`.
 
 ### Approvals
 
@@ -287,9 +326,13 @@ revocable session table would be a change to the web sessions too; it is not par
 ## Terminal
 
 `t` attaches to the sandbox's tmux session `main`, which the web workspace opens first; the
-session is created when it doesn't exist. A session row on Home attaches its own terminal, and
-`studio shell <sandbox> [terminal]` does the same from a shell. Only a running sandbox has
-terminals.
+session is created when it doesn't exist. A session row on Home attaches its own terminal, in
+the pane from 100 columns, and `studio shell <sandbox> [terminal]` does the same from a shell.
+Only a running sandbox has terminals.
+
+In the pane, the terminal is drawn by an emulator (`charmbracelet/x/vt`) fed by the same
+websocket, which encodes the keys as a terminal would. Full screen, as below, the TUI hands the
+terminal over.
 
 The attachment uses the same websocket as the web terminal (`.../terminals/{name}/attach`):
 
@@ -345,22 +388,22 @@ and [design/tui-visual.md](design/tui-visual.md)):
   choices as keycaps on the card under the cursor.
 - **Chat.** Prompts have a green rule and tool calls a glyph for their kind. A running call or
   turn spins. Code blocks have a dim rule and their language, and a plan is a checklist.
-- **Wide layouts.** From 120 columns, Home is the list beside the selected sandbox's pane. The
-  pane shows its facts, CPU and memory, the first approval waiting as a card, terminals, ports,
-  and a history line from its lineage. The git review gains a file list with +/− bars, where
-  `[` and `]` jump between files. From 160 columns Home adds a third column, the selected
-  sandbox's network: its connections newest first, with their verdict's dot, age, host and
-  verdict, read from `GET .../sandboxes/{id}/connections` every 2 seconds while it shows
-  (`dash.go`). When the sandbox's teammate's browser runs, the pane ends with its page's
+- **Wide layouts.** From 100 columns, Home is the sidebar and [the pane](#the-pane), in both
+  looks. A sandbox's dashboard in the pane has the history line from its lineage and its
+  network: its connections newest first, with their verdict's dot, age, host and verdict,
+  read from `GET .../sandboxes/{id}/connections` every 2 seconds while it shows (`dash.go`).
+  From 120 columns the git review gains a file list with +/− bars, where `[` and `]` jump
+  between files. When the sandbox's teammate's browser runs, the dashboard ends with its page's
   address and, on terminals with 256 colors or more, a picture of the page about 40×9 cells,
   drawn in half blocks (`▀`, two pixels a cell) from `GET .../browser/frame` every 3 seconds
   (`picture.go`). A picture that doesn't fit the pane's height is left out. From 160 columns the diff is side by side, and `v` toggles
   it. Inside a changed line, the words it changes are in reverse video. They come from a
   diff of the words of each removed line and the added line paired with it (`worddiff.go`),
   and lines that share no word, or have more than 300, keep their line's color only.
-- **Live numbers.** From 100 columns, Home's list has a CPU sparkline per running sandbox.
-  The pane and the detail screen show CPU and a memory bar. Usage is read every 2 seconds,
-  and only while Home or the detail is on show, for running sandboxes. A runtime that
+- **Live numbers.** From 100 columns, the sidebar has a CPU sparkline per running sandbox, and
+  the dashboard charts CPU and memory over 2 minutes (`charts.go`). The detail screen shows
+  CPU and a memory bar. Usage is read every 2 seconds, and only while Home or the detail is on
+  show, for running sandboxes. A runtime that
   reports no usage stops the reads. Activity has a strip of the busiest hosts, with 10-minute
   connection sparklines.
 - **Mouse.** Bubble Tea's cell-motion mode is on, and holding shift keeps the terminal's own
@@ -395,6 +438,9 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   the TUI answers. `pager.go` is the git review.
 - `chat.go` is the chat screen: the stream, the transcript's layout and folds, the composer.
 - `sessions.go` is Home's sessions: their reads, states, rows, numbers and the ways in.
+  `homepane.go` is Home's split, the pane's state, keys, title and approval banner; `pane.go`
+  the live terminal in it, an emulator between the attachment's websocket and the frame; and
+  `charts.go` the dashboard and its charts.
   `input.go` is the line editor the composer and the new sandbox's name use, and `linePrompt`,
   the one-line question of the notice line (a fork's name, a checkpoint's name, an answer).
 - `activity.go` is the Activity log and an entry's rule. `newsandbox.go` is the new sandbox's
@@ -431,5 +477,7 @@ Tests:
 - A pseudo-terminal test runs the TUI as a child process: it shows Home, opens Activity, goes
   back, opens the approvals, allows a waiting host with `y` (the server then has its rule) and
   quits. A second one runs at 140×40, where Home splits, and opens Activity by clicking its
-  tab. Another runs the attachment on a real terminal and checks that unbuffered
-  input reaches the sandbox and that Ctrl-] detaches. Both are skipped on Windows.
+  tab. A third runs the attachment on a real terminal and checks that unbuffered input
+  reaches the sandbox and that Ctrl-] detaches. They are skipped on Windows.
+- Model tests run the pane against a fake attachment: its screen, the keys it sends, Ctrl-],
+  alt+digits and full screen, and the banner's keys.

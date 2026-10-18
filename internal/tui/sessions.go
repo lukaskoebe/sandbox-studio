@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -170,10 +171,19 @@ func (m *app) sessionsUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 }
 
 // sessionsRead takes a read in. A session that worked at the last read and no longer does is
-// done until the user enters it, and says so.
+// done until the user enters it, and says so. The cursor stays on its session, wherever the read
+// puts it, so that the pane keeps showing it.
 func (m *app) sessionsRead(msg sessionsLoaded) {
 	s := &m.sess
+	at, onSession := m.selectedSession()
 	s.terms, s.chats = msg.terms, msg.chats
+	if sb := m.selected(); onSession && sb != nil {
+		for i, x := range m.sessionsOf(*sb) {
+			if x.id() == at.id() || (x.kind == sessionOlder && at.kind == sessionOlder) {
+				m.sub = i
+			}
+		}
+	}
 	working := map[string]bool{}
 	for _, sb := range m.sandboxes {
 		for _, x := range m.sessionsOf(sb) {
@@ -187,7 +197,7 @@ func (m *app) sessionsRead(msg sessionsLoaded) {
 				delete(s.done, x.id())
 				continue
 			}
-			if s.working[x.id()] {
+			if s.working[x.id()] && !m.onShow(x.id()) { // the pane shows its end
 				if s.done == nil {
 					s.done = map[string]bool{}
 				}
@@ -336,11 +346,15 @@ func (m *app) moveRow(dir int) {
 	m.cursor, m.sub = rows[i].sb, rows[i].sub
 }
 
-// numbered enters the session with the number n.
+// numbered enters the session with the number n: Home's pane takes the keys for it, or, on a
+// narrow terminal, its terminal or chat takes the screen.
 func (m *app) numbered(n int) tea.Cmd {
 	for _, r := range m.homeRows() {
 		if r.num == n {
 			m.cursor, m.sub = r.sb, r.sub
+			if _, ok := m.paneTarget(); ok {
+				return m.focusPane()
+			}
 			return m.enterSession()
 		}
 	}
@@ -387,7 +401,7 @@ func (m *app) enterSession() tea.Cmd {
 		m.sess.older[x.sandbox] = true
 		return nil
 	case sessionChat:
-		m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1}
+		m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, gen: m.chats.gen}
 		cmd := m.openChat(x.chat.ID)
 		if x.chat.State == store.ChatIdle && m.stateOf(x) != stateBlocked {
 			m.chats.composing = true
@@ -471,23 +485,45 @@ func (m *app) sessionWords(x session, st agentState) string {
 	return kind
 }
 
-// sessionRow is a session's row in w cells: its number and state where the sandbox's status
-// is, its title in nameW cells where the sandbox's name is, then what it is.
-func (m *app) sessionRow(x session, num int, selected bool, nameW, w int) string {
+// sessionKind is what a session is, in a word: agent, chat, term, sched or check.
+func sessionKindWord(x session) string {
+	switch {
+	case x.kind == sessionChat && x.chat.Heartbeat:
+		return "check"
+	case x.kind == sessionChat && x.chat.TaskID != "":
+		return "sched"
+	}
+	return map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "term"}[x.kind]
+}
+
+// sessionRow is a session's row of the sidebar in w cells: its number, its state's mark and its
+// title, and on the right what it is; a wide list says how it is too.
+func (m *app) sessionRow(x session, num int, selected bool, w int) string {
+	if x.kind == sessionOlder {
+		return m.cursorMark(selected) + "    " + styleDim.Render(clip(x.title(), max(w-6, 0)))
+	}
 	n := " "
 	if num > 0 {
 		n = fmt.Sprint(num)
 	}
 	st := m.stateOf(x)
-	title := fit(x.title(), nameW)
-	switch {
-	case x.kind == sessionOlder:
-		title = styleDim.Render(title)
-	case selected:
+	lead := m.cursorMark(selected) + styleDim.Render(n) + " " + m.stateMark(st) + " "
+	right := sessionKindWord(x)
+	if w >= 64 {
+		right = m.sessionWords(x, st)
+	}
+	titleW := w - 6 - lipgloss.Width(right) - 1
+	if titleW < 8 {
+		right, titleW = "", w-6
+	}
+	title := fit(x.title(), max(titleW, 0))
+	if selected {
 		title = styleBold.Render(title)
 	}
-	lead := m.cursorMark(selected) + fitStyled("  "+styleDim.Render(n)+"  "+m.stateMark(st), colStatus) + " "
-	return lead + title + " " + styleDim.Render(clip(m.sessionWords(x, st), max(w-2-colStatus-1-nameW-1, 0)))
+	if right == "" {
+		return lead + title
+	}
+	return lead + title + " " + styleDim.Render(right)
 }
 
 // sessionCounts count the sessions of the environment that work and that are blocked, for the

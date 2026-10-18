@@ -95,7 +95,7 @@ func pressOf(k string) tea.KeyPressMsg {
 func (m *app) typingKeys() bool {
 	return m.filtering || m.typing != nil || m.confirm != nil ||
 		(m.checkpoints.restoring != nil && m.screen == screenCheckpoints) ||
-		(m.screen == screenChat && m.chats.composing)
+		(m.chatShows() && m.chats.composing)
 }
 
 // enterKey is the key a double click presses.
@@ -132,6 +132,10 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 			return m.clickRow(r, double)
 		}
 	}
+	// A click in Home's pane gives it the keys.
+	if m.paneShows() && msg.X >= m.paneX() && msg.Y >= bodyTop && msg.Y < bodyTop+m.bodyRows() {
+		return m, m.focusPane()
+	}
 	return m, nil
 }
 
@@ -139,13 +143,13 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 	switch r.target {
 	case rowSandbox:
-		m.cursor, m.sub = r.index, -1
+		m.cursor, m.sub, m.pane.focus = r.index, -1, false
 	case rowCard:
 		m.approvalCursor = r.index
 	case rowEntry:
 		m.activity.cursor = r.index
 	case rowSession:
-		m.cursor, m.sub = r.index, r.sub
+		m.cursor, m.sub, m.pane.focus = r.index, r.sub, false
 	case rowCheckpoint:
 		m.checkpoints.cursor = r.index
 		return m, nil // enter does nothing here
@@ -185,13 +189,21 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 	case screenPager:
 		m.pager.scroll = max(m.pager.scroll+dir*wheelLines, 0)
 	case screenChat:
-		c := &m.chats
-		if c.fold >= 0 {
-			c.scroll, c.fold = m.foldScroll(c.fold), -1
+		m.wheelChat(dir)
+	case screenHome:
+		switch {
+		case m.chats.inPane && m.paneShows() && msg.X >= m.paneX():
+			m.wheelChat(dir)
+		case m.paneFocused() || (m.paneShows() && msg.X >= m.paneX()):
+			// a terminal in the pane scrolls itself: its program reads the keys
+		default:
+			k := tea.KeyPressMsg{Code: tea.KeyDown}
+			if dir < 0 {
+				k = tea.KeyPressMsg{Code: tea.KeyUp}
+			}
+			m.key(k)
 		}
-		total := len(m.transcript(m.width).lines)
-		c.scroll = min(max(c.scroll-dir*wheelLines, 0), max(total-m.transcriptRows(), 0))
-	case screenHome, screenApprovals, screenActivity, screenCheckpoints, screenEnvs:
+	case screenApprovals, screenActivity, screenCheckpoints, screenEnvs:
 		if m.checkpoints.restoring != nil && m.screen == screenCheckpoints {
 			return
 		}
@@ -201,6 +213,16 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 		}
 		m.key(k)
 	}
+}
+
+// wheelChat scrolls the transcript on show by a few lines.
+func (m *app) wheelChat(dir int) {
+	c := &m.chats
+	if c.fold >= 0 {
+		c.scroll, c.fold = m.foldScroll(c.fold), -1
+	}
+	total := len(m.transcript(m.chatWidth()).lines)
+	c.scroll = min(max(c.scroll-dir*wheelLines, 0), max(total-m.transcriptRows(), 0))
 }
 
 // openTab shows a tab's screen, as its key does: Sandboxes is Home, Git the first push waiting

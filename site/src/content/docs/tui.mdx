@@ -9,8 +9,8 @@ import home from '../../../../internal/tui/testdata/visual_home.golden?raw'
 
 `studio tui` is a keyboard client of the Studio that is already running on this machine. It
 shows the sandboxes of an environment, creates, forks and suspends them, and saves and restores
-their checkpoints. It answers approvals and reviews git pushes, chats with a sandbox's teammate, follows the network Activity, and opens a sandbox's
-terminal in full screen. Everything else stays in the browser, and the TUI prints the address
+their checkpoints. It answers approvals and reviews git pushes, chats with a sandbox's teammate, follows the network Activity, and shows a sandbox's
+terminals and agents live, beside the list, or in full screen. Everything else stays in the browser, and the TUI prints the address
 of the page where you need it.
 
 <TerminalScreen ansi={home} label="The TUI's Home: four sandboxes, one with an approval waiting" />
@@ -39,6 +39,8 @@ shows the ones that apply where you are, and `?` lists them all.
 | `1` to `9` | go into that session: an agent, a chat or a terminal |
 | `enter` | go into the session under the cursor; on a sandbox, open it: its facts, its open ports, and the same keys |
 | `tab` | the next session that waits for you |
+| `alt+z` | the pane in full screen, and back (from 100 columns) |
+| `y` `o` `n` | allow, allow once or deny the network request in the pane's banner |
 | `n` | create a new sandbox |
 | `t` | open the sandbox's main terminal (it must be running) |
 | `T` | start the teammate's agent in a new terminal and open it |
@@ -70,14 +72,15 @@ cursor where you were. To switch to another agent, press `Ctrl-]` and its number
 ```
 Sandbox Studio · Default                               2 blocked · ● 2 approvals
 ────────────────────────────────────────────────────────────────────────────────
-  ● Running   blub             Iris      node-22+python-… up 2h 14m
-    1  ✓      claude                     agent · done
-▸   2  ○      Fix the login form         chat · 3m ago
-    3         main                       terminal · attached
-  ● Running   api-refactor     Finn      go@2             up 12m     2 approvals
-    4  ▲      codex                      agent · blocked
-    5  ▲      Port the parser to go      chat · blocked
-    6         main                       terminal
+▸ blub · Iris  node-22+python-3.13@2 ─────────────────────────────── ● up 2h 14m
+  1 ✓ claude                                                        agent · done
+  2 ○ Fix the login form                                           chat · 3m ago
+  3   main                                                   terminal · attached
+
+  api-refactor · Finn  go@2 ──────────────────────────── ▲ 2 approvals  ● up 12m
+  4 ▲ codex                                                      agent · blocked
+  5 ▲ Port the parser to go                                       chat · blocked
+  6   main                                                              terminal
 ```
 
 Each agent shows what it's doing:
@@ -90,6 +93,37 @@ Each agent shows what it's doing:
 
 `tab` jumps to the next blocked agent, then to the next done one. The header counts the
 working and the blocked ones.
+
+## The pane
+
+In a terminal 100 columns wide or more, the list becomes a sidebar, and the pane beside it
+shows what the cursor is on, live:
+
+- on an agent or a terminal, its screen, as it runs;
+- on a chat, its transcript;
+- on a sandbox, its dashboard: CPU over the last two minutes as a chart, memory as a gauge
+  with its history, the approval waiting, its terminals, ports and history, its network as it
+  happens and its teammate's browser.
+
+Each sidebar row says what kind of session it is: `agent`, `chat`, `term`, `sched` for a
+scheduled task's run, or `check` for a check-in's.
+
+`enter`, the session's number or a click hands your keys to the pane, and the line between the
+two turns bright. Everything you type goes to the agent, `q` and `ctrl+c` too, except:
+
+| Key | In the pane |
+|---|---|
+| `Ctrl-]` | give the keys back to the sidebar |
+| `alt+1` to `alt+9` | switch to that session |
+| `alt+z` | full screen, and back |
+
+Alt keys need a terminal that sends them; on macOS, set Option to act as Meta.
+
+When an approval blocks an agent, a box over its screen says what waits, such as `api-refactor
+wants proxy.golang.org:443`. For a network request, press `y`, `o` or `n` in the sidebar to
+allow it, allow it once or deny it, without leaving the list.
+
+A terminal open in the browser too takes the size of whichever window was resized last.
 
 ## New sandbox
 
@@ -224,13 +258,10 @@ columns, the header becomes tabs.
 
 Wider terminals use the extra room:
 
-- From 120 columns, Home shows the selected sandbox beside the list, with its CPU and memory,
-  the first approval waiting, its terminals and ports, and its history. When the sandbox's
-  teammate's browser runs, the pane ends with the page it is on and a small picture of it, on
-  terminals with 256 colors or more.
-- The git review lists the changed files, and `[` and `]` jump between them.
-- From 160 columns, Home adds the selected sandbox's network as it happens: each connection,
-  how long ago, its host and its verdict.
+- From 100 columns, Home is a sidebar and [the pane](#the-pane), where a sandbox's dashboard
+  charts its CPU and memory. When the sandbox's teammate's browser runs, the dashboard ends
+  with the page it is on and a small picture of it, on terminals with 256 colors or more.
+- From 120 columns, the git review lists the changed files, and `[` and `]` jump between them.
 - From 160 columns, the diff is side by side, and `v` toggles it.
 - The words a changed line changes are highlighted.
 - What an action did, or an error, shows for 3 seconds at the top right.
@@ -242,13 +273,13 @@ The mouse works too:
 - A click on a tab opens it, and a click on a key, on a card or in the key bar, presses it.
 - Hold shift to select text as usual.
 
-`STUDIO_TUI=plain studio tui` gives the plain look shown above, with no mouse. So do
+`STUDIO_TUI=plain studio tui` gives the plain look shown above, with no mouse and no charts. So do
 `NO_COLOR` and terminals without colors. Every screen still fits 80×24.
 
 ## Terminal
 
-`t` opens the sandbox's main terminal, the one the browser opens first, and a terminal's number
-opens that one. From a shell, `studio shell <sandbox> [terminal]` does the same. The sandbox's
+`t` opens the sandbox's main terminal, the one the browser opens first, in full screen. A
+terminal's number opens that one, in the pane when there's room for it. From a shell, `studio shell <sandbox> [terminal]` does the same. The sandbox's
 screen takes over your terminal, and your keys go to it, as in any other terminal. Resizing
 your window resizes the sandbox's. Press `Ctrl-]` to go back to the TUI. If the sandbox ends the
 terminal, you see that, and the next key returns you to the TUI.

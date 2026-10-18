@@ -257,7 +257,7 @@ func TestGroupedKeyBar(t *testing.T) {
 func TestMouseSelectsAndOpens(t *testing.T) {
 	m := visualApp(80, 24)
 	m.View() // records where the rows lead
-	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 2, Button: tea.MouseLeft}
+	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 4, Button: tea.MouseLeft} // docs-site's header, under two groups
 	next, _ := m.Update(click)
 	m = next.(*app)
 	if m.cursor != 2 || m.screen != screenHome {
@@ -443,10 +443,10 @@ func TestNetworkColumnReadsTheSelectedSandbox(t *testing.T) {
 	m := visualApp(180, 50)
 	m = press(m, "j")
 	if got := m.netWanted(); got != "sb2" {
-		t.Fatalf("Home at 180 columns reads the selected sandbox's connections: %q", got)
+		t.Fatalf("Home's dashboard reads the selected sandbox's connections: %q", got)
 	}
-	if visualApp(159, 50).netWanted() != "" || press(visualApp(180, 50), "a").netWanted() != "" {
-		t.Error("the network column is read below 160 columns, or off Home")
+	if visualApp(99, 50).netWanted() != "" || press(visualApp(180, 50), "a").netWanted() != "" {
+		t.Error("the network is read without the pane, or off Home")
 	}
 	if cmd := m.watchNet(); cmd != nil || m.net.sandbox != "sb2" || !m.net.busy {
 		// press already started the read through Update; a second watch starts nothing

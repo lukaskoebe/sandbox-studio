@@ -104,7 +104,8 @@ type app struct {
 	toast    toastState   // the result or error the visual look shows at the top right
 	slide    slideState   // the new cards sliding in
 	net      netState     // the connections of the sandbox in Home's network column
-	picture  pictureState // the browser of the teammate in Home's detail pane
+	picture  pictureState // the browser of the teammate in Home's dashboard
+	pane     paneState    // what Home's pane shows, and whether it has the keys
 }
 
 // newApp returns the model for a session with the Studio at addr. Its first screen loads on Init.
@@ -149,7 +150,7 @@ func (m *app) Init() tea.Cmd {
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
-		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions())
+		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions(), m.watchPane())
 }
 
 // update applies one message to the model.
@@ -179,6 +180,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.sessionsUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.paneUpdate(msg); ok {
 		return m, cmd
 	}
 	if m.motionUpdate(msg) {
@@ -308,8 +312,10 @@ func (m *app) paste(text string) {
 		id := m.selectedID()
 		*m.filterTarget() += strings.Join(strings.Fields(text), " ")
 		m.filtered(id)
-	case m.screen == screenChat && m.chats.composing:
+	case m.chatShows() && m.chats.composing:
 		m.chats.draft.paste(text)
+	case m.paneFocused() && m.pane.term != nil:
+		m.pane.term.paste(text)
 	case m.screen == screenNew && m.newSb.step == stepName:
 		m.newSb.name.paste(strings.ToLower(strings.Join(strings.Fields(text), "")))
 	}

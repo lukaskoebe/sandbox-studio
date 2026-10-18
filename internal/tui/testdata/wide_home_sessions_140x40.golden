@@ -1,39 +1,39 @@
  ◆ Studio  Default ▾   Sandboxes   Approvals 2   Activity   Git                                                           2 blocked · 12:00 
 ───────────────────────━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────
-SANDBOXES  4                                            │ blub                                                                  ● Running  
-  ● Running   blub            Iris    ▁▁▁▁▁▁▁▁ 2h       │ ─────────────────────────────────────────────────────────────────────────────────
-▌   1  ✓      claude                  agent · done      │ Iris · node-22+python-3.13@2 · 2 CPUs · 2 GiB · up 2h 14m
-    2  ○      Fix the login form      chat · 3m ago     │ 
-    3         main                    terminal · attach…│ CPU  ·········▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁   2 %  ┊  MEM ███░░░░░░░ 600 MiB / 2 GiB
-  ● Running   api-refactor    Finn    ▂▄▅▆▆▄▃▄ 12m  ●2  │ 
-    4  ▲      codex                   agent · blocked   │ TERMINALS  …
-    5  ▲      Port the parser to go   chat · blocked    │ PORTS      …
-    6         main                    terminal          │ HISTORY    …
-  ○ Stopped   docs-site       Iris                      │ ID         sb1
-    7  ○      Update the deploy notes scheduled · 1d ago│ 
-    8  ○      Check-in                check-in · 1d ago │ 
-    9  ○      Rename the guides       chat · ended      │ 
-              + 2 older                                 │ 
-  ◐ Booting   demo            —       ▓▒░░░░░░          │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-                                                        │ 
-────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────
-enter go in  1-9 jump in  tab next waiting  T new agent  C new chat │ a approvals │ ? more  q quit
+  blub · Iris ─────────────── ▁▁▁▁▁▁▁▁ ● 2h │ claude · blub                                                                   ✓ agent · done
+▌ 1 ✓ claude                          agent │ ──────────────────────────────────────────────────────────────────────────────────────────────
+  2 ○ Fix the login form               chat │ Connecting…
+  3   main                             term │ 
+                                            │ 
+  api-refactor · Finn ────────── ▲ 2  ● 12m │ 
+  4 ▲ codex                           agent │ 
+  5 ▲ Port the parser to go            chat │ 
+  6   main                             term │ 
+                                            │ 
+  docs-site · Iris ────────────── ○ stopped │ 
+  7 ○ Update the deploy notes         sched │ 
+  8 ○ Check-in                        check │ 
+  9 ○ Rename the guides                chat │ 
+      + 2 older                             │ 
+                                            │ 
+  demo ───────────────── ▓▒░░░░░░ ◐ booting │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────
+enter type in  1-9 jump in  tab next waiting  alt+z full screen  T new agent  C new chat │ a approvals │ ? more  q quit

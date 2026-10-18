@@ -54,8 +54,12 @@ var (
 	keySplit     = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "review one by one"))
 )
 
-// key routes a key press to the mode and screen the user is in.
+// key routes a key press to the mode and screen the user is in. While Home's pane has the keys,
+// they go to it, ctrl+c too: it interrupts the agent there, not the TUI.
 func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if !m.filtering && m.typing == nil && m.confirm == nil && m.paneFocused() {
+		return m.paneKey(msg)
+	}
 	if key.Matches(msg, keyInterrupt) {
 		return m, tea.Quit
 	}
@@ -99,6 +103,10 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.bannerKey(msg); ok {
+		return m, cmd
+	}
+	_, inPane := m.paneTarget()
 	switch {
 	case key.Matches(msg, keyQuit):
 		return m, tea.Quit
@@ -110,6 +118,10 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.numbered(int(msg.String()[0] - '0'))
 	case key.Matches(msg, keyWaiting):
 		m.nextWaiting()
+	case key.Matches(msg, keyZoom) && inPane:
+		m.pane.zoom = !m.pane.zoom
+	case key.Matches(msg, keyOpen) && inPane:
+		return m, m.focusPane()
 	case key.Matches(msg, keyOpen):
 		if _, ok := m.selectedSession(); ok {
 			return m, m.enterSession()
@@ -367,6 +379,16 @@ func (m *app) bindings() []key.Binding {
 		return m.newBindings()
 	case screenCheckpoints:
 		return m.checkpointBindings()
+	}
+	if m.paneFocused() {
+		return m.paneBindings()
+	}
+	if x, ok := m.paneTarget(); ok {
+		bindings := []key.Binding{keyFocus, keyNumber, keyWaiting}
+		if c, blocked := m.paneCard(x); blocked && bannerKeys(c) {
+			bindings = append(bindings, keyAllow, keyOnce, keyDeny)
+		}
+		return append(bindings, keyApprovals, keyHelp, keyQuit, keyZoom, keyAgent, keyChatNew)
 	}
 	if _, ok := m.selectedSession(); ok {
 		return []key.Binding{keyEnter, keyNumber, keyWaiting, keyApprovals, keyHelp, keyQuit, keyAgent, keyChatNew}

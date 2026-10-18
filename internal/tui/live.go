@@ -31,6 +31,7 @@ const spinEvery = 120 * time.Millisecond
 // usageState is the CPU and memory use of the running sandboxes, kept as a short history.
 type usageState struct {
 	cpu         map[string][]float64             // CPU share samples by sandbox ID, oldest first
+	mem         map[string][]float64             // the share of memory in use, likewise
 	last        map[string]sandboxes.ResourceUse // the latest sample by sandbox ID
 	busy        bool                             // a read or the wait for the next one is under way
 	unsupported bool                             // the runtime reports no usage
@@ -126,14 +127,21 @@ func (m *app) loadUsage(ids []string) tea.Cmd {
 // record adds a read's samples to the history.
 func (u *usageState) record(samples map[string]sandboxes.ResourceUse) {
 	if u.cpu == nil {
-		u.cpu, u.last = map[string][]float64{}, map[string]sandboxes.ResourceUse{}
+		u.cpu, u.mem, u.last = map[string][]float64{}, map[string][]float64{}, map[string]sandboxes.ResourceUse{}
 	}
-	for id, s := range samples {
-		hist := append(u.cpu[id], s.CPUPercent)
+	keep := func(hist []float64, v float64) []float64 {
+		hist = append(hist, v)
 		if len(hist) > usageKeep {
 			hist = hist[len(hist)-usageKeep:]
 		}
-		u.cpu[id], u.last[id] = hist, s
+		return hist
+	}
+	for id, s := range samples {
+		share := 0.0
+		if s.MemoryTotalBytes > 0 {
+			share = float64(s.MemoryBytes) / float64(s.MemoryTotalBytes)
+		}
+		u.cpu[id], u.mem[id], u.last[id] = keep(u.cpu[id], s.CPUPercent), keep(u.mem[id], share), s
 	}
 }
 
@@ -143,7 +151,7 @@ func (m *app) lineageWanted() string {
 	if m.look.plain || m.env.ID == "" {
 		return ""
 	}
-	if m.screen == screenDetail || (m.screen == screenHome && m.homeSplit(m.width)) {
+	if m.screen == screenDetail || m.dashShows() {
 		return m.selectedID()
 	}
 	return ""
@@ -170,8 +178,8 @@ func (m *app) watchLineage() tea.Cmd {
 	}
 }
 
-// spinWanted reports whether the screen on show has something that moves: a turn that runs, or a
-// sandbox that starts where its shimmer shows.
+// spinWanted reports whether the screen on show has something that moves: a turn that runs, a
+// session that works, or a sandbox that starts where its shimmer shows.
 func (m *app) spinWanted() bool {
 	if m.look.plain {
 		return false
@@ -184,8 +192,11 @@ func (m *app) spinWanted() bool {
 	case screenChat:
 		return m.chats.running()
 	case screenHome:
-		if !m.sparkColumn(m.width) {
-			return false
+		if m.chats.inPane && m.chats.running() {
+			return true
+		}
+		if working, _ := m.sessionCounts(); working > 0 {
+			return true
 		}
 		for _, sb := range m.visible() {
 			if booting(sb) {
