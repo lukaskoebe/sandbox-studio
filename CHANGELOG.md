@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 — 2026-10-19
+
+One look everywhere: the TUI's style in the web app, the docs and the videos. A TUI Home of
+sandboxes and their sessions beside a live pane, approvals from a full-screen terminal,
+settings as a dialog, scheduled tasks, and memory that catches up on the chats it missed.
 
 - **Terminal UI:** Home lists each sandbox's sessions under it: its agents running in a
   terminal, its newest chats and its other terminals, each agent marked working, blocked or
@@ -32,7 +36,8 @@
 - **Web app, docs and videos:** the same look as the TUI and the landing page. Text is set in
   Instrument Sans, and titles, keys and identifiers in JetBrains Mono, both bundled. The grays
   are cooler, buttons and links are teal (green now only means running or ok), keys are drawn as
-  keycaps, and terminals use the TUI's colors.
+  keycaps, and terminals use the TUI's colors. The cube of the app icon, the favicon, the logo
+  and the TUI's `◆` is teal too, and the docs' screenshots show the new look.
 - **Command line:** `studio shell <sandbox> [terminal]` opens any of a sandbox's terminals,
   such as an agent's.
 - **Web app:** Settings is a dialog over the page you are on instead of a page of its own,
