@@ -3,12 +3,14 @@
 `studio tui` is a keyboard client of the running Studio, in the same binary. It covers the
 daily loop: see, create, fork and suspend sandboxes, save and restore their checkpoints, see
 their open ports, answer approvals of every kind and review git pushes, chat with a sandbox's
-teammate, follow the network Activity, and drop into a sandbox's terminal. Everything else
+teammate, follow the network Activity, and drop into any of a sandbox's terminals, an agent's
+among them, with one key. Everything else
 stays in the browser, and the TUI prints the URL where it applies. Plain `studio` is still
 the server; `studio tui` only ever connects to one.
 
-The user page is [Terminal UI](../site/src/content/docs/tui.md). A proposal for a richer look
-on wide and capable terminals is in [design/tui-visual.md](design/tui-visual.md).
+The user page is [Terminal UI](../site/src/content/docs/tui.md). The design of the visual look
+is in [design/tui-visual.md](design/tui-visual.md), and that of Home's sessions in
+[design/tui-sessions.md](design/tui-sessions.md).
 
 ## Why a terminal client
 
@@ -51,19 +53,59 @@ Keys are the same on every screen and cannot be changed. The key bar shows the o
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | the sandboxes of the environment on show: status dot and word, name, teammate, template, uptime and the approvals waiting on each | `↑/↓` `j/k` move · `enter` open · `n` new · `t` terminal · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` chat · `a` approvals · `l` Activity · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
-| **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID, and the open ports with their preview addresses | `t` terminal · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` chat · `l` its Activity · `a` approvals · `esc` back |
+| **Home** | the sandboxes of the environment on show: status dot and word, name, teammate, template, uptime and the approvals waiting on each; under each, its [sessions](#sessions) | `↑/↓` `j/k` move over sandboxes and sessions · `1`–`9` go into that session · `enter` go into the session, or open the sandbox · `tab` the next session that waits · `n` new · `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest chat · `C` a new chat · `a` approvals · `l` Activity · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
+| **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID, and the open ports with their preview addresses | `t` terminal · `T` agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` chat · `C` new chat · `l` its Activity · `a` approvals · `esc` back |
 | **Checkpoints** (from `h`) | the sandbox's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
 | **New sandbox** (from `n`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
-| **Chats** (from `c`) | the chats of the sandbox's teammate in that sandbox, newest activity first | `enter` open · `n` new chat · `esc` back |
-| **Chat** | the transcript, streaming | see below |
+| **Chat** (from a chat's session, `c` or `C`) | the transcript, streaming | see below |
 | **Approvals** (from `a` anywhere) | every pending approval of every environment, grouped like the web stack | see below |
 | **Git review** (from `enter` on a git card) | the push's facts, commits and diff, or the pull request | see below |
 | **Activity** (from `l`) | connections and decisions of the environment's sandboxes, newest first | `enter` the entry and its rule · `/` filter by sandbox · `r` print the rules page's URL · `esc` back |
 | **Environments** (from `e`) | the environments; `enter` switches | `↑/↓` · `enter` choose · `esc` cancel |
 
-The header always shows the number of pending approvals across all environments. When a new
-approval arrives, the terminal rings its bell once.
+The header always shows the number of pending approvals across all environments, after the
+environment's working and blocked sessions. When a new approval arrives, the terminal rings
+its bell once.
+
+### Sessions
+
+Under each sandbox, Home lists what can be entered in it, indented:
+
+- its agent terminals: tmux sessions that run a harness, such as `claude` or `codex-2`;
+- the chats of its teammate in it, the newest three, then a `+ n older` row that shows the
+  rest. A check-in's chat says so. A chat continued in a terminal is listed once, as its
+  terminal;
+- its other terminals, `main` among them.
+
+The first nine sessions get the numbers `1` to `9`, top to bottom. On Home, a number goes
+straight into its session, and so does `enter` on a session's row. A terminal is attached
+(any of them, by its name), and `Ctrl-]` returns to Home with the cursor on it. A chat opens,
+an idle one with the composer ready; `esc` closes the composer and a second `esc` returns.
+So switching to another session takes two keys: `Ctrl-]` (or `esc`), then its number.
+
+Each agent terminal and chat shows its agent's state, as herdr words them:
+
+| Mark | State | A chat | An agent terminal |
+|---|---|---|---|
+| `●` | working | a turn runs | the terminal printed within 5 seconds of the last read |
+| `▲` | blocked | one of its permission requests waits | an approval of another kind waits in its sandbox; approvals don't say which process asked |
+| `✓` | done | it worked, and hasn't been entered since | the same |
+| `○` | idle | none of these | none of these |
+| `·` | unknown | | the guest doesn't report the terminal's output |
+
+A session that turns done says so, in the notice line or as a toast. `tab` moves the cursor
+to the next blocked session, then to the next done one. Plain terminals show no state and say
+when they are attached elsewhere, such as in the web.
+
+Home reads the terminals of each running sandbox (`GET .../sandboxes/{id}/terminals`) and the
+chats of each sandbox with a teammate (`GET .../sandboxes/{id}/chats`) every 3 seconds while
+it shows. A terminal's `activity` is when its window last printed, which the guest reads from
+tmux's `window_activity`; a sandbox started before Studio had it reports none until it starts
+again. Done lives in the TUI's memory only.
+
+`T` starts the teammate's harness in a new terminal (`POST .../sandboxes/{id}/sessions`, the
+web's Start agent) and attaches it. `c` opens the sandbox's newest chat, or a new one when it
+has none, and `C` always starts a new one.
 
 ### Approvals
 
@@ -116,8 +158,8 @@ the agent is not offered; a rejection with a note is written in the browser.
 
 ### Chat
 
-`c` lists the chats of the sandbox's teammate in that sandbox (`GET
-.../sandboxes/{id}/chats`). A sandbox without a teammate has no chats, and `c` says so.
+A chat is opened from its session on Home, or with `c` and `C`. A sandbox without a teammate
+has no chats, and `c` says so.
 
 A chat loads its log (`GET .../chats/{chat}`), then follows its stream (`GET
 .../chats/{chat}/stream?after=<rev>`), the SSE the web follows. Each event carries a chat, turn
@@ -245,7 +287,9 @@ revocable session table would be a change to the web sessions too; it is not par
 ## Terminal
 
 `t` attaches to the sandbox's tmux session `main`, which the web workspace opens first; the
-session is created when it doesn't exist. Only a running sandbox has a terminal.
+session is created when it doesn't exist. A session row on Home attaches its own terminal, and
+`studio shell <sandbox> [terminal]` does the same from a shell. Only a running sandbox has
+terminals.
 
 The attachment uses the same websocket as the web terminal (`.../terminals/{name}/attach`):
 
@@ -320,8 +364,8 @@ and [design/tui-visual.md](design/tui-visual.md)):
   reports no usage stops the reads. Activity has a strip of the busiest hosts, with 10-minute
   connection sparklines.
 - **Mouse.** Bubble Tea's cell-motion mode is on, and holding shift keeps the terminal's own
-  selection. A click selects a row: a sandbox, card, log entry, chat, checkpoint, environment,
-  fold or file. A double click opens it as `enter` does. The wheel scrolls the review and the
+  selection. A click selects a row: a sandbox, session, card, log entry, checkpoint,
+  environment, fold or file. A double click opens it as `enter` does. The wheel scrolls the review and the
   transcript, and moves the cursor in lists. A click on a tab acts as its key, and a click on
   the environment opens the picker. A click on a card's keycap or a key of the key bar presses
   that key; the bar's arrows and keys with a modifier take no clicks.
@@ -349,7 +393,8 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   decision choices of `web/src/components/approval-decision.tsx`. `kinds.go` decides the other
   kinds (browser, memory, agent permissions) and reads a question's schema into the one field
   the TUI answers. `pager.go` is the git review.
-- `chat.go` is the chat screens: the stream, the transcript's layout and folds, the composer.
+- `chat.go` is the chat screen: the stream, the transcript's layout and folds, the composer.
+- `sessions.go` is Home's sessions: their reads, states, rows, numbers and the ways in.
   `input.go` is the line editor the composer and the new sandbox's name use, and `linePrompt`,
   the one-line question of the notice line (a fork's name, a checkpoint's name, an answer).
 - `activity.go` is the Activity log and an entry's rule. `newsandbox.go` is the new sandbox's

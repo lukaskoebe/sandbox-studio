@@ -19,7 +19,7 @@ const (
 	rowSandbox    rowTarget = iota + 1 // a sandbox of Home's list
 	rowCard                            // an approval's card
 	rowEntry                           // an entry of the Activity log
-	rowChat                            // a chat of the chats list
+	rowSession                         // a session under a sandbox of Home's list
 	rowCheckpoint                      // a checkpoint
 	rowEnv                             // an environment of the picker
 	rowFold                            // a folded tool call or thought of a transcript
@@ -31,6 +31,7 @@ type rowHit struct {
 	y, x0, x1 int
 	target    rowTarget
 	index     int
+	sub       int // a session's index under its sandbox
 }
 
 // keyHit is a key drawn on the screen: a keycap of a card or a key of the key bar, on row y from
@@ -54,6 +55,12 @@ type mouseState struct {
 // hitRow records that line of the body, from x0 to x1, leads to the target's index-th item.
 func (m *app) hitRow(line, x0, x1 int, target rowTarget, index int) {
 	m.mouse.rows = append(m.mouse.rows, rowHit{y: bodyTop + line, x0: x0, x1: x1, target: target, index: index})
+}
+
+// hitSession records that line of the body, from x0 to x1, leads to the sub-th session of the
+// index-th sandbox.
+func (m *app) hitSession(line, x0, x1, index, sub int) {
+	m.mouse.rows = append(m.mouse.rows, rowHit{y: bodyTop + line, x0: x0, x1: x1, target: rowSession, index: index, sub: sub})
 }
 
 // hitKeys records the keys of a line on row y of the screen, the line starting at column x.
@@ -132,13 +139,13 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 	switch r.target {
 	case rowSandbox:
-		m.cursor = r.index
+		m.cursor, m.sub = r.index, -1
 	case rowCard:
 		m.approvalCursor = r.index
 	case rowEntry:
 		m.activity.cursor = r.index
-	case rowChat:
-		m.chats.cursor = r.index
+	case rowSession:
+		m.cursor, m.sub = r.index, r.sub
 	case rowCheckpoint:
 		m.checkpoints.cursor = r.index
 		return m, nil // enter does nothing here
@@ -184,7 +191,7 @@ func (m *app) wheel(msg tea.MouseWheelMsg) {
 		}
 		total := len(m.transcript(m.width).lines)
 		c.scroll = min(max(c.scroll-dir*wheelLines, 0), max(total-m.transcriptRows(), 0))
-	case screenHome, screenApprovals, screenActivity, screenChats, screenCheckpoints, screenEnvs:
+	case screenHome, screenApprovals, screenActivity, screenCheckpoints, screenEnvs:
 		if m.checkpoints.restoring != nil && m.screen == screenCheckpoints {
 			return
 		}

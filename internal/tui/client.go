@@ -204,6 +204,13 @@ func (c *Client) Terminals(ctx context.Context, env, sandbox string) ([]agentpro
 	return out, err
 }
 
+// StartSession starts the sandbox teammate's harness in a new terminal, which it names.
+func (c *Client) StartSession(ctx context.Context, env, sandbox string) (agentproto.Session, error) {
+	var out agentproto.Session
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/sandboxes/"+sandbox+"/sessions", nil, nil, &out)
+	return out, err
+}
+
 // Usage reads a running sandbox's CPU and memory use, as the workspace's status line does. A
 // runtime that reports none answers 501, a sandbox that doesn't run 409.
 func (c *Client) Usage(ctx context.Context, env, sandbox string) (sandboxes.ResourceUse, error) {

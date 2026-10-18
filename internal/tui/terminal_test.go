@@ -203,17 +203,34 @@ func TestAttachRefusesASandboxThatIsNotRunning(t *testing.T) {
 func TestAttachOnlyStartsForARunningSandbox(t *testing.T) {
 	m := sampleApp()
 	m.cursor = 2 // docs-site, stopped
-	if cmd := m.attachTo(m.selected()); cmd != nil || m.notice.text != "Start docs-site first, with s." {
+	if cmd := m.attachTo(m.selected(), terminalName); cmd != nil || m.notice.text != "Start docs-site first, with s." {
 		t.Fatalf("stopped sandbox: command %v, notice %q", cmd != nil, m.notice.text)
 	}
 	m.cursor = 0 // blub, running with an agent
-	if cmd := m.attachTo(m.selected()); cmd == nil {
+	if cmd := m.attachTo(m.selected(), terminalName); cmd == nil {
 		t.Fatal("running sandbox did not start a terminal")
 	}
 	m.sandboxes[0].Status = runtime.Status("running")
 	m.sandboxes[0].Agent = nil
 	m.cursor = 0
-	if cmd := m.attachTo(m.selected()); cmd != nil || m.notice.text != "blub is still starting." {
+	if cmd := m.attachTo(m.selected(), terminalName); cmd != nil || m.notice.text != "blub is still starting." {
 		t.Fatalf("starting sandbox: command %v, notice %q", cmd != nil, m.notice.text)
+	}
+}
+
+func TestAttachOpensTheTerminalByName(t *testing.T) {
+	paths := make(chan string, 2)
+	client := fakeTerminal(t, func(ctx context.Context, c *websocket.Conn, r *http.Request) {
+		paths <- r.URL.Path
+		c.Close(websocket.StatusNormalClosure, "")
+	})
+	for _, name := range []string{"", "claude"} {
+		a := &attachment{ctx: context.Background(), client: client, env: "env1", sandbox: "sb1", name: name,
+			in: strings.NewReader("x"), out: &syncBuffer{}, size: fixedSize(80, 24)}
+		_ = a.Run()
+		want := "/api/environments/env1/sandboxes/sb1/terminals/" + firstNonEmpty(name, "main") + "/attach"
+		if got := <-paths; got != want {
+			t.Fatalf("attached %s, want %s", got, want)
+		}
 	}
 }

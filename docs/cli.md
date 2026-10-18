@@ -13,7 +13,7 @@ three are the same binary. The user page is [Command line](../site/src/content/d
 | `create <name>` | a new sandbox, with `--teammate`, `--template`, `--cpus`, `--memory` (GiB); waits until it runs, unless `--no-wait` |
 | `fork <sandbox> <name>` | a fork with a copy of the disks; waits like `create` |
 | `rm <sandbox>` | deletes the sandbox and its disks; asks first |
-| `shell <sandbox>` | the sandbox's main terminal in this one, as in the TUI; `Ctrl-]` detaches |
+| `shell <sandbox> [terminal]` | the sandbox's main terminal, or the one named (such as an agent's, `claude`), in this one, as in the TUI; `Ctrl-]` detaches |
 | `ask <sandbox> <prompt>` | a chat with the sandbox's teammate, the answer printed as it streams; `-` reads the prompt from stdin, `--chat <id>` continues a chat |
 | `approvals` | the pending approvals of every environment |
 | `approve`, `deny <approval>` | decides one; a network request gets a rule with the teammate's usual scope (`--scope` to choose), or `--once` for this connection only. A browser request's rule covers only the browsers, as on the web; `--sandboxes` lets it cover the sandboxes too |

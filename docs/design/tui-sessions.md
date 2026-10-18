@@ -1,6 +1,16 @@
 # Sessions on Home (design)
 
-Status: proposed 2026-10-18.
+Status: built (2026-10-18); [tui.md](../tui.md#sessions) describes it as it is. Where the
+build differs from the text:
+
+- A click selects a session's row and a double click enters it, as on every other row, so a
+  click can still show a sandbox's detail pane without taking over the screen.
+- Blocked sessions read "blocked", without the reason, so their row fits the wide layout's
+  list. The approvals say why.
+- The toast is for done only. A new approval already rings the bell.
+- Sandbox rows don't repeat their sessions' most urgent state, since the sessions are listed
+  right under them. The header counts working and blocked sessions.
+- `studio shell <sandbox> [terminal]` attaches a terminal by its name from a shell.
 
 The TUI should put the agents one key away. Today they sit several screens deep, and an agent
 that runs in a terminal can't be reached from the TUI at all. This concept flattens Home into

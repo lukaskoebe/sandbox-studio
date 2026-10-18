@@ -25,14 +25,12 @@ const (
 	chatReloadDelay = 5 * time.Second
 )
 
-// chatState is what the chat screens show: a sandbox's chats, and the chat on show with its
-// transcript, kept current from the chat's stream.
+// chatState is what the chat screen shows: a chat of a sandbox with its transcript, kept
+// current from the chat's stream.
 type chatState struct {
-	sandbox sandboxes.View // the sandbox whose chats these are
-	back    screen         // where esc returns to from the list
-	list    []store.Chat
-	listed  bool // the list arrived
-	cursor  int  // the selected chat of the list
+	sandbox sandboxes.View // the sandbox whose chat this is
+	back    screen         // where esc returns to
+	picking bool           // c waits for the sandbox's chats, to open the newest
 
 	id     string // the chat on show; "" for a new chat, which the first prompt starts
 	gen    int    // counts the chats opened, so the messages of a stream left behind are dropped
@@ -104,23 +102,40 @@ var (
 	keyBottom  = key.NewBinding(key.WithKeys("end", "G"))
 )
 
-// openChats shows the chats of a sandbox. Only a sandbox with a teammate has chats: the chat is
-// with its teammate.
+// openChats opens the newest chat of a sandbox, or a new one when it has none. Only a sandbox
+// with a teammate has chats: the chat is with its teammate.
 func (m *app) openChats(sb *sandboxes.View) tea.Cmd {
-	if sb == nil {
+	if !m.chatsIn(sb) {
 		return nil
 	}
-	if sb.TeammateID == "" {
-		m.setNotice(sb.Name+" has no teammate to chat with. Give it one in the browser.", true)
+	m.stopChat()
+	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, picking: true}
+	return m.loadChats()
+}
+
+// newChat opens the composer of a new chat in a sandbox; the first prompt starts it.
+func (m *app) newChat(sb *sandboxes.View) tea.Cmd {
+	if !m.chatsIn(sb) {
 		return nil
 	}
 	m.stopChat()
 	m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1}
-	m.screen = screenChats
-	return m.loadChats()
+	return m.openChat("")
 }
 
-// loadChats reads the chats of the sandbox on the chat screens.
+// chatsIn reports whether a sandbox has chats, saying why not when it hasn't.
+func (m *app) chatsIn(sb *sandboxes.View) bool {
+	if sb == nil {
+		return false
+	}
+	if sb.TeammateID == "" {
+		m.setNotice(sb.Name+" has no teammate to chat with. Give it one in the browser.", true)
+		return false
+	}
+	return true
+}
+
+// loadChats reads the chats of the chat screen's sandbox, for c to open the newest.
 func (m *app) loadChats() tea.Cmd {
 	ctx, client, env, sandbox := m.ctx, m.client, m.env.ID, m.chats.sandbox.ID
 	return func() tea.Msg {
@@ -202,24 +217,18 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 	}
 	switch msg := msg.(type) {
 	case chatsListed:
-		if msg.sandbox != c.sandbox.ID {
+		if msg.sandbox != c.sandbox.ID || !c.picking || m.screen == screenChat {
 			return nil, true
 		}
+		c.picking = false
 		if msg.err != nil {
 			m.fail(msg.err)
 			return nil, true
 		}
-		prev := ""
-		if c.cursor < len(c.list) {
-			prev = c.list[c.cursor].ID
+		if len(msg.list) == 0 {
+			return m.openChat(""), true
 		}
-		c.list, c.listed = msg.list, true
-		c.cursor = min(c.cursor, max(len(c.list)-1, 0))
-		for i, x := range c.list {
-			if x.ID == prev {
-				c.cursor = i
-			}
-		}
+		return m.openChat(byActivity(msg.list)[0].ID), true
 	case chatLoaded:
 		if !current(msg.gen) {
 			return nil, true
@@ -286,9 +295,9 @@ func (m *app) chatUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 		c.draft.set("")
 		m.setNotice("", false)
 		if m.screen != screenChat || c.id != "" {
-			return m.loadChats(), true
+			return nil, true
 		}
-		return tea.Batch(m.openChat(msg.chat.ID), m.loadChats()), true
+		return m.openChat(msg.chat.ID), true
 	case promptSent:
 		if msg.gen != c.gen {
 			return nil, true
@@ -351,30 +360,6 @@ func (c *chatState) running() bool {
 	return c.chat.State == store.ChatRunning
 }
 
-// chatsKey answers the list of a sandbox's chats.
-func (m *app) chatsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	c := &m.chats
-	switch {
-	case key.Matches(msg, keyBack):
-		m.screen = c.back
-	case key.Matches(msg, keyUp):
-		c.cursor = max(c.cursor-1, 0)
-	case key.Matches(msg, keyDown):
-		c.cursor = min(c.cursor+1, max(len(c.list)-1, 0))
-	case key.Matches(msg, keyOpen):
-		if c.cursor < len(c.list) {
-			return m, m.openChat(c.list[c.cursor].ID)
-		}
-	case key.Matches(msg, keyNewChat):
-		return m, m.openChat("")
-	case key.Matches(msg, keyApprovals):
-		m.openApprovals()
-	case key.Matches(msg, keyHelp):
-		m.openHelp()
-	}
-	return m, nil
-}
-
 // chatKey answers the transcript: the cursor moves between the folded items, and the keys write,
 // stop and start chats.
 func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -389,8 +374,7 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keyBack):
 		m.stopChat()
-		m.screen = screenChats
-		return m, m.loadChats()
+		m.screen = c.back
 	case key.Matches(msg, keyUp):
 		switch {
 		case folds == 0:
@@ -513,8 +497,7 @@ func (m *app) composeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyEsc):
 		c.composing = false
 		if c.id == "" { // a new chat that never started
-			m.screen = screenChats
-			return m, m.loadChats()
+			m.screen = c.back
 		}
 	default:
 		c.draft.key(msg)
@@ -1097,38 +1080,6 @@ func chatTitle(c store.Chat) string {
 	return firstNonEmpty(oneLine(c.Title), "New chat")
 }
 
-// chatsBody is the list of the sandbox's chats, the newest activity first.
-func (m *app) chatsBody(w, h int) []string {
-	c := &m.chats
-	head := styleBold.Render("Chats") + styleDim.Render(" in "+c.sandbox.Name+" with "+m.teammateName())
-	switch {
-	case !c.listed:
-		return []string{head, "", styleDim.Render("Loading…")}
-	case len(c.list) == 0:
-		return []string{head, "", "No chats yet. Press n to start one with " + m.teammateName() + "."}
-	}
-	lines := []string{head, ""}
-	offset := 0
-	if c.cursor >= h-2 {
-		offset = c.cursor - (h - 2) + 1
-	}
-	for i := offset; i < len(c.list); i++ {
-		m.hitRow(len(lines), 0, w, rowChat, i)
-		x := c.list[i]
-		cursor, title := "  ", fit(chatTitle(x), max(w-2-colStatus-1-colUptime-1, 8))
-		if i == c.cursor {
-			cursor, title = m.cursorMark(true), styleBold.Render(title)
-		}
-		mark, style := "○", styleDim
-		if x.State == store.ChatRunning {
-			mark, style = "◐", styleAccent
-		}
-		state := style.Render(mark) + " " + fit(chatStateWords[x.State], colStatus-2)
-		lines = append(lines, cursor+state+" "+title+" "+styleDim.Render(age(m.now.Sub(x.UpdatedAt))))
-	}
-	return lines
-}
-
 // chatBody is the chat on show: its title and state, and the transcript's rows in view.
 func (m *app) chatBody(w, h int) []string {
 	c := &m.chats
@@ -1175,15 +1126,9 @@ func (m *app) chatBody(w, h int) []string {
 	return append(lines, t.lines[start:end]...)
 }
 
-// chatBindings are the keys the key bar shows on the chat screens.
+// chatBindings are the keys the key bar shows on the chat screen.
 func (m *app) chatBindings() []key.Binding {
 	c := &m.chats
-	if m.screen == screenChats {
-		if len(c.list) == 0 {
-			return []key.Binding{keyNewChat, keyBack, keyHelp}
-		}
-		return []key.Binding{keyOpen, keyNewChat, keyUp, keyBack, keyHelp}
-	}
 	if c.composing {
 		return []key.Binding{keySend, keyNewline, keyLeave}
 	}

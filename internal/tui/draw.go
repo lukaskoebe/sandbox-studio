@@ -242,7 +242,7 @@ func (m *app) tabHeader(w int) (string, []tabSpan) {
 			}
 		}
 	}
-	return spread(b.String(), styleDim.Render(m.now.Format("15:04"))+" ", w), spans
+	return spread(b.String(), m.sessionsHeader()+styleDim.Render(m.now.Format("15:04"))+" ", w), spans
 }
 
 // tabRule is the rule under the tab header: the accent under the tab on show, dim elsewhere.

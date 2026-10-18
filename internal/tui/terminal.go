@@ -20,8 +20,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 )
 
-// terminalName is the sandbox's tmux session the TUI attaches to: the one the web workspace
-// opens first, which it creates when it doesn't exist.
+// terminalName is the sandbox's tmux session t attaches to: the one the web workspace opens
+// first, which it creates when it doesn't exist.
 const terminalName = "main"
 
 // detachKey is Ctrl-], which returns from an attached terminal to the TUI.
@@ -35,6 +35,7 @@ const resizeEvery = 250 * time.Millisecond
 // user detached.
 type attachDone struct {
 	sandbox string
+	name    string // the terminal's
 	err     error
 }
 
@@ -46,6 +47,7 @@ type attachment struct {
 	client  *Client
 	env     string
 	sandbox string
+	name    string    // the tmux session
 	in      io.Reader // the terminal's input, given by Bubble Tea
 	out     io.Writer // the terminal's output, given by Bubble Tea
 	// size is the terminal's size when it is not a terminal itself, such as in tests.
@@ -61,7 +63,7 @@ func (a *attachment) SetStderr(io.Writer)   {}
 func (a *attachment) Run() error {
 	fd, isTerm := terminalFD(a.in)
 	cols, rows := a.terminalSize(fd, isTerm)
-	conn, err := a.client.Attach(a.ctx, a.env, a.sandbox, terminalName, cols, rows)
+	conn, err := a.client.Attach(a.ctx, a.env, a.sandbox, firstNonEmpty(a.name, terminalName), cols, rows)
 	if err != nil {
 		return err
 	}
@@ -208,14 +210,15 @@ func (c *Client) Attach(ctx context.Context, env, id, name string, cols, rows ui
 	return conn, nil
 }
 
-// AttachTerminal shows a running sandbox's main terminal in this one, as the TUI does, until the
-// user detaches with Ctrl-] or the sandbox ends the terminal.
-func AttachTerminal(ctx context.Context, c *Client, env, sandbox string) error {
-	return (&attachment{ctx: ctx, client: c, env: env, sandbox: sandbox, in: os.Stdin, out: os.Stdout}).Run()
+// AttachTerminal shows a running sandbox's terminal by its name in this one, as the TUI does,
+// until the user detaches with Ctrl-] or the sandbox ends the terminal.
+func AttachTerminal(ctx context.Context, c *Client, env, sandbox, name string) error {
+	return (&attachment{ctx: ctx, client: c, env: env, sandbox: sandbox, name: name, in: os.Stdin, out: os.Stdout}).Run()
 }
 
-// attachTo shows a sandbox's terminal. Only a running sandbox has one; the others say what to do.
-func (m *app) attachTo(sb *sandboxes.View) tea.Cmd {
+// attachTo shows a sandbox's terminal by its name. Only a running sandbox has terminals; the
+// others say what to do.
+func (m *app) attachTo(sb *sandboxes.View, name string) tea.Cmd {
 	if sb == nil {
 		return nil
 	}
@@ -231,8 +234,8 @@ func (m *app) attachTo(sb *sandboxes.View) tea.Cmd {
 		m.setNotice(sb.Name+" is still starting.", false)
 		return nil
 	}
-	name := sb.Name
-	return tea.Exec(&attachment{ctx: m.ctx, client: m.client, env: m.env.ID, sandbox: sb.ID}, func(err error) tea.Msg {
-		return attachDone{sandbox: name, err: err}
+	sandbox := sb.Name
+	return tea.Exec(&attachment{ctx: m.ctx, client: m.client, env: m.env.ID, sandbox: sb.ID, name: name}, func(err error) tea.Msg {
+		return attachDone{sandbox: sandbox, name: name, err: err}
 	})
 }

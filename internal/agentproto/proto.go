@@ -85,6 +85,8 @@ type Session struct {
 	Harness string `json:"harness,omitempty" doc:"The agent harness running in the session; empty for plain terminals"`
 	// Chat is set for a chat opened in the terminal.
 	Chat string `json:"chat,omitempty" doc:"The chat this session continues, when a chat was opened in the terminal"`
+	// Activity is when the session's window last printed; guests before it send none.
+	Activity int64 `json:"activity,omitempty" doc:"Unix seconds of the session window's latest output"`
 }
 
 // HarnessOption is the tmux user option that marks a session as an agent session.

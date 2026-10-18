@@ -32,7 +32,7 @@ The session cookie is set after the first navigation in fixtures.ts, so a fast p
 | `studio create <name>` | Creates a sandbox and waits until it runs. `--teammate Finn` gives it an owner, `--template node@3` starts from a template, `--cpus` and `--memory` (in GiB) size it, and `--no-wait` returns once Studio has accepted it. |
 | `studio fork <sandbox> <name>` | Forks a sandbox into a new one with a copy of its disks, and waits until it runs, unless `--no-wait`. |
 | `studio rm <sandbox>` | Deletes a sandbox and its disks. Asks for its name first. |
-| `studio shell <sandbox>` | Opens the sandbox's terminal in yours. `Ctrl-]` detaches; the terminal keeps running. |
+| `studio shell <sandbox> [terminal]` | Opens the sandbox's main terminal in yours, or the one you name, such as an agent's (`claude`). `Ctrl-]` detaches; the terminal keeps running. |
 | `studio ask <sandbox> <prompt>` | Asks the sandbox's teammate and prints the answer as it comes. |
 | `studio approvals` | Lists what is waiting for you, in every environment. |
 | `studio approve <id>`, `studio deny <id>` | Decides an approval. |

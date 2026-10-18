@@ -28,6 +28,11 @@ var (
 	keySuspend   = key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "suspend"))
 	keyDelete    = key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete"))
 	keyChat      = key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "chat"))
+	keyChatNew   = key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "new chat"))
+	keyAgent     = key.NewBinding(key.WithKeys("T"), key.WithHelp("T", "new agent"))
+	keyNumber    = key.NewBinding(key.WithKeys("1", "2", "3", "4", "5", "6", "7", "8", "9"), key.WithHelp("1-9", "jump in"))
+	keyWaiting   = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next waiting"))
+	keyEnter     = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "go in"))
 	keyYes       = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "delete"))
 	keyNo        = key.NewBinding(key.WithKeys("n", "esc"), key.WithHelp("n", "keep"))
 	keyInterrupt = key.NewBinding(key.WithKeys("ctrl+c"))
@@ -73,8 +78,6 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.envsKey(msg)
 	case screenApprovals:
 		return m.approvalsKey(msg)
-	case screenChats:
-		return m.chatsKey(msg)
 	case screenChat:
 		return m.chatKey(msg)
 	case screenActivity:
@@ -100,10 +103,17 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyQuit):
 		return m, tea.Quit
 	case key.Matches(msg, keyUp):
-		m.cursor = max(m.cursor-1, 0)
+		m.moveRow(-1)
 	case key.Matches(msg, keyDown):
-		m.cursor = min(m.cursor+1, max(len(m.visible())-1, 0))
+		m.moveRow(1)
+	case key.Matches(msg, keyNumber):
+		return m, m.numbered(int(msg.String()[0] - '0'))
+	case key.Matches(msg, keyWaiting):
+		m.nextWaiting()
 	case key.Matches(msg, keyOpen):
+		if _, ok := m.selectedSession(); ok {
+			return m, m.enterSession()
+		}
 		if m.selected() != nil {
 			m.screen = screenDetail
 		}
@@ -123,6 +133,10 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.askDelete(m.selected())
 	case key.Matches(msg, keyChat):
 		return m, m.openChats(m.selected())
+	case key.Matches(msg, keyChatNew):
+		return m, m.newChat(m.selected())
+	case key.Matches(msg, keyAgent):
+		return m, m.startAgent(m.selected())
 	case key.Matches(msg, keyEnv):
 		m.openEnvs()
 	case key.Matches(msg, keyFilter):
@@ -130,7 +144,7 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
 	case key.Matches(msg, keyTerminal):
-		return m, m.attachTo(m.selected())
+		return m, m.attachTo(m.selected(), terminalName)
 	case key.Matches(msg, keyActivity):
 		return m, m.openActivity("")
 	case key.Matches(msg, keyEsc):
@@ -160,6 +174,10 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.askDelete(m.selected())
 	case key.Matches(msg, keyChat):
 		return m, m.openChats(m.selected())
+	case key.Matches(msg, keyChatNew):
+		return m, m.newChat(m.selected())
+	case key.Matches(msg, keyAgent):
+		return m, m.startAgent(m.selected())
 	case key.Matches(msg, keyActivity):
 		if sb := m.selected(); sb != nil {
 			return m, m.openActivity(sb.Name)
@@ -167,7 +185,7 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
 	case key.Matches(msg, keyTerminal):
-		return m, m.attachTo(m.selected())
+		return m, m.attachTo(m.selected(), terminalName)
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}
@@ -186,7 +204,7 @@ func (m *app) envsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenHome
 		if m.picker < len(m.envs) && m.envs[m.picker].ID != m.env.ID {
 			m.env = m.envs[m.picker]
-			m.sandboxes, m.loaded, m.cursor, m.filter = nil, false, 0, ""
+			m.sandboxes, m.loaded, m.cursor, m.sub, m.filter = nil, false, 0, -1, ""
 			return m, m.loadSandboxes()
 		}
 	}
@@ -339,7 +357,7 @@ func (m *app) bindings() []key.Binding {
 		return []key.Binding{keyBack}
 	case screenApprovals:
 		return m.approvalBindings()
-	case screenChats, screenChat:
+	case screenChat:
 		return m.chatBindings()
 	case screenActivity, screenEntry:
 		return m.activityBindings()
@@ -349,6 +367,9 @@ func (m *app) bindings() []key.Binding {
 		return m.newBindings()
 	case screenCheckpoints:
 		return m.checkpointBindings()
+	}
+	if _, ok := m.selectedSession(); ok {
+		return []key.Binding{keyEnter, keyNumber, keyWaiting, keyApprovals, keyHelp, keyQuit, keyAgent, keyChatNew}
 	}
 	return []key.Binding{keyOpen, keyNew, keyLifecycle, keyApprovals, keyTerminal, keyChat, keyHelp, keyQuit}
 }

@@ -114,17 +114,12 @@ func (m *app) row(sb sandboxes.View, selected bool, w int) string {
 	ph := phaseOf(sb)
 	spark := ""
 	if m.sparkColumn(w) {
-		w -= colSpark + 1
 		spark = m.cpuSpark(sb, colSpark) + " "
 	}
 	// The flexible columns share what the fixed ones leave: the name gets the larger half. The
 	// visual look's approvals have a dot before them.
-	flex := max(w-2-colStatus-colTeammate-colUptime-colApprovals-4, 8)
-	if !m.look.plain {
-		flex = max(flex-2, 8)
-	}
-	nameW := flex / 2
-	tmplW := max(flex-nameW-1, 4)
+	nameW := m.rowNameWidth(w)
+	tmplW := max(m.rowFlex(w)-nameW-1, 4)
 
 	name := fit(sb.Name, nameW)
 	if selected {
@@ -154,6 +149,25 @@ func (m *app) row(sb sandboxes.View, selected bool, w int) string {
 		styleDim.Render(fit(sb.TemplateName, tmplW)) + " " + spark + styleDim.Render(fit(up, colUptime)) + " " + approvals
 }
 
+// rowFlex is the room the fixed columns of a row of w cells leave to the name and the template.
+// The visual look's approvals have a dot before them.
+func (m *app) rowFlex(w int) int {
+	if m.sparkColumn(w) {
+		w -= colSpark + 1
+	}
+	flex := max(w-2-colStatus-colTeammate-colUptime-colApprovals-4, 8)
+	if !m.look.plain {
+		flex = max(flex-2, 8)
+	}
+	return flex
+}
+
+// rowNameWidth is the width of the name in a row of w cells: the larger half of the flexible
+// columns.
+func (m *app) rowNameWidth(w int) int {
+	return m.rowFlex(w) / 2
+}
+
 // Columns of the list in Home's wide layout: teammate, uptime and the approvals waiting.
 const (
 	colPaneTeammate = 7
@@ -165,7 +179,7 @@ const (
 // teammate, CPU sparkline, uptime, and the approvals waiting on it. The detail pane has the rest.
 func (m *app) paneRow(sb sandboxes.View, selected bool, w int) string {
 	ph := phaseOf(sb)
-	nameW := max(w-2-colStatus-colPaneTeammate-colSpark-colShortUptime-colWaiting-5, 6)
+	nameW := m.paneNameWidth(w)
 	name := fit(sb.Name, nameW)
 	if selected {
 		name = styleBold.Render(name)
@@ -184,6 +198,11 @@ func (m *app) paneRow(sb sandboxes.View, selected bool, w int) string {
 	}
 	return m.cursorMark(selected) + m.statusCell(ph, colStatus) + " " + name + " " + teammate + " " +
 		m.cpuSpark(sb, colSpark) + " " + styleDim.Render(fit(up, colShortUptime)) + " " + waiting
+}
+
+// paneNameWidth is the width of the name in a row of the wide layout's list of w cells.
+func (m *app) paneNameWidth(w int) int {
+	return max(w-2-colStatus-colPaneTeammate-colSpark-colShortUptime-colWaiting-5, 6)
 }
 
 // shortUptime is an uptime in its largest unit: "12m", "2h", "4d".
@@ -218,15 +237,37 @@ func (m *app) homeBody(w, h int) []string {
 	if m.homeSplit(w) {
 		return m.splitHome(visible, w, h)
 	}
-	// The cursor's row stays in view: the list scrolls once the cursor passes the last row.
+	return m.homeList(visible, w, h, func(sb sandboxes.View, selected bool) string { return m.row(sb, selected, w) }, m.rowNameWidth(w)+1+colTeammate)
+}
+
+// homeList is the rows of Home's list in w cells and h lines, the cursor's row in view: each
+// sandbox as row draws it, then its sessions, their titles nameW cells wide, over the sandboxes'
+// names and teammates.
+func (m *app) homeList(visible []sandboxes.View, w, h int, row func(sandboxes.View, bool) string, nameW int) []string {
+	rows := m.homeRows()
+	at := m.cursorRow(rows)
+	// The list scrolls once the cursor passes the last row.
 	offset := 0
-	if m.cursor >= h {
-		offset = m.cursor - h + 1
+	if at >= h {
+		offset = at - h + 1
 	}
 	var lines []string
-	for i := offset; i < len(visible) && len(lines) < h; i++ {
-		m.hitRow(len(lines), 0, w, rowSandbox, i)
-		lines = append(lines, m.row(visible[i], i == m.cursor, w))
+	sessions := map[int][]session{}
+	for i := offset; i < len(rows) && len(lines) < h; i++ {
+		r := rows[i]
+		selected := i == at
+		if r.sub < 0 {
+			m.hitRow(len(lines), 0, w, rowSandbox, r.sb)
+			lines = append(lines, row(visible[r.sb], selected))
+			continue
+		}
+		list, ok := sessions[r.sb]
+		if !ok {
+			list = m.sessionsOf(visible[r.sb])
+			sessions[r.sb] = list
+		}
+		m.hitSession(len(lines), 0, w, r.sb, r.sub)
+		lines = append(lines, m.sessionRow(list[r.sub], r.num, selected, nameW, w))
 	}
 	return lines
 }
@@ -236,15 +277,14 @@ func (m *app) homeBody(w, h int) []string {
 func (m *app) splitHome(visible []sandboxes.View, w, h int) []string {
 	listW := homeListWidth(w)
 	left := []string{styleDim.Render(fmt.Sprintf("SANDBOXES  %d", len(visible)))}
-	rows := max(h-1, 1)
-	offset := 0
-	if m.cursor >= rows {
-		offset = m.cursor - rows + 1
+	first := len(m.mouse.rows)
+	list := m.homeList(visible, listW, max(h-1, 1), func(sb sandboxes.View, selected bool) string {
+		return m.paneRow(sb, selected, listW-1)
+	}, m.paneNameWidth(listW-1)+1+colPaneTeammate)
+	for i := first; i < len(m.mouse.rows); i++ {
+		m.mouse.rows[i].y++ // under the heading
 	}
-	for i := offset; i < len(visible) && len(left) < h; i++ {
-		m.hitRow(len(left), 0, listW, rowSandbox, i)
-		left = append(left, m.paneRow(visible[i], i == m.cursor, listW-1))
-	}
+	left = append(left, list...)
 	var right []string
 	detailW := w - listW - 2
 	if m.homeDash(w) {

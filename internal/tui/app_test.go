@@ -57,6 +57,8 @@ func keyMsg(k string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyDown}
 	case "up":
 		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
 	case "ctrl+c":
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	default:

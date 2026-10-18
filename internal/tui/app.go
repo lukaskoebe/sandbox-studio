@@ -24,7 +24,6 @@ const (
 	screenEnvs
 	screenHelp
 	screenApprovals
-	screenChats       // a sandbox's chats
 	screenChat        // one chat's transcript
 	screenActivity    // the connections and decisions log
 	screenEntry       // one entry of the log, and its rule
@@ -82,6 +81,8 @@ type app struct {
 	checkpoints    checkpointState    // the checkpoints screen
 	ports          portsState         // the open ports of the sandbox on the detail screen
 	cursor         int                // the selected sandbox, among the visible ones
+	sub            int                // the session under the cursor's sandbox the cursor is on; -1 for the sandbox
+	sess           sessionsState      // the sessions of the sandboxes, which Home lists under them
 	approvalCursor int                // the selected card of the approvals screen
 	choices        map[string]*choice // the approvals' choices, by the ID of a card's first approval
 	split          map[string]bool    // the approvals reviewed one by one, out of their group
@@ -122,6 +123,7 @@ func newApp(ctx context.Context, client *Client, addr string) *app {
 		width:     defaultWidth,
 		height:    defaultHeight,
 		look:      look{plain: true},
+		sub:       -1,
 	}
 }
 
@@ -147,7 +149,7 @@ func (m *app) Init() tea.Cmd {
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
-		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture())
+		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions())
 }
 
 // update applies one message to the model.
@@ -174,6 +176,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.pictureUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.sessionsUpdate(msg); ok {
 		return m, cmd
 	}
 	if m.motionUpdate(msg) {
@@ -274,7 +279,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.report("Could not open the terminal: "+msg.err.Error(), true)
 		} else {
-			m.report("Detached from "+msg.sandbox+".", false)
+			m.report("Detached from "+msg.name+" in "+msg.sandbox+".", false)
 		}
 		return m, m.refresh()
 	}
@@ -285,10 +290,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // approvals of every environment, and the list of the screen on show.
 func (m *app) refresh() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSandboxes(), m.loadApprovals()}
-	switch m.screen {
-	case screenChats:
-		cmds = append(cmds, m.loadChats())
-	case screenCheckpoints:
+	if m.screen == screenCheckpoints {
 		cmds = append(cmds, m.loadCheckpoints())
 	}
 	return tea.Batch(cmds...)
@@ -344,7 +346,7 @@ func (m *app) setNotice(text string, failed bool) {
 }
 
 // reselect puts the cursor back on the sandbox prev when it is still visible, reporting whether
-// it is, and keeps the cursor in range otherwise.
+// it is, and keeps the cursor in range otherwise, on a sandbox's own row.
 func (m *app) reselect(prev string) bool {
 	visible := m.visible()
 	found := false
@@ -352,6 +354,9 @@ func (m *app) reselect(prev string) bool {
 		if sb.ID == prev {
 			m.cursor, found = i, true
 		}
+	}
+	if !found {
+		m.sub = -1
 	}
 	m.cursor = min(max(m.cursor, 0), max(len(visible)-1, 0))
 	return found

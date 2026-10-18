@@ -80,7 +80,7 @@ func (m *app) header(w int) string {
 	default:
 		right = styleAccent.Render(fmt.Sprintf("● %d %s", n, plural(n, "approval", "approvals")))
 	}
-	return spread(left, right, w)
+	return spread(left, m.sessionsHeader()+right, w)
 }
 
 // paneColumns are the columns of the lines between the panes of the screen on show, none when it
@@ -110,8 +110,6 @@ func (m *app) body(w, h int) []string {
 		return m.helpBody()
 	case screenApprovals:
 		return m.approvalsBody(w, h)
-	case screenChats:
-		return m.chatsBody(w, h)
 	case screenChat:
 		return m.chatBody(w, h)
 	case screenActivity:
@@ -174,13 +172,13 @@ func (m *app) noticeLine(w int) string {
 // Studio lives.
 func (m *app) helpBody() []string {
 	keys := [][2]string{
-		{"enter", "open the sandbox, with its ports"},
-		{"s / z", "start, stop or resume the sandbox; z suspends it"},
-		{"d", "delete the sandbox, after asking"},
-		{"f", "fork the sandbox: a new one with a copy of its disks"},
-		{"h", "the sandbox's checkpoints: save one, or restore one"},
-		{"t", "the sandbox's terminal; Ctrl-] returns here"},
-		{"c", "the chats with the sandbox's teammate"},
+		{"1-9", "go into that session: its terminal (Ctrl-] returns) or its chat"},
+		{"enter", "go into the session under the cursor, or open the sandbox"},
+		{"tab", "the next session that waits for you: blocked, then done"},
+		{"t / T", "the sandbox's main terminal; T starts its teammate's agent"},
+		{"c / C", "the newest chat with the sandbox's teammate; C a new one"},
+		{"s / z / d", "start, stop or resume; z suspends; d deletes, after asking"},
+		{"f / h", "fork the sandbox; its checkpoints, to save or restore one"},
 		{"n", "new sandbox: a teammate, a template and a name"},
 		{"e", "switch environment"},
 		{"/", "filter by name, teammate or template"},
@@ -223,7 +221,7 @@ func (m *app) helpBody() []string {
 			"The log shows each sandbox's latest connections, which Studio keeps in",
 			"memory, and the decisions on its requests. It updates every two seconds.",
 		}
-	case screenChats, screenChat:
+	case screenChat:
 		title = "Chat"
 		keys = [][2]string{
 			{"p", "write a prompt; enter sends it, ctrl+j starts a new line"},

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Terminal UI:** Home lists each sandbox's sessions under it: its agents running in a
+  terminal, its newest chats and its other terminals, each agent marked working, blocked or
+  done. A number from 1 to 9 goes straight into a session, `Ctrl-]` (or `esc` in a chat) comes
+  back, and `tab` finds the next one that waits for you. `T` starts the teammate's agent in a
+  new terminal, `c` opens the newest chat and `C` a new one. The Chats screen is gone.
+- **Command line:** `studio shell <sandbox> [terminal]` opens any of a sandbox's terminals,
+  such as an agent's.
+- **Fix:** `studio tui` and `studio login-url` read the Studio's key without opening the
+  catalog for writing, so a newer binary no longer migrates the catalog of the Studio it talks to.
+
 ## v0.3.5 — 2026-10-17
 
 A terminal UI that looks like Studio and decides every approval, Codex memory that works

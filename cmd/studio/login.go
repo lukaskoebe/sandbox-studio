@@ -70,12 +70,7 @@ func controlCredential(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	st, err := store.Open(ctx, p.DB())
-	if err != nil {
-		return "", fmt.Errorf("open Studio's catalog (start Studio first): %w", err)
-	}
-	defer st.Close()
-	key, err := st.Setting(ctx, "web-auth-key")
+	key, err := store.PeekSetting(ctx, p.DB(), "web-auth-key")
 	if err != nil {
 		return "", fmt.Errorf("read Studio's authentication key (start Studio first): %w", err)
 	}

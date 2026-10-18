@@ -24,16 +24,11 @@ func item(id string, seq int, kind string) chat.Item {
 // sampleChat opens a chat of blub with Iris on the sample app: a prompt, a thought, two tool
 // calls and an answer with a heading and a code block.
 func sampleChat(m *app) *app {
-	m = press(m, "c")
-	m.chats.list = []store.Chat{
-		{ID: "c1", SandboxID: "sb1", TeammateID: "t1", Title: "Fix the login form", State: store.ChatIdle, UpdatedAt: m.now.Add(-3 * time.Minute)},
-		{ID: "c2", SandboxID: "sb1", TeammateID: "t1", State: store.ChatIdle, UpdatedAt: m.now.Add(-26 * time.Hour)},
-	}
-	m.chats.listed = true
+	m.chats = chatState{sandbox: m.sandboxes[0], back: screenHome, fold: -1}
 	m.openChat("c1")
 	c := &m.chats
 	c.loaded = true
-	c.chat = m.chats.list[0]
+	c.chat = store.Chat{ID: "c1", SandboxID: "sb1", TeammateID: "t1", Title: "Fix the login form", State: store.ChatIdle, UpdatedAt: m.now.Add(-3 * time.Minute)}
 	ended := m.now.Add(-time.Minute)
 	c.turns["t1"] = chat.Turn{ChatTurn: store.ChatTurn{ID: "t1", ChatID: "c1", Seq: 1, EndedAt: &ended}}
 
@@ -56,13 +51,6 @@ func sampleChat(m *app) *app {
 	}
 	c.rev = 5
 	return m
-}
-
-func TestGoldenChats(t *testing.T) {
-	m := sampleChat(sampleApp())
-	m.stopChat()
-	m.screen = screenChats
-	golden(t, "chats", m)
 }
 
 func TestGoldenChat(t *testing.T) {
@@ -102,15 +90,28 @@ func TestChatNeedsATeammate(t *testing.T) {
 func TestChatOpensFromHomeAndDetail(t *testing.T) {
 	next, cmd := sampleApp().Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
 	m := next.(*app)
-	if m.screen != screenChats || m.chats.sandbox.ID != "sb1" || cmd == nil {
-		t.Fatalf("c on Home: screen %v, sandbox %q, cmd %v", m.screen, m.chats.sandbox.ID, cmd != nil)
+	if m.screen != screenHome || m.chats.sandbox.ID != "sb1" || !m.chats.picking || cmd == nil {
+		t.Fatalf("c on Home: screen %v, sandbox %q, picking %v, cmd %v", m.screen, m.chats.sandbox.ID, m.chats.picking, cmd != nil)
 	}
+	newest := store.Chat{ID: "c1", SandboxID: "sb1", State: store.ChatIdle, UpdatedAt: time.Now()}
+	next, _ = m.Update(chatsListed{sandbox: "sb1", list: []store.Chat{{ID: "c0"}, newest}})
+	if m = next.(*app); m.screen != screenChat || m.chats.id != "c1" {
+		t.Fatalf("c opens the newest chat: screen %v, chat %q", m.screen, m.chats.id)
+	}
+	if m = press(m, "esc"); m.screen != screenHome {
+		t.Fatalf("esc from the chat returns to %v", m.screen)
+	}
+
 	m = press(sampleApp(), "j", "enter", "c")
-	if m.screen != screenChats || m.chats.sandbox.ID != "sb2" {
-		t.Fatalf("c on the detail: screen %v, sandbox %q", m.screen, m.chats.sandbox.ID)
+	next, _ = m.Update(chatsListed{sandbox: "sb2"})
+	if m = next.(*app); m.screen != screenChat || m.chats.id != "" || !m.chats.composing {
+		t.Fatalf("c without chats opens a new one: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
 	}
 	if m = press(m, "esc"); m.screen != screenDetail {
-		t.Fatalf("esc from the chats returns to %v", m.screen)
+		t.Fatalf("esc from the new chat returns to %v", m.screen)
+	}
+	if m = press(sampleApp(), "C"); m.screen != screenChat || m.chats.id != "" || !m.chats.composing {
+		t.Fatalf("C: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
 	}
 }
 
@@ -203,7 +204,7 @@ func TestNewChatStartsWithTheComposer(t *testing.T) {
 		t.Fatalf("created: screen %v, chat %q, composing %v", m.screen, m.chats.id, m.chats.composing)
 	}
 	m = press(sampleChat(sampleApp()), "n", "esc")
-	if m.screen != screenChats {
+	if m.screen != screenHome {
 		t.Fatalf("esc from a new chat returns to %v", m.screen)
 	}
 }
@@ -413,11 +414,10 @@ func TestChatScreensLoadFromTheServer(t *testing.T) {
 	m.sandboxes[0].TeammateID = "t1" // the chat is with this teammate
 	m.teammates["t1"] = "Iris"
 	m = run(m, m.openChats(m.selected()))
-	if !m.chats.listed || len(m.chats.list) != 1 {
-		t.Fatalf("chats: listed %v, %d", m.chats.listed, len(m.chats.list))
+	if m.screen != screenChat || m.chats.id != c.ID {
+		t.Fatalf("c opens the newest chat: screen %v, chat %q", m.screen, m.chats.id)
 	}
-	cmd := m.openChat(c.ID)
-	next, cmd := m.Update(cmd())
+	next, cmd := m.Update(m.loadChat()())
 	m = next.(*app)
 	if !m.chats.loaded || len(m.chats.items) != 3 || cmd == nil {
 		t.Fatalf("chat: loaded %v, %d items, follow %v", m.chats.loaded, len(m.chats.items), cmd != nil)
