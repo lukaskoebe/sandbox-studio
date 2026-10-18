@@ -1870,6 +1870,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{id}/task-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The logged runs of all the teammate's scheduled tasks, newest first, at most 20, for its activity. */
+        get: operations["listTeammateTaskRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{id}/tasks": {
         parameters: {
             query?: never;
@@ -1880,7 +1897,7 @@ export interface paths {
         /** @description The teammate's tasks: the ones not done first, then oldest first. */
         get: operations["listTeammateTasks"];
         put?: never;
-        /** @description Adds a task to the teammate's list, created by the user. A new task is open; its status is not read. */
+        /** @description Adds a task to the teammate's list, created by the user. A new task is open; its status is not read. A schedule runs it in a chat of its own at its times, in the sandbox sandboxId or the teammate's latest. */
         post: operations["createTeammateTask"];
         delete?: never;
         options?: never;
@@ -1896,8 +1913,42 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Replaces the task's title, details, due day and status. Status done marks it finished. */
+        /** @description Replaces the task's title, details, due day, status, schedule and sandbox: a request without a schedule removes it. Status done marks the task finished, and ends a repeating schedule. */
         put: operations["updateTeammateTask"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{id}/tasks/{task}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Starts a run of the task now, in a chat of its own, as its schedule would. It makes the same checks but doesn't wait: a run that can't start now, such as while a turn runs in the sandbox, is a 409 that says why. The schedule's next run stays. */
+        post: operations["runTeammateTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/teammates/{id}/tasks/{task}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The task's logged runs, newest first, at most 100: started or done with their chat, skipped with why, or missed. */
+        get: operations["listTaskRuns"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2630,6 +2681,8 @@ export interface components {
             sandboxId: string;
             /** @enum {string} */
             state: "idle" | "running" | "terminal" | "orphaned";
+            /** @description The task whose scheduled run opened the chat */
+            taskId?: string;
             teammateId: string;
             title: string;
             /** Format: date-time */
@@ -4300,6 +4353,11 @@ export interface components {
             code: string;
         };
         Session: {
+            /**
+             * Format: int64
+             * @description Unix seconds of the session window's latest output
+             */
+            activity?: number;
             /** Format: int64 */
             attached: number;
             /** @description The chat this session continues, when a chat was opened in the terminal */
@@ -4492,6 +4550,16 @@ export interface components {
             /** @description A day, YYYY-MM-DD */
             due?: string;
             id: string;
+            /** @description The latest logged run */
+            lastRun?: components["schemas"]["TaskRun"];
+            /**
+             * Format: date-time
+             * @description When the schedule runs the task next; absent while it is paused or has no time left
+             */
+            nextRunAt?: string;
+            /** @description The sandbox the runs go to; empty for the teammate's latest */
+            sandboxId?: string;
+            schedule?: components["schemas"]["TaskSchedule"];
             /** @enum {string} */
             status: "open" | "in_progress" | "done";
             teammateId: string;
@@ -4504,9 +4572,61 @@ export interface components {
             details?: string;
             /** @description A day, YYYY-MM-DD */
             due?: string;
+            /** @description The sandbox the runs go to; empty for the teammate's latest */
+            sandboxId?: string;
+            /** @description When the task runs in a chat of its own; absent for none, so a PUT without it removes it */
+            schedule?: components["schemas"]["TaskSchedule"];
             /** @enum {string} */
             status?: "open" | "in_progress" | "done";
             title: string;
+        };
+        TaskRun: {
+            /** Format: date-time */
+            at: string;
+            /** @description The chat the run started */
+            chatId?: string;
+            /**
+             * Format: date-time
+             * @description The scheduled time; absent for a run started with Run now
+             */
+            dueAt?: string;
+            id: string;
+            /**
+             * @description done: the teammate marked the run's work done
+             * @enum {string}
+             */
+            outcome: "started" | "done" | "skipped" | "missed";
+            /** @description Why the run was skipped or missed */
+            reason?: string;
+            taskId: string;
+            teammateId: string;
+        };
+        TaskSchedule: {
+            /** @description once: the day, YYYY-MM-DD */
+            date?: string;
+            /** @description days: the weekdays it runs on */
+            days?: ("mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun")[] | null;
+            /**
+             * Format: int64
+             * @description hours: the hours between runs
+             */
+            everyHours?: number;
+            /**
+             * Format: int64
+             * @description hours: the local hour of the first run
+             */
+            fromHour?: number;
+            /** @description Keeps the schedule and stops the runs */
+            paused?: boolean;
+            /** @enum {string} */
+            repeat: "once" | "days" | "hours";
+            /** @description once and days: the local time, HH:MM */
+            time?: string;
+            /**
+             * Format: int64
+             * @description hours: the local hour the runs stop before
+             */
+            toHour?: number;
         };
         Teammate: {
             /**
@@ -4616,6 +4736,8 @@ export interface components {
             /** @enum {string} */
             origin: "chat" | "terminal";
             prompt: string;
+            /** @description The task whose scheduled run this turn is */
+            taskId?: string;
             /** Format: int64 */
             toolCount: number;
             tools: components["schemas"]["TeammateTool"][] | null;
@@ -9855,6 +9977,40 @@ export interface operations {
             };
         };
     };
+    listTeammateTaskRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listTeammateTasks: {
         parameters: {
             query?: never;
@@ -9954,6 +10110,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Task"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    runTeammateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+                /** @description Task ID */
+                task: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listTaskRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                id: string;
+                /** @description Task ID */
+                task: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskRun"][] | null;
                 };
             };
             /** @description Error */

@@ -849,6 +849,10 @@
             ],
             "type": "string"
           },
+          "taskId": {
+            "description": "The task whose scheduled run opened the chat",
+            "type": "string"
+          },
           "teammateId": {
             "type": "string"
           },
@@ -5841,6 +5845,11 @@
       "Session": {
         "additionalProperties": false,
         "properties": {
+          "activity": {
+            "description": "Unix seconds of the session window's latest output",
+            "format": "int64",
+            "type": "integer"
+          },
           "attached": {
             "format": "int64",
             "type": "integer"
@@ -6393,6 +6402,22 @@
           "id": {
             "type": "string"
           },
+          "lastRun": {
+            "$ref": "#/components/schemas/TaskRun",
+            "description": "The latest logged run"
+          },
+          "nextRunAt": {
+            "description": "When the schedule runs the task next; absent while it is paused or has no time left",
+            "format": "date-time",
+            "type": "string"
+          },
+          "sandboxId": {
+            "description": "The sandbox the runs go to; empty for the teammate's latest",
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/TaskSchedule"
+          },
           "status": {
             "enum": [
               "open",
@@ -6436,6 +6461,14 @@
             "maxLength": 10,
             "type": "string"
           },
+          "sandboxId": {
+            "description": "The sandbox the runs go to; empty for the teammate's latest",
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/TaskSchedule",
+            "description": "When the task runs in a chat of its own; absent for none, so a PUT without it removes it"
+          },
           "status": {
             "enum": [
               "open",
@@ -6452,6 +6485,124 @@
         },
         "required": [
           "title"
+        ],
+        "type": "object"
+      },
+      "TaskRun": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chatId": {
+            "description": "The chat the run started",
+            "type": "string"
+          },
+          "dueAt": {
+            "description": "The scheduled time; absent for a run started with Run now",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "description": "done: the teammate marked the run's work done",
+            "enum": [
+              "started",
+              "done",
+              "skipped",
+              "missed"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Why the run was skipped or missed",
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "teammateId",
+          "taskId",
+          "at",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "TaskSchedule": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "description": "once: the day, YYYY-MM-DD",
+            "type": "string"
+          },
+          "days": {
+            "description": "days: the weekdays it runs on",
+            "items": {
+              "enum": [
+                "mon",
+                "tue",
+                "wed",
+                "thu",
+                "fri",
+                "sat",
+                "sun"
+              ],
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "everyHours": {
+            "description": "hours: the hours between runs",
+            "format": "int64",
+            "maximum": 24,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "fromHour": {
+            "description": "hours: the local hour of the first run",
+            "format": "int64",
+            "maximum": 23,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "paused": {
+            "description": "Keeps the schedule and stops the runs",
+            "type": "boolean"
+          },
+          "repeat": {
+            "enum": [
+              "once",
+              "days",
+              "hours"
+            ],
+            "type": "string"
+          },
+          "time": {
+            "description": "once and days: the local time, HH:MM",
+            "type": "string"
+          },
+          "toHour": {
+            "description": "hours: the local hour the runs stop before",
+            "format": "int64",
+            "maximum": 24,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repeat"
         ],
         "type": "object"
       },
@@ -6793,6 +6944,10 @@
             "type": "string"
           },
           "prompt": {
+            "type": "string"
+          },
+          "taskId": {
+            "description": "The task whose scheduled run this turn is",
             "type": "string"
           },
           "toolCount": {
@@ -15513,6 +15668,65 @@
         ]
       }
     },
+    "/api/environments/{env}/teammates/{id}/task-runs": {
+      "get": {
+        "description": "The logged runs of all the teammate's scheduled tasks, newest first, at most 20, for its activity.",
+        "operationId": "listTeammateTaskRuns",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskRun"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
     "/api/environments/{env}/teammates/{id}/tasks": {
       "get": {
         "description": "The teammate's tasks: the ones not done first, then oldest first.",
@@ -15572,7 +15786,7 @@
         ]
       },
       "post": {
-        "description": "Adds a task to the teammate's list, created by the user. A new task is open; its status is not read.",
+        "description": "Adds a task to the teammate's list, created by the user. A new task is open; its status is not read. A schedule runs it in a chat of its own at its times, in the sandbox sandboxId or the teammate's latest.",
         "operationId": "createTeammateTask",
         "parameters": [
           {
@@ -15635,7 +15849,7 @@
     },
     "/api/environments/{env}/teammates/{id}/tasks/{task}": {
       "put": {
-        "description": "Replaces the task's title, details, due day and status. Status done marks it finished.",
+        "description": "Replaces the task's title, details, due day, status, schedule and sandbox: a request without a schedule removes it. Status done marks the task finished, and ends a repeating schedule.",
         "operationId": "updateTeammateTask",
         "parameters": [
           {
@@ -15685,6 +15899,138 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Task"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/tasks/{task}/run": {
+      "post": {
+        "description": "Starts a run of the task now, in a chat of its own, as its schedule would. It makes the same checks but doesn't wait: a run that can't start now, such as while a turn runs in the sandbox, is a 409 that says why. The schedule's next run stays.",
+        "operationId": "runTeammateTask",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Task ID",
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "description": "Task ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRun"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "teammates"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{id}/tasks/{task}/runs": {
+      "get": {
+        "description": "The task's logged runs, newest first, at most 100: started or done with their chat, skipped with why, or missed.",
+        "operationId": "listTaskRuns",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Task ID",
+            "in": "path",
+            "name": "task",
+            "required": true,
+            "schema": {
+              "description": "Task ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskRun"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
                 }
               }
             },

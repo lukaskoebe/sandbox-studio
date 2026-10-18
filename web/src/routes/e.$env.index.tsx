@@ -558,7 +558,11 @@ function Activity({ env }: { env: string }) {
       text: (
         <>
           <span className="text-muted-foreground">
-            {c.heartbeat ? "Heartbeat" : "Started chat"}
+            {c.heartbeat
+              ? "Heartbeat"
+              : c.taskId
+                ? "Scheduled run"
+                : "Started chat"}
           </span>{" "}
           {c.title ? `“${c.title}”` : "New chat"}
         </>

@@ -61,3 +61,76 @@ test("check-ins start off, then save their schedule on the settings page", async
   await expect(toggle).not.toBeChecked()
   await expect.poll(schedule).toBeUndefined()
 })
+
+test("a task gets a schedule in its dialog, shows it with its next run, and Run now says why it can't start", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("Planner")
+  const id = await addTeammate(api, env, name)
+  const title = `CI triage ${name}`
+  type Listed = {
+    id: string
+    title: string
+    schedule?: { repeat: string; days?: string[]; everyHours?: number }
+    nextRunAt?: string
+  }
+  const listed = async () =>
+    (
+      await api.json<Listed[]>(
+        "GET",
+        `/api/environments/${env}/teammates/${id}/tasks`
+      )
+    )?.find((t) => t.title === title)
+
+  await page.goto(`/e/${env}/teammates/${id}/tasks`)
+  await page.getByRole("button", { name: "Add task", exact: true }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Title").fill(title)
+  await dialog.getByLabel("Schedule").click()
+  await page.getByRole("option", { name: "Days" }).click()
+  await expect(dialog.getByRole("button", { name: "Mon" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  await dialog.getByLabel("Time").fill("09:30")
+  await expect(
+    dialog.getByText("Every weekday at 09:30, in this Studio's local time.")
+  ).toBeVisible()
+  await dialog.getByRole("button", { name: "Add task", exact: true }).click()
+  await expect(dialog).toBeHidden()
+
+  const row = page.getByRole("listitem").filter({ hasText: title })
+  await expect(row).toContainText("⟳ Every weekday at 09:30 · next ")
+  const saved = await listed()
+  expect(saved?.schedule?.days).toEqual(["mon", "tue", "wed", "thu", "fri"])
+  expect(saved?.nextRunAt).toBeTruthy()
+  expect(new Date(saved!.nextRunAt!).getMinutes()).toBe(30)
+
+  // The teammate has no sandbox, so Run now is refused with why.
+  await row.getByRole("button", { name: "Run now" }).click()
+  await expect(page.getByText("The run did not start")).toBeVisible()
+  await expect(page.getByText(/has no sandbox to work in/)).toBeVisible()
+
+  // Every few hours instead, then no schedule at all.
+  await row.getByRole("button", { name: title }).click()
+  await dialog.getByLabel("Schedule").click()
+  await page.getByRole("option", { name: "Every N hours" }).click()
+  await expect(
+    dialog.getByText("Every 4 hours, 08:00–20:00, in this Studio's local time.")
+  ).toBeVisible()
+  await dialog.getByRole("button", { name: "Save" }).click()
+  await expect(dialog).toBeHidden()
+  await expect(row).toContainText("⟳ Every 4 hours, 08:00–20:00")
+  await expect.poll(async () => (await listed())?.schedule?.everyHours).toBe(4)
+
+  await row.getByRole("button", { name: title }).click()
+  await dialog.getByLabel("Schedule").click()
+  await page.getByRole("option", { name: "Off" }).click()
+  await dialog.getByRole("button", { name: "Save" }).click()
+  await expect(dialog).toBeHidden()
+  await expect(row).not.toContainText("⟳")
+  await expect.poll(async () => (await listed())?.schedule).toBeUndefined()
+  await expect(row.getByRole("button", { name: "Run now" })).toHaveCount(0)
+})

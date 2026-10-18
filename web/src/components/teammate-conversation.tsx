@@ -458,6 +458,11 @@ function TurnRow({
           <ClockIcon className="size-3" />
           Check-in · {time(at)}
         </span>
+      ) : turn.taskId ? (
+        <span className="ml-10 flex items-center gap-1.5 font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase">
+          <ClockIcon className="size-3" />
+          Scheduled · {turn.chatTitle || time(at)}
+        </span>
       ) : (
         turn.prompt && (
           <Message align="end">
@@ -824,6 +829,7 @@ function TeammateComposer({
       (c) =>
         c.sandboxId === sandbox?.id &&
         !c.heartbeat &&
+        !c.taskId &&
         (c.state === "idle" || c.state === "running")
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

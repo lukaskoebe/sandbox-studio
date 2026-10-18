@@ -76,6 +76,11 @@ export function ChatTable({
                     Heartbeat
                   </Badge>
                 )}
+                {c.taskId && (
+                  <Badge variant="secondary" className="shrink-0">
+                    Scheduled
+                  </Badge>
+                )}
               </span>
             </TableCell>
             {showTeammate && (

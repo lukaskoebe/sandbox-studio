@@ -2,7 +2,12 @@ import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { HeartbeatIcon, ListChecksIcon, PlusIcon } from "@phosphor-icons/react"
+import {
+  HeartbeatIcon,
+  ListChecksIcon,
+  PlayIcon,
+  PlusIcon,
+} from "@phosphor-icons/react"
 import { SectionHeader } from "@/components/section-header"
 import { TaskDialog } from "@/components/task-dialog"
 import { Button } from "@/components/ui/button"
@@ -18,6 +23,9 @@ import { $api, errorMessage } from "@/lib/api/client"
 import {
   beatLabel,
   heartbeatSentence,
+  runLabel,
+  runTime,
+  scheduleSentence,
   taskStatusLabels,
   type Task,
 } from "@/lib/tasks"
@@ -43,6 +51,11 @@ function TeammateTasks() {
     "/api/environments/{env}/teammates/{id}/heartbeats",
     { params: { path: { env, id } } }
   )
+  const runs = $api.useQuery(
+    "get",
+    "/api/environments/{env}/teammates/{id}/task-runs",
+    { params: { path: { env, id } } }
+  )
   const [dialog, setDialog] = useState<{ open: boolean; task?: Task }>({
     open: false,
   })
@@ -66,7 +79,29 @@ function TeammateTasks() {
     }
   )
 
-  /** Ticking a task marks it done; unticking reopens it. The task's other fields stay. */
+  const run = $api.useMutation(
+    "post",
+    "/api/environments/{env}/teammates/{id}/tasks/{task}/run",
+    {
+      onSuccess: () => {
+        toast.success("The run started in a chat of its own")
+        for (const path of [
+          "/api/environments/{env}/teammates/{id}/tasks",
+          "/api/environments/{env}/teammates/{id}/task-runs",
+        ] as const)
+          void queryClient.invalidateQueries({ queryKey: ["get", path] })
+      },
+      onError: (err) =>
+        toast.error("The run did not start", {
+          description: errorMessage(err),
+        }),
+    }
+  )
+
+  /**
+   * Ticking a task marks it done; unticking reopens it. The task's other fields stay; done
+   * ends a repeating schedule.
+   */
   const setDone = (task: Task, done: boolean) =>
     update.mutate({
       params: { path: { env, id, task: task.id } },
@@ -75,8 +110,26 @@ function TeammateTasks() {
         details: task.details,
         due: task.due,
         status: done ? "done" : "open",
+        schedule: task.schedule,
+        sandboxId: task.sandboxId,
       },
     })
+
+  const titles = new Map(list.map((t) => [t.id, t.title]))
+  const activity = [
+    ...(beats.data ?? []).map((b) => ({
+      key: b.id,
+      at: b.at,
+      text: beatLabel(b),
+      chatId: b.chatId,
+    })),
+    ...(runs.data ?? []).map((r) => ({
+      key: r.id,
+      at: r.at,
+      text: runLabel(r, titles.get(r.taskId) ?? "a task"),
+      chatId: r.chatId,
+    })),
+  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
 
   return (
     <div className="max-w-3xl space-y-8">
@@ -95,7 +148,8 @@ function TeammateTasks() {
         />
         <p className="text-xs text-muted-foreground">
           What {name} works on. Its open tasks are what a check-in gives it to
-          do, and it can add its own.
+          do, and it can add its own. A task with a schedule runs at its own
+          times instead, each time in a new chat.
         </p>
         {tasks.isPending ? (
           <Spinner className="mx-auto block" />
@@ -144,7 +198,45 @@ function TeammateTasks() {
                       <span>Added by {name}</span>
                     )}
                   </span>
+                  {task.schedule && task.status !== "done" && (
+                    <span className="mt-0.5 flex flex-wrap gap-x-2 text-[0.6875rem] text-muted-foreground">
+                      <span>
+                        ⟳ {scheduleSentence(task.schedule)}
+                        {task.schedule.paused
+                          ? " · paused"
+                          : task.nextRunAt
+                            ? ` · next ${runTime(task.nextRunAt)}`
+                            : " · no run left"}
+                      </span>
+                      {task.lastRun && (
+                        <span>
+                          Last run {runTime(task.lastRun.at)},{" "}
+                          {task.lastRun.outcome}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </button>
+                {task.schedule && task.status !== "done" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={run.isPending}
+                    onClick={() =>
+                      run.mutate({
+                        params: { path: { env, id, task: task.id } },
+                      })
+                    }
+                  >
+                    {run.isPending &&
+                    run.variables.params.path.task === task.id ? (
+                      <Spinner />
+                    ) : (
+                      <PlayIcon />
+                    )}
+                    Run now
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -156,7 +248,7 @@ function TeammateTasks() {
           title="Activity"
           icon={HeartbeatIcon}
           area="chat"
-          count={beats.data?.length}
+          count={beats.data || runs.data ? activity.length : undefined}
         />
         <p className="text-xs text-muted-foreground">
           {teammate?.heartbeat ? (
@@ -177,20 +269,21 @@ function TeammateTasks() {
               .
             </>
           )}{" "}
-          Only check-ins that started a chat or were skipped are listed.
+          Only check-ins that started a chat or were skipped are listed, with
+          the runs of scheduled tasks.
         </p>
-        {beats.isPending ? (
+        {beats.isPending || runs.isPending ? (
           <Spinner className="mx-auto block" />
-        ) : (beats.data ?? []).length === 0 ? (
+        ) : activity.length === 0 ? (
           <p className="text-xs text-muted-foreground">Nothing logged yet.</p>
         ) : (
           <ul className="divide-y rounded-lg ring-1 ring-foreground/10">
-            {(beats.data ?? []).map((b) => (
+            {activity.map((b) => (
               <li
-                key={b.id}
+                key={b.key}
                 className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-xs"
               >
-                <span className="min-w-0">{beatLabel(b)}</span>
+                <span className="min-w-0">{b.text}</span>
                 <span className="flex items-center gap-3 text-muted-foreground">
                   {b.chatId && (
                     <Link
