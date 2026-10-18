@@ -60,7 +60,7 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
     display: grid;
     grid-template-columns: 2.5rem minmax(0, 1fr);
     padding: 1.5rem 0;
-    border-bottom: 1px solid var(--sl-color-hairline-light);
+    border-bottom: 1px solid var(--ss-line);
   }
   .install-steps > li:first-child {
     padding-top: 0;
@@ -68,47 +68,47 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
   .install-steps > li::before {
     content: counter(step, decimal-leading-zero);
     padding-top: 0.2rem;
-    color: var(--sl-color-text-accent);
-    font: 500 var(--sl-text-sm) / 1.4 var(--__sl-font-mono);
+    color: var(--ss-accent);
+    font: 700 0.8rem / 1.4 var(--ss-font-mono);
   }
   .install-steps > li > :global(*) {
     grid-column: 2;
   }
   h3 {
-    font-size: var(--sl-text-lg);
-    font-weight: 620;
-    letter-spacing: -0.015em;
-    color: var(--sl-color-white);
+    font: 600 1.0625rem / 1.35 var(--__sl-font);
+    color: var(--ss-fg);
   }
   h3 code,
   p code {
-    font-family: var(--__sl-font-mono);
-    font-size: 0.9em;
     padding: 0.1em 0.35em;
-    border-radius: 0.3rem;
-    background: var(--sl-color-bg-inline-code);
+    border: 1px solid var(--ss-line);
+    border-radius: 4px;
+    background: var(--ss-surface);
   }
   p {
     margin-top: 0.35rem;
     font-size: var(--sl-text-sm);
-    color: var(--sl-color-gray-2);
-    line-height: 1.65;
+    color: var(--ss-muted);
+    line-height: 1.6;
   }
   .install-steps :global(starlight-tabs),
   .install-steps :global(.expressive-code) {
     margin-top: 1rem;
+  }
+  .install-steps :global([role='tab']) {
+    font: 600 0.8rem / 1.2 var(--ss-font-mono);
   }
   .install-tab-text {
     margin-top: 1rem;
   }
   .install-tab-text a,
   .install-note a {
-    color: var(--sl-color-text-accent);
-    font-weight: 550;
+    color: var(--ss-accent);
+    font-weight: 600;
   }
   .install-note {
     margin-top: 1.25rem;
     font-size: var(--sl-text-sm);
-    color: var(--sl-color-gray-3);
+    color: var(--ss-muted);
   }
 </style>

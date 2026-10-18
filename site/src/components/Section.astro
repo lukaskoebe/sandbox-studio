@@ -1,6 +1,6 @@
 ---
-// A landing page section under a hairline: a numbered label, a headline and a lede, then the
-// section's content. `split` puts the heading in a column of its own on wide screens.
+// A landing page section under a hairline: a numbered eyebrow, a mono headline and a lede,
+// then the section's content. `split` puts the heading in a column of its own on wide screens.
 interface Props {
   number?: string
   kicker?: string
@@ -15,7 +15,7 @@ const { number, kicker, title, id, split = false } = Astro.props
   <header class="section-head">
     {
       kicker && (
-        <p class="section-kicker">
+        <p class="section-kicker landing-eyebrow">
           {number && <span class="section-number">{number}</span>}
           {kicker}
         </p>
@@ -29,13 +29,13 @@ const { number, kicker, title, id, split = false } = Astro.props
 
 <style>
   .landing-section {
-    margin-top: clamp(4.5rem, 9vw, 7rem);
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--sl-color-hairline-light);
+    margin-top: clamp(4rem, 8vw, 6.5rem);
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--ss-line);
   }
   .section-head {
-    max-width: 42rem;
-    margin-bottom: clamp(2rem, 4vw, 3rem);
+    max-width: 44rem;
+    margin-bottom: clamp(2rem, 4vw, 2.75rem);
   }
   @media (min-width: 62rem) {
     .split {
@@ -47,36 +47,29 @@ const { number, kicker, title, id, split = false } = Astro.props
       margin-bottom: 0;
     }
     .split h2 {
-      font-size: clamp(1.75rem, 1rem + 1.6vw, 2.25rem);
+      font-size: clamp(1.35rem, 0.9rem + 1vw, 1.7rem);
     }
   }
   .section-kicker {
     display: flex;
     gap: 0.75rem;
-    font-family: var(--__sl-font-mono);
-    font-size: var(--sl-text-xs);
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--sl-color-gray-3);
   }
   .section-number {
-    color: var(--sl-color-text-accent);
+    color: var(--ss-muted);
   }
   h2 {
-    margin-top: 1.5rem;
-    font-size: clamp(1.9rem, 1rem + 2.6vw, 2.75rem);
-    line-height: 1.1;
-    letter-spacing: -0.035em;
-    font-weight: 660;
-    color: var(--sl-color-white);
+    margin-top: 1.1rem;
+    font: 700 clamp(1.5rem, 0.95rem + 1.6vw, 2.1rem) / 1.2 var(--ss-font-mono);
+    letter-spacing: -0.02em;
+    color: var(--ss-fg);
     text-wrap: balance;
   }
   .section-lede {
     margin-top: 1rem;
+    max-width: 68ch;
     font-size: var(--sl-text-base);
-    line-height: 1.65;
-    color: var(--sl-color-gray-2);
+    line-height: 1.6;
+    color: var(--ss-muted);
     text-wrap: pretty;
   }
   .section-body {

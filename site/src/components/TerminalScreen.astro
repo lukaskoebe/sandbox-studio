@@ -1,7 +1,9 @@
 ---
 // A terminal screen from its ANSI text, such as a golden file of the TUI's tests, drawn as
 // colored spans on a dark terminal in both site themes. It knows the SGR codes the TUI
-// writes: reset, bold, dim, the 16 basic colors and the 256-color palette.
+// writes: reset, bold, dim, the 16 basic colors and the 256-color palette. The colors the TUI
+// uses are read from --t-* properties when a page sets them, as the landing page does to follow
+// its light and dark themes; without them the dark terminal's colors stay.
 interface Props {
   ansi: string
   label: string
@@ -10,6 +12,18 @@ const { ansi, label } = Astro.props
 
 const basic = ['#1c2023', '#e06c75', '#7ec699', '#e5c07b', '#61afef', '#c678dd', '#56b6c2', '#d7dae0']
 const bright = ['#5c6370', '#ff7b86', '#98e0b0', '#ffd68a', '#7cc4ff', '#d99bf0', '#76d4e0', '#ffffff']
+
+// The TUI's colors by the --t-* property that stands for them.
+const tokens: Record<number, string> = {
+  1: 'bad', 2: 'ok', 3: 'warn', 5: 'violet', 6: 'acc', 8: 'dim', 9: 'bad', 10: 'ok', 11: 'warn',
+  13: 'violet', 14: 'acc', 72: 'chat', 74: 'acc', 77: 'ok', 114: 'ok', 141: 'violet',
+  203: 'bad', 215: 'orange', 221: 'warn', 237: 'key',
+}
+
+// color returns color n of the xterm 256-color palette, through its --t-* property if it has one.
+function color(n: number): string {
+  return tokens[n] ? `var(--t-${tokens[n]}, ${palette(n)})` : palette(n)
+}
 
 // palette returns color n of the xterm 256-color palette.
 function palette(n: number): string {
@@ -36,13 +50,13 @@ function apply(style: Style, params: number[]): Style {
     else if (p === 1) s.bold = true
     else if (p === 2) s.dim = true
     else if (p === 22) s.bold = s.dim = false
-    else if (p >= 30 && p <= 37) s.fg = basic[p - 30]
-    else if (p >= 90 && p <= 97) s.fg = bright[p - 90]
+    else if (p >= 30 && p <= 37) s.fg = color(p - 30)
+    else if (p >= 90 && p <= 97) s.fg = color(p - 90 + 8)
     else if (p === 39) delete s.fg
-    else if (p >= 40 && p <= 47) s.bg = basic[p - 40]
+    else if (p >= 40 && p <= 47) s.bg = color(p - 40)
     else if (p === 49) delete s.bg
     else if ((p === 38 || p === 48) && params[i + 1] === 5) {
-      s[p === 38 ? 'fg' : 'bg'] = palette(params[i + 2])
+      s[p === 38 ? 'fg' : 'bg'] = color(params[i + 2])
       i += 2
     }
   }
@@ -66,26 +80,21 @@ const cells = (text: string) => text.split(/([\u2190-\u24ff\u2580-\u2bff])/).fil
 const symbol = (t: string) => /^[\u2190-\u24ff\u2580-\u2bff]$/.test(t)
 
 const css = (s: Style) =>
-  [
-    s.fg && `color:${s.fg}`,
-    s.bg && `background:${s.bg}`,
-    s.bold && 'font-weight:700',
-    s.dim && 'opacity:0.6',
-  ]
+  [s.fg && `color:${s.fg}`, s.bg && `background:${s.bg}`, s.bold && 'font-weight:700']
     .filter(Boolean)
     .join(';')
 ---
 
 <figure class="terminal-screen not-content" aria-label={label}>
-  <pre>{lines.map((runs) => (<span class="line">{runs.map((r) => (<span style={css(r.style)}>{cells(r.text).map((t) => (symbol(t) ? <span class="cell">{t}</span> : t))}</span>))}{'\n'}</span>))}</pre>
+  <pre>{lines.map((runs) => (<span class="line">{runs.map((r) => (<span class:list={{ dim: r.style.dim }} style={css(r.style)}>{cells(r.text).map((t) => (symbol(t) ? <span class="cell">{t}</span> : t))}</span>))}{'\n'}</span>))}</pre>
 </figure>
 
 <style>
   .terminal-screen {
     margin: 1.5rem 0;
-    border: 1px solid var(--sl-color-hairline-light);
+    border: 1px solid var(--t-edge, var(--sl-color-hairline-light));
     border-radius: 0.5rem;
-    background: #0f1417;
+    background: var(--t-bg, #0f1417);
     overflow-x: auto;
   }
   pre {
@@ -96,8 +105,14 @@ const css = (s: Style) =>
     font-family: var(--sl-font-mono);
     font-size: 0.8125rem;
     line-height: 1.45;
-    color: #d7dae0;
+    color: var(--t-fg, #d7dae0);
     background: transparent;
+  }
+  /* Dim text: faded on the dark terminal, or the TUI's dim gray where --t-dim is set (an unset
+     property leaves the color inherited). */
+  .dim {
+    color: var(--t-dim);
+    opacity: var(--t-dim-opacity, 0.6);
   }
   .cell {
     display: inline-block;

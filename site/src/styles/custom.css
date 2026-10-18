@@ -343,9 +343,137 @@ starlight-tabs [role='tab'][aria-selected='true'] {
   border-color: var(--ss-green-border);
 }
 
-/* The landing page: wider, with the hero's backdrop allowed past the column. */
+/* The landing page: wider, with the hero's backdrop allowed past the column. It has a look of
+   its own, the TUI mock's: JetBrains Mono for headings and terminals, Instrument Sans for text,
+   calm grays with a teal accent, and terminal panels in the TUI's own palette (--t-*). The
+   tokens below remap Starlight's on this page only, so the header and code frames follow. */
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('../fonts/instrument-sans-latin-wght-normal.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../fonts/jetbrains-mono-wght-normal.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 html[data-has-hero] {
   --sl-content-width: 72rem;
+  --sl-font: 'Instrument Sans';
+  --sl-font-mono: 'JetBrains Mono', 'Source Code Pro', ui-monospace, monospace;
+  --ss-font-mono: 'JetBrains Mono', 'Source Code Pro', ui-monospace, monospace;
+
+  /* Dark (the default). */
+  --ss-bg: #0e1214;
+  --ss-surface: #151b1e;
+  --ss-fg: #e1e7ea;
+  --ss-muted: #93a1a9;
+  --ss-line: #263035;
+  --ss-accent: #5cc3d1;
+  --ss-on-accent: #06181b;
+
+  --t-bg: #15171b;
+  --t-fg: #d7dade;
+  --t-dim: #858b94;
+  --t-dim-opacity: 1;
+  --t-faint: #353a41;
+  --t-rule: #464c54;
+  --t-acc: #58b8c8;
+  --t-ok: #47c86e;
+  --t-warn: #f0c551;
+  --t-bad: #fa6863;
+  --t-off: #6e7277;
+  --t-brand: #3fc168;
+  --t-key: #33363b;
+  --t-orange: #eea471;
+  --t-violet: #b09de9;
+  --t-chat: #76c788;
+  --t-edge: #2a3035;
+
+  --sl-color-gray-1: #d3dbdf;
+  --sl-color-gray-2: #b3c0c6;
+  --sl-color-gray-4: #5f6d74;
+  --sl-color-gray-6: var(--ss-surface);
+  --sl-color-accent-low: #10303a;
+  --sl-color-accent-high: #c4ecf1;
+  --sl-color-bg-nav: rgba(14, 18, 20, 0.8);
+  --sl-color-hairline: #1c2428;
+  --sl-color-hairline-shade: #080b0c;
+
+  /* The rest of the site's green accent, in teal here (--ss-green itself is set below). */
+  --ss-green-soft: rgba(92, 195, 209, 0.12);
+  --ss-green-border: rgba(92, 195, 209, 0.34);
+  --ss-green-ring: rgba(92, 195, 209, 0.22);
+}
+html[data-has-hero][data-theme='light'] {
+  --ss-bg: #eef1f2;
+  --ss-surface: #f8fafa;
+  --ss-fg: #172024;
+  --ss-muted: #56636b;
+  --ss-line: #d3dade;
+  --ss-accent: #0f7686;
+  --ss-on-accent: #ffffff;
+
+  --t-bg: #fafbfb;
+  --t-fg: #23272c;
+  --t-dim: #80868e;
+  --t-faint: #d3d7dc;
+  --t-rule: #c3c8ce;
+  --t-acc: #1b8797;
+  --t-ok: #0fa44d;
+  --t-warn: #c8951a;
+  --t-bad: #db2c2b;
+  --t-off: #9a9fa5;
+  --t-brand: #008238;
+  --t-key: #e4e6ea;
+  --t-orange: #c67447;
+  --t-violet: #795bbf;
+  --t-chat: #3b834e;
+  --t-edge: #d9dee2;
+
+  --sl-color-gray-1: #1f2a2f;
+  --sl-color-gray-2: #3a474e;
+  --sl-color-gray-4: #8a979e;
+  --sl-color-gray-6: #e4e9eb;
+  --sl-color-gray-7: var(--ss-surface);
+  --sl-color-accent-low: #d3ecef;
+  --sl-color-accent-high: #0a3d45;
+  --sl-color-bg-nav: rgba(238, 241, 242, 0.82);
+  --sl-color-hairline: #e1e6e8;
+  --sl-color-hairline-shade: #c3ccd1;
+
+  --ss-green-soft: rgba(15, 118, 134, 0.09);
+  --ss-green-border: rgba(15, 118, 134, 0.3);
+  --ss-green-ring: rgba(15, 118, 134, 0.16);
+}
+/* Starlight's colors from the tokens above, in both themes (the site's light theme sets them
+   on :root[data-theme='light'], which would win over html[data-has-hero] alone). */
+html[data-has-hero],
+html[data-has-hero][data-theme='light'] {
+  --sl-color-white: var(--ss-fg);
+  --sl-color-gray-3: var(--ss-muted);
+  --sl-color-gray-5: var(--ss-line);
+  --sl-color-black: var(--ss-bg);
+  --sl-color-accent: var(--ss-accent);
+  --sl-color-text-accent: var(--ss-accent);
+  --sl-color-bg-sidebar: var(--ss-bg);
+  --sl-color-bg-inline-code: var(--ss-surface);
+  --sl-color-hairline-light: var(--ss-line);
+  --ss-green: var(--ss-accent);
+  --ss-code-bg: var(--t-bg);
+}
+html[data-has-hero] body {
+  background: var(--ss-bg);
+  /* The site's Inter alternates (cv11, ss01) would pick other glyphs in Instrument Sans. */
+  font-feature-settings: normal;
+}
+html[data-has-hero] .sl-link-button.primary {
+  color: var(--ss-on-accent);
 }
 html[data-has-hero] main {
   overflow-x: clip;
@@ -358,9 +486,40 @@ html[data-has-hero] .content-panel + .content-panel {
 }
 .landing-section .accent,
 .landing-hero .accent {
-  color: var(--ss-green);
+  color: var(--ss-accent);
 }
 html[data-has-hero] .sl-markdown-content > .card-grid,
 html[data-has-hero] .landing-section .card-grid {
   margin-top: 0;
+}
+
+/* The landing page's shared pieces: mono eyebrows and headings, keycaps, inline code. */
+.landing-eyebrow {
+  font: 600 0.75rem / 1.2 var(--ss-font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ss-accent);
+}
+html[data-has-hero] .not-content :is(code, kbd) {
+  font-family: var(--ss-font-mono);
+  font-size: 0.88em;
+}
+html[data-has-hero] .not-content kbd {
+  padding: 0 0.32rem;
+  border: 1px solid var(--ss-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--ss-surface);
+  color: var(--ss-fg);
+  white-space: nowrap;
+}
+html[data-has-hero] .terminal-screen {
+  margin: 0;
+  border-radius: 8px;
+}
+html[data-has-hero] .terminal-screen pre {
+  padding: 0.75rem 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  font-variant-ligatures: none;
 }

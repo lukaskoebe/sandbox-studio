@@ -1,6 +1,11 @@
 ---
-// The landing page's "Under the hood" samples: a template spec and a session with the CLI.
+// The landing page's "Under the hood" samples: a template spec, a session with the CLI, and
+// the TUI's Home as its golden test draws it, beside a key to its marks and keys.
 import { Code } from '@astrojs/starlight/components'
+import TerminalScreen from './TerminalScreen.astro'
+import home from '../../../internal/tui/testdata/visual_home.golden?raw'
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
 
 const template = `resources:
   cpus: 2
@@ -38,6 +43,30 @@ k2j4h6g8f0d1s  network  api   registry.npmjs.org:443  12s`),
   <Code code={session} lang="ansi" frame="terminal" title="Terminal" />
 </div>
 
+<div class="tui not-content">
+  <TerminalScreen ansi={home} label="The TUI's Home: four sandboxes, one with an approval waiting" />
+  <div class="tui-copy">
+    <p class="landing-eyebrow">Terminal UI</p>
+    <p>
+      <code>studio tui</code> drives the same sandboxes, approvals and git reviews from the
+      keyboard, on the Studio machine or over SSH.
+    </p>
+    <ul class="tui-legend" aria-label="Sandbox states">
+      <li><span class="ok">●</span> running</li>
+      <li><span class="warn">▲</span> approval</li>
+      <li><span class="off">○</span> stopped</li>
+      <li><span class="acc">◐</span> booting</li>
+    </ul>
+    <p class="tui-keys">
+      <span><kbd>enter</kbd> open</span>
+      <span><kbd>a</kbd> approvals</span>
+      <span><kbd>t</kbd> terminal</span>
+      <span><kbd>c</kbd> chat</span>
+    </p>
+    <a class="tui-link" href={`${base}tui/`}>The terminal UI <span aria-hidden="true">→</span></a>
+  </div>
+</div>
+
 <style>
   .samples {
     display: grid;
@@ -56,5 +85,77 @@ k2j4h6g8f0d1s  network  api   registry.npmjs.org:443  12s`),
   }
   .samples :global(.frame.is-terminal .header::before) {
     display: none;
+  }
+  .samples :global(.frame .header .title) {
+    font-family: var(--ss-font-mono);
+  }
+
+  /* The TUI at its own 80 columns, with the notes beside it on wide screens. */
+  .tui {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem 2.5rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (min-width: 72rem) {
+    .tui {
+      grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+      align-items: start;
+    }
+  }
+  .tui-copy {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+    min-width: 0;
+    color: var(--ss-muted);
+    line-height: 1.6;
+  }
+  .tui-copy code {
+    color: var(--ss-fg);
+  }
+  /* The marks as the TUI draws them, on a strip of terminal. */
+  .tui-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.1rem;
+    justify-self: start;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    list-style: none;
+    border: 1px solid var(--t-edge);
+    border-radius: 6px;
+    background: var(--t-bg);
+    color: var(--t-fg);
+    font: 0.8rem / 1.4 var(--ss-font-mono);
+  }
+  .ok {
+    color: var(--t-ok);
+  }
+  .warn {
+    color: var(--t-warn);
+    font-weight: 700;
+  }
+  .off {
+    color: var(--t-dim);
+  }
+  .acc {
+    color: var(--t-acc);
+  }
+  .tui-keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    font-size: var(--sl-text-sm);
+  }
+  .tui-link {
+    justify-self: start;
+    color: var(--ss-accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .tui-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 </style>

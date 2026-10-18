@@ -45,7 +45,7 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
     }
   }
   li {
-    border-bottom: 1px solid var(--sl-color-hairline-light);
+    border-bottom: 1px solid var(--ss-line);
   }
   a {
     display: grid;
@@ -58,20 +58,21 @@ const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
     justify-content: space-between;
     gap: 1rem;
     font-weight: 600;
-    color: var(--sl-color-white);
+    color: var(--ss-fg);
   }
   .guide-arrow {
-    color: var(--sl-color-gray-4);
+    font-family: var(--ss-font-mono);
+    color: var(--ss-muted);
     transition:
       color 0.15s,
       transform 0.15s;
   }
   a:hover .guide-arrow {
-    color: var(--sl-color-text-accent);
+    color: var(--ss-accent);
     transform: translateX(3px);
   }
   .guide-text {
     font-size: var(--sl-text-sm);
-    color: var(--sl-color-gray-3);
+    color: var(--ss-muted);
   }
 </style>
