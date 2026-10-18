@@ -56,17 +56,26 @@ to an environment.
 | `/e/$env/teammates/$id/memory` | the teammate's private memory, with the tabs of shared memory |
 | `/e/$env/teammates/$id/browser` | the teammate's browser: the browser window (tabs, toolbar, live view) with Activity and Sites beside it ([browser](browser.md#live-view-and-takeover)) |
 | `/e/$env/teammates/$id/settings` | edit the teammate, its check-ins, network level and secrets (its own, its sandboxes' and the environment's it inherits, with which replaces which; Add secret preselects the teammate's scope), or delete it |
-| `/e/$env/settings` | redirects to `general` |
-| `/e/$env/settings/general` | work mode, start at login, updates (the whole installation), "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
-| `/e/$env/settings/providers` | AI providers of the environment |
 | `/e/$env/git` | the pushes and pull requests of the environment's sandboxes, waiting ones first; each opens its review |
-| `/e/$env/settings/git` | the forges of the environment |
-| `/e/$env/settings/templates` | template builds and templates of the environment |
-| `/e/$env/settings/runtime` | host checks (doctor) |
-| `/e/$env/settings/network` | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
 | `/e/$env/git/reviews/$id` | one git push review: the commits and diff, decided there while it waits, its outcome after |
 | `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
 | `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |
+
+Settings is a dialog over any page of an environment (`components/settings/`), opened by
+`?settings=<section>` on that page's address, so a section can be linked and closing the dialog
+leaves the page as it was. Its sections:
+
+| `?settings=` | Section |
+|---|---|
+| `general` | work mode, start at login, updates (the whole installation), "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
+| `providers` | AI providers of the environment |
+| `git` | the forges of the environment |
+| `network` | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
+| `templates` | template builds and templates of the environment |
+| `runtime` | host checks (doctor) |
+
+The old addresses `/e/$env/settings` and `/e/$env/settings/<section>` open the dialog over
+Home.
 
 On the first load of a browser session, `/e/$env` redirects to `/setup` while the setup is
 neither completed nor dismissed and the environment has no sandbox yet; the check runs once
@@ -77,7 +86,7 @@ the environment has a provider, a teammate, a forge or a sandbox); the setup is 
 every step is done or skipped.
 
 The old addresses `/e/$env/builds`, `/providers` and `/browser` redirect to the
-settings pages and teammate browsers above. `/browser?teammate=<id>` opens that teammate's
+settings dialog and teammate browsers above. `/browser?teammate=<id>` opens that teammate's
 browser.
 
 The sidebar holds the environment switcher, the navigation (Home, Chats, Git with the count of
@@ -88,7 +97,7 @@ an agent's); one opens its tab in the workspace. The workspace's URL names the t
 is its tooltip) and the count of approvals waiting on it. A teammate's dot shows its presence:
 waiting for you while one of its approvals is pending (a browser action or credential, a
 memory share, or a tool permission in one of its chats), working while one of its chats is
-running, and idle otherwise. The Settings pages for an environment name it in their header.
+running, and idle otherwise. The Settings dialog's sections name the environment in their header.
 The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
 on every page.
 

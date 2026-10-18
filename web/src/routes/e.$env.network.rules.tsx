@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react"
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
+import { SettingsLink } from "@/components/settings/link"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -262,7 +263,7 @@ function RulesTab() {
                           {isUnused(r, now) && <RuleChip>unused</RuleChip>}
                         </span>
                         {r.unreachable && (
-                          <Unreachable env={env} reason={r.unreachable} />
+                          <Unreachable reason={r.unreachable} />
                         )}
                       </TableCell>
                       <TableCell>
@@ -338,20 +339,19 @@ function RulesTab() {
 }
 
 /** Why no sandbox reaches a rule's connections, with the way to the settings that change it. */
-function Unreachable({ env, reason }: { env: string; reason: string }) {
+function Unreachable({ reason }: { reason: string }) {
   return (
     <p className="mt-1 flex max-w-96 gap-1.5 text-[0.6875rem]/relaxed whitespace-normal text-amber-700 dark:text-amber-400">
       <WarningIcon className="mt-0.5 size-3 shrink-0" aria-hidden />
       <span>
         {reason}{" "}
         {reason.includes("Settings → Network") && (
-          <Link
-            to="/e/$env/settings/network"
-            params={{ env }}
+          <SettingsLink
+            section="network"
             className="underline underline-offset-2"
           >
             Open network settings
-          </Link>
+          </SettingsLink>
         )}
       </span>
     </p>

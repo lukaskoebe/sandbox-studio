@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router"
+import { SettingsLink } from "@/components/settings/link"
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,7 @@ export function TeammateDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-xl lg:max-w-2xl">
         {providers.length ? (
           <>
             <DialogHeader>
@@ -60,9 +60,7 @@ export function TeammateDialog({
                 Cancel
               </Button>
               <Button
-                render={
-                  <Link to="/e/$env/settings/providers" params={{ env }} />
-                }
+                render={<SettingsLink section="providers" />}
                 onClick={() => onOpenChange(false)}
               >
                 Add a provider

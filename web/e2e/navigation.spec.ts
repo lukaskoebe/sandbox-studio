@@ -83,12 +83,19 @@ test("old addresses redirect to the pages that replaced them", async ({
   await page.goto(`/e/${env}/browser`)
   await expect(page).toHaveURL(/\/teammates\/[^/]+\/browser$/)
 
+  // Settings are a dialog over Home; the old pages' addresses open it there.
   for (const [from, to] of [
-    ["providers", "settings/providers"],
-    ["builds", "settings/templates"],
-    ["settings", "settings/general"],
+    ["providers", "providers"],
+    ["builds", "templates"],
+    ["settings", "general"],
+    ["settings/git", "git"],
   ] as const) {
     await page.goto(`/e/${env}/${from}`)
-    await expect(page).toHaveURL(new RegExp(`/e/${env}/${to}$`))
+    await expect(page).toHaveURL(new RegExp(`/e/${env}\\?settings=${to}$`))
+    await expect(
+      page
+        .getByRole("navigation", { name: "Settings" })
+        .getByRole("link", { name: to[0].toUpperCase() + to.slice(1) })
+    ).toHaveAttribute("aria-current", "page")
   }
 })

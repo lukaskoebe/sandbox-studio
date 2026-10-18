@@ -440,7 +440,7 @@ func (m *app) approvalURL(a api.ApprovalView) string {
 	env := "/e/" + a.EnvironmentID
 	switch {
 	case strings.HasPrefix(a.Kind, "git."):
-		return m.browserURL(env + "/settings/git")
+		return m.browserURL(env + "?settings=git")
 	case a.BrowserAction != nil:
 		return m.browserURL(env + "/teammates/" + a.BrowserAction.TeammateID + "/browser")
 	case a.BrowserCredential != nil:

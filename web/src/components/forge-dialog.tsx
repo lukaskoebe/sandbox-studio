@@ -164,7 +164,7 @@ export function ForgeDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl lg:max-w-2xl">
         {/* The form, including a typed token, exists only while the dialog is open. */}
         {open && <ForgeForm env={env} onDone={() => onOpenChange(false)} />}
       </DialogContent>
@@ -347,131 +347,137 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           <FieldError>{errorMessage(parse.error)}</FieldError>
         )}
       </Field>
-      <Field>
-        <FieldLabel>Kind</FieldLabel>
-        <Select
-          value={kind}
-          onValueChange={(v) => v && pickKind(v)}
-          items={kindLabels}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(kindLabels) as Kind[]).map((k) => (
-              <SelectItem key={k} value={k}>
-                {kindLabels[k]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <FieldDescription>
-          {kind === "forgejo" && "Forgejo or Gitea, such as Codeberg."}
-          {kind === "github" && "github.com or GitHub Enterprise Server."}
-          {kind === "gitlab" &&
-            "gitlab.com or a self-hosted GitLab. Approved pushes to other branches get a merge request."}
-          {kind === "https" &&
-            "Any host serving git over HTTPS with a token, such as Bitbucket. No pull requests."}
-          {ssh && "Any host serving git over SSH. No pull requests."}
-          {local &&
-            "Repositories in a folder here, such as ~/git. Approved pushes go in with your git, as git push to the folder would; no pull requests."}
-        </FieldDescription>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="forge-name">Short name</FieldLabel>
-        <Input
-          id="forge-name"
-          value={name}
-          placeholder={namePlaceholders[kind]}
-          autoComplete="off"
-          onChange={(e) => setName(e.target.value.toLowerCase())}
-        />
-        <FieldDescription>
-          Used in sandbox remote URLs. Sandboxes use{" "}
-          <Ident>
-            {`https://${remoteHost}/${name.trim() || "<name>"}/${repoPath || (local ? "repo" : "owner/repo")}.git`}
-          </Ident>
-        </FieldDescription>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="forge-url">
-          {ssh ? "SSH address" : local ? "Folder" : "URL"}
-        </FieldLabel>
-        <Input
-          id="forge-url"
-          value={baseUrl}
-          placeholder={
-            ssh
-              ? "git@git.example.org"
-              : local
-                ? "~/git"
-                : "https://git.example.org"
-          }
-          autoComplete="off"
-          onChange={(e) => {
-            const v = e.target.value
-            // A clone URL pasted here fills in the form as in Repository URL.
-            if (ssh && isSSHCloneURL(v.trim())) setRepoURL(v.trim())
-            setBaseUrl(v)
-            setScanned(undefined)
-            setConfirmed(false)
-          }}
-        />
-        {local && (
-          <FieldDescription>
-            The folder the repositories are in. Sandboxes can fetch every
-            repository in it; nothing goes in without your approval.
-          </FieldDescription>
-        )}
-        {ssh && (
-          <FieldDescription>
-            user@host, or ssh://user@host:port. The user is git if you leave it
-            out. A clone URL such as git@github.com:owner/repo.git works too.
-          </FieldDescription>
-        )}
-      </Field>
-      {kind === "https" && (
+      {/* Short fields in pairs, so the form stays short on a wide screen. */}
+      <div className="grid items-start gap-4 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="forge-username">Username</FieldLabel>
-          <Input
-            id="forge-username"
-            value={username}
-            placeholder="git"
-            autoComplete="off"
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <FieldDescription>
-            The user git sends with the token. Bitbucket wants x-token-auth;
-            most hosts take any.
-          </FieldDescription>
-        </Field>
-      )}
-      {ssh && (
-        <Field>
-          <FieldLabel>Authentication</FieldLabel>
+          <FieldLabel>Kind</FieldLabel>
           <Select
-            value={auth}
-            onValueChange={(v) => v && setAuth(v)}
-            items={authLabels}
+            value={kind}
+            onValueChange={(v) => v && pickKind(v)}
+            items={kindLabels}
           >
             <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {(Object.keys(authLabels) as Auth[]).map((a) => (
-                <SelectItem key={a} value={a}>
-                  {authLabels[a]}
+              {(Object.keys(kindLabels) as Kind[]).map((k) => (
+                <SelectItem key={k} value={k}>
+                  {kindLabels[k]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <FieldDescription>
-            {auth === "agent"
-              ? "Studio signs with the keys in your SSH agent, as ssh does. A hardware key may ask you to confirm."
-              : "Studio makes a key for this forge. You add its public key to the host."}
+            {kind === "forgejo" && "Forgejo or Gitea, such as Codeberg."}
+            {kind === "github" && "github.com or GitHub Enterprise Server."}
+            {kind === "gitlab" &&
+              "gitlab.com or a self-hosted GitLab. Approved pushes to other branches get a merge request."}
+            {kind === "https" &&
+              "Any host serving git over HTTPS with a token, such as Bitbucket. No pull requests."}
+            {ssh && "Any host serving git over SSH. No pull requests."}
+            {local &&
+              "Repositories in a folder here, such as ~/git. Approved pushes go in with your git, as git push to the folder would; no pull requests."}
           </FieldDescription>
         </Field>
-      )}
+        <Field>
+          <FieldLabel htmlFor="forge-name">Short name</FieldLabel>
+          <Input
+            id="forge-name"
+            value={name}
+            placeholder={namePlaceholders[kind]}
+            autoComplete="off"
+            onChange={(e) => setName(e.target.value.toLowerCase())}
+          />
+          <FieldDescription>
+            Used in sandbox remote URLs. Sandboxes use{" "}
+            <Ident>
+              {`https://${remoteHost}/${name.trim() || "<name>"}/${repoPath || (local ? "repo" : "owner/repo")}.git`}
+            </Ident>
+          </FieldDescription>
+        </Field>
+      </div>
+      <div className="grid items-start gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="forge-url">
+            {ssh ? "SSH address" : local ? "Folder" : "URL"}
+          </FieldLabel>
+          <Input
+            id="forge-url"
+            value={baseUrl}
+            placeholder={
+              ssh
+                ? "git@git.example.org"
+                : local
+                  ? "~/git"
+                  : "https://git.example.org"
+            }
+            autoComplete="off"
+            onChange={(e) => {
+              const v = e.target.value
+              // A clone URL pasted here fills in the form as in Repository URL.
+              if (ssh && isSSHCloneURL(v.trim())) setRepoURL(v.trim())
+              setBaseUrl(v)
+              setScanned(undefined)
+              setConfirmed(false)
+            }}
+          />
+          {local && (
+            <FieldDescription>
+              The folder the repositories are in. Sandboxes can fetch every
+              repository in it; nothing goes in without your approval.
+            </FieldDescription>
+          )}
+          {ssh && (
+            <FieldDescription>
+              user@host, or ssh://user@host:port. The user is git if you leave
+              it out. A clone URL such as git@github.com:owner/repo.git works
+              too.
+            </FieldDescription>
+          )}
+        </Field>
+        {kind === "https" && (
+          <Field>
+            <FieldLabel htmlFor="forge-username">Username</FieldLabel>
+            <Input
+              id="forge-username"
+              value={username}
+              placeholder="git"
+              autoComplete="off"
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <FieldDescription>
+              The user git sends with the token. Bitbucket wants x-token-auth;
+              most hosts take any.
+            </FieldDescription>
+          </Field>
+        )}
+        {ssh && (
+          <Field>
+            <FieldLabel>Authentication</FieldLabel>
+            <Select
+              value={auth}
+              onValueChange={(v) => v && setAuth(v)}
+              items={authLabels}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(authLabels) as Auth[]).map((a) => (
+                  <SelectItem key={a} value={a}>
+                    {authLabels[a]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>
+              {auth === "agent"
+                ? "Studio signs with the keys in your SSH agent, as ssh does. A hardware key may ask you to confirm."
+                : "Studio makes a key for this forge. You add its public key to the host."}
+            </FieldDescription>
+          </Field>
+        )}
+      </div>
       {local ? null : ssh ? (
         <HostKeyCheck
           env={env}

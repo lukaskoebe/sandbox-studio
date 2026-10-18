@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { SettingsLink } from "@/components/settings/link"
 import { GearIcon, GitBranchIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -58,7 +59,7 @@ function GitPage() {
           size="sm"
           variant="outline"
           className="ml-auto"
-          render={<Link to="/e/$env/settings/git" params={{ env }} />}
+          render={<SettingsLink section="git" />}
         >
           <GearIcon />
           Forges
@@ -102,7 +103,7 @@ function GitPage() {
               <Button
                 size="sm"
                 variant="outline"
-                render={<Link to="/e/$env/settings/git" params={{ env }} />}
+                render={<SettingsLink section="git" />}
               >
                 Add a forge
               </Button>

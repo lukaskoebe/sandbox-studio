@@ -1,21 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { PageHeader } from "@/components/page-header"
-import { RuntimeSection } from "@/components/runtime-card"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 
+// Settings are a dialog; the page's old address opens it over Home.
 export const Route = createFileRoute("/e/$env/settings/runtime")({
-  component: RuntimePage,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: "/e/$env",
+      params,
+      search: { settings: "runtime" },
+      replace: true,
+    })
+  },
 })
-
-function RuntimePage() {
-  return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Runtime</h1>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
-        <RuntimeSection />
-      </ScrollArea>
-    </>
-  )
-}

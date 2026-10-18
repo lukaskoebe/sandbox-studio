@@ -63,7 +63,7 @@ export function ProviderDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl lg:max-w-2xl">
         {/* The form, including a typed key, exists only while the dialog is open. */}
         <ProviderForm
           key={provider?.id ?? "new"}
@@ -192,49 +192,51 @@ function ProviderForm({
           stored as secrets, so sandboxes only ever see a placeholder.
         </DialogDescription>
       </DialogHeader>
-      <Field>
-        <FieldLabel htmlFor="provider-name">Name</FieldLabel>
-        <Input
-          id="provider-name"
-          autoFocus={!provider}
-          autoComplete="off"
-          maxLength={64}
-          readOnly={!!current}
-          placeholder="Anthropic"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {current && (
-          <FieldDescription>The name and kind can't change.</FieldDescription>
-        )}
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="provider-kind">Kind</FieldLabel>
-        <Select
-          value={kind}
-          disabled={!!current}
-          onValueChange={(v) => {
-            const next = providerKinds.find((k) => k === v)
-            if (next) {
-              setKind(next)
-              setServerError(undefined)
-            }
-          }}
-          items={kindLabels}
-        >
-          <SelectTrigger id="provider-kind" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {providerKinds.map((k) => (
-              <SelectItem key={k} value={k}>
-                {kindLabels[k]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {!current && <FieldDescription>{kindHints[kind]}</FieldDescription>}
-      </Field>
+      <div className="grid items-start gap-4 sm:grid-cols-2">
+        <Field>
+          <FieldLabel htmlFor="provider-name">Name</FieldLabel>
+          <Input
+            id="provider-name"
+            autoFocus={!provider}
+            autoComplete="off"
+            maxLength={64}
+            readOnly={!!current}
+            placeholder="Anthropic"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          {current && (
+            <FieldDescription>The name and kind can't change.</FieldDescription>
+          )}
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="provider-kind">Kind</FieldLabel>
+          <Select
+            value={kind}
+            disabled={!!current}
+            onValueChange={(v) => {
+              const next = providerKinds.find((k) => k === v)
+              if (next) {
+                setKind(next)
+                setServerError(undefined)
+              }
+            }}
+            items={kindLabels}
+          >
+            <SelectTrigger id="provider-kind" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {providerKinds.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {kindLabels[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!current && <FieldDescription>{kindHints[kind]}</FieldDescription>}
+        </Field>
+      </div>
       {subscription ? (
         current ? (
           <ProviderLogin env={env} provider={current} />
@@ -247,7 +249,7 @@ function ProviderForm({
       ) : (
         <>
           {compatible && (
-            <>
+            <div className="grid items-start gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="provider-url">Base URL</FieldLabel>
                 <Input
@@ -277,7 +279,7 @@ function ProviderForm({
                   onChange={(e) => setModel(e.target.value)}
                 />
               </Field>
-            </>
+            </div>
           )}
           <Field>
             <FieldLabel htmlFor="provider-key">API key</FieldLabel>

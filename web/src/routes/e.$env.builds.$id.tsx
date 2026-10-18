@@ -1,5 +1,6 @@
 import { useRef, useState } from "react"
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { SettingsLink } from "@/components/settings/link"
 import { BuildDialog } from "@/components/build-dialog"
 import { BuildJobView, shortId } from "@/components/build-job-sheet"
 import { CreateTemplateSandboxDialog } from "@/components/create-template-sandbox-dialog"
@@ -37,7 +38,7 @@ function BuildPage() {
           variant="ghost"
           size="sm"
           className="ml-auto"
-          render={<Link to="/e/$env/settings/templates" params={{ env }} />}
+          render={<SettingsLink section="templates" />}
         >
           All builds
         </Button>

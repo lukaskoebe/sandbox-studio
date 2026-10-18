@@ -82,7 +82,7 @@ export function SecretDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl lg:max-w-2xl">
         {/* The form, including a typed value, exists only while the dialog is open. */}
         <SecretForm
           key={secret?.id ?? `new:${scope ?? ""}`}

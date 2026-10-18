@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
+import { SettingsLink } from "@/components/settings/link"
 import { PlusIcon } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -145,9 +146,9 @@ function TeammatesPage() {
                 ) : (
                   <>
                     A teammate needs a provider for its model.{" "}
-                    <Link to="/e/$env/settings/providers" params={{ env }}>
+                    <SettingsLink section="providers">
                       Add a provider
-                    </Link>{" "}
+                    </SettingsLink>{" "}
                     first.
                   </>
                 )}

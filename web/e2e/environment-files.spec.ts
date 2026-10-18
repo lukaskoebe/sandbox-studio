@@ -35,7 +35,7 @@ test("an environment exports to a file without its keys, and the file imports as
   const chooser = page.waitForEvent("filechooser")
   await page.getByRole("button", { name: "Import environment" }).click()
   await (await chooser).setFiles(path)
-  const report = page.getByRole("dialog")
+  const report = page.getByRole("dialog", { name: `${name} 2 is ready` })
   await expect(report).toContainText(`${name} 2 is ready`)
   await expect(
     report.getByRole("link", { name: "Add the API key of Anthropic" })

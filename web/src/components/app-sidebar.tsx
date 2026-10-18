@@ -39,6 +39,7 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { SettingsLink } from "@/components/settings/link"
 import { ThemeToggle } from "@/components/theme-toggle"
 import {
   DropdownMenu,
@@ -109,6 +110,7 @@ export function AppSidebar({ env }: { env: string }) {
     if (a.environmentId === env && isGitApproval(a)) gitWaiting++
   }
   const matchRoute = useMatchRoute()
+  const settingsOpen = useSearch({ strict: false }).settings !== undefined
 
   return (
     <Sidebar collapsible="icon">
@@ -335,14 +337,8 @@ export function AppSidebar({ env }: { env: string }) {
             <SidebarMenuButton
               size="sm"
               tooltip="Settings"
-              isActive={
-                !!matchRoute({
-                  to: "/e/$env/settings",
-                  params: { env },
-                  fuzzy: true,
-                })
-              }
-              render={<Link to="/e/$env/settings" params={{ env }} />}
+              isActive={settingsOpen}
+              render={<SettingsLink section="general" />}
             >
               <GearIcon />
               <span>Settings</span>

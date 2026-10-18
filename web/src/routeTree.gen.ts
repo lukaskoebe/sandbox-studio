@@ -17,7 +17,6 @@ import { Route as EEnvBrowserRouteImport } from './routes/e.$env.browser'
 import { Route as EEnvNetworkRouteImport } from './routes/e.$env.network'
 import { Route as EEnvProvidersRouteImport } from './routes/e.$env.providers'
 import { Route as EEnvSecretsRouteImport } from './routes/e.$env.secrets'
-import { Route as EEnvSettingsRouteImport } from './routes/e.$env.settings'
 import { Route as EEnvBuildsIndexRouteImport } from './routes/e.$env.builds.index'
 import { Route as EEnvBuildsIdRouteImport } from './routes/e.$env.builds.$id'
 import { Route as EEnvChatsIndexRouteImport } from './routes/e.$env.chats.index'
@@ -90,11 +89,6 @@ const EEnvSecretsRoute = EEnvSecretsRouteImport.update({
   path: '/secrets',
   getParentRoute: () => EEnvRoute,
 } as any)
-const EEnvSettingsRoute = EEnvSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => EEnvRoute,
-} as any)
 const EEnvBuildsIndexRoute = EEnvBuildsIndexRouteImport.update({
   id: '/builds/',
   path: '/builds/',
@@ -156,39 +150,39 @@ const EEnvSandboxesIdRoute = EEnvSandboxesIdRouteImport.update({
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSettingsIndexRoute = EEnvSettingsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => EEnvSettingsRoute,
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSettingsGeneralRoute = EEnvSettingsGeneralRouteImport.update({
-  id: '/general',
-  path: '/general',
-  getParentRoute: () => EEnvSettingsRoute,
+  id: '/settings/general',
+  path: '/settings/general',
+  getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSettingsGitRoute = EEnvSettingsGitRouteImport.update({
-  id: '/git',
-  path: '/git',
-  getParentRoute: () => EEnvSettingsRoute,
+  id: '/settings/git',
+  path: '/settings/git',
+  getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSettingsNetworkRoute = EEnvSettingsNetworkRouteImport.update({
-  id: '/network',
-  path: '/network',
-  getParentRoute: () => EEnvSettingsRoute,
+  id: '/settings/network',
+  path: '/settings/network',
+  getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSettingsProvidersRoute = EEnvSettingsProvidersRouteImport.update({
-  id: '/providers',
-  path: '/providers',
-  getParentRoute: () => EEnvSettingsRoute,
+  id: '/settings/providers',
+  path: '/settings/providers',
+  getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSettingsRuntimeRoute = EEnvSettingsRuntimeRouteImport.update({
-  id: '/runtime',
-  path: '/runtime',
-  getParentRoute: () => EEnvSettingsRoute,
+  id: '/settings/runtime',
+  path: '/settings/runtime',
+  getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvSettingsTemplatesRoute = EEnvSettingsTemplatesRouteImport.update({
-  id: '/templates',
-  path: '/templates',
-  getParentRoute: () => EEnvSettingsRoute,
+  id: '/settings/templates',
+  path: '/settings/templates',
+  getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvTeammatesIndexRoute = EEnvTeammatesIndexRouteImport.update({
   id: '/teammates/',
@@ -259,7 +253,6 @@ export interface FileRoutesByFullPath {
   '/e/$env/network': typeof EEnvNetworkRouteWithChildren
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
-  '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
@@ -339,7 +332,6 @@ export interface FileRoutesById {
   '/e/$env/network': typeof EEnvNetworkRouteWithChildren
   '/e/$env/providers': typeof EEnvProvidersRoute
   '/e/$env/secrets': typeof EEnvSecretsRoute
-  '/e/$env/settings': typeof EEnvSettingsRouteWithChildren
   '/e/$env/': typeof EEnvIndexRoute
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
@@ -383,7 +375,6 @@ export interface FileRouteTypes {
     | '/e/$env/network'
     | '/e/$env/providers'
     | '/e/$env/secrets'
-    | '/e/$env/settings'
     | '/e/$env/'
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
@@ -462,7 +453,6 @@ export interface FileRouteTypes {
     | '/e/$env/network'
     | '/e/$env/providers'
     | '/e/$env/secrets'
-    | '/e/$env/settings'
     | '/e/$env/'
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
@@ -561,13 +551,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EEnvSecretsRouteImport
       parentRoute: typeof EEnvRoute
     }
-    '/e/$env/settings': {
-      id: '/e/$env/settings'
-      path: '/settings'
-      fullPath: '/e/$env/settings'
-      preLoaderRoute: typeof EEnvSettingsRouteImport
-      parentRoute: typeof EEnvRoute
-    }
     '/e/$env/builds/': {
       id: '/e/$env/builds/'
       path: '/builds'
@@ -654,52 +637,52 @@ declare module '@tanstack/react-router' {
     }
     '/e/$env/settings/': {
       id: '/e/$env/settings/'
-      path: '/'
+      path: '/settings'
       fullPath: '/e/$env/settings/'
       preLoaderRoute: typeof EEnvSettingsIndexRouteImport
-      parentRoute: typeof EEnvSettingsRoute
+      parentRoute: typeof EEnvRoute
     }
     '/e/$env/settings/general': {
       id: '/e/$env/settings/general'
-      path: '/general'
+      path: '/settings/general'
       fullPath: '/e/$env/settings/general'
       preLoaderRoute: typeof EEnvSettingsGeneralRouteImport
-      parentRoute: typeof EEnvSettingsRoute
+      parentRoute: typeof EEnvRoute
     }
     '/e/$env/settings/git': {
       id: '/e/$env/settings/git'
-      path: '/git'
+      path: '/settings/git'
       fullPath: '/e/$env/settings/git'
       preLoaderRoute: typeof EEnvSettingsGitRouteImport
-      parentRoute: typeof EEnvSettingsRoute
+      parentRoute: typeof EEnvRoute
     }
     '/e/$env/settings/network': {
       id: '/e/$env/settings/network'
-      path: '/network'
+      path: '/settings/network'
       fullPath: '/e/$env/settings/network'
       preLoaderRoute: typeof EEnvSettingsNetworkRouteImport
-      parentRoute: typeof EEnvSettingsRoute
+      parentRoute: typeof EEnvRoute
     }
     '/e/$env/settings/providers': {
       id: '/e/$env/settings/providers'
-      path: '/providers'
+      path: '/settings/providers'
       fullPath: '/e/$env/settings/providers'
       preLoaderRoute: typeof EEnvSettingsProvidersRouteImport
-      parentRoute: typeof EEnvSettingsRoute
+      parentRoute: typeof EEnvRoute
     }
     '/e/$env/settings/runtime': {
       id: '/e/$env/settings/runtime'
-      path: '/runtime'
+      path: '/settings/runtime'
       fullPath: '/e/$env/settings/runtime'
       preLoaderRoute: typeof EEnvSettingsRuntimeRouteImport
-      parentRoute: typeof EEnvSettingsRoute
+      parentRoute: typeof EEnvRoute
     }
     '/e/$env/settings/templates': {
       id: '/e/$env/settings/templates'
-      path: '/templates'
+      path: '/settings/templates'
       fullPath: '/e/$env/settings/templates'
       preLoaderRoute: typeof EEnvSettingsTemplatesRouteImport
-      parentRoute: typeof EEnvSettingsRoute
+      parentRoute: typeof EEnvRoute
     }
     '/e/$env/teammates/': {
       id: '/e/$env/teammates/'
@@ -806,30 +789,6 @@ const EEnvNetworkRouteWithChildren = EEnvNetworkRoute._addFileChildren(
   EEnvNetworkRouteChildren,
 )
 
-interface EEnvSettingsRouteChildren {
-  EEnvSettingsGeneralRoute: typeof EEnvSettingsGeneralRoute
-  EEnvSettingsGitRoute: typeof EEnvSettingsGitRoute
-  EEnvSettingsNetworkRoute: typeof EEnvSettingsNetworkRoute
-  EEnvSettingsProvidersRoute: typeof EEnvSettingsProvidersRoute
-  EEnvSettingsRuntimeRoute: typeof EEnvSettingsRuntimeRoute
-  EEnvSettingsTemplatesRoute: typeof EEnvSettingsTemplatesRoute
-  EEnvSettingsIndexRoute: typeof EEnvSettingsIndexRoute
-}
-
-const EEnvSettingsRouteChildren: EEnvSettingsRouteChildren = {
-  EEnvSettingsGeneralRoute: EEnvSettingsGeneralRoute,
-  EEnvSettingsGitRoute: EEnvSettingsGitRoute,
-  EEnvSettingsNetworkRoute: EEnvSettingsNetworkRoute,
-  EEnvSettingsProvidersRoute: EEnvSettingsProvidersRoute,
-  EEnvSettingsRuntimeRoute: EEnvSettingsRuntimeRoute,
-  EEnvSettingsTemplatesRoute: EEnvSettingsTemplatesRoute,
-  EEnvSettingsIndexRoute: EEnvSettingsIndexRoute,
-}
-
-const EEnvSettingsRouteWithChildren = EEnvSettingsRoute._addFileChildren(
-  EEnvSettingsRouteChildren,
-)
-
 interface EEnvSandboxesIdRouteChildren {
   EEnvSandboxesIdWorkRoute: typeof EEnvSandboxesIdWorkRoute
   EEnvSandboxesIdIndexRoute: typeof EEnvSandboxesIdIndexRoute
@@ -871,17 +830,23 @@ interface EEnvRouteChildren {
   EEnvNetworkRoute: typeof EEnvNetworkRouteWithChildren
   EEnvProvidersRoute: typeof EEnvProvidersRoute
   EEnvSecretsRoute: typeof EEnvSecretsRoute
-  EEnvSettingsRoute: typeof EEnvSettingsRouteWithChildren
   EEnvIndexRoute: typeof EEnvIndexRoute
   EEnvBuildsIdRoute: typeof EEnvBuildsIdRoute
   EEnvChatsChatRoute: typeof EEnvChatsChatRoute
   EEnvChatsNewRoute: typeof EEnvChatsNewRoute
   EEnvSandboxesIdRoute: typeof EEnvSandboxesIdRouteWithChildren
+  EEnvSettingsGeneralRoute: typeof EEnvSettingsGeneralRoute
+  EEnvSettingsGitRoute: typeof EEnvSettingsGitRoute
+  EEnvSettingsNetworkRoute: typeof EEnvSettingsNetworkRoute
+  EEnvSettingsProvidersRoute: typeof EEnvSettingsProvidersRoute
+  EEnvSettingsRuntimeRoute: typeof EEnvSettingsRuntimeRoute
+  EEnvSettingsTemplatesRoute: typeof EEnvSettingsTemplatesRoute
   EEnvTeammatesIdRoute: typeof EEnvTeammatesIdRouteWithChildren
   EEnvBuildsIndexRoute: typeof EEnvBuildsIndexRoute
   EEnvChatsIndexRoute: typeof EEnvChatsIndexRoute
   EEnvGitIndexRoute: typeof EEnvGitIndexRoute
   EEnvMemoryIndexRoute: typeof EEnvMemoryIndexRoute
+  EEnvSettingsIndexRoute: typeof EEnvSettingsIndexRoute
   EEnvTeammatesIndexRoute: typeof EEnvTeammatesIndexRoute
   EEnvGitReviewsIdRoute: typeof EEnvGitReviewsIdRoute
   EEnvMemoryConflictsIdRoute: typeof EEnvMemoryConflictsIdRoute
@@ -892,17 +857,23 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvNetworkRoute: EEnvNetworkRouteWithChildren,
   EEnvProvidersRoute: EEnvProvidersRoute,
   EEnvSecretsRoute: EEnvSecretsRoute,
-  EEnvSettingsRoute: EEnvSettingsRouteWithChildren,
   EEnvIndexRoute: EEnvIndexRoute,
   EEnvBuildsIdRoute: EEnvBuildsIdRoute,
   EEnvChatsChatRoute: EEnvChatsChatRoute,
   EEnvChatsNewRoute: EEnvChatsNewRoute,
   EEnvSandboxesIdRoute: EEnvSandboxesIdRouteWithChildren,
+  EEnvSettingsGeneralRoute: EEnvSettingsGeneralRoute,
+  EEnvSettingsGitRoute: EEnvSettingsGitRoute,
+  EEnvSettingsNetworkRoute: EEnvSettingsNetworkRoute,
+  EEnvSettingsProvidersRoute: EEnvSettingsProvidersRoute,
+  EEnvSettingsRuntimeRoute: EEnvSettingsRuntimeRoute,
+  EEnvSettingsTemplatesRoute: EEnvSettingsTemplatesRoute,
   EEnvTeammatesIdRoute: EEnvTeammatesIdRouteWithChildren,
   EEnvBuildsIndexRoute: EEnvBuildsIndexRoute,
   EEnvChatsIndexRoute: EEnvChatsIndexRoute,
   EEnvGitIndexRoute: EEnvGitIndexRoute,
   EEnvMemoryIndexRoute: EEnvMemoryIndexRoute,
+  EEnvSettingsIndexRoute: EEnvSettingsIndexRoute,
   EEnvTeammatesIndexRoute: EEnvTeammatesIndexRoute,
   EEnvGitReviewsIdRoute: EEnvGitReviewsIdRoute,
   EEnvMemoryConflictsIdRoute: EEnvMemoryConflictsIdRoute,

@@ -68,7 +68,7 @@ test("adding a teammate without a provider explains why and leads to the provide
   await page.getByRole("button", { name: "Add a teammate" }).first().click()
   await dialog.getByRole("link", { name: "Add a provider" }).click()
   await expect(page).toHaveURL(
-    new RegExp(`/e/${fresh!.id}/settings/providers$`)
+    new RegExp(`/e/${fresh!.id}/teammates\\?settings=providers$`)
   )
   await expect(dialog).toBeHidden()
 })
