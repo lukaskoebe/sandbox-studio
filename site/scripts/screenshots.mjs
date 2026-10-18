@@ -224,6 +224,14 @@ async function step(name, fn) {
   }
 }
 
+// The first run captures the setup as it opens; later runs open it again.
+await step("setup", async () => {
+  if (!saved) return
+  await page.goto("/setup")
+  await page.getByRole("button", { name: /Host check/ }).waitFor()
+  await page.waitForTimeout(1500)
+  await shot("setup")
+})
 await step("new-sandbox", async () => {
   await go("")
   await page.getByTitle("New sandbox").click()
@@ -267,6 +275,8 @@ await step("approval", async () => {
 })
 
 await step("checkpoints", async () => {
+  // One VM at a time: the terminal's sandbox stops first.
+  await api("POST", `${E}/sandboxes/${webshop.id}/stop`).catch(() => {})
   await running(storefront)
   const checkpoints = await list(`${E}/sandboxes/${storefront.id}/checkpoints`)
   if (!checkpoints.some?.((c) => c.name === "before-upgrade"))
@@ -289,7 +299,7 @@ await step("secrets", async () => {
   await shot("secrets")
 })
 await step("providers", async () => {
-  await go("/settings/providers")
+  await go("?settings=providers")
   await shot("providers")
 })
 await step("teammates", async () => {
@@ -297,7 +307,7 @@ await step("teammates", async () => {
   await shot("teammates")
 })
 await step("git", async () => {
-  await go("/settings/git")
+  await go("?settings=git")
   await shot("git")
 })
 await step("memory", async () => {
@@ -306,8 +316,9 @@ await step("memory", async () => {
   await shot("memory")
 })
 await step("build-dialog", async () => {
-  await go("/settings/templates")
+  await go("?settings=templates")
   await button("New build").click()
+  await page.getByRole("dialog", { name: /build/i }).waitFor()
   await page.waitForTimeout(500)
   await shot("build-dialog")
   await closeDialog()

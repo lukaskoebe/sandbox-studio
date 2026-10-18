@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import {
   CpuIcon,
@@ -41,6 +41,8 @@ export function SettingsDialog({
   section?: SettingsSection
 }) {
   const navigate = useNavigate()
+  // Focus starts on the section, not on the first link of the nav.
+  const content = useRef<HTMLDivElement>(null)
   // The section stays drawn while the dialog closes.
   const [shown, setShown] = useState(section)
   if (section && section !== shown) setShown(section)
@@ -62,6 +64,7 @@ export function SettingsDialog({
     >
       <DialogContent
         bare
+        initialFocus={content}
         className="flex h-[min(56rem,calc(100dvh-2rem))] flex-col overflow-hidden sm:max-w-[min(76rem,calc(100%-4rem))] md:flex-row"
       >
         <DialogTitle className="sr-only">Settings</DialogTitle>
@@ -90,7 +93,11 @@ export function SettingsDialog({
             ))}
           </nav>
         </div>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div
+          ref={content}
+          tabIndex={-1}
+          className="flex min-h-0 min-w-0 flex-1 flex-col outline-none"
+        >
           <InDialog.Provider value={true}>
             {shown && <Section env={env} section={shown} />}
           </InDialog.Provider>
