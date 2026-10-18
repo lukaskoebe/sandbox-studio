@@ -142,12 +142,12 @@ func (p *palette) capsLine(caps []choiceCap, at int, focused func(string) string
 // cardBox draws lines in a card of w cells: a rounded frame in frame's style with the area's
 // rule down its left edge.
 func cardBox(lines []string, w int, rule, frame lipgloss.Style) []string {
-	inner := max(w-4, 1)
-	out := []string{frame.Render("╭" + strings.Repeat("─", w-2) + "╮")}
+	inner, edge := max(w-4, 1), max(w-2, 0)
+	out := []string{frame.Render("╭" + strings.Repeat("─", edge) + "╮")}
 	for _, l := range lines {
 		out = append(out, rule.Render("┃")+" "+fitStyled(l, inner)+" "+frame.Render("│"))
 	}
-	return append(out, frame.Render("╰"+strings.Repeat("─", w-2)+"╯"))
+	return append(out, frame.Render("╰"+strings.Repeat("─", edge)+"╯"))
 }
 
 // tab is a tab of the header: a screen reached with one key.

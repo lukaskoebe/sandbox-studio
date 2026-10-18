@@ -38,6 +38,8 @@
   than an hour late and is logged as missed otherwise. The task list shows each schedule with its
   next and last run, **Run now** starts one at once, and Activity lists the runs. Check-ins leave
   scheduled tasks out. Only the user sets schedules.
+- **Fix:** the TUI no longer crashes when its terminal gets only a few rows, such as a phone
+  over SSH turned on its side while Home's pane shows a terminal.
 - **Fix:** `studio tui` and `studio login-url` read the Studio's key without opening the
   catalog for writing, so a newer binary no longer migrates the catalog of the Studio it talks to.
 

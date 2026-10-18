@@ -58,6 +58,7 @@ func spread(left, right string, w int) string {
 
 // pad makes a body exactly n lines long, cutting or filling with blank lines.
 func pad(lines []string, n int) []string {
+	n = max(n, 0)
 	if len(lines) > n {
 		return lines[:n]
 	}

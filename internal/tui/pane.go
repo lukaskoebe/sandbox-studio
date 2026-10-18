@@ -199,6 +199,9 @@ func (t *liveTerm) waitOutput(gen int) tea.Cmd {
 func (t *liveTerm) lines(w, h int) []string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if w <= 0 || h <= 0 {
+		return nil // a terminal turned too small for the pane to have rows
+	}
 	out := make([]string, 0, h)
 	for y := 0; y < min(h, t.rows); y++ {
 		var line, run strings.Builder
