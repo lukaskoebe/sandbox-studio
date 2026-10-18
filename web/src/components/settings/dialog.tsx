@@ -80,7 +80,8 @@ export function SettingsDialog({
                 aria-current={s.id === shown ? "page" : undefined}
                 className={cn(
                   "flex h-7 shrink-0 items-center gap-2 rounded-md px-2 text-[0.8125rem] text-muted-foreground hover:bg-foreground/5 hover:text-foreground [&_svg]:size-3.5",
-                  s.id === shown && "bg-foreground/8 font-medium text-foreground"
+                  s.id === shown &&
+                    "bg-foreground/8 font-medium text-foreground"
                 )}
               >
                 {s.icon}
