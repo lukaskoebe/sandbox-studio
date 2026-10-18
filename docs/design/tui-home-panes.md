@@ -1,6 +1,6 @@
 # Home as a sidebar and a pane (design)
 
-Status: built (2026-10-18); [tui.md](../tui.md#the-pane) describes it as it is. It follows
+Status: built (2026-10-18), the banner reworked the same day; [tui.md](../tui.md#the-pane) describes it as it is. It follows
 [tui-sessions.md](tui-sessions.md), which put every session one key away, and is mock A2 of the
 layout proposals: a sidebar of sandboxes with their sessions, and beside it the selected
 session as it runs, as herdr shows its agents.
@@ -68,12 +68,29 @@ which encodes them as the terminal would, so arrows, function keys and bracketed
 
 ### The approval banner
 
-A blocked agent's screen gets a box over its top rows in the waiting color: the approval that
-waits in its sandbox, `api-refactor wants proxy.golang.org:443`. When it is a single network
-request, `y`, `o` and `n` in the sidebar allow it, allow it once or deny it, without leaving
-Home. Any other kind says `a approvals`. While the pane has the keys, those keys belong to the
-agent, so the banner says `Ctrl-] then y allow …`. A chat's permission request is in its
-transcript and gets no banner.
+A box in the waiting color over the top rows of every session of a sandbox in which an
+approval waits, terminal or chat: `api-refactor wants proxy.golang.org:443 · 1 more`. A chat's
+permission request is in its transcript and gets no banner. Its choices are buttons: `o Allow
+once`, `y Allow`, `n Deny`, `a More…` for a single network request, `a Review it` for the rest.
+
+The question was how to answer it without losing your place, from the pane, from a chat and
+from a terminal attached full screen:
+
+- **The sidebar** has the keys: the letters decide, and `←/→`, `space` and `enter` press the
+  buttons. Enter keeps opening the session until an arrow focuses a button.
+- **The pane** has the keys: they belong to the agent, so the banner says `alt+a answers it`.
+  `alt+a` hands the keys to the banner's buttons (`pane.answer`), and after a decision or
+  `esc` they go back to the pane. Ctrl-] would also work but leaves the keys in the sidebar.
+- **More…** opens the approvals on that card with a `resumeState`: the approval it waits for
+  and where to go back to. Every approvals read checks it, and once the approval is no longer
+  pending, the TUI goes back, with the pane's keys as they were.
+- **A chat** shows the banner under its title, and `alt+a` opens the card with a resume back
+  to the chat.
+- **A terminal attached full screen** can't be drawn over. While it runs, a watcher polls the
+  sandbox's pending approvals every 2 s. Approvals already pending at attach are ignored; a
+  new one sets the title (pushed and popped with `CSI 22/23 t`, written only after 150 ms
+  without output) and rings the bell once. `Ctrl-]` then opens the approvals on it, with a
+  resume that attaches the terminal again.
 
 ## 4. The dashboard
 
@@ -99,7 +116,9 @@ The dashboard holds both. The full-screen sandbox detail (`enter` below 100 colu
 
 ## 6. Later
 
-- An approval banner for kinds other than network, deciding in place.
+- Deciding kinds other than network in the banner itself, not on their card.
+- A notification of the terminal's own (OSC 9 or 777) next to the title, where terminals show
+  them.
 - Keeping attachments open in the background, so switching back shows the screen at once,
   and so herdr's blocked can be read from the screen, as in tui-sessions.md section 6.
 - A split of the pane itself, to watch two agents side by side.

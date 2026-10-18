@@ -121,13 +121,17 @@ type keySpan struct {
 	key    string
 }
 
-// capsLine lays the choices of a card out as keycaps on one line, and says where each sits.
-func (p *palette) capsLine(caps []choiceCap) (string, []keySpan) {
+// capsLine lays the choices of a card out as keycaps on one line, and says where each sits. The
+// at-th choice is the one the arrows are on, drawn by focused.
+func (p *palette) capsLine(caps []choiceCap, at int, focused func(string) string) (string, []keySpan) {
 	parts := make([]string, 0, len(caps))
 	spans := make([]keySpan, 0, len(caps))
 	x := 0
-	for _, c := range caps {
+	for i, c := range caps {
 		part := p.cap(c.key) + " " + c.label
+		if i == at {
+			part = focused(c.key + " " + c.label)
+		}
 		spans = append(spans, keySpan{x0: x, x1: x + lipgloss.Width(part), key: c.key})
 		x += lipgloss.Width(part) + 2
 		parts = append(parts, part)
@@ -172,7 +176,7 @@ func (m *app) activeTab() tab {
 	switch s {
 	case screenApprovals:
 		return tabApprovals
-	case screenPager:
+	case screenPager, screenGit:
 		return tabGit
 	case screenActivity, screenEntry:
 		return tabActivity

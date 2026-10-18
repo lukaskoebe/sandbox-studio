@@ -54,19 +54,23 @@ Keys are the same on every screen and cannot be changed. The key bar shows the o
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | the sandboxes of the environment on show: status, name, teammate, template, uptime and the approvals waiting on each; under each, its [sessions](#sessions). From 100 columns, a sidebar of them beside [the pane](#the-pane) | `↑/↓` `j/k` move over sandboxes and sessions · `1`–`9` go into that session · `enter` go into the session, or open the sandbox · `alt+z` the pane in full screen · `y` `o` `n` decide the [banner](#the-pane)'s approval · `tab` the next session that waits · `n` new · `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest chat · `C` a new chat · `a` approvals · `l` Activity · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
-| **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID, and the open ports with their preview addresses | `t` terminal · `T` agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` chat · `C` new chat · `l` its Activity · `a` approvals · `esc` back |
+| **Home** | the sandboxes of the environment on show: status, name, teammate, template, uptime and the approvals waiting on each; under each, its [sessions](#sessions). From 100 columns, a sidebar of them beside [the pane](#the-pane) | `↑/↓` `j/k` move over sandboxes and sessions · `1`–`9` go into that session · `enter` go into the session, or open the sandbox · `alt+z` the pane in full screen · `y` `o` `n` decide the [banner](#the-approval-banner)'s network request, `a` reviews it on its card, `←/→` and `space` press its buttons · `tab` the next session that waits · `n` new · `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest chat · `C` a new chat · `a` approvals · `l` Activity · `g` Git · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
+| **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID, and the open ports with their preview addresses | `t` terminal · `T` agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` chat · `C` new chat · `l` its Activity · `a` approvals · `g` Git · `esc` back |
 | **Checkpoints** (from `h`) | the sandbox's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
 | **New sandbox** (from `n`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
 | **Chat** (from a chat's session, `c` or `C`) | the transcript, streaming | see below |
 | **Approvals** (from `a` anywhere) | every pending approval of every environment, grouped like the web stack | see below |
-| **Git review** (from `enter` on a git card) | the push's facts, commits and diff, or the pull request | see below |
+| **Git** (from `g`, or its tab) | the environment's pushes and pull requests: the ones waiting for a review, then the last 100 decided, with their sandbox and outcome | `↑/↓` move · `enter` the review · `a` approvals · `l` Activity · `esc` back |
+| **Git review** (from `enter` on a git card or a push on the Git screen) | the push's facts, commits and diff, or the pull request | see below |
 | **Activity** (from `l`) | connections and decisions of the environment's sandboxes, newest first | `enter` the entry and its rule · `/` filter by sandbox · `r` print the rules page's URL · `esc` back |
 | **Environments** (from `e`) | the environments; `enter` switches | `↑/↓` · `enter` choose · `esc` cancel |
 
 The header always shows the number of pending approvals across all environments, after the
 environment's working and blocked sessions. When a new approval arrives, the terminal rings
 its bell once.
+
+A confirmation (delete a sandbox, restore a checkpoint) shows its choices in the notice line,
+`y Delete  [n Keep]`, with Keep focused: `enter` keeps, `y` or `←` then `enter` goes ahead.
 
 ### Sessions
 
@@ -141,10 +145,32 @@ Alt keys need a terminal that sends them as `ESC` and the key; on macOS, set Opt
 Meta. The pane sends its size when it attaches and when it changes. tmux sizes a session to
 its latest client, so a terminal open in the web too follows whichever was resized last.
 
-When an approval blocks an agent in the pane, a box over the top of its screen says what
-waits, such as `api-refactor wants proxy.golang.org:443`. For a single network request, `y`,
-`o` and `n` in the sidebar allow it, allow it once or deny it. Other kinds say `a approvals`.
-While the pane has the keys, they go to the agent, so the box says `Ctrl-] then y allow …`.
+### The approval banner
+
+When an approval waits in a sandbox, every session of it in the pane, terminal or chat, gets
+a box over its top rows that says what waits, such as `api-refactor wants
+proxy.golang.org:443 · 1 more`. A chat's own permission requests are in its transcript and get
+no banner. The box carries its choices as buttons: `o Allow once`, `y Allow`, `n Deny` and
+`a More…` for a single network request, `a Review it` for any other kind or a group.
+
+- **From the sidebar**, the letters decide it, and `←/→` move over the buttons and `space` or
+  `enter` presses one. `enter` keeps opening the session until an arrow is pressed.
+- **While the pane has the keys**, they go to the agent, so the box says `alt+a answers it`.
+  `alt+a` moves the keys to the banner's buttons. After a decision, or `esc`, the keys go back
+  to the agent, so answering takes `alt+a`, then `y`, and typing goes on.
+- **`a`** (More…, Review it) opens the approvals with the cursor on that card, where the
+  pattern, the scope and the other choices are. Once it is decided there, the TUI goes back to
+  Home, with the pane's keys where they were. `esc` there stays on the approvals.
+
+A terminal attached full screen (below 100 columns, or `t`) can't draw a box over the
+sandbox's screen. Instead, while it is attached, the TUI checks the sandbox's pending
+approvals every 2 seconds. A new one sets the terminal's title to `▲ api-refactor wants
+proxy.golang.org:443 · Ctrl-] answers it` and rings the bell once. The title is written only
+after 150 ms without output, so it doesn't land inside an escape sequence the sandbox is
+writing, and the old title is pushed (`CSI 22;0 t`) and popped (`CSI 23;0 t`) around it, in
+terminals that keep a title stack. `Ctrl-]` then opens the approvals on that card instead of
+Home, and once it is decided, the terminal is attached again. `studio shell` has no TUI to
+return to and doesn't watch.
 
 ### Approvals
 
@@ -218,7 +244,8 @@ The transcript:
 - Plans, permission requests and questions show as one line each. The first one that waits
   is answered in place, with its choices listed under it:
   - a permission request: `1`–`9` pick an option, `i` ignores it. It is decided as its card
-    on the approvals screen is.
+    on the approvals screen is. `←/→` move over its choices as buttons, and `space` or `enter`
+    presses one.
   - a question: `i` skips it (`decline`). One with no field takes `1` for OK; a choice, or yes
     or no, takes `1`–`9`; text or a number takes `r`, which opens a line for the answer in the
     notice line. The answer goes to `POST .../chats/{chat}/items/{item}/answer` with
@@ -226,7 +253,14 @@ The transcript:
     several fields, or a list, is a form; its keys print the chat's URL instead.
 - `pgup/pgdn` (or `b`/`space`) scroll a page, `g`/`G` jump to the start or the end.
 
-`p` (or `enter` with no fold selected) opens the composer in the notice line: `enter` sends,
+An approval waiting in the chat's sandbox, such as a network request of a tool the agent
+runs, is a [banner](#the-approval-banner) under the title. `alt+a` opens the approvals on its
+card and comes back to the chat once it is decided.
+
+The composer is a box at the bottom of the chat, in the chat's color, with the teammate's name
+in its frame and its keys on the right; it grows with the prompt to six lines. While no prompt
+is written it is one line on the keycaps' background: `› Write to Iris…`, `Sending…` or the
+draft put aside. `p` (or `enter` with no fold selected) opens it: `enter` sends,
 `ctrl+j` (or `shift+enter` where the terminal reports it) starts a new line, `esc` puts the
 draft aside. A prompt is sent with `POST .../chats/{chat}/prompt`; while a turn runs Studio
 answers 409, and the draft stays. `x` stops the running turn (`POST .../chats/{chat}/cancel`).
@@ -339,7 +373,8 @@ The attachment uses the same websocket as the web terminal (`.../terminals/{name
 - The screen, the keyboard and the terminal's size are handed over in raw mode, so the
   sandbox's full-screen programs work as they do in a terminal of their own. The size is sent
   whenever it changes, checked every 250 ms.
-- `Ctrl-]` detaches and returns to the TUI. It is not sent to the sandbox.
+- `Ctrl-]` detaches and returns to the TUI. It is not sent to the sandbox. If an approval
+  came while it was attached, `Ctrl-]` opens it, as [the banner](#the-approval-banner) says.
 - If the sandbox ends the terminal, Studio shows that and the next key returns to the TUI. That
   key is not sent to the sandbox either.
 
@@ -385,7 +420,10 @@ and [design/tui-visual.md](design/tui-visual.md)):
   is the plain one. The key bar groups keys with a dim `│` between the groups and calls `?`
   "more". When the separators don't fit, it drops them.
 - **Cards.** Approvals are rounded cards with their area's rule, a kind chip, and the
-  choices as keycaps on the card under the cursor.
+  choices as keycaps on the card under the cursor. `←/→` move over the card's toggles (pattern,
+  scope, ports) and then its choices; the one focused is reversed, and `space` or `enter`
+  steps a toggle or presses a choice. Nothing is focused until an arrow is pressed. In the
+  plain look the focused one is in brackets.
 - **Chat.** Prompts have a green rule and tool calls a glyph for their kind. A running call or
   turn spins. Code blocks have a dim rule and their language, and a plan is a checklist.
 - **Wide layouts.** From 100 columns, Home is the sidebar and [the pane](#the-pane), in both
@@ -435,10 +473,13 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
 - `approvals.go` ports the web's card grouping (`web/src/lib/approval-groups.ts`) and the
   decision choices of `web/src/components/approval-decision.tsx`. `kinds.go` decides the other
   kinds (browser, memory, agent permissions) and reads a question's schema into the one field
-  the TUI answers. `pager.go` is the git review.
-- `chat.go` is the chat screen: the stream, the transcript's layout and folds, the composer.
+  the TUI answers. `pager.go` is the git review, and `git.go` the Git screen.
+- `chat.go` is the chat screen: the stream, the transcript's layout and folds. `composer.go`
+  is the composer's box.
 - `sessions.go` is Home's sessions: their reads, states, rows, numbers and the ways in.
-  `homepane.go` is Home's split, the pane's state, keys, title and approval banner; `pane.go`
+  `homepane.go` is Home's split, the pane's state, keys, title and approval banner; `buttons.go`
+  the focus of the arrows over buttons, the confirmations, and the return to a session after a
+  decision made elsewhere; `pane.go`
   the live terminal in it, an emulator between the attachment's websocket and the frame; and
   `charts.go` the dashboard and its charts.
   `input.go` is the line editor the composer and the new sandbox's name use, and `linePrompt`,
@@ -456,7 +497,8 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   those rows and keycaps as it draws them, and the frame the key bar's keys.
 - `terminal.go` is the attachment: a `tea.ExecCommand`, so Bubble Tea releases the terminal
   while it runs. It bridges the websocket and reads the keys itself, which is what lets Ctrl-]
-  return without a goroutine left reading the terminal.
+  return without a goroutine left reading the terminal. While a terminal of Home is attached,
+  it watches the sandbox's approvals and sets the title.
 
 The background work of the chat and Activity screens carries a generation, so a result, a
 stream event or a tick of a screen the user has left is dropped.
@@ -481,3 +523,6 @@ Tests:
   reaches the sandbox and that Ctrl-] detaches. They are skipped on Windows.
 - Model tests run the pane against a fake attachment: its screen, the keys it sends, Ctrl-],
   alt+digits and full screen, and the banner's keys.
+- Model tests press the arrows over a card's toggles, the banner, a chat's picks and a
+  confirmation, answer the banner with `alt+a` and check the keys go back, and check that a
+  decision on the approvals returns to the pane or attaches the terminal again.

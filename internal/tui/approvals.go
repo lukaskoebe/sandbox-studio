@@ -327,6 +327,8 @@ func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, keyBack):
 			m.screen = m.back
+		case key.Matches(msg, keyGit):
+			return m, m.openGit()
 		case key.Matches(msg, keyHelp):
 			m.openHelp()
 		}
@@ -335,11 +337,26 @@ func (m *app) approvalsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	c := cards[m.approvalCursor]
 	a := c.first()
 	ch := m.choiceOf(c)
+	if k, ok := m.buttonKey(msg, cardOwner(c), cardControls(c, *ch), len(cardToggles(c))); ok {
+		if k == "" {
+			return m, nil
+		}
+		msg = pressOf(k) // the focused control's key
+	}
 	switch {
+	case key.Matches(msg, keyBack) && m.resuming != nil:
+		r := m.resuming
+		m.resuming = nil
+		m.screen = m.back
+		if r.pane && m.screen == screenHome {
+			m.pane.focus = true
+		}
 	case key.Matches(msg, keyBack):
 		m.screen = m.back
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
+	case key.Matches(msg, keyGit):
+		return m, m.openGit()
 	case key.Matches(msg, keyUp):
 		m.approvalCursor = max(m.approvalCursor-1, 0)
 	case key.Matches(msg, keyDown):
@@ -524,6 +541,16 @@ func (m *app) cardLines(c card, selected bool, w int) []string {
 		details = append(nonEmpty(source, m.envName(a.EnvironmentID)), when)
 	}
 	head := cursor + styleAccent.Render(title) + "  " + styleDim.Render(strings.Join(nonEmpty(details...), " · "))
+	at := -1
+	if selected {
+		at = m.buttonAt(cardOwner(c))
+	}
+	toggle := func(i int, text string) string { // a setting the arrows may be on
+		if i == at {
+			return m.focused(ansiStrip(text))
+		}
+		return text
+	}
 	lines := []string{spread(head, "", w)}
 	switch {
 	case c.group:
@@ -532,13 +559,13 @@ func (m *app) cardLines(c card, selected bool, w int) []string {
 			hosts = append(hosts, hostOf(x))
 		}
 		lines = append(lines, "    "+strings.Join(hosts, " · "))
-		lines = append(lines, "    "+whoText(a, *m.choiceOf(c)))
+		lines = append(lines, "    "+toggle(0, whoText(a, *m.choiceOf(c))))
 	case isNetwork(a):
 		ch := m.choiceOf(c)
 		lines = append(lines, "    "+styleBold.Render(hostOf(a)))
-		lines = append(lines, "    "+styleDim.Render("pattern ")+patternText(a, *ch)+
-			"   "+whoText(a, *ch)+
-			"   "+styleDim.Render("ports ")+portsText(*ch))
+		lines = append(lines, "    "+styleDim.Render("pattern ")+toggle(0, patternText(a, *ch))+
+			"   "+toggle(1, whoText(a, *ch))+
+			"   "+styleDim.Render("ports ")+toggle(2, portsText(*ch)))
 	case isGit(a):
 		lines = append(lines, "    "+summary(a))
 		lines = append(lines, "    "+styleDim.Render("enter opens its diff"))
@@ -547,7 +574,34 @@ func (m *app) cardLines(c card, selected bool, w int) []string {
 			lines = append(lines, "    "+line)
 		}
 	}
+	// The plain look leaves the choices to the key bar until the arrows are on them.
+	if at >= len(cardToggles(c)) {
+		row, _ := m.buttonsLine(cardCaps(c, *m.choiceOf(c)), at-len(cardToggles(c)))
+		lines = append(lines, "    "+row)
+	}
 	return append(lines, "")
+}
+
+// cardOwner names a card's row of controls for the arrows.
+func cardOwner(c card) string {
+	return "card:" + c.first().ID
+}
+
+// cardToggles are the settings of a card its keys step, in the order they are drawn: a network
+// card's pattern, scope and ports, and a group's scope.
+func cardToggles(c card) []choiceCap {
+	switch {
+	case c.group:
+		return []choiceCap{{"s", "scope"}}
+	case isNetwork(c.first()):
+		return []choiceCap{{"p", "pattern"}, {"s", "scope"}, {"x", "ports"}}
+	}
+	return nil
+}
+
+// cardControls are what the arrows move over on a card: its settings, then its choices.
+func cardControls(c card, ch choice) []choiceCap {
+	return append(cardToggles(c), cardCaps(c, ch)...)
 }
 
 // patternText is the host pattern a card would decide, or the browser request it names.

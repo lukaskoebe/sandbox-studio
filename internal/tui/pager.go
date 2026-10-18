@@ -17,8 +17,9 @@ import (
 // the pull request it would open, in a pager the user scrolls before deciding.
 type pagerState struct {
 	approval api.ApprovalView
-	scroll   int  // the first line on show
-	unified  bool // v turned side by side off, on a terminal wide enough for it
+	back     screen // where esc and a decision return to: the approvals or the Git screen
+	scroll   int    // the first line on show
+	unified  bool   // v turned side by side off, on a terminal wide enough for it
 
 	// lines caches the review laid out for width, which a long diff makes worth keeping, and
 	// files where each file's diff starts in it.
@@ -55,7 +56,7 @@ const sideWidth = 160
 
 // openPager shows the review of a git approval.
 func (m *app) openPager(a api.ApprovalView) {
-	m.pager = pagerState{approval: a}
+	m.pager = pagerState{approval: a, back: screenApprovals}
 	m.screen = screenPager
 }
 
@@ -417,7 +418,8 @@ func (m *app) fileBar(f diffFile, most, w int) string {
 		strings.Repeat(" ", w-cells)
 }
 
-// pagerKey scrolls the review and decides it. A decision returns to the approvals.
+// pagerKey scrolls the review and decides it, while it waits. A decision returns to the screen
+// the review came from.
 func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	p := &m.pager
 	_, h := m.size()
@@ -425,7 +427,9 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	a := p.approval
 	switch {
 	case key.Matches(msg, keyBack):
-		m.screen = screenApprovals
+		m.screen = p.back
+	case key.Matches(msg, keyPush, keyReject, keyIgnore) && !gitPending(a):
+		m.setNotice(gitDecidedText(a), false)
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	case key.Matches(msg, keyUp):
@@ -458,16 +462,16 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keySide):
 		p.unified = !p.unified
 	case key.Matches(msg, keyPush):
-		m.screen = screenApprovals
+		m.screen = p.back
 		if a.Git.PullRequest != nil {
 			return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "allow", Scope: "sandbox"}, "Opening", "the pull request")
 		}
 		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "allow", Scope: "sandbox"}, "Approved", "the push of "+gitBranch(a))
 	case key.Matches(msg, keyReject):
-		m.screen = screenApprovals
+		m.screen = p.back
 		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a))
 	case key.Matches(msg, keyIgnore):
-		m.screen = screenApprovals
+		m.screen = p.back
 		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "dismiss", Scope: "sandbox"}, "Ignored", gitWhat(a))
 	}
 	p.scroll = max(p.scroll, 0) // pagerBody keeps it off the end
@@ -497,6 +501,9 @@ func (m *app) pagerBindings() []key.Binding {
 		approve = keyOpenPR
 	}
 	bindings := []key.Binding{approve, keyReject, keyIgnore, keyScrollBar}
+	if !gitPending(m.pager.approval) {
+		bindings = []key.Binding{keyScrollBar}
+	}
 	if !m.look.plain && len(m.pagerFiles()) > 1 {
 		bindings = append(bindings, keyFilesBar)
 	}

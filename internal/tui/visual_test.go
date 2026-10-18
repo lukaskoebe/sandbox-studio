@@ -256,7 +256,7 @@ func TestGroupedKeyBar(t *testing.T) {
 
 func TestMouseSelectsAndOpens(t *testing.T) {
 	m := visualApp(80, 24)
-	m.View() // records where the rows lead
+	m.View()                                                                 // records where the rows lead
 	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 4, Button: tea.MouseLeft} // docs-site's header, under two groups
 	next, _ := m.Update(click)
 	m = next.(*app)
@@ -310,8 +310,8 @@ func TestClickingATabActsAsItsKey(t *testing.T) {
 	}
 	next, _ := m.Update(tea.MouseClickMsg{X: git.x0, Y: 0, Button: tea.MouseLeft})
 	m = next.(*app)
-	if m.screen != screenApprovals || !isGit(m.cards()[m.approvalCursor].first()) {
-		t.Fatalf("Git opens the approvals on the push: screen %v, card %d", m.screen, m.approvalCursor)
+	if m.screen != screenGit || m.git.back != screenHome {
+		t.Fatalf("Git opens the Git screen from Home: screen %v, back %v", m.screen, m.git.back)
 	}
 	m.View()
 	next, _ = m.Update(tea.MouseClickMsg{X: activity.x0, Y: 0, Button: tea.MouseLeft})

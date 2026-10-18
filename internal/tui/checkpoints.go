@@ -204,6 +204,12 @@ func (m *app) askRestore() {
 // keeps it as it is.
 func (m *app) restoreKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	cp := *m.checkpoints.restoring
+	if k, ok := m.confirmButtons(msg, "restore:"+cp.ID); ok {
+		if k == "" {
+			return m, nil
+		}
+		msg = pressOf(k)
+	}
 	m.checkpoints.restoring = nil
 	sb := m.checkpointSandbox()
 	if !key.Matches(msg, keyRestoreYes) {

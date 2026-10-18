@@ -96,6 +96,8 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.progressKey(msg)
 	case screenCheckpoints:
 		return m.checkpointsKey(msg)
+	case screenGit:
+		return m.gitKey(msg)
 	default: // help: any key closes it
 		m.screen = m.helpBack
 		return m, nil
@@ -155,6 +157,8 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.startFilter()
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
+	case key.Matches(msg, keyGit):
+		return m, m.openGit()
 	case key.Matches(msg, keyTerminal):
 		return m, m.attachTo(m.selected(), terminalName)
 	case key.Matches(msg, keyActivity):
@@ -196,6 +200,8 @@ func (m *app) detailKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
+	case key.Matches(msg, keyGit):
+		return m, m.openGit()
 	case key.Matches(msg, keyTerminal):
 		return m, m.attachTo(m.selected(), terminalName)
 	case key.Matches(msg, keyHelp):
@@ -265,6 +271,12 @@ func (m *app) filtered(id string) {
 // confirmKey answers a pending delete: y deletes the sandbox, any other key keeps it.
 func (m *app) confirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	sb := *m.confirm
+	if k, ok := m.confirmButtons(msg, "delete:"+sb.ID); ok {
+		if k == "" {
+			return m, nil
+		}
+		msg = pressOf(k)
+	}
 	m.confirm = nil
 	if key.Matches(msg, keyYes) {
 		m.setNotice("Deleting "+sb.Name+"…", false)
@@ -379,14 +391,21 @@ func (m *app) bindings() []key.Binding {
 		return m.newBindings()
 	case screenCheckpoints:
 		return m.checkpointBindings()
+	case screenGit:
+		return m.gitBindings()
 	}
 	if m.paneFocused() {
 		return m.paneBindings()
 	}
+	if b := m.bannerBindings(); b != nil {
+		return b
+	}
 	if x, ok := m.paneTarget(); ok {
 		bindings := []key.Binding{keyFocus, keyNumber, keyWaiting}
-		if c, blocked := m.paneCard(x); blocked && bannerKeys(c) {
-			bindings = append(bindings, keyAllow, keyOnce, keyDeny)
+		if c, waiting := m.paneCard(x); waiting && bannerKeys(c) {
+			bindings = append(bindings, keyAllow, keyOnce, keyDeny, keyLeft)
+		} else if waiting {
+			bindings = append(bindings, keyReviewIt)
 		}
 		return append(bindings, keyApprovals, keyHelp, keyQuit, keyZoom, keyAgent, keyChatNew)
 	}
@@ -415,11 +434,11 @@ func (m *app) approvalBindings() []key.Binding {
 	c := cards[m.approvalCursor]
 	switch {
 	case c.group:
-		return []key.Binding{keyAllowAll, keyDenyAll, keySplit, keyScope, keyBack}
+		return []key.Binding{keyAllowAll, keyDenyAll, keySplit, keyScope, keyBack, keyLeft}
 	case isNetwork(c.first()):
 		return []key.Binding{keyAllow, keyDeny, keyOnce, keyHour, keyPattern, keyScope, keyBack}
 	case isGit(c.first()):
 		return []key.Binding{keyReview, keyBack}
 	}
-	return kindBindings(c.first())
+	return append(kindBindings(c.first()), keyLeft)
 }

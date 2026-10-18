@@ -24,6 +24,7 @@ const (
 	rowEnv                             // an environment of the picker
 	rowFold                            // a folded tool call or thought of a transcript
 	rowFile                            // a file of the git review's file list
+	rowPush                            // a push or pull request of the Git screen
 )
 
 // rowHit is a row of the screen, or the part of it from x0 to x1, and what it leads to.
@@ -155,6 +156,8 @@ func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 		return m, nil // enter does nothing here
 	case rowEnv:
 		m.picker = r.index
+	case rowPush:
+		m.git.cursor = r.index
 	case rowFold:
 		m.chats.fold = r.index
 		m.chats.scroll = m.foldScroll(r.index)
@@ -225,8 +228,7 @@ func (m *app) wheelChat(dir int) {
 	c.scroll = min(max(c.scroll-dir*wheelLines, 0), max(total-m.transcriptRows(), 0))
 }
 
-// openTab shows a tab's screen, as its key does: Sandboxes is Home, Git the first push waiting
-// for a review. The environment's name opens the picker from Home, as e does.
+// openTab shows a tab's screen, as its key does: Sandboxes is Home. The environment's name opens the picker from Home, as e does.
 func (m *app) openTab(s tabSpan) tea.Cmd {
 	if s.env {
 		if m.screen == screenHome {
@@ -243,19 +245,17 @@ func (m *app) openTab(s tabSpan) tea.Cmd {
 	case tabSandboxes:
 		leave()
 		m.screen = screenHome
-	case tabApprovals, tabGit:
+	case tabApprovals:
 		if m.screen == screenPager {
-			m.screen = screenApprovals // the review's way back
+			m.screen = m.pager.back // the review's way back
 		}
 		m.openApprovals()
-		if s.tab == tabGit {
-			for i, c := range m.cards() {
-				if isGit(c.first()) {
-					m.approvalCursor = i
-					break
-				}
-			}
+	case tabGit:
+		if m.screen == screenGit {
+			return nil
 		}
+		leave()
+		return m.openGit()
 	case tabActivity:
 		if m.screen == screenActivity {
 			return nil

@@ -1,7 +1,6 @@
 Sandbox Studio · Default                                            ● 1 approval
 ────────────────────────────────────────────────────────────────────────────────
 Fix the login form · blub                                                  Ready
-
   ▸ Thought it through
   ▸ Read src/login.tsx                                                      done
   ▸ Edit src/login.tsx                                                      done
@@ -19,5 +18,6 @@ button now:
   ? Asks to run npm test · waiting for you
     1 Allow once  2 Reject  i ignore
   ? Iris asks: Which port should the dev server use?
+ › Write to Iris…                                                       p write 
 ────────────────────────────────────────────────────────────────────────────────
-1-2 choose  i ignore  p prompt  ↑/↓ tools  pgup scroll  n new chat  esc/q back  
+1-2 choose  i ignore  ←/→ choose  p prompt  ↑/↓ tools  pgup scroll  n new chat  

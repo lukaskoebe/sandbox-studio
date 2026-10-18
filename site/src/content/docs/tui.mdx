@@ -40,7 +40,8 @@ shows the ones that apply where you are, and `?` lists them all.
 | `enter` | go into the session under the cursor; on a sandbox, open it: its facts, its open ports, and the same keys |
 | `tab` | the next session that waits for you |
 | `alt+z` | the pane in full screen, and back (from 100 columns) |
-| `y` `o` `n` | allow, allow once or deny the network request in the pane's banner |
+| `y` `o` `n` | allow, allow once or deny the network request in the pane's [banner](#answer-from-a-session) |
+| `←` `→` then `space` | move over the banner's buttons and press one |
 | `n` | create a new sandbox |
 | `t` | open the sandbox's main terminal (it must be running) |
 | `T` | start the teammate's agent in a new terminal and open it |
@@ -53,6 +54,7 @@ shows the ones that apply where you are, and `?` lists them all.
 | `C` | a new chat |
 | `a` | approvals, from every environment |
 | `l` | Activity: connections and decisions |
+| `g` | Git: the pushes and pull requests waiting for your review, then the decided ones |
 | `e` | switch environment |
 | `/` | filter by name, teammate or template |
 | `?` | help |
@@ -60,6 +62,10 @@ shows the ones that apply where you are, and `?` lists them all.
 
 `esc` or `q` goes back from every other screen. The header counts the approvals waiting in
 every environment, and the terminal rings its bell once when a new one arrives.
+
+When the TUI asks before it deletes a sandbox or restores a checkpoint, its choices are in the
+line at the bottom, `y Delete  [n Keep]`. Keep is chosen, so `enter` keeps; press `y`, or `←`
+and then `enter`, to go ahead.
 
 ## Sessions
 
@@ -119,11 +125,26 @@ two turns bright. Everything you type goes to the agent, `q` and `ctrl+c` too, e
 
 Alt keys need a terminal that sends them; on macOS, set Option to act as Meta.
 
-When an approval blocks an agent, a box over its screen says what waits, such as `api-refactor
-wants proxy.golang.org:443`. For a network request, press `y`, `o` or `n` in the sidebar to
-allow it, allow it once or deny it, without leaving the list.
-
 A terminal open in the browser too takes the size of whichever window was resized last.
+
+### Answer from a session
+
+When an approval waits in a sandbox, each of its sessions in the pane shows a box over its
+top rows that says what waits, such as `api-refactor wants proxy.golang.org:443`, with its
+choices as buttons: **Allow once**, **Allow**, **Deny** and **More…** for a network request,
+**Review it** for anything else.
+
+- In the sidebar, press `o`, `y` or `n`, or move over the buttons with `←` and `→` and press
+  one with `space`.
+- While you type in the pane, your keys go to the agent, so the box says `alt+a answers it`.
+  `alt+a` puts you on its buttons; once you've answered, or pressed `esc`, your keys go back
+  to the agent.
+- `a` (**More…**) opens the approval's card, where you choose the host pattern and the scope.
+  Once you've decided, you're back in the session.
+
+A terminal in full screen has no room for a box. When an approval arrives while you're in one,
+the terminal's title says what waits and the bell rings. `Ctrl-]` then takes you straight to
+the approval, and once you've answered it you're back in the terminal.
 
 ## New sandbox
 
@@ -177,11 +198,14 @@ A card lets you:
   who the rule covers: its browser, all browsers, or the browsers and the sandboxes.
 - **Decide a group:** `A` allows every host, `D` denies every host, and `r` reviews them one by
   one.
+- **Move with the arrows:** `←` and `→` move over the card's toggles (pattern, scope, ports)
+  and its choices, and `space` or `enter` presses the one you're on, as its key does.
 - **Review a git push:** `enter` opens the push in a pager: the repository, branch and change,
   the commits, and the diff with added lines in green and removed ones in red. Scroll with the
   arrows, `pgup`/`pgdn` (or `b`/`space`), `g` and `G`. Then `y` approves and pushes it, `n`
   rejects it, and `i` ignores it. A pull request shows its title and description, and `y`
-  opens it.
+  opens it. `g` lists every push and pull request, the ones waiting for you first and then the
+  decided ones with what came of them; `enter` opens one.
 
 The other cards are decided with their own keys:
 
@@ -221,24 +245,29 @@ button now:
 - The button is focusable.
 
 
-
+ › Write to Iris…                                                       p write
 ────────────────────────────────────────────────────────────────────────────────
 p prompt  ↑/↓ tools  pgup scroll  n new chat  esc/q back  ? help
 ```
 
 The transcript streams as the agent works. Thoughts and tool calls are folded to one line:
 `↑` and `↓` move between them, and `enter` expands one to show its files, its diff or its
-output. `p` writes a prompt at the bottom: `enter` sends it, `ctrl+j` starts a new line, and
-`esc` puts it aside. `x` stops the turn that runs. Headings are bold and code is indented;
+output. `p` writes a prompt in the box at the bottom of the chat, framed in the chat's color:
+`enter` sends it, `ctrl+j` starts a new line, and `esc` puts it aside. `x` stops the turn that runs. Headings are bold and code is indented;
 there is no other formatting.
 
 When the agent asks for a permission or asks a question, you answer it in the chat. The
 choices are listed under it.
 
-- A permission: press the number of an option, or `i` to ignore it.
+- A permission: press the number of an option, or `i` to ignore it. `←`, `→` and `space`
+  work too.
 - A question: press the number of a choice, or `r` to type an answer and `enter` to send it.
   `i` skips the question. A question with several fields is answered in the browser; its keys
   print the chat's address.
+
+When an approval waits in the chat's sandbox, such as a host one of the agent's tools wants,
+it shows as a box under the title. `alt+a` opens it, and once you've answered you're back in
+the chat.
 
 ## Activity
 
@@ -281,7 +310,8 @@ The mouse works too:
 `t` opens the sandbox's main terminal, the one the browser opens first, in full screen. A
 terminal's number opens that one, in the pane when there's room for it. From a shell, `studio shell <sandbox> [terminal]` does the same. The sandbox's
 screen takes over your terminal, and your keys go to it, as in any other terminal. Resizing
-your window resizes the sandbox's. Press `Ctrl-]` to go back to the TUI. If the sandbox ends the
+your window resizes the sandbox's. Press `Ctrl-]` to go back to the TUI, or to the approval
+that arrived meanwhile, as [above](#answer-from-a-session). If the sandbox ends the
 terminal, you see that, and the next key returns you to the TUI.
 
 ## Stays in the browser

@@ -31,6 +31,7 @@ const (
 	screenNew         // the form of a new sandbox
 	screenProgress    // a new sandbox's create or a fork, until it is ready
 	screenCheckpoints // a sandbox's checkpoints
+	screenGit         // the environment's pushes and pull requests
 )
 
 // notice is the one line under the key bar: what the last action did, or what went wrong.
@@ -77,6 +78,7 @@ type app struct {
 	chats          chatState          // the chat screens
 	activity       activityState      // the Activity screens
 	pager          pagerState         // the review of a git approval
+	git            gitState           // the Git screen
 	newSb          newState           // a new sandbox, from its form to its create's end
 	checkpoints    checkpointState    // the checkpoints screen
 	ports          portsState         // the open ports of the sandbox on the detail screen
@@ -106,6 +108,8 @@ type app struct {
 	net      netState     // the connections of the sandbox in Home's network column
 	picture  pictureState // the browser of the teammate in Home's dashboard
 	pane     paneState    // what Home's pane shows, and whether it has the keys
+	buttons  buttonFocus  // the control the arrows are on
+	resuming *resumeState // what a decision away from a session returns to
 }
 
 // newApp returns the model for a session with the Studio at addr. Its first screen loads on Init.
@@ -185,6 +189,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.paneUpdate(msg); ok {
 		return m, cmd
 	}
+	if cmd, ok := m.gitUpdate(msg); ok {
+		return m, cmd
+	}
 	if m.motionUpdate(msg) {
 		return m, nil
 	}
@@ -249,7 +256,7 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fail(msg.err)
 			return m, nil
 		}
-		return m, m.setApprovals(msg.list)
+		return m, tea.Batch(m.setApprovals(msg.list), m.resume())
 	case subscribed:
 		if msg.err != nil {
 			m.offline = true
@@ -280,9 +287,16 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.refresh()
 	case attachDone:
-		if msg.err != nil {
+		switch {
+		case msg.err != nil:
 			m.report("Could not open the terminal: "+msg.err.Error(), true)
-		} else {
+		case msg.waiting != "":
+			// An approval came in while the terminal was attached: show it, and attach the
+			// terminal again once it is decided.
+			m.openApprovalsOn(msg.waiting, &resumeState{approval: msg.waiting, back: screenHome,
+				attach: &attachTarget{id: msg.id, sandbox: msg.sandbox, name: msg.name}})
+			m.setNotice("Answer it, and you're back in "+msg.name+". esc stays here.", false)
+		default:
 			m.report("Detached from "+msg.name+" in "+msg.sandbox+".", false)
 		}
 		return m, m.refresh()
@@ -294,8 +308,11 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // approvals of every environment, and the list of the screen on show.
 func (m *app) refresh() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSandboxes(), m.loadApprovals()}
-	if m.screen == screenCheckpoints {
+	switch m.screen {
+	case screenCheckpoints:
 		cmds = append(cmds, m.loadCheckpoints())
+	case screenGit:
+		cmds = append(cmds, m.loadGit())
 	}
 	return tea.Batch(cmds...)
 }

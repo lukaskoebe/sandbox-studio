@@ -15,6 +15,20 @@
   the sidebar decide a network request. A sandbox's header shows its dashboard, with CPU over
   2 minutes as an area chart and memory as a gauge and history. The 120-column detail pane and
   the 160-column network column are gone; the dashboard has both.
+- **Terminal UI:** an approval waiting in a sandbox shows as a banner over each of its
+  sessions, terminals and chats, with its choices as buttons. In the pane, `alt+a` answers it
+  and gives the keys back to the agent; **More…** opens its card and returns to the session once
+  it is decided. A terminal attached full screen sets its title and rings the bell when an
+  approval arrives, and `Ctrl-]` goes straight to it, then attaches again.
+- **Terminal UI:** `←`/`→` move over the buttons and toggles of approval cards, the banner, a
+  chat's permission and question choices and the delete and restore confirmations, and `space`
+  or `enter` presses one. Confirmations start on Keep.
+- **Terminal UI:** the chat's prompt is a box at the bottom of the chat, in its color, instead
+  of the line above the key bar.
+- **Terminal UI:** `g` and the Git tab open a Git screen that lists the pushes and pull
+  requests waiting for review, then the decided ones; before, the tab opened the approvals.
+- **Website:** the landing page takes the TUI's look: monospace headings, a teal accent and
+  the TUI's Home among the code samples.
 - **Command line:** `studio shell <sandbox> [terminal]` opens any of a sandbox's terminals,
   such as an agent's.
 - **Scheduled tasks:** a task can get a schedule in its dialog: once at a day and time, on

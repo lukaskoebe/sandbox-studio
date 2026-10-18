@@ -84,7 +84,7 @@ func TestSessionStates(t *testing.T) {
 	m := withSessions(sampleApp())
 	want := map[string]agentState{
 		"claude": stateDone, "main": stateNone, "Fix the login form": stateIdle,
-		"codex": stateBlocked, // a network approval waits in api-refactor
+		"codex":                 stateBlocked, // a network approval waits in api-refactor
 		"Port the parser to go": stateBlocked,
 	}
 	for _, sb := range m.sandboxes[:2] {

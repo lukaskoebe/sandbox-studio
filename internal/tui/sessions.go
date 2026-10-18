@@ -95,8 +95,8 @@ type (
 		terms map[string][]agentproto.Session
 		chats map[string][]store.Chat
 	}
-	sessionsTick  struct{ gen int }
-	agentStarted  struct {
+	sessionsTick struct{ gen int }
+	agentStarted struct {
 		sandbox sandboxes.View
 		name    string
 		err     error
@@ -344,6 +344,8 @@ func (m *app) moveRow(dir int) {
 	}
 	i := min(max(m.cursorRow(rows)+dir, 0), len(rows)-1)
 	m.cursor, m.sub = rows[i].sb, rows[i].sub
+	m.blurButtons()
+	m.pane.answer = false
 }
 
 // numbered enters the session with the number n: Home's pane takes the keys for it, or, on a

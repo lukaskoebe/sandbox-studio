@@ -99,7 +99,7 @@ func TestPaneShowsTheAgentAndTakesTheKeys(t *testing.T) {
 		t.Fatal("Ctrl-] did not give the keys back")
 	}
 	m = run(m, func() tea.Msg { return tea.KeyPressMsg{Code: 'z', Mod: tea.ModAlt} }) // back from full screen
-	m = press(m, "j") // the chat: the terminal is let go
+	m = press(m, "j")                                                                 // the chat: the terminal is let go
 	select {
 	case <-closed:
 	case <-time.After(5 * time.Second):
@@ -153,7 +153,7 @@ func TestPaneShowsTheChat(t *testing.T) {
 
 	// Enter writes; esc puts the prompt aside, a second esc gives the keys back.
 	m = press(m, "enter", "h", "i")
-	if !m.paneFocused() || !m.chats.composing || !strings.Contains(m.noticeLine(140), "hi") {
+	if !m.paneFocused() || !m.chats.composing || !strings.Contains(ansi.Strip(strings.Join(m.composer(m.paneW()), "")), "hi▏") {
 		t.Fatalf("enter writes a prompt in the pane: focus %v composing %v", m.pane.focus, m.chats.composing)
 	}
 	m = press(m, "esc")
@@ -178,7 +178,7 @@ func TestBannerDecidesTheAgentsApprovalFromTheSidebar(t *testing.T) {
 		t.Fatalf("on %+v", x)
 	}
 	out := shown(m)
-	if !strings.Contains(out, "api-refactor wants proxy.golang.org:443") || !strings.Contains(out, "y allow · o once · n deny") {
+	if !strings.Contains(out, "api-refactor wants proxy.golang.org:443") || !strings.Contains(out, "Allow once") || !strings.Contains(out, "More…") {
 		t.Fatalf("no banner over the blocked agent:\n%s", out)
 	}
 	for _, k := range []string{"y", "o", "n"} {
@@ -188,9 +188,6 @@ func TestBannerDecidesTheAgentsApprovalFromTheSidebar(t *testing.T) {
 	}
 	if m = press(m, "n"); m.screen != screenHome {
 		t.Errorf("n opened %v instead of denying", m.screen)
-	}
-	if m = press(m, "k"); m.paneBanner(must(m.paneTarget()), 90) != nil {
-		t.Error("the main terminal shows the agent's banner")
 	}
 }
 

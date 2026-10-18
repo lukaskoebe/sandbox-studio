@@ -164,7 +164,8 @@ type palette struct {
 	added   lipgloss.Style
 	removed lipgloss.Style
 	keycap  lipgloss.Style
-	capBg   bool // keycaps sit on a background; on 16 colors they are bracketed instead
+	capBg   bool           // keycaps sit on a background; on 16 colors they are bracketed instead
+	field   lipgloss.Style // a field to type in, on the keycaps' background when they have one
 }
 
 // newPalette resolves the palette for a look.
@@ -207,6 +208,7 @@ func newPalette(l look) palette {
 			x256 = 254
 		}
 		p.keycap = p.keycap.Background(complete(nil, lipgloss.Color(fmt.Sprint(x256)), lipgloss.Color(bg)))
+		p.field = p.field.Background(complete(nil, lipgloss.Color(fmt.Sprint(x256)), lipgloss.Color(bg)))
 		p.capBg = true
 	}
 	return p

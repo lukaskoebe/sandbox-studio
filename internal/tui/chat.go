@@ -370,6 +370,14 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if c.composing {
 		return m.composeKey(msg)
 	}
+	if it, ok := c.pendingAsk(); ok {
+		if k, handled := m.buttonKey(msg, askOwner(it), askCaps(it), 0); handled {
+			if k == "" {
+				return m, nil
+			}
+			msg = pressOf(k) // the focused choice's key
+		}
+	}
 	if cmd, ok := m.askKey(msg); ok {
 		return m, cmd
 	}
@@ -417,6 +425,11 @@ func (m *app) chatKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openChat("")
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
+	case key.Matches(msg, keyAnswerIt) && m.screen == screenChat:
+		if card, ok := m.sandboxCard(c.sandbox.ID); ok {
+			id := card.first().ID
+			m.openApprovalsOn(id, &resumeState{approval: id, back: screenChat})
+		}
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}
@@ -579,9 +592,10 @@ func (m *app) scrollTranscript(dir int) {
 	c.scroll = min(max(c.scroll-dir*max(rows-1, 1), 0), max(total-rows, 0))
 }
 
-// transcriptRows is how many rows the transcript gets: the body less the chat's title line.
+// transcriptRows is how many rows the transcript gets: the body less the chat's title line and
+// the composer.
 func (m *app) transcriptRows() int {
-	return max(m.bodyRows()-1, 1)
+	return max(m.bodyRows()-1-m.composerRows(), 1)
 }
 
 // chatShows reports whether the chat is on show: on its screen, or in Home's pane.
@@ -704,7 +718,11 @@ func (m *app) transcript(w int) transcriptView {
 			}
 		case chat.KindPermission:
 			out.lines = append(out.lines, permissionLine(it, w))
-			if it.ID == askID && it.Permission != nil {
+			switch {
+			case it.ID == askID && m.buttonAt(askOwner(it)) >= 0:
+				row, _ := m.buttonsLine(askCaps(it), m.buttonAt(askOwner(it)))
+				out.lines = append(out.lines, "    "+row)
+			case it.ID == askID && it.Permission != nil:
 				out.lines = append(out.lines, "    "+picksText(permissionPicks(it.Permission.Options))+styleDim.Render("  i ignore"))
 			}
 		case chat.KindQuestion:
@@ -963,6 +981,10 @@ func (m *app) questionLines(it chat.Item, keys bool, w int) []string {
 	if !keys {
 		return lines
 	}
+	if at := m.buttonAt(askOwner(it)); at >= 0 {
+		row, _ := m.buttonsLine(askCaps(it), at)
+		return append(lines, "    "+row)
+	}
 	f, ok := questionForm(it.Question.Schema)
 	switch {
 	case !ok:
@@ -1115,18 +1137,19 @@ func (m *app) chatBody(w, h int) []string {
 		}
 	}
 	lines := []string{spread(styleBold.Render(title), state, w)}
-	rows := max(h-1, 1)
+	box := m.composer(w)
+	rows := max(h-1-len(box), 1)
 	switch {
 	case c.gone:
 		return append(lines, "", "This chat was deleted. Press n to start a new one.")
 	case c.id == "":
-		return append(lines, "", styleDim.Render("Write what "+m.teammateName()+" should do. Enter sends it and starts the chat."))
+		return withComposer(append(lines, "", styleDim.Render("Write what "+m.teammateName()+" should do. Enter sends it and starts the chat.")), box, h)
 	case !c.loaded:
 		return append(lines, styleDim.Render("Loading…"))
 	}
 	t := m.transcript(w)
 	if len(t.lines) == 0 {
-		return append(lines, "", styleDim.Render("Nothing here yet. Press p and say what "+m.teammateName()+" should do."))
+		return withComposer(append(lines, "", styleDim.Render("Nothing here yet. Press p and say what "+m.teammateName()+" should do.")), box, h)
 	}
 	scroll := c.scroll
 	if c.fold >= 0 {
@@ -1139,7 +1162,22 @@ func (m *app) chatBody(w, h int) []string {
 			m.hitRow(len(lines)+f.line-start, 0, w, rowFold, i)
 		}
 	}
-	return append(lines, t.lines[start:end]...)
+	return withComposer(m.withBanner(append(lines, t.lines[start:end]...), w), box, h)
+}
+
+// withBanner draws the approval waiting in the chat's sandbox over the transcript, under the
+// title, as Home's pane does over a terminal. The chat's own permission requests are in the
+// transcript instead.
+func (m *app) withBanner(lines []string, w int) []string {
+	c, ok := m.sandboxCard(m.chats.sandbox.ID)
+	if !ok || w < 24 {
+		return lines
+	}
+	typing := m.screen == screenChat || m.paneFocused()
+	b := m.banner(c, m.chats.sandbox.ID, typing, w)
+	lines = pad(lines, len(b)+1)
+	copy(lines[1:], b)
+	return lines
 }
 
 // chatBindings are the keys the key bar shows on the chat screen.
@@ -1163,10 +1201,42 @@ func (m *app) chatBindings() []key.Binding {
 	return append(bindings, keyNewChat, keyBack, keyHelp)
 }
 
+// askOwner names the choices of a permission request or question for the arrows.
+func askOwner(it chat.Item) string {
+	return "ask:" + it.ID
+}
+
+// askCaps are the choices of the permission request or question the agent waits on, as the
+// arrows move over them: its numbered picks, answering and ignoring or skipping it.
+func askCaps(it chat.Item) []choiceCap {
+	var caps []choiceCap
+	numbered := func(picks []pick) {
+		for i, p := range picks[:min(len(picks), 9)] {
+			caps = append(caps, choiceCap{fmt.Sprint(i + 1), oneLine(p.label)})
+		}
+	}
+	if it.Kind == chat.KindPermission && it.Permission != nil {
+		numbered(permissionPicks(it.Permission.Options))
+		return append(caps, choiceCap{"i", "Ignore"})
+	}
+	if it.Question == nil {
+		return nil
+	}
+	f, ok := questionForm(it.Question.Schema)
+	switch {
+	case !ok:
+	case len(f.picks) > 0:
+		numbered(f.picks)
+	default:
+		caps = append(caps, choiceCap{"r", "Answer"})
+	}
+	return append(caps, choiceCap{"i", "Skip"})
+}
+
 // askBindings are the keys of the permission request or question the agent waits on.
 func askBindings(it chat.Item) []key.Binding {
 	if it.Kind == chat.KindPermission && it.Permission != nil {
-		return []key.Binding{keyPick(len(permissionPicks(it.Permission.Options))), keyIgnore}
+		return []key.Binding{keyPick(len(permissionPicks(it.Permission.Options))), keyIgnore, keyLeft}
 	}
 	if it.Question == nil {
 		return nil

@@ -20,4 +20,4 @@ Approvals from every environment, newest first
     B Deploys never go out on Fridays.                                  · agent
 
 ────────────────────────────────────────────────────────────────────────────────
-y allow  n deny  i ignore  r always  esc/q back
+y allow  n deny  i ignore  r always  esc/q back  ←/→ choose

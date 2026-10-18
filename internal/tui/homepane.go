@@ -25,22 +25,27 @@ const paneDelay = 150 * time.Millisecond
 
 // paneState is what Home's pane shows and whether it has the keys.
 type paneState struct {
-	key   string    // the session on show, by its id; "" when the pane shows no session
-	term  *liveTerm // the terminal on show, once connected
-	err   error     // why the terminal could not be shown
-	ended bool      // the sandbox ended the terminal
-	dialing bool    // the terminal's connection is being made
-	gen   int       // counts the sessions shown, so a message for an earlier one is dropped
-	focus bool      // the pane has the keys
-	zoom  bool      // the pane takes the sidebar's room too
+	key     string    // the session on show, by its id; "" when the pane shows no session
+	term    *liveTerm // the terminal on show, once connected
+	err     error     // why the terminal could not be shown
+	ended   bool      // the sandbox ended the terminal
+	dialing bool      // the terminal's connection is being made
+	gen     int       // counts the sessions shown, so a message for an earlier one is dropped
+	focus   bool      // the pane has the keys
+	zoom    bool      // the pane takes the sidebar's room too
+	answer  bool      // the pane gave the keys to its banner, and gets them back after
 }
 
 // The keys of a pane that has the keys.
 var (
-	keySidebar = key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "sidebar"))
-	keySwitch  = key.NewBinding(key.WithKeys("alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9"), key.WithHelp("alt+1-9", "switch"))
-	keyZoom    = key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "full screen"))
-	keyFocus   = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "type in"))
+	keySidebar    = key.NewBinding(key.WithKeys("ctrl+]"), key.WithHelp("ctrl+]", "sidebar"))
+	keySwitch     = key.NewBinding(key.WithKeys("alt+1", "alt+2", "alt+3", "alt+4", "alt+5", "alt+6", "alt+7", "alt+8", "alt+9"), key.WithHelp("alt+1-9", "switch"))
+	keyZoom       = key.NewBinding(key.WithKeys("alt+z"), key.WithHelp("alt+z", "full screen"))
+	keyFocus      = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "type in"))
+	keyAnswerIt   = key.NewBinding(key.WithKeys("alt+a"), key.WithHelp("alt+a", "answer the banner"))
+	keyMore       = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "more"))
+	keyReviewIt   = key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "review it"))
+	keyBannerBack = key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))
 )
 
 // homeSplit reports whether Home shows the sidebar and the pane.
@@ -267,6 +272,9 @@ func (m *app) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyZoom):
 		p.zoom = !p.zoom
 		return m, nil
+	case key.Matches(msg, keyAnswerIt):
+		m.answerBanner()
+		return m, nil
 	}
 	if m.chats.inPane {
 		c := &m.chats
@@ -289,12 +297,19 @@ func (m *app) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// paneBindings are the keys the key bar shows while the pane has them.
+// paneBindings are the keys the key bar shows while the pane has them: alt+a first while a
+// banner waits.
 func (m *app) paneBindings() []key.Binding {
-	if m.chats.inPane {
-		return append(m.chatBindings(), keySidebar, keySwitch, keyZoom)
+	var bindings []key.Binding
+	if x, ok := m.paneTarget(); ok {
+		if _, waiting := m.paneCard(x); waiting {
+			bindings = append(bindings, keyAnswerIt)
+		}
 	}
-	return []key.Binding{keySidebar, keySwitch, keyZoom}
+	if m.chats.inPane {
+		return append(append(bindings, m.chatBindings()...), keySidebar, keySwitch, keyZoom)
+	}
+	return append(bindings, keySidebar, keySwitch, keyZoom)
 }
 
 // paneBody is Home's pane in w cells and h rows: the dashboard of the sandbox under the cursor,
@@ -359,14 +374,20 @@ func (m *app) paneRule(w int) string {
 	return styleDim.Render(strings.Repeat("─", w))
 }
 
-// paneCard is the approval that blocks an agent in the pane: the first of its sandbox's that
-// isn't a chat's permission request.
+// paneCard is the approval waiting in the sandbox of the session in the pane: the first of its
+// sandbox's that isn't a chat's permission request, which the chat shows itself. Approvals don't
+// say which process asked, so every session of the sandbox shows it.
 func (m *app) paneCard(x session) (card, bool) {
-	if x.kind != sessionAgent || m.stateOf(x) != stateBlocked {
+	if x.kind == sessionOlder {
 		return card{}, false
 	}
+	return m.sandboxCard(x.sandbox)
+}
+
+// sandboxCard is the first card waiting in a sandbox that isn't a chat's permission request.
+func (m *app) sandboxCard(id string) (card, bool) {
 	for _, c := range m.cards() {
-		if c.first().SandboxID == x.sandbox && c.first().ChatPermission == nil {
+		if c.first().SandboxID == id && c.first().ChatPermission == nil {
 			return c, true
 		}
 	}
@@ -379,37 +400,56 @@ func bannerKeys(c card) bool {
 	return !c.group && isNetwork(c.first())
 }
 
-// paneBanner is the approval that blocks the agent on show, drawn over the top of its screen in
-// w cells, with the keys that decide it from the sidebar; nil when none blocks it.
+// bannerOwner names a banner's row of choices for the arrows.
+func bannerOwner(c card) string {
+	return "banner:" + c.first().ID
+}
+
+// bannerCaps are a banner's choices: allow once, allow and deny for a network request, and the
+// approvals screen, on the card, for more or for any other kind.
+func bannerCaps(c card) []choiceCap {
+	if !bannerKeys(c) {
+		return []choiceCap{{"a", "Review it"}}
+	}
+	return []choiceCap{{"o", "Allow once"}, {"y", "Allow"}, {"n", "Deny"}, {"a", "More…"}}
+}
+
+// paneBanner is the approval waiting in the sandbox on show, drawn over the top of its session
+// in w cells, with its choices; nil when none waits. While the pane has the keys, they go to
+// the session, and the banner says how to answer instead.
 func (m *app) paneBanner(x session, w int) []string {
 	c, ok := m.paneCard(x)
 	if !ok || w < 24 {
 		return nil
 	}
+	return m.banner(c, x.sandbox, m.paneFocused(), w)
+}
+
+// banner draws card c as a banner of w cells over a session of the sandbox. typing is whether
+// the session has the keys.
+func (m *app) banner(c card, sandbox string, typing bool, w int) []string {
 	a := c.first()
 	what := kindTitle(a.Kind) + ": " + summary(a)
 	if isNetwork(a) {
 		what = firstNonEmpty(approvalSource(a), "The sandbox") + " wants " + hostOf(a)
 	}
 	n := len(c.approvals)
-	if more := m.pendingFor(x.sandbox) - n; more > 0 {
+	if more := m.pendingFor(sandbox) - n; more > 0 {
 		what += fmt.Sprintf(" · %d more", more)
-	}
-	keys := "a approvals"
-	switch {
-	case m.paneFocused():
-		keys = "Ctrl-] then y allow · o once · n deny · a approvals"
-		if !bannerKeys(c) {
-			keys = "Ctrl-] then a approvals"
-		}
-	case bannerKeys(c):
-		keys = "y allow · o once · n deny · a approvals"
 	}
 	style := styleAccent
 	if !m.look.plain {
 		style = m.pal.waiting
 	}
 	inner := w - 4
+	choices := styleDim.Render("alt+a answers it")
+	if m.screen == screenHome {
+		choices += styleDim.Render(" · Ctrl-] gives the keys to the list")
+	}
+	if !typing {
+		choices, _ = m.buttonsLine(bannerCaps(c), m.buttonAt(bannerOwner(c)))
+		choices += styleDim.Render("   ←/→ space")
+	}
 	edge := func(l, r string, label string) string {
 		return style.Render(l + label + strings.Repeat("─", max(inner+2-lipgloss.Width(label), 0)) + r)
 	}
@@ -419,33 +459,96 @@ func (m *app) paneBanner(x session, w int) []string {
 	return []string{
 		edge("┌", "┐", " Studio "),
 		row(style.Render("▲") + " " + clip(what, inner-2)),
-		row(styleDim.Render(clip(keys, inner))),
+		row(choices),
 		edge("└", "┘", ""),
 	}
 }
 
-// bannerKey answers y, o and n from the sidebar for the banner over the agent under the cursor.
-// ok is false when no banner shows, or the key isn't one of its.
+// answerBanner gives the banner over the pane's session the keys, from the pane: the arrows are
+// on its first choice, and a decision gives the keys back to the pane.
+func (m *app) answerBanner() bool {
+	x, ok := m.paneTarget()
+	if !ok {
+		return false
+	}
+	c, waiting := m.paneCard(x)
+	if !waiting {
+		m.setNotice("Nothing waits in "+m.selected().Name+".", false)
+		return false
+	}
+	m.pane.focus, m.pane.answer = false, true
+	m.focusButton(bannerOwner(c), 0)
+	return true
+}
+
+// bannerKey answers the banner over the session under the cursor, from the sidebar: y, o and n
+// decide a network request, a reviews it on the approvals screen, and the arrows, space and
+// enter press its choices. esc lets go of them, back to the pane when it gave the keys. ok is
+// false when no banner shows, or the key isn't one of its.
 func (m *app) bannerKey(msg tea.KeyPressMsg) (cmd tea.Cmd, ok bool) {
 	x, shown := m.paneTarget()
 	if !shown {
 		return nil, false
 	}
-	c, blocked := m.paneCard(x)
-	if !blocked || !bannerKeys(c) {
+	c, waiting := m.paneCard(x)
+	if !waiting {
 		return nil, false
+	}
+	owner := bannerOwner(c)
+	if k, ok := m.buttonKey(msg, owner, bannerCaps(c), 0); ok {
+		if k == "" {
+			return nil, true
+		}
+		msg = pressOf(k)
+	}
+	p := &m.pane
+	back := func() { // after a decision, or esc: the keys go back where they were
+		m.blurButtons()
+		if p.answer {
+			p.focus, p.answer = true, false
+		}
 	}
 	a := c.first()
 	ch := m.choiceOf(c)
 	switch {
+	case key.Matches(msg, keyEsc) && (m.buttonAt(owner) >= 0 || p.answer):
+		back()
+		return nil, true
+	case key.Matches(msg, keyApprovals):
+		r := &resumeState{approval: a.ID, back: screenHome, pane: p.answer}
+		m.blurButtons()
+		p.answer = false
+		m.openApprovalsOn(a.ID, r)
+		return nil, true
+	case !bannerKeys(c):
+		return nil, false
 	case key.Matches(msg, keyAllow):
+		back()
 		return m.decide(c, decisionFor(a, *ch, "allow"), "Allowed", ""), true
 	case key.Matches(msg, keyOnce):
+		back()
 		return m.decide(c, decisionFor(a, *ch, "allow_once"), "Allowed", hostOf(a)+" once"), true
 	case key.Matches(msg, keyDeny):
+		back()
 		return m.decide(c, decisionFor(a, *ch, "deny"), "Denied", ""), true
 	}
 	return nil, false
+}
+
+// bannerBindings are the keys of the banner while the arrows are on it, or nil.
+func (m *app) bannerBindings() []key.Binding {
+	x, ok := m.paneTarget()
+	if !ok {
+		return nil
+	}
+	c, waiting := m.paneCard(x)
+	if !waiting || (m.buttonAt(bannerOwner(c)) < 0 && !m.pane.answer) {
+		return nil
+	}
+	if !bannerKeys(c) {
+		return []key.Binding{keyReviewIt, keyLeft, keyPress, keyBannerBack}
+	}
+	return []key.Binding{keyOnce, keyAllow, keyDeny, keyMore, keyLeft, keyPress, keyBannerBack}
 }
 
 // paneCursor is where the terminal's cursor is on the screen while the pane has the keys, or nil.

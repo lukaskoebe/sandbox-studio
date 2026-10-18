@@ -62,6 +62,16 @@ func (m *app) visualCard(c card, selected bool, w int) ([]string, []keyHit) {
 	var body []string
 	ch := m.choiceOf(c)
 	key := func(k string) string { return styleDim.Render(" ‹" + k + "›") }
+	at := -1
+	if selected {
+		at = m.buttonAt(cardOwner(c))
+	}
+	toggle := func(i int, text string) string { // a setting the arrows may be on
+		if i == at {
+			return m.focused(ansiStrip(text))
+		}
+		return text
+	}
 	switch {
 	case c.group:
 		title = firstNonEmpty(a.Network.Site, source) + " wants " + fmt.Sprint(len(c.approvals)) + " hosts"
@@ -72,11 +82,11 @@ func (m *app) visualCard(c card, selected bool, w int) ([]string, []keyHit) {
 		for _, x := range c.approvals {
 			hosts = append(hosts, styleBold.Render(hostOf(x)))
 		}
-		body = append(body, strings.Join(hosts, "  "), whoText(a, *ch)+key("s"))
+		body = append(body, strings.Join(hosts, "  "), toggle(0, whoText(a, *ch))+key("s"))
 	case isNetwork(a):
 		title = source + " wants " + styleBold.Render(hostOf(a))
-		body = append(body, styleDim.Render("pattern ")+patternText(a, *ch)+key("p")+"   "+
-			whoText(a, *ch)+key("s")+"   "+styleDim.Render("ports ")+portsText(*ch)+key("x"))
+		body = append(body, styleDim.Render("pattern ")+toggle(0, patternText(a, *ch))+key("p")+"   "+
+			toggle(1, whoText(a, *ch))+key("s")+"   "+styleDim.Render("ports ")+toggle(2, portsText(*ch))+key("x"))
 	case isGit(a):
 		title = gitSummary(a)
 		details = append([]string{source}, details...)
@@ -105,7 +115,7 @@ func (m *app) visualCard(c card, selected bool, w int) ([]string, []keyHit) {
 	var keys []keyHit
 	if selected {
 		if caps := cardCaps(c, *ch); len(caps) > 0 {
-			line, spans := m.pal.capsLine(caps)
+			line, spans := m.pal.capsLine(caps, at-len(cardToggles(c)), m.focused)
 			for _, k := range spans {
 				// The box's top is the card's first row, and its rule and a space start each line.
 				if k.x1 <= inner {

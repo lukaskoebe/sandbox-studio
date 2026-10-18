@@ -12,7 +12,7 @@ Keys
   f / h      fork the sandbox; its checkpoints, to save or restore one
   n          new sandbox: a teammate, a template and a name
   e / /      switch environment; filter by name, teammate or template
-  a / l      approvals, from every environment; Activity, the log
+  a / l / g  approvals, from every environment; Activity, the log; Git
   ↑/↓, j/k   move the cursor
   esc / q    go back; esc clears the filter, q quits from the list
   ?          this help

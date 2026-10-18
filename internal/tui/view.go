@@ -121,6 +121,8 @@ func (m *app) body(w, h int) []string {
 		return m.progressBody(w, h)
 	case screenCheckpoints:
 		return m.checkpointsBody(w, h)
+	case screenGit:
+		return m.gitBody(w, h)
 	}
 	return m.homeBody(w, h)
 }
@@ -144,15 +146,12 @@ func (m *app) noticeLine(w int) string {
 		return styleBold.Render("/ ") + *m.filterTarget() + styleAccent.Render("▏")
 	case m.typing != nil:
 		return m.typing.view(w)
-	case m.chatShows() && m.chats.composing:
-		return m.chats.draft.line("› ", w)
-	case m.chatShows() && m.chats.sending && m.notice.text == "":
-		return styleDim.Render("Sending…")
 	case m.confirm != nil:
-		return styleBold.Render("Delete "+m.confirm.Name+"?") + styleDim.Render(" This removes its disks.")
+		return styleBold.Render("Delete "+m.confirm.Name+"?") + styleDim.Render(" This removes its disks.  ") +
+			m.confirmRow("delete:"+m.confirm.ID, "Delete")
 	case m.checkpoints.restoring != nil && m.screen == screenCheckpoints:
 		return styleBold.Render("Restore "+m.checkpointSandbox().Name+" to "+m.checkpoints.restoring.Name+"?") +
-			styleDim.Render(" What changed since is lost.")
+			styleDim.Render(" What changed since is lost.  ") + m.confirmRow("restore:"+m.checkpoints.restoring.ID, "Restore")
 	case m.notice.text != "" && m.notice.failed:
 		return styleFailed.Render(m.notice.text)
 	case m.notice.text != "":
@@ -183,7 +182,7 @@ func (m *app) helpBody() []string {
 		{"f / h", "fork the sandbox; its checkpoints, to save or restore one"},
 		{"n", "new sandbox: a teammate, a template and a name"},
 		{"e / /", "switch environment; filter by name, teammate or template"},
-		{"a / l", "approvals, from every environment; Activity, the log"},
+		{"a / l / g", "approvals, from every environment; Activity, the log; Git"},
 		{"↑/↓, j/k", "move the cursor"},
 		{"esc / q", "go back; esc clears the filter, q quits from the list"},
 		{"?", "this help"},
@@ -259,6 +258,7 @@ func (m *app) helpBody() []string {
 			{"", "credential: y fills it; memory share: y shares, n declines"},
 			{"1 / 2", "memory conflict: keep A or B; i later; enter for the rest"},
 			{"1-9", "an agent's permission: its numbered choices; i ignores it"},
+			{"←/→ space", "move over a card's toggles and choices; space or enter presses one"},
 			{"esc / q", "back"},
 		}
 	case screenPager:

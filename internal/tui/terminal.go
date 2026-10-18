@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -31,11 +32,22 @@ const detachKey = 0x1d
 // platform, where a window-change signal would not.
 const resizeEvery = 250 * time.Millisecond
 
+// approvalsEvery is how often an attached terminal asks whether an approval of its sandbox came
+// in, and quietFor how long the sandbox's output must pause before the title is set, so that it
+// never lands in the middle of the sandbox's own escape sequences.
+const (
+	approvalsEvery = 2 * time.Second
+	quietFor       = 150 * time.Millisecond
+)
+
 // attachDone ends an attachment: err is why the terminal could not be shown, or nil when the
-// user detached.
+// user detached. waiting is an approval of the sandbox that came in while it was attached and
+// still waited when the user detached.
 type attachDone struct {
+	id      string // the sandbox's
 	sandbox string
 	name    string // the terminal's
+	waiting string
 	err     error
 }
 
@@ -52,6 +64,12 @@ type attachment struct {
 	out     io.Writer // the terminal's output, given by Bubble Tea
 	// size is the terminal's size when it is not a terminal itself, such as in tests.
 	size func() (cols, rows uint16)
+	// watch has the attachment tell of the sandbox's new approvals, as the TUI's does.
+	watch bool
+
+	mu      sync.Mutex
+	lastOut time.Time // when the sandbox last wrote to the terminal
+	waiting string    // a new approval that waits, by its ID
 }
 
 func (a *attachment) SetStdin(r io.Reader)  { a.in = r }
@@ -77,6 +95,18 @@ func (a *attachment) Run() error {
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
 	defer cancel()
+	if a.watch {
+		watchCtx, stop := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			a.watchApprovals(watchCtx)
+		}()
+		defer func() { // before the terminal is restored and handed back
+			stop()
+			<-done
+		}()
+	}
 
 	// The sandbox's output goes to the terminal. When the sandbox ends the terminal, that is
 	// shown, and the next key returns (the TUI doesn't send it on, since nothing is listening).
@@ -97,7 +127,10 @@ func (a *attachment) Run() error {
 				return
 			}
 			if typ == websocket.MessageBinary {
+				a.mu.Lock()
 				_, _ = a.out.Write(data)
+				a.lastOut = time.Now()
+				a.mu.Unlock()
 			}
 		}
 	}()
@@ -128,6 +161,84 @@ func (a *attachment) Run() error {
 		if err := conn.Write(ctx, websocket.MessageBinary, chunk); err != nil {
 			detach(conn, detaching, readerDone)
 			return errors.New("the terminal connection was lost")
+		}
+	}
+}
+
+// watchApprovals asks for the pending approvals every approvalsEvery while the terminal is
+// attached. While one that came in since waits for the sandbox, the terminal's title names it and
+// says how to answer it, the bell rings once for each, and the detach is told of it; the title
+// it replaced comes back when none waits, or when the terminal is let go. A chat's permission
+// requests are left to the chat.
+func (a *attachment) watchApprovals(ctx context.Context) {
+	initial := map[string]bool{} // what waited already when the terminal was attached
+	rung := map[string]bool{}
+	first := true
+	shown, want := "", "" // the title set, and the one to set
+	bell := false
+	setTitle := func(force bool) { // only while the sandbox's output pauses
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		if want == shown || (!force && time.Since(a.lastOut) < quietFor) {
+			return
+		}
+		switch {
+		case shown == "":
+			fmt.Fprint(a.out, "\x1b[22;0t") // keep the title to bring back
+		case want == "":
+			fmt.Fprint(a.out, "\x1b[23;0t") // the title kept
+		}
+		if want != "" {
+			fmt.Fprint(a.out, "\x1b]2;"+want+"\a")
+		}
+		if bell {
+			fmt.Fprint(a.out, "\a")
+			bell = false
+		}
+		shown = want
+	}
+	defer func() {
+		want = ""
+		setTitle(true)
+	}()
+	ticker := time.NewTicker(approvalsEvery)
+	defer ticker.Stop()
+	for {
+		rctx, cancel := requestContext(ctx)
+		list, err := a.client.PendingApprovals(rctx)
+		cancel()
+		if err == nil {
+			waiting, title := "", ""
+			for _, ap := range list { // newest first
+				switch {
+				case ap.SandboxID != a.sandbox || ap.ChatPermission != nil:
+					continue
+				case first:
+					initial[ap.ID] = true
+					continue
+				case initial[ap.ID] || waiting != "":
+					continue
+				}
+				waiting = ap.ID
+				title = "▲ " + kindTitle(ap.Kind) + " waits · Ctrl-] answers it"
+				if isNetwork(ap) {
+					title = "▲ " + firstNonEmpty(approvalSource(ap), "the sandbox") + " wants " + hostOf(ap) + " · Ctrl-] answers it"
+				}
+				if !rung[ap.ID] {
+					rung[ap.ID], bell = true, true
+				}
+			}
+			first = false
+			want = title
+			a.mu.Lock()
+			a.waiting = waiting
+			a.mu.Unlock()
+		}
+		setTitle(false)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
 		}
 	}
 }
@@ -234,8 +345,11 @@ func (m *app) attachTo(sb *sandboxes.View, name string) tea.Cmd {
 		m.setNotice(sb.Name+" is still starting.", false)
 		return nil
 	}
-	sandbox := sb.Name
-	return tea.Exec(&attachment{ctx: m.ctx, client: m.client, env: m.env.ID, sandbox: sb.ID, name: name}, func(err error) tea.Msg {
-		return attachDone{sandbox: sandbox, name: name, err: err}
+	sandbox, id := sb.Name, sb.ID
+	at := &attachment{ctx: m.ctx, client: m.client, env: m.env.ID, sandbox: sb.ID, name: name, watch: true}
+	return tea.Exec(at, func(err error) tea.Msg {
+		at.mu.Lock()
+		defer at.mu.Unlock()
+		return attachDone{id: id, sandbox: sandbox, name: name, waiting: at.waiting, err: err}
 	})
 }
