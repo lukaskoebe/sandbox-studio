@@ -70,6 +70,7 @@ type attachment struct {
 	mu      sync.Mutex
 	lastOut time.Time // when the sandbox last wrote to the terminal
 	waiting string    // a new approval that waits, by its ID
+	ended   bool      // the sandbox ended the terminal
 }
 
 func (a *attachment) SetStdin(r io.Reader)  { a.in = r }
@@ -143,6 +144,9 @@ func (a *attachment) Run() error {
 		select {
 		case <-ended:
 			detach(conn, detaching, readerDone)
+			a.mu.Lock()
+			a.ended = true
+			a.mu.Unlock()
 			return nil
 		default:
 		}
@@ -322,9 +326,9 @@ func (c *Client) Attach(ctx context.Context, env, id, name string, cols, rows ui
 }
 
 // AttachTerminal shows a running sandbox's terminal by its name in this one, as the TUI does,
-// until the user detaches with Ctrl-] or the sandbox ends the terminal.
+// until the user detaches with Ctrl-] or the sandbox ends the terminal. See Shell.
 func AttachTerminal(ctx context.Context, c *Client, env, sandbox, name string) error {
-	return (&attachment{ctx: ctx, client: c, env: env, sandbox: sandbox, name: name, in: os.Stdin, out: os.Stdout}).Run()
+	return Shell(ctx, c, env, sandbox, name, os.Stdin, os.Stdout)
 }
 
 // attachTo shows a sandbox's terminal by its name. Only a running sandbox has terminals; the

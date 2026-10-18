@@ -169,8 +169,15 @@ proxy.golang.org:443 · Ctrl-] answers it` and rings the bell once. The title is
 after 150 ms without output, so it doesn't land inside an escape sequence the sandbox is
 writing, and the old title is pushed (`CSI 22;0 t`) and popped (`CSI 23;0 t`) around it, in
 terminals that keep a title stack. `Ctrl-]` then opens the approvals on that card instead of
-Home, and once it is decided, the terminal is attached again. `studio shell` has no TUI to
-return to and doesn't watch.
+Home, and once it is decided, the terminal is attached again.
+
+`studio shell` watches the same way, and having no TUI to return to, its `Ctrl-]` asks about
+the approval in place (`Shell`, `askApproval` in `internal/tui/shell.go`): it clears the screen
+and shows the request with `o` allow once, `y` allow (the teammate's default pattern and scope,
+as the card would start) and `n` deny, or for another kind says to answer it in the TUI or the
+browser. `enter` goes back to the terminal, and `q`, `Ctrl-]` or `Ctrl-C` detach. After a
+decision the terminal is attached again, which redraws it. With nothing waiting, `Ctrl-]`
+detaches as before.
 
 ### Approvals
 

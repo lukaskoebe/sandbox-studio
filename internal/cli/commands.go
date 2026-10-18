@@ -33,7 +33,7 @@ func init() {
 		{name: "create", args: "<name>", summary: "Create a sandbox and wait until it runs.", flags: createFlags, run: (*call).create},
 		{name: "fork", args: "<sandbox> <name>", summary: "Fork a sandbox into a new one with a copy of its disks, and wait until it runs.", flags: waitFlag, run: (*call).fork},
 		{name: "rm", args: "<sandbox>", summary: "Delete a sandbox and its disks. Asks first, unless --yes.", flags: yesFlag, run: (*call).remove},
-		{name: "shell", args: "<sandbox> [terminal]", summary: "Open the sandbox's main terminal, or the one named (such as an agent's), here. Ctrl-] detaches; the terminal keeps running.", run: (*call).shell},
+		{name: "shell", args: "<sandbox> [terminal]", summary: "Open the sandbox's main terminal, or the one named (such as an agent's), here. Ctrl-] detaches, or answers the sandbox's approval that waits; the terminal keeps running.", run: (*call).shell},
 		{name: "ask", args: "<sandbox> <prompt>|-", summary: "Ask the sandbox's teammate in a chat and print its answer as it comes.", flags: askFlags, run: (*call).ask},
 		{name: "approvals", args: "", summary: "List the approvals waiting for you, in every environment.", run: (*call).approvals},
 		{name: "approve", args: "<approval>", summary: "Allow a pending request. A network request gets a rule, unless --once.", flags: decideFlags, run: decide("allow")},
@@ -447,7 +447,7 @@ func (c *call) shell(rest []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(c.opts.Stderr, "Attached to %s in %s. Ctrl-] detaches.\r\n", clean(name), clean(sb.Name))
+	fmt.Fprintf(c.opts.Stderr, "Attached to %s in %s. Ctrl-] detaches, or answers an approval that waits.\r\n", clean(name), clean(sb.Name))
 	return tui.AttachTerminal(c.ctx, c.client, env, sb.ID, name)
 }
 
