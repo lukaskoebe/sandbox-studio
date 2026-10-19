@@ -26,6 +26,8 @@ func installGuestAgent(string, string) error { return nil }
 
 func ensureRuntime(context.Context) error { return nil }
 
+func repairMSBDB(context.Context, *slog.Logger) {}
+
 func newRuntime(opts runtime.Options, log *slog.Logger) studioRuntime {
 	fakeRuntime = e2e.NewRuntime(opts.Image, log)
 	return fakeRuntime

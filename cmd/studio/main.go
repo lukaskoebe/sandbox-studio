@@ -207,6 +207,7 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := p.Ensure(); err != nil {
 		return err
 	}
+	repairMSBDB(ctx, log)
 	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil))
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
 		return err

@@ -359,6 +359,8 @@ func apiError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, policy.ErrDecided), errors.Is(err, policy.ErrNotReviewed):
 		return huma.Error409Conflict(err.Error())
+	case errors.Is(err, runtime.ErrCatalog):
+		return huma.Error503ServiceUnavailable(err.Error())
 	}
 	return huma.Error500InternalServerError(err.Error())
 }

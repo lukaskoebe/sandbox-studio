@@ -70,6 +70,10 @@ type Probes struct {
 	// how to fix that.
 	Embedder func() (ready bool, problem, fix string)
 
+	// MSBDB checks msb's own database: problem is what makes it unusable and fix how to fix
+	// that; repaired describes a repair Studio made to it when it started.
+	MSBDB func(ctx context.Context) (problem, repaired, fix string)
+
 	// MSBPath returns the installed msb executable, or an error if there is none.
 	MSBPath func() (string, error)
 	// Run runs a program and returns its combined output. A non-zero exit is an error.
@@ -128,6 +132,9 @@ const LowDisk = 5 << 30
 func Run(ctx context.Context, p Probes, o Options) Report {
 	var checks []Check
 	checks = append(checks, checkMSB(ctx, p, o)...)
+	if p.MSBDB != nil {
+		checks = append(checks, checkMSBDB(ctx, p))
+	}
 	checks = append(checks, checkVirtualization(p)...)
 	if o.Image != "" {
 		checks = append(checks, checkImage(ctx, p, o.Image))
@@ -163,6 +170,22 @@ func checkEmbedder(p Probes) Check {
 		c.Message = "loaded"
 	default:
 		c.Message = "loads with the first memory that needs it"
+	}
+	return c
+}
+
+// checkMSBDB reports msb's database. An unusable one fails: no sandbox can be listed,
+// started or created. One Studio repaired is a warning, as the repair may have lost rows.
+func checkMSBDB(ctx context.Context, p Probes) Check {
+	c := Check{ID: "msb-db", Name: "microsandbox database", Status: OK, Message: "passed its integrity check"}
+	problem, repaired, fix := p.MSBDB(ctx)
+	switch {
+	case problem != "":
+		c.Status, c.Message, c.Fix = Fail, problem, fix
+	case repaired != "":
+		c.Status, c.Message = Warn, repaired
+		c.Fix = "Sandboxes that msb no longer knows show as without a VM; their disks stay in ~/.microsandbox/sandboxes. " +
+			"The damaged file stays where the message says until you delete it."
 	}
 	return c
 }

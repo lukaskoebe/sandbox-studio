@@ -445,7 +445,7 @@ func (r *Runtime) Status(ctx context.Context, name string) (Status, error) {
 		if msb.IsKind(err, msb.ErrSandboxNotFound) {
 			return StatusAbsent, nil
 		}
-		return "", err
+		return "", catalogError(err)
 	}
 	return statusOf(h.Status()), nil
 }
@@ -461,7 +461,7 @@ func (r *Runtime) Statuses(ctx context.Context, prefix string) (map[string]Statu
 		}
 		page, err := msb.ListSandboxesWith(ctx, opts...)
 		if err != nil {
-			return nil, err
+			return nil, catalogError(err)
 		}
 		for _, h := range page.Sandboxes {
 			if strings.HasPrefix(h.Name(), prefix) {

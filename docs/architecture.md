@@ -113,7 +113,18 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   references store the registry address.
 - Sandboxes run detached. They keep running when Studio stops; on start Studio reconciles
   its catalog with microsandbox, and guest agents reconnect.
-- Startup (`cmd/studio/main.go`): data dir, doctor (warnings only), install the guest agent
+- msb keeps its sandboxes, images and snapshot index in its own SQLite database. Before any
+  msb call opens it, Studio runs SQLite's quick check on it. A damaged one (a failed check,
+  "file is not a database" or "database disk image is malformed") is moved aside with its
+  `-wal` and `-shm` files as `msb.db.broken-<UTC time>` and never deleted. In its place goes
+  a new database with the schema and every row that still reads, provided the migration list
+  comes through whole; otherwise msb starts an empty one. Then msb indexes the snapshots on disk
+  again. The `msb-db` doctor check, in `studio doctor` and Settings, fails for a damaged
+  database or one a newer msb migrated (fix: `msb self downgrade <Studio's msb>`), and warns
+  after a repair with what was kept and lost. Runtime calls that fail on the database answer
+  503 with that fix instead of a bare SQLite error.
+- Startup (`cmd/studio/main.go`): data dir, a check of msb's own database
+  (`~/.microsandbox/db/msb.db`, `internal/msbdb`), doctor (warnings only), install the guest agent
   binaries, open the catalog and vault, make sure an environment exists, start the
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
   reconcile sandboxes, recover chats and build jobs, then serve the API and UI.
@@ -177,6 +188,7 @@ internal/
   cli/                                  command line client (studio ls, ask, approve, …)
   store/                                SQLite catalog and migrations
   doctor/ autostart/ updates/ diskspace/ paths/ version/
+  msbdb/                                check and repair of msb's own database
   e2e/                                  fakes of the e2e build (-tags e2e only)
 web/                  Vite + React + TanStack Router + shadcn (Base UI); e2e tests in web/e2e,
                       browser tests against a real Studio in web/e2e-live

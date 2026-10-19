@@ -244,3 +244,24 @@ func TestEmbedder(t *testing.T) {
 		t.Fatalf("broken: %s %+v", r.Status, c)
 	}
 }
+
+func TestMSBDB(t *testing.T) {
+	p := healthy()
+	p.MSBDB = func(context.Context) (string, string, string) { return "", "", "" }
+	if c := find(t, Run(context.Background(), p, opts), "msb-db"); c.Status != OK {
+		t.Fatalf("sound: %+v", c)
+	}
+	p.MSBDB = func(context.Context) (string, string, string) {
+		return "", "Studio moved the damaged database aside to /h/msb.db.broken-x and rebuilt it", ""
+	}
+	if c := find(t, Run(context.Background(), p, opts), "msb-db"); c.Status != Warn || !strings.Contains(c.Message, "broken-x") || c.Fix == "" {
+		t.Fatalf("repaired: %+v", c)
+	}
+	p.MSBDB = func(context.Context) (string, string, string) {
+		return "microsandbox's database is damaged: file is not a database", "", "Restart Studio"
+	}
+	r := Run(context.Background(), p, opts)
+	if c := find(t, r, "msb-db"); r.Status != Fail || c.Status != Fail || c.Fix != "Restart Studio" {
+		t.Fatalf("damaged: %s %+v", r.Status, c)
+	}
+}

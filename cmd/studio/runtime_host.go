@@ -4,12 +4,16 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -28,7 +32,59 @@ func hostProbes() doctor.Probes {
 	p := doctor.HostProbes()
 	p.MSBPath = runtime.MSBPath
 	p.ImageCached = runtime.ImageCached
+	p.MSBDB = checkMSBDB
 	return p
+}
+
+// msbRepaired describes the repair repairMSBDB made when Studio started, if it made one.
+var msbRepaired string
+
+// repairMSBDB checks msb's database before any msb call opens it. A damaged one is moved
+// aside and rebuilt from the rows that can still be read; then msb indexes the snapshots on
+// disk again, so the checkpoints are found.
+func repairMSBDB(ctx context.Context, log *slog.Logger) {
+	path, err := msbdb.Path()
+	if err != nil {
+		return
+	}
+	var d *msbdb.Damaged
+	if err := msbdb.Check(ctx, path); !errors.As(err, &d) {
+		if err != nil {
+			log.Warn("could not check microsandbox's database", "path", path, "err", err)
+		}
+		return
+	}
+	log.Error("microsandbox's database is damaged; repairing it", "path", path, "problem", d.Detail)
+	r, err := msbdb.Fix(ctx, path, time.Now())
+	if err != nil {
+		log.Error("could not repair microsandbox's database", "path", path, "err", err)
+		return
+	}
+	msbRepaired = r.Summary()
+	if n, err := runtime.ReindexSnapshots(ctx); err != nil {
+		log.Error("msb could not index its snapshots again", "err", err)
+		msbRepaired += "; indexing the checkpoints again failed: " + err.Error()
+	} else {
+		msbRepaired += fmt.Sprintf("; msb indexed %d snapshots again", n)
+	}
+	log.Warn("repaired microsandbox's database", "aside", r.Aside, "salvaged", r.Salvaged, "rows", r.Rows,
+		"partial", r.Partial, "summary", msbRepaired)
+}
+
+// checkMSBDB is the doctor's probe of msb's database: its integrity, then whether msb can
+// read it.
+func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
+	if path, err := msbdb.Path(); err == nil {
+		var d *msbdb.Damaged
+		if err := msbdb.Check(ctx, path); errors.As(err, &d) {
+			return d.Error(), "", runtime.RepairOnRestart
+		}
+	}
+	var ce *runtime.CatalogError
+	if err := runtime.CheckCatalog(ctx); errors.As(err, &ce) {
+		return ce.Err.Error(), "", ce.Fix
+	}
+	return "", msbRepaired, ""
 }
 
 func sandboxEgress(gw *gateway.Gateway) sandboxes.Egress { return gw }
