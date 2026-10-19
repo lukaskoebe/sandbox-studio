@@ -85,7 +85,7 @@ var Tools = []Tool{
 			"id":   str("A fact or page ID from a search hit"),
 			"slug": str("A page slug, e.g. project/github.com/acme/api"),
 		})},
-	{agentproto.MethodRemember, "Save a fact to your own memory right away. Use it when the user states a preference or decision, when you verified a procedure by running it, and for facts about people, projects or systems you will need again. Facts about one sandbox's files or tools should name the sandbox.",
+	{agentproto.MethodRemember, "Save a fact to your own memory right away. Use it when the user states a standing preference or rule, or settles a decision about a project (an answer to your question or a choice for the task at hand is neither), when you verified a procedure by running it, and for facts about people, projects or systems you will need again. Facts about one sandbox's files or tools should name the sandbox.",
 		obj([]string{"text", "kind"}, map[string]any{
 			"text":     str("One self-contained claim", "maxLength", 2000),
 			"kind":     str("What sort of fact", "enum", kinds),

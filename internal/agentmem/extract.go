@@ -216,14 +216,16 @@ var factsSchema = map[string]any{
 			"type": "array", "maxItems": maxFacts,
 			"items": map[string]any{
 				"type": "object", "additionalProperties": false,
-				"required": []string{"text", "kind", "tier", "entities", "attribute", "evidence"},
+				"required": []string{"text", "kind", "tier", "reach", "entities", "attribute", "evidence", "reply_to"},
 				"properties": map[string]any{
 					"text":      map[string]any{"type": "string"},
 					"kind":      map[string]any{"type": "string", "enum": []string{memory.KindPreference, memory.KindDecision, memory.KindFact, memory.KindProcedure, memory.KindEvent}},
 					"tier":      map[string]any{"type": "string", "enum": []string{memory.TierUser, memory.TierInferred}},
+					"reach":     map[string]any{"type": "string", "enum": []string{reachGeneral, reachProject, reachTask}},
 					"entities":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 					"attribute": map[string]any{"type": "string"},
 					"evidence":  map[string]any{"type": "string"},
+					"reply_to":  map[string]any{"type": "string"},
 				},
 			},
 		},
@@ -235,6 +237,8 @@ func extractionPrompt(c caller, transcript, previous string) (system, user strin
 	system = `You extract durable memories from a coding agent's session for the agent's teammate "` + c.teammate.Name + `".
 Keep only what will still matter in a later session: the user's preferences, decisions and their reasons, facts about people, projects and systems, and procedures that worked. Skip chit-chat, transient state, things any engineer knows, anything already marked as memory, and secrets of any kind.
 The session ran in the sandbox "` + c.sandbox.Name + `", one of several separate machines the teammate works in. A fact about the state of this sandbox (its files, branches, installed tools, services or paths) names it, e.g. "In sandbox ` + c.sandbox.Name + `, …"; preferences, decisions and procedures hold everywhere and name no sandbox.
+reach says how far a fact holds. "general": in all the teammate's work, such as a habit or rule the user states as one ("always", "never", "from now on", "I prefer"). "project": for the project, system or person in entities, such as a design decision for one repo. "task": only for the work at hand. Most choices the user makes are about the task: an answer to a question or options the agent offered ("defer it", "option B", "yes, go ahead"), anything said for now, this time or here, and one-off instructions. Never make one answer a general preference: a preference or decision of reach "task" isn't kept, so when such a choice matters later write it as an event that says what was chosen for what, e.g. "The user chose to defer the fix of the flaky login test."
+reply_to is, when the evidence is the user's reply to a question or a choice the agent put to them, a verbatim quote of at most 300 characters of that question; otherwise "".
 Each fact is one short self-contained sentence. tier is "user" only when the user said it, otherwise "inferred". entities are short lowercase names (a project, person, service or tool). attribute is a short key such as "test_command" when the fact sets one property of an entity, else "". evidence is a verbatim quote of at most 300 characters from the transcript that supports the fact.
 summary is the session so far in at most 400 characters, for the teammate's next sessions: what the user wanted, what was done and where it was left, naming the sandbox's project. It updates the previous summary with this excerpt; keep what still matters of it. No secrets.
 Answer with JSON only, no prose, matching this schema: ` + string(schema) + `
@@ -255,9 +259,44 @@ type factOut struct {
 	Text      string   `json:"text"`
 	Kind      string   `json:"kind"`
 	Tier      string   `json:"tier"`
+	Reach     string   `json:"reach"`
 	Entities  []string `json:"entities"`
 	Attribute string   `json:"attribute"`
 	Evidence  string   `json:"evidence"`
+	ReplyTo   string   `json:"reply_to"`
+}
+
+// How far a fact holds, as the extraction labels it.
+const (
+	reachGeneral = "general" // in all the teammate's work
+	reachProject = "project" // for the entities it names
+	reachTask    = "task"    // for the work at hand only
+)
+
+var (
+	// oneOff marks evidence that limits a choice to the work at hand.
+	oneOff = regexp.MustCompile(`(?i)\b(this time|for now|for the moment|just this once|this once|right now|today|in this case|for this (one|task|pr|change|branch|issue|bug|ticket))\b`)
+	// generalizes marks evidence that states a choice as a rule.
+	generalizes = regexp.MustCompile(`(?i)\b(always|never|from now on|in general|generally|by default|every time|whenever|each time|as a rule|i prefer|i'd rather|i like to|i don't like|i hate|we always|we never|our convention|going forward)\b`)
+)
+
+// lasting says whether a preference or decision holds beyond the work at hand, and how far:
+// the extraction's reach, held to the evidence. A reply to the agent's question or a choice
+// said for now is about the task unless the user states it as a rule.
+func lasting(f factOut, entities []string, transcript string) (string, bool) {
+	reach := f.Reach
+	reply := f.ReplyTo != "" || answersQuestion(transcript, f.Evidence)
+	switch {
+	case reach == reachTask, oneOff.MatchString(f.Evidence):
+		return reachTask, false
+	case reach != reachProject && reply && !generalizes.MatchString(f.Evidence):
+		// An answer can settle something about a project, never a habit.
+		if len(entities) == 0 {
+			return reachTask, false
+		}
+		reach = reachProject
+	}
+	return reach, true
 }
 
 // parseFacts validates the model's answer strictly: one violation rejects it all. A summary
@@ -296,6 +335,11 @@ func parseFacts(text, transcript string) ([]candidate, string, error) {
 			return nil, "", bad("evidence must have 1 to 300 characters")
 		case f.Tier != memory.TierUser && f.Tier != memory.TierInferred:
 			return nil, "", bad("tier must be user or inferred")
+		case f.Reach != "" && f.Reach != reachGeneral && f.Reach != reachProject && f.Reach != reachTask:
+			// No reach, from a model that skipped the field, leaves it to the evidence.
+			return nil, "", bad("reach must be general, project or task")
+		case len([]rune(f.ReplyTo)) > maxEvidence:
+			return nil, "", bad("reply_to must have at most 300 characters")
 		case len(f.Entities) > maxEntities:
 			return nil, "", bad("too many entities")
 		case !attributeKey.MatchString(f.Attribute):
@@ -315,6 +359,11 @@ func parseFacts(text, transcript string) ([]candidate, string, error) {
 		for _, e := range f.Entities {
 			if e = entityID(e); e != "" && !containsStr(cand.Entities, e) {
 				cand.Entities = append(cand.Entities, e)
+			}
+		}
+		if cand.Kind == memory.KindPreference || cand.Kind == memory.KindDecision {
+			if _, ok := lasting(f, cand.Entities, transcript); !ok {
+				continue // a choice for the task at hand; the prompt asks for an event instead
 			}
 		}
 		res = append(res, cand)
@@ -355,6 +404,31 @@ func saidByUser(transcript, evidence string) bool {
 		cur.WriteString(line + "\n")
 	}
 	return flush()
+}
+
+// answersQuestion says whether evidence comes from a user turn that answers the agent: the
+// turn before it asks something.
+func answersQuestion(transcript, evidence string) bool {
+	ev := normalize(evidence)
+	var turns []string
+	for _, line := range strings.Split(transcript, "\n") {
+		if strings.HasPrefix(line, "user:") || strings.HasPrefix(line, "assistant:") || len(turns) == 0 {
+			turns = append(turns, line)
+		} else {
+			turns[len(turns)-1] += "\n" + line
+		}
+	}
+	for i, t := range turns {
+		if i == 0 || !strings.HasPrefix(t, "user:") || !strings.Contains(normalize(t), ev) {
+			continue
+		}
+		prev := strings.TrimSpace(turns[i-1])
+		if strings.HasPrefix(prev, "assistant:") && (strings.HasSuffix(prev, "?") ||
+			strings.HasPrefix(prev, "assistant: [question]") || strings.HasPrefix(prev, "assistant: [asks to run]")) {
+			return true
+		}
+	}
+	return false
 }
 
 // --- dedupe -----------------------------------------------------------------------------

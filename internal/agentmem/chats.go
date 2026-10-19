@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
@@ -201,12 +202,25 @@ func (s *Service) isChatSession(ctx context.Context, c caller, ref string) (bool
 	return err == nil, err
 }
 
+// questionAnswer is the user's answer to a question form as a line, or "" while it waits.
+func questionAnswer(q *chat.QuestionBody) string {
+	switch q.Action {
+	case acp.ElicitAccept:
+		return "[answer] " + truncate(string(q.Answer), maxToolLine)
+	case acp.ElicitDecline:
+		return "[declined to answer]"
+	}
+	return ""
+}
+
 // injectedMemory is the context Studio added to a prompt, which is not extracted again.
 var injectedMemory = regexp.MustCompile(`(?s)<studio-memory>.*?</studio-memory>`)
 
 // chatTranscript condenses chat items the way the guest condenses a transcript file: "user:"
 // and "assistant:" lines, continuation lines indented. Tool calls are kept as one line each,
-// their title, so procedures that worked can be found; thoughts and tool output are not.
+// their title, so procedures that worked can be found; thoughts and tool output are not. The
+// agent's questions and permission asks are kept with the user's answers, so an answer reads
+// as one and isn't taken for a preference of its own.
 func chatTranscript(items []store.ChatItem) string {
 	var b strings.Builder
 	write := func(role, text string) {
@@ -228,6 +242,19 @@ func chatTranscript(items []store.ChatItem) string {
 				status = " (failed)"
 			}
 			write("assistant", fmt.Sprintf("[tool] %s%s", truncate(strings.Join(strings.Fields(it.Tool.Title), " "), maxToolLine), status))
+		case it.Question != nil:
+			write("assistant", "[question] "+it.Question.Message)
+			if answer := questionAnswer(it.Question); answer != "" {
+				write("user", answer)
+			}
+		case it.Permission != nil:
+			title := truncate(strings.Join(strings.Fields(it.Permission.ToolCall.Title), " "), maxToolLine)
+			write("assistant", "[asks to run] "+title)
+			for _, o := range it.Permission.Options {
+				if o.OptionID == it.Permission.Outcome && it.Permission.Outcome != "" {
+					write("user", "[chose] "+o.Name)
+				}
+			}
 		}
 	}
 	out := b.String()

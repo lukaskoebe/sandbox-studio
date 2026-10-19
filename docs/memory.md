@@ -331,7 +331,18 @@ transcript; one bad fact, an unknown field or anything like a credential rejects
 answer. `user` tier stays only if the quote is from a user line. The prompt names the
 session's sandbox: a fact about that sandbox's state (files, branches, tools, services)
 says "In sandbox X, …", since the teammate's other sandboxes don't have it; preferences,
-decisions and procedures name none. Facts go to the teammate's
+decisions and procedures name none.
+
+Each fact also has a `reach` (`general`, `project` for its entities, or `task`) and
+`reply_to`, the agent's question when the evidence answers one. The transcript keeps the
+agent's questions and permission asks with the user's answers. A choice for the task at hand
+is no preference: Studio drops a preference or decision of reach `task`, one whose evidence
+says it holds for now ("this time", "for now", "today"), and one that answers the agent
+(`reply_to`, or a user line right after an assistant line ending in a question) unless the
+evidence states a rule ("always", "never", "from now on", "I prefer"); an answer about a
+named project stays as a project decision. The prompt asks for such choices as events
+instead ("The user chose to defer the fix of the flaky login test."). An answer without
+`reach` is judged by its evidence alone. Agents get the same rule for `remember`. Facts go to the teammate's
 scope; a fact with the same text, the same attribute and similarity ≥ 0.75, similarity
 ≥ 0.92 or word overlap ≥ 0.8 reinforces the existing one instead.
 

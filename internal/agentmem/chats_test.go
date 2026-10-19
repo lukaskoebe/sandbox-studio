@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/acp"
 	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
@@ -355,5 +356,73 @@ func TestSummaryParsing(t *testing.T) {
 	// Answers without a summary still parse.
 	if _, summary, err := parseFacts(`{"facts": []}`, ""); err != nil || summary != "" {
 		t.Fatalf("no summary: %q, %v", summary, err)
+	}
+}
+
+// A choice for the task at hand never becomes a preference or decision, however the model
+// labels it: an answer to the agent's question, or a choice said for now, is kept only as an
+// event. A rule the user states, or a project decision, stays.
+func TestOneOffChoicesAreNoPreferences(t *testing.T) {
+	transcript := `assistant: The login test is flaky. Should I fix it now or defer the fix?
+user: defer
+assistant: [question] Which database should the api use?
+user: [answer] {"db":"postgres"}
+assistant: Which package manager?
+user: use npm this time
+assistant: Should I run the tests before pushing?
+user: always run the tests before you push, in every repo
+user: skip the tests for now, just push it
+user: I prefer small commits with one-line messages
+`
+	fact := func(kind, reach, text, evidence, replyTo string, entities ...string) string {
+		b, _ := json.Marshal(map[string]any{"text": text, "kind": kind, "tier": "user", "reach": reach,
+			"entities": append([]string{}, entities...), "attribute": "", "evidence": evidence, "reply_to": replyTo})
+		return string(b)
+	}
+	for _, tc := range []struct {
+		name, fact string
+		kept       bool
+	}{
+		{"an answer labeled general", fact("preference", "general", "The user prefers deferring fixes.", "defer", "Should I fix it now or defer the fix?"), false},
+		{"an answer without reply_to", fact("preference", "general", "The user prefers deferring fixes.", "defer", ""), false},
+		{"an answer labeled task", fact("decision", "task", "Defer the flaky test fix.", "defer", "Should I fix it now or defer the fix?"), false},
+		{"the same answer as an event", fact("event", "task", "The user chose to defer the fix of the flaky login test.", "defer", "Should I fix it now or defer the fix?", "api"), true},
+		{"said for this time", fact("preference", "general", "The user prefers npm.", "use npm this time", ""), false},
+		{"said for now", fact("decision", "general", "Skip tests before pushing.", "skip the tests for now, just push it", ""), false},
+		{"an answer about a project", fact("decision", "general", "The api uses Postgres.", `{"db":"postgres"}`, "Which database should the api use?", "api"), true},
+		{"an answer stated as a rule", fact("preference", "general", "Always run the tests before pushing.", "always run the tests before you push, in every repo", "Should I run the tests before pushing?"), true},
+		{"a stated preference", fact("preference", "general", "The user prefers small commits with one-line messages.", "I prefer small commits with one-line messages", ""), true},
+		{"no reach from an older model", fact("preference", "", "The user prefers small commits with one-line messages.", "I prefer small commits with one-line messages", ""), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts, _, err := parseFacts(`{"facts": [`+tc.fact+`], "summary": ""}`, transcript)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kept := len(facts) == 1; kept != tc.kept {
+				t.Fatalf("kept %v, want %v: %+v", kept, tc.kept, facts)
+			}
+		})
+	}
+	if _, _, err := parseFacts(`{"facts": [`+fact("fact", "everywhere", "x", "defer", "")+`], "summary": ""}`, transcript); err == nil {
+		t.Fatal("an unknown reach was accepted")
+	}
+}
+
+// The agent's questions and permission asks reach the extraction with the user's answers.
+func TestChatTranscriptKeepsQuestionsWithTheirAnswers(t *testing.T) {
+	item := func(kind string, body any) store.ChatItem {
+		b, _ := json.Marshal(body)
+		return store.ChatItem{Kind: kind, Body: b}
+	}
+	got := chatTranscript([]store.ChatItem{
+		item(chat.KindQuestion, chat.QuestionBody{Message: "Fix it now or later?", Action: acp.ElicitAccept, Answer: json.RawMessage(`{"when":"later"}`)}),
+		item(chat.KindPermission, chat.PermissionBody{ToolCall: acp.ToolCallUpdate{Title: "git push"},
+			Options: []acp.PermissionOption{{OptionID: "a", Name: "Allow once"}, {OptionID: "r", Name: "Reject"}}, Outcome: "a"}),
+		item(chat.KindQuestion, chat.QuestionBody{Message: "Still waiting?"}),
+	})
+	want := "assistant: [question] Fix it now or later?\nuser: [answer] {\"when\":\"later\"}\nassistant: [asks to run] git push\nuser: [chose] Allow once\nassistant: [question] Still waiting?\n"
+	if got != want {
+		t.Fatalf("transcript\n%s\nwant\n%s", got, want)
 	}
 }
