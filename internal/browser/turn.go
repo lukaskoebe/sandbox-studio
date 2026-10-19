@@ -38,14 +38,17 @@ func (t *userTurn) saw(url string) {
 }
 
 // note tells the agent, in its next browser call, that the user drove and what Studio saw:
-// the pages past the one the agent left, downloads sent, and where the page is now.
-func (t *userTurn) note(now time.Time, at string) string {
+// downloads sent and where the page is now, and with pages the pages past the one the agent
+// left. Without pages what the user did stays private to them.
+func (t *userTurn) note(now time.Time, at string, pages bool) string {
 	if t == nil {
 		return ""
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "Note: the user took over this browser for %s and handed it back.", turnLength(now.Sub(t.since)))
-	if len(t.pages) > 1 {
+	if !pages {
+		b.WriteString(" Where they went and what they did is private to them.")
+	} else if len(t.pages) > 1 {
 		b.WriteString(" While they drove, it was on " + strings.Join(t.pages[1:], ", "))
 		if t.more > 0 {
 			fmt.Fprintf(&b, " and %d more", t.more)

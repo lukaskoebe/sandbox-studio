@@ -284,7 +284,7 @@ func run(addr, image string, log *slog.Logger) error {
 	gitRemote := &gitreview.Service{Store: st, Secrets: vault, Bus: bus, Dir: filepath.Join(p.Data, "git-staging"), Log: log,
 		Client: forgeClient(p.Data)}
 	integs := integrations.Set{gitRemote}
-	brw := newBrowser(st, vault, bus, p.Data, image, log) // settles browser.action and browser.credential approvals
+	brw := newBrowser(st, vault, bus, p.Data, image, log) // settles browser.action, browser.credential and browser.control approvals
 	integs = append(integs, brw)
 	engine.Browsers = brw // a browser's requests are attributed to its page
 	gw := &gateway.Gateway{

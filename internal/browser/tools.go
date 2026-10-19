@@ -92,12 +92,21 @@ func (s *Service) HandleCall(ctx context.Context, sandboxID, method string, para
 			return nil, err
 		}
 	}
+	// The pages the user visited while driving stay private unless the user shares them.
+	share := false
+	if tm, err := s.Store.Teammate(ctx, sb.EnvironmentID, sb.TeammateID); err == nil {
+		share = tm.BrowserSharePages
+	}
 	var handback string
 	s.mu.Lock()
 	st.driver, st.lastUsed = sb, s.now()
 	if pg != nil {
 		pg.used = st.lastUsed
-		handback, pg.handback = pg.handback, ""
+		handback = pg.handback
+		if share {
+			handback = pg.handbackPages
+		}
+		pg.handback, pg.handbackPages = "", ""
 	}
 	s.mu.Unlock()
 	res, err := s.callTool(ctx, t, st, pg, sb, method, params)

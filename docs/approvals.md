@@ -12,7 +12,7 @@ is pending raises `attempts` instead of adding a row.
 | `network` | a held connection to a host no rule covers | `internal/policy` ([network](network.md#hold-and-ask)) |
 | `network.request` | a request on a connection the gateway terminates (a browser VM's HTTPS) that no rule covers | `internal/policy` ([network](network.md#hold-and-ask)) |
 | `git.push`, `git.pr` | a push to the virtual remote; a PR proposal after an approved push | `internal/gitreview` ([git review](git-review.md)) |
-| `browser.action`, `browser.credential` | broker tools that need a decision; `fill_credential` | `internal/browser` ([browser](browser.md)) |
+| `browser.action`, `browser.credential`, `browser.control` | broker tools that need a decision; `fill_credential`; `browser_request_control` while the user drives | `internal/browser` ([browser](browser.md)) |
 | `memory.share`, `memory.conflict` | `share`, `remember` with scope `shared`, "promote to shared"; consolidation | `internal/agentmem` ([memory](memory.md)) |
 | `chat.permission` | a permission request from an ACP agent | `internal/chat` ([chat design](design/chat-mode.md)) |
 

@@ -167,6 +167,10 @@
             "$ref": "#/components/schemas/ActionPayload",
             "description": "An agent's browser action on a new origin"
           },
+          "browserControl": {
+            "$ref": "#/components/schemas/ControlPayload",
+            "description": "An agent asks the user, who drives the browser, to hand it back"
+          },
           "browserCredential": {
             "$ref": "#/components/schemas/CredentialPayload",
             "description": "An agent asks Studio to fill a vault credential into a page"
@@ -1362,6 +1366,39 @@
         },
         "required": [
           "type"
+        ],
+        "type": "object"
+      },
+      "ControlPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "description": "What the agent wants to do in the browser",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "session": {
+            "description": "The ephemeral browser session asked for; empty for the persistent profile",
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "teammateId",
+          "teammateName",
+          "sandboxId",
+          "sandboxName",
+          "reason"
         ],
         "type": "object"
       },
@@ -6644,6 +6681,10 @@
             "description": "One emoji, shape:\u003cname\u003e for a generated avatar, or empty to show the initials",
             "type": "string"
           },
+          "browserSharePages": {
+            "description": "After the user hands the browser back, agents hear which pages it was on while the user drove",
+            "type": "boolean"
+          },
           "browserStealth": {
             "description": "The teammate's browser runs in stealth mode: a desktop Chrome user agent, no automation flag, a desktop screen and human pointer movement",
             "type": "boolean"
@@ -6724,7 +6765,8 @@
           "createdAt",
           "updatedAt",
           "securityLevel",
-          "browserStealth"
+          "browserStealth",
+          "browserSharePages"
         ],
         "type": "object"
       },
@@ -16845,6 +16887,69 @@
         "responses": {
           "204": {
             "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/share-pages": {
+      "put": {
+        "description": "Sets whether the teammate's agents hear, after the user hands the browser back, which pages it was on while the user drove. Off, that stays private to the user.",
+        "operationId": "setBrowserSharePages",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetStealthInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Teammate"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {

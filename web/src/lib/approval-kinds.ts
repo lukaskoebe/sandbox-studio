@@ -5,6 +5,7 @@ import {
   GitBranchIcon,
   GitPullRequestIcon,
   GlobeIcon,
+  HandIcon,
   KeyIcon,
   ScalesIcon,
   ShieldIcon,
@@ -140,6 +141,18 @@ const kinds: Record<string, ApprovalKind> = {
     area: "browser",
     page: "/e/$env/teammates/$id/browser",
   },
+  "browser.control": {
+    title: "Browser handback",
+    summary: (a) => {
+      const ask = a.browserControl
+      return ask
+        ? `${ask.teammateName} asks for the browser back: ${ask.reason}`
+        : a.subject
+    },
+    icon: HandIcon,
+    area: "browser",
+    page: "/e/$env/teammates/$id/browser",
+  },
   "chat.permission": {
     title: "Agent permission",
     summary: (a) => a.chatPermission?.title ?? a.subject,
@@ -166,7 +179,21 @@ export function approvalKind(a: Approval): ApprovalKind {
 /** The sandbox or teammate that asked, when the payload names one. */
 /** The teammate whose browser asked, for the browser kinds that link to it. */
 export function approvalTeammateId(a: Approval): string | undefined {
-  return a.browserAction?.teammateId ?? a.browserCredential?.teammateId
+  return (
+    a.browserAction?.teammateId ??
+    a.browserCredential?.teammateId ??
+    a.browserControl?.teammateId
+  )
+}
+
+/** Whether an approval is a question the teammate's browser asks on its page. */
+export function isBrowserAsk(a: Approval, teammate: string) {
+  return (
+    (a.kind === "browser.action" ||
+      a.kind === "browser.credential" ||
+      a.kind === "browser.control") &&
+    approvalTeammateId(a) === teammate
+  )
 }
 
 export function approvalSource(a: Approval): string | undefined {
@@ -176,6 +203,7 @@ export function approvalSource(a: Approval): string | undefined {
     a.memoryShare?.teammateName ??
     a.browserAction?.sandboxName ??
     a.browserCredential?.sandboxName ??
+    a.browserControl?.sandboxName ??
     a.chatPermission?.sandboxName
   )
 }

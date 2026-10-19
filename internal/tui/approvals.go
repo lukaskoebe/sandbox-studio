@@ -445,6 +445,8 @@ func (m *app) approvalURL(a api.ApprovalView) string {
 		return m.browserURL(env + "/teammates/" + a.BrowserAction.TeammateID + "/browser")
 	case a.BrowserCredential != nil:
 		return m.browserURL(env + "/teammates/" + a.BrowserCredential.TeammateID + "/browser")
+	case a.BrowserControl != nil:
+		return m.browserURL(env + "/teammates/" + a.BrowserControl.TeammateID + "/browser")
 	case a.MemoryShare != nil || a.MemoryConflict != nil:
 		return m.browserURL(env + "/memory")
 	case a.ChatPermission != nil:
@@ -691,6 +693,8 @@ func kindTitle(kind string) string {
 		return "Browser action"
 	case "browser.credential":
 		return "Browser credential"
+	case "browser.control":
+		return "Browser handback"
 	case "chat.permission":
 		return "Agent permission"
 	}
@@ -710,6 +714,8 @@ func approvalSource(a api.ApprovalView) string {
 		return a.BrowserAction.SandboxName
 	case a.BrowserCredential != nil:
 		return a.BrowserCredential.SandboxName
+	case a.BrowserControl != nil:
+		return a.BrowserControl.SandboxName
 	case a.ChatPermission != nil:
 		return a.ChatPermission.SandboxName
 	}
@@ -738,6 +744,8 @@ func summary(a api.ApprovalView) string {
 		return act.Action + target + " on " + act.Origin
 	case a.BrowserCredential != nil:
 		return "Fill " + a.BrowserCredential.Credential + " on " + a.BrowserCredential.Origin
+	case a.BrowserControl != nil:
+		return firstNonEmpty(a.BrowserControl.TeammateName, "An agent") + " asks for the browser back: " + oneLine(a.BrowserControl.Reason)
 	case a.ChatPermission != nil:
 		return a.ChatPermission.Title
 	}

@@ -24,11 +24,12 @@ func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
 	return []integrations.ApprovalKind{
 		{Kind: KindAction, Decide: s.decideAction},
 		{Kind: KindCredential, Decide: s.decideCredentialKind},
+		{Kind: KindControl, Decide: s.decideControl},
 	}
 }
 
-// Tools are the download tools (downloads.go); the other browser tools are answered by
-// HandleCall. The browser runs no integration job.
+// Tools are the download tools (downloads.go) and browser_request_control (control.go); the
+// other browser tools are answered by HandleCall. The browser runs no integration job.
 func (s *Service) Jobs() []integrations.Job { return nil }
 
 func decisionStatus(d integrations.Decision) (string, error) {
@@ -269,6 +270,7 @@ func (s *Service) SetTakeover(ctx context.Context, envID, teammateID, session st
 	if !s.endTakeover(pg) {
 		return nil
 	}
+	s.settleControl(ctx, envID, pg, store.StatusApproved)
 	// The page as the user left it.
 	var shot []byte
 	s.mu.Lock()
@@ -293,7 +295,8 @@ func (s *Service) endTakeover(pg *page) bool {
 	// What the user did is unknown to the broker: refs are stale and a credential the
 	// user typed may show.
 	pg.refs = nil
-	pg.handback = Scrub(pg.turn.note(s.now(), pg.url), pg.secrets)
+	pg.handback = Scrub(pg.turn.note(s.now(), pg.url, false), pg.secrets)
+	pg.handbackPages = Scrub(pg.turn.note(s.now(), pg.url, true), pg.secrets)
 	pg.turn = nil
 	return true
 }
@@ -308,6 +311,7 @@ func (s *Service) endTakeovers(st *state) {
 	s.mu.Unlock()
 	for _, pg := range pages {
 		s.endTakeover(pg)
+		s.settleControl(context.Background(), st.env, pg, store.StatusDismissed)
 	}
 }
 

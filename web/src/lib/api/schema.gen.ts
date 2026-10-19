@@ -2143,6 +2143,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/share-pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Sets whether the teammate's agents hear, after the user hands the browser back, which pages it was on while the user drove. Off, that stays private to the user. */
+        put: operations["setBrowserSharePages"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/stealth": {
         parameters: {
             query?: never;
@@ -2480,6 +2497,8 @@ export interface components {
             attempts: number;
             /** @description An agent's browser action on a new origin */
             browserAction?: components["schemas"]["ActionPayload"];
+            /** @description An agent asks the user, who drives the browser, to hand it back */
+            browserControl?: components["schemas"]["ControlPayload"];
             /** @description An agent asks Studio to fill a vault credential into a page */
             browserCredential?: components["schemas"]["CredentialPayload"];
             /** @description A chat's agent asks to run a tool */
@@ -2869,6 +2888,16 @@ export interface components {
             title?: string;
             type: string;
             uri?: string;
+        };
+        ControlPayload: {
+            /** @description What the agent wants to do in the browser */
+            reason: string;
+            sandboxId: string;
+            sandboxName: string;
+            /** @description The ephemeral browser session asked for; empty for the persistent profile */
+            session?: string;
+            teammateId: string;
+            teammateName: string;
         };
         CopyTeammateInBody: {
             /** @description The environment to copy the teammate to; not the one it is in */
@@ -4664,6 +4693,8 @@ export interface components {
             approvalScope: "sandbox" | "teammate" | "environment";
             /** @description One emoji, shape:<name> for a generated avatar, or empty to show the initials */
             avatar: string;
+            /** @description After the user hands the browser back, agents hear which pages it was on while the user drove */
+            browserSharePages: boolean;
             /** @description The teammate's browser runs in stealth mode: a desktop Chrome user agent, no automation flag, a desktop screen and human pointer movement */
             browserStealth: boolean;
             /** Format: date-time */
@@ -10681,6 +10712,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setBrowserSharePages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStealthInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Teammate"];
+                };
             };
             /** @description Error */
             default: {

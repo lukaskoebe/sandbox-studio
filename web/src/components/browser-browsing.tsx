@@ -6,22 +6,13 @@ import {
 } from "@/components/browser-rail"
 import { screenshotURL } from "@/components/browser-window"
 import { Button } from "@/components/ui/button"
-import { $api, type Approval } from "@/lib/api/client"
+import { $api } from "@/lib/api/client"
 import { tileClass } from "@/lib/accents"
 import { hostOf } from "@/lib/browser-sites"
 import { cn } from "@/lib/utils"
 
 /** A session that went quiet this long ago no longer shows as browsing now. */
 const recent = 15 * 60 * 1000
-
-/** Whether an approval is a question the teammate's browser asks on its page. */
-export function isBrowserAsk(a: Approval, teammate: string) {
-  return (
-    (a.kind === "browser.action" || a.kind === "browser.credential") &&
-    (a.browserAction?.teammateId ?? a.browserCredential?.teammateId) ===
-      teammate
-  )
-}
 
 /** What the teammate's browser does now: its latest session while the browser runs. */
 export function useBrowsing(env: string, teammate: string) {

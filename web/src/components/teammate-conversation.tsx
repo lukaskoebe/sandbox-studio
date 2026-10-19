@@ -25,9 +25,9 @@ import {
 import {
   BrowsingCard,
   BrowsingNow,
-  isBrowserAsk,
   useBrowsing,
 } from "@/components/browser-browsing"
+import { isBrowserAsk } from "@/lib/approval-kinds"
 import { BrowserPanel } from "@/components/browser-panel"
 import { ChatItemView } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
@@ -129,6 +129,7 @@ function teammateApprovals(
         a.memoryShare?.teammateId === teammate ||
         a.browserAction?.teammateId === teammate ||
         a.browserCredential?.teammateId === teammate ||
+        a.browserControl?.teammateId === teammate ||
         (a.sandboxId !== undefined && sandboxIds.has(a.sandboxId)))
   )
 }

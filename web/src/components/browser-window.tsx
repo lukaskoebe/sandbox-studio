@@ -33,6 +33,7 @@ import {
 } from "@phosphor-icons/react"
 import {
   BrowserActionDecision,
+  BrowserControlDecision,
   BrowserCredentialDecision,
 } from "@/components/browser-approval"
 import { BrowserDownloads } from "@/components/browser-downloads"
@@ -73,6 +74,7 @@ import {
 import type { components } from "@/lib/api/schema.gen"
 import { ruleClass, tileClass } from "@/lib/accents"
 import { useClaimApprovals } from "@/lib/approval-claims"
+import { isBrowserAsk } from "@/lib/approval-kinds"
 import { normalizeBrowserAddress } from "@/lib/browser-address"
 import {
   elementWords,
@@ -123,7 +125,12 @@ type Props = {
 
 /** The page an approval is about: its ephemeral session, "" for the profile. */
 function approvalSession(a: Approval) {
-  return a.browserAction?.session ?? a.browserCredential?.session ?? ""
+  return (
+    a.browserAction?.session ??
+    a.browserCredential?.session ??
+    a.browserControl?.session ??
+    ""
+  )
 }
 
 /**
@@ -175,11 +182,7 @@ export function BrowserWindow({
     { refetchInterval: 15000 }
   )
   const asks = (pending.data ?? []).filter(
-    (a) =>
-      a.environmentId === env &&
-      (a.kind === "browser.action" || a.kind === "browser.credential") &&
-      (a.browserAction?.teammateId ?? a.browserCredential?.teammateId) ===
-        teammate
+    (a) => a.environmentId === env && isBrowserAsk(a, teammate)
   )
   const asksHere = running
     ? asks.filter((a) => approvalSession(a) === sessionID)
@@ -1158,7 +1161,8 @@ export function stepWords(a: BrowserAction, name: string) {
 function AskCard({ approval, name }: { approval: Approval; name: string }) {
   const act = approval.browserAction
   const cred = approval.browserCredential
-  const Icon = cred ? KeyIcon : CursorClickIcon
+  const control = approval.browserControl
+  const Icon = control ? HandIcon : cred ? KeyIcon : CursorClickIcon
   return (
     <div
       role="alertdialog"
@@ -1177,13 +1181,17 @@ function AskCard({ approval, name }: { approval: Approval; name: string }) {
         >
           <Icon className="size-3.5" weight="bold" />
         </span>
-        <KindChip>{cred ? "Login" : "Page action"}</KindChip>
+        <KindChip>
+          {control ? "Handback" : cred ? "Login" : "Page action"}
+        </KindChip>
         <span className="ml-auto text-muted-foreground">
           {formatAge(approval.createdAt)}
         </span>
       </div>
       <p className="text-[0.8125rem]">
-        {cred ? (
+        {control ? (
+          <>{name} asks you to hand the browser back.</>
+        ) : cred ? (
           <>
             {name} wants Studio to fill <b>{cred.label || "a field"}</b> with{" "}
             <span className="font-mono">{cred.credential}</span>.
@@ -1201,7 +1209,9 @@ function AskCard({ approval, name }: { approval: Approval; name: string }) {
           </>
         )}
       </p>
-      {cred ? (
+      {control ? (
+        <BrowserControlDecision approval={approval} />
+      ) : cred ? (
         <BrowserCredentialDecision approval={approval} />
       ) : (
         <BrowserActionDecision approval={approval} />

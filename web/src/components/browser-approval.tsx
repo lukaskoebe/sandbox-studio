@@ -28,6 +28,13 @@ function useDecide(what: string) {
             "/api/environments/{env}/teammates/{teammate}/browser/patterns",
           ],
         })
+        // A handback changes who drives.
+        queryClient.invalidateQueries({
+          queryKey: [
+            "get",
+            "/api/environments/{env}/teammates/{teammate}/browser",
+          ],
+        })
       },
       onError: (err) => {
         if (errorStatus(err) === 409) return
@@ -171,6 +178,57 @@ export function BrowserCredentialDecision({
         >
           {busy("allow") && <Spinner />}
           Fill
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Decides a browser.control approval: an agent asks the user, who drives the browser, for it
+ * back. Hand back ends the user's turn; Keep driving tells the agent the user keeps it.
+ */
+export function BrowserControlDecision({ approval }: { approval: Approval }) {
+  const ask = approval.browserControl
+  const decide = useDecide("request for the browser")
+  const send = (action: "allow" | "deny" | "dismiss") =>
+    decide.mutate({
+      params: { path: { env: approval.environmentId, id: approval.id } },
+      body: { action, scope: "teammate", remember: false },
+    })
+  return (
+    <div className="grid gap-2">
+      {ask?.reason && <p className="text-xs">{ask.reason}</p>}
+      {ask?.session && (
+        <p className="text-xs text-muted-foreground">
+          Ephemeral session {ask.session}
+        </p>
+      )}
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={decide.isPending}
+          onClick={() => send("dismiss")}
+        >
+          Ignore
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          disabled={decide.isPending}
+          onClick={() => send("deny")}
+        >
+          Keep driving
+        </Button>
+        <Button
+          size="sm"
+          disabled={decide.isPending}
+          onClick={() => send("allow")}
+        >
+          {decide.isPending && <Spinner />}
+          Hand back
         </Button>
       </div>
     </div>

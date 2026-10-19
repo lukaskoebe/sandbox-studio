@@ -34,7 +34,9 @@ const (
 var (
 	ErrNoTeammate = errors.New("this sandbox has no teammate, so it has no browser")
 	ErrNoCalls    = errors.New("browser calls come from agent sandboxes only")
-	ErrPaused     = errors.New("the user is driving the browser, so agent browser calls are paused; try again once the user hands it back")
+	ErrPaused     = errors.New("the user took over the browser and still has control of it, so your browser calls are paused. " +
+		"Tell the user what you want to do in the browser and that they still have control; they hand it back with Hand back on the Browser page. " +
+		"browser_request_control asks them with a notification. Call again once they have handed it back")
 	ErrNotLive    = errors.New("the browser is not running")
 	ErrNoTakeover = errors.New("take over the browser before navigating")
 	ErrBadURL     = errors.New("url must be an absolute http or https URL with a host, no userinfo, and at most 4000 characters")
@@ -146,12 +148,15 @@ type page struct {
 	resumed  chan struct{} // closed when the user hands back
 	turn     *userTurn     // what the user did while taking over
 	// handback tells the next agent call what the user's turn changed; see userTurn.note.
-	handback string
-	refs     map[string]refInfo
-	url      string
-	loading  string          // the site an allowed navigation is loading, until url is known
-	secrets  []string        // credential values filled in this run, for Scrub
-	credRefs map[string]bool // refs Studio filled with a credential
+	// handbackPages is the same with the pages the browser was on, for a teammate whose
+	// user shares them.
+	handback, handbackPages string
+	control                 string // the agent's pending request for the session back, if any
+	refs                    map[string]refInfo
+	url                     string
+	loading                 string          // the site an allowed navigation is loading, until url is known
+	secrets                 []string        // credential values filled in this run, for Scrub
+	credRefs                map[string]bool // refs Studio filled with a credential
 	// visible is set when a credential went into a field that shows it: agent screenshots,
 	// history screenshots and frames stop until the page changes.
 	visible bool

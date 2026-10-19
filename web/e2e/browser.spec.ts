@@ -153,6 +153,45 @@ test("the address bar takes the wheel, Back goes back, and Hand back returns it"
   expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
 })
 
+// While the user drives, an agent's call is paused and says so, and browser_request_control
+// asks on the page: Keep driving keeps the wheel, Hand back returns it and answers the call.
+test("an agent asks for the browser back while the user drives", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const { name, sb, base, call } = await browsing(page, api, env)
+  const address = page.getByLabel("Browser address")
+  await address.fill("example.com/a")
+  await address.press("Enter")
+  await expect(page.getByText("You're driving.")).toBeVisible()
+
+  const state = (id: number) =>
+    api.json<Call>("GET", `/api/e2e/sandboxes/${sb}/calls/${id}`)
+  const ask = page.getByRole("alertdialog", { name: `${name} is asking` })
+  const request = () =>
+    call("browser_request_control", { reason: "to finish the order" }, false)
+
+  let req = (await request())!
+  await expect(ask.getByText(/to finish the order/)).toBeVisible()
+  await ask.getByRole("button", { name: "Keep driving" }).click()
+  await expect(ask).toBeHidden()
+  await expect.poll(async () => (await state(req.id))!.done).toBe(true)
+  expect(JSON.stringify((await state(req.id))!.result)).toContain(
+    "keeps control"
+  )
+  expect((await api.json<Status>("GET", base))!.takeover).toBe(true)
+
+  req = (await request())!
+  await ask.getByRole("button", { name: "Hand back" }).click()
+  await expect(page.getByText(`${name} isn't using the browser.`)).toBeVisible()
+  await expect.poll(async () => (await state(req.id))!.done).toBe(true)
+  expect(JSON.stringify((await state(req.id))!.result)).toContain(
+    "handed the browser back"
+  )
+})
+
 // The live view maps a click through the frame to the page: pressing "Sign in" on the canvas
 // lands on the button, which goes to /welcome.
 test("a click on the live view lands on the right page coordinates", async ({

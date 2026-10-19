@@ -298,17 +298,27 @@ disconnecting clears the local input buffer.
   picture on show doesn't keep it from idling out. Studio doesn't start the daemon for a frame:
   a browser that hasn't opened a page yet answers 409. Like screenshots, frames stop while a
   credential shows in the page (409 too), and the one kept is dropped.
-- **Takeover.** Taking the wheel pauses agents. Agent calls wait up to 20 s, then fail with "the
-  user is driving the browser…". The user types passwords straight into the page. Hand
-  back resumes agent calls.
+- **Takeover.** Taking the wheel pauses agents: while the user drives, no agent call reaches
+  the session, so agents can neither act in it nor see it (no snapshot, screenshot or text).
+  Agent calls wait up to 20 s, then fail with "the user took over the browser and still has
+  control of it…", which tells the agent to let the user know they still have control and
+  how to hand it back. The user types passwords straight into the page. Hand back resumes
+  agent calls.
+- **Asking for the browser back.** `browser_request_control` (`control.go`, with a required
+  `reason`) raises a `browser.control` approval while the user drives: a notification, and
+  a **Handback** card on the Browser page and in the TUI. **Hand back** ends the takeover,
+  **Keep driving** tells the agent to carry on with other work, and the call waits up to
+  30 s for the answer. A handback another way settles a pending request, and stopping the
+  browser dismisses it. When no one drives it answers at once that the agent can go ahead.
 - **What the agent hears after a handback.** The session's `userTurn` (`turn.go`) keeps
   what Studio saw while the user drove: the pages the browser was on (from navigation and
   the stream's URL messages, 10 at most and a count of the rest) and downloads the user
   sent to a sandbox. Live-view clicks and keys reach the page as raw input and are not
   kept, as they may be a password. On handback it becomes a note, scrubbed of filled
   credentials, that the next agent call to that session gets in front of its result or
-  error, once: how long the user drove, those pages and downloads, where the page is now,
-  and that refs are stale.
+  error, once: how long the user drove, the downloads, where the page is now, and that refs
+  are stale. The pages it was on stay private to the user unless the teammate's **Tell agents
+  where you browsed** setting (`browser_share_pages`, off by default) is on.
 - **Open a website.** Enter a URL in **Browser address** and press Enter; it takes the wheel
   first when an agent drives. Addresses without a scheme use HTTPS. A new browser starts on
   `about:blank`; the live view explains how to open its first page. The address follows

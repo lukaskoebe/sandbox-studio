@@ -90,6 +90,21 @@ func (s *Server) registerBrowser(api huma.API) {
 		return &struct{ Body store.Teammate }{t}, nil
 	})
 
+	huma.Register(api, huma.Operation{
+		OperationID: "setBrowserSharePages", Method: http.MethodPut, Path: "/api/environments/{env}/teammates/{teammate}/browser/share-pages", Tags: []string{"browser"},
+		Description: "Sets whether the teammate's agents hear, after the user hands the browser back, which pages it was on while the user drove. Off, that stays private to the user.",
+	}, func(ctx context.Context, in *setStealthIn) (*struct{ Body store.Teammate }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		t, err := s.Store.SetTeammateBrowserSharePages(ctx, in.Env, in.Teammate, in.Body.On)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		s.publishTeammates(in.Env)
+		return &struct{ Body store.Teammate }{t}, nil
+	})
+
 	type navigateBrowserIn struct {
 		Env      string `path:"env" doc:"Environment ID"`
 		Teammate string `path:"teammate" doc:"Teammate ID"`

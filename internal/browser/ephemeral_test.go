@@ -208,7 +208,7 @@ func TestEphemeralSessionOwnerAndTakeover(t *testing.T) {
 	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, id, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{"session":"`+id+`"}`); err == nil || !strings.Contains(err.Error(), "user is driving") {
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{"session":"`+id+`"}`); err == nil || !strings.Contains(err.Error(), "still has control") {
 		t.Errorf("paused session: %v", err)
 	}
 	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)

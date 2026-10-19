@@ -150,6 +150,8 @@ func cardCaps(c card, ch choice) []choiceCap {
 		return []choiceCap{{"y", "Allow"}, {"n", "Deny"}, {"i", "Ignore"}, {"r", always}}
 	case a.Kind == "browser.credential" && a.BrowserCredential != nil:
 		return []choiceCap{{"y", "Fill"}, {"n", "Deny"}, {"i", "Ignore"}}
+	case a.Kind == "browser.control" && a.BrowserControl != nil:
+		return []choiceCap{{"y", "Hand back"}, {"n", "Keep driving"}, {"i", "Ignore"}}
 	case a.Kind == "memory.share":
 		return []choiceCap{{"y", "Share"}, {"n", "Decline"}, {"i", "Ignore"}}
 	case a.Kind == "memory.conflict" && a.MemoryConflict != nil && a.MemoryConflict.ConflictID != "":

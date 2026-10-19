@@ -107,6 +107,9 @@ func kindApprovals(now time.Time) []api.ApprovalView {
 				{OptionID: "o3", Name: "Reject", Kind: acp.RejectOnce},
 			},
 		}},
+		{Approval: at("bh", "browser.control", 6*time.Minute), BrowserControl: &browser.ControlPayload{
+			TeammateID: "t1", TeammateName: "Iris", SandboxName: "blub", Reason: "Check the order status",
+		}},
 	}
 }
 
@@ -199,6 +202,10 @@ func TestKindKeysDecideOnTheirCards(t *testing.T) {
 			`{"action":"deny","scope":"environment"}`, "Chose “Reject” for npm test."},
 		{"permission ignored", 4, []string{"i"}, "/api/environments/env1/approvals/cp/decide",
 			`{"action":"dismiss","scope":"environment"}`, "Ignored the permission request."},
+		{"browser handed back", 5, []string{"y"}, "/api/environments/env1/approvals/bh/decide",
+			`{"action":"allow","scope":"teammate"}`, "Handed back the browser."},
+		{"browser kept", 5, []string{"n"}, "/api/environments/env1/approvals/bh/decide",
+			`{"action":"deny","scope":"teammate"}`, "Kept driving."},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

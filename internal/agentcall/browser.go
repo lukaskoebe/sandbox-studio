@@ -71,8 +71,18 @@ func init() {
 		Tools = append(Tools, withSession(t))
 	}
 	Tools = append(Tools, Tool{agentproto.MethodBrowserClose, "End an ephemeral browser session; its cookies, storage and downloads are deleted.",
-		obj([]string{"session"}, map[string]any{"session": session()})}, BrowserDownloadsTool, BrowserDownloadToWorkspaceTool)
+		obj([]string{"session"}, map[string]any{"session": session()})}, BrowserDownloadsTool, BrowserDownloadToWorkspaceTool, BrowserRequestControlTool)
 }
+
+// BrowserRequestControlTool asks the user for the browser back; the browser service answers it.
+var BrowserRequestControlTool = Tool{agentproto.MethodBrowserRequestControl,
+	"Ask the user, who has taken over your browser, to hand it back: Studio notifies them with your reason. " +
+		"Use it when a browser call says the user has control and your task needs the browser; it waits a little for their answer. " +
+		"Ask once, and tell the user in your reply too.",
+	obj([]string{"reason"}, map[string]any{
+		"reason":  str("What you want to do in the browser, in a sentence for the user", "maxLength", 500),
+		"session": session(),
+	})}
 
 // BrowserDownloadsTool lists the files the browser saved; the browser service answers it.
 var BrowserDownloadsTool = Tool{agentproto.MethodBrowserDownloads,

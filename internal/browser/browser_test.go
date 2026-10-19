@@ -1052,21 +1052,33 @@ func TestUserClosesEphemeralSession(t *testing.T) {
 	}
 }
 
-// After a handback, the agent's next call says that the user drove and where the browser
-// went; the call after it doesn't repeat it.
+// After a handback, the agent's next call says that the user drove, and, if the user shares
+// them, where the browser went; the call after it doesn't repeat it.
 func TestHandbackTellsTheAgentWhatTheUserDid(t *testing.T) {
 	f := newFixture(t)
 	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
+	drive := func(url string) string {
+		t.Helper()
+		if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", url); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", false); err != nil {
+			t.Fatal(err)
+		}
+		res, _ := f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`).(string)
+		return res
+	}
+	private, _, _ := strings.Cut(drive("https://example.org/private"), "\n\n")
+	if strings.Contains(private, "it was on") || !strings.Contains(private, "private to them") {
+		t.Errorf("by default the pages the user visited reached the agent: %q", private)
+	}
+	if _, err := f.st.SetTeammateBrowserSharePages(f.ctx, f.env, f.ada.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.Navigate(f.ctx, f.env, f.ada.ID, "", "https://example.org/settings"); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", false); err != nil {
-		t.Fatal(err)
-	}
-	res, _ := f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`).(string)
+	res := drive("https://example.org/settings")
 	note, _, _ := strings.Cut(res, "\n\n")
 	for _, want := range []string{"the user took over this browser for less than a minute", "it was on https://example.org/settings", "take a browser_snapshot"} {
 		if !strings.Contains(note, want) {
@@ -1084,7 +1096,7 @@ func TestHandbackTellsTheAgentWhatTheUserDid(t *testing.T) {
 func TestUserTurnNote(t *testing.T) {
 	t0 := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
 	turn := &userTurn{since: t0, pages: []string{"https://a.example/"}}
-	if n := turn.note(t0.Add(5*time.Minute), "https://a.example/"); !strings.Contains(n, "for 5 minutes") || !strings.Contains(n, "stayed on the page you left") {
+	if n := turn.note(t0.Add(5*time.Minute), "https://a.example/", true); !strings.Contains(n, "for 5 minutes") || !strings.Contains(n, "stayed on the page you left") {
 		t.Errorf("idle turn: %q", n)
 	}
 	for i := range 12 {
@@ -1092,15 +1104,21 @@ func TestUserTurnNote(t *testing.T) {
 	}
 	turn.saw("https://a.example/0")
 	turn.downloads = []string{"r.pdf (sent to ada as downloads/r.pdf)"}
-	n := turn.note(t0.Add(time.Minute), "https://a.example/11")
+	n := turn.note(t0.Add(time.Minute), "https://a.example/11", true)
 	for _, want := range []string{"for a minute", "https://a.example/0, ", "and 3 more", "They sent downloads: r.pdf", "The page is now https://a.example/11."} {
 		if !strings.Contains(n, want) {
 			t.Errorf("note lacks %q: %q", want, n)
 		}
 	}
+	// Unshared, the pages stay private; what the user sent and where the page is now don't.
+	n = turn.note(t0.Add(time.Minute), "https://a.example/11", false)
+	if strings.Contains(n, "https://a.example/0") || strings.Contains(n, "more") || !strings.Contains(n, "private to them") ||
+		!strings.Contains(n, "They sent downloads: r.pdf") || !strings.Contains(n, "The page is now https://a.example/11.") {
+		t.Errorf("private note: %q", n)
+	}
 	var none *userTurn
 	none.saw("https://a.example/")
-	if none.note(t0, "") != "" {
+	if none.note(t0, "", true) != "" {
 		t.Error("a nil turn has a note")
 	}
 }

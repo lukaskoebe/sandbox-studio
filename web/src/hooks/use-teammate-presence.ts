@@ -35,6 +35,7 @@ export function usePresence(env: string): (teammateId: string) => Presence {
       const teammate =
         a.browserAction?.teammateId ??
         a.browserCredential?.teammateId ??
+        a.browserControl?.teammateId ??
         a.memoryShare?.teammateId ??
         chatTeammate.get(a.chatPermission?.chatId ?? "")
       if (teammate) waiting.add(teammate)

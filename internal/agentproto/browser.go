@@ -89,6 +89,8 @@ const BrowserMethodPrefix = "browser_"
 const (
 	MethodBrowserDownloads           = "browser_downloads"
 	MethodBrowserDownloadToWorkspace = "browser_download_to_workspace"
+	// MethodBrowserRequestControl asks the user, who drives the browser, to hand it back.
+	MethodBrowserRequestControl = "browser_request_control"
 )
 
 // KindBrowserDownloads (host → guest, browser VMs only): the host writes a

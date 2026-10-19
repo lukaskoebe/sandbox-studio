@@ -18,17 +18,19 @@ import (
 // the web's cards for them do (browser-approval.tsx, memory-sessions.tsx, memory-conflict.tsx,
 // chat/permission-card.tsx).
 var (
-	keyFill     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "fill"))
-	keyShare    = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "share"))
-	keyDecline  = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "decline"))
-	keyRemember = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "always"))
-	keyKeepA    = key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "keep A"))
-	keyKeepB    = key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "keep B"))
-	keyLater    = key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "later"))
-	keyBoth     = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "more (browser)"))
-	keySkip     = key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "skip"))
-	keyReply    = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "answer"))
-	keyAnswer   = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send"))
+	keyFill      = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "fill"))
+	keyHandBack  = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "hand back"))
+	keyKeepWheel = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "keep driving"))
+	keyShare     = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "share"))
+	keyDecline   = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "decline"))
+	keyRemember  = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "always"))
+	keyKeepA     = key.NewBinding(key.WithKeys("1"), key.WithHelp("1", "keep A"))
+	keyKeepB     = key.NewBinding(key.WithKeys("2"), key.WithHelp("2", "keep B"))
+	keyLater     = key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "later"))
+	keyBoth      = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "more (browser)"))
+	keySkip      = key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "skip"))
+	keyReply     = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "answer"))
+	keyAnswer    = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send"))
 )
 
 // keyPick is the key bar's entry for the numbered choices 1 to n.
@@ -142,6 +144,15 @@ func (m *app) kindKey(msg tea.KeyPressMsg, c card) tea.Cmd {
 		case key.Matches(msg, keyIgnore):
 			return decide("dismiss", false, "Ignored", what)
 		}
+	case a.Kind == "browser.control" && a.BrowserControl != nil:
+		switch {
+		case key.Matches(msg, keyHandBack):
+			return decide("allow", false, "Handed back", "the browser")
+		case key.Matches(msg, keyKeepWheel):
+			return decide("deny", false, "Kept", "driving")
+		case key.Matches(msg, keyIgnore):
+			return decide("dismiss", false, "Ignored", "the request")
+		}
 	case a.Kind == "memory.share":
 		switch {
 		case key.Matches(msg, keyShare):
@@ -197,6 +208,8 @@ func kindBindings(a api.ApprovalView) []key.Binding {
 		return []key.Binding{keyAllow, keyDeny, keyIgnore, keyRemember, keyBack}
 	case a.Kind == "browser.credential" && a.BrowserCredential != nil:
 		return []key.Binding{keyFill, keyDeny, keyIgnore, keyBack}
+	case a.Kind == "browser.control" && a.BrowserControl != nil:
+		return []key.Binding{keyHandBack, keyKeepWheel, keyIgnore, keyBack}
 	case a.Kind == "memory.share":
 		return []key.Binding{keyShare, keyDecline, keyIgnore, keyBack}
 	case a.Kind == "memory.conflict" && a.MemoryConflict != nil && a.MemoryConflict.ConflictID != "":
@@ -231,6 +244,9 @@ func (m *app) kindLines(c card, w int) []string {
 		}
 		lines = append(lines, styleDim.Render(fit("Studio fills the secret into "+field+"; "+
 			firstNonEmpty(cred.TeammateName, "the agent")+" sees only its name.", w)))
+	case a.Kind == "browser.control" && a.BrowserControl != nil:
+		lines = append(lines, styleDim.Render(fit("You are driving; handing back lets "+
+			firstNonEmpty(a.BrowserControl.TeammateName, "the agent")+" use the browser again.", w)))
 	case a.Kind == "memory.share" && a.MemoryShare != nil:
 		share := a.MemoryShare
 		lines = []string{fit(oneLine(share.Text), w), styleDim.Render(fit(strings.Join(nonEmpty(share.TeammateName, share.Kind, share.Tier), " · "), w))}

@@ -33,11 +33,13 @@ type Download struct {
 	Saved   time.Time `json:"saved"`
 }
 
-// Tools are the download tools of the browser: browser_downloads and browser_download_to_workspace.
+// Tools are the browser's tools that don't wait for the user to hand back: the download tools,
+// browser_downloads and browser_download_to_workspace, and browser_request_control (control.go).
 func (s *Service) Tools() []integrations.Tool {
 	return []integrations.Tool{
 		{Def: agentcall.BrowserDownloadsTool, Handle: s.toolDownloads},
 		{Def: agentcall.BrowserDownloadToWorkspaceTool, Handle: s.toolDownloadToWorkspace},
+		{Def: agentcall.BrowserRequestControlTool, Handle: s.toolRequestControl},
 	}
 }
 
