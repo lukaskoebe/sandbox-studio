@@ -4327,6 +4327,24 @@
         ],
         "type": "object"
       },
+      "PastedFile": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "description": "The file's absolute path in the sandbox, for the terminal to paste",
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "size"
+        ],
+        "type": "object"
+      },
       "PermissionBody": {
         "additionalProperties": false,
         "properties": {
@@ -13996,6 +14014,79 @@
             "description": "Error"
           }
         },
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/pastes": {
+      "post": {
+        "description": "Writes the body as the file name in /tmp/studio-pastes, outside the workspace, for a terminal to paste the path: an image pasted into a sandbox's terminal reaches an agent, such as Claude Code, which reads the image from the path. A taken name is kept as \"name (2).ext\". The folder is in /tmp, so a reboot of the sandbox empties it. A sandbox whose guest agent predates pastes answers 422 until it restarts.",
+        "operationId": "pasteFile",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The file's name",
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "contentMediaType": "application/octet-stream",
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastedFile"
+                }
+              }
+            },
+            "description": "The file was written"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload a file pasted into a terminal",
         "tags": [
           "sandboxes"
         ]

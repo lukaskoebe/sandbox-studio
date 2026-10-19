@@ -510,7 +510,11 @@ func (h *Hub) Upload(ctx context.Context, id string, req agentproto.UploadReques
 		_ = st.Close()
 	})
 	defer stopCancel()
-	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: agentproto.KindUpload}); err != nil {
+	kind := agentproto.KindUpload
+	if req.Paste {
+		kind = agentproto.KindPaste
+	}
+	if err := agentproto.WriteJSONLine(st, agentproto.Header{Kind: kind}); err != nil {
 		return out, err
 	}
 	if err := agentproto.WriteJSONLine(st, req); err != nil {

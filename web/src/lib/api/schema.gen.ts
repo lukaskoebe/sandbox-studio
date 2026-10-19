@@ -1472,6 +1472,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/pastes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file pasted into a terminal
+         * @description Writes the body as the file name in /tmp/studio-pastes, outside the workspace, for a terminal to paste the path: an image pasted into a sandbox's terminal reaches an agent, such as Claude Code, which reads the image from the path. A taken name is kept as "name (2).ext". The folder is in /tmp, so a reboot of the sandbox empties it. A sandbox whose guest agent predates pastes answers 422 until it restarts.
+         */
+        post: operations["pasteFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/ports": {
         parameters: {
             query?: never;
@@ -3837,6 +3857,12 @@ export interface components {
         PasteTokenInBody: {
             /** @description The long-lived token from claude setup-token, as the terminal printed it */
             token: string;
+        };
+        PastedFile: {
+            /** @description The file's absolute path in the sandbox, for the terminal to paste */
+            path: string;
+            /** Format: int64 */
+            size: number;
         };
         PermissionBody: {
             options: components["schemas"]["PermissionOption"][] | null;
@@ -8919,6 +8945,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Lineage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    pasteFile: {
+        parameters: {
+            query: {
+                /** @description The file's name */
+                name: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description The file was written */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PastedFile"];
                 };
             };
             /** @description Error */

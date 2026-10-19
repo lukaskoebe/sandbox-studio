@@ -66,6 +66,7 @@ import {
   openPreviewTab,
 } from "@/lib/previews"
 import { cn } from "@/lib/utils"
+import { pasteFile } from "@/lib/workspace-upload"
 
 /** The workspace's side panels: one is open at a time, named in the URL. */
 export const workspacePanels = ["browser", "connections", "files"] as const
@@ -733,6 +734,7 @@ function TerminalPane({
           active={name === active}
           suspended={suspended}
           onExit={() => onExit(name)}
+          onPasteFile={(file) => pasteFile(env, sb.id, file)}
         />
       ))}
     </div>

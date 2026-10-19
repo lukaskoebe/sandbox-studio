@@ -231,6 +231,13 @@ func (g *Guest) handle(st net.Conn) {
 		err = g.serveForwards(st, br)
 	case agentproto.KindACP:
 		err = g.serveACP(st, br)
+	case agentproto.KindPaste:
+		var req agentproto.UploadRequest
+		if err = agentproto.ReadJSONLine(br, &req); err == nil {
+			if _, err = io.CopyN(io.Discard, br, req.Size); err == nil {
+				err = agentproto.WriteJSONLine(st, agentproto.UploadReply{Name: req.Name, Size: req.Size})
+			}
+		}
 	case agentproto.KindRun:
 		var req agentproto.RunRequest
 		if err = agentproto.ReadJSONLineLimit(br, &req, agentproto.MaxRunLine); err == nil {

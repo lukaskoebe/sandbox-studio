@@ -28,11 +28,16 @@ func storeTestUpload(t *testing.T, workspace string, req agentproto.UploadReques
 // the host side, and returns the reply line the host reads.
 func streamUpload(t *testing.T, workspace string, req agentproto.UploadRequest, body string) []byte {
 	t.Helper()
+	return streamUploadInto(t, workspace, "", req, body)
+}
+
+func streamUploadInto(t *testing.T, workspace, into string, req agentproto.UploadRequest, body string) []byte {
+	t.Helper()
 	host, guest := net.Pipe()
 	defer host.Close()
 	defer guest.Close()
 	served := make(chan error, 1)
-	go func() { served <- serveUpload(guest, bufio.NewReader(guest), workspace, uploadOwner) }()
+	go func() { served <- serveUpload(guest, bufio.NewReader(guest), workspace, into, uploadOwner) }()
 	go func() {
 		_ = agentproto.WriteJSONLine(host, req)
 		_, _ = host.Write([]byte(body))
@@ -251,5 +256,23 @@ func TestStoreUploadCreatesItsFolderOnRequest(t *testing.T) {
 	}
 	if _, err := storeTestUpload(t, ws, agentproto.UploadRequest{Dir: "missing/deeper", Name: "a.txt", CreateDir: true}, "x"); err == nil {
 		t.Fatal("CreateDir made a folder whose parent does not exist")
+	}
+}
+
+// A paste goes into its own folder, made when missing, whatever folder the request names.
+func TestServeUploadIntoPasteFolder(t *testing.T) {
+	tmp := t.TempDir()
+	for range 2 {
+		line := streamUploadInto(t, tmp, "studio-pastes", agentproto.UploadRequest{Dir: "../elsewhere", Name: "image.png", Size: 3, Conflict: agentproto.ConflictKeep}, "png")
+		var reply agentproto.UploadReply
+		if err := json.Unmarshal(line, &reply); err != nil || reply.Name == "" {
+			t.Fatalf("reply %s, %v", line, err)
+		}
+		if data, err := os.ReadFile(filepath.Join(tmp, "studio-pastes", reply.Name)); err != nil || string(data) != "png" {
+			t.Fatalf("pasted file %q, %v", data, err)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(tmp, "studio-pastes")); len(entries) != 2 {
+		t.Fatalf("pastes %v", entries)
 	}
 }

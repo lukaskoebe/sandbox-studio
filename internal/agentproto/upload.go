@@ -6,6 +6,15 @@ package agentproto
 // refused, so the host's writes always complete.
 const KindUpload = "upload"
 
+// KindPaste is a KindUpload stream into PasteDir instead of the workspace: a file pasted into a
+// terminal, which the terminal then names by its path. The request's Dir and CreateDir don't
+// apply. A guest older than the kind refuses it, so a paste never lands in the workspace.
+const KindPaste = "paste"
+
+// PasteDir is the guest's folder of pasted files: outside the workspace, so they never show up
+// in the project's changes, and in /tmp, so they are gone after a reboot.
+const PasteDir = "/tmp/studio-pastes"
+
 // Upload conflict policies, for a name already taken in the folder.
 const (
 	ConflictFail    = "fail" // refuse, and write nothing (the default)
@@ -35,6 +44,9 @@ type UploadRequest struct {
 	// CreateDir makes Dir when it is missing, as a folder of its parent, which must exist.
 	// Without it a missing folder is an error.
 	CreateDir bool `json:"createDir,omitempty"`
+	// Paste sends the file as a KindPaste stream, into PasteDir. It picks the stream's kind and
+	// isn't part of the request line.
+	Paste bool `json:"-"`
 }
 
 // UploadReply answers an UploadRequest. Name is the name the file was written under, which

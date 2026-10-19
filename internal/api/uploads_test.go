@@ -89,3 +89,23 @@ func TestUploadFileAPI(t *testing.T) {
 		t.Fatalf("problem JSON: %v", err)
 	}
 }
+
+func TestPasteFileAPI(t *testing.T) {
+	h, s, g, env := newChatServer(t, &acptest.Agent{SessionID: "ses_paste"})
+	sb, err := s.Store.CreateSandbox(context.Background(), store.Sandbox{EnvironmentID: env.ID, Name: "dev", CPUs: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pastes := testOrigin + "/api/environments/" + env.ID + "/sandboxes/" + sb.ID + "/pastes"
+	rec := do(h, "POST", pastes+"?name=taken.txt", "png", "Content-Type", "application/octet-stream")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("paste: %d %s", rec.Code, rec.Body)
+	}
+	// A taken name is kept, and the path is the guest's, outside the workspace.
+	if got := decode[PastedFile](t, rec); got != (PastedFile{Path: agentproto.PasteDir + "/taken (2).txt", Size: 3}) {
+		t.Fatalf("reply %+v", got)
+	}
+	if got := g.uploads[0]; got != (agentproto.UploadRequest{Name: "taken.txt", Size: 3, Conflict: agentproto.ConflictKeep, Paste: true}) {
+		t.Fatalf("guest got %+v", got)
+	}
+}

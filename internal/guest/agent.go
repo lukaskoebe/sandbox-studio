@@ -214,6 +214,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.files(st, br)
 	case agentproto.KindUpload:
 		err = a.upload(st, br)
+	case agentproto.KindPaste:
+		err = a.paste(st, br)
 	case agentproto.KindRun:
 		err = a.serveRun(st, br)
 	case agentproto.KindForwards:

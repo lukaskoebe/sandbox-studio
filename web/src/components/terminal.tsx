@@ -16,6 +16,7 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { errorMessage } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
 
@@ -116,6 +117,17 @@ function terminalClipboard(onCopied: () => void): IClipboardProvider {
   }
 }
 
+/** The images on the clipboard, as files. */
+async function clipboardImages(clipboard: Clipboard): Promise<File[]> {
+  const files: File[] = []
+  for (const item of await clipboard.read()) {
+    const type = item.types.find((t) => t.startsWith("image/"))
+    if (type)
+      files.push(new File([await item.getType(type)], "image", { type }))
+  }
+  return files
+}
+
 /**
  * One tmux session in the guest, attached over a websocket. Binary messages carry terminal
  * bytes; text messages are control messages. The connection is retried until the session
@@ -127,12 +139,18 @@ export function Terminal({
   active,
   suspended = false,
   onExit,
+  onPasteFile,
   className,
 }: {
   url: string
   active: boolean
   suspended?: boolean
   onExit: () => void
+  /**
+   * Puts a file pasted or dropped into the terminal where the program in it can read it, and
+   * returns its path there, which the terminal pastes. Without it a pasted file does nothing.
+   */
+  onPasteFile?: (file: File) => Promise<string>
   className?: string
 }) {
   const container = useRef<HTMLDivElement>(null)
@@ -145,6 +163,9 @@ export function Terminal({
   const pasteEventPendingRef = useRef(false)
   const onExitRef = useRef(onExit)
   onExitRef.current = onExit
+  const onPasteFileRef = useRef(onPasteFile)
+  onPasteFileRef.current = onPasteFile
+  const [pasting, setPasting] = useState(false)
   const suspendedRef = useRef(suspended)
   const parkRef = useRef<(suspended: boolean) => void>(null)
   // What the right-click menu acts on: xterm's own selection when it opened (Shift-drag, or
@@ -170,11 +191,39 @@ export function Terminal({
     return true
   }, [showCopied])
 
+  // Pasted and dropped files go into the sandbox, and their paths into the terminal: an agent
+  // such as Claude Code reads an image from its path, as it can't reach this machine's clipboard.
+  const pasteFiles = useCallback(async (files: File[]) => {
+    const upload = onPasteFileRef.current
+    if (!upload || !connectedRef.current || suspendedRef.current) return
+    setPasting(true)
+    try {
+      const paths = await Promise.all(files.map(upload))
+      termRef.current?.paste(paths.join(" "))
+    } catch (err) {
+      toast.error(
+        files.length === 1
+          ? "Could not paste the file"
+          : "Could not paste the files",
+        { description: errorMessage(err) }
+      )
+    } finally {
+      setPasting(false)
+      termRef.current?.focus()
+    }
+  }, [])
+
   const pasteClipboard = useCallback(async () => {
     const term = termRef.current
     if (!term || !connectedRef.current || suspendedRef.current) return
     try {
       const clipboard = (navigator as Partial<Navigator>).clipboard
+      // An image on the clipboard goes in as a file; reading it may be refused, and then
+      // the clipboard's text still goes in.
+      if (onPasteFileRef.current && typeof clipboard?.read === "function") {
+        const images = await clipboardImages(clipboard).catch(() => [])
+        if (images.length > 0) return await pasteFiles(images)
+      }
       if (typeof clipboard?.readText !== "function") throw new Error()
       const text = await clipboard.readText()
       if (text) term.paste(text)
@@ -186,7 +235,7 @@ export function Terminal({
       })
       term.focus()
     }
-  }, [])
+  }, [pasteFiles])
 
   const consumeCtrl = useCallback((data: string) => {
     if (!ctrlArmedRef.current || pasteEventPendingRef.current) return data
@@ -334,6 +383,15 @@ export function Terminal({
     const terminalTextarea = el.querySelector("textarea")
     const markTerminalPaste = (event: ClipboardEvent) => {
       if (event.target !== terminalTextarea) return
+      // A pasted file, such as a screenshot, never reaches xterm, which would paste the
+      // text that may come with it instead.
+      const files = [...(event.clipboardData?.files ?? [])]
+      if (files.length > 0 && onPasteFileRef.current) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        void pasteFiles(files)
+        return
+      }
       pasteEventPendingRef.current = true
       // xterm emits pasted data synchronously from its paste handler. Clear the
       // guard if the browser had no paste payload and therefore emitted no data.
@@ -342,6 +400,18 @@ export function Terminal({
       })
     }
     document.addEventListener("paste", markTerminalPaste, true)
+    const dragOver = (event: DragEvent) => {
+      if (onPasteFileRef.current && event.dataTransfer?.types.includes("Files"))
+        event.preventDefault()
+    }
+    const drop = (event: DragEvent) => {
+      const files = [...(event.dataTransfer?.files ?? [])]
+      if (files.length === 0 || !onPasteFileRef.current) return
+      event.preventDefault()
+      void pasteFiles(files)
+    }
+    el.addEventListener("dragover", dragOver)
+    el.addEventListener("drop", drop)
     // The right button opens Studio's menu, not tmux's: tmux would draw a menu of its own
     // under the browser's.
     const keepRightButton = (event: MouseEvent) => {
@@ -379,6 +449,8 @@ export function Terminal({
       clearTimeout(retry)
       observer.disconnect()
       document.removeEventListener("paste", markTerminalPaste, true)
+      el.removeEventListener("dragover", dragOver)
+      el.removeEventListener("drop", drop)
       el.removeEventListener("mousedown", keepRightButton, true)
       el.removeEventListener("mouseup", keepRightButton, true)
       pasteEventPendingRef.current = false
@@ -386,7 +458,7 @@ export function Terminal({
       ws?.close()
       term.dispose()
     }
-  }, [consumeCtrl, copySelection, showCopied, url])
+  }, [consumeCtrl, copySelection, pasteFiles, showCopied, url])
 
   useEffect(() => {
     suspendedRef.current = suspended
@@ -447,12 +519,12 @@ export function Terminal({
           </p>
         </ContextMenuContent>
       </ContextMenu>
-      {copied && (
+      {(copied || pasting) && (
         <span
           role="status"
           className="pointer-events-none absolute top-3 right-4 rounded-md bg-[#33363b] px-2 py-0.5 text-xs text-[#d7dade] shadow"
         >
-          Copied
+          {pasting ? "Pasting…" : "Copied"}
         </span>
       )}
       <TerminalControls

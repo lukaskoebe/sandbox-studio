@@ -77,3 +77,36 @@ test("terminal: a tmux copy reaches the clipboard, and right-click opens Copy an
   await page.keyboard.press("Enter")
   await expect(term.line("pasted")).toHaveCount(1)
 })
+
+test("terminal: a pasted screenshot goes into the sandbox, and its path into the terminal", async ({
+  page,
+  api,
+  env,
+}) => {
+  const id = await api.createSandbox(sandboxName("paste"))
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  const term = terminal(page)
+  await expect(term.rows).toContainText("$")
+  // A screenshot on the clipboard pastes as a file named image.png, with no text.
+  await page
+    .locator(".xterm textarea")
+    .filter({ visible: true })
+    .evaluate((ta) => {
+      const data = new DataTransfer()
+      data.items.add(
+        new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "image.png", {
+          type: "image/png",
+        })
+      )
+      ta.dispatchEvent(
+        new ClipboardEvent("paste", {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+    })
+  await expect(term.rows).toContainText(
+    /\/tmp\/studio-pastes\/paste-\d{14}-\w{4}\.png/
+  )
+})

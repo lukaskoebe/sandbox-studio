@@ -32,13 +32,24 @@ var errTaken = errors.New("already exists")
 
 // upload serves a KindUpload stream into the workspace.
 func (a *Agent) upload(st net.Conn, br *bufio.Reader) error {
-	return serveUpload(st, br, Workdir, [2]int{int(a.user.uid), int(a.user.gid)})
+	return serveUpload(st, br, Workdir, "", [2]int{int(a.user.uid), int(a.user.gid)})
 }
 
-func serveUpload(st net.Conn, br *bufio.Reader, workspace string, owner [2]int) error {
+// paste serves a KindPaste stream into agentproto.PasteDir, which it makes for the agent user
+// beneath /tmp.
+func (a *Agent) paste(st net.Conn, br *bufio.Reader) error {
+	return serveUpload(st, br, path.Dir(agentproto.PasteDir), path.Base(agentproto.PasteDir), [2]int{int(a.user.uid), int(a.user.gid)})
+}
+
+// serveUpload stores the stream's file in the folder its request names beneath workspace, or,
+// with into set, in the folder into beneath it, which is made when missing.
+func serveUpload(st net.Conn, br *bufio.Reader, workspace, into string, owner [2]int) error {
 	var req agentproto.UploadRequest
 	if err := agentproto.ReadJSONLineLimit(br, &req, 64<<10); err != nil {
 		return replyError(st, err)
+	}
+	if into != "" {
+		req.Dir, req.CreateDir = into, true
 	}
 	if req.Size < 0 || req.Size > agentproto.MaxUploadBytes {
 		return replyError(st, fmt.Errorf("a file is at most %d MiB", agentproto.MaxUploadBytes>>20))
