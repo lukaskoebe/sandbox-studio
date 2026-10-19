@@ -9,13 +9,13 @@ Fix the login form · blub                                                      
 
 Fixed
 
-The form used a `div` as its button, so enter did nothing. It is a real submit button now:
+The form used a div as its button, so enter did nothing. It is a real submit button now:
 
   │ tsx
   │ <button type="submit">Sign in</button>
 
-- Enter submits the form.
-- The button is focusable.
+• Enter submits the form.
+• The button is focusable.
 
 ┃ Add a test for it.
 

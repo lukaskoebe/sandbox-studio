@@ -9,14 +9,14 @@
 
 [1mFixed[m
 
-The form used a `div` as its button, so enter did nothing. It is a real submit
+The form used a [36mdiv[m as its button, so enter did nothing. It is a real submit
 button now:
 
 [2m  │ tsx[m
 [2m  │ [m<button type="submit">Sign in</button>
 
-- Enter submits the form.
-- The button is focusable.
+[2m•[m Enter submits the form.
+[2m•[m The button is focusable.
 
 [2;48;5;237m › Write to Iris…                                                       p write [m
 [2m────────────────────────────────────────────────────────────────────────────────[m

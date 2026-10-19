@@ -45,9 +45,10 @@ type chatState struct {
 	items  map[string]chat.Item
 	rev    int64 // the last rev seen, where the stream resumes
 
-	expanded map[string]bool // the folded items the user opened, by item ID
-	fold     int             // the folded item under the cursor, among the foldable ones; -1 for none
-	scroll   int             // rows the transcript is scrolled up from its end
+	expanded map[string]bool         // the folded items the user opened, by item ID
+	rendered map[string]renderedText // the agent's messages drawn as markdown, by item ID
+	fold     int                     // the folded item under the cursor, among the foldable ones; -1 for none
+	scroll   int                     // rows the transcript is scrolled up from its end
 
 	composing bool  // the composer takes the keys
 	draft     input // the prompt being written
@@ -703,7 +704,7 @@ func (m *app) transcript(w int) transcriptView {
 			if it.Text == nil {
 				continue
 			}
-			out.lines = append(out.lines, renderMarkdown(it.Text.Text, w, !m.look.plain)...)
+			out.lines = append(out.lines, c.markdown(it, w, !m.look.plain)...)
 			if it.Text.Truncated {
 				out.lines = append(out.lines, styleDim.Render("The rest of this message was too long to keep."))
 			}
@@ -1036,46 +1037,26 @@ func markerLine(it chat.Item, w int) string {
 	return styleDim.Render(fit(line, w))
 }
 
-// markdownLines styles an agent's answer lightly, with no markdown renderer: headings are bold
-// and code blocks are indented, as they come. The rest is wrapped to w.
-func markdownLines(text string, w int) []string {
-	return renderMarkdown(text, w, false)
+// renderedText is a message drawn as markdown, for its text at a width and look.
+type renderedText struct {
+	text  string
+	w     int
+	ruled bool
+	lines []string
 }
 
-// renderMarkdown is markdownLines; ruled gives code blocks the visual look's dim left rule, with
-// the block's language as its label.
-func renderMarkdown(text string, w int, ruled bool) []string {
-	var lines []string
-	code := false
-	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-			code = !code
-			if lang := strings.TrimSpace(strings.TrimLeft(trimmed, "`~")); code && ruled && lang != "" {
-				lines = append(lines, styleDim.Render("  │ "+lang))
-			}
-			continue
-		}
-		switch {
-		case code && ruled:
-			lines = append(lines, styleDim.Render("  │ ")+strings.ReplaceAll(line, "\t", "    "))
-		case code:
-			lines = append(lines, "    "+strings.ReplaceAll(line, "\t", "    "))
-		case isHeading(trimmed):
-			for _, l := range wrapText(strings.TrimSpace(strings.TrimLeft(trimmed, "#")), w) {
-				lines = append(lines, styleBold.Render(l))
-			}
-		default:
-			lines = append(lines, wrapText(line, w)...)
-		}
+// markdown draws an agent's message, once for each text, width and look: the transcript is
+// laid out for every key and frame, so scrolling would otherwise draw every message again.
+func (c *chatState) markdown(it chat.Item, w int, ruled bool) []string {
+	if r, ok := c.rendered[it.ID]; ok && r.text == it.Text.Text && r.w == w && r.ruled == ruled {
+		return r.lines
 	}
+	if c.rendered == nil {
+		c.rendered = map[string]renderedText{}
+	}
+	lines := renderMarkdown(it.Text.Text, w, ruled)
+	c.rendered[it.ID] = renderedText{text: it.Text.Text, w: w, ruled: ruled, lines: lines}
 	return lines
-}
-
-// isHeading reports whether a line is a markdown heading: one to six # and a space.
-func isHeading(line string) bool {
-	n := len(line) - len(strings.TrimLeft(line, "#"))
-	return n >= 1 && n <= 6 && strings.HasPrefix(line[n:], " ")
 }
 
 // wrapText wraps text to w cells, keeping its line breaks. A line's leading spaces stay on

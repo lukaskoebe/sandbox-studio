@@ -271,7 +271,7 @@ func TestEndedChatsTakeNoPrompt(t *testing.T) {
 
 func TestMarkdownLinesStyleLightly(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := markdownLines("# Title\nSome text.\n```go\nfunc main() {}\n```\n#hashtag", 40)
+	got := renderMarkdown("# Title\nSome text.\n```go\nfunc main() {}\n```\n#hashtag", 40, false)
 	want := []string{"Title", "Some text.", "    func main() {}", "#hashtag"}
 	if len(got) != len(want) {
 		t.Fatalf("lines %q, want %q", got, want)

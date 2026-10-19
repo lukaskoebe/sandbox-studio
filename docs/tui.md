@@ -29,8 +29,8 @@ URL.
 - **Library.** Charm's Bubble Tea v2 with Lip Gloss and Bubbles (`charm.land/*/v2`, MIT,
   works on Windows terminals). `tview` has heavier widgets and less control over the look; a
   hand-rolled renderer on `golang.org/x/term` needs no dependency but much more code. There
-  is no markdown renderer: chat text gets light styling (bold headings, indented code)
-  instead of a glamour dependency.
+  is no glamour dependency: `markdown.go` renders chat text itself, reading markdown as the
+  web's renderer does.
 - **`studio tui`, not `studio`.** Plain `studio` stays the server even in an interactive
   terminal with a server already running, so scripts and autostart never get a UI.
 - **One screen at a time**, with a header and a key bar and no panes, so it works at 80×24
@@ -241,9 +241,15 @@ chat that is gone (404) says so.
 
 The transcript:
 
-- Prompts are bold, after `›`. The agent's text gets light styling, with no markdown renderer:
-  headings are bold, code blocks are indented four spaces with their fences dropped, list items
-  wrap under their text.
+- Prompts are bold, after `›`. The agent's text is rendered as markdown (`markdown.go`, the
+  same blocks and inline marks as `web/src/components/chat/markdown.tsx`): headings and
+  `**bold**` are bold, `*italics*` italic, and a link shows its text with its address dim
+  after it. Bullets become `•` (`◦` nested) and items wrap under their text; quotes get a
+  `│` rule (`>` in the plain look). Code blocks drop their fences and get a dim `│` rule
+  with their language (indented four spaces in the plain look); inline code takes the accent
+  color (keeps its backticks in the plain look). Tables are boxed, each column as wide as its
+  cells up to a fair share of the width, with cells wrapping inside; a table too narrow for
+  its columns becomes `heading: cell` lines per row.
 - Thoughts and tool calls are folded to one line: `▸`, the title, and the call's state on the
   right. `↑/↓` moves a cursor between them, `enter` (or `space`) expands one: a tool call's
   locations, its diffs (`-`/`+` lines) and text output, at most 40 lines. With no cursor the

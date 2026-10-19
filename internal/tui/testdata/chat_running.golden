@@ -12,8 +12,8 @@ button now:
 
     <button type="submit">Sign in</button>
 
-- Enter submits the form.
-- The button is focusable.
+• Enter submits the form.
+• The button is focusable.
 
 › Add a test for it.
 
