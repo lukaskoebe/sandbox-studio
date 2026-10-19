@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils"
 
 /**
  * A small markdown renderer for agent messages: headings, paragraphs, lists, quotes, code
- * blocks, rules, and inline code, bold, italics and links. It builds React elements and
+ * blocks, tables, rules, and inline code, bold, italics and links. It builds React elements and
  * never HTML, so agent text can't inject markup. Anything it doesn't know stays plain text.
  */
 export function Markdown({
@@ -26,12 +26,69 @@ type Block =
   | { kind: "list"; ordered: boolean; start: number; items: string[] }
   | { kind: "quote"; text: string }
   | { kind: "rule" }
+  | { kind: "table"; align: Align[]; head: string[]; rows: string[][] }
   | { kind: "para"; text: string }
+
+type Align = "left" | "center" | "right" | undefined
 
 /** A match's groups; a group that did not take part is undefined. */
 type Groups = (string | undefined)[] & { index: number }
 
 const listItem = /^\s{0,3}(?:([-*+])|(\d{1,9})[.)])\s+(.*)$/
+
+// A table's delimiter row, as in GitHub's markdown: |---|:---:|, with at least one pipe.
+const delimiterRow = /^\s{0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/
+
+/** Whether lines[i] starts a table: a row with pipes over a delimiter row of as many cells. */
+function tableAt(lines: string[], i: number) {
+  if (i + 1 >= lines.length) return false
+  const next = lines[i + 1]
+  return (
+    lines[i].includes("|") &&
+    next.includes("|") &&
+    delimiterRow.test(next) &&
+    cells(lines[i]).length === cells(next).length
+  )
+}
+
+/**
+ * A table row's cells. \| is a pipe in a cell, and so is one inside a code span, which agents
+ * write for shell pipes; the outer pipes are optional.
+ */
+function cells(line: string, codeSpans = true): string[] {
+  let s = line.trim()
+  if (s.startsWith("|")) s = s.slice(1)
+  if (s.endsWith("|") && !s.endsWith("\\|")) s = s.slice(0, -1)
+  const out: string[] = []
+  let cell = ""
+  let ticks = 0 // the length of the open code span's backtick run
+  for (let j = 0; j < s.length; j++) {
+    const c = s[j]
+    if (c === "\\" && s[j + 1] === "|") {
+      cell += "|"
+      j++
+    } else if (c === "`" && codeSpans) {
+      let n = 1
+      while (s[j + n] === "`") n++
+      if (ticks === 0) ticks = n
+      else if (ticks === n) ticks = 0
+      cell += "`".repeat(n)
+      j += n - 1
+    } else if (c === "|" && ticks === 0) {
+      out.push(cell.trim())
+      cell = ""
+    } else cell += c
+  }
+  out.push(cell.trim())
+  // A backtick that never closes isn't a code span: split at every pipe instead.
+  return ticks && codeSpans ? cells(line, false) : out
+}
+
+function alignOf(delimiter: string): Align {
+  const left = delimiter.startsWith(":")
+  const right = delimiter.endsWith(":")
+  return left && right ? "center" : right ? "right" : left ? "left" : undefined
+}
 
 function parse(text: string): Block[] {
   const lines = text.replace(/\r\n?/g, "\n").split("\n")
@@ -71,6 +128,18 @@ function parse(text: string): Block[] {
       out.push({ kind: "quote", text: body.join("\n") })
       continue
     }
+    if (tableAt(lines, i)) {
+      const head = cells(line)
+      const align = cells(lines[i + 1]).map(alignOf)
+      const rows: string[][] = []
+      i += 2
+      while (i < lines.length && lines[i].trim() && lines[i].includes("|")) {
+        const row = cells(lines[i++])
+        rows.push(head.map((_, j) => row[j] ?? ""))
+      }
+      out.push({ kind: "table", align, head, rows })
+      continue
+    }
     const first: Groups | null = listItem.exec(line)
     if (first) {
       const ordered = first[2] !== undefined
@@ -98,7 +167,8 @@ function parse(text: string): Block[] {
       i < lines.length &&
       lines[i].trim() &&
       !/^\s{0,3}(```|~~~|#{1,6}\s|>)/.test(lines[i]) &&
-      !listItem.test(lines[i])
+      !listItem.test(lines[i]) &&
+      !tableAt(lines, i)
     )
       body.push(lines[i++])
     out.push({ kind: "para", text: body.join("\n") })
@@ -147,6 +217,8 @@ function blocks(text: string): ReactNode[] {
         )
       case "rule":
         return <hr key={i} className="border-border" />
+      case "table":
+        return <Table key={i} {...b} />
       case "para":
         return (
           <p key={i} className="whitespace-pre-wrap">
@@ -155,6 +227,49 @@ function blocks(text: string): ReactNode[] {
         )
     }
   })
+}
+
+/** A table that scrolls sideways rather than widening the chat. */
+function Table({
+  align,
+  head,
+  rows,
+}: {
+  align: Align[]
+  head: string[]
+  rows: string[][]
+}) {
+  const cell = "max-w-80 px-2.5 py-1.5 align-top"
+  return (
+    <div className="max-w-full overflow-x-auto rounded-md border">
+      <table className="min-w-full border-collapse">
+        <thead className="bg-muted/60">
+          <tr className="border-b">
+            {head.map((h, j) => (
+              <th
+                key={j}
+                className={cn(cell, "text-left font-medium")}
+                style={{ textAlign: align[j] }}
+              >
+                {inline(h)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, r) => (
+            <tr key={r} className="border-b last:border-b-0">
+              {row.map((c, j) => (
+                <td key={j} className={cell} style={{ textAlign: align[j] }}>
+                  {inline(c)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 }
 
 /** Preformatted text that scrolls sideways rather than widening the chat. */

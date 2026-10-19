@@ -17,6 +17,8 @@ const (
 	ACPGreeting = "Hello from the scripted agent. I need to run the tests first."
 	ACPTool     = "Run make test"
 	ACPDone     = "The tests passed."
+	// ACPTable follows ACPDone in the same message: a markdown table, with a pipe in a code span.
+	ACPTable = "\n\n| Package | Result |\n| --- | :---: |\n| `./... | tee` | ok |\n"
 )
 
 // acpTurns is the script of every prompt: the agent answers, asks to run a command, runs it
@@ -47,6 +49,7 @@ func acpTurns(n int) []acptest.Turn {
 			})},
 			{Update: raw(map[string]any{"sessionUpdate": "tool_call_update", "toolCallId": id, "status": "completed"})},
 			{Update: text(ACPDone)},
+			{Update: text(ACPTable)},
 		}}
 	}
 	return turns

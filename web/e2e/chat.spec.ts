@@ -36,6 +36,13 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
 
   await main.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(main).toContainText(done)
+  // The closing message's markdown table is a table.
+  const table = main.getByRole("table")
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Package",
+    "Result",
+  ])
+  await expect(table.getByRole("cell")).toHaveText(["./... | tee", "ok"])
   await expect(
     main.getByRole("button", { name: "Allow", exact: true })
   ).toHaveCount(0)
