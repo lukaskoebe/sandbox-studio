@@ -1,6 +1,9 @@
 # Changelog
 
-## v0.4.1 — 2026-10-19
+## v0.4.2 — 2026-10-19
+
+v0.4.1 was tagged but never released; this is that release, with typing after a mouse
+selection in the terminal fixed.
 
 Agents that get on with the work, a steadier chat, markdown in the TUI, a browser that stays
 the user's while they drive it, and a microsandbox database that repairs itself.
@@ -33,7 +36,7 @@ the user's while they drive it, and a microsandbox database that repairs itself.
 - **Terminal:** images pasted or dropped into the web terminal go into the sandbox, and their
   path into the terminal, so an agent such as Claude Code can read a screenshot. A mouse
   selection is copied when you let go and stays where it was, instead of clearing and
-  jumping to the bottom; a click clears it.
+  jumping to the bottom; a click clears it, and typing goes to the shell as before.
 - **Memory:** a one-off answer, such as "defer" to a question about one fix, no longer
   becomes a standing preference. Each fact records how far it reaches (general, a project or
   the task) and the question it answered. The embedding model says why it can't start, in
