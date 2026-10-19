@@ -266,6 +266,25 @@ test("a throwaway session is a tab, and closing the tab ends it", async ({
     .toEqual([])
 })
 
+test("a tab with a long host keeps its label inside the tab", async ({
+  page,
+  api,
+  env,
+}) => {
+  const { call } = await browsing(page, api, env)
+  const host = `${"subdomain".repeat(5)}.${"label".repeat(10)}.example.org`
+  await call("browser_open", { url: `https://${host}/`, ephemeral: true })
+  const tab = page.getByRole("tab", { name: host })
+  await expect(tab).toBeVisible()
+  const sticking = await tab.evaluate((button) => {
+    const box = button.parentElement!.getBoundingClientRect()
+    return [...button.querySelectorAll("span")]
+      .map((s) => s.getBoundingClientRect())
+      .filter((r) => r.right > box.right + 1).length
+  })
+  expect(sticking).toBe(0)
+})
+
 // Stealth mode is switched in the teammate's settings, and the browser's next command runs
 // with it.
 test("stealth mode is switched in the settings and reaches the browser", async ({

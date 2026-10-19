@@ -670,7 +670,7 @@ function TabStrip({ w }: { w: Win }) {
           <span className="flex size-4 shrink-0 items-center justify-center">
             {icon}
           </span>
-          <span className="truncate">{tabLabel(url)}</span>
+          <span className="min-w-0 truncate">{tabLabel(url)}</span>
           {extra}
           {!active && waiting(id) && (
             <span
@@ -716,7 +716,7 @@ function TabStrip({ w }: { w: Win }) {
           w.sessionID === s.id ? w.pageURL : s.url,
           `A throwaway session an agent in ${s.sandbox} opened: a temporary profile that is gone when it closes`,
           w.size === "full" && (
-            <span className="ml-auto shrink-0 font-mono text-[0.625rem] text-muted-foreground">
+            <span className="ml-auto max-w-[45%] min-w-0 shrink-0 truncate font-mono text-[0.625rem] text-muted-foreground">
               {s.sandbox}
             </span>
           )

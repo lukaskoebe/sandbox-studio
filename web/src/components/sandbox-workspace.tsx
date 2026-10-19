@@ -407,7 +407,7 @@ export function SandboxWorkspace({
                     {t.kind === "chat" && (
                       <ChatTabIcon chat={chatOf(t.id)} seen={seen} on={on} />
                     )}
-                    <span className="truncate">{label}</span>
+                    <span className="min-w-0 truncate">{label}</span>
                   </button>
                   <button
                     type="button"

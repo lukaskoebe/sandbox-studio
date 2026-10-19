@@ -213,7 +213,7 @@ function Activity({
                       aria-label="Throwaway session"
                     />
                   )}
-                  <span className="truncate">
+                  <span className="min-w-0 truncate">
                     {hostOf([...run.steps].reverse().find((a) => a.url)?.url) ||
                       "Browser session"}
                   </span>
