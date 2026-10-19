@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.4.1 — 2026-10-19
+
+Agents that get on with the work, a steadier chat, markdown in the TUI, a browser that stays
+the user's while they drive it, and a microsandbox database that repairs itself.
+
+- **Teammates:** the default soul has a teammate work on its own in its sandbox: it reads,
+  runs, edits and installs what the work needs without asking, and checks with the user only
+  before something outside the sandbox that can't be undone, such as a force-push or sending
+  something. Teammates that kept the old default get the new one. Claude chats run in
+  `bypassPermissions` mode, as in the terminal; questions such as AskUserQuestion still come
+  to the user.
+- **Chat:** a sent message shows in the chat at once and goes back into the box if it
+  couldn't be sent. A new chat started from a sandbox's workspace opens in its chat tab instead
+  of falling back to the terminal. Stopping a message while its agent starts now
+  holds, tool calls still open when a turn ends show as stopped, and a prompt that waits in
+  the queue says why it couldn't go. An agent idle for 30 minutes stops, and a fifth chat in a
+  sandbox takes the place of the one idle longest; the next message resumes it. Large
+  prompts with attachments get through to Claude.
+- **Chat:** markdown tables render in the web chat, with their alignment and pipes inside
+  code spans.
+- **Terminal UI:** chats render markdown as the web does: headings, bold, italics, inline
+  code, links with their address, nested lists, quotes, rules, code blocks, and tables
+  boxed to the terminal's width.
+- **Browser:** while the user drives the browser, agents can neither use it nor see it, and
+  their paused calls tell them the user still has control. The new `browser_request_control`
+  tool asks for it back: a notification, and a Handback card on the Browser page and in the
+  TUI with Hand back and Keep driving. After a handback agents hear how long the user drove
+  and where the page is now; the pages the user visited stay private unless the teammate's
+  new **Tell agents where you browsed** setting is on.
+- **Browser:** a long tab label stays inside its tab.
+- **Terminal:** images pasted or dropped into the web terminal go into the sandbox, and their
+  path into the terminal, so an agent such as Claude Code can read a screenshot. A mouse
+  selection is copied when you let go and stays where it was, instead of clearing and
+  jumping to the bottom; a click clears it.
+- **Memory:** a one-off answer, such as "defer" to a question about one fix, no longer
+  becomes a standing preference. Each fact records how far it reaches (general, a project or
+  the task) and the question it answered. The embedding model says why it can't start, in
+  the log and in `studio doctor`; on NixOS it needs `programs.nix-ld` with libstdc++ and
+  libgomp, and `STUDIO_LLAMA_LIB` loads a system llama.cpp instead.
+- **Sandboxes:** Studio checks microsandbox's own database when it starts. A damaged one is
+  moved aside, never deleted, and rebuilt from the rows that still read, and the checkpoints
+  on disk are indexed again. `studio doctor` fails for a damaged database and for one a newer
+  msb migrated, with the fix, and errors from the database say what to do instead of a bare
+  SQLite message.
+
 ## v0.4.0 — 2026-10-19
 
 One look everywhere: the TUI's style in the web app, the docs and the videos. A TUI Home of
