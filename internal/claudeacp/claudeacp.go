@@ -70,15 +70,12 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, opts Options) error
 	defer a.shutdown()
 	done := make(chan error, 1)
 	go func() {
-		sc := bufio.NewScanner(in)
-		sc.Buffer(make([]byte, 64<<10), acp.MaxLine)
-		for sc.Scan() {
+		done <- eachLine(in, func(line []byte) {
 			var m rpcMessage
-			if json.Unmarshal(sc.Bytes(), &m) == nil {
+			if json.Unmarshal(line, &m) == nil {
 				a.dispatch(m)
 			}
-		}
-		done <- sc.Err()
+		})
 	}()
 	select {
 	case err := <-done:
@@ -513,15 +510,12 @@ func (s *session) start() (*process, error) {
 
 // read maps the process's output until it ends, then reaps the process and ends its turn.
 func (s *session) read(p *process, out io.Reader) {
-	sc := bufio.NewScanner(out)
-	sc.Buffer(make([]byte, 64<<10), acp.MaxLine)
-	for sc.Scan() {
+	readErr := eachLine(out, func(line []byte) {
 		var m streamMessage
-		if json.Unmarshal(sc.Bytes(), &m) == nil {
+		if json.Unmarshal(line, &m) == nil {
 			s.handle(p, m)
 		}
-	}
-	readErr := sc.Err()
+	})
 	if readErr != nil {
 		_, _ = io.Copy(io.Discard, out) // let the process finish writing
 	}
@@ -531,6 +525,28 @@ func (s *session) read(p *process, out io.Reader) {
 	}
 	s.exited(p, err)
 	close(p.exited)
+}
+
+// maxLine bounds a line the shim reads: a prompt from the host carries its attachments, up
+// to 15 MiB through the API, and Claude Code's output can hold a large tool result.
+const maxLine = 32 << 20
+
+// eachLine calls fn with each line of r until r ends, which is a nil error. A line over
+// maxLine is skipped: one message lost, rather than every message after it.
+func eachLine(r io.Reader, fn func(line []byte)) error {
+	br := bufio.NewReaderSize(r, 64<<10)
+	for {
+		line, err := acp.ReadLine(br, maxLine)
+		switch {
+		case errors.Is(err, acp.ErrLineTooLong):
+		case errors.Is(err, io.EOF):
+			return nil
+		case err != nil:
+			return err
+		default:
+			fn(line)
+		}
+	}
 }
 
 // handle maps one message of the process to updates and, for its result, ends the turn.

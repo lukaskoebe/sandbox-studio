@@ -219,8 +219,9 @@ export function useChat(env: string, chatId: string | undefined) {
     }
   }, [env, chatId])
 
-  // A chat followed on a page in view is seen (lib/chat-seen.ts), up to its last change.
-  const seenRev = state.chat ? state.rev : undefined
+  // A chat followed on a page in view is seen (lib/chat-seen.ts), up to its last change. Right
+  // after a switch to another chat, the state is still the last chat's.
+  const seenRev = state.chat?.id === chatId ? state.rev : undefined
   useEffect(() => {
     if (!chatId || seenRev === undefined) return
     const mark = () => {

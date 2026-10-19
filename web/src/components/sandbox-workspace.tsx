@@ -197,12 +197,19 @@ export function SandboxWorkspace({
   }, [view, chats.data, picked])
 
   useEffect(() => saveOpenChats(sb.id, chatIds), [sb.id, chatIds])
-  // A deleted chat leaves the tabs.
+  // A deleted chat leaves the tabs. A chat a link just opened may be newer than the list,
+  // which is still the cached one right after the chat was created, so it stays until the
+  // list has shown it once.
+  const unlisted = useRef(new Set(search.chat ? [search.chat] : []))
+  useEffect(() => {
+    if (search.chat) unlisted.current.add(search.chat)
+  }, [search.chat])
   useEffect(() => {
     if (!chats.data) return
     const ids = new Set(chats.data.map((c) => c.id))
+    for (const id of ids) unlisted.current.delete(id)
     setChatIds((prev) => {
-      const kept = prev.filter((id) => ids.has(id))
+      const kept = prev.filter((id) => ids.has(id) || unlisted.current.has(id))
       return kept.length === prev.length ? prev : kept
     })
   }, [chats.data])

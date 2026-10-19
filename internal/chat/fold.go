@@ -69,14 +69,25 @@ func (f *folder) close() []change {
 	return []change{{e: e, ended: true}}
 }
 
-// finish ends every entry, at the end of the turn.
+// finish ends every entry, at the end of the turn. A tool call still open then never
+// finished: it is stopped.
 func (f *folder) finish() []change {
 	f.open = nil
 	out := make([]change, 0, len(f.entries))
 	for _, e := range f.entries {
+		if b, ok := e.body.(*ToolBody); ok && toolOpen(b.Status) {
+			b.Status, e.status, e.dirty = ToolStopped, ToolStopped, true
+		}
 		out = append(out, change{e: e, ended: true})
 	}
 	return out
+}
+
+// ToolStopped is the status of a tool call whose turn ended before it did.
+const ToolStopped = "stopped"
+
+func toolOpen(status string) bool {
+	return status == "" || status == "pending" || status == "in_progress"
 }
 
 // apply folds one update and reports the entries it changed.

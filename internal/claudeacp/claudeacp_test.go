@@ -669,3 +669,17 @@ func TestClaudeContentMapsAttachments(t *testing.T) {
 		t.Errorf("an SVG went to the API as an image: %s", s)
 	}
 }
+
+// A prompt with attachments near the API's limit gets through, and a line over maxLine is
+// skipped without losing the lines after it.
+func TestEachLineTakesLargePromptsAndSkipsHugeLines(t *testing.T) {
+	big := strings.Repeat("a", 15<<20)
+	huge := strings.Repeat("b", maxLine+1)
+	var got []int
+	err := eachLine(strings.NewReader("one\n"+big+"\n"+huge+"\nlast\n"), func(line []byte) {
+		got = append(got, len(line))
+	})
+	if err != nil || len(got) != 3 || got[0] != 4 || got[1] != len(big)+1 || got[2] != 5 {
+		t.Fatalf("lines %v, err %v; want one, the big one and last", got, err)
+	}
+}

@@ -157,8 +157,8 @@ func (c *Conn) shutdown(err error) {
 func (c *Conn) read() {
 	br := bufio.NewReaderSize(c.rwc, 64<<10)
 	for {
-		line, err := readLine(br, MaxLine)
-		if errors.Is(err, errLineTooLong) {
+		line, err := ReadLine(br, MaxLine)
+		if errors.Is(err, ErrLineTooLong) {
 			continue
 		}
 		if err != nil {
@@ -194,11 +194,12 @@ func (c *Conn) read() {
 	}
 }
 
-var errLineTooLong = errors.New("line too long")
+// ErrLineTooLong is ReadLine's error for a line over its limit, which it skipped.
+var ErrLineTooLong = errors.New("line too long")
 
-// readLine reads one line of at most max bytes; a longer one is read to its end and
+// ReadLine reads one line of at most max bytes; a longer one is read to its end and
 // dropped.
-func readLine(br *bufio.Reader, max int) ([]byte, error) {
+func ReadLine(br *bufio.Reader, max int) ([]byte, error) {
 	var line []byte
 	for {
 		chunk, err := br.ReadSlice('\n')
@@ -209,7 +210,7 @@ func readLine(br *bufio.Reader, max int) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			return nil, errLineTooLong
+			return nil, ErrLineTooLong
 		}
 		line = append(line, chunk...)
 		if err == nil {

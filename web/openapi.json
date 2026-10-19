@@ -5112,6 +5112,10 @@
               "null"
             ]
           },
+          "error": {
+            "description": "Why it couldn't go when the turn before it ended; it waits until the next message",
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -7172,11 +7176,13 @@
             ]
           },
           "status": {
+            "description": "stopped: the turn ended before the call did",
             "enum": [
               "pending",
               "in_progress",
               "completed",
-              "failed"
+              "failed",
+              "stopped"
             ],
             "type": "string"
           },

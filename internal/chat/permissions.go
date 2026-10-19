@@ -975,13 +975,22 @@ func (s *Service) recoverApprovals(ctx context.Context) error {
 	}
 }
 
-// settleOpenItems marks a turn's pending permissions and questions cancelled.
+// settleOpenItems marks a turn's pending permissions and questions cancelled, and its open
+// tool calls stopped.
 func (s *Service) settleOpenItems(ctx context.Context, chatID, turnID string) error {
 	items, err := s.Store.ChatItems(ctx, chatID, turnID)
 	if err != nil {
 		return err
 	}
 	for _, it := range items {
+		if tool := ItemView(it).Tool; it.Kind == KindTool && tool != nil && toolOpen(tool.Status) {
+			tool.Status, it.Status = ToolStopped, ToolStopped
+			it.Body = encodeBody(tool)
+			if _, err := s.Store.UpdateChatItem(ctx, it); err != nil {
+				return err
+			}
+			continue
+		}
 		if it.Status == StatusPending && (it.Kind == KindPermission || it.Kind == KindQuestion) {
 			it.Status = StatusCancelled
 			if it.Kind == KindQuestion {

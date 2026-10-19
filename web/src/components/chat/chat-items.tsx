@@ -10,6 +10,7 @@ import {
   WarningIcon,
   type Icon,
 } from "@phosphor-icons/react"
+import type { Prompt } from "@/components/chat/composer"
 import { Markdown } from "@/components/chat/markdown"
 import { PermissionCard } from "@/components/chat/permission-card"
 import { PlanCard } from "@/components/chat/plan-card"
@@ -139,8 +140,30 @@ export function ChatItemView({
 }
 
 function UserMessage({ item }: { item: ChatItem }) {
-  const u = item.user
-  if (!u) return null
+  return item.user ? <UserBubble u={item.user} /> : null
+}
+
+/**
+ * A message the user just sent, shown until the chat's log has it, so it leaves the composer
+ * at once even while the agent takes a moment to start.
+ */
+export function SendingMessage({ prompt }: { prompt: Prompt }) {
+  const attachments = (prompt.attachments ?? []).map((a) => ({
+    name: a.name,
+    mimeType: a.mimeType ?? "",
+    size: Math.floor((a.data.length * 3) / 4), // base64
+  }))
+  return (
+    <div className="grid justify-items-end gap-1">
+      <UserBubble u={{ text: prompt.text ?? "", attachments }} />
+      <span className="shimmer text-[0.625rem] text-muted-foreground">
+        Sending…
+      </span>
+    </div>
+  )
+}
+
+function UserBubble({ u }: { u: NonNullable<ChatItem["user"]> }) {
   return (
     <Message align="end">
       <MessageContent>

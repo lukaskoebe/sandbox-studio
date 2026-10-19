@@ -138,7 +138,7 @@ func TestTerminalRewrittenHistory(t *testing.T) {
 }
 
 func TestTerminalSessionGone(t *testing.T) {
-	f := newFixture(t, &acptest.Agent{})
+	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{Steps: steps(chunk(agentChunk, "Hi"))}}})
 	ctx := context.Background()
 	env := f.sb.EnvironmentID
 	f.wait(t, f.send(t, "one").ID)

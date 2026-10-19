@@ -781,6 +781,8 @@ func (m *app) toolDot(status string) string {
 		return m.pal.dot("running")
 	case "failed":
 		return m.pal.dot("failed")
+	case "stopped":
+		return m.pal.dot("stopped")
 	}
 	return m.pal.dot("waiting")
 }
@@ -794,6 +796,8 @@ func toolStatus(status string) string {
 		return "done"
 	case "failed":
 		return "failed"
+	case "stopped":
+		return "stopped"
 	}
 	return "waiting"
 }

@@ -38,6 +38,9 @@ var (
 	flushEvery   = 250 * time.Millisecond // how often a streaming item is written
 	cancelGrace  = 10 * time.Second       // how long a cancelled turn may take to end
 	startTimeout = 90 * time.Second       // starting the agent and its session
+	idleTimeout  = 30 * time.Minute       // how long an agent runs on with no turn
+	slotRetry    = 250 * time.Millisecond // how often a start looks for a free slot
+	slotWait     = 7 * time.Second        // how long a retired agent's slot may take to free
 )
 
 // Conflict is a request the chat's state refuses; the API answers 409 with its text.
@@ -48,6 +51,9 @@ func (Conflict) Is(target error) bool { return target == store.ErrConflict }
 
 // ErrBusy refuses a prompt while the agent works on the last one.
 var ErrBusy = Conflict("the agent is still working on the last request; stop it first")
+
+// ErrStopped is Send's error when the user stopped the message while its agent started.
+var ErrStopped = Conflict("stopped before the agent started on it")
 
 // ErrInvalid marks a prompt the agent can't take.
 var ErrInvalid = errors.New("invalid prompt")
@@ -99,6 +105,12 @@ type Service struct {
 	live  map[string]*live
 	watch map[string]map[chan struct{}]struct{}
 	queue map[string][]queuedPrompt // chat ID → prompts that wait for its running turn, see Queue
+	// draining holds the chats whose queue sendQueued sends now, and whether it was
+	// asked to look again.
+	draining map[string]bool
+	// stops holds the chats whose message Send starts, and whether the user stopped it
+	// before its turn existed.
+	stops map[string]bool
 }
 
 // queuedPrompt is a prompt that waits for its chat to become idle.
@@ -116,6 +128,7 @@ type QueuedPrompt struct {
 	Text        string    `json:"text"`
 	Attachments []string  `json:"attachments,omitempty" doc:"The names of its files"`
 	QueuedAt    time.Time `json:"queuedAt"`
+	Error       string    `json:"error,omitempty" doc:"Why it couldn't go when the turn before it ended; it waits until the next message"`
 }
 
 func (s *Service) log() *slog.Logger {
@@ -247,9 +260,6 @@ func (s *Service) Delete(ctx context.Context, envID, chatID string) error {
 	if err != nil {
 		return err
 	}
-	if l := s.get(chatID); l != nil {
-		l.shutdown(ctx)
-	}
 	if c.State == store.ChatTerminal {
 		if err := s.killTUI(ctx, c); err != nil {
 			s.log().Debug("chat: end the terminal of a deleted chat", "chat", chatID, "err", err)
@@ -257,6 +267,10 @@ func (s *Service) Delete(ctx context.Context, envID, chatID string) error {
 	}
 	if err := s.Store.DeleteChat(ctx, envID, chatID); err != nil {
 		return err
+	}
+	// After the chat is gone, so an agent still starting finds it gone (startAgent) or is here.
+	if l := s.get(chatID); l != nil {
+		l.shutdown(ctx)
 	}
 	s.mu.Lock()
 	delete(s.queue, chatID)
@@ -344,7 +358,16 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 	if c, err = s.lock(ctx, c, store.ChatRunning); err != nil {
 		return store.ChatTurn{}, err
 	}
+	s.mu.Lock()
+	if s.stops == nil {
+		s.stops = map[string]bool{}
+	}
+	s.stops[c.ID] = false
+	s.mu.Unlock()
 	l, err := s.ensure(ctx, c, launch)
+	if err == nil && s.stopped(c.ID) {
+		err = ErrStopped
+	}
 	if err == nil {
 		var blocks []acp.ContentBlock
 		var atts []Attachment
@@ -355,6 +378,7 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 			}
 		}
 	}
+	s.started(c.ID)
 	s.unlock(c, store.ChatRunning)
 	return store.ChatTurn{}, err
 }
@@ -369,6 +393,7 @@ func (s *Service) Queue(ctx context.Context, envID, chatID string, launch Launch
 
 // Enqueue is Queue that also returns the waiting prompt as the chat shows it, when it waits.
 func (s *Service) Enqueue(ctx context.Context, envID, chatID string, launch Launch, p Prompt, sent func()) (QueuedPrompt, bool, error) {
+	s.retryQueue(envID, chatID)
 	if _, err := s.Send(ctx, envID, chatID, launch, p); !errors.Is(err, ErrBusy) {
 		if err == nil && sent != nil {
 			sent()
@@ -393,6 +418,22 @@ func (s *Service) Enqueue(ctx context.Context, envID, chatID string, launch Laun
 	return view, true, nil
 }
 
+// retryQueue clears the reason a waiting prompt couldn't go, so the queue goes on once the
+// chat is idle: the user sends another message.
+func (s *Service) retryQueue(envID, chatID string) {
+	s.mu.Lock()
+	list := slices.Clone(s.queue[chatID])
+	failed := len(list) > 0 && list[0].view.Error != ""
+	if failed {
+		list[0].view.Error = ""
+		s.queue[chatID] = list
+	}
+	s.mu.Unlock()
+	if failed {
+		s.changed(envID, chatID, false)
+	}
+}
+
 // Queued returns the prompts waiting for the chat's running turn, in the order they go.
 func (s *Service) Queued(chatID string) []QueuedPrompt {
 	s.mu.Lock()
@@ -414,53 +455,78 @@ func (s *Service) Unqueue(envID, chatID, id string) error {
 		s.mu.Unlock()
 		return store.ErrNotFound
 	}
-	list = slices.Delete(slices.Clone(list), i, i+1)
-	if len(list) == 0 {
-		delete(s.queue, chatID)
-	} else {
-		s.queue[chatID] = list
-	}
+	s.setQueue(chatID, slices.Delete(slices.Clone(list), i, i+1))
 	s.mu.Unlock()
 	s.changed(envID, chatID, false)
 	return nil
 }
 
-// sendQueued sends the chat's next waiting prompt. A chat that went busy again keeps it; one
-// that can't take prompts anymore drops its queue.
+// sendQueued sends the chat's waiting prompts, one turn each, while it is idle. Only one
+// call sends at a time; one that comes in meanwhile has the sender look again.
 func (s *Service) sendQueued(chatID string) {
 	s.mu.Lock()
+	if s.draining == nil {
+		s.draining = map[string]bool{}
+	}
+	if _, ok := s.draining[chatID]; ok {
+		s.draining[chatID] = true
+		s.mu.Unlock()
+		return
+	}
+	for {
+		s.draining[chatID] = false
+		s.mu.Unlock()
+		s.sendNext(chatID)
+		s.mu.Lock()
+		if !s.draining[chatID] {
+			delete(s.draining, chatID)
+			s.mu.Unlock()
+			return
+		}
+	}
+}
+
+// sendNext sends the chat's first waiting prompt. A prompt that can't go stays first with
+// the reason, and the queue waits until the user sends or queues another message.
+func (s *Service) sendNext(chatID string) {
+	s.mu.Lock()
 	list := s.queue[chatID]
-	if len(list) == 0 {
+	if len(list) == 0 || list[0].view.Error != "" {
 		s.mu.Unlock()
 		return
 	}
 	q := list[0]
-	if len(list) == 1 {
-		delete(s.queue, chatID)
-	} else {
-		s.queue[chatID] = list[1:]
-	}
 	s.mu.Unlock()
 	_, err := s.Send(context.Background(), q.envID, chatID, q.launch, q.p)
-	switch {
-	case err == nil:
-		if q.sent != nil {
-			q.sent()
+	if errors.Is(err, ErrBusy) {
+		return // it goes when the turn that runs now ends
+	}
+	s.mu.Lock()
+	list = slices.Clone(s.queue[chatID])
+	if i := slices.IndexFunc(list, func(w queuedPrompt) bool { return w.view.ID == q.view.ID }); i >= 0 {
+		if err == nil {
+			list = slices.Delete(list, i, i+1)
+		} else {
+			list[i].view.Error = clip(err.Error(), 500)
 		}
-	case errors.Is(err, ErrBusy):
-		s.mu.Lock()
-		if s.queue == nil {
-			s.queue = map[string][]queuedPrompt{}
-		}
-		s.queue[chatID] = append([]queuedPrompt{q}, s.queue[chatID]...)
-		s.mu.Unlock()
-	default:
-		s.mu.Lock()
-		delete(s.queue, chatID)
-		s.mu.Unlock()
+		s.setQueue(chatID, list)
+	}
+	s.mu.Unlock()
+	if err != nil {
 		s.log().Warn("chat: send a queued prompt", "chat", chatID, "err", err)
+	} else if q.sent != nil {
+		q.sent()
 	}
 	s.changed(q.envID, chatID, false)
+}
+
+// setQueue replaces the chat's queue. s.mu is held.
+func (s *Service) setQueue(chatID string, list []queuedPrompt) {
+	if len(list) == 0 {
+		delete(s.queue, chatID)
+	} else {
+		s.queue[chatID] = list
+	}
 }
 
 // lock moves an idle chat to state, or explains why it can't.
@@ -504,17 +570,20 @@ func stateConflict(state string) error {
 
 // live is a chat's running agent.
 type live struct {
-	s       *Service
-	envID   string
-	chatID  string
-	conn    *acp.Conn
-	caps    acp.AgentCapabilities
-	session string
+	s         *Service
+	envID     string
+	chatID    string
+	sandboxID string
+	conn      *acp.Conn
+	caps      acp.AgentCapabilities
+	session   string
 
 	mu     sync.Mutex
 	turn   *run    // the running turn
 	replay *folder // collects session/load's replay
 	asks   map[string]*ask
+	used   time.Time   // when the last turn started or ended
+	idle   *time.Timer // retires the agent after idleTimeout without a turn
 }
 
 // run is a running turn.
@@ -524,6 +593,7 @@ type run struct {
 	cancelled  bool
 	ended      bool
 	promptSent chan struct{} // closed after session/prompt is written
+	answered   chan struct{} // closed once the prompt's response or error arrived
 	done       chan struct{}
 }
 
@@ -559,7 +629,7 @@ func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, r
 	if err := s.Guest.WriteHomeFiles(ctx, c.SandboxID, launch.Files); err != nil {
 		return nil, nil, fmt.Errorf("writing the harness config: %w", err)
 	}
-	rwc, err := s.Guest.OpenACP(ctx, c.SandboxID, agentproto.StartACP{Chat: c.ID, Harness: h.Name(), Command: launch.Command, Env: launch.Env})
+	rwc, err := s.openACP(ctx, c, agentproto.StartACP{Chat: c.ID, Harness: h.Name(), Command: launch.Command, Env: launch.Env})
 	var he agentchan.HarnessError
 	if errors.As(err, &he) {
 		return nil, nil, Conflict(he.Error())
@@ -567,7 +637,7 @@ func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, r
 	if err != nil {
 		return nil, nil, fmt.Errorf("starting %s's chat agent: %w", h.Name(), err)
 	}
-	l := &live{s: s, envID: c.EnvironmentID, chatID: c.ID, asks: map[string]*ask{}}
+	l := &live{s: s, envID: c.EnvironmentID, chatID: c.ID, sandboxID: c.SandboxID, asks: map[string]*ask{}, used: time.Now()}
 	l.conn = acp.NewConn(rwc, l)
 	replay, err := l.open(ctx, c, h.ACPMCPServers(), reload)
 	if err != nil {
@@ -583,11 +653,117 @@ func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, r
 	}
 	s.live[c.ID] = l
 	s.mu.Unlock()
+	// A chat deleted while its agent started doesn't keep it (see Delete).
+	if _, err := s.Store.Chat(ctx, c.EnvironmentID, c.ID); errors.Is(err, store.ErrNotFound) {
+		l.conn.Close()
+		s.forgetLive(l)
+		return nil, nil, err
+	}
+	l.mu.Lock()
+	l.rest()
+	l.mu.Unlock()
 	go func() {
 		<-l.conn.Done()
+		l.mu.Lock()
+		l.idle.Stop()
+		l.mu.Unlock()
 		s.forgetLive(l)
 	}()
 	return l, replay, nil
+}
+
+// openACP starts the chat's agent in the guest. A sandbox runs agentproto.MaxACPProcesses
+// agents at most; when it has no room, the agents of other chats that sat idle longest are
+// retired, and their sessions resume with the next message.
+func (s *Service) openACP(ctx context.Context, c store.Chat, req agentproto.StartACP) (io.ReadWriteCloser, error) {
+	var retired time.Time
+	for {
+		rwc, err := s.Guest.OpenACP(ctx, c.SandboxID, req)
+		if !errors.Is(err, agentchan.ErrACPFull) {
+			return rwc, err
+		}
+		// A retired agent's slot frees once its process exited, a moment after its stream:
+		// wait for that rather than retire another.
+		if time.Since(retired) > slotWait {
+			if !s.makeRoom(c) {
+				return nil, Conflict(fmt.Sprintf("this sandbox already runs %d chats that are busy; wait for one to finish or stop it", agentproto.MaxACPProcesses))
+			}
+			retired = time.Now()
+		}
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("waiting for another chat's agent to stop: %w", ctx.Err())
+		case <-time.After(slotRetry):
+		}
+	}
+}
+
+// makeRoom retires the idle agent that was used longest ago among the other chats of c's
+// sandbox, and says whether there was one.
+func (s *Service) makeRoom(c store.Chat) bool {
+	s.mu.Lock()
+	var others []*live
+	for _, l := range s.live {
+		if l.sandboxID == c.SandboxID && l.chatID != c.ID {
+			others = append(others, l)
+		}
+	}
+	s.mu.Unlock()
+	slices.SortFunc(others, func(a, b *live) int { return a.lastUsed().Compare(b.lastUsed()) })
+	for _, l := range others {
+		if s.retire(l) {
+			return true
+		}
+	}
+	return false
+}
+
+// retire stops l if its chat is idle and its agent waits on nothing. The chat is held
+// running meanwhile, so no turn starts on the agent going away: a message sent then waits
+// in the queue, and goes once the chat is idle again.
+func (s *Service) retire(l *live) bool {
+	ctx := context.Background()
+	if !l.resting() {
+		return false
+	}
+	if _, err := s.Store.SetChatState(ctx, l.envID, l.chatID, store.ChatRunning, store.ChatIdle); err != nil {
+		return false
+	}
+	defer func() {
+		if _, err := s.Store.SetChatState(ctx, l.envID, l.chatID, store.ChatIdle, store.ChatRunning); err == nil {
+			go s.sendQueued(l.chatID)
+		}
+	}()
+	// A turn starts only with the chat held, so with it held now l stays as it is.
+	if !l.resting() {
+		return false
+	}
+	s.log().Debug("chat: retire an idle agent", "chat", l.chatID)
+	l.shutdown(ctx)
+	return true
+}
+
+// resting says whether l runs no turn and waits on no answer.
+func (l *live) resting() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.turn == nil && l.replay == nil && len(l.asks) == 0
+}
+
+func (l *live) lastUsed() time.Time {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.used
+}
+
+// rest notes that l's turn ended, or it just started, and retires it after idleTimeout
+// with no other turn. l.mu is held.
+func (l *live) rest() {
+	l.used = time.Now()
+	if l.idle != nil {
+		l.idle.Stop()
+	}
+	l.idle = time.AfterFunc(idleTimeout, func() { l.s.retire(l) })
 }
 
 // open initializes the agent and creates or reattaches the chat's session: with
@@ -599,13 +775,16 @@ func (l *live) open(ctx context.Context, c store.Chat, servers []acp.MCPServer, 
 		return nil, fmt.Errorf("initialize: %w", err)
 	}
 	l.caps = init.AgentCapabilities
-	if c.ACPSessionID == "" {
+	newSession := func() (*folder, error) {
 		id, err := l.conn.NewSession(ctx, Workdir, servers)
 		if err != nil {
 			return nil, fmt.Errorf("new session: %w", err)
 		}
 		l.session = id
 		return nil, l.s.Store.SetChatSession(ctx, c.ID, id)
+	}
+	if c.ACPSessionID == "" {
+		return newSession()
 	}
 	l.session = c.ACPSessionID
 	var replay *folder
@@ -618,6 +797,11 @@ func (l *live) open(ctx context.Context, c store.Chat, servers []acp.MCPServer, 
 		err = &acp.Error{Message: "the agent can resume no sessions"}
 	}
 	var ae *acp.Error
+	if errors.As(err, &ae) && !l.s.answered(ctx, c) {
+		// The agent never kept a session it didn't answer in, such as one whose first
+		// message was stopped: nothing is lost by starting over.
+		return newSession()
+	}
 	if errors.As(err, &ae) {
 		l.s.orphan(c)
 		return nil, Conflict("the agent's session of this chat is gone (" + ae.Message + "); start a new chat")
@@ -641,6 +825,22 @@ func (l *live) load(ctx context.Context, servers []acp.MCPServer) (*folder, erro
 	l.mu.Unlock()
 	f.close()
 	return f, err
+}
+
+// answered says whether the agent wrote anything in the chat, which its session would hold:
+// an answer, or a turn in the terminal. It errs towards yes.
+func (s *Service) answered(ctx context.Context, c store.Chat) bool {
+	turns, err := s.Store.ChatTurns(ctx, c.ID)
+	if err != nil || slices.ContainsFunc(turns, func(t store.ChatTurn) bool { return t.Origin == store.OriginTerminal }) {
+		return true
+	}
+	items, err := s.Store.ChatItems(ctx, c.ID, "")
+	if err != nil {
+		return true
+	}
+	return slices.ContainsFunc(items, func(it store.ChatItem) bool {
+		return it.Kind == KindAgent || it.Kind == KindThought || it.Kind == KindTool || it.Kind == KindPlan
+	})
 }
 
 // orphan marks a chat whose session is gone; it stays readable.
@@ -779,9 +979,11 @@ func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Atta
 		return t, err
 	}
 	t = l.s.snapshot(ctx, c, t)
-	r := &run{turn: t, f: newFolder(store.NewID), promptSent: make(chan struct{}), done: make(chan struct{})}
+	r := &run{turn: t, f: newFolder(store.NewID), promptSent: make(chan struct{}), answered: make(chan struct{}), done: make(chan struct{})}
 	l.mu.Lock()
 	l.turn = r
+	l.used = time.Now()
+	l.idle.Stop()
 	_, ch := r.f.add(KindUser, &UserBody{Text: text, Attachments: atts})
 	l.write(r, ch)
 	l.mu.Unlock()
@@ -790,8 +992,13 @@ func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Atta
 	}
 	// Publish the turn before writing so early updates are retained. Cancel waits on
 	// promptSent, which preserves wire order without holding l.mu during the write.
+	// A stop that came while the turn started, after Send looked (see Cancel).
+	stop := l.s.started(c.ID)
 	prompt, err := l.conn.StartPrompt(context.Background(), l.session, blocks)
 	close(r.promptSent)
+	if stop {
+		go func() { _ = l.s.Cancel(context.Background(), c.EnvironmentID, c.ID) }()
+	}
 	if err != nil {
 		go l.end(r, acp.PromptResponse{}, err)
 	} else {
@@ -848,6 +1055,7 @@ func (l *live) run(r *run, prompt <-chan acp.PromptResult) {
 // end closes the turn: the last writes, a marker saying why it stopped, the usage.
 func (l *live) end(r *run, resp acp.PromptResponse, err error) {
 	ctx := context.Background()
+	close(r.answered)
 	l.mu.Lock()
 	r.ended = true
 	l.mu.Unlock()
@@ -886,6 +1094,7 @@ func (l *live) end(r *run, resp acp.PromptResponse, err error) {
 	}
 	title := r.f.title
 	l.turn = nil
+	l.rest()
 	l.mu.Unlock()
 
 	c, cerr := l.s.Store.Chat(ctx, l.envID, l.chatID)
@@ -900,6 +1109,22 @@ func (l *live) end(r *run, resp acp.PromptResponse, err error) {
 	l.s.retitle(c, title)
 	l.s.unlock(c, store.ChatRunning)
 	close(r.done)
+}
+
+// stopped says whether the user stopped the message Send is starting.
+func (s *Service) stopped(chatID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stops[chatID]
+}
+
+// started ends Send's start of the chat's message, and says whether the user stopped it.
+func (s *Service) started(chatID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stop := s.stops[chatID]
+	delete(s.stops, chatID)
+	return stop
 }
 
 func isClosed(c *acp.Conn) bool {
@@ -918,6 +1143,13 @@ func (s *Service) Cancel(ctx context.Context, envID, chatID string) error {
 	if _, err := s.Store.Chat(ctx, envID, chatID); err != nil {
 		return err
 	}
+	// A message whose agent still starts has no turn yet: Send stops it before it goes, or
+	// start once its turn exists. The note goes first, so one of the two sees the other.
+	s.mu.Lock()
+	if _, starting := s.stops[chatID]; starting {
+		s.stops[chatID] = true
+	}
+	s.mu.Unlock()
 	l := s.get(chatID)
 	if l == nil {
 		return nil
@@ -942,7 +1174,7 @@ func (s *Service) Cancel(ctx context.Context, envID, chatID string) error {
 	grace := cancelGrace
 	go func() {
 		select {
-		case <-r.done:
+		case <-r.answered: // the turn stopped; what follows, such as the diff, may take long
 		case <-time.After(grace):
 			l.conn.Close()
 		}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"maps"
+	"net"
 	"slices"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp/acptest"
+	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/harness"
@@ -38,6 +40,15 @@ type fakeGuest struct {
 	// turnEdits are what the next turns change, applied as each turn ends.
 	turnEdits []map[string]string
 	snapErr   error
+	// slots, when set, is how many agents run at once, as the guest's MaxACPProcesses;
+	// running holds the chats whose stream is open.
+	slots    int
+	running  map[string]bool
+	openErr  error         // returned by OpenACP when set
+	openHold chan struct{} // OpenACP waits for it to close, when set
+	// newAgent, when set, serves each stream with an agent of its own, for chats that run
+	// side by side; an acptest.Agent serves one stream at a time.
+	newAgent func() *acptest.Agent
 }
 
 func (g *fakeGuest) Snapshot(_ context.Context, _ string, req agentproto.SnapshotRequest) (agentproto.SnapshotReply, error) {
@@ -170,11 +181,48 @@ func (g *fakeGuest) KillSession(_ context.Context, _, name string) error {
 
 func (g *fakeGuest) OpenACP(_ context.Context, _ string, req agentproto.StartACP) (io.ReadWriteCloser, error) {
 	g.mu.Lock()
+	hold := g.openHold
+	g.mu.Unlock()
+	if hold != nil {
+		<-hold
+	}
+	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.opens = append(g.opens, req)
-	c := g.agent.Pipe()
+	if g.openErr != nil {
+		return nil, g.openErr
+	}
+	if g.slots > 0 && len(g.running) >= g.slots {
+		return nil, agentchan.ErrACPFull
+	}
+	if g.running == nil {
+		g.running = map[string]bool{}
+	}
+	g.running[req.Chat] = true
+	agent := g.agent
+	if g.newAgent != nil {
+		agent = g.newAgent()
+	}
+	c := &slotConn{Conn: agent.Pipe(), g: g, chat: req.Chat}
 	g.conns = append(g.conns, c)
 	return c, nil
+}
+
+// slotConn frees its chat's slot when it closes.
+type slotConn struct {
+	net.Conn
+	g    *fakeGuest
+	chat string
+	once sync.Once
+}
+
+func (c *slotConn) Close() error {
+	c.once.Do(func() {
+		c.g.mu.Lock()
+		delete(c.g.running, c.chat)
+		c.g.mu.Unlock()
+	})
+	return c.Conn.Close()
 }
 
 func (g *fakeGuest) WriteHomeFiles(_ context.Context, _ string, files []agentproto.HomeFile) error {
@@ -187,8 +235,9 @@ func (g *fakeGuest) WriteHomeFiles(_ context.Context, _ string, files []agentpro
 // killAgent ends the agent's stream as a stopping sandbox would.
 func (g *fakeGuest) killAgent() {
 	g.mu.Lock()
-	defer g.mu.Unlock()
-	for _, c := range g.conns {
+	conns := slices.Clone(g.conns)
+	g.mu.Unlock()
+	for _, c := range conns {
 		c.Close()
 	}
 }
@@ -426,11 +475,14 @@ func TestChatCancelGrace(t *testing.T) {
 }
 
 func TestChatOrphaned(t *testing.T) {
-	f := newFixture(t, &acptest.Agent{MissingSessions: true})
+	f := newFixture(t, &acptest.Agent{MissingSessions: true, Turns: []acptest.Turn{{Steps: steps(chunk(agentChunk, "Hi"))}}})
 	ctx := context.Background()
+	f.wait(t, f.send(t, "hello").ID)
+	f.g.killAgent()
 	if err := f.s.Store.SetChatSession(ctx, f.chat.ID, "ses_gone"); err != nil {
 		t.Fatal(err)
 	}
+	waitGone(t, f)
 	_, err := f.s.Send(ctx, f.sb.EnvironmentID, f.chat.ID, f.launch(), Prompt{Text: "hi"})
 	if !errors.Is(err, store.ErrConflict) || !strings.Contains(err.Error(), "session of this chat is gone") {
 		t.Fatalf("send: %v", err)
@@ -474,14 +526,22 @@ func TestRecoverInterruptsRunningTurns(t *testing.T) {
 	if _, err := f.s.Store.SetChatState(ctx, f.sb.EnvironmentID, f.chat.ID, store.ChatRunning); err != nil {
 		t.Fatal(err)
 	}
+	// A tool call that was running.
+	if _, err := f.s.Store.AddChatItem(ctx, store.ChatItem{ChatID: f.chat.ID, TurnID: turn.ID, Kind: KindTool, Status: "in_progress",
+		Body: encodeBody(&ToolBody{Title: "make test", Status: "in_progress"})}); err != nil {
+		t.Fatal(err)
+	}
 	ch, unsubscribe := f.s.Bus.Subscribe()
 	defer unsubscribe()
 	if err := f.s.Recover(ctx); err != nil {
 		t.Fatal(err)
 	}
 	turn, log := f.wait(t, turn.ID)
-	if turn.StopReason != StopInterrupted || kinds(log.Items) != "marker:interrupted" || log.Chat.State != store.ChatIdle {
+	if turn.StopReason != StopInterrupted || kinds(log.Items) != "tool,marker:interrupted" || log.Chat.State != store.ChatIdle {
 		t.Fatalf("turn %+v items %s chat %s", turn, kinds(log.Items), log.Chat.State)
+	}
+	if tool := log.Items[0]; tool.Status != ToolStopped || tool.Tool.Status != ToolStopped {
+		t.Fatalf("tool %+v %+v; want it stopped", tool.ChatItem, tool.Tool)
 	}
 	if e := <-ch; e.Topic != events.TopicChats || e.ID != f.chat.ID {
 		t.Fatalf("event %+v", e)
@@ -654,5 +714,244 @@ func TestQueuedPromptsShowAndCanBeTakenOff(t *testing.T) {
 	}
 	if got := strings.Join(texts, "|"); got != "work|steer one|steer three" || len(log.Queued) != 0 {
 		t.Fatalf("prompts %q, still queued %+v", got, log.Queued)
+	}
+}
+
+// A sandbox with no room for another chat's agent retires the agent that sat idle longest; its
+// chat resumes its session with the next message. With every agent busy, a start is refused.
+func TestFullSandboxRetiresTheIdlestAgent(t *testing.T) {
+	release := make(chan struct{})
+	var hold atomic.Bool
+	f := newFixture(t, &acptest.Agent{BeforePrompt: func() {
+		if hold.Load() {
+			<-release
+		}
+	}})
+	f.g.slots = 2
+	var agents []*acptest.Agent
+	f.g.newAgent = func() *acptest.Agent {
+		a := &acptest.Agent{SessionID: "ses_1", BeforePrompt: f.agent.BeforePrompt}
+		agents = append(agents, a)
+		return a
+	}
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	chats := []store.Chat{f.chat}
+	for range 2 {
+		c, err := f.s.Create(ctx, f.sb, "opencode")
+		if err != nil {
+			t.Fatal(err)
+		}
+		chats = append(chats, c)
+	}
+	sendTo := func(c store.Chat) error {
+		turn, err := f.s.Send(ctx, env, c.ID, f.launch(), Prompt{Text: "hi"})
+		if err == nil {
+			f.chat = c
+			f.wait(t, turn.ID)
+		}
+		return err
+	}
+	for _, c := range chats {
+		if err := sendTo(c); err != nil {
+			t.Fatalf("send to %s: %v", c.ID, err)
+		}
+	}
+	if f.s.get(chats[0].ID) != nil || f.s.get(chats[1].ID) == nil || f.s.get(chats[2].ID) == nil {
+		t.Fatal("the first chat's agent, idle longest, should have made room")
+	}
+	if c, _ := f.s.Store.Chat(ctx, env, chats[0].ID); c.State != store.ChatIdle {
+		t.Fatalf("the retired agent's chat is %s", c.State)
+	}
+	// It comes back, in place of the second.
+	if err := sendTo(chats[0]); err != nil {
+		t.Fatal(err)
+	}
+	if f.s.get(chats[1].ID) != nil || f.s.get(chats[0].ID) == nil {
+		t.Fatal("the second chat's agent should have made room")
+	}
+	f.g.mu.Lock()
+	back := agents[len(agents)-1]
+	f.g.mu.Unlock()
+	if calls := back.Calls; !slices.Contains(calls, "session/resume") {
+		t.Fatalf("calls %v; want the session resumed", calls)
+	}
+
+	// Both agents busy: the third chat is told so, and no agent stops.
+	hold.Store(true)
+	defer close(release)
+	for _, c := range []store.Chat{chats[0], chats[2]} {
+		if _, err := f.s.Send(ctx, env, c.ID, f.launch(), Prompt{Text: "work"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := f.s.Send(ctx, env, chats[1].ID, f.launch(), Prompt{Text: "hi"})
+	if !errors.Is(err, store.ErrConflict) || !strings.Contains(err.Error(), "busy") {
+		t.Fatalf("Send with every agent busy = %v; want a conflict", err)
+	}
+	if f.s.get(chats[0].ID) == nil || f.s.get(chats[2].ID) == nil {
+		t.Fatal("a busy agent was stopped")
+	}
+}
+
+// A queued prompt that can't go stays queued with the reason, and nothing retries it in a
+// loop; the user's next message tries again, and the queue goes on after it.
+func TestQueuedPromptThatFailsStaysWithItsReason(t *testing.T) {
+	release := make(chan struct{})
+	var prompts atomic.Int32
+	f := newFixture(t, &acptest.Agent{BeforePrompt: func() {
+		if prompts.Add(1) == 1 {
+			<-release
+		}
+	}})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	first := f.send(t, "work")
+	if _, queued, err := f.s.Enqueue(ctx, env, f.chat.ID, f.launch(), Prompt{Text: "next"}, nil); err != nil || !queued {
+		t.Fatalf("Enqueue = %v, %v", queued, err)
+	}
+	// The sandbox stops: the turn ends, and the agent can't start again.
+	f.g.mu.Lock()
+	f.g.openErr = errors.New("the sandbox is stopped")
+	f.g.mu.Unlock()
+	f.g.killAgent()
+	close(release)
+	f.wait(t, first.ID)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		q := f.s.Queued(f.chat.ID)
+		if len(q) == 1 && strings.Contains(q[0].Error, "the sandbox is stopped") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("queued %+v; want the prompt kept with the reason", q)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	f.g.mu.Lock()
+	opens := len(f.g.opens)
+	f.g.openErr = nil
+	f.g.mu.Unlock()
+	if opens != 2 {
+		t.Fatalf("%d agent starts; want the failed prompt tried once", opens)
+	}
+
+	queued, err := f.s.Queue(ctx, env, f.chat.ID, f.launch(), Prompt{Text: "again"}, nil)
+	if err != nil || queued {
+		t.Fatalf("Queue on an idle chat = %v, %v; want sent", queued, err)
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	for len(f.s.Queued(f.chat.ID)) > 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	log, err := f.s.Get(ctx, env, f.chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wait(t, log.Turns[len(log.Turns)-1].ID)
+	log, _ = f.s.Get(ctx, env, f.chat.ID)
+	var texts []string
+	for _, it := range log.Items {
+		if it.User != nil {
+			texts = append(texts, it.User.Text)
+		}
+	}
+	if got := strings.Join(texts, "|"); got != "work|again|next" {
+		t.Fatalf("prompts %q; want the queued one after the retry", got)
+	}
+}
+
+// A chat deleted while its agent starts doesn't keep the agent.
+func TestDeleteWhileTheAgentStarts(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	ctx := context.Background()
+	c, err := f.s.Store.Chat(ctx, f.sb.EnvironmentID, f.chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Store.DeleteChat(ctx, f.sb.EnvironmentID, f.chat.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.s.startAgent(ctx, c, f.launch(), false); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("startAgent for a deleted chat = %v", err)
+	}
+	if f.s.get(c.ID) != nil {
+		t.Fatal("the deleted chat's agent kept running")
+	}
+	f.g.mu.Lock()
+	defer f.g.mu.Unlock()
+	if len(f.g.running) != 0 {
+		t.Fatalf("running %v", f.g.running)
+	}
+}
+
+// Stop while the agent starts stops the message before it goes: no turn, the chat idle again.
+func TestStopWhileTheAgentStarts(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	hold := make(chan struct{})
+	f.g.openHold = hold
+	sent := make(chan error, 1)
+	go func() {
+		_, err := f.s.Send(ctx, env, f.chat.ID, f.launch(), Prompt{Text: "hi"})
+		sent <- err
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		f.s.mu.Lock()
+		_, starting := f.s.stops[f.chat.ID]
+		f.s.mu.Unlock()
+		if starting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Send never started the agent")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := f.s.Cancel(ctx, env, f.chat.ID); err != nil {
+		t.Fatal(err)
+	}
+	close(hold)
+	if err := <-sent; !errors.Is(err, ErrStopped) {
+		t.Fatalf("Send = %v; want ErrStopped", err)
+	}
+	log, err := f.s.Get(ctx, env, f.chat.ID)
+	if err != nil || len(log.Turns) != 0 || log.Chat.State != store.ChatIdle {
+		t.Fatalf("turns %d, state %s, err %v", len(log.Turns), log.Chat.State, err)
+	}
+	// A stop with nothing starting doesn't stop the next message.
+	if err := f.s.Cancel(ctx, env, f.chat.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.wait(t, f.send(t, "again").ID)
+}
+
+// waitGone waits until the chat's agent is gone.
+func waitGone(t *testing.T, f *fixture) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for f.s.get(f.chat.ID) != nil {
+		if time.Now().After(deadline) {
+			t.Fatal("the agent kept running")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// A chat whose agent never answered starts a new session when the agent lost the old one, as
+// Claude Code does when a first message is stopped before it wrote its transcript.
+func TestUnansweredChatStartsOverWhenTheSessionIsGone(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{MissingSessions: true})
+	ctx := context.Background()
+	if err := f.s.Store.SetChatSession(ctx, f.chat.ID, "ses_gone"); err != nil {
+		t.Fatal(err)
+	}
+	f.wait(t, f.send(t, "hi").ID)
+	c, _ := f.s.Store.Chat(ctx, f.sb.EnvironmentID, f.chat.ID)
+	if c.State != store.ChatIdle || c.ACPSessionID != "ses_1" {
+		t.Fatalf("chat %s with session %q; want idle in a new session", c.State, c.ACPSessionID)
 	}
 }

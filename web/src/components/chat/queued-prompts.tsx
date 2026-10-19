@@ -13,6 +13,7 @@ import type { QueuedPrompt } from "@/lib/chats"
 /**
  * The messages written while the agent works, waiting above the composer until the turn ends;
  * then they go one turn each, in order. Edit takes one back into the composer, Remove drops it.
+ * One that couldn't go shows why, and the rest wait behind it until the next message.
  */
 export function QueuedPrompts({
   env,
@@ -29,6 +30,8 @@ export function QueuedPrompts({
 }) {
   const [busy, setBusy] = useState<string>()
   if (queued.length === 0) return null
+  // The first one couldn't go when the last turn ended; the queue waits for the user.
+  const stuck = queued[0].error
 
   const takeOff = async (q: QueuedPrompt, edit: boolean) => {
     setBusy(q.id)
@@ -54,8 +57,10 @@ export function QueuedPrompts({
     <section aria-label="Queued messages" className="grid gap-1">
       <p className="flex items-center gap-1.5 px-1 text-[0.6875rem] text-muted-foreground">
         <ClockIcon className="size-3" aria-hidden />
-        {queued.length === 1 ? "Queued" : `${queued.length} queued`}: sent when{" "}
-        {teammateName} finishes this turn
+        {queued.length === 1 ? "Queued" : `${queued.length} queued`}:{" "}
+        {stuck
+          ? "waiting for your next message, which tries again"
+          : `sent when ${teammateName} finishes this turn`}
       </p>
       <ul className="grid gap-1">
         {queued.map((q) => (
@@ -75,6 +80,11 @@ export function QueuedPrompts({
                   <span className="truncate">{q.attachments.join(", ")}</span>
                 </p>
               ) : null}
+              {q.error && (
+                <p className="text-xs break-words text-destructive">
+                  Not sent: {q.error}
+                </p>
+              )}
             </div>
             {/* Files can't go back into the composer, so only text-only messages are edited. */}
             {!q.attachments?.length && (

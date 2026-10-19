@@ -57,6 +57,7 @@ const statuses: Record<
   in_progress: { label: "Working", variant: "secondary" },
   completed: { label: "Done", variant: "outline" },
   failed: { label: "Failed", variant: "destructive" },
+  stopped: { label: "Stopped", variant: "outline" },
 }
 
 /**

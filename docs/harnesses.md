@@ -182,6 +182,19 @@ terminal capability. A Claude subscription's chats run `studio-agent claude-acp`
 SIGKILL after 5 s) and runs at most 4 per sandbox, one per chat; its stderr goes to
 `/run/studio-agent/acp-<chat>.log`, capped at 256 KiB.
 
+Studio stops a chat's agent after 30 minutes without a turn, and when a fifth chat of the
+sandbox needs one it stops the agent that sat idle longest. An agent that works or waits on
+the user is never stopped; with four of those, the fifth chat is told to wait. The next
+message to a stopped chat starts its agent again and resumes the session. A session the
+agent no longer finds ends the chat (orphaned), unless the agent never answered in it, as
+when its first message was stopped: then the chat starts a new one.
+
+A message sent while a turn runs waits in a queue in memory and goes once the chat is idle,
+one turn each. One that can't go then, because the agent can't start, stays first with the
+reason; the rest wait behind it until the user's next message, which tries again. Stop
+while the agent still starts stops the message before it goes, and the composer gets it
+back.
+
 A chat opened in the terminal runs its harness's TUI with the resume command above, in the
 tmux session `chat-<chat>` tagged `@studio_chat`. The `<id>` is the ACP session ID, which
 is the harness's own session ID. Studio only passes IDs matching

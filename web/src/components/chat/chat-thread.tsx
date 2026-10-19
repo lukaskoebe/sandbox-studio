@@ -1,8 +1,12 @@
-import { Fragment, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { ChatCircleDotsIcon, TerminalWindowIcon } from "@phosphor-icons/react"
-import { ChatItemView, turnUsage } from "@/components/chat/chat-items"
+import {
+  ChatItemView,
+  SendingMessage,
+  turnUsage,
+} from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
@@ -108,13 +112,35 @@ function ChatLog({
   const liveId = openItems.at(-1)?.id
   const pinned = [...openItems].reverse().find((i) => i.kind === "plan")
 
+  // The message being sent shows until the log has it as a message or a queued prompt.
+  const users = items.filter((i) => i.kind === "user").length
+  const [sending, setSending] = useState<Sending>()
+  if (sending && (users > sending.users || queued.length > sending.queued))
+    setSending(undefined)
+  const onSending = (p: Prompt | undefined) =>
+    setSending(
+      p && {
+        prompt: p,
+        users,
+        queued: queued.length,
+        key: Date.now(),
+      }
+    )
+  // A message the server took but the stream didn't bring stops showing after a while; the
+  // log has it once the stream is back.
+  useEffect(() => {
+    if (!sending?.sent) return
+    const t = setTimeout(() => setSending(undefined), 15_000)
+    return () => clearTimeout(t)
+  }, [sending?.sent])
+
   return (
     <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport aria-label="Messages">
             <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
-              {items.length === 0 && (
+              {items.length === 0 && !sending && (
                 <MessageScrollerItem className="m-auto">
                   <Empty>
                     <EmptyHeader>
@@ -179,7 +205,12 @@ function ChatLog({
                   </Fragment>
                 )
               })}
-              {running && !liveId && (
+              {sending && (
+                <MessageScrollerItem key={sending.key} scrollAnchor>
+                  <SendingMessage prompt={sending.prompt} />
+                </MessageScrollerItem>
+              )}
+              {running && !liveId && !sending && (
                 <MessageScrollerItem>
                   <p className="shimmer text-xs text-muted-foreground">
                     {teammateName} is starting…
@@ -199,6 +230,8 @@ function ChatLog({
             chat={chat}
             queued={queued}
             teammateName={teammateName}
+            onSending={onSending}
+            onSent={() => setSending((s) => s && { ...s, sent: true })}
           />
         </div>
       </div>
@@ -206,16 +239,30 @@ function ChatLog({
   )
 }
 
+/** A message on its way to the chat, and how much of the log there was when it left. */
+type Sending = {
+  prompt: Prompt
+  users: number
+  queued: number
+  key: number
+  sent?: boolean
+}
+
 function ChatComposer({
   env,
   chat,
   queued,
   teammateName,
+  onSending,
+  onSent,
 }: {
   env: string
   chat: Chat
   queued: QueuedPrompt[]
   teammateName: string
+  /** The message being sent, or undefined when it didn't go. */
+  onSending: (p: Prompt | undefined) => void
+  onSent: () => void
 }) {
   const [error, setError] = useState<string>()
   const [insert, setInsert] = useState<{ id: string; text: string }>()
@@ -246,14 +293,19 @@ function ChatComposer({
   // While a turn runs, a message waits for it to end, after the ones already waiting.
   const send = async (prompt: Prompt) => {
     setError(undefined)
-    const res = await fetchClient.POST(
-      "/api/environments/{env}/chats/{chat}/queue",
-      { params: { path }, body: prompt }
-    )
-    if (res.error) {
-      setError(errorMessage(res.error))
+    onSending(prompt)
+    try {
+      const res = await fetchClient.POST(
+        "/api/environments/{env}/chats/{chat}/queue",
+        { params: { path }, body: prompt }
+      )
+      if (res.error) throw res.error
+    } catch (err) {
+      onSending(undefined)
+      setError(errorMessage(err))
       return false
     }
+    onSent()
     return true
   }
   const stop = () =>

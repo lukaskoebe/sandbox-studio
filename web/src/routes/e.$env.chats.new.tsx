@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
+import { SendingMessage } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { PageHeader } from "@/components/page-header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
@@ -67,32 +68,43 @@ function NewChatPage() {
     owned.at(0)
   const owner = teammates.data?.find((t) => t.id === sandbox?.teammateId)
   const [error, setError] = useState<string>()
+  // The first message shows while the chat is created and its agent starts.
+  const [sending, setSending] = useState<Prompt>()
 
   const send = async (prompt: Prompt) => {
     if (!sandbox) return false
     setError(undefined)
-    const res = await fetchClient.POST(
-      "/api/environments/{env}/sandboxes/{id}/chats",
-      { params: { path: { env, id: sandbox.id } }, body: prompt }
-    )
-    if (!res.data) {
-      setError(errorMessage(res.error))
+    setSending(prompt)
+    let created: { id: string }
+    try {
+      const res = await fetchClient.POST(
+        "/api/environments/{env}/sandboxes/{id}/chats",
+        { params: { path: { env, id: sandbox.id } }, body: prompt }
+      )
+      if (!res.data) throw res.error
+      created = res.data
+    } catch (err) {
+      setSending(undefined)
+      setError(errorMessage(err))
       return false
     }
     void queryClient.invalidateQueries({
       queryKey: ["get", "/api/environments/{env}/chats"],
     })
+    void queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/sandboxes/{id}/chats"],
+    })
     if (search.origin === "workspace") {
       void navigate({
         to: "/e/$env/sandboxes/$id/work",
         params: { env, id: sandbox.id },
-        search: { chat: res.data.id },
+        search: { chat: created.id },
         replace: true,
       })
     } else {
       void navigate({
         to: "/e/$env/chats/$chat",
-        params: { env, chat: res.data.id },
+        params: { env, chat: created.id },
         replace: true,
       })
     }
@@ -143,33 +155,36 @@ function NewChatPage() {
           </Empty>
         ) : (
           <>
-            <div className="m-auto flex flex-col items-center gap-2 text-center">
-              <TeammateAvatar
-                name={owner?.name ?? "?"}
-                avatar={owner?.avatar}
-                className="size-10"
-              />
-              <p className="text-sm font-medium">
-                What should {owner?.name ?? "your teammate"} do?
-              </p>
-              <p className="max-w-md text-xs text-muted-foreground">
-                It works in {sandbox.name}. You can attach files, and it asks
-                before anything risky.
-              </p>
-              {!isReady(sandbox) && (
-                <p className="max-w-md text-xs">
-                  {sandbox.name} isn't running.{" "}
-                  <Link
-                    to="/e/$env/sandboxes/$id"
-                    params={{ env, id: sandbox.id }}
-                    className="underline"
-                  >
-                    Start it
-                  </Link>{" "}
-                  before you send.
+            {sending ? (
+              <SendingMessage prompt={sending} />
+            ) : (
+              <div className="m-auto flex flex-col items-center gap-2 text-center">
+                <TeammateAvatar
+                  name={owner?.name ?? "?"}
+                  avatar={owner?.avatar}
+                  className="size-10"
+                />
+                <p className="text-sm font-medium">
+                  What should {owner?.name ?? "your teammate"} do?
                 </p>
-              )}
-            </div>
+                <p className="max-w-md text-xs text-muted-foreground">
+                  It works in {sandbox.name} on its own. You can attach files.
+                </p>
+                {!isReady(sandbox) && (
+                  <p className="max-w-md text-xs">
+                    {sandbox.name} isn't running.{" "}
+                    <Link
+                      to="/e/$env/sandboxes/$id"
+                      params={{ env, id: sandbox.id }}
+                      className="underline"
+                    >
+                      Start it
+                    </Link>{" "}
+                    before you send.
+                  </p>
+                )}
+              </div>
+            )}
             <Composer key={sandbox.id} onSend={send} autoFocus error={error} />
           </>
         )}

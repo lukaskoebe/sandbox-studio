@@ -153,3 +153,32 @@ test("the workspace marks only the chats with something new", async ({
   await expect(page).toHaveURL(new RegExp(`chat=${fresh.id}`))
   await expect(menu.getByTitle("2 chats")).toBeVisible()
 })
+
+test("a chat started from the workspace opens in the workspace", async ({
+  page,
+  api,
+  env,
+}) => {
+  const teammate = await addTeammate(
+    api,
+    env,
+    `Opened ${Math.random().toString(36).slice(2, 6)}`
+  )
+  const id = await api.createSandbox(sandboxName("opened"), teammate)
+  await api.guestReady(id)
+
+  // The workspace has loaded its list of chats, which the new chat isn't on yet.
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  await expect(
+    page.getByRole("button", { name: "main", exact: true })
+  ).toBeVisible()
+  await page.getByRole("link", { name: "New chat" }).click()
+  const box = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await box.fill("Please run the tests")
+  await box.press("Enter")
+
+  await expect(page).toHaveURL(/\/work\?chat=/)
+  await expect(page.getByRole("main")).toContainText(greeting)
+  await page.waitForTimeout(1500)
+  await expect(page).toHaveURL(/\/work\?chat=/)
+})

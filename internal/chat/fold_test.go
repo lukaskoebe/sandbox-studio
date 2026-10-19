@@ -147,3 +147,15 @@ func TestEncodeBodyTruncatesTools(t *testing.T) {
 		t.Fatalf("%v %+v", err, got)
 	}
 }
+
+// A tool call the turn ended before is stopped, not left waiting; a finished one keeps its status.
+func TestFinishStopsOpenToolCalls(t *testing.T) {
+	f := newFolder(func() string { return "i" })
+	title := "make test"
+	f.apply(acp.SessionUpdate{Kind: acp.UpdateToolCall, ToolCallID: "a", Title: &title, Status: "in_progress"})
+	f.apply(acp.SessionUpdate{Kind: acp.UpdateToolCall, ToolCallID: "b", Title: &title, Status: "completed"})
+	f.finish()
+	if a, b := f.tools["a"].body.(*ToolBody).Status, f.tools["b"].body.(*ToolBody).Status; a != ToolStopped || f.tools["a"].status != ToolStopped || b != "completed" {
+		t.Fatalf("statuses %q, %q", a, b)
+	}
+}

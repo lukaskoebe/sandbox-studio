@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -14,7 +15,8 @@ import (
 
 // OpenACP starts the ACP agent of a chat in the guest and returns its stdio: writes go to
 // the agent's stdin, reads come from its stdout. Closing the stream stops the agent; the
-// agent exiting ends reads with io.EOF. A missing adapter is a HarnessError.
+// agent exiting ends reads with io.EOF. A missing adapter is a HarnessError, and a sandbox
+// that runs agentproto.MaxACPProcesses agents already is ErrACPFull.
 func (h *Hub) OpenACP(ctx context.Context, id string, req agentproto.StartACP) (io.ReadWriteCloser, error) {
 	st, err := h.open(ctx, id, agentproto.Header{Kind: agentproto.KindACP})
 	if err != nil {
@@ -42,14 +44,20 @@ func (h *Hub) OpenACP(ctx context.Context, id string, req agentproto.StartACP) (
 	var e agentproto.Error
 	if json.Unmarshal(line, &e) == nil && e.Error != "" {
 		st.Close()
-		if e.Code == agentproto.CodeHarness {
+		switch e.Code {
+		case agentproto.CodeHarness:
 			return nil, HarnessError(e.Error)
+		case agentproto.CodeFull:
+			return nil, fmt.Errorf("%w: %s", ErrACPFull, e.Error)
 		}
 		return nil, errors.New(e.Error)
 	}
 	st.SetDeadline(time.Time{})
 	return &acpStream{Conn: st, r: br}, nil
 }
+
+// ErrACPFull is OpenACP's error when the sandbox runs as many chat agents as it takes.
+var ErrACPFull = errors.New("no room for another chat agent")
 
 // acpStream reads through the reader that held the ack, which may have buffered the
 // agent's first bytes.

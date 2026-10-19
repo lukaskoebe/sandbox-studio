@@ -109,6 +109,13 @@ export function Composer({
     if (sending || disabled) return
     if (!text.trim() && files.length === 0) return
     setSending(true)
+    const draft = { text, files }
+    // The message leaves the box at once, and comes back if it didn't go, ahead of anything
+    // typed meanwhile.
+    const restore = () => {
+      setText((t) => (t.trim() ? `${draft.text}\n\n${t}` : draft.text))
+      setFiles((f) => [...draft.files, ...f])
+    }
     try {
       const attachments = await Promise.all(
         files.map(async (f) => ({
@@ -117,16 +124,16 @@ export function Composer({
           data: await readBase64(f),
         }))
       )
+      setText("")
+      setFiles([])
+      setProblem(undefined)
       const ok = await onSend({
         text: text.trim() || undefined,
         attachments: attachments.length > 0 ? attachments : undefined,
       })
-      if (ok) {
-        setText("")
-        setFiles([])
-        setProblem(undefined)
-      }
+      if (!ok) restore()
     } catch (err) {
+      restore()
       setProblem(err instanceof Error ? err.message : String(err))
     } finally {
       setSending(false)

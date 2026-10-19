@@ -59,7 +59,7 @@ type TextBody struct {
 type ToolBody struct {
 	Title     string                 `json:"title"`
 	Kind      string                 `json:"kind,omitempty" doc:"read, edit, delete, move, search, execute, think, fetch, switch_mode or other"`
-	Status    string                 `json:"status,omitempty" enum:"pending,in_progress,completed,failed"`
+	Status    string                 `json:"status,omitempty" enum:"pending,in_progress,completed,failed,stopped" doc:"stopped: the turn ended before the call did"`
 	Content   []acp.ToolCallContent  `json:"content,omitempty"`
 	Locations []acp.ToolCallLocation `json:"locations,omitempty"`
 	Input     json.RawMessage        `json:"input,omitempty" doc:"The tool's raw input, as the agent reports it"`

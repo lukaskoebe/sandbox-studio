@@ -80,10 +80,17 @@ func (s *acpSlots) acquire(chat string) error {
 		return fmt.Errorf("the agent of chat %s is already running", chat)
 	}
 	if len(s.chats) >= agentproto.MaxACPProcesses {
-		return fmt.Errorf("at most %d chats can run at once in a sandbox", agentproto.MaxACPProcesses)
+		return errFull{}
 	}
 	s.chats[chat] = true
 	return nil
+}
+
+// errFull says every slot is taken.
+type errFull struct{}
+
+func (errFull) Error() string {
+	return fmt.Sprintf("at most %d chats can run at once in a sandbox", agentproto.MaxACPProcesses)
 }
 
 func (s *acpSlots) release(chat string) {
@@ -118,6 +125,10 @@ func (a *Agent) serveACP(st net.Conn, br *bufio.Reader) error {
 // start a new process group (Setsid or Setpgid).
 func runACP(slots *acpSlots, st net.Conn, br *bufio.Reader, cmd *exec.Cmd, chat, logPath string) error {
 	if err := slots.acquire(chat); err != nil {
+		var full errFull
+		if errors.As(err, &full) {
+			return agentproto.WriteJSONLine(st, agentproto.Error{Error: err.Error(), Code: agentproto.CodeFull})
+		}
 		return replyError(st, err)
 	}
 	defer slots.release(chat)

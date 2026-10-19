@@ -4084,6 +4084,8 @@ export interface components {
         QueuedPrompt: {
             /** @description The names of its files */
             attachments?: string[] | null;
+            /** @description Why it couldn't go when the turn before it ended; it waits until the next message */
+            error?: string;
             id: string;
             /** Format: date-time */
             queuedAt: string;
@@ -4800,8 +4802,11 @@ export interface components {
             /** @description read, edit, delete, move, search, execute, think, fetch, switch_mode or other */
             kind?: string;
             locations?: components["schemas"]["ToolCallLocation"][] | null;
-            /** @enum {string} */
-            status?: "pending" | "in_progress" | "completed" | "failed";
+            /**
+             * @description stopped: the turn ended before the call did
+             * @enum {string}
+             */
+            status?: "pending" | "in_progress" | "completed" | "failed" | "stopped";
             title: string;
             truncated?: boolean;
         };
