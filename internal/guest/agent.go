@@ -266,6 +266,7 @@ func (a *Agent) servePTY(st net.Conn, br *bufio.Reader, h agentproto.Header) err
 		return agentproto.WriteFrame(st, typ, p)
 	}
 	go func() {
+		var clicks afterClick
 		for {
 			typ, p, err := agentproto.ReadFrame(br)
 			if err != nil {
@@ -275,7 +276,7 @@ func (a *Agent) servePTY(st net.Conn, br *bufio.Reader, h agentproto.Header) err
 			}
 			switch typ {
 			case agentproto.FrameData:
-				_, _ = f.Write(p) // a terminal that is gone ends the read loop below
+				_, _ = f.Write(clicks.input(p, time.Now())) // a terminal that is gone ends the read loop below
 			case agentproto.FrameResize:
 				var r agentproto.Resize
 				if json.Unmarshal(p, &r) == nil && r.Cols > 0 && r.Rows > 0 {
