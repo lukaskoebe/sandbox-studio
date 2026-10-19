@@ -38,10 +38,18 @@ func catalog(t *testing.T) string {
 			t.Fatal(q, err)
 		}
 	}
+	// One transaction: a commit for each row takes minutes on Windows, where each one syncs.
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i := range 3000 {
-		if _, err := db.Exec("INSERT INTO layer (digest) VALUES (?)", strings.Repeat("d", 200)+string(rune('a'+i%26))); err != nil {
+		if _, err := tx.Exec("INSERT INTO layer (digest) VALUES (?)", strings.Repeat("d", 200)+string(rune('a'+i%26))); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
 	}
 	return path
 }
