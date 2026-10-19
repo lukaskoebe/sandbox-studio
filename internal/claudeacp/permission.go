@@ -14,7 +14,8 @@ import (
 )
 
 // The permission path. Claude Code asks its --permission-prompt-tool before a tool call it
-// doesn't approve itself. That tool belongs to the plugin's permissions server, which runs
+// doesn't approve itself; in bypassPermissions mode, which the shim runs in, that leaves the
+// tools that need the user in any mode, such as AskUserQuestion. That tool belongs to the plugin's permissions server, which runs
 // `studio-agent claude-permission`: it sends the question over the session's socket to the
 // shim, which asks Studio with session/request_permission and answers with Claude Code's
 // allow or deny. Studio offers allow once and deny; "don't ask again" needs a rule Claude

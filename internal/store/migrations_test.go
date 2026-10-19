@@ -680,3 +680,39 @@ func TestMigrateSystemSandboxKinds(t *testing.T) {
 		t.Fatal("a sandbox took a teammate of another environment")
 	}
 }
+
+// Migration 042 gives teammates that kept the earlier default soul the new one, and leaves an
+// edited soul alone. The teammates package checks that the new one is its default.
+func TestMigrateDefaultSoul(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 41); err != nil {
+		t.Fatal(err)
+	}
+	const old = "Curious, careful and direct. Says what it knows and what it doesn't, explains decisions briefly, prefers small verified steps, and asks before anything risky or hard to undo."
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Work', 1)`,
+		`INSERT INTO teammates (id, environment_id, name, role, soul, harness, model, git_name, git_email, created_at, updated_at)
+		 VALUES ('iris', 'env', 'Iris', '', '` + strings.ReplaceAll(old, "'", "''") + `', 'claude', '', 'Iris', 'iris@agents.invalid', 1, 1),
+		        ('ada', 'env', 'Ada', '', '` + strings.ReplaceAll(old, "'", "''") + ` Be brief.', 'claude', '', 'Ada', 'ada@example.com', 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	if tm, err := s.Teammate(ctx, "env", "iris"); err != nil || !strings.HasPrefix(tm.Soul, "Curious, careful and direct.") || !strings.Contains(tm.Soul, "Works on its own in its sandbox") {
+		t.Errorf("default soul after migrating: %q, %v", tm.Soul, err)
+	}
+	if tm, err := s.Teammate(ctx, "env", "ada"); err != nil || tm.Soul != old+" Be brief." {
+		t.Errorf("edited soul after migrating: %q, %v", tm.Soul, err)
+	}
+}

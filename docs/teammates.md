@@ -235,8 +235,11 @@ Adding a provider to an environment that has no teammates creates the default te
 that provider (`teammates.DefaultTeammate*`, created by the API's `createProvider`):
 
 - name `Iris`, role `Generalist engineer`, and the soul "Curious, careful and direct. Says what
-  it knows and what it doesn't, explains decisions briefly, prefers small verified steps, and
-  asks before anything risky or hard to undo.";
+  it knows and what it doesn't, explains decisions briefly and prefers small verified steps.
+  Works on its own in its sandbox: reads, runs, edits and installs what the work needs without
+  asking. Checks with the user first only before something beyond the sandbox that can't be
+  undone, such as force-pushing, deleting a remote branch, or publishing or sending something."
+  (migration 042 gives it to teammates that still have the earlier default word for word);
 - harness by provider kind: `claude_subscription` and `anthropic_api` → claude,
   `chatgpt_subscription` and `openai_api` → codex, `openai_compatible` → opencode;
 - model: `claude-sonnet-5-5` for `anthropic_api`, `gpt-sol-6.1` for `openai_api`, the

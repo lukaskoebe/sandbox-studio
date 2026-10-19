@@ -476,9 +476,9 @@ func (s *session) start() (*process, error) {
 	args := []string{
 		"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--include-partial-messages",
-		// Studio asks about every action that isn't auto-approved, so the mode is the
-		// default one, whatever the settings say (the TUI's bypassPermissions).
-		"--permission-mode", "default",
+		// The VM is the sandbox, as in the TUI: tools run without asking. The prompt tool
+		// still gets what Claude Code asks about in every mode, such as AskUserQuestion.
+		"--permission-mode", "bypassPermissions",
 		"--permission-prompt-tool", PermissionTool,
 		"--plugin-dir", s.plugin,
 	}

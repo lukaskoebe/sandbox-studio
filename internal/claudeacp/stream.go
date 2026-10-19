@@ -118,8 +118,10 @@ func (m *mapper) assistant(raw json.RawMessage) []acp.SessionUpdate {
 			} else if !m.tools[b.ID] {
 				m.tools[b.ID] = true
 				title, kind, locations := toolCall(b.Name, b.Input)
+				// Claude Code runs a call once it is in a message; one that needs the user
+				// asks through the prompt tool, which shows as its own card.
 				out = append(out, acp.SessionUpdate{Kind: acp.UpdateToolCall, ToolCallID: b.ID, Title: &title,
-					ToolKind: kind, Status: "pending", Locations: locations, RawInput: b.Input})
+					ToolKind: kind, Status: "in_progress", Locations: locations, RawInput: b.Input})
 			}
 		}
 	}

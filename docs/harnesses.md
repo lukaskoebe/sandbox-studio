@@ -216,10 +216,13 @@ Claude Code's output becomes ACP updates:
 Text that streamed as deltas isn't shown again from the complete message. Messages of
 subagents (`parent_tool_use_id` set) aren't shown.
 
-**Permissions.** The shim passes `--permission-mode default`, which overrides the
-`bypassPermissions` that the teammate's `settings.json` sets for the TUI, and
-`--permission-prompt-tool mcp__plugin_studio_permissions__prompt`. Claude Code asks that tool
-before each action it doesn't approve itself. The tool is the permissions server, `studio-agent
+**Permissions.** The shim passes `--permission-mode bypassPermissions`, the mode the
+teammate's `settings.json` sets for the TUI: the VM is the sandbox, and network access goes
+through the gateway's policy, so tools run without asking, as they do for Codex
+(`approval_policy = "never"`) and OpenCode (`"permission": "allow"`). It also passes
+`--permission-prompt-tool mcp__plugin_studio_permissions__prompt`, which Claude Code asks
+before an action it doesn't approve itself; in this mode that leaves the tools that need the
+user in any mode. The tool is the permissions server, `studio-agent
 claude-permission`, which sends the question over the session's socket to the shim. The socket
 is `0600` in the shim's private run directory. The shim asks Studio with
 `session/request_permission`, offering **Allow** (`allow_once`) and **Deny** (`reject_once`);

@@ -439,7 +439,7 @@ func TestServeStreamsTextAndRunsClaudeForTheSession(t *testing.T) {
 			t.Errorf("start without %s: %q", want, argv[0])
 		}
 	}
-	if flagOf(argv[0], "--permission-mode") != "default" || flagOf(argv[0], "--permission-prompt-tool") != PermissionTool {
+	if flagOf(argv[0], "--permission-mode") != "bypassPermissions" || flagOf(argv[0], "--permission-prompt-tool") != PermissionTool {
 		t.Errorf("permissions: %q", argv[0])
 	}
 	// Studio's own tools run without asking; the permissions server's tools are asked about.
@@ -493,7 +493,7 @@ func TestPermissionAllowRunsTheToolCall(t *testing.T) {
 	var started, completed, text bool
 	for _, n := range s.drain() {
 		switch {
-		case n.Update.Kind == acp.UpdateToolCall && n.Update.ToolCallID == testToolID && n.Update.Status == "pending":
+		case n.Update.Kind == acp.UpdateToolCall && n.Update.ToolCallID == testToolID && n.Update.Status == "in_progress":
 			started = true
 		case n.Update.Kind == acp.UpdateToolCallUpdate && n.Update.ToolCallID == testToolID && n.Update.Status == "completed":
 			completed = true
