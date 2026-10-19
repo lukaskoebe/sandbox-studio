@@ -76,9 +76,11 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
     )
     if ((await term.result("docker", 60_000)) === "yes") {
       expect((await level("open")).ok()).toBe(true)
+      // Docker's output stays on screen, so a failed test's trace shows where it stopped.
       await term.run(
         `for i in $(seq 120); do docker info >/dev/null 2>&1 && break; sleep 1; done; ` +
-          `r=failed; docker run --rm hello-world 2>&1 | grep -q 'Hello from Docker!' && r=ok; echo "hello=$r"`
+          `r=failed; docker run --rm hello-world 2>&1 | tee /tmp/hello; ` +
+          `grep -q 'Hello from Docker!' /tmp/hello && r=ok; echo "hello=$r"`
       )
       expect(await term.result("hello", 10 * 60_000)).toBe("ok")
     } else {
