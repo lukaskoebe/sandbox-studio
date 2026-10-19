@@ -515,7 +515,8 @@ export function Terminal({
           </ContextMenuItem>
           <ContextMenuSeparator />
           <p className="max-w-56 px-2 py-1 text-[0.6875rem] text-muted-foreground">
-            Drag to select: it is copied when you let go.
+            Drag to select: it is copied when you let go and stays marked until
+            you click.
           </p>
         </ContextMenuContent>
       </ContextMenu>
