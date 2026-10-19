@@ -207,7 +207,7 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := p.Ensure(); err != nil {
 		return err
 	}
-	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0))
+	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil))
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
 		return err
 	}
@@ -396,7 +396,7 @@ func run(addr, image string, log *slog.Logger) error {
 		if err != nil {
 			log.Warn("doctor: count SSH agent forges", "err", err)
 		}
-		return doctorCheck(ctx, p.Data, image, addr, true, agentForges)
+		return doctorCheck(ctx, p.Data, image, addr, true, agentForges, embedder)
 	}}
 	if system.Autostart, err = autostart.Default(); err != nil {
 		log.Warn("autostart is unavailable", "err", err)

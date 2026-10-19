@@ -15,6 +15,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/memory"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -22,8 +23,17 @@ import (
 
 // doctorCheck runs the host checks. Studio's own listeners count as healthy when owned.
 // The SSH agent is checked when agentForges SSH forges sign with it.
-func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool, agentForges int) doctor.Report {
+func doctorCheck(ctx context.Context, dataDir, image, addr string, owned bool, agentForges int, embedder *memory.Llama) doctor.Report {
 	p := hostProbes()
+	if embedder != nil {
+		p.Embedder = func() (bool, string, string) {
+			var u memory.Unavailable
+			if errors.As(embedder.Failure(), &u) {
+				return false, u.Err.Error(), u.Fix
+			}
+			return embedder.Ready(), "", ""
+		}
+	}
 	p.SSHAgent = func(ctx context.Context) (int, string, error) {
 		st := gitreview.CheckAgent(ctx)
 		if !st.Available {
@@ -67,7 +77,7 @@ func runDoctor(w io.Writer, addr, image string) int {
 	// The catalog is only read, so a running Studio keeps it. The agent checked is this
 	// shell's; the Git page shows the one the running Studio reaches.
 	agentForges, _ := store.CountAgentForges(ctx, p.DB())
-	r := doctorCheck(ctx, p.Data, image, addr, studioRunning(ctx, addr), agentForges)
+	r := doctorCheck(ctx, p.Data, image, addr, studioRunning(ctx, addr), agentForges, nil)
 	for _, c := range r.Checks {
 		fmt.Fprintf(w, "%-5s %-28s %s\n", c.Status, c.Name, c.Message)
 		if c.Fix != "" {

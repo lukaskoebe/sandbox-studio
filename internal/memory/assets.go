@@ -54,7 +54,10 @@ var LlamaAssets = map[string]Asset{
 
 // Assets downloads the embedding model and llama.cpp into Dir, verifying checksums.
 type Assets struct {
-	Dir    string
+	Dir string
+	// LibDir, when set, is a llama.cpp to load instead of the pinned download, such as one
+	// from the system's packages (STUDIO_LLAMA_LIB).
+	LibDir string
 	Model  Asset
 	Libs   map[string]Asset
 	GOOS   string // defaults to runtime.GOOS
@@ -64,7 +67,7 @@ type Assets struct {
 
 // DefaultAssets are the pinned assets, kept under dir (Studio's data dir).
 func DefaultAssets(dir string) Assets {
-	return Assets{Dir: dir, Model: ModelAsset, Libs: LlamaAssets}
+	return Assets{Dir: dir, LibDir: os.Getenv("STUDIO_LLAMA_LIB"), Model: ModelAsset, Libs: LlamaAssets}
 }
 
 // ErrChecksum means a download did not match its pinned SHA-256.
@@ -77,8 +80,10 @@ func (a Assets) Ensure(ctx context.Context) (libDir, modelPath string, err error
 	if err := os.MkdirAll(a.Dir, 0o700); err != nil {
 		return "", "", err
 	}
-	if libDir, err = a.ensureLibs(ctx); err != nil {
-		return "", "", fmt.Errorf("llama.cpp libraries: %w", err)
+	if libDir = a.LibDir; libDir == "" {
+		if libDir, err = a.ensureLibs(ctx); err != nil {
+			return "", "", fmt.Errorf("llama.cpp libraries: %w", err)
+		}
 	}
 	modelPath = filepath.Join(a.Dir, filepath.Base(strings.SplitN(a.Model.URL, "?", 2)[0]))
 	if err := a.ensureFile(ctx, a.Model, modelPath); err != nil {

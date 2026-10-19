@@ -228,3 +228,19 @@ func TestHostProbesRun(t *testing.T) {
 		t.Fatalf("temp dir: %+v", c)
 	}
 }
+
+// An embedding model that can't load is a warning with its fix; search still works.
+func TestEmbedder(t *testing.T) {
+	p := healthy()
+	p.Embedder = func() (bool, string, string) { return false, "", "" }
+	if c := find(t, Run(context.Background(), p, opts), "embedder"); c.Status != OK || !strings.Contains(c.Message, "first memory") {
+		t.Fatalf("not loaded yet: %+v", c)
+	}
+	p.Embedder = func() (bool, string, string) {
+		return false, "load llama.cpp: libstdc++.so.6: cannot open shared object file", "enable programs.nix-ld"
+	}
+	r := Run(context.Background(), p, opts)
+	if c := find(t, r, "embedder"); r.Status != Warn || c.Status != Warn || !strings.Contains(c.Message, "keywords only") || c.Fix != "enable programs.nix-ld" {
+		t.Fatalf("broken: %s %+v", r.Status, c)
+	}
+}

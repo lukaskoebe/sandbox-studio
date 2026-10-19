@@ -66,6 +66,10 @@ func (r Report) Problems() []Check {
 type Probes struct {
 	GOOS, GOARCH string
 
+	// Embedder reports whether memory's embedding model is loaded, or why it can't load and
+	// how to fix that.
+	Embedder func() (ready bool, problem, fix string)
+
 	// MSBPath returns the installed msb executable, or an error if there is none.
 	MSBPath func() (string, error)
 	// Run runs a program and returns its combined output. A non-zero exit is an error.
@@ -135,6 +139,9 @@ func Run(ctx context.Context, p Probes, o Options) Report {
 	if o.AgentForges > 0 && p.SSHAgent != nil {
 		checks = append(checks, checkSSHAgent(ctx, p, o.AgentForges))
 	}
+	if p.Embedder != nil {
+		checks = append(checks, checkEmbedder(p))
+	}
 	r := Report{Status: OK, Checks: checks, CheckedAt: time.Now().UTC()}
 	for _, c := range checks {
 		if c.Status.rank() > r.Status.rank() {
@@ -142,6 +149,22 @@ func Run(ctx context.Context, p Probes, o Options) Report {
 		}
 	}
 	return r
+}
+
+// checkEmbedder reports memory's embedding model. One that can't load is a warning: search
+// still works, by keywords.
+func checkEmbedder(p Probes) Check {
+	c := Check{ID: "embedder", Name: "Memory embedding model", Status: OK}
+	ready, problem, fix := p.Embedder()
+	switch {
+	case problem != "":
+		c.Status, c.Message, c.Fix = Warn, problem+"; memory search uses keywords only", fix
+	case ready:
+		c.Message = "loaded"
+	default:
+		c.Message = "loads with the first memory that needs it"
+	}
+	return c
 }
 
 func checkMSB(ctx context.Context, p Probes, o Options) []Check {

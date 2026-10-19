@@ -177,3 +177,32 @@ func TestPinnedAssetsCoverPlatforms(t *testing.T) {
 		t.Errorf("model %+v", ModelAsset)
 	}
 }
+
+// STUDIO_LLAMA_LIB's llama.cpp is used as it is: nothing of llama.cpp is downloaded.
+func TestAssetsLibDirSkipsTheDownload(t *testing.T) {
+	model := []byte("GGUF fake model bytes")
+	srv := newAssetServer(t, map[string][]byte{"model.gguf": model})
+	t.Setenv("STUDIO_LLAMA_LIB", "/run/current-system/sw/lib")
+	a := DefaultAssets(t.TempDir())
+	a.Model = Asset{URL: srv.URL + "/model.gguf", SHA256: sum(model)}
+	a.Libs = nil
+	libDir, _, err := a.Ensure(context.Background())
+	if err != nil || libDir != "/run/current-system/sw/lib" {
+		t.Fatalf("lib dir %q, %v", libDir, err)
+	}
+}
+
+// A library that can't find its dependencies says how to provide them.
+func TestLoadHint(t *testing.T) {
+	err := errors.New("load llama.cpp from /d: libgomp.so.1: cannot open shared object file: No such file or directory")
+	if hint := loadHint(err); !strings.Contains(hint, "libgomp") || !strings.Contains(hint, "STUDIO_LLAMA_LIB") {
+		t.Fatalf("hint %q", hint)
+	}
+	if hint := loadHint(errors.New("invalid ELF header")); hint != "" {
+		t.Fatalf("hint for another error: %q", hint)
+	}
+	u := Unavailable{Err: err, Fix: "Do this."}
+	if !strings.HasSuffix(u.Error(), "directory. Do this.") || !errors.Is(u, err) {
+		t.Fatalf("Unavailable %q", u.Error())
+	}
+}

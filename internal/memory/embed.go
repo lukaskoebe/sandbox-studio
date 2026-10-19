@@ -103,6 +103,18 @@ func (s *Service) requestSweep() {
 func (s *Service) Run(ctx context.Context) {
 	s.requestSweep()
 	var retry <-chan time.Time
+	off := false // the model can't load in this process: search goes on by keywords
+	failed := func(err error) {
+		switch {
+		case ctx.Err() != nil:
+		case errors.As(err, new(Unavailable)):
+			off = true
+			s.log.Error("memory: the embedding model can't load, so search uses keywords only", "err", err)
+		default:
+			s.log.Warn("memory: embedding failed; retrying later", "err", err)
+			retry = time.After(retryDelay)
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -111,14 +123,18 @@ func (s *Service) Run(ctx context.Context) {
 			retry = nil
 			s.requestSweep()
 		case id := <-s.queue:
-			if err := s.embedChunks(ctx, []int64{id}); err != nil && ctx.Err() == nil {
-				s.log.Warn("memory: embedding failed; retrying later", "err", err)
-				retry = time.After(retryDelay)
+			if off {
+				continue
+			}
+			if err := s.embedChunks(ctx, []int64{id}); err != nil {
+				failed(err)
 			}
 		case <-s.sweep:
-			if _, err := s.EmbedPending(ctx); err != nil && ctx.Err() == nil {
-				s.log.Warn("memory: embedding failed; retrying later", "err", err)
-				retry = time.After(retryDelay)
+			if off {
+				continue
+			}
+			if _, err := s.EmbedPending(ctx); err != nil {
+				failed(err)
 			}
 		}
 	}

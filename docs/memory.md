@@ -99,6 +99,16 @@ changes, update the thresholds in the same commit and say why.
   for the platform and the GGUF at a pinned Hugging Face revision into
   `<data>/memory/`, verifying the pinned SHA-256 of each (about 335 MB in all). An unused
   memory downloads nothing.
+- `STUDIO_LLAMA_LIB` names a directory with `libllama`, `libggml` and `libggml-base` of a
+  compatible llama.cpp to load instead of the download, such as a system package's.
+- The Linux build is Ubuntu's: it needs `libstdc++` and `libgomp` where the dynamic loader
+  looks, which NixOS doesn't provide without `programs.nix-ld` (with `stdenv.cc.cc.lib` and
+  `llvmPackages.openmp` in its libraries). A library that doesn't load, or a llama.cpp with
+  no compute backend (ggml ignores a CPU backend that fails to open, reported through
+  `ggml_backend_load_errors`), is logged once as an error with the fix, the Runtime settings
+  and `/api/system/doctor` show it as the `embedder` warning, and search stays on BM25 until
+  Studio restarts instead of retrying every minute. Other failures, such as a download, retry
+  after a minute.
 - Vectors record the model name. A new name (a new pin) makes the sweep re-embed
   everything in the background; old vectors are ignored meanwhile.
 
