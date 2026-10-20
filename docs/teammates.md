@@ -254,7 +254,7 @@ that provider (`teammates.DefaultTeammate*`, created by the API's `createProvide
   (migration 042 gives it to teammates that still have the earlier default word for word);
 - harness by provider kind: `claude_subscription` and `anthropic_api` → claude,
   `chatgpt_subscription` and `openai_api` → codex, `openai_compatible` → opencode;
-- model: `claude-sonnet-5-5` for `anthropic_api`, `gpt-sol-6.1` for `openai_api`, the
+- model: `claude-sonnet-5-5` for `anthropic_api`, `gpt-6.1-sol` for `openai_api`, the
   endpoint's model for `openai_compatible`, and none for subscriptions (the subscription's
   default);
 - git identity `Iris (agent) <iris@agents.invalid>`.

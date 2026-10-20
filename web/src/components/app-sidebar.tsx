@@ -23,6 +23,7 @@ import {
   RobotIcon,
   TrayIcon,
   TerminalWindowIcon,
+  WarningIcon,
 } from "@phosphor-icons/react"
 import {
   Sidebar,
@@ -153,9 +154,12 @@ export function AppSidebar({ env }: { env: string }) {
   const matchRoute = useMatchRoute()
   const settingsOpen = useSearch({ strict: false }).settings !== undefined
   const all = sandboxes.data ?? []
+  // A sandbox whose teammate is gone counts as without one; until the teammates load, only
+  // a sandbox that never had one does.
   const unowned = all.filter(
     (sb) =>
-      !sb.teammateId || !teammates.data?.some((p) => p.id === sb.teammateId)
+      !sb.teammateId ||
+      (teammates.data && !teammates.data.some((p) => p.id === sb.teammateId))
   )
 
   return (
@@ -208,12 +212,38 @@ export function AppSidebar({ env }: { env: string }) {
           </SidebarGroupAction>
           <SidebarGroupContent>
             <SidebarMenu>
+              {/* Only the first try shows the skeleton: pages that load teammates retry a
+                  failed list, and the sidebar says it failed meanwhile. */}
               {teammates.isPending &&
+                teammates.failureCount === 0 &&
                 Array.from({ length: 2 }, (_, i) => (
                   <SidebarMenuItem key={i}>
                     <SidebarMenuSkeleton showIcon />
                   </SidebarMenuItem>
                 ))}
+              {!teammates.data && teammates.failureCount > 0 && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    size="sm"
+                    tooltip={errorMessage(
+                      teammates.error ?? teammates.failureReason
+                    )}
+                    title={errorMessage(
+                      teammates.error ?? teammates.failureReason
+                    )}
+                    disabled={teammates.isFetching}
+                    onClick={() => void teammates.refetch()}
+                  >
+                    <WarningIcon className="text-destructive" />
+                    <span className="min-w-0 flex-1 truncate">
+                      Teammates didn't load
+                    </span>
+                    <span className="text-[0.6875rem] text-muted-foreground">
+                      {teammates.isFetching ? "retrying" : "retry"}
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               {teammates.data?.map((p) => (
                 <TeammateNode
                   key={p.id}

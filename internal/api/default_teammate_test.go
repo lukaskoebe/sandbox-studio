@@ -53,7 +53,7 @@ func TestFirstProviderCreatesTheDefaultTeammate(t *testing.T) {
 func TestDefaultTeammateHarnessAndModelPerProviderKind(t *testing.T) {
 	h, s := newTestServer(t)
 	for _, tc := range []struct{ name, body, harness, model string }{
-		{"OpenAI", `{"name":"OpenAI","kind":"openai_api","apiKey":"sk-test-openai"}`, "codex", "gpt-sol-6.1"},
+		{"OpenAI", `{"name":"OpenAI","kind":"openai_api","apiKey":"sk-test-openai"}`, "codex", "gpt-6.1-sol"},
 		{"Endpoint", `{"name":"Endpoint","kind":"openai_compatible","apiKey":"sk-test-endpoint","baseUrl":"https://llm.example.com/v1","model":"llama-3.1"}`, "opencode", "llama-3.1"},
 		{"Claude", `{"name":"Claude","kind":"claude_subscription"}`, "claude", ""},
 		{"ChatGPT", `{"name":"ChatGPT","kind":"chatgpt_subscription"}`, "codex", ""},

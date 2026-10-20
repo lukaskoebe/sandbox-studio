@@ -716,3 +716,36 @@ func TestMigrateDefaultSoul(t *testing.T) {
 		t.Errorf("edited soul after migrating: %q, %v", tm.Soul, err)
 	}
 }
+
+// Migration 045 corrects the default OpenAI model's ID, and leaves other models alone.
+func TestMigrateOpenAIModelID(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 44); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Work', 1)`,
+		`INSERT INTO teammates (id, environment_id, name, role, soul, harness, model, git_name, git_email, created_at, updated_at)
+		 VALUES ('iris', 'env', 'Iris', '', '', 'codex', 'gpt-sol-6.1', 'Iris', 'iris@agents.invalid', 1, 1),
+		        ('ada', 'env', 'Ada', '', '', 'codex', 'gpt-6-sol', 'Ada', 'ada@agents.invalid', 1, 1)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]string{"iris": "gpt-6.1-sol", "ada": "gpt-6-sol"} {
+		if tm, err := s.Teammate(ctx, "env", id); err != nil || tm.Model != want {
+			t.Errorf("%s's model after migrating: %q, %v; want %q", id, tm.Model, err, want)
+		}
+	}
+}

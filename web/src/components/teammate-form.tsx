@@ -320,7 +320,7 @@ export function TeammateForm({
               provider?.kind === "openai_compatible"
                 ? provider.model
                 : provider?.kind === "openai_api"
-                  ? "gpt-sol-6.1"
+                  ? "gpt-6.1-sol"
                   : needsModel
                     ? "claude-sonnet-5-5"
                     : "The subscription's default"

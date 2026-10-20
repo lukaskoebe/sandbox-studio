@@ -19,7 +19,7 @@ func DefaultTeammateHarness(kind string) (harness, model string) {
 	case KindAnthropicAPI:
 		return HarnessClaude, "claude-sonnet-5-5"
 	case KindOpenAIAPI:
-		return HarnessCodex, "gpt-sol-6.1"
+		return HarnessCodex, "gpt-6.1-sol"
 	case KindOpenAICompatible:
 		return HarnessOpenCode, ""
 	case KindClaudeSubscription:
