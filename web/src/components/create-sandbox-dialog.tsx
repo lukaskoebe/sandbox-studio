@@ -26,15 +26,18 @@ const namePattern = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/
 
 export function CreateSandboxDialog({
   env,
+  teammate = "",
   open,
   onOpenChange,
 }: {
   env: string
+  /** The teammate the new sandbox is for, until the user picks another. */
+  teammate?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const [name, setName] = useState("")
-  const [teammateId, setTeammateId] = useState("")
+  const [teammateId, setTeammateId] = useState(teammate)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const create = $api.useMutation("post", "/api/environments/{env}/sandboxes", {

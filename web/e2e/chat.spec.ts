@@ -172,7 +172,8 @@ test("a chat started from the workspace opens in the workspace", async ({
   await expect(
     page.getByRole("button", { name: "main", exact: true })
   ).toBeVisible()
-  await page.getByRole("main").getByRole("link", { name: "New chat" }).click()
+  await page.getByRole("button", { name: "New session" }).click()
+  await page.getByRole("menuitem", { name: /^New chat with / }).click()
   const box = page.getByRole("main").getByRole("textbox", { name: "Message" })
   await box.fill("Please run the tests")
   await box.press("Enter")

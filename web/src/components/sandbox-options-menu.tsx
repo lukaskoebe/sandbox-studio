@@ -6,13 +6,17 @@ import {
   DownloadSimpleIcon,
   GitForkIcon,
   ArrowClockwiseIcon,
+  ClockCounterClockwiseIcon,
   PauseIcon,
   PlayIcon,
+  PlusIcon,
   StopIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
+import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
+import { HistorySheet } from "@/components/sandbox-details"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -51,7 +55,9 @@ export function SandboxOptionsMenu({
   env: string
   sandbox: Sandbox
 }) {
-  const [dialog, setDialog] = useState<"fork" | "rebase" | "delete">()
+  const [dialog, setDialog] = useState<
+    "history" | "fork" | "another" | "rebase" | "delete"
+  >()
   const { path, stop, suspend, resume, phase: p } = useSandboxLifecycle(env, sb)
   // A create or fork that runs or failed has no guest yet; only deleting it makes sense.
   const building = sb.status === "creating" || sb.status === "failed"
@@ -74,13 +80,17 @@ export function SandboxOptionsMenu({
         >
           <DotsThreeIcon weight="bold" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuGroup>
             <DropdownMenuLabel className="truncate">
               {sb.name}
             </DropdownMenuLabel>
             {!building && (
               <>
+                <DropdownMenuItem onClick={() => setDialog("history")}>
+                  <ClockCounterClockwiseIcon />
+                  History and checkpoints
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   disabled={!available}
                   title={
@@ -93,6 +103,12 @@ export function SandboxOptionsMenu({
                   <GitForkIcon />
                   Fork
                 </DropdownMenuItem>
+                {sb.teammateId && (
+                  <DropdownMenuItem onClick={() => setDialog("another")}>
+                    <PlusIcon />
+                    Another sandbox for this teammate
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   disabled={!available}
                   title={
@@ -173,6 +189,18 @@ export function SandboxOptionsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       {/* Rendered beside the menu: the menu closes when an item is chosen. */}
+      <HistorySheet
+        env={env}
+        sandbox={sb}
+        open={dialog === "history"}
+        onOpenChange={(open) => setDialog(open ? "history" : undefined)}
+      />
+      <CreateSandboxDialog
+        env={env}
+        teammate={sb.teammateId}
+        open={dialog === "another"}
+        onOpenChange={(open) => setDialog(open ? "another" : undefined)}
+      />
       <ForkSandboxDialog
         env={env}
         sandbox={sb}

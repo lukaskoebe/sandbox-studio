@@ -1,19 +1,16 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
-import { SandboxDashboard } from "@/components/sandbox-dashboard"
 
 /**
- * The sandbox's dashboard. Links from before the dashboard and workspace split carry
- * workspace parameters (?terminal=, ?session=, ?chat=); those go to the workspace.
+ * A sandbox's address opens its workspace, with the tab a link names (?terminal=, ?session=,
+ * ?chat=). The dashboard it once showed is the header's details pill and ⋯ menu now.
  */
 export const Route = createFileRoute("/e/$env/sandboxes/$id/")({
   beforeLoad: ({ params, search }) => {
-    if (Object.keys(search).length > 0)
-      throw redirect({
-        to: "/e/$env/sandboxes/$id/work",
-        params,
-        search,
-        replace: true,
-      })
+    throw redirect({
+      to: "/e/$env/sandboxes/$id/work",
+      params,
+      search,
+      replace: true,
+    })
   },
-  component: SandboxDashboard,
 })

@@ -522,4 +522,4 @@ environments. How guests trust the CA: [guest agent](guest-agent.md#ca-trust-and
 
 The gateway keeps the last 500 connections per sandbox, in memory only (`connlog.go`):
 host, port, verdict (`pending`, `open`, `allowed`, `denied`, `undecided`, `failed`), rule,
-bytes. The sandbox dashboard and its Connections panel show it (`GET …/sandboxes/{id}/connections`).
+bytes. The sandbox's Connections panel shows it (`GET …/sandboxes/{id}/connections`).

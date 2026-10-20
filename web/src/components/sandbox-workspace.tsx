@@ -1,23 +1,35 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import {
   ArrowSquareOutIcon,
   BroadcastIcon,
   BroomIcon,
   BrowserIcon,
   ChatCircleDotsIcon,
+  GitBranchIcon,
   GitDiffIcon,
   PlugsConnectedIcon,
   PlusIcon,
+  RobotIcon,
+  TerminalWindowIcon,
   WarningIcon,
   XIcon,
 } from "@phosphor-icons/react"
-import { AgentSessions } from "@/components/agent-sessions"
+import {
+  AgentSessions,
+  useStartAgentSession,
+} from "@/components/agent-sessions"
 import { ChatThread, requestLabel } from "@/components/chat/chat-thread"
 import { SandboxChats } from "@/components/chat/sandbox-chats"
 import { WorkspaceTabs, type PanelTab } from "@/components/chat/workspace-panel"
 import { BrowserPanel } from "@/components/browser-panel"
 import { ConnectionsPanel } from "@/components/connections-panel"
+import {
+  GitReview,
+  gitReviewDescription,
+  isGitApproval,
+} from "@/components/git-review"
 import { StartButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
@@ -52,14 +64,22 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { Terminal } from "@/components/terminal"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
-import { useAgentView } from "@/lib/agent-view"
-import { $api, isReady, type Sandbox } from "@/lib/api/client"
+import {
+  $api,
+  errorMessage,
+  errorStatus,
+  isReady,
+  type Sandbox,
+} from "@/lib/api/client"
+import { useClaimApprovals } from "@/lib/approval-claims"
 import { hasNews, useChatsSeen } from "@/lib/chat-seen"
 import { chatTitle, useChat, type Chat, type ChatTurn } from "@/lib/chats"
 import { shortTemplate } from "@/lib/lineage"
+import { harnessLabels } from "@/lib/teammates"
 import {
   freshPreviewHint,
   onStudioMachine,
@@ -72,8 +92,14 @@ import { pasteFile } from "@/lib/workspace-upload"
 export const workspacePanels = ["browser", "connections", "files"] as const
 export type WorkspacePanelId = (typeof workspacePanels)[number]
 
-/** A tab in the workspace: a terminal session of the guest, or a chat of the sandbox. */
-type Tab = { kind: "terminal"; name: string } | { kind: "chat"; id: string }
+/**
+ * A tab in the workspace: a terminal session of the guest, a chat of the sandbox, or the review
+ * of a push from it.
+ */
+type Tab =
+  | { kind: "terminal"; name: string }
+  | { kind: "chat"; id: string }
+  | { kind: "review"; id: string }
 const keyOf = (t: Tab) => `${t.kind}:${t.kind === "terminal" ? t.name : t.id}`
 
 /**
@@ -86,14 +112,18 @@ export function SandboxWorkspace({
   onPanel,
   onTab,
 }: {
-  search: { terminal?: string; chat?: string; panel?: WorkspacePanelId }
+  search: {
+    terminal?: string
+    chat?: string
+    review?: string
+    panel?: WorkspacePanelId
+  }
   onPanel: (panel: WorkspacePanelId | undefined) => void
   /** The tab in view changed: the URL names it, so a link to another tab switches to it. */
-  onTab: (tab: { terminal?: string; chat?: string }) => void
+  onTab: (tab: { terminal?: string; chat?: string; review?: string }) => void
 }) {
   const { env, sandbox: sb } = useSandboxPage()
   const queryClient = useQueryClient()
-  const view = useAgentView().view
   const p = phase(sb)
   const building = sb.status === "creating" || sb.status === "failed"
   const suspended = p === "suspended"
@@ -120,7 +150,21 @@ export function SandboxWorkspace({
       ? { kind: "terminal", name: search.terminal }
       : search.chat
         ? { kind: "chat", id: search.chat }
-        : null
+        : search.review
+          ? { kind: "review", id: search.review }
+          : null
+  )
+  // A push waiting for review opens its tab by itself; one a link names stays after it is
+  // decided, until its tab is closed.
+  const approvals = usePendingApprovals()
+  const waitingReviews = (approvals.data ?? [])
+    .filter((a) => a.sandboxId === sb.id && isGitApproval(a))
+    .map((a) => a.id)
+  const [reviewIds, setReviewIds] = useState<string[]>(() =>
+    search.review ? [search.review] : []
+  )
+  const [closedReviews, setClosedReviews] = useState<ReadonlySet<string>>(
+    () => new Set()
   )
   const [panelTab, setPanelTab] = useState<PanelTab>("changes")
   const [turnId, setTurnId] = useState<string>()
@@ -180,22 +224,33 @@ export function SandboxWorkspace({
     setChatIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
     setPicked({ kind: "chat", id })
   }, [search.chat])
+  useEffect(() => {
+    if (!search.review) return
+    const id = search.review
+    setReviewIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    setClosedReviews((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+    setPicked({ kind: "review", id })
+  }, [search.review])
 
-  // Work mode: in chat mode a sandbox with chats opens its latest one, unless the user or
-  // a link already picked a tab.
+  // A sandbox with chats opens its latest one, unless the user or a link already picked a tab.
   const seeded = useRef(false)
   useEffect(() => {
-    if (seeded.current || view === undefined || !chats.data) return
+    if (seeded.current || !chats.data) return
     seeded.current = true
     const latest = [...chats.data]
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
       .at(0)
-    if (view !== "chat" || !latest || picked) return
+    if (!latest || picked) return
     setChatIds((prev) =>
       prev.includes(latest.id) ? prev : [...prev, latest.id]
     )
     setPicked({ kind: "chat", id: latest.id })
-  }, [view, chats.data, picked])
+  }, [chats.data, picked])
 
   useEffect(() => saveOpenChats(sb.id, chatIds), [sb.id, chatIds])
   // A deleted chat leaves the tabs. A chat a link just opened may be newer than the list,
@@ -215,16 +270,23 @@ export function SandboxWorkspace({
     })
   }, [chats.data])
 
+  const reviews = [
+    ...reviewIds,
+    ...waitingReviews.filter((id) => !reviewIds.includes(id)),
+  ].filter((id) => !closedReviews.has(id))
   const tabs: Tab[] = [
-    ...terminals.map((name): Tab => ({ kind: "terminal", name })),
     ...chatIds.map((id): Tab => ({ kind: "chat", id })),
+    ...terminals.map((name): Tab => ({ kind: "terminal", name })),
+    ...reviews.map((id): Tab => ({ kind: "review", id })),
   ]
-  // The picked tab, or the last one open when the picked one closed.
+  // The picked tab, or the last chat or terminal open when the picked one closed. A review
+  // that opened by itself waits for a click.
   const current =
     tabs.find((t) => keyOf(t) === (picked && keyOf(picked))) ??
-    tabs.at(-1) ??
+    tabs.filter((t) => t.kind !== "review").at(-1) ??
     null
   const chatActive = current?.kind === "chat"
+  const reviewActive = current?.kind === "review"
   // Only a change of the tab in view goes to the URL. A link changes the URL first, and the
   // tab follows it above.
   const currentKey = current && keyOf(current)
@@ -233,8 +295,15 @@ export function SandboxWorkspace({
     const tab =
       current.kind === "terminal"
         ? { terminal: current.name }
-        : { chat: current.id }
-    if (tab.terminal !== search.terminal || tab.chat !== search.chat) onTab(tab)
+        : current.kind === "chat"
+          ? { chat: current.id }
+          : { review: current.id }
+    if (
+      tab.terminal !== search.terminal ||
+      tab.chat !== search.chat ||
+      tab.review !== search.review
+    )
+      onTab(tab)
   }, [currentKey])
   const chatLog = useChat(
     env,
@@ -265,8 +334,11 @@ export function SandboxWorkspace({
     if (t.kind === "terminal") {
       drop(t.name)
       close.mutate({ params: { path: { env, id: sb.id, name: t.name } } })
-    } else {
+    } else if (t.kind === "chat") {
       setChatIds((prev) => prev.filter((id) => id !== t.id))
+    } else {
+      setReviewIds((prev) => prev.filter((id) => id !== t.id))
+      setClosedReviews((prev) => new Set(prev).add(t.id))
     }
     if (current && keyOf(current) === keyOf(t)) setPicked(null)
   }
@@ -275,6 +347,15 @@ export function SandboxWorkspace({
     const chat = chatOf(id)
     return chat ? chatTitle(chat) : "Chat"
   }
+  const reviewLabel = (id: string) => {
+    const a = approvals.data?.find((x) => x.id === id)
+    const branch = a?.git?.review?.branch ?? a?.git?.pullRequest?.head
+    return branch ? `Review ${branch}` : "Review"
+  }
+  const startAgent = useStartAgentSession(env, sb.id, (name) => {
+    setTerminals((prev) => (prev.includes(name) ? prev : [...prev, name]))
+    setPicked({ kind: "terminal", name })
+  })
   const seen = useChatsSeen()
 
   // Changes of the chat in view open on the Files and changes panel.
@@ -330,7 +411,10 @@ export function SandboxWorkspace({
       <>
         <RebaseFailedAlert env={env} sandbox={sb} />
         <div
-          className={cn("flex min-h-0 flex-1 flex-col", chatActive && "hidden")}
+          className={cn(
+            "flex min-h-0 flex-1 flex-col",
+            (chatActive || reviewActive) && "hidden"
+          )}
         >
           <TerminalPane
             env={env}
@@ -345,6 +429,7 @@ export function SandboxWorkspace({
             onExit={drop}
           />
         </div>
+        {current?.kind === "review" && <ReviewPane env={env} id={current.id} />}
         {chatActive &&
           (chatLog.chat ? (
             <ChatThread
@@ -385,7 +470,12 @@ export function SandboxWorkspace({
           <div className="flex items-center gap-0.5">
             {tabs.map((t) => {
               const on = current !== null && keyOf(t) === keyOf(current)
-              const label = t.kind === "terminal" ? t.name : chatLabel(t.id)
+              const label =
+                t.kind === "terminal"
+                  ? t.name
+                  : t.kind === "chat"
+                    ? chatLabel(t.id)
+                    : reviewLabel(t.id)
               return (
                 <div
                   key={keyOf(t)}
@@ -408,7 +498,16 @@ export function SandboxWorkspace({
                     {t.kind === "chat" && (
                       <ChatTabIcon chat={chatOf(t.id)} seen={seen} on={on} />
                     )}
+                    {t.kind === "review" && (
+                      <GitBranchIcon className="size-3.5 shrink-0 text-(--acc-git)" />
+                    )}
                     <span className="min-w-0 truncate">{label}</span>
+                    {t.kind === "review" && waitingReviews.includes(t.id) && (
+                      <span
+                        aria-label="waiting on you"
+                        className="size-1.5 shrink-0 rounded-full bg-(--st-waiting)"
+                      />
+                    )}
                   </button>
                   <button
                     type="button"
@@ -416,7 +515,9 @@ export function SandboxWorkspace({
                     title={
                       t.kind === "terminal"
                         ? `Close ${label} (ends its processes)`
-                        : `Close ${label} (the chat stays)`
+                        : t.kind === "chat"
+                          ? `Close ${label} (the chat stays)`
+                          : `Close ${label} (it stays waiting on Home)`
                     }
                     className="mr-1 rounded p-0.5 opacity-50 group-hover:opacity-100 hover:bg-muted-foreground/20"
                     onClick={() => closeTab(t)}
@@ -426,27 +527,32 @@ export function SandboxWorkspace({
                 </div>
               )
             })}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              title="New terminal"
-              aria-label="New terminal"
-              onClick={newTerminal}
-            >
-              <PlusIcon />
-            </Button>
+            {sb.teammateId ? (
+              <NewSession
+                env={env}
+                sandbox={sb}
+                onShell={newTerminal}
+                onAgent={startAgent.start}
+                starting={startAgent.starting}
+              />
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                title="New terminal"
+                aria-label="New terminal"
+                onClick={newTerminal}
+              >
+                <PlusIcon />
+              </Button>
+            )}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-1 pl-2">
             {!building && sb.teammateId && (
               <SandboxChats env={env} id={sb.id} onOpen={openChat} />
             )}
             {sb.teammateId && isReady(sb) && (
-              <AgentSessions
-                env={env}
-                id={sb.id}
-                teammateId={sb.teammateId}
-                onAttach={openTerminal}
-              />
+              <AgentSessions env={env} id={sb.id} onAttach={openTerminal} />
             )}
             {isReady(sb) && <Previews env={env} sandbox={sb} />}
             <span className="mx-0.5 h-4 w-px shrink-0 bg-border" />
@@ -814,5 +920,119 @@ function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/**
+ * The + of a teammate's sandbox: a chat with the teammate, the teammate's own harness in a
+ * terminal, or a plain shell.
+ */
+function NewSession({
+  env,
+  sandbox: sb,
+  onShell,
+  onAgent,
+  starting,
+}: {
+  env: string
+  sandbox: Sandbox
+  onShell: () => void
+  onAgent: () => void
+  starting: boolean
+}) {
+  const navigate = useNavigate()
+  const teammate = $api.useQuery(
+    "get",
+    "/api/environments/{env}/teammates/{id}",
+    { params: { path: { env, id: sb.teammateId ?? "" } } },
+    { enabled: !!sb.teammateId }
+  )
+  const name = teammate.data?.name ?? "the teammate"
+  const harness = teammate.data ? harnessLabels[teammate.data.harness] : "agent"
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="New session"
+            aria-label="New session"
+          />
+        }
+      >
+        {starting ? <Spinner /> : <PlusIcon />}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuItem
+          onClick={() =>
+            void navigate({
+              to: "/e/$env/chats/new",
+              params: { env },
+              search: { sandbox: sb.id, origin: "workspace" },
+            })
+          }
+        >
+          <ChatCircleDotsIcon />
+          <span className="flex flex-col">
+            New chat with {name}
+            <span className="text-xs text-muted-foreground">
+              {harness}, in this sandbox
+            </span>
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!isReady(sb) || starting} onClick={onAgent}>
+          <RobotIcon />
+          <span className="flex flex-col">
+            {name} in a terminal
+            <span className="text-xs text-muted-foreground">
+              {harness}&apos;s own interface
+            </span>
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onShell}>
+          <TerminalWindowIcon />
+          Shell
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** A push's review as a tab: the same review its page and Home's sheet show. */
+function ReviewPane({ env, id }: { env: string; id: string }) {
+  const approval = $api.useQuery(
+    "get",
+    "/api/environments/{env}/approvals/{id}",
+    { params: { path: { env, id } } },
+    { retry: (n, err) => errorStatus(err) !== 404 && n < 2 }
+  )
+  const a = approval.data
+  // The tab decides it, so the approval stack leaves its card out.
+  useClaimApprovals(a?.status === "pending" ? [a.id] : [])
+  if (!a)
+    return (
+      <Empty className="m-auto">
+        <EmptyHeader>
+          {approval.isError ? (
+            <>
+              <EmptyTitle>Can&apos;t load this review</EmptyTitle>
+              <EmptyDescription>
+                {errorMessage(approval.error)}
+              </EmptyDescription>
+            </>
+          ) : (
+            <Spinner />
+          )}
+        </EmptyHeader>
+      </Empty>
+    )
+  return (
+    <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4 md:p-6">
+      <div className="mx-auto grid max-w-5xl gap-3 text-[0.8125rem]">
+        <p className="text-muted-foreground">{gitReviewDescription(a)}</p>
+        <GitReview approval={a} />
+      </div>
+    </ScrollArea>
   )
 }

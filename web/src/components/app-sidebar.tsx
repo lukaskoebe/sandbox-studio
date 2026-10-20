@@ -659,15 +659,14 @@ function SessionList({ sb, sessions }: { sb: Sandbox; sessions: Sessions }) {
         <SidebarMenuSubItem key={a.id}>
           <SidebarMenuSubButton
             size="sm"
-            isActive={
-              !!matchRoute({
-                to: "/e/$env/git/reviews/$id",
-                params: { env, id: a.id },
-              })
-            }
+            isActive={inWorkspace && search.review === a.id}
             title={`Review: ${a.subject}`}
             render={
-              <Link to="/e/$env/git/reviews/$id" params={{ env, id: a.id }} />
+              <Link
+                to="/e/$env/sandboxes/$id/work"
+                params={{ env, id: sb.id }}
+                search={{ review: a.id }}
+              />
             }
           >
             <GitBranchIcon className="text-(--acc-git)" />

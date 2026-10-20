@@ -98,10 +98,10 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await expect(
       page.getByRole("region", { name: "Finish setup" })
     ).toBeHidden()
-    // The sandbox table's row: its name, ID, owner, template, status and ports.
+    // The sidebar lists Iris with its sandbox and what it is doing.
     await expect(
-      page.getByRole("link", { name: /^first \S+ Iris .*Running/ })
-    ).toBeVisible()
+      page.getByRole("link", { name: "Iris", exact: true })
+    ).toHaveAccessibleDescription(/^first · /)
   } finally {
     await context.close()
     await studio.stop()

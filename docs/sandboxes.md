@@ -116,9 +116,9 @@ A template's spec fixes the resources of sandboxes created from it, and a rebase
 new generation from the template, so it resets the CPUs and memory as well.
 
 `PUT /api/environments/{env}/sandboxes/{id}/resources` with `{"cpus", "memoryMiB"}` sets the
-CPUs (1–64) and the memory size (at least 512 MiB). The sandbox dashboard's Resources dialog
-calls it. Studio asks msb's `modify` for a dry run and applies each changed resource as the
-plan says:
+CPUs (1–64) and the memory size (at least 512 MiB). The Resources dialog in the
+sandbox's details calls it. Studio asks msb's `modify` for a dry run and applies each
+changed resource as the plan says:
 
 - **live**: a running sandbox's VM takes the change now, where msb offers it (msb 0.7.7
   doesn't, see below), up to the VM's boot-time capacity: its memory ceiling, and its CPU

@@ -12,6 +12,16 @@
   approval.
 - **Git review:** review feedback can go to a new chat in the push's sandbox, the default for
   a teammate's sandbox; it starts only when there is a note or a line comment to send.
+- **Web:** the sidebar is one tree: each teammate with its sandbox and that sandbox's chats,
+  terminals and waiting reviews, then the sandboxes without a teammate, with New chat on top
+  and a menu for a new teammate, a sandbox without one, or an import.
+- **Web:** Home shows what needs you (the approvals waiting, decided on the spot), the chats
+  working now and the latest network activity, in place of the sandbox table.
+- **Web:** a sandbox opens on its workspace; the dashboard is gone. Its chats, terminals and
+  the git reviews waiting on it are tabs, and **+** starts a chat with its teammate, the
+  teammate in a terminal, or a shell. The status pill in the header opens its details
+  (template, resources, ID, ports, start, stop and resize), **Checkpoint** saves one, and
+  ⋯ › History and checkpoints shows where it came from and its checkpoints.
 
 ## v0.4.2 — 2026-10-19
 

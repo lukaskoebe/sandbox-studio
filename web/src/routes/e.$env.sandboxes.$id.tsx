@@ -11,7 +11,7 @@ import { SandboxHeader, SandboxPageProvider } from "@/components/sandbox-page"
 import { $api, errorMessage, errorStatus, isReady } from "@/lib/api/client"
 
 /**
- * One sandbox: its dashboard (the index) and its workspace (/work) share this frame and the
+ * One sandbox: its workspace (/work; the index redirects there) gets this frame and the
  * sandbox it loads.
  */
 export const Route = createFileRoute("/e/$env/sandboxes/$id")({

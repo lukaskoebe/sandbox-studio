@@ -43,7 +43,7 @@ import type { components } from "@/lib/api/schema.gen"
 import { formatAge } from "@/lib/utils"
 
 /**
- * Disk checkpoints of one sandbox, on its dashboard, as a list with a save action and the
+ * Disk checkpoints of one sandbox, in its history sheet, as a list with a save action and the
  * schedule that takes them. They work while it is stopped. The history above shows the same
  * checkpoints on the line.
  */
@@ -407,7 +407,7 @@ function refresh(queryClient: QueryClient) {
 }
 
 /** Names and saves a checkpoint of the sandbox as it is now. */
-function SaveCheckpointDialog({
+export function SaveCheckpointDialog({
   environmentId,
   sandboxId,
   taken,

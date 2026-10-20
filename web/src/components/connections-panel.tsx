@@ -80,60 +80,6 @@ function VerdictDot({ conn }: { conn: Connection }) {
   )
 }
 
-/**
- * The newest connections of a sandbox, for its dashboard. The full log is in the
- * Connections panel.
- */
-export function RecentConnections({
-  env,
-  id,
-  limit = 5,
-}: {
-  env: string
-  id: string
-  limit?: number
-}) {
-  const conns = $api.useQuery(
-    "get",
-    "/api/environments/{env}/sandboxes/{id}/connections",
-    { params: { path: { env, id } } },
-    { refetchInterval: 5000 }
-  )
-  if (conns.isPending) return <Spinner />
-  if (conns.isError) {
-    return (
-      <p className="text-xs text-destructive">{errorMessage(conns.error)}</p>
-    )
-  }
-  const list = conns.data ?? []
-  if (list.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Connections from this sandbox show up here as it makes them.
-      </p>
-    )
-  }
-  return (
-    <ul className="overflow-hidden rounded-(--radius) border bg-card">
-      {list.slice(0, limit).map((c) => (
-        <li
-          key={c.id}
-          className="flex min-h-(--wb-row) items-center gap-3 border-b px-3 py-1.5 text-xs last:border-b-0"
-        >
-          <VerdictDot conn={c} />
-          <Ident className="min-w-0 flex-1">{hostPort(c.host, c.port)}</Ident>
-          <time
-            dateTime={c.started}
-            className="shrink-0 font-mono text-[0.6875rem] text-muted-foreground tabular-nums"
-          >
-            {new Date(c.started).toLocaleTimeString()}
-          </time>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 /** Mounted only while the panel is open, so the log refreshes only then. */
 function ConnectionLog({ env, id }: { env: string; id: string }) {
   const conns = $api.useQuery(

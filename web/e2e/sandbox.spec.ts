@@ -15,22 +15,31 @@ test("sandbox lifecycle: create, terminal, stop, start, delete", async ({
   await create.getByLabel("Name", { exact: true }).fill(name)
   await create.getByRole("button", { name: "Create" }).click()
   await expect(page.getByRole("heading", { name })).toBeVisible()
-  const id = page.url().split("/").at(-1)!
+  // A sandbox opens on its workspace.
+  await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+\/work/)
+  const id = page.url().match(/\/sandboxes\/([a-z0-9]+)\//)![1]
 
-  await page.getByRole("link", { name: "Workspace", exact: true }).click()
   const term = terminal(page)
   await term.run("echo hi")
   await expect(term.line("hi")).toHaveCount(1)
 
-  await page.getByRole("link", { name: "Dashboard", exact: true }).click()
-  await page.getByRole("button", { name: "Stop" }).click()
+  // Stop and Start are in the details behind the header's status pill.
+  const details = page.getByRole("button", { name: "Sandbox details" })
+  await details.click()
+  await page.getByRole("button", { name: "Stop", exact: true }).click()
   await expect(
-    page.getByText("Your workspace, home directory and Docker images are kept.")
+    page
+      .getByRole("main")
+      .getByText("Your workspace, home directory and Docker images are kept.")
   ).toBeVisible()
   expect((await api.guest(id)).connected).toBe(false)
 
-  await page.getByRole("button", { name: "Start" }).click()
-  await page.getByRole("link", { name: "Workspace", exact: true }).click()
+  // The stopped workspace offers Start too.
+  await page.keyboard.press("Escape")
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Start", exact: true })
+    .click()
   await term.run("echo back")
   await expect(term.line("back")).toHaveCount(1)
 

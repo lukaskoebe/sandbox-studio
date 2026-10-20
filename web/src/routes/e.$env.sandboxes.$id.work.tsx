@@ -8,15 +8,21 @@ import {
 const text = (value: unknown) => (typeof value === "string" ? value : undefined)
 
 /**
- * The sandbox's workspace: its terminals and chats with the side panels. ?session= is the
+ * The sandbox's workspace: its chats, terminals and reviews with the side panels. ?session= is the
  * terminal's old name in links, so both open a terminal.
  */
 export const Route = createFileRoute("/e/$env/sandboxes/$id/work")({
   validateSearch: (
     s: Record<string, unknown>
-  ): { terminal?: string; chat?: string; panel?: WorkspacePanelId } => ({
+  ): {
+    terminal?: string
+    chat?: string
+    review?: string
+    panel?: WorkspacePanelId
+  } => ({
     terminal: text(s.terminal) ?? text(s.session),
     chat: text(s.chat),
+    review: text(s.review),
     panel: workspacePanels.find((p) => p === s.panel),
   }),
   component: WorkspaceRoute,

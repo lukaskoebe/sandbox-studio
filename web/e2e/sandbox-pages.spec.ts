@@ -1,6 +1,6 @@
 import { expect, sandboxName, terminal, test } from "./fixtures"
 
-test("the dashboard shows the sandbox's sections, and the workspace opens its terminal", async ({
+test("a sandbox opens on its workspace, with its details behind the status pill", async ({
   page,
   api,
   env,
@@ -9,16 +9,6 @@ test("the dashboard shows the sandbox's sections, and the workspace opens its te
   const id = await api.createSandbox(name)
   await page.goto(`/e/${env}/sandboxes/${id}`)
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible()
-  await expect(page.getByRole("region", { name: "Overview" })).toBeVisible()
-  for (const section of [
-    "Ports",
-    "Recent connections",
-    "Checkpoints",
-    "Terminals",
-  ])
-    await expect(page.getByRole("region", { name: section })).toBeVisible()
-
-  await page.getByRole("link", { name: "Workspace", exact: true }).click()
   // The URL names the terminal in view.
   await expect(page).toHaveURL(
     new RegExp(`/sandboxes/${id}/work\\?terminal=main$`)
@@ -26,6 +16,14 @@ test("the dashboard shows the sandbox's sections, and the workspace opens its te
   const term = terminal(page)
   await term.run("echo workspace")
   await expect(term.line("workspace")).toHaveCount(1)
+
+  await page.getByRole("button", { name: "Sandbox details" }).click()
+  const details = page.getByRole("dialog")
+  for (const fact of ["Template", "Resources", "Created", "ID", "Ports"])
+    await expect(
+      details.getByRole("term").filter({ hasText: new RegExp(`^${fact}$`) })
+    ).toBeVisible()
+  await expect(details.getByText(id)).toBeVisible()
 })
 
 // The sidebar lists a running sandbox's terminals under it; one opens its tab in the workspace.
@@ -178,7 +176,7 @@ test("an old terminal link opens the workspace with the same parameters", async 
   )
 })
 
-test("the dashboard and the workspace fit a 390px screen, and a panel covers it", async ({
+test("the workspace fits a 390px screen, and a panel covers it", async ({
   page,
   api,
   env,
@@ -189,10 +187,6 @@ test("the dashboard and the workspace fit a 390px screen, and a panel covers it"
     page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth
     )
-
-  await page.goto(`/e/${env}/sandboxes/${id}`)
-  await expect(page.getByRole("region", { name: "Overview" })).toBeVisible()
-  expect(await fits()).toBe(true)
 
   await page.goto(`/e/${env}/sandboxes/${id}/work`)
   await expect(
@@ -244,7 +238,14 @@ test("the workspace status line shows CPU and memory use while the sandbox runs"
 // A schedule takes its first checkpoint as soon as it is turned on, and marks it as its own.
 test("a checkpoint schedule takes a checkpoint", async ({ page, api, env }) => {
   const id = await api.createSandbox(sandboxName("sched"))
-  await page.goto(`/e/${env}/sandboxes/${id}`)
+  const openHistory = async () => {
+    await page.getByRole("button", { name: "Sandbox options" }).click()
+    await page
+      .getByRole("menuitem", { name: "History and checkpoints" })
+      .click()
+  }
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  await openHistory()
   const section = page.getByRole("region", { name: "Checkpoints" })
   await section.getByRole("combobox", { name: "Take checkpoints" }).click()
   await page.getByRole("option", { name: "Every 4 hours" }).click()
@@ -255,6 +256,7 @@ test("a checkpoint schedule takes a checkpoint", async ({ page, api, env }) => {
 
   // After a reload the schedule is still on.
   await page.reload()
+  await openHistory()
   await expect(
     section.getByRole("combobox", { name: "Take checkpoints" })
   ).toContainText("Every 4 hours")

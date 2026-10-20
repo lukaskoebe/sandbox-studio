@@ -59,9 +59,9 @@ request did before it ran in the background.
 7. Studio removes the old VM and ends the record.
 
 A failed rebase leaves the sandbox on its old template, in its old status. Its view keeps
-`progress` with `operation: rebase`, `state: failed`, the step and the error: the dashboard
-shows the steps with the failed one marked, and the workspace a note, each with a Dismiss
-button (`DELETE /api/environments/{env}/sandboxes/{id}/progress`). The next rebase replaces
+`progress` with `operation: rebase`, `state: failed`, the step and the error: the workspace
+shows a note naming the failed step, with a Dismiss button
+(`DELETE /api/environments/{env}/sandboxes/{id}/progress`). The next rebase replaces
 the report.
 
 If a step before the commit fails, Studio removes the target, stops the source and ends

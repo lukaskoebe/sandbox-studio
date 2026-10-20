@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { ChatCircleDotsIcon, ChatsIcon } from "@phosphor-icons/react"
+import { ChatsIcon } from "@phosphor-icons/react"
 import { CountPill } from "@/components/count-pill"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,10 +16,7 @@ import { hasNews, useChatsSeen } from "@/lib/chat-seen"
 import { chatStateLabels, chatTitle, type Chat } from "@/lib/chats"
 import { cn, formatAge } from "@/lib/utils"
 
-/**
- * The chats of a sandbox next to its agent sessions, so chat and terminal are each one
- * click away: a new chat, or one of the sandbox's chats, opened in the workspace.
- */
+/** The chats of a sandbox, each opening in the workspace; a new one starts from its + menu. */
 export function SandboxChats({
   env,
   id,
@@ -40,21 +37,6 @@ export function SandboxChats({
   const news = list.filter((c) => hasNews(c, seen)).length
   return (
     <>
-      <Button
-        variant="ghost"
-        size="sm"
-        title="Start a chat with this sandbox's teammate"
-        render={
-          <Link
-            to="/e/$env/chats/new"
-            params={{ env }}
-            search={{ sandbox: id, origin: "workspace" }}
-          />
-        }
-      >
-        <ChatCircleDotsIcon />
-        <span className="max-md:sr-only">New chat</span>
-      </Button>
       {list.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>

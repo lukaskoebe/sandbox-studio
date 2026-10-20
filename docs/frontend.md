@@ -41,10 +41,10 @@ to an environment.
 
 | Route | Page |
 |---|---|
-| `/e/$env` | Home: the environment at a glance (the sandbox table with the approvals waiting on each, the latest network activity, the family tree once a sandbox was forked, the approvals and teammates), create, import, and the setup card until the setup is complete or dismissed |
+| `/e/$env` | Home: what needs you (the approvals waiting, decided on the spot), the chats working now, and earlier: the latest network activity. The setup card shows until the setup is complete or dismissed, and an environment with neither a teammate nor a sandbox offers to make the first |
 | `/setup` | the guided setup: host check, work mode, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome; it works on the environment last opened, or the first |
-| `/e/$env/sandboxes/$id` | one sandbox's dashboard, laid out like Home: a facts band (status, owner, template, resources, age) with start, stop, resize and the workspace; chats, terminal sessions (each opens in the workspace), history (lineage timeline) and checkpoints; ports and recent connections at the side |
-| `/e/$env/sandboxes/$id/work` | its workspace: terminal tabs and chats in one strip, the picked one in full, and one side panel. `?terminal=` and `?chat=` pick a tab; `?panel=` names the open panel (browser, connections or files). Open chat tabs are kept in sessionStorage per sandbox; chats with changes this browser hasn't seen (`lib/chat-seen.ts`, revs in localStorage) are marked green, and only they: other counts use the quiet `CountPill` |
+| `/e/$env/sandboxes/$id` | redirects to its workspace, with its parameters |
+| `/e/$env/sandboxes/$id/work` | the sandbox: its chats, terminals and the git reviews waiting on it as tabs in one strip, the picked one in full, and one side panel. `?terminal=`, `?chat=` and `?review=` pick a tab; a review that opens by itself waits for a click; `?panel=` names the open panel (browser, connections or files). Open chat tabs are kept in sessionStorage per sandbox; chats with changes this browser hasn't seen (`lib/chat-seen.ts`, revs in localStorage) are marked green, and only they: other counts use the quiet `CountPill` |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
 | `/e/$env/network/rules`, `/requests`, `/activity` | network rules (filters in the URL: search, scope, action, origin, unused; grouped by registrable domain), requests waiting for a decision, decided requests; `/e/$env/network` opens requests when any wait, else rules |
 | `/e/$env/secrets` | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
@@ -89,22 +89,29 @@ The old addresses `/e/$env/builds`, `/providers` and `/browser` redirect to the
 settings dialog and teammate browsers above. `/browser?teammate=<id>` opens that teammate's
 browser.
 
-The sidebar holds the environment switcher, the navigation (Home, Chats, Git with the count of
-pushes waiting for review, Network, Secrets, Memory), the teammates and the sandboxes, and a footer with Settings, the version and the theme
-switch. Under each running sandbox it lists the guest's terminals (its tmux sessions, a robot for
-an agent's); one opens its tab in the workspace. The workspace's URL names the tab in view
-(`?terminal=` or `?chat=`), so such a link switches tabs. A sandbox row has its status dot (the word
-is its tooltip) and the count of approvals waiting on it. A teammate's dot shows its presence:
-waiting for you while one of its approvals is pending (a browser action or credential, a
-memory share, or a tool permission in one of its chats), working while one of its chats is
-running, and idle otherwise. The Settings dialog's sections name the environment in their header.
+The sidebar is one tree: the environment switcher and Home, then each teammate with its
+sandbox, then the sandboxes without a teammate, and a footer with Settings, the version and
+the theme switch. A teammate's row says where it works and what it is doing: waiting on you
+while one of its approvals is pending (a browser action or credential, a memory share, or a
+tool permission in one of its chats), working while one of its chats is running, and idle
+otherwise. Under a sandbox are its chats, its terminals (tmux sessions, a robot for an
+agent's) and the git reviews waiting on it; each opens its tab in the sandbox's workspace,
+whose URL names the tab in view (`?terminal=`, `?chat=` or `?review=`). A teammate with more
+than one sandbox lists them, each with its status dot (the word is its tooltip) and the count
+of approvals waiting on it. New chat sits at the top, with a menu for a new teammate, a
+sandbox without a teammate or an import; the pages that are off the everyday path (all chats,
+Git, Network, Secrets, Memory) are a row of icons above the footer. The Settings dialog's sections name the environment in their header.
 The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
 on every page.
 
-Both sandbox pages share a header: the sandbox's name and ID, its status, the page switch
-(Dashboard, Workspace) and the options menu (fork, rebase, export, suspend or resume, stop,
-delete). The dashboard's start and stop buttons and the workspace's tabs are the everyday
-path; the menu holds the rest. The workspace ends in a status line: state, ID, template,
+The sandbox's header names its teammate and the sandbox, and has a pill with its status, CPU
+and memory. The pill opens its details (`components/sandbox-details.tsx`): teammate,
+template, resources, uptime, age, ID and listening ports, with start, stop and resources.
+Next to it are a Checkpoint button and the options menu: history and checkpoints (lineage
+and checkpoints in a sheet), another sandbox for the teammate, fork, rebase, export, suspend
+or resume, stop and delete. The tab strip's + starts a chat with the teammate, the
+teammate's harness in a terminal, or a shell; a sandbox without a teammate has New terminal.
+The workspace ends in a status line: state, ID, template,
 listening ports, approvals waiting, CPU and memory use while the sandbox runs (`cpu 12% · mem
 1.2/4 GiB`, polled every 5 seconds, hidden below the large breakpoint) and generation.
 
@@ -121,8 +128,8 @@ has "Open as page", which leads to the item's own page above; Home's activity, t
 Settings → Templates and the memory conflicts tab link there too. A page for an item that
 doesn't exist says so, and one already decided shows the outcome without the buttons.
 
-Links from before the dashboard and workspace split that carry workspace parameters
-(`?terminal=`, `?session=`, `?chat=`) redirect the dashboard to `/work`.
+Links from when a sandbox had a dashboard (`/e/$env/sandboxes/$id`, with or without
+`?terminal=`, `?session=` or `?chat=`) redirect to `/work` with their parameters.
 
 ## Development
 
