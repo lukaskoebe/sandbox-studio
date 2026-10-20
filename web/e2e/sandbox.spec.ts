@@ -7,7 +7,10 @@ test("sandbox lifecycle: create, terminal, stop, start, delete", async ({
 }) => {
   const name = sandboxName("life")
   await page.goto(`/e/${env}`)
-  await page.getByRole("button", { name: "New sandbox" }).first().click()
+  await page.getByRole("button", { name: "More to create" }).click()
+  await page
+    .getByRole("menuitem", { name: /Sandbox without a teammate/ })
+    .click()
   const create = page.getByRole("dialog", { name: "New sandbox" })
   await create.getByLabel("Name", { exact: true }).fill(name)
   await create.getByRole("button", { name: "Create" }).click()

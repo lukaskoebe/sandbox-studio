@@ -15,7 +15,9 @@ test("the sidebar opens a teammate, whose tabs each render", async ({
 
   await page.getByRole("tab", { name: "Chats" }).click()
   await expect(page).toHaveURL(new RegExp(`/teammates/${id}/chats$`))
-  await expect(page.getByRole("link", { name: "New chat" })).toBeVisible()
+  await expect(
+    page.getByRole("main").getByRole("link", { name: "New chat" })
+  ).toBeVisible()
 
   await page.getByRole("tab", { name: "Memory" }).click()
   await expect(page).toHaveURL(new RegExp(`/teammates/${id}/memory$`))
@@ -50,7 +52,7 @@ test("teaching a teammate puts the fact in the conversation, where it can be for
   const id = await addTeammate(api, env, name)
   await page.goto(`/e/${env}/teammates/${id}`)
 
-  await page.getByRole("button", { name: "Teach" }).click()
+  await page.getByRole("button", { name: "Teach", exact: true }).click()
   const fact = "The staging database needs the VPN"
   await page.getByRole("textbox", { name: "Message" }).fill(fact)
   await page.getByRole("button", { name: "Send" }).click()

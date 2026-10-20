@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import {
   Link,
   useMatchRoute,
@@ -9,7 +9,10 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   BrainIcon,
+  CaretDownIcon,
+  CaretRightIcon,
   CaretUpDownIcon,
+  ChatCircleIcon,
   ChatsCircleIcon,
   CheckIcon,
   GearIcon,
@@ -18,7 +21,7 @@ import {
   KeyIcon,
   PlusIcon,
   RobotIcon,
-  SquaresFourIcon,
+  TrayIcon,
   TerminalWindowIcon,
 } from "@phosphor-icons/react"
 import {
@@ -62,27 +65,51 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
-import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
+import { ImportSandboxDialog } from "@/components/import-sandbox-dialog"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
 import { isGitApproval } from "@/components/git-review"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
-import { usePresence } from "@/hooks/use-teammate-presence"
-import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
+import { presenceLabels, usePresence } from "@/hooks/use-teammate-presence"
+import {
+  $api,
+  errorMessage,
+  type Approval,
+  type Sandbox,
+} from "@/lib/api/client"
+import { hasNews, useChatsSeen } from "@/lib/chat-seen"
+import type { Chat } from "@/lib/chats"
 import { harnessLabels } from "@/lib/teammates"
+import { cn } from "@/lib/utils"
 
 /** The section labels: small, mono and uppercase, as the Workbench's lists title theirs. */
 const groupLabel = "h-6 font-mono text-[0.625rem] tracking-wider uppercase"
 
+/** Chats a sandbox lists in the sidebar; the rest are on the teammate's page. */
+const sidebarChats = 5
+
+type Teammate = { id: string; name: string; avatar?: string }
+
+/** What the sidebar knows about the environment's sessions, shared by its rows. */
+type Sessions = {
+  env: string
+  chats: Chat[]
+  reviews: Approval[]
+  waiting: Map<string, number>
+}
+
 /**
- * The environment's navigation: Home, Chats, Git, Network, Secrets and Memory, then the teammates
- * (each with its presence) and the sandboxes (each with its status, the approvals waiting on it
- * and its terminals). Settings sit at the bottom, above the version and the theme toggle.
+ * The environment's navigation as one tree: environment → teammate → sandbox → session. A
+ * teammate with one sandbox lists its sessions (chats, terminals, reviews) right under it; one
+ * with more lists its sandboxes first. Sandboxes without a teammate come last. Home, with what
+ * waits for you, and New chat are on top; Settings at the bottom.
  */
 export function AppSidebar({ env }: { env: string }) {
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [addingTeammate, setAddingTeammate] = useState(false)
   const sandboxes = $api.useQuery(
     "get",
@@ -100,17 +127,36 @@ export function AppSidebar({ env }: { env: string }) {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
+  const chats = $api.useQuery(
+    "get",
+    "/api/environments/{env}/chats",
+    { params: { path: { env } } },
+    { refetchInterval: 5000 }
+  )
   const approvals = usePendingApprovals()
-  const presence = usePresence(env)
   const waiting = new Map<string, number>()
-  let gitWaiting = 0
+  const reviews: Approval[] = []
+  let envWaiting = 0
   for (const a of approvals.data ?? []) {
+    if (a.environmentId !== env) continue
+    envWaiting++
     if (a.sandboxId)
       waiting.set(a.sandboxId, (waiting.get(a.sandboxId) ?? 0) + 1)
-    if (a.environmentId === env && isGitApproval(a)) gitWaiting++
+    if (isGitApproval(a)) reviews.push(a)
+  }
+  const sessions: Sessions = {
+    env,
+    chats: chats.data ?? [],
+    reviews,
+    waiting,
   }
   const matchRoute = useMatchRoute()
   const settingsOpen = useSearch({ strict: false }).settings !== undefined
+  const all = sandboxes.data ?? []
+  const unowned = all.filter(
+    (sb) =>
+      !sb.teammateId || !teammates.data?.some((p) => p.id === sb.teammateId)
+  )
 
   return (
     <Sidebar collapsible="icon">
@@ -118,7 +164,13 @@ export function AppSidebar({ env }: { env: string }) {
         <EnvironmentSwitcher env={env} />
       </SidebarHeader>
       <SidebarContent className="gap-0">
-        <SidebarGroup className="py-2">
+        <SidebarGroup className="gap-1 py-2">
+          <NewChatButton
+            env={env}
+            onAddTeammate={() => setAddingTeammate(true)}
+            onCreateSandbox={() => setCreating(true)}
+            onImport={() => setImporting(true)}
+          />
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
@@ -133,90 +185,9 @@ export function AppSidebar({ env }: { env: string }) {
                   />
                 }
               >
-                <SquaresFourIcon />
-                <span>Home</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="sm"
-                tooltip="Chats"
-                isActive={
-                  !!matchRoute({
-                    to: "/e/$env/chats",
-                    params: { env },
-                    fuzzy: true,
-                  })
-                }
-                className="[&_svg]:text-(--acc-chat)"
-                render={<Link to="/e/$env/chats" params={{ env }} />}
-              >
-                <ChatsCircleIcon />
-                <span>Chats</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="sm"
-                tooltip="Git"
-                isActive={
-                  !!matchRoute({
-                    to: "/e/$env/git",
-                    params: { env },
-                    fuzzy: true,
-                  })
-                }
-                className="[&_svg]:text-(--acc-git)"
-                render={<Link to="/e/$env/git" params={{ env }} />}
-              >
-                <GitBranchIcon />
-                <span className="min-w-0 flex-1 truncate">Git</span>
-                <WaitingCount count={gitWaiting} />
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="sm"
-                tooltip="Network"
-                isActive={
-                  !!matchRoute({
-                    to: "/e/$env/network",
-                    params: { env },
-                    fuzzy: true,
-                  })
-                }
-                className="[&_svg]:text-(--acc-network)"
-                render={<Link to="/e/$env/network" params={{ env }} />}
-              >
-                <GlobeIcon />
-                <span>Network</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="sm"
-                tooltip="Secrets"
-                isActive={
-                  !!matchRoute({ to: "/e/$env/secrets", params: { env } })
-                }
-                render={<Link to="/e/$env/secrets" params={{ env }} />}
-              >
-                <KeyIcon />
-                <span>Secrets</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="sm"
-                tooltip="Memory"
-                isActive={
-                  !!matchRoute({ to: "/e/$env/memory", params: { env } })
-                }
-                className="[&_svg]:text-(--acc-memory)"
-                render={<Link to="/e/$env/memory" params={{ env }} />}
-              >
-                <BrainIcon />
-                <span>Memory</span>
+                <TrayIcon />
+                <span className="min-w-0 flex-1 truncate">Home</span>
+                <WaitingCount count={envWaiting} />
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -244,92 +215,40 @@ export function AppSidebar({ env }: { env: string }) {
                   </SidebarMenuItem>
                 ))}
               {teammates.data?.map((p) => (
-                <SidebarMenuItem key={p.id}>
-                  <SidebarMenuButton
-                    size="sm"
-                    tooltip={p.name}
-                    isActive={
-                      !!matchRoute({
-                        to: "/e/$env/teammates/$id",
-                        params: { env, id: p.id },
-                        fuzzy: true,
-                      })
-                    }
-                    render={
-                      <Link
-                        to="/e/$env/teammates/$id"
-                        params={{ env, id: p.id }}
-                      />
-                    }
-                  >
-                    <TeammateAvatar
-                      name={p.name}
-                      avatar={p.avatar}
-                      className="size-4 text-[0.5rem]"
-                    />
-                    <span className="truncate">{p.name}</span>
-                    <PresenceDot
-                      presence={presence(p.id)}
-                      className="ml-auto"
-                    />
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <TeammateNode
+                  key={p.id}
+                  teammate={p}
+                  sandboxes={all.filter((sb) => sb.teammateId === p.id)}
+                  sessions={sessions}
+                />
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup className="py-1">
-          <SidebarGroupLabel className={groupLabel}>
-            Sandboxes
-          </SidebarGroupLabel>
-          <SidebarGroupAction
-            className="top-1.5"
-            title="New sandbox"
-            onClick={() => setCreating(true)}
-          >
-            <PlusIcon />
-          </SidebarGroupAction>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {sandboxes.isPending &&
-                Array.from({ length: 2 }, (_, i) => (
-                  <SidebarMenuItem key={i}>
-                    <SidebarMenuSkeleton showIcon />
+        {unowned.length > 0 && (
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel className={groupLabel}>
+              No teammate
+            </SidebarGroupLabel>
+            <SidebarGroupAction
+              className="top-1.5"
+              title="New sandbox without a teammate"
+              onClick={() => setCreating(true)}
+            >
+              <PlusIcon />
+            </SidebarGroupAction>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {unowned.map((sb) => (
+                  <SidebarMenuItem key={sb.id}>
+                    <SandboxRow sb={sb} sessions={sessions} />
+                    <SessionList sb={sb} sessions={sessions} />
                   </SidebarMenuItem>
                 ))}
-              {sandboxes.data?.map((sb) => (
-                <SidebarMenuItem key={sb.id}>
-                  <SidebarMenuButton
-                    size="sm"
-                    tooltip={sb.name}
-                    isActive={
-                      !!matchRoute({
-                        to: "/e/$env/sandboxes/$id",
-                        params: { env, id: sb.id },
-                      })
-                    }
-                    className="font-mono"
-                    render={
-                      <Link
-                        to="/e/$env/sandboxes/$id"
-                        params={{ env, id: sb.id }}
-                      />
-                    }
-                  >
-                    <StatusDot
-                      {...phaseDot(phase(sb))}
-                      compact
-                      className="shrink-0"
-                    />
-                    <span className="min-w-0 flex-1 truncate">{sb.name}</span>
-                    <WaitingCount count={waiting.get(sb.id) ?? 0} />
-                  </SidebarMenuButton>
-                  <SandboxTerminals env={env} sb={sb} />
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="gap-1 border-t border-sidebar-border p-2">
         <SidebarMenu>
@@ -342,14 +261,19 @@ export function AppSidebar({ env }: { env: string }) {
             >
               <GearIcon />
               <span>Settings</span>
-              {updates.data?.available && (
+              {updates.data?.available ? (
                 <span className="ml-auto text-[0.625rem] text-primary">
                   Update available
+                </span>
+              ) : (
+                <span className="ml-auto truncate text-[0.625rem] text-muted-foreground">
+                  network, git, keys
                 </span>
               )}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <MorePages env={env} />
         <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsible=icon]:hidden">
           <p className="min-w-0 truncate text-[0.625rem] text-muted-foreground">
             Sandbox Studio{" "}
@@ -364,6 +288,11 @@ export function AppSidebar({ env }: { env: string }) {
         open={creating}
         onOpenChange={setCreating}
       />
+      <ImportSandboxDialog
+        env={env}
+        open={importing}
+        onOpenChange={setImporting}
+      />
       <TeammateDialog
         env={env}
         providers={providers.data ?? []}
@@ -374,11 +303,267 @@ export function AppSidebar({ env }: { env: string }) {
   )
 }
 
+/** New chat, with the other ways to start beside it: a teammate, a bare sandbox, an import. */
+function NewChatButton({
+  env,
+  onAddTeammate,
+  onCreateSandbox,
+  onImport,
+}: {
+  env: string
+  onAddTeammate: () => void
+  onCreateSandbox: () => void
+  onImport: () => void
+}) {
+  const navigate = useNavigate()
+  return (
+    <div className="flex rounded-md bg-primary text-primary-foreground group-data-[collapsible=icon]:hidden">
+      <Link
+        to="/e/$env/chats/new"
+        params={{ env }}
+        className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-l-md px-2.5 text-sm font-medium hover:bg-primary/90"
+      >
+        <PlusIcon className="size-4" />
+        New chat
+      </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label="More to create"
+          className="flex w-8 items-center justify-center rounded-r-md border-l border-primary-foreground/30 hover:bg-primary/90"
+        >
+          <CaretDownIcon className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-60">
+          <DropdownMenuItem
+            onClick={() =>
+              navigate({ to: "/e/$env/chats/new", params: { env } })
+            }
+          >
+            <MenuText
+              title="New chat"
+              hint="With a teammate, on its computer"
+            />
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onAddTeammate}>
+            <MenuText
+              title="Add a teammate"
+              hint="Comes with its own sandbox"
+            />
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onCreateSandbox}>
+            <MenuText
+              title="Sandbox without a teammate"
+              hint="A plain VM with terminals"
+            />
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onImport}>
+            <MenuText title="Import a sandbox" hint="From an export file" />
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
+function MenuText({ title, hint }: { title: string; hint: string }) {
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span>{title}</span>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </span>
+  )
+}
+
+/** Which teammates' rows are open, per browser; one never toggled opens while it needs you. */
+const openKey = "studio.sidebar.open"
+
+function loadOpen(): Record<string, boolean> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(openKey) ?? "{}")
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, boolean>)
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function useOpen(id: string, fallback: boolean) {
+  const [open, setOpen] = useState<boolean | undefined>(() => loadOpen()[id])
+  const toggle = () => {
+    const next = !(open ?? fallback)
+    setOpen(next)
+    try {
+      localStorage.setItem(
+        openKey,
+        JSON.stringify({ ...loadOpen(), [id]: next })
+      )
+    } catch {
+      // Kept for this page.
+    }
+  }
+  return [open ?? fallback, toggle] as const
+}
+
 /**
- * A running sandbox's terminals, the guest's tmux sessions, oldest first: a shell or an agent's
- * session, each opening in the sandbox's workspace.
+ * A teammate, with its one sandbox's sessions under it, or its sandboxes when it has more.
+ * The line under its name says where it works and what it is doing.
  */
-function SandboxTerminals({ env, sb }: { env: string; sb: Sandbox }) {
+function TeammateNode({
+  teammate,
+  sandboxes,
+  sessions,
+}: {
+  teammate: Teammate
+  sandboxes: Sandbox[]
+  sessions: Sessions
+}) {
+  const { env } = sessions
+  const presence = usePresence(env)(teammate.id)
+  const matchRoute = useMatchRoute()
+  const ids = new Set(sandboxes.map((sb) => sb.id))
+  const waiting = sandboxes.reduce(
+    (n, sb) => n + (sessions.waiting.get(sb.id) ?? 0),
+    0
+  )
+  const working = sessions.chats.some(
+    (c) => ids.has(c.sandboxId) && c.state === "running"
+  )
+  const here = sandboxes.some(
+    (sb) =>
+      !!matchRoute({
+        to: "/e/$env/sandboxes/$id",
+        params: { env, id: sb.id },
+        fuzzy: true,
+      })
+  )
+  const active = !!matchRoute({
+    to: "/e/$env/teammates/$id",
+    params: { env, id: teammate.id },
+    fuzzy: true,
+  })
+  const [open, toggle] = useOpen(teammate.id, waiting > 0 || working || here)
+  const statusId = useId()
+  const status =
+    waiting > 0
+      ? "needs you"
+      : working
+        ? "working"
+        : sandboxes.length === 1 && phase(sandboxes[0]) !== "ready"
+          ? phaseDot(phase(sandboxes[0])).label.toLowerCase()
+          : presenceLabels[presence].toLowerCase()
+  const where =
+    sandboxes.length === 0
+      ? "no sandbox"
+      : sandboxes.length === 1
+        ? sandboxes[0].name
+        : `${sandboxes.length} sandboxes`
+
+  return (
+    <SidebarMenuItem>
+      <div className="flex items-center">
+        <button
+          type="button"
+          aria-label={`${open ? "Hide" : "Show"} ${teammate.name}'s sessions`}
+          aria-expanded={open}
+          onClick={toggle}
+          className="flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent"
+        >
+          <CaretRightIcon
+            className={cn("size-3 transition-transform", open && "rotate-90")}
+          />
+        </button>
+        <SidebarMenuButton
+          tooltip={teammate.name}
+          isActive={active}
+          className="h-auto min-h-9 py-1"
+          render={
+            <Link
+              to="/e/$env/teammates/$id"
+              params={{ env, id: teammate.id }}
+              aria-label={teammate.name}
+              aria-describedby={statusId}
+            />
+          }
+        >
+          <TeammateAvatar
+            name={teammate.name}
+            avatar={teammate.avatar}
+            className="size-5 text-[0.5625rem]"
+          />
+          <span className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="truncate font-medium">{teammate.name}</span>
+            <span
+              id={statusId}
+              className="truncate text-[0.6875rem] text-muted-foreground"
+            >
+              <span className={cn(sandboxes.length === 1 && "font-mono")}>
+                {where}
+              </span>
+              {" · "}
+              <span className={cn(waiting > 0 && "text-(--st-waiting-fg)")}>
+                {status}
+              </span>
+            </span>
+          </span>
+          <WaitingCount count={waiting} />
+        </SidebarMenuButton>
+      </div>
+      {open &&
+        (sandboxes.length === 1 ? (
+          <SessionList sb={sandboxes[0]} sessions={sessions} />
+        ) : (
+          sandboxes.length > 1 && (
+            <SidebarMenu className="pl-5 group-data-[collapsible=icon]:hidden">
+              {sandboxes.map((sb) => (
+                <SidebarMenuItem key={sb.id}>
+                  <SandboxRow sb={sb} sessions={sessions} />
+                  <SessionList sb={sb} sessions={sessions} />
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          )
+        ))}
+    </SidebarMenuItem>
+  )
+}
+
+/** A sandbox: its status, its name and what waits on it, opening its workspace. */
+function SandboxRow({ sb, sessions }: { sb: Sandbox; sessions: Sessions }) {
+  const { env } = sessions
+  const matchRoute = useMatchRoute()
+  const p = phase(sb)
+  return (
+    <SidebarMenuButton
+      size="sm"
+      tooltip={sb.name}
+      isActive={
+        !!matchRoute({
+          to: "/e/$env/sandboxes/$id",
+          params: { env, id: sb.id },
+        })
+      }
+      className="font-mono"
+      render={<Link to="/e/$env/sandboxes/$id" params={{ env, id: sb.id }} />}
+    >
+      <StatusDot {...phaseDot(p)} compact className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{sb.name}</span>
+      {p !== "ready" && (
+        <span className="font-sans text-[0.625rem] text-muted-foreground">
+          {phaseDot(p).label.toLowerCase()}
+        </span>
+      )}
+      <WaitingCount count={sessions.waiting.get(sb.id) ?? 0} />
+    </SidebarMenuButton>
+  )
+}
+
+/**
+ * A sandbox's sessions, each opening in its workspace: its latest chats, its terminals (the
+ * guest's tmux sessions, a shell or an agent's) and the pushes waiting for review.
+ */
+function SessionList({ sb, sessions }: { sb: Sandbox; sessions: Sessions }) {
+  const { env } = sessions
   const running = phase(sb) === "ready"
   const terminals = $api.useQuery(
     "get",
@@ -386,12 +571,19 @@ function SandboxTerminals({ env, sb }: { env: string; sb: Sandbox }) {
     { params: { path: { env, id: sb.id } } },
     { refetchInterval: 5000, enabled: running }
   )
+  const seen = useChatsSeen()
   const matchRoute = useMatchRoute()
   const search = useSearch({ strict: false })
-  const here = !!matchRoute({
+  const inWorkspace = !!matchRoute({
     to: "/e/$env/sandboxes/$id/work",
     params: { env, id: sb.id },
   })
+  const chats = sessions.chats
+    .filter(
+      (c) =>
+        c.sandboxId === sb.id && (c.state === "idle" || c.state === "running")
+    )
+    .slice(0, sidebarChats)
   const list = running
     ? [...(terminals.data ?? [])].sort(
         // tmux counts in seconds, so sessions made in the same one go main first, then by name
@@ -401,9 +593,43 @@ function SandboxTerminals({ env, sb }: { env: string; sb: Sandbox }) {
           a.name.localeCompare(b.name, undefined, { numeric: true })
       )
     : []
-  if (!list.length) return null
+  const reviews = sessions.reviews.filter((a) => a.sandboxId === sb.id)
+  if (!chats.length && !list.length && !reviews.length) return null
   return (
-    <SidebarMenuSub aria-label={`Terminals of ${sb.name}`}>
+    <SidebarMenuSub aria-label={`Sessions of ${sb.name}`}>
+      {chats.map((c) => (
+        <SidebarMenuSubItem key={c.id}>
+          <SidebarMenuSubButton
+            size="sm"
+            isActive={inWorkspace && search.chat === c.id}
+            title={`Chat: ${c.title || "Untitled"}`}
+            render={
+              <Link
+                to="/e/$env/sandboxes/$id/work"
+                params={{ env, id: sb.id }}
+                search={{ chat: c.id }}
+              />
+            }
+          >
+            <ChatCircleIcon className="text-(--acc-chat)" />
+            <span className="min-w-0 flex-1 truncate">
+              {c.title || "Untitled"}
+            </span>
+            {c.state === "running" ? (
+              <span className="text-[0.625rem] text-muted-foreground">
+                working
+              </span>
+            ) : (
+              hasNews(c, seen) && (
+                <span
+                  aria-label="new"
+                  className="size-1.5 shrink-0 rounded-full bg-(--st-running)"
+                />
+              )
+            )}
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      ))}
       {list.map((t) => {
         const harness =
           t.harness && t.harness in harnessLabels
@@ -413,7 +639,7 @@ function SandboxTerminals({ env, sb }: { env: string; sb: Sandbox }) {
           <SidebarMenuSubItem key={t.name}>
             <SidebarMenuSubButton
               size="sm"
-              isActive={here && search.terminal === t.name}
+              isActive={inWorkspace && search.terminal === t.name}
               title={harness ? `${t.name}: ${harness}` : `Terminal ${t.name}`}
               render={
                 <Link
@@ -429,7 +655,65 @@ function SandboxTerminals({ env, sb }: { env: string; sb: Sandbox }) {
           </SidebarMenuSubItem>
         )
       })}
+      {reviews.map((a) => (
+        <SidebarMenuSubItem key={a.id}>
+          <SidebarMenuSubButton
+            size="sm"
+            isActive={
+              !!matchRoute({
+                to: "/e/$env/git/reviews/$id",
+                params: { env, id: a.id },
+              })
+            }
+            title={`Review: ${a.subject}`}
+            render={
+              <Link to="/e/$env/git/reviews/$id" params={{ env, id: a.id }} />
+            }
+          >
+            <GitBranchIcon className="text-(--acc-git)" />
+            <span className="min-w-0 flex-1 truncate font-mono">
+              {a.git?.review?.branch ?? a.git?.pullRequest?.head ?? a.subject}
+            </span>
+            <span className="text-[0.625rem] text-(--st-waiting-fg)">
+              review
+            </span>
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      ))}
     </SidebarMenuSub>
+  )
+}
+
+/**
+ * The pages that move into Settings with the redesign, until they do: all chats, git,
+ * network, secrets and memory, as a row of icons.
+ */
+function MorePages({ env }: { env: string }) {
+  const pages = [
+    { to: "/e/$env/chats", label: "All chats", icon: ChatsCircleIcon },
+    { to: "/e/$env/git", label: "Git", icon: GitBranchIcon },
+    { to: "/e/$env/network", label: "Network", icon: GlobeIcon },
+    { to: "/e/$env/secrets", label: "Secrets", icon: KeyIcon },
+    { to: "/e/$env/memory", label: "Memory", icon: BrainIcon },
+  ] as const
+  return (
+    <nav
+      aria-label="More pages"
+      className="flex items-center gap-0.5 px-1 group-data-[collapsible=icon]:hidden"
+    >
+      {pages.map(({ to, label, icon: Icon }) => (
+        <Link
+          key={to}
+          to={to}
+          params={{ env }}
+          title={label}
+          aria-label={label}
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground"
+        >
+          <Icon className="size-4" />
+        </Link>
+      ))}
+    </nav>
   )
 }
 

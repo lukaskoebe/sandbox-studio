@@ -117,6 +117,8 @@
   /* Status: its own fixed set, never used for an area. */
   --st-running: oklch(0.63 0.17 150);
   --st-waiting: oklch(0.78 0.15 86);
+  /* Waiting as text: dark enough to read on the page. */
+  --st-waiting-fg: oklch(0.5 0.11 80);
   --st-failed: oklch(0.58 0.21 27);
   --st-stopped: oklch(0.7 0.01 255);
   /* Terminal colors for a dark terminal in both themes. */
@@ -183,6 +185,7 @@
   --acc-chat: oklch(0.76 0.12 150);
   --st-running: oklch(0.74 0.17 150);
   --st-waiting: oklch(0.84 0.14 88);
+  --st-waiting-fg: oklch(0.84 0.14 88);
   --st-failed: oklch(0.7 0.18 25);
   --st-stopped: oklch(0.55 0.01 255);
   --wb-term-bg: #15171b;

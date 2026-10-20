@@ -42,7 +42,7 @@ test("the sidebar lists a sandbox's terminals and opens one", async ({
   await expect(page).toHaveURL(/terminal=(2|%222%22)$/)
   await terminal(page).run("echo second")
 
-  const list = page.getByRole("list", { name: `Terminals of ${name}` })
+  const list = page.getByRole("list", { name: `Sessions of ${name}` })
   await expect(list.getByRole("link")).toHaveText(["main", "2"])
   await expect(list.getByRole("link", { name: "2" })).toHaveAttribute(
     "data-active",

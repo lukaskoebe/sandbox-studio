@@ -94,7 +94,8 @@ test("a pending push review opens as a page and is decided there", async ({
 }) => {
   await api.dismissApprovals()
   const forge = await forgeWithRepo(api, env)
-  const id = await api.createSandbox(sandboxName("page"))
+  const name = sandboxName("page")
+  const id = await api.createSandbox(name)
   await api.guestReady(id)
   const pushed = await api.push(id, {
     url: forge.url,
@@ -104,10 +105,12 @@ test("a pending push review opens as a page and is decided there", async ({
   })
   expect(pushed.error, pushed.output).toBeUndefined()
 
-  // The sidebar's Git link counts the push while it waits.
+  // The sidebar lists the push under its sandbox while it waits.
   await page.goto(`/e/${env}`)
   await expect(
-    page.getByRole("link", { name: /^Git/ }).locator('[data-status="waiting"]')
+    page
+      .getByRole("list", { name: `Sessions of ${name}` })
+      .getByRole("link", { name: /review$/ })
   ).toBeVisible()
 
   // The sheet's "Open as page" leads to the review's own address.
