@@ -157,7 +157,7 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	}
 	hp := harness.Provider{Kind: prov.Kind, BaseURL: prov.BaseURL, Model: prov.Model, EnvVar: view.EnvVar, Placeholder: prov.Placeholder}
 	files, err := harness.Files(h,
-		harness.Teammate{Name: p.Name, Role: p.Role, Soul: p.Soul, Model: p.Model, GitName: p.GitName, GitEmail: p.GitEmail},
+		s.harnessTeammate(ctx, p),
 		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites, Others: s.otherSandboxes(ctx, sb)}, hp)
 	if err != nil {
 		return sessionPlan{}, huma.Error409Conflict(err.Error())

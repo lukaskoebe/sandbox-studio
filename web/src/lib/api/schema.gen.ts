@@ -587,6 +587,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/forges/{id}/repositories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a forge's repositories
+         * @description The repositories Studio's credential reaches, through the forge's API (Forgejo, GitHub, GitLab), recently active first; for a local forge, the repositories in its folder and one level down. At most 300. Forges of kind https and ssh have no list.
+         */
+        get: operations["listForgeRepositories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/forges/{id}/test": {
         parameters: {
             query?: never;
@@ -1081,6 +1101,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/providers/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The models an OpenAI-compatible endpoint lists
+         * @description Studio requests GET <baseUrl>/models with the key as a bearer token, over public addresses only, and returns the ids. The forms suggest them for the model field.
+         */
+        post: operations["listProviderModels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/providers/{id}": {
         parameters: {
             query?: never;
@@ -1374,6 +1414,26 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["restoreCheckpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/clone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clone a forge's repository into a sandbox
+         * @description Runs git clone as the agent user in the running sandbox, from the virtual remote https://git.studio.internal/<forge>/<path>.git into /workspace/<repository name>, so the clone fetches and pushes through Studio like any other. A folder of that name that is not empty fails the clone.
+         */
+        post: operations["cloneRepository"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2328,22 +2388,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/ui": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["getUISettings"];
-        put: operations["setUISettings"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/setup": {
         parameters: {
             query?: never;
@@ -2353,7 +2397,7 @@ export interface paths {
         };
         /**
          * The guided setup's progress
-         * @description A step reads done when its condition holds: the host check passes, a work mode is chosen, and the environment has a provider, a teammate, a forge or a sandbox.
+         * @description A step reads done when its condition holds: the host check passes and the environment has a provider, a teammate, a forge or a sandbox.
          */
         get: operations["getSetup"];
         /**
@@ -2394,6 +2438,46 @@ export interface paths {
         };
         /** Run the host checks */
         get: operations["getDoctor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The subfolders of a folder on this computer
+         * @description For picking the folder of a local forge: the browser can't name folders on the host. Only folders are listed, and which are git repositories. The file system's root is refused, as it is as a forge's folder.
+         */
+        get: operations["listHostFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/git-identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The git identity of the user Studio runs as
+         * @description git config --global user.name and user.email on the Studio host, which teammates that use the host's identity commit with. Values that are not set are empty.
+         */
+        get: operations["getHostGitIdentity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2773,6 +2857,16 @@ export interface components {
             everyHours: number;
             /** @description Why the last scheduled checkpoint was not taken, if it wasn't */
             note?: string;
+        };
+        CloneInput: {
+            /** @description Forge ID */
+            forgeId: string;
+            /** @description The repository's path on the forge, such as owner/repo */
+            repo: string;
+        };
+        CloneResult: {
+            /** @description The clone in the sandbox, /workspace/<repository name> */
+            dir: string;
         };
         Commit: {
             author: string;
@@ -3434,6 +3528,7 @@ export interface components {
             provider?: string;
             role?: string;
             soul?: string;
+            useHostGitIdentity?: boolean;
         };
         FileTemplate: {
             spec: string;
@@ -3553,6 +3648,12 @@ export interface components {
             /** @description Set for git.push approvals */
             review?: components["schemas"]["PushReview"];
         };
+        GitIdentity: {
+            /** @description user.email; empty if it is not set */
+            email: string;
+            /** @description user.name; empty if it is not set */
+            name: string;
+        };
         GitPush: {
             approvalId: string;
             /** Format: date-time */
@@ -3642,6 +3743,29 @@ export interface components {
             name: string;
             /** @enum {string} */
             status: "ok" | "warn" | "fail";
+        };
+        HostFolder: {
+            /** @description The subfolders, sorted by name */
+            entries: components["schemas"]["HostFolderEntry"][] | null;
+            /** @description Whether the folder is a git repository itself */
+            git: boolean;
+            /** @description The home directory, where browsing starts */
+            home: string;
+            /** @description The folder above, unless that is the file system's root, which is not listed */
+            parent?: string;
+            /** @description The folder's absolute path */
+            path: string;
+            /** @description The path as ~/... when it is under the home directory, as forms show it */
+            short: string;
+            /** @description There are more subfolders than listed */
+            truncated: boolean;
+        };
+        HostFolderEntry: {
+            /** @description Whether it is a git repository: a working copy or a bare repository */
+            git: boolean;
+            name: string;
+            /** @description Its absolute path */
+            path: string;
         };
         ImportInBody: {
             /** @description A file made by export, at most 2 MiB */
@@ -3794,6 +3918,14 @@ export interface components {
             templateId?: string;
             /** @description The display name of that template; empty for none, or once the template is gone */
             templateName?: string;
+        };
+        ListModelsInBody: {
+            /** @description The key to list with. It is only sent to the base URL and never stored or returned. */
+            apiKey?: string;
+            /** @description The endpoint's https:// base URL */
+            baseUrl: string;
+            /** @description A saved OpenAI-compatible provider whose stored key lists, when no key is given. Its base URL must be the one given. */
+            providerId?: string;
         };
         Log: {
             chat: components["schemas"]["Chat"];
@@ -4018,6 +4150,10 @@ export interface components {
             /** @enum {string} */
             kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
         };
+        ProviderModels: {
+            /** @description Model ids, sorted; ids that are not valid model names are left out */
+            models: string[] | null;
+        };
         ProviderView: {
             /** @description openai_compatible only */
             baseUrl?: string;
@@ -4193,6 +4329,12 @@ export interface components {
         RenameCheckpointInBody: {
             /** @description Human-readable checkpoint name */
             name: string;
+        };
+        Repo: {
+            description?: string;
+            /** @description The repository's path on the forge, such as owner/repo; the remote URL is https://git.studio.internal/<forge>/<path>.git */
+            path: string;
+            private?: boolean;
         };
         RepoURL: {
             /**
@@ -4572,11 +4714,6 @@ export interface components {
              * @enum {string}
              */
             teammate?: "done" | "skipped";
-            /**
-             * @description Work mode: chat or terminal
-             * @enum {string}
-             */
-            workMode?: "done" | "skipped";
         };
         SetupUpdateBody: {
             dismissed: boolean;
@@ -4760,6 +4897,8 @@ export interface components {
             soul: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description Sessions commit with the git identity of the user Studio runs as; gitName and gitEmail are used when the host has none */
+            useHostGitIdentity: boolean;
         };
         TeammateEvent: {
             /** Format: date-time */
@@ -4803,6 +4942,8 @@ export interface components {
             role?: string;
             /** @description Personality and working rules, as markdown */
             soul?: string;
+            /** @description Commit with the git identity of the user Studio runs as, when the host has one */
+            useHostGitIdentity?: boolean;
         };
         TeammateSession: {
             harness: string;
@@ -4982,19 +5123,6 @@ export interface components {
             cost?: unknown;
             /** @description The prompt response's usage, as the agent reports it */
             tokens?: unknown;
-        };
-        UISettings: {
-            /**
-             * @description How agent sessions open by default
-             * @enum {string}
-             */
-            agentView: "chat" | "terminal";
-            /** @description The user chose agentView; until then it is chat and the UI asks once */
-            asked: boolean;
-        };
-        UISettingsUpdate: {
-            /** @enum {string} */
-            agentView: "chat" | "terminal";
         };
         UpdateProviderInBody: {
             /** @description A new key. Omit it to keep the stored one. */
@@ -6509,6 +6637,40 @@ export interface operations {
             };
         };
     };
+    listForgeRepositories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Forge ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Repo"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     testForge: {
         parameters: {
             query?: never;
@@ -7828,6 +7990,42 @@ export interface operations {
             };
         };
     };
+    listProviderModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListModelsInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderModels"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     updateProvider: {
         parameters: {
             query?: never;
@@ -8795,6 +8993,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    cloneRepository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloneInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloneResult"];
                 };
             };
             /** @description Error */
@@ -11182,68 +11418,6 @@ export interface operations {
             };
         };
     };
-    getUISettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UISettings"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    setUISettings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UISettingsUpdate"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UISettings"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     getSetup: {
         parameters: {
             query: {
@@ -11390,6 +11564,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DoctorReport"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listHostFolders: {
+        parameters: {
+            query?: {
+                /** @description An absolute path, or ~/path; empty is the home directory */
+                path?: string;
+                /** @description Also list folders whose names start with a dot */
+                hidden?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostFolder"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getHostGitIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GitIdentity"];
                 };
             };
             /** @description Error */

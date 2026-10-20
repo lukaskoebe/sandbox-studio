@@ -261,15 +261,18 @@ type Teammate struct {
 	ApprovalScope string `json:"approvalScope" enum:"sandbox,teammate,environment" doc:"The scope the approval cards for this teammate's sandboxes preselect for new rules"`
 	// ApprovalPattern is the host pattern level the teammate last chose, which its next card
 	// preselects. It is kept by the policy, not edited.
-	ApprovalPattern string    `json:"-"`
-	Soul            string    `json:"soul" doc:"Personality and working rules, as markdown"`
-	Harness         string    `json:"harness" enum:"opencode,claude,codex"`
-	ProviderID      string    `json:"providerId" doc:"Empty while a copied teammate has no provider of its kind in this environment"`
-	Model           string    `json:"model"`
-	GitName         string    `json:"gitName"`
-	GitEmail        string    `json:"gitEmail"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+	ApprovalPattern string `json:"-"`
+	Soul            string `json:"soul" doc:"Personality and working rules, as markdown"`
+	Harness         string `json:"harness" enum:"opencode,claude,codex"`
+	ProviderID      string `json:"providerId" doc:"Empty while a copied teammate has no provider of its kind in this environment"`
+	Model           string `json:"model"`
+	GitName         string `json:"gitName"`
+	GitEmail        string `json:"gitEmail"`
+	// UseHostGitIdentity commits as the user Studio runs as: their git config --global
+	// identity, read when a session starts. GitName and GitEmail stay as the fallback.
+	UseHostGitIdentity bool      `json:"useHostGitIdentity" doc:"Sessions commit with the git identity of the user Studio runs as; gitName and gitEmail are used when the host has none"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 	// SecurityLevel overrides the environment's network security level for this teammate's
 	// sandboxes; empty means the environment's.
 	SecurityLevel string `json:"securityLevel" enum:",locked,guarded,assisted,open" doc:"The network security level of this teammate's sandboxes; empty means the environment's"`
@@ -285,13 +288,13 @@ type Teammate struct {
 }
 
 // teammateCols selects a teammate; provider_id reads as "" for a teammate without a provider.
-const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at, browser_stealth, browser_share_pages"
+const teammateCols = "id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness, IFNULL(provider_id, ''), model, git_name, git_email, created_at, updated_at, security_level, heartbeat_every, heartbeat_from, heartbeat_to, heartbeat_at, browser_stealth, browser_share_pages, use_host_git_identity"
 
 func scanTeammate(row interface{ Scan(...any) error }) (Teammate, error) {
 	var p Teammate
 	var created, updated, beat int64
 	var every, from, to int
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat, &p.BrowserStealth, &p.BrowserSharePages)
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Role, &p.Avatar, &p.ApprovalScope, &p.ApprovalPattern, &p.Soul, &p.Harness, &p.ProviderID, &p.Model, &p.GitName, &p.GitEmail, &created, &updated, &p.SecurityLevel, &every, &from, &to, &beat, &p.BrowserStealth, &p.BrowserSharePages, &p.UseHostGitIdentity)
 	if every > 0 {
 		p.Heartbeat = &Heartbeat{EveryHours: every, FromHour: from, ToHour: to}
 	}
@@ -327,8 +330,8 @@ func (s *Store) CreateTeammate(ctx context.Context, p Teammate) (Teammate, error
 // insertTeammate writes a teammate row, with a NULL provider when it has none.
 func insertTeammate(ctx context.Context, q execer, p Teammate, t int64) error {
 	_, err := q.ExecContext(ctx, `INSERT INTO teammates (id, environment_id, name, role, avatar, approval_scope, approval_pattern, soul, harness,
-		provider_id, model, git_name, git_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, t, t)
+		provider_id, model, git_name, git_email, use_host_git_identity, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.EnvironmentID, p.Name, p.Role, p.Avatar, p.ApprovalScope, p.ApprovalPattern, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, p.UseHostGitIdentity, t, t)
 	return err
 }
 
@@ -383,8 +386,8 @@ func (s *Store) UpdateTeammate(ctx context.Context, p Teammate) (Teammate, error
 		p.ApprovalScope = "environment"
 	}
 	res, err := s.db.ExecContext(ctx, `UPDATE teammates SET name = ?, role = ?, avatar = ?, approval_scope = ?, soul = ?, harness = ?, provider_id = ?, model = ?,
-		git_name = ?, git_email = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
-		p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, now(), p.EnvironmentID, p.ID)
+		git_name = ?, git_email = ?, use_host_git_identity = ?, updated_at = ? WHERE environment_id = ? AND id = ?`,
+		p.Name, p.Role, p.Avatar, p.ApprovalScope, p.Soul, p.Harness, nullable(p.ProviderID), p.Model, p.GitName, p.GitEmail, p.UseHostGitIdentity, now(), p.EnvironmentID, p.ID)
 	if err := teammateExists(err, p.Name); err != nil {
 		return p, err
 	}

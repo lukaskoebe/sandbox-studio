@@ -14,7 +14,7 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await expect(page).toHaveURL(/\/setup$/)
 
     // Each step is a row; the open one shows its body and the buttons to move on.
-    // A step's row is named by its title and state, after its number until done ("4 Teammate To do",
+    // A step's row is named by its title and state, after its number until done ("3 Teammate To do",
     // "Teammate Done").
     const row = (title: string) =>
       page.getByRole("button", { name: new RegExp(`^(\\d+ )?${title} `) })
@@ -27,14 +27,6 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await expect(row("Host check")).toBeVisible()
     if ((await row("Host check").getAttribute("aria-expanded")) === "true")
       await page.getByRole("button", { name: "Skip", exact: true }).click()
-
-    // Work mode: the choice is saved as it is made, which makes the step done.
-    await open("Work mode")
-    await page.getByRole("button", { name: /^Terminal/ }).click()
-    await expect(
-      page.getByRole("button", { name: /^Terminal/ })
-    ).toHaveAttribute("aria-pressed", "true")
-    await next().click()
 
     // AI provider: an API key. The fake key is never sent anywhere in the e2e build.
     await open("AI provider")
@@ -63,7 +55,7 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
       page.getByRole("heading", { name: "Home", level: 1 })
     ).toBeVisible()
     const card = page.getByRole("region", { name: "Finish setup" })
-    await expect(card).toContainText("/7")
+    await expect(card).toContainText("/6")
     await card.getByRole("link", { name: "Continue" }).click()
     await open("Git")
     await page.getByRole("button", { name: "Skip", exact: true }).click()

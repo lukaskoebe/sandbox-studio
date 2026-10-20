@@ -267,7 +267,10 @@ secrets).
   URL, short name and the path for the preview; every field stays editable.
   - Kind: Forgejo, GitHub, Other HTTPS, Other SSH. A GitHub URL over SSH becomes Other SSH
     with the agent; choose GitHub for pull requests.
-  - Short name, with the live preview "Sandboxes use https://git.studio.internal/<name>/<path>.git".
+  - Name in Studio, last and filled in from the host until the user types one, with the
+    live preview "How sandboxes refer to this forge, in URLs like
+    https://git.studio.internal/<name>/<path>.git". (It was "Short name", next to Kind, which
+    confused people.)
   - GitHub: base URL prefilled `https://github.com`, token field with a link to the
     fine-grained token page and the permissions listed.
   - Other HTTPS: base URL, username, token.

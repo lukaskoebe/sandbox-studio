@@ -1,7 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { CopyIcon, ShieldCheckIcon } from "@phosphor-icons/react"
+import {
+  CopyIcon,
+  FolderOpenIcon,
+  ShieldCheckIcon,
+} from "@phosphor-icons/react"
+import { FolderPickerDialog } from "@/components/folder-picker"
 import { Ident } from "@/components/ident"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -32,8 +37,10 @@ import { $api, errorMessage, fetchClient, type Forge } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
 import {
   authLabels,
+  freeName,
   kindLabels,
   remoteHost,
+  suggestedName,
   type Auth,
   type Kind,
 } from "@/lib/forges"
@@ -218,15 +225,6 @@ const defaultBaseURLs: Record<Kind, string> = {
   local: "",
 }
 
-const namePlaceholders: Record<Kind, string> = {
-  forgejo: "codeberg",
-  github: "github",
-  gitlab: "gitlab",
-  https: "other",
-  ssh: "myhost",
-  local: "local",
-}
-
 /**
  * Whether an SSH address is a repository's clone URL: [user@]host:path, with a path that isn't a
  * port, or ssh://host/path.
@@ -242,7 +240,10 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
   const [repoURL, setRepoURL] = useState("")
   const [repoPath, setRepoPath] = useState("")
   const [kind, setKind] = useState<Kind>("github")
+  // The name the user typed; until then the forge is named after its host.
   const [name, setName] = useState("")
+  const [nameEdited, setNameEdited] = useState(false)
+  const [browsing, setBrowsing] = useState(false)
   const [baseUrl, setBaseUrl] = useState(defaultBaseURLs.github)
   const [auth, setAuth] = useState<Auth>("agent")
   const [username, setUsername] = useState("")
@@ -257,6 +258,11 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
     "/api/environments/{env}/forges/parse-url"
   )
   const { mutate: parseURL, data: parsed } = parse
+  const forges = $api.useQuery("get", "/api/environments/{env}/forges", {
+    params: { path: { env } },
+  })
+  const autoName = freeName(suggestedName(kind, baseUrl), forges.data ?? [])
+  const forgeName = nameEdited ? name.trim() : autoName
   // A pasted repository URL fills in the form, after a short pause in typing.
   useEffect(() => {
     const url = repoURL.trim()
@@ -272,6 +278,7 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
     setKind(parsed.kind)
     setBaseUrl(parsed.baseUrl)
     setName(parsed.name)
+    setNameEdited(false)
     setRepoPath(parsed.path)
     setAuth(parsed.auth === "key" ? "key" : "agent")
     setScanned(undefined)
@@ -281,7 +288,7 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
   const ssh = kind === "ssh"
   const local = kind === "local"
   const canSave =
-    name.trim() !== "" &&
+    forgeName !== "" &&
     baseUrl.trim() !== "" &&
     (local || (ssh ? scanned !== undefined && confirmed : token !== ""))
 
@@ -300,7 +307,7 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
     const res = await fetchClient.POST("/api/environments/{env}/forges", {
       params: { path: { env } },
       body: {
-        name: name.trim(),
+        name: forgeName,
         kind,
         baseUrl: baseUrl.trim(),
         ...(kind === "https" && username.trim()
@@ -323,6 +330,12 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
 
   return (
     <form onSubmit={submit} className="grid gap-4">
+      <FolderPickerDialog
+        open={browsing}
+        onOpenChange={setBrowsing}
+        start={baseUrl}
+        onPick={setBaseUrl}
+      />
       <DialogHeader>
         <DialogTitle>Add forge</DialogTitle>
         <DialogDescription>
@@ -380,47 +393,41 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           </FieldDescription>
         </Field>
         <Field>
-          <FieldLabel htmlFor="forge-name">Short name</FieldLabel>
-          <Input
-            id="forge-name"
-            value={name}
-            placeholder={namePlaceholders[kind]}
-            autoComplete="off"
-            onChange={(e) => setName(e.target.value.toLowerCase())}
-          />
-          <FieldDescription>
-            Used in sandbox remote URLs. Sandboxes use{" "}
-            <Ident>
-              {`https://${remoteHost}/${name.trim() || "<name>"}/${repoPath || (local ? "repo" : "owner/repo")}.git`}
-            </Ident>
-          </FieldDescription>
-        </Field>
-      </div>
-      <div className="grid items-start gap-4 sm:grid-cols-2">
-        <Field>
           <FieldLabel htmlFor="forge-url">
             {ssh ? "SSH address" : local ? "Folder" : "URL"}
           </FieldLabel>
-          <Input
-            id="forge-url"
-            value={baseUrl}
-            placeholder={
-              ssh
-                ? "git@git.example.org"
-                : local
-                  ? "~/git"
-                  : "https://git.example.org"
-            }
-            autoComplete="off"
-            onChange={(e) => {
-              const v = e.target.value
-              // A clone URL pasted here fills in the form as in Repository URL.
-              if (ssh && isSSHCloneURL(v.trim())) setRepoURL(v.trim())
-              setBaseUrl(v)
-              setScanned(undefined)
-              setConfirmed(false)
-            }}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="forge-url"
+              value={baseUrl}
+              placeholder={
+                ssh
+                  ? "git@git.example.org"
+                  : local
+                    ? "~/git"
+                    : "https://git.example.org"
+              }
+              autoComplete="off"
+              onChange={(e) => {
+                const v = e.target.value
+                // A clone URL pasted here fills in the form as in Repository URL.
+                if (ssh && isSSHCloneURL(v.trim())) setRepoURL(v.trim())
+                setBaseUrl(v)
+                setScanned(undefined)
+                setConfirmed(false)
+              }}
+            />
+            {local && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBrowsing(true)}
+              >
+                <FolderOpenIcon />
+                Browse…
+              </Button>
+            )}
+          </div>
           {local && (
             <FieldDescription>
               The folder the repositories are in. Sandboxes can fetch every
@@ -435,49 +442,53 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
             </FieldDescription>
           )}
         </Field>
-        {kind === "https" && (
-          <Field>
-            <FieldLabel htmlFor="forge-username">Username</FieldLabel>
-            <Input
-              id="forge-username"
-              value={username}
-              placeholder="git"
-              autoComplete="off"
-              onChange={(e) => setUsername(e.target.value)}
-            />
-            <FieldDescription>
-              The user git sends with the token. Bitbucket wants x-token-auth;
-              most hosts take any.
-            </FieldDescription>
-          </Field>
-        )}
-        {ssh && (
-          <Field>
-            <FieldLabel>Authentication</FieldLabel>
-            <Select
-              value={auth}
-              onValueChange={(v) => v && setAuth(v)}
-              items={authLabels}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(authLabels) as Auth[]).map((a) => (
-                  <SelectItem key={a} value={a}>
-                    {authLabels[a]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldDescription>
-              {auth === "agent"
-                ? "Studio signs with the keys in your SSH agent, as ssh does. A hardware key may ask you to confirm."
-                : "Studio makes a key for this forge. You add its public key to the host."}
-            </FieldDescription>
-          </Field>
-        )}
       </div>
+      {(kind === "https" || ssh) && (
+        <div className="grid items-start gap-4 sm:grid-cols-2">
+          {kind === "https" && (
+            <Field>
+              <FieldLabel htmlFor="forge-username">Username</FieldLabel>
+              <Input
+                id="forge-username"
+                value={username}
+                placeholder="git"
+                autoComplete="off"
+                onChange={(e) => setUsername(e.target.value)}
+              />
+              <FieldDescription>
+                The user git sends with the token. Bitbucket wants x-token-auth;
+                most hosts take any.
+              </FieldDescription>
+            </Field>
+          )}
+          {ssh && (
+            <Field>
+              <FieldLabel>Authentication</FieldLabel>
+              <Select
+                value={auth}
+                onValueChange={(v) => v && setAuth(v)}
+                items={authLabels}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(authLabels) as Auth[]).map((a) => (
+                    <SelectItem key={a} value={a}>
+                      {authLabels[a]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>
+                {auth === "agent"
+                  ? "Studio signs with the keys in your SSH agent, as ssh does. A hardware key may ask you to confirm."
+                  : "Studio makes a key for this forge. You add its public key to the host."}
+              </FieldDescription>
+            </Field>
+          )}
+        </div>
+      )}
       {local ? null : ssh ? (
         <HostKeyCheck
           env={env}
@@ -527,6 +538,31 @@ function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
           </FieldDescription>
         </Field>
       )}
+      <Field>
+        <FieldLabel htmlFor="forge-name">Name in Studio</FieldLabel>
+        <Input
+          id="forge-name"
+          className="font-mono sm:max-w-64"
+          value={nameEdited ? name : autoName}
+          placeholder={autoName}
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={32}
+          onChange={(e) => {
+            setName(e.target.value.toLowerCase())
+            setNameEdited(true)
+          }}
+          // Emptied, the name goes back to the one from the host.
+          onBlur={() => name.trim() === "" && setNameEdited(false)}
+        />
+        <FieldDescription>
+          How sandboxes refer to this forge, in URLs like{" "}
+          <Ident>
+            {`https://${remoteHost}/${forgeName || "<name>"}/${repoPath || (local ? "repo" : "owner/repo")}.git`}
+          </Ident>
+          . Filled in from the {local ? "folder" : "host"}; most people keep it.
+        </FieldDescription>
+      </Field>
       {error && <FieldError>{error}</FieldError>}
       <DialogFooter>
         <Button type="submit" disabled={!canSave || saving}>

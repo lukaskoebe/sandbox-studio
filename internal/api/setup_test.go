@@ -40,12 +40,6 @@ func TestSetupConditions(t *testing.T) {
 	if got := steps(env.ID); got != (SetupSteps{Doctor: setupDone, Provider: setupDone, Teammate: setupDone}) {
 		t.Fatalf("after a provider: %+v", got)
 	}
-	if rec := do(h, "PUT", testOrigin+"/api/settings/ui", `{"agentView":"chat"}`); rec.Code != http.StatusOK {
-		t.Fatalf("work mode: %d %s", rec.Code, rec.Body)
-	}
-	if got := steps(env.ID); got.WorkMode != setupDone {
-		t.Fatalf("a chosen work mode: %+v", got)
-	}
 
 	if _, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: env.ID, Name: "cb", Kind: "forgejo", BaseURL: "https://codeberg.org"},
 		store.Secret{ID: store.NewID(), Name: "FORGE_CB_TOKEN", Sealed: []byte("x"), Hosts: []string{"codeberg.org"}}); err != nil {
@@ -96,16 +90,16 @@ func TestSetupRecordsSteps(t *testing.T) {
 		t.Fatalf("unknown environment: %d %s; want 404", rec.Code, rec.Body)
 	}
 
-	got := decode[Setup](t, do(h, "PUT", path+query, `{"steps":{"workMode":"skipped","network":"done"},"dismissed":false}`))
-	if got.Steps != (SetupSteps{WorkMode: "skipped", Network: setupDone}) || got.CompletedAt != nil {
+	got := decode[Setup](t, do(h, "PUT", path+query, `{"steps":{"git":"skipped","network":"done"},"dismissed":false}`))
+	if got.Steps != (SetupSteps{Git: "skipped", Network: setupDone}) || got.CompletedAt != nil {
 		t.Fatalf("partial: %+v", got)
 	}
-	if got := decode[Setup](t, do(h, "GET", path+query, "")); got.Steps.Network != setupDone || got.Steps.WorkMode != "skipped" {
+	if got := decode[Setup](t, do(h, "GET", path+query, "")); got.Steps.Network != setupDone || got.Steps.Git != "skipped" {
 		t.Fatalf("stored: %+v", got)
 	}
 
 	// Every step done or skipped completes the setup; a later update keeps the first time.
-	all := `{"steps":{"doctor":"skipped","workMode":"done","provider":"skipped","teammate":"skipped","git":"skipped","network":"done","sandbox":"skipped"},"dismissed":false}`
+	all := `{"steps":{"doctor":"skipped","provider":"skipped","teammate":"skipped","git":"skipped","network":"done","sandbox":"skipped"},"dismissed":false}`
 	done := decode[Setup](t, do(h, "PUT", path+query, all))
 	if done.CompletedAt == nil {
 		t.Fatalf("all steps resolved, not completed: %+v", done)
@@ -128,9 +122,6 @@ func TestSetupCompletesWhenEveryStepHolds(t *testing.T) {
 	const path = testOrigin + "/api/setup?env="
 
 	createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
-	if rec := do(h, "PUT", testOrigin+"/api/settings/ui", `{"agentView":"terminal"}`); rec.Code != http.StatusOK {
-		t.Fatalf("work mode: %d %s", rec.Code, rec.Body)
-	}
 	if _, err := s.Store.CreateForge(ctx, store.Forge{ID: store.NewID(), EnvironmentID: env.ID, Name: "cb", Kind: "forgejo", BaseURL: "https://codeberg.org"},
 		store.Secret{ID: store.NewID(), Name: "FORGE_CB_TOKEN", Sealed: []byte("x"), Hosts: []string{"codeberg.org"}}); err != nil {
 		t.Fatal(err)

@@ -23,8 +23,12 @@ import { SandboxProgress } from "@/components/sandbox-progress"
 import { ProviderDialog } from "@/components/provider-dialog"
 import { StatusBadge } from "@/components/status-badge"
 import { TeammateForm } from "@/components/teammate-form"
-import { WorkModePicker } from "@/components/agent-view"
 import { Ident } from "@/components/ident"
+import {
+  CloneRepositories,
+  RepositoryChecklist,
+  type RepoChoice,
+} from "@/components/clone-repositories"
 import {
   $api,
   errorMessage,
@@ -45,16 +49,6 @@ export function SetupStepBody({ step, env }: { step: SetupKey; env: string }) {
             skip it to come back later.
           </Hint>
           <HostChecks />
-        </Column>
-      )
-    case "workMode":
-      return (
-        <Column>
-          <Hint>
-            How you see agents work in a sandbox. You can switch any time in
-            Settings.
-          </Hint>
-          <WorkModePicker />
         </Column>
       )
     case "provider":
@@ -292,6 +286,8 @@ function SandboxStep({ env }: { env: string }) {
     params: { path: { env } },
   })
   const [name, setName] = useState("")
+  // Repositories picked with the sandbox, cloned once it runs.
+  const [repos, setRepos] = useState<RepoChoice[]>([])
   const create = $api.useMutation("post", "/api/environments/{env}/sandboxes", {
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -344,6 +340,9 @@ function SandboxStep({ env }: { env: string }) {
             </Button>
           </div>
         )}
+        {!building && (
+          <CloneRepositories env={env} sandbox={latest} queued={repos} />
+        )}
       </Column>
     )
   }
@@ -384,6 +383,12 @@ function SandboxStep({ env }: { env: string }) {
           <FieldDescription>Also the sandbox&apos;s hostname.</FieldDescription>
         )}
       </Field>
+      <RepositoryChecklist
+        env={env}
+        value={repos}
+        onChange={setRepos}
+        disabled={create.isPending}
+      />
       <div>
         <Button
           size="sm"

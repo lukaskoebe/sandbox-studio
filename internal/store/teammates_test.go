@@ -95,7 +95,8 @@ func TestProvidersAndTeammates(t *testing.T) {
 		t.Fatalf("cross-environment teammate read: %v", err)
 	}
 	teammate.Role = "author"
-	if got, err := s.UpdateTeammate(ctx, teammate); err != nil || got.Role != "author" {
+	teammate.UseHostGitIdentity = true
+	if got, err := s.UpdateTeammate(ctx, teammate); err != nil || got.Role != "author" || !got.UseHostGitIdentity {
 		t.Fatalf("update teammate: %+v %v", got, err)
 	}
 

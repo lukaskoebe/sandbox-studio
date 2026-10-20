@@ -31,6 +31,7 @@ Stream kinds:
 | `config` | host → guest | CA and placeholders; acknowledged when applied |
 | `home-files` | host → guest | harness config files into `/home/agent` (at most 16 files, 256 KiB each, no symlinks) |
 | `start-session` | host → guest | a harness TUI in a detached tmux session |
+| `run` | host → guest | one command as the agent user, from an allowlist (`claude`, `codex`, `tmux`, `cat`, `git`): CLI logins, review feedback typed into an agent's terminal, repositories cloned into `/workspace` |
 | `acp` | host → guest | stdin/stdout of an ACP agent process (chats) |
 | `snapshot`, `files` | host → guest | chat turn snapshots and the file browser's listings and reads |
 | `upload` | host → guest | a file streamed into a folder of `/workspace` (see [uploads](#uploads)) |

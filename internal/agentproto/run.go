@@ -3,8 +3,9 @@ package agentproto
 // KindRun (host → guest): the host writes a RunRequest line; the guest runs the command as the
 // agent user in its home, and replies with one RunResult line or an Error. Studio runs the CLI
 // logins and one-shot calls in the system VMs this way (docs/teammates.md, subscription
-// logins), and pastes review feedback into an agent's tmux session in a user's sandbox
-// (sandboxes.Manager.SendToAgent). Only the programs in RunCommands run.
+// logins), pastes review feedback into an agent's tmux session in a user's sandbox
+// (sandboxes.Manager.SendToAgent), and clones repositories into a sandbox's workspace through
+// the virtual git remote (docs/git-review.md). Only the programs in RunCommands run.
 const KindRun = "run"
 
 // Limits of a run. MaxRunLine bounds a request or reply line, escapes included.
@@ -21,7 +22,7 @@ const (
 
 // RunCommands are the programs a run may start, by their bare names. The guest refuses any
 // other program, whatever the host asks.
-var RunCommands = []string{"claude", "codex", "tmux", "cat"}
+var RunCommands = []string{"claude", "codex", "tmux", "cat", "git"}
 
 // RunRequest is the body of a KindRun stream.
 type RunRequest struct {

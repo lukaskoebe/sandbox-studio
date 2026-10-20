@@ -26,7 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { ModelSuggestions } from "@/components/provider-dialog"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import {
   $api,
@@ -37,6 +39,7 @@ import {
   type Provider,
 } from "@/lib/api/client"
 import type { Area } from "@/lib/accents"
+import { useProviderModels } from "@/lib/provider-models"
 import {
   approvalScopeLabels,
   approvalScopes,
@@ -116,6 +119,14 @@ export function TeammateForm({
     teammate?.providerId ?? providers.at(0)?.id ?? ""
   )
   const provider = providers.find((p) => p.id === providerId)
+  // An OpenAI-compatible endpoint's own models, listed with the provider's stored key.
+  const compatible =
+    provider?.kind === "openai_compatible" && provider.state === "ready"
+  const suggestions = useProviderModels({
+    env,
+    baseUrl: compatible ? (provider.baseUrl ?? "") : "",
+    providerId: compatible ? provider.id : undefined,
+  })
   const supported = provider?.harnesses ?? []
   const [harness, setHarness] = useState<Harness | undefined>(
     teammate?.harness ?? supported[0]
@@ -123,6 +134,12 @@ export function TeammateForm({
   const [model, setModel] = useState(teammate?.model ?? "")
   const [gitName, setGitName] = useState(teammate?.gitName ?? "")
   const [gitEmail, setGitEmail] = useState(teammate?.gitEmail ?? "")
+  const [useHostGit, setUseHostGit] = useState(
+    teammate?.useHostGitIdentity ?? false
+  )
+  // The identity "Use my git identity" commits with: the host's git config --global.
+  const hostGit = $api.useQuery("get", "/api/system/git-identity").data
+  const hostGitSet = !!hostGit?.name && !!hostGit.email
   const [soul, setSoul] = useState(teammate?.soul ?? "")
   const [avatar, setAvatar] = useState(teammate?.avatar ?? "")
   const [approvalScope, setApprovalScope] = useState<Teammate["approvalScope"]>(
@@ -180,6 +197,7 @@ export function TeammateForm({
       model: model.trim() || undefined,
       gitName: gitName.trim() || undefined,
       gitEmail: gitEmail.trim() || undefined,
+      useHostGitIdentity: useHostGit || undefined,
       avatar: avatar || undefined,
       approvalScope,
     }
@@ -307,13 +325,41 @@ export function TeammateForm({
                     ? "claude-sonnet-5-5"
                     : "The subscription's default"
             }
+            list="teammate-models"
             value={model}
             onChange={(e) => setModel(e.target.value)}
           />
+          {compatible && (
+            <ModelSuggestions id="teammate-models" {...suggestions} />
+          )}
         </Field>
       </FormSection>
       <FormSection title="Git identity" icon={GitBranchIcon} area="git">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={useHostGit} onCheckedChange={setUseHostGit} />
+            Use my git identity
+          </label>
+          <p className="text-xs text-muted-foreground">
+            {hostGitSet ? (
+              <>
+                Commit as{" "}
+                <span className="font-mono">
+                  {hostGit.name} &lt;{hostGit.email}&gt;
+                </span>
+                , the identity in your git config on this computer.
+              </>
+            ) : (
+              "Your git config on this computer has no user.name and user.email yet, so the name and email below are used."
+            )}
+          </p>
+        </div>
+        <div
+          className={cn(
+            "grid gap-4 sm:grid-cols-2",
+            useHostGit && hostGitSet && "hidden"
+          )}
+        >
           <Field>
             <FieldLabel htmlFor="teammate-git-name">Git name</FieldLabel>
             <Input

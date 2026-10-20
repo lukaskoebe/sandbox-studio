@@ -22,9 +22,12 @@ A forge is a kind, a base URL, a username, one studio-only credential and, for S
 host key. An SSH forge can sign with your SSH agent instead of a credential. The kind chooses
 the transport (HTTPS or SSH) and whether there is an API for pull requests.
 
-- Per environment: short name (`^[a-z0-9][a-z0-9-]{0,31}$`, used in the remote URL), kind and
+- Per environment: name (`^[a-z0-9][a-z0-9-]{0,31}$`, used in the remote URL), kind and
   base URL. Pasting a repository URL such as `git@github.com:owner/repo.git` into the Add
-  forge dialog fills these in. An HTTPS base URL follows the same rules as a provider's: `https://`, a public
+  forge dialog fills these in. The dialog calls the name "Name in Studio" and fills it in
+  from the host as the URL is typed (`github.com` and `git.example.org` become `github` and
+  `example`, a folder `local`, with `-2` and so on if taken), until the user types their
+  own; it shows the remote URL sandboxes will use. An HTTPS base URL follows the same rules as a provider's: `https://`, a public
   host, no credentials, query or fragment.
 - Kinds:
   - `forgejo` (Forgejo, Gitea, Codeberg): git over HTTPS as `sandbox-studio:<token>`, API
@@ -150,7 +153,12 @@ A `local` forge is a folder on the host, so a sandbox can push to a repository y
 here, reviewed like any other push.
 
 - The base URL is the folder's absolute path; the dialog also takes `~/git` and
-  `file:///…`. It must exist, and can't be the file system's root. Pasting a repository's
+  `file:///…`. It must exist, and can't be the file system's root. "Browse…" picks it from
+  the host's folders: the browser can't name them, so `GET /api/system/folders?path=` lists
+  the subfolders of a folder (only folders, dot folders with `hidden=true`, at most 1000),
+  marks the git repositories (a `.git`, or `HEAD` and `objects`), and gives its parent. It
+  starts at the home directory, or at the folder the field names, and refuses the root, as
+  a forge's folder does. Like every `/api` route it needs the owner's session. Pasting a repository's
   path (`~/git/app`) fills in the form: the folder it is in, named `local`, path `app`.
 - `https://git.studio.internal/<forge>/<path>.git` is `<folder>/<path>.git` (bare) or
   `<folder>/<path>` (a working copy, or bare). `splitPath` already refuses `..` and segments
@@ -166,6 +174,27 @@ here, reviewed like any other push.
   unless the repository sets `receive.denyCurrentBranch=updateInstead`.
 - The approval says "Approving pushes it to <folder>/<path> on this computer." No pull
   requests. "Test" without a repository checks the folder.
+
+## Cloning into a sandbox
+
+The setup's sandbox step can clone repositories of a forge into the new sandbox, so it
+starts with the code.
+
+- `GET …/forges/{id}/repositories` lists what Studio's credential reaches, through the API,
+  at most 300 (`gitreview.MaxRepositories`): Forgejo `GET /api/v1/user/repos` (pages of 50),
+  GitHub `GET /user/repos?sort=pushed` (pages of 100), GitLab `GET /api/v4/projects` with
+  `membership=true&simple=true&order_by=last_activity_at` (pages of 100). A path the virtual
+  remote can't serve is left out. A `local` forge lists the repositories in its folder and
+  one level down (`owner/repo`), by name, without hidden folders; a bare `app.git` is listed
+  as `app`. Kinds `https` and `ssh` have no list (422).
+- `POST …/sandboxes/{id}/clone` with `{forgeId, repo}` runs `git clone --
+  https://git.studio.internal/<forge>/<path>.git /workspace/<name>` in the running sandbox,
+  as the agent user, through the guest's `run` stream (`git` is in
+  `agentproto.RunCommands`), with `GIT_TERMINAL_PROMPT=0` and a 10-minute limit. The clone
+  is an ordinary one of the virtual remote: its fetches carry no token, and its pushes come
+  for review. The path is checked as the remote checks it, so `<name>`, the last segment,
+  stays in `/workspace` and can't start with a dash. git refuses a folder that exists and
+  isn't empty; the answer is 409 with the end of git's output, as for any failed clone.
 
 ## Fetch
 

@@ -66,6 +66,9 @@ type Adapter interface {
 	// OpenPullRequestOf returns the web URL of the open pull request from head, a branch of
 	// the repository itself, or "" if there is none.
 	OpenPullRequestOf(ctx context.Context, token, owner, repo, head string) (string, error)
+	// ListRepositories returns the repositories the token can reach, recently active first,
+	// at most MaxRepositories (repositories.go).
+	ListRepositories(ctx context.Context, token string) ([]Repo, error)
 }
 
 // PullRequest is the pull request a push proposes, and what a git.pr approval opens.

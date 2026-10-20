@@ -42,7 +42,7 @@ to an environment.
 | Route | Page |
 |---|---|
 | `/e/$env` | Home: what needs you (the approvals waiting, decided on the spot), the chats working now, and earlier: the latest network activity. The setup card shows until the setup is complete or dismissed, and an environment with neither a teammate nor a sandbox offers to make the first |
-| `/setup` | the guided setup: host check, work mode, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome; it works on the environment last opened, or the first |
+| `/setup` | the guided setup: host check, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome; it works on the environment last opened, or the first |
 | `/e/$env/sandboxes/$id` | redirects to its workspace, with its parameters |
 | `/e/$env/sandboxes/$id/work` | the sandbox: its chats, terminals and the git reviews waiting on it as tabs in one strip, the picked one in full, and one side panel. `?terminal=`, `?chat=` and `?review=` pick a tab; a review that opens by itself waits for a click; `?panel=` names the open panel (browser, connections or files). Open chat tabs are kept in sessionStorage per sandbox; chats with changes this browser hasn't seen (`lib/chat-seen.ts`, revs in localStorage) are marked green, and only they: other counts use the quiet `CountPill` |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
@@ -67,7 +67,7 @@ leaves the page as it was. Its sections:
 
 | `?settings=` | Section |
 |---|---|
-| `general` | work mode, start at login, updates (the whole installation), "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
+| `general` | start at login, updates (the whole installation), "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
 | `providers` | AI providers of the environment |
 | `git` | the forges of the environment |
 | `network` | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
@@ -81,9 +81,15 @@ On the first load of a browser session, `/e/$env` redirects to `/setup` while th
 neither completed nor dismissed and the environment has no sandbox yet; the check runs once
 per session (`studio.setup.routed` in session storage). The setup's progress is stored on the
 server as the `setup.v1` setting and read with `GET /api/setup?env=` ([API](api.md)). A step
-reads done when its condition already holds (the host check passes, a work mode is chosen,
-the environment has a provider, a teammate, a forge or a sandbox); the setup is complete once
+reads done when its condition already holds (the host check passes, or the environment has
+a provider, a teammate, a forge or a sandbox); the setup is complete once
 every step is done or skipped.
+
+The first sandbox step lists the repositories of the environment's forges that have a list
+(Forgejo, GitHub, GitLab and folders on this computer) as a searchable checklist. The ones
+picked are cloned into `/workspace` one after the other once the sandbox runs, each showing
+how it went; while nothing was cloned yet, more can be picked there
+([git review](git-review.md#cloning-into-a-sandbox)).
 
 The old addresses `/e/$env/builds`, `/providers` and `/browser` redirect to the
 settings dialog and teammate browsers above. `/browser?teammate=<id>` opens that teammate's

@@ -29,6 +29,8 @@ export type GuestState = {
     prompts: unknown[]
     outcomes: { outcome: { outcome: string; optionId?: string } }[]
   }[]
+  /** The folders repositories were cloned to (POST …/sandboxes/{id}/clone). */
+  clones: string[]
 }
 
 /** A branch of a fake upstream repository (internal/e2e, /api/e2e/upstream). */
@@ -144,8 +146,8 @@ export class Api {
 type StorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>
 
 /**
- * Exchanges a fresh login link for a session cookie. The work mode is chosen and the guided
- * setup dismissed, so that tests start on the app's pages rather than on /setup.
+ * Exchanges a fresh login link for a session cookie. The guided setup is dismissed, so that
+ * tests start on the app's pages rather than on /setup.
  */
 async function logIn(studio: Studio): Promise<StorageState> {
   const ctx = await request.newContext({ baseURL: studio.url })
@@ -154,11 +156,6 @@ async function logIn(studio: Studio): Promise<StorageState> {
   expect((await ctx.post("/api/auth/exchange", { data: { token } })).ok()).toBe(
     true
   )
-  expect(
-    (
-      await ctx.put("/api/settings/ui", { data: { agentView: "terminal" } })
-    ).ok()
-  ).toBe(true)
   const envs = await (await ctx.get("/api/environments")).json()
   expect(
     (

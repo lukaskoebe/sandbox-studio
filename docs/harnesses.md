@@ -83,7 +83,8 @@ takes effect with the next session start, which rewrites the block.
 
 Auto-approve is safe here because the VM is the sandbox and the gateway's policy governs
 the network. Every harness also gets the git identity in `~/.config/git/config` (managed),
-with no credentials. Git reads `~/.gitconfig` after that file, so a user's `~/.gitconfig`
+with no credentials: the teammate's, or the host user's when the teammate uses it
+([teammates](teammates.md#teammates)). Git reads `~/.gitconfig` after that file, so a user's `~/.gitconfig`
 still wins.
 
 Codex needs an OpenAI-compatible endpoint that speaks the Responses API, its only

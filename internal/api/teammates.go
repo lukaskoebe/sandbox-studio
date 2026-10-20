@@ -88,6 +88,9 @@ type TeammateInput struct {
 	Model         string `json:"model,omitempty" maxLength:"128" doc:"Required for API-key providers; defaults to the model of an OpenAI-compatible provider"`
 	GitName       string `json:"gitName,omitempty" maxLength:"100" doc:"Defaults to the name"`
 	GitEmail      string `json:"gitEmail,omitempty" maxLength:"254" doc:"Defaults to <slug>@agents.invalid"`
+	// UseHostGitIdentity commits with the host user's git identity; GitName and GitEmail stay
+	// the fallback.
+	UseHostGitIdentity bool `json:"useHostGitIdentity,omitempty" doc:"Commit with the git identity of the user Studio runs as, when the host has one"`
 }
 
 func (s *Server) registerTeammates(api huma.API) {
@@ -398,6 +401,7 @@ func (s *Server) registerTeammates(api huma.API) {
 		p := store.Teammate{
 			ID: store.NewID(), EnvironmentID: target, Role: src.Role, Avatar: src.Avatar, ApprovalScope: src.ApprovalScope,
 			Soul: src.Soul, Harness: src.Harness, Model: src.Model, GitName: src.GitName, GitEmail: src.GitEmail,
+			UseHostGitIdentity: src.UseHostGitIdentity,
 		}
 		if p.ProviderID, err = s.matchingProvider(ctx, in.Env, target, src.ProviderID); err != nil {
 			return nil, err
@@ -458,6 +462,7 @@ func (s *Server) teammateFrom(ctx context.Context, env, id string, in TeammateIn
 		ID: id, EnvironmentID: env, Name: in.Name, Role: strings.TrimSpace(in.Role), Avatar: in.Avatar, Soul: in.Soul,
 		Harness: in.Harness, ProviderID: in.ProviderID, Model: strings.TrimSpace(in.Model),
 		GitName: strings.TrimSpace(in.GitName), GitEmail: strings.TrimSpace(in.GitEmail), ApprovalScope: in.ApprovalScope,
+		UseHostGitIdentity: in.UseHostGitIdentity,
 	}
 	if p.ApprovalScope == "" {
 		p.ApprovalScope = teammates.ScopeEnvironment

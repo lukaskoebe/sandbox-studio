@@ -71,6 +71,9 @@ type FileTeammate struct {
 	Model         string `json:"model,omitempty" maxLength:"128"`
 	GitName       string `json:"gitName,omitempty" maxLength:"100"`
 	GitEmail      string `json:"gitEmail,omitempty" maxLength:"254"`
+	// UseHostGitIdentity is the teammate's choice to commit as the user. The identity itself
+	// is read on the host that imports the file.
+	UseHostGitIdentity bool `json:"useHostGitIdentity,omitempty"`
 }
 
 // FileRule is a network rule. Teammate names a teammate of the file; empty means the whole
@@ -170,6 +173,7 @@ func (s *Server) buildEnvironmentFile(ctx context.Context, envID string) (Enviro
 		f.Teammates = append(f.Teammates, FileTeammate{
 			Name: t.Name, Role: t.Role, Avatar: t.Avatar, ApprovalScope: t.ApprovalScope, Soul: t.Soul, Harness: t.Harness,
 			Provider: providerName[t.ProviderID], Model: t.Model, GitName: t.GitName, GitEmail: t.GitEmail,
+			UseHostGitIdentity: t.UseHostGitIdentity,
 		})
 	}
 	for _, r := range rules {
@@ -384,6 +388,7 @@ func (s *Server) checkEnvironmentFile(f EnvironmentFile) (importPlan, error) {
 			ID: store.NewID(), Name: ft.Name, Role: strings.TrimSpace(ft.Role), Avatar: ft.Avatar,
 			ApprovalScope: ft.ApprovalScope, Soul: ft.Soul, Harness: ft.Harness, Model: strings.TrimSpace(ft.Model),
 			GitName: strings.TrimSpace(ft.GitName), GitEmail: strings.TrimSpace(ft.GitEmail),
+			UseHostGitIdentity: ft.UseHostGitIdentity,
 		}
 		if p.ApprovalScope == "" {
 			p.ApprovalScope = teammates.ScopeEnvironment

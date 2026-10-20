@@ -8,6 +8,8 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-git/go-billy/v5/memfs"
@@ -17,6 +19,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/storage/memory"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
 // Push is what the guest pushes: one commit that writes File on top of Branch of the
@@ -41,25 +45,18 @@ type Pushed struct {
 // CA from the guest's config, so Studio's virtual git remote gets the push and holds it for
 // review.
 func (g *Guest) Push(ctx context.Context, p Push) Pushed {
-	g.mu.Lock()
-	egress, cfg := g.egress, g.config
-	g.mu.Unlock()
 	var out Pushed
 	fail := func(err error) Pushed {
 		out.Error = err.Error()
 		return out
 	}
-	if egress.Proxy == "" {
-		return fail(errors.New("the sandbox has no gateway"))
-	}
-	if cfg == nil || cfg.CA == "" {
-		return fail(errors.New("the guest has no CA yet"))
+	proxy, ca, err := g.gateway()
+	if err != nil {
+		return fail(err)
 	}
 	if p.Branch == "" {
 		p.Branch = "main"
 	}
-	proxy := transport.ProxyOptions{URL: "socks5://" + egress.Proxy, Username: egress.User, Password: os.Getenv(egress.PasswordEnv)}
-	ca := []byte(cfg.CA)
 	var progress bytes.Buffer
 	repo, err := git.CloneContext(ctx, memory.NewStorage(), memfs.New(), &git.CloneOptions{
 		URL: p.URL, ReferenceName: plumbing.NewBranchReferenceName(p.Branch), SingleBranch: true,
@@ -100,4 +97,48 @@ func (g *Guest) Push(ctx context.Context, p Push) Pushed {
 		return fail(err)
 	}
 	return out
+}
+
+// gateway is how git in the guest reaches Studio: the sandbox's gateway as a SOCKS proxy, and
+// the environment CA from the guest's config, which git.studio.internal is served with.
+func (g *Guest) gateway() (transport.ProxyOptions, []byte, error) {
+	g.mu.Lock()
+	egress, cfg := g.egress, g.config
+	g.mu.Unlock()
+	if egress.Proxy == "" {
+		return transport.ProxyOptions{}, nil, errors.New("the sandbox has no gateway")
+	}
+	if cfg == nil || cfg.CA == "" {
+		return transport.ProxyOptions{}, nil, errors.New("the guest has no CA yet")
+	}
+	proxy := transport.ProxyOptions{URL: "socks5://" + egress.Proxy, Username: egress.User, Password: os.Getenv(egress.PasswordEnv)}
+	return proxy, []byte(cfg.CA), nil
+}
+
+// runGit fakes the git clone Studio runs to clone a repository into the workspace
+// (POST .../sandboxes/{id}/clone): it clones the URL through the gateway into memory, as git
+// in a sandbox would, and records the folder the clone went to.
+func (g *Guest) runGit(ctx context.Context, req agentproto.RunRequest) agentproto.RunResult {
+	a := req.Args
+	if len(a) != 5 || a[1] != "clone" || a[2] != "--" {
+		return agentproto.RunResult{ExitCode: 127, Stderr: "the e2e guest doesn't run " + strings.Join(a, " ")}
+	}
+	url, dir := a[3], a[4]
+	g.mu.Lock()
+	taken := slices.Contains(g.clones, dir)
+	g.mu.Unlock()
+	if taken {
+		return agentproto.RunResult{ExitCode: 128, Stderr: "fatal: destination path '" + dir + "' already exists and is not an empty directory.\n"}
+	}
+	proxy, ca, err := g.gateway()
+	if err == nil {
+		_, err = git.CloneContext(ctx, memory.NewStorage(), memfs.New(), &git.CloneOptions{URL: url, CABundle: ca, ProxyOptions: proxy})
+	}
+	if err != nil && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
+		return agentproto.RunResult{ExitCode: 128, Stderr: "Cloning into '" + dir + "'...\nfatal: " + err.Error() + "\n"}
+	}
+	g.mu.Lock()
+	g.clones = append(g.clones, dir)
+	g.mu.Unlock()
+	return agentproto.RunResult{Stderr: "Cloning into '" + dir + "'...\n"}
 }

@@ -8,10 +8,13 @@ FROM debian:${DEBIAN_VERSION}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# bash-completion gives terminals tab completion, git's included (the git package ships its
+# script): its /etc/profile.d/bash_completion.sh loads it in the login shells tmux starts,
+# and the skeleton's ~/.bashrc in other interactive shells.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
-        curl wget git tmux sudo jq ripgrep fd-find less vim-tiny openssh-client \
+        curl wget git tmux sudo jq ripgrep fd-find less vim-tiny openssh-client bash-completion \
         gnupg procps iproute2 iputils-ping dnsutils unzip xz-utils zstd file \
         build-essential pkg-config python3 python3-venv locales \
     && install -m 0755 -d /etc/apt/keyrings \

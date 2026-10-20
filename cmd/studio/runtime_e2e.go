@@ -56,6 +56,10 @@ func forgeClient(data string) *http.Client {
 	return fakeUpstream.Client()
 }
 
+// modelsClient sends the model listings of OpenAI-compatible providers to the fake upstream,
+// which answers every /models with the same two models. It follows forgeClient.
+func modelsClient() *http.Client { return fakeUpstream.Client() }
+
 // registerControl serves the control API behind the API's login, like the rest of the API. Its
 // requests are decided by the policy, as a sandbox's connections are.
 func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine) {

@@ -19,6 +19,13 @@ its sandboxes when an agent session starts and when the sandbox's guest connects
   409 for it. Guests see only the placeholder, as with any secret.
 - `openai_compatible` takes an `https://` base URL on a public host (no credentials, query
   or fragment, no private, loopback or link-local address) and the endpoint's single model.
+- The provider form suggests the models the endpoint lists. Once a base URL and a key are
+  set, it calls `POST /api/environments/{env}/providers/models` with `{baseUrl, apiKey}`, or
+  with `providerId` to use a saved provider's stored key. Studio itself sends `GET
+  <baseUrl>/models` with the key as a bearer token, to public addresses only, and gives up
+  after 10 seconds. It returns the ids (`{models}`), never the key; the endpoint's errors
+  answer 502. A stored key is only sent to its provider's own base URL. The model field
+  still takes any name.
 - Name and kind are fixed. A provider used by a teammate can't be deleted (409).
 - An API-key provider can exist without its key: an imported environment's providers do
   (`state` `key_required`). Its first key is added with `PUT` and `apiKey`, and sessions and
@@ -94,6 +101,11 @@ What is built and what is verified is in [harnesses](harnesses.md#subscription-l
   `openai_compatible` defaults to the provider's model.
 - Git name defaults to the name, git email to `<slug>@agents.invalid`. Both are one line
   without control characters, quotes or angle brackets, so they are safe in git config.
+- "Use my git identity" (`useHostGitIdentity`, off by default) commits as the user instead.
+  When a session starts, Studio reads `git config --global user.name` and `user.email` on
+  the host. If either is not set, or one fails the checks above, the teammate's own git name
+  and email are used. `GET /api/system/git-identity` returns what the host has, so the form
+  can show it.
 - A teammate that owns sandboxes can't be deleted (409). Deleting a teammate deletes the
   network rules scoped to it.
 - The approval scope is `sandbox`, `teammate` or `environment` (the default, and what rules

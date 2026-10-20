@@ -20,7 +20,7 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 	anthropic := createProvider(t, h, work, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
 	local := createProvider(t, h, work, `{"name":"Local","kind":"openai_compatible","apiKey":"sk-local-key","baseUrl":"https://llm.example.com/v1","model":"qwen3-coder"}`)
 	teammateURL := testOrigin + "/api/environments/" + work.ID + "/teammates"
-	ada := decode[store.Teammate](t, do(h, "POST", teammateURL, `{"name":"Ada","role":"Reviewer","avatar":"🦊","approvalScope":"teammate","soul":"# Ada\nCareful.","harness":"claude","providerId":"`+anthropic.ID+`","model":"claude-sonnet-5-5","gitName":"Ada (agent)","gitEmail":"ada@agents.invalid"}`))
+	ada := decode[store.Teammate](t, do(h, "POST", teammateURL, `{"name":"Ada","role":"Reviewer","avatar":"🦊","approvalScope":"teammate","soul":"# Ada\nCareful.","harness":"claude","providerId":"`+anthropic.ID+`","model":"claude-sonnet-5-5","gitName":"Ada (agent)","gitEmail":"ada@agents.invalid","useHostGitIdentity":true}`))
 	do(h, "POST", teammateURL, `{"name":"Bob","harness":"opencode","providerId":"`+local.ID+`"}`)
 
 	rulesURL := testOrigin + "/api/environments/" + work.ID + "/rules"
@@ -118,7 +118,7 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 		}
 	}
 	if newAda.ProviderID != newAnthropic.ID || newAda.Avatar != "🦊" || newAda.ApprovalScope != "teammate" || newAda.Soul != ada.Soul ||
-		newAda.Model != ada.Model || newAda.GitEmail != ada.GitEmail || newAda.Role != ada.Role {
+		newAda.Model != ada.Model || newAda.GitEmail != ada.GitEmail || newAda.Role != ada.Role || !newAda.UseHostGitIdentity {
 		t.Fatalf("imported Ada: %+v", newAda)
 	}
 	rules := decode[[]store.Rule](t, do(h, "GET", base+"/rules", ""))

@@ -64,3 +64,28 @@ test("a Claude subscription asks for a browser sign-in, not a key", async ({
   if (added)
     await api.request.delete(`/api/environments/${env}/providers/${added.id}`)
 })
+
+test("an OpenAI-compatible endpoint suggests the models it lists", async ({
+  page,
+  env,
+}) => {
+  await page.goto(`/e/${env}/settings/providers`)
+  await page.getByRole("button", { name: "Add provider" }).first().click()
+  const dialog = page.getByRole("dialog", { name: "Add provider" })
+  await dialog.getByLabel("Kind").click()
+  await page.getByRole("option", { name: "OpenAI-compatible endpoint" }).click()
+  await dialog.getByLabel("Base URL").fill("https://llm.example.com/v1")
+  await expect(dialog.getByText(/The endpoint lists/)).toHaveCount(0)
+
+  // Studio asks the endpoint once there is a key; the e2e build's fake lists two models.
+  await dialog.getByLabel("API key", { exact: true }).fill("sk-e2e-fake")
+  await expect(dialog.getByText("The endpoint lists 2 models")).toBeVisible()
+  await expect(dialog.locator("datalist#provider-models option")).toHaveCount(2)
+  await expect(
+    dialog.locator('datalist#provider-models option[value="e2e-coder"]')
+  ).toHaveCount(1)
+  // Any other model can still be typed.
+  await dialog.getByLabel("Model").fill("my-own-model")
+  await expect(dialog.getByLabel("Model")).toHaveValue("my-own-model")
+  await page.keyboard.press("Escape")
+})

@@ -53,6 +53,7 @@ type Guest struct {
 	home     []string
 	sessions map[string]*session
 	buffers  map[string]string // tmux paste buffers, see runTmux
+	clones   []string          // the folders repositories were cloned to, see runGit
 	ports    []int
 	forwards []int // a browser VM's forwarded ports
 	conns    []*Connection
@@ -241,7 +242,13 @@ func (g *Guest) handle(st net.Conn) {
 	case agentproto.KindRun:
 		var req agentproto.RunRequest
 		if err = agentproto.ReadJSONLineLimit(br, &req, agentproto.MaxRunLine); err == nil {
-			err = agentproto.WriteJSONLine(st, g.runTmux(req))
+			if len(req.Args) > 0 && req.Args[0] == "git" {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.TimeoutSec)*time.Second)
+				err = agentproto.WriteJSONLine(st, g.runGit(ctx, req))
+				cancel()
+			} else {
+				err = agentproto.WriteJSONLine(st, g.runTmux(req))
+			}
 		}
 	default:
 		err = agentproto.WriteJSONLine(st, agentproto.Error{Error: "the e2e guest does not support " + h.Kind + " streams"})
@@ -646,6 +653,7 @@ type State struct {
 	Connection []Connection         `json:"connections"`
 	Calls      []Call               `json:"calls"`
 	ACP        []ACPAgent           `json:"acp"`
+	Clones     []string             `json:"clones"` // the folders repositories were cloned to
 	// Browser is the fake browser of a browser VM, once Studio drove it.
 	Browser *BrowserState `json:"browser,omitempty"`
 }
@@ -665,6 +673,7 @@ func (g *Guest) State() State {
 		Connected: g.sess != nil && !g.sess.IsClosed(), Configs: g.configs, Env: env,
 		CA: g.config != nil && strings.Contains(g.config.CA, "BEGIN CERTIFICATE"), HomeFiles: append([]string{}, g.home...),
 		Sessions: sessions, Ports: slices.Clone(g.ports), Connection: []Connection{}, Calls: []Call{}, ACP: agents, Browser: browser,
+		Clones: append([]string{}, g.clones...),
 	}
 	for _, c := range g.conns {
 		s.Connection = append(s.Connection, *c)

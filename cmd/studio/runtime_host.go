@@ -96,5 +96,9 @@ func upstreamDial() gatewayDial { return nil }
 // only.
 func forgeClient(string) *http.Client { return nil }
 
+// modelsClient lists the models of OpenAI-compatible endpoints; nil is its default, public
+// addresses only.
+func modelsClient() *http.Client { return nil }
+
 // registerControl adds the e2e control API to the API mux; production has none.
 func registerControl(*http.ServeMux, *store.Store, *policy.Engine) {}

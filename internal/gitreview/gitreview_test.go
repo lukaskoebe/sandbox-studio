@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -52,6 +53,25 @@ type fakeForge struct {
 	upload int // upload-pack advertisements served: fetches, the mirror's included
 	pulls  []PullRequest
 	merges []mergeRequest // GitLab merge requests
+	repos  int            // repositories the user's list has besides owner/repo
+}
+
+// repoPage is page (from 1) of the fake's repository list, size entries long: owner/repo,
+// then owner/r1 to owner/r<repos>.
+func (f *fakeForge) repoPage(r *http.Request, sizeParam string) []string {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	size, _ := strconv.Atoi(r.URL.Query().Get(sizeParam))
+	f.mu.Lock()
+	all := []string{"owner/repo"}
+	for i := 1; i <= f.repos; i++ {
+		all = append(all, fmt.Sprintf("owner/r%d", i))
+	}
+	f.mu.Unlock()
+	if page < 1 || size < 1 {
+		return nil
+	}
+	lo, hi := min((page-1)*size, len(all)), min(page*size, len(all))
+	return all[lo:hi]
 }
 
 // mergeRequest is the body a GitLab merge request is opened with.
@@ -197,6 +217,12 @@ func (f *fakeForge) api(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"login":"studio-bot"}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/owner/repo":
 		_, _ = io.WriteString(w, `{"default_branch":"main"}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/user/repos":
+		out := []map[string]any{}
+		for _, p := range f.repoPage(r, "limit") {
+			out = append(out, map[string]any{"full_name": p, "private": p == "owner/repo", "description": "about " + p})
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/owner/repo/pulls":
 		f.mu.Lock()
 		defer f.mu.Unlock()
@@ -244,6 +270,16 @@ func (f *fakeForge) githubAPI(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"login":"octo-bot"}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/repo":
 		_, _ = io.WriteString(w, `{"default_branch":"main"}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user/repos":
+		if r.URL.Query().Get("sort") != "pushed" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		out := []map[string]any{}
+		for _, p := range f.repoPage(r, "per_page") {
+			out = append(out, map[string]any{"full_name": p, "private": false})
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/old":
 		w.Header().Set("Location", f.srv.URL+"/api/v3/repositories/42")
 		w.WriteHeader(http.StatusMovedPermanently)
@@ -295,6 +331,19 @@ func (f *fakeForge) gitlabAPI(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"username":"gl-bot"}`)
 	case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/group%2Fsub%2Fproj":
 		_, _ = io.WriteString(w, `{"default_branch":"trunk"}`)
+	case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects":
+		q := r.URL.Query()
+		if q.Get("membership") != "true" || q.Get("simple") != "true" || q.Get("order_by") != "last_activity_at" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		out := []map[string]any{}
+		if q.Get("page") == "1" {
+			// A path the virtual remote can't serve is left out of the list.
+			out = append(out, map[string]any{"path_with_namespace": "group/sub/proj", "visibility": "private"},
+				map[string]any{"path_with_namespace": "group/bad name"})
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/group%2Fsub%2Fproj/merge_requests":
 		f.mu.Lock()
 		defer f.mu.Unlock()

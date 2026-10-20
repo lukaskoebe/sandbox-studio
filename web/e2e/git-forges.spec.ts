@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { mkdtempSync } from "node:fs"
+import { mkdirSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "./fixtures"
@@ -17,9 +17,20 @@ test("the forge dialog offers GitLab with its own address and token scopes", asy
   await page.getByRole("option", { name: "GitLab", exact: true }).click()
 
   await expect(dialog.locator("#forge-url")).toHaveValue("https://gitlab.com")
+  // The forge is named after its host, unless the user names it.
   await expect(
-    dialog.getByLabel("Short name", { exact: true })
-  ).toHaveAttribute("placeholder", "gitlab")
+    dialog.getByLabel("Name in Studio", { exact: true })
+  ).toHaveValue("gitlab")
+  await dialog.locator("#forge-url").fill("https://git.example.co.uk")
+  await expect(
+    dialog.getByLabel("Name in Studio", { exact: true })
+  ).toHaveValue("example")
+  await dialog.getByLabel("Name in Studio", { exact: true }).fill("work")
+  await dialog.locator("#forge-url").fill("https://gitlab.com")
+  await expect(
+    dialog.getByLabel("Name in Studio", { exact: true })
+  ).toHaveValue("work")
+  await expect(dialog).toContainText("https://git.studio.internal/work/")
   await expect(dialog).toContainText("api and write_repository scopes")
   await expect(dialog.getByLabel("Username", { exact: true })).toHaveCount(0)
 })
@@ -42,9 +53,9 @@ test("an SSH forge's address takes a clone URL and keeps its user", async ({
   await expect(dialog.locator("#forge-url")).toHaveValue(
     "ssh://forgejo@code.example.org"
   )
-  await expect(dialog.getByLabel("Short name", { exact: true })).toHaveValue(
-    "example"
-  )
+  await expect(
+    dialog.getByLabel("Name in Studio", { exact: true })
+  ).toHaveValue("example")
   await expect(dialog.locator("#forge-repo-url")).toHaveValue(
     "forgejo@code.example.org:team/app.git"
   )
@@ -76,9 +87,9 @@ test("a repository folder on this computer becomes a local forge", async ({
   const dialog = page.getByRole("dialog", { name: "Add forge" })
   await dialog.getByLabel("Repository URL", { exact: true }).fill(repo)
   await expect(dialog.getByLabel("Folder", { exact: true })).toHaveValue(folder)
-  await expect(dialog.getByLabel("Short name", { exact: true })).toHaveValue(
-    "local"
-  )
+  await expect(
+    dialog.getByLabel("Name in Studio", { exact: true })
+  ).toHaveValue("local")
   await expect(dialog).toContainText(
     "https://git.studio.internal/local/proj.git"
   )
@@ -96,4 +107,43 @@ test("a repository folder on this computer becomes a local forge", async ({
   await tester.getByLabel("Repository").fill("proj")
   await tester.getByRole("button", { name: "Test" }).click()
   await expect(tester).toContainText("proj has 1 branch.")
+})
+
+// The folder of a local forge can be picked from the folders on this computer, which the
+// browser can't name: Browse… lists them from where the field points, repositories marked.
+test("a local forge's folder can be picked by browsing", async ({
+  page,
+  env,
+}) => {
+  const folder = mkdtempSync(join(tmpdir(), "studio-browse-"))
+  execFileSync("git", ["init", "-q", join(folder, "proj")])
+  mkdirSync(join(folder, "notes"))
+  mkdirSync(join(folder, ".hidden"))
+
+  await page.goto(`/e/${env}/settings/git`)
+  await page.getByRole("button", { name: "Add forge" }).first().click()
+  const dialog = page.getByRole("dialog", { name: "Add forge" })
+  await dialog.getByRole("combobox").filter({ hasText: "GitHub" }).click()
+  await page
+    .getByRole("option", { name: "Folder on this computer", exact: true })
+    .click()
+  await dialog.getByLabel("Folder", { exact: true }).fill(folder)
+  await dialog.getByRole("button", { name: "Browse…" }).click()
+
+  const picker = page.getByRole("dialog", { name: "Choose a folder" })
+  const folders = picker.getByRole("list", { name: "Folders" })
+  await expect(folders.getByRole("listitem")).toHaveText([
+    "notes",
+    "projrepository",
+  ])
+  await expect(picker).toContainText("1 repository in this folder.")
+  await folders.getByRole("listitem").filter({ hasText: "proj" }).click()
+  await expect(picker).toContainText("This folder is a repository itself.")
+  await picker.getByRole("button", { name: "Up one folder" }).click()
+  await picker.getByRole("button", { name: "Use this folder" }).click()
+  await expect(picker).toBeHidden()
+  await expect(dialog.getByLabel("Folder", { exact: true })).toHaveValue(folder)
+  await expect(
+    dialog.getByLabel("Name in Studio", { exact: true })
+  ).toHaveValue(/^local(-\d+)?$/)
 })

@@ -23,11 +23,10 @@ const (
 	setupSkipped = "skipped"
 )
 
-// SetupSteps are the outcomes of the seven steps of the guided setup, in the order of the
+// SetupSteps are the outcomes of the six steps of the guided setup, in the order of the
 // wizard. The fields are the only keys the setup has: any other key is refused.
 type SetupSteps struct {
 	Doctor   string `json:"doctor,omitempty" enum:"done,skipped" doc:"Host check"`
-	WorkMode string `json:"workMode,omitempty" enum:"done,skipped" doc:"Work mode: chat or terminal"`
 	Provider string `json:"provider,omitempty" enum:"done,skipped" doc:"AI provider"`
 	Teammate string `json:"teammate,omitempty" enum:"done,skipped" doc:"Teammate"`
 	Git      string `json:"git,omitempty" enum:"done,skipped" doc:"Git forge"`
@@ -37,7 +36,7 @@ type SetupSteps struct {
 
 // fields returns the steps in wizard order, for reading and setting them as a list.
 func (st *SetupSteps) fields() []*string {
-	return []*string{&st.Doctor, &st.WorkMode, &st.Provider, &st.Teammate, &st.Git, &st.Network, &st.Sandbox}
+	return []*string{&st.Doctor, &st.Provider, &st.Teammate, &st.Git, &st.Network, &st.Sandbox}
 }
 
 // resolved reports whether every step is done or skipped.
@@ -66,7 +65,7 @@ func (s *Server) registerSetup(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "getSetup", Method: http.MethodGet, Path: "/api/setup", Tags: []string{"setup"},
 		Summary:     "The guided setup's progress",
-		Description: "A step reads done when its condition holds: the host check passes, a work mode is chosen, and the environment has a provider, a teammate, a forge or a sandbox.",
+		Description: "A step reads done when its condition holds: the host check passes and the environment has a provider, a teammate, a forge or a sandbox.",
 	}, func(ctx context.Context, in *setupQuery) (*struct{ Body Setup }, error) {
 		if _, err := s.Store.Environment(ctx, in.Env); err != nil {
 			return nil, apiError(err)
@@ -165,13 +164,6 @@ func (s *Server) setupConditions(ctx context.Context, envID string) (SetupSteps,
 	var holds SetupSteps
 	if s.System.Doctor != nil && s.System.Doctor(ctx).Status == doctor.OK {
 		holds.Doctor = setupDone
-	}
-	ui, err := s.uiSettings(ctx)
-	if err != nil {
-		return holds, err
-	}
-	if ui.Asked {
-		holds.WorkMode = setupDone
 	}
 	providers, err := s.Store.Providers(ctx, envID)
 	if err != nil {

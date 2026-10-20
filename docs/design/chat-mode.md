@@ -21,8 +21,8 @@ Decisions taken before this doc:
 - **One protocol.** ACP: JSON-RPC 2.0 over stdio.
 - **Studio's UI.** It's built from shadcn's chat components (June 2026: MessageScroller,
   Message, Bubble, Attachment, Marker), not AI Elements.
-- **Where you choose the view.** The guided setup's work mode step asks for Chat or Terminal,
-  and Settings can change it.
+- **No view to choose.** A sandbox opens its latest chat, and every session can also open
+  in the terminal. An earlier work mode setting (Chat or Terminal) was removed.
 - **Permissions.** A permission request becomes a Studio approval.
 - **No client capabilities.** The client advertises no `fs` or `terminal` capabilities. The
   agent works on the sandbox filesystem itself, and Studio never proxies its files or
@@ -369,9 +369,6 @@ Item bodies are capped at 256 KiB. Tool output beyond that is truncated, with a
 "truncated" flag. The agent's own transcript stays in the guest, and Studio stores only
 what it shows.
 
-The view preference is not a table. It's the settings key `ui.agent_view`, valued `chat` or
-`terminal`.
-
 **API: `internal/api/chats.go`, huma style, tag `chats`.**
 
 Paths under `/api/environments/{env}`:
@@ -394,7 +391,6 @@ Paths under `/api/environments/{env}`:
 | `GET /sandboxes/{id}/files?path=` | `listFiles` | `{entries[], truncated}` |
 | `GET /sandboxes/{id}/files/content?path=` | `readFile` | `{size, mimeType, data, tooLarge, binary, unreadable}`, `data` in base64 |
 | `POST /sandboxes/{id}/previews/{port}/open?embed=true` | `openPreview` | The login URL for an iframe (section 5) |
-| `GET /api/settings/ui` / `PUT /api/settings/ui` | `getUISettings` / `setUISettings` | `{agentView: chat\|terminal, asked}`. `asked` is false until the first `PUT`, which the setup's work mode step makes |
 
 Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
 
@@ -430,14 +426,11 @@ Each turn in `getChat` carries `changes` (the stored list) and `undoable`.
   - `tool-call-card.tsx`, `plan-card.tsx`, `permission-card.tsx` (reuses
     `approval-decision.tsx`), `question-card.tsx`.
   - `composer.tsx`, `preview-panel.tsx`, `files-panel.tsx`, `changes-panel.tsx`.
-- **Sandbox page:** "Start session" follows the preference. A chat-backed tmux session shows
+- **Sandbox page:** "Start session" starts a terminal session. A chat-backed tmux session shows
   "Back to chat", and a chat shows "Open in terminal".
-- **The choice and the preference.**
-  - The guided setup's work mode step ([frontend](../frontend.md#routes)) asks "Chat
-    (recommended) or Terminal" with `WorkModePicker`. The answer is saved with
-    `setUISettings`. Until a choice is saved, the sandbox page doesn't open the chat by itself.
-  - Settings → General shows the same choice as a `ToggleGroup`, "Work mode".
-  - The preference sets the default only. Both views exist for every session.
+- **No preference.** The workspace opens a sandbox's latest chat when no tab is picked. Both
+  views exist for every session. (A work mode setting, `ui.agent_view`, with a setup step
+  and a Settings toggle, was removed.)
 
 ## 4. Open this chat in the terminal
 

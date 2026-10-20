@@ -183,6 +183,16 @@ func encode(st storer.EncodedObjectStorer, o interface {
 // ServeHTTP answers git smart HTTP for https://<host>/<path>.git/{info/refs,git-upload-pack,
 // git-receive-pack}.
 func (u *Upstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// An OpenAI-compatible endpoint's model list, for the provider form's suggestions.
+	if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/models") {
+		if r.Header.Get("Authorization") == "" {
+			http.Error(w, "no key", http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"object":"list","data":[{"id":"e2e-coder"},{"id":"e2e-chat"}]}`)
+		return
+	}
 	prefix, rest, ok := strings.Cut(r.URL.Path, ".git/")
 	if !ok {
 		http.NotFound(w, r)

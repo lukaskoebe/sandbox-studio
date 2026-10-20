@@ -337,7 +337,7 @@ func TestCopyTeammate(t *testing.T) {
 	other := newEnvironment(t, s, "other")
 	anthropic := createProvider(t, h, work, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
 	base := testOrigin + "/api/environments/" + work.ID + "/teammates"
-	ada := decode[store.Teammate](t, do(h, "POST", base, `{"name":"Ada Lovelace","role":"Reviewer","avatar":"🦊","soul":"# Ada","harness":"claude","providerId":"`+anthropic.ID+`","model":"claude-sonnet-5-5","gitName":"Ada (agent)","gitEmail":"ada@agents.invalid","approvalScope":"teammate"}`))
+	ada := decode[store.Teammate](t, do(h, "POST", base, `{"name":"Ada Lovelace","role":"Reviewer","avatar":"🦊","soul":"# Ada","harness":"claude","providerId":"`+anthropic.ID+`","model":"claude-sonnet-5-5","gitName":"Ada (agent)","gitEmail":"ada@agents.invalid","approvalScope":"teammate","useHostGitIdentity":true}`))
 	if _, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: work.ID, Name: "ada-dev", CPUs: 1, TeammateID: ada.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +366,7 @@ func TestCopyTeammate(t *testing.T) {
 		t.Fatalf("copy identity: %+v", copied)
 	}
 	if copied.Role != ada.Role || copied.Avatar != ada.Avatar || copied.Soul != ada.Soul || copied.Harness != ada.Harness ||
-		copied.Model != ada.Model || copied.GitName != ada.GitName || copied.GitEmail != ada.GitEmail || copied.ApprovalScope != "teammate" {
+		copied.Model != ada.Model || copied.GitName != ada.GitName || copied.GitEmail != ada.GitEmail || copied.ApprovalScope != "teammate" || !copied.UseHostGitIdentity {
 		t.Fatalf("copied settings differ: %+v", copied)
 	}
 	expectEvent(t, ch, events.Event{Topic: events.TopicTeammates, EnvironmentID: private.ID})

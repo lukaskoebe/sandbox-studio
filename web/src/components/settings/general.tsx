@@ -7,7 +7,6 @@ import {
   DownloadSimpleIcon,
   ListChecksIcon,
   PowerIcon,
-  TerminalWindowIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
@@ -23,7 +22,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SettingsLink } from "@/components/settings/link"
 import { Spinner } from "@/components/ui/spinner"
-import { AgentViewToggle } from "@/components/agent-view"
 import { Ident } from "@/components/ident"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
@@ -49,7 +47,6 @@ export function GeneralSettings({ env }: { env: string }) {
         viewportClassName="grid max-w-4xl content-start gap-6 p-3 md:p-4"
       >
         <SettingsGroup label="Studio">
-          <AgentsSection />
           <AutostartSection />
           <UpdatesSection />
           <SetupSection env={env} />
@@ -238,17 +235,6 @@ function ImportReport({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function AgentsSection() {
-  return (
-    <SettingRow
-      icon={TerminalWindowIcon}
-      title="Work mode"
-      description="How you work with your teammates' agents by default: chatting, or in the agent's own terminal app. The other way stays one click away on each sandbox."
-      control={<AgentViewToggle />}
-    />
   )
 }
 

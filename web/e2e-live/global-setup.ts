@@ -2,8 +2,8 @@ import { request, type APIResponse } from "@playwright/test"
 
 /**
  * Exchanges STUDIO_LOGIN_URL's one-time token for a session, and hands the session to the
- * tests in STUDIO_LIVE_STATE (workers inherit the environment). The work mode is chosen and
- * the guided setup dismissed, so that pages open as themselves rather than on /setup.
+ * tests in STUDIO_LIVE_STATE (workers inherit the environment). The guided setup is
+ * dismissed, so that pages open as themselves rather than on /setup.
  */
 export default async function globalSetup() {
   const login = process.env.STUDIO_LOGIN_URL
@@ -21,10 +21,6 @@ export default async function globalSetup() {
     if (!r.ok()) throw new Error(`${what}: HTTP ${r.status()}`)
   }
   await check("log in", ctx.post("/api/auth/exchange", { data: { token } }))
-  await check(
-    "choose the work mode",
-    ctx.put("/api/settings/ui", { data: { agentView: "terminal" } })
-  )
   const envs = (await (await ctx.get("/api/environments")).json()) as {
     id: string
   }[]

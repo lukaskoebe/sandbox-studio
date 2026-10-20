@@ -59,11 +59,16 @@ type Server struct {
 	Git          *gitreview.Service
 	Browser      *browser.Service // the browser broker; its endpoints answer 503 without it
 	System       System
-	Chats        *chat.Service // its endpoints answer 503 without it
+	// HostGit reads the host's git identity (HostGitIdentity); without it the host has none.
+	HostGit func(context.Context) GitIdentity
+	Chats   *chat.Service // its endpoints answer 503 without it
 	// Login runs the subscription sign-ins; their endpoints answer 503 without it.
 	Login *login.Service
 	// TaskRuns starts the runs of scheduled tasks for Run now; it answers 503 without it.
 	TaskRuns TaskRunner
+	// ModelsClient lists the models of OpenAI-compatible endpoints; nil dials public addresses
+	// only.
+	ModelsClient *http.Client
 	// Reach says why no sandbox can make the connections a rule allows (Rule.Unreachable); nil
 	// leaves rules without warnings.
 	Reach interface {
@@ -100,15 +105,18 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerMemoryAgent(api)
 	s.registerMemoryDream(api)
 	s.registerTeammates(api)
+	s.registerProviderModels(api)
 	s.registerTasks(api)
 	s.registerTimeline(api)
 	s.registerLogins(api)
 	s.registerSessions(api)
 	s.registerForges(api)
+	s.registerForgeRepositories(api)
 	s.registerSystem(api)
+	s.registerFolders(api)
+	s.registerGitIdentity(api)
 	s.registerBrowser(api)
 	s.registerChats(api)
-	s.registerUISettings(api)
 	s.registerSetup(api)
 	mux.HandleFunc("GET /api/events", s.streamEvents)
 	mux.HandleFunc("GET /api/environments/{env}/chats/{chat}/stream", s.streamChat)

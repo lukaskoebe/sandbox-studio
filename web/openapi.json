@@ -962,6 +962,40 @@
         ],
         "type": "object"
       },
+      "CloneInput": {
+        "additionalProperties": false,
+        "properties": {
+          "forgeId": {
+            "description": "Forge ID",
+            "minLength": 1,
+            "type": "string"
+          },
+          "repo": {
+            "description": "The repository's path on the forge, such as owner/repo",
+            "maxLength": 800,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "forgeId",
+          "repo"
+        ],
+        "type": "object"
+      },
+      "CloneResult": {
+        "additionalProperties": false,
+        "properties": {
+          "dir": {
+            "description": "The clone in the sandbox, /workspace/\u003crepository name\u003e",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dir"
+        ],
+        "type": "object"
+      },
       "Commit": {
         "additionalProperties": false,
         "properties": {
@@ -2881,6 +2915,9 @@
           "soul": {
             "maxLength": 16384,
             "type": "string"
+          },
+          "useHostGitIdentity": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -3216,6 +3253,24 @@
         ],
         "type": "object"
       },
+      "GitIdentity": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "user.email; empty if it is not set",
+            "type": "string"
+          },
+          "name": {
+            "description": "user.name; empty if it is not set",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email"
+        ],
+        "type": "object"
+      },
       "GitPush": {
         "additionalProperties": false,
         "properties": {
@@ -3478,6 +3533,76 @@
           "name",
           "status",
           "message"
+        ],
+        "type": "object"
+      },
+      "HostFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "description": "The subfolders, sorted by name",
+            "items": {
+              "$ref": "#/components/schemas/HostFolderEntry"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "git": {
+            "description": "Whether the folder is a git repository itself",
+            "type": "boolean"
+          },
+          "home": {
+            "description": "The home directory, where browsing starts",
+            "type": "string"
+          },
+          "parent": {
+            "description": "The folder above, unless that is the file system's root, which is not listed",
+            "type": "string"
+          },
+          "path": {
+            "description": "The folder's absolute path",
+            "type": "string"
+          },
+          "short": {
+            "description": "The path as ~/... when it is under the home directory, as forms show it",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "There are more subfolders than listed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "short",
+          "home",
+          "git",
+          "entries",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "HostFolderEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "git": {
+            "description": "Whether it is a git repository: a working copy or a bare repository",
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "description": "Its absolute path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "git"
         ],
         "type": "object"
       },
@@ -3952,6 +4077,29 @@
           "name",
           "status",
           "deleted"
+        ],
+        "type": "object"
+      },
+      "ListModelsInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "description": "The key to list with. It is only sent to the base URL and never stored or returned.",
+            "type": "string",
+            "writeOnly": true
+          },
+          "baseUrl": {
+            "description": "The endpoint's https:// base URL",
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "providerId": {
+            "description": "A saved OpenAI-compatible provider whose stored key lists, when no key is given. Its base URL must be the one given.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "baseUrl"
         ],
         "type": "object"
       },
@@ -4797,6 +4945,25 @@
         ],
         "type": "object"
       },
+      "ProviderModels": {
+        "additionalProperties": false,
+        "properties": {
+          "models": {
+            "description": "Model ids, sorted; ids that are not valid model names are left out",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "models"
+        ],
+        "type": "object"
+      },
       "ProviderView": {
         "additionalProperties": false,
         "properties": {
@@ -5264,6 +5431,25 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "Repo": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "path": {
+            "description": "The repository's path on the forge, such as owner/repo; the remote URL is https://git.studio.internal/\u003cforge\u003e/\u003cpath\u003e.git",
+            "type": "string"
+          },
+          "private": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path"
         ],
         "type": "object"
       },
@@ -6267,14 +6453,6 @@
               "skipped"
             ],
             "type": "string"
-          },
-          "workMode": {
-            "description": "Work mode: chat or terminal",
-            "enum": [
-              "done",
-              "skipped"
-            ],
-            "type": "string"
           }
         },
         "type": "object"
@@ -6796,6 +6974,10 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "useHostGitIdentity": {
+            "description": "Sessions commit with the git identity of the user Studio runs as; gitName and gitEmail are used when the host has none",
+            "type": "boolean"
           }
         },
         "required": [
@@ -6811,6 +6993,7 @@
           "model",
           "gitName",
           "gitEmail",
+          "useHostGitIdentity",
           "createdAt",
           "updatedAt",
           "securityLevel",
@@ -6947,6 +7130,10 @@
             "description": "Personality and working rules, as markdown",
             "maxLength": 16384,
             "type": "string"
+          },
+          "useHostGitIdentity": {
+            "description": "Commit with the git identity of the user Studio runs as, when the host has one",
+            "type": "boolean"
           }
         },
         "required": [
@@ -7524,44 +7711,6 @@
             "description": "The prompt response's usage, as the agent reports it"
           }
         },
-        "type": "object"
-      },
-      "UISettings": {
-        "additionalProperties": false,
-        "properties": {
-          "agentView": {
-            "description": "How agent sessions open by default",
-            "enum": [
-              "chat",
-              "terminal"
-            ],
-            "type": "string"
-          },
-          "asked": {
-            "description": "The user chose agentView; until then it is chat and the UI asks once",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "agentView",
-          "asked"
-        ],
-        "type": "object"
-      },
-      "UISettingsUpdate": {
-        "additionalProperties": false,
-        "properties": {
-          "agentView": {
-            "enum": [
-              "chat",
-              "terminal"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "agentView"
-        ],
         "type": "object"
       },
       "UpdateProviderInBody": {
@@ -10106,6 +10255,66 @@
         ]
       }
     },
+    "/api/environments/{env}/forges/{id}/repositories": {
+      "get": {
+        "description": "The repositories Studio's credential reaches, through the forge's API (Forgejo, GitHub, GitLab), recently active first; for a local forge, the repositories in its folder and one level down. At most 300. Forges of kind https and ssh have no list.",
+        "operationId": "listForgeRepositories",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Forge ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Forge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Repo"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List a forge's repositories",
+        "tags": [
+          "git"
+        ]
+      }
+    },
     "/api/environments/{env}/forges/{id}/test": {
       "post": {
         "description": "Checks that the forge answers and accepts Studio's credential: through its API if it has one, and by listing the branches of repo if given.",
@@ -12201,6 +12410,60 @@
         ]
       }
     },
+    "/api/environments/{env}/providers/models": {
+      "post": {
+        "description": "Studio requests GET \u003cbaseUrl\u003e/models with the key as a bearer token, over public addresses only, and returns the ids. The forms suggest them for the model field.",
+        "operationId": "listProviderModels",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListModelsInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModels"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The models an OpenAI-compatible endpoint lists",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
     "/api/environments/{env}/providers/{id}": {
       "delete": {
         "description": "Deletes the provider and its key. Refused while a teammate uses the provider.",
@@ -13720,6 +13983,70 @@
         },
         "tags": [
           "checkpoints"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/clone": {
+      "post": {
+        "description": "Runs git clone as the agent user in the running sandbox, from the virtual remote https://git.studio.internal/\u003cforge\u003e/\u003cpath\u003e.git into /workspace/\u003crepository name\u003e, so the clone fetches and pushes through Studio like any other. A folder of that name that is not empty fails the clone.",
+        "operationId": "cloneRepository",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clone a forge's repository into a sandbox",
+        "tags": [
+          "git"
         ]
       }
     },
@@ -17594,77 +17921,9 @@
         ]
       }
     },
-    "/api/settings/ui": {
-      "get": {
-        "operationId": "getUISettings",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UISettings"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "settings"
-        ]
-      },
-      "put": {
-        "operationId": "setUISettings",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UISettingsUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UISettings"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "tags": [
-          "settings"
-        ]
-      }
-    },
     "/api/setup": {
       "get": {
-        "description": "A step reads done when its condition holds: the host check passes, a work mode is chosen, and the environment has a provider, a teammate, a forge or a sandbox.",
+        "description": "A step reads done when its condition holds: the host check passes and the environment has a provider, a teammate, a forge or a sandbox.",
         "operationId": "getSetup",
         "parameters": [
           {
@@ -17855,6 +18114,93 @@
           }
         },
         "summary": "Run the host checks",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/folders": {
+      "get": {
+        "description": "For picking the folder of a local forge: the browser can't name folders on the host. Only folders are listed, and which are git repositories. The file system's root is refused, as it is as a forge's folder.",
+        "operationId": "listHostFolders",
+        "parameters": [
+          {
+            "description": "An absolute path, or ~/path; empty is the home directory",
+            "explode": false,
+            "in": "query",
+            "name": "path",
+            "schema": {
+              "description": "An absolute path, or ~/path; empty is the home directory",
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Also list folders whose names start with a dot",
+            "explode": false,
+            "in": "query",
+            "name": "hidden",
+            "schema": {
+              "description": "Also list folders whose names start with a dot",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostFolder"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The subfolders of a folder on this computer",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/git-identity": {
+      "get": {
+        "description": "git config --global user.name and user.email on the Studio host, which teammates that use the host's identity commit with. Values that are not set are empty.",
+        "operationId": "getHostGitIdentity",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitIdentity"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The git identity of the user Studio runs as",
         "tags": [
           "system"
         ]

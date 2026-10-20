@@ -22,6 +22,32 @@
   teammate in a terminal, or a shell. The status pill in the header opens its details
   (template, resources, ID, ports, start, stop and resize), **Checkpoint** saves one, and
   ⋯ › History and checkpoints shows where it came from and its checkpoints.
+- **Web:** the work mode setting is gone, from Settings and from the guided setup, which now
+  has six steps. A sandbox's workspace opens its latest chat when no tab is picked; every
+  session still opens in the terminal with one click. `GET` and `PUT /api/settings/ui` are
+  removed.
+- **Providers:** an OpenAI-compatible endpoint's model field suggests the models the
+  endpoint lists, once its base URL and key are entered; any other name can still be typed.
+  Studio asks the endpoint itself (`POST …/providers/models`), so the key never leaves it.
+- **Teammates:** "Use my git identity" in a teammate's Git identity section has its sandboxes
+  commit as you: the `user.name` and `user.email` of your git config on the Studio host, read
+  when a session starts. The form shows the identity it would use; without one, the
+  teammate's own git name and email stay in use. Environment files keep the choice.
+- **Git:** the setup's first sandbox step lists the repositories of your forges (Forgejo,
+  GitHub, GitLab, or a folder on this computer) to search and tick, and clones the ticked
+  ones into the sandbox's `/workspace` once it runs, through Studio's git remote, so their
+  pushes come to you for review. `GET …/forges/{id}/repositories` lists them and
+  `POST …/sandboxes/{id}/clone` clones one.
+- **Git:** the Add forge dialog's "Short name" is now "Name in Studio", at the end of the
+  form, and fills itself in from the host as you type the URL (`github`, `gitlab`, `example`
+  for `git.example.org`, `local` for a folder). It says what it is for, with the remote URL
+  sandboxes will use; most people never touch it.
+- **Git:** a folder on this computer can be picked with **Browse…** in the Add forge dialog:
+  it lists the host's folders from your home directory, marks the git repositories, and
+  fills in the one you choose (`GET /api/system/folders`).
+- **Sandboxes:** tab completion works in the sandbox shell, for git's commands, branches and
+  remotes too: the base image has `bash-completion`, which its terminals load. Templates
+  built on the new image have it as well.
 
 ## v0.4.2 — 2026-10-19
 

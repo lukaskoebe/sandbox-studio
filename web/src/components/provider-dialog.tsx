@@ -33,6 +33,7 @@ import {
   type Provider,
   type ProviderKind,
 } from "@/lib/api/client"
+import { useProviderModels } from "@/lib/provider-models"
 import { isSubscription, kindLabels, providerKinds } from "@/lib/teammates"
 
 // What each kind asks for, so an API key and a subscription sign-in don't look alike.
@@ -104,6 +105,14 @@ function ProviderForm({
   const compatible = kind === "openai_compatible"
   // A provider that was imported without its key needs one before it can be used.
   const keyMissing = provider?.state === "key_required"
+  // The endpoint's models, as suggestions. A saved provider's stored key only lists at its own URL.
+  const suggestions = useProviderModels({
+    env,
+    baseUrl: compatible ? baseUrl : "",
+    apiKey,
+    providerId:
+      provider && baseUrl.trim() === provider.baseUrl ? provider.id : undefined,
+  })
   const canSave = provider
     ? !subscription && (!keyMissing || apiKey !== "")
     : name.trim() !== "" &&
@@ -275,9 +284,11 @@ function ProviderForm({
                   spellCheck={false}
                   maxLength={128}
                   placeholder="qwen3-coder"
+                  list="provider-models"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                 />
+                <ModelSuggestions id="provider-models" {...suggestions} />
               </Field>
             </div>
           )}
@@ -334,5 +345,43 @@ function ProviderForm({
         )}
       </DialogFooter>
     </form>
+  )
+}
+
+/**
+ * The models an endpoint lists, as the suggestions of a model input (its list attribute names
+ * id), and a line saying where they stand. Any other model can still be typed.
+ */
+export function ModelSuggestions({
+  id,
+  models,
+  error,
+  loading,
+}: {
+  id: string
+  models: string[]
+  error?: string
+  loading: boolean
+}) {
+  return (
+    <>
+      <datalist id={id}>
+        {models.map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
+      {loading ? (
+        <FieldDescription>Asking the endpoint for its models…</FieldDescription>
+      ) : error ? (
+        <FieldDescription>Could not list the models: {error}</FieldDescription>
+      ) : models.length > 0 ? (
+        <FieldDescription>
+          {models.length === 1
+            ? "The endpoint lists 1 model"
+            : `The endpoint lists ${models.length} models`}
+          ; pick one or type another.
+        </FieldDescription>
+      ) : null}
+    </>
   )
 }

@@ -361,8 +361,8 @@ Remote-SSH itself was not tried.
 
 ## Base image
 
-`images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, Node,
-build tools and Python, plus pinned mise, OpenCode, Claude Code, Codex and their ACP
+`images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, bash
+completion (git's too, in the login shells tmux starts), Node, build tools and Python, plus pinned mise, OpenCode, Claude Code, Codex and their ACP
 adapters (versions in the Dockerfile and [harnesses](harnesses.md#versions)). User `agent`
 (uid 1000, sudo, docker). It creates `/opt/mise` for template toolchains and keeps the
 agent's home as the skeleton that home disks are seeded from. No init system. Releases

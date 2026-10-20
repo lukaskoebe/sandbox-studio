@@ -97,7 +97,7 @@ and imported as a new environment. Settings → General has both buttons.
 
 Included: the name, the providers (name, kind, base URL and model for an OpenAI-compatible
 endpoint), the teammates (role, avatar, approval scope, soul, harness, provider by name,
-model, git identity), the network rules of the environment and of its teammates, the secret
+model, git identity and whether it uses the host's), the network rules of the environment and of its teammates, the secret
 names with the hosts they bind to and the teammate they are scoped to, and the template
 specs in YAML.
 
