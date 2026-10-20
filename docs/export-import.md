@@ -116,7 +116,7 @@ creates nothing; the errors name the offending value, never a host path. Validat
 against the file's own secrets, which are not created yet, so a rule may name them.
 
 The import creates everything in one transaction. Providers come without keys, which makes
-them `key_required` until a key is added on the provider page (`PUT /api/environments/{env}/
+them `key_required` until a key is added on Settings → AI providers (`PUT /api/environments/{env}/
 providers/{id}` with `apiKey`). Secrets are not created, because a secret needs a value;
 `toAdd` lists each one with its hosts and teammate. `templates` holds the template specs to
-build from the Builds page. A name already in use gets a number: `work 2`, `work 3`.
+build from Settings → Templates. A name already in use gets a number: `work 2`, `work 3`.

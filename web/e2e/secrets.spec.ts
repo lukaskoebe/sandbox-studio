@@ -20,7 +20,7 @@ test("a secret reaches the guest only as its placeholder", async ({
   }
   page.on("response", record)
 
-  await page.goto(`/e/${env}/secrets`)
+  await page.goto(`/e/${env}/settings/secrets`)
   await page.getByRole("button", { name: "Add secret" }).first().click()
   const dialog = page.getByRole("dialog", { name: "Add secret" })
   await dialog.getByLabel("Name", { exact: true }).fill(name)
@@ -87,7 +87,7 @@ test("secrets are grouped by scope, and a teammate's settings list what its sand
   await add(own, { sandboxId })
 
   // The Secrets page has a section per scope, named after its teammate or sandbox.
-  await page.goto(`/e/${env}/secrets`)
+  await page.goto(`/e/${env}/settings/secrets`)
   const section = (name: string) => page.getByRole("region", { name })
   const environment = section("Environment")
   await expect(environment.getByRole("row", { name: shared })).toBeVisible()

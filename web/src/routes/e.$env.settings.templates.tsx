@@ -1,13 +1,11 @@
-import { createFileRoute, redirect } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
+import { TemplatesSettings } from "@/components/settings/templates"
 
-// Settings are a dialog; the page's old address opens it over Home.
 export const Route = createFileRoute("/e/$env/settings/templates")({
-  beforeLoad: ({ params }) => {
-    throw redirect({
-      to: "/e/$env",
-      params,
-      search: { settings: "templates" },
-      replace: true,
-    })
-  },
+  component: Section,
 })
+
+function Section() {
+  const { env } = Route.useParams()
+  return <TemplatesSettings env={env} />
+}

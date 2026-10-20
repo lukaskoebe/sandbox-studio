@@ -78,7 +78,13 @@ function GitReviewPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  render={<Link to="/e/$env/git" params={{ env }} />}
+                  render={
+                    <Link
+                      to="/e/$env/settings/activity"
+                      params={{ env }}
+                      search={{ kind: "git" }}
+                    />
+                  }
                 >
                   All pushes
                 </Button>

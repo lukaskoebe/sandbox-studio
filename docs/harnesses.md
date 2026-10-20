@@ -335,7 +335,7 @@ accounts. Each assumption is marked `verify (S8)` in the code.
 Verified: the Claude sign-in (step 1) worked on the owner's machine on 2026-10-17. Steps 2 to 7
 are still to be run. The steps:
 
-1. Claude Pro/Max. In Settings → Providers, Add provider → Claude subscription → Add. Choose
+1. Claude Pro/Max. In Settings → AI providers, Add provider → Claude subscription → Add. Choose
    Sign in with Claude. Expect the dialog's steps: open the sign-in page, sign in and authorize,
    copy the code the page shows, and paste it into the dialog's code field (or choose Paste).
    The terminal running `claude setup-token` is hidden behind "Show the terminal Claude Code

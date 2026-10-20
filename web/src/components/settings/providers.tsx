@@ -58,7 +58,7 @@ export function ProvidersSettings({ env }: { env: string }) {
   return (
     <>
       <PageHeader>
-        <h1 className="text-sm font-medium">Providers</h1>
+        <h1 className="text-sm font-medium">AI providers</h1>
         <EnvironmentLabel env={env} />
         <Button size="sm" className="ml-auto" onClick={() => setDialog({})}>
           <PlusIcon />

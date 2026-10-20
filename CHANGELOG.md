@@ -22,6 +22,14 @@
   teammate in a terminal, or a shell. The status pill in the header opens its details
   (template, resources, ID, ports, start, stop and resize), **Checkpoint** saves one, and
   ⋯ › History and checkpoints shows where it came from and its checkpoints.
+- **Web:** Settings is a page instead of a dialog, with a searchable nav in three groups:
+  this environment (General, Network, Secrets, Shared memory, Activity), accounts (AI
+  providers, Git forges) and this computer (Templates, Runtime, Ports and LAN, Updates). The
+  Network, Git, Secrets and Memory pages moved into it: the network rules and security level
+  are Settings → Network, the host ports and local network list are Settings → Ports and LAN,
+  and Activity lists every decision (network, pushes, tool permissions, browser, memory) with
+  a filter by kind. Requests waiting for you are on Home. The old addresses and `?settings=`
+  links lead to the section that replaced them.
 - **Web:** the work mode setting is gone, from Settings and from the guided setup, which now
   has six steps. A sandbox's workspace opens its latest chat when no tab is picked; every
   session still opens in the terminal with one click. `GET` and `PUT /api/settings/ui` are

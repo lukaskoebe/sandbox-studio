@@ -72,10 +72,9 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
     )
     .toEqual({ name: "main", sha: pushed.commit, subject: "Add a greeting" })
 
-  // The Git page, from the sidebar, lists the push with its outcome and links to its page,
-  // which shows the decided review without the buttons.
-  await page.getByRole("link", { name: "Git", exact: true }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/git$`))
+  // Settings → Activity lists the push with its outcome and links to its page, which shows
+  // the decided review without the buttons.
+  await page.goto(`/e/${env}/settings/activity?kind=git`)
   const row = page.getByRole("row").filter({ hasText: "team/app" })
   await expect(row).toContainText("pushed")
   await row.getByRole("link").click()
@@ -136,7 +135,9 @@ test("a review that doesn't exist says so", async ({ page, env }) => {
   await page.goto(`/e/${env}/git/reviews/no-such-review`)
   await expect(page.getByText("No such review")).toBeVisible()
   await page.getByRole("link", { name: "All pushes" }).click()
-  await expect(page).toHaveURL(new RegExp(`/e/${env}/git$`))
+  await expect(page).toHaveURL(
+    new RegExp(`/e/${env}/settings/activity\\?kind=git$`)
+  )
 })
 
 // Review feedback goes straight to the agent: line comments and the outcome as a prompt of

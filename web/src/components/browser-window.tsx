@@ -438,7 +438,7 @@ export function BrowserWindow({
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
-                render={<Link to="/e/$env/network/rules" params={{ env }} />}
+                render={<Link to="/e/$env/settings/network" params={{ env }} />}
               >
                 <ShieldCheckIcon />
                 Network rules

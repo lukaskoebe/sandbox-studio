@@ -8,7 +8,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  BrainIcon,
   CaretDownIcon,
   CaretRightIcon,
   CaretUpDownIcon,
@@ -17,8 +16,6 @@ import {
   CheckIcon,
   GearIcon,
   GitBranchIcon,
-  GlobeIcon,
-  KeyIcon,
   PlusIcon,
   RobotIcon,
   TrayIcon,
@@ -152,7 +149,11 @@ export function AppSidebar({ env }: { env: string }) {
     waiting,
   }
   const matchRoute = useMatchRoute()
-  const settingsOpen = useSearch({ strict: false }).settings !== undefined
+  const settingsOpen = !!matchRoute({
+    to: "/e/$env/settings",
+    params: { env },
+    fuzzy: true,
+  })
   const all = sandboxes.data ?? []
   // A sandbox whose teammate is gone counts as without one; until the teammates load, only
   // a sandbox that never had one does.
@@ -285,6 +286,17 @@ export function AppSidebar({ env }: { env: string }) {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="sm"
+              tooltip="All chats"
+              isActive={!!matchRoute({ to: "/e/$env/chats", params: { env } })}
+              render={<Link to="/e/$env/chats" params={{ env }} />}
+            >
+              <ChatsCircleIcon />
+              <span>All chats</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="sm"
               tooltip="Settings"
               isActive={settingsOpen}
               render={<SettingsLink section="general" />}
@@ -303,7 +315,6 @@ export function AppSidebar({ env }: { env: string }) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <MorePages env={env} />
         <div className="flex items-center justify-between gap-2 px-1 group-data-[collapsible=icon]:hidden">
           <p className="min-w-0 truncate text-[0.625rem] text-muted-foreground">
             Sandbox Studio{" "}
@@ -710,39 +721,6 @@ function SessionList({ sb, sessions }: { sb: Sandbox; sessions: Sessions }) {
         </SidebarMenuSubItem>
       ))}
     </SidebarMenuSub>
-  )
-}
-
-/**
- * The pages that move into Settings with the redesign, until they do: all chats, git,
- * network, secrets and memory, as a row of icons.
- */
-function MorePages({ env }: { env: string }) {
-  const pages = [
-    { to: "/e/$env/chats", label: "All chats", icon: ChatsCircleIcon },
-    { to: "/e/$env/git", label: "Git", icon: GitBranchIcon },
-    { to: "/e/$env/network", label: "Network", icon: GlobeIcon },
-    { to: "/e/$env/secrets", label: "Secrets", icon: KeyIcon },
-    { to: "/e/$env/memory", label: "Memory", icon: BrainIcon },
-  ] as const
-  return (
-    <nav
-      aria-label="More pages"
-      className="flex items-center gap-0.5 px-1 group-data-[collapsible=icon]:hidden"
-    >
-      {pages.map(({ to, label, icon: Icon }) => (
-        <Link
-          key={to}
-          to={to}
-          params={{ env }}
-          title={label}
-          aria-label={label}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-accent-foreground"
-        >
-          <Icon className="size-4" />
-        </Link>
-      ))}
-    </nav>
   )
 }
 

@@ -21,7 +21,7 @@ import (
 type HostPortError struct{ Port int }
 
 func (e HostPortError) Error() string {
-	return fmt.Sprintf("port %d of this computer is not open to sandboxes: open it in Settings → Network → This computer", e.Port)
+	return fmt.Sprintf("port %d of this computer is not open to sandboxes: open it in Settings → Ports and LAN", e.Port)
 }
 
 // dialHost connects to port of this computer for environment envID.

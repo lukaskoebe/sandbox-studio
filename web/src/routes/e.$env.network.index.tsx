@@ -1,20 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
-import { $api } from "@/lib/api/client"
-import { isNetworkApproval } from "@/lib/approval-kinds"
 
-// Requests that wait for a decision come first; otherwise the rules.
+// Network rules moved to Settings → Network. Old address kept for bookmarks.
 export const Route = createFileRoute("/e/$env/network/")({
-  beforeLoad: async ({ context, params }) => {
-    const pending = await context.queryClient
-      .fetchQuery(
-        $api.queryOptions("get", "/api/environments/{env}/approvals", {
-          params: { path: params, query: { status: "pending" } },
-        })
-      )
-      .catch(() => [])
-    const to = (pending ?? []).some(isNetworkApproval)
-      ? "/e/$env/network/requests"
-      : "/e/$env/network/rules"
-    throw redirect({ to, params, replace: true })
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/e/$env/settings/network", params, replace: true })
   },
 })

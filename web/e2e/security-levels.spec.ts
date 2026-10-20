@@ -14,7 +14,7 @@ test("the security level decides what no rule covers, and a curated entry can be
   const held = (host: string) =>
     approvals(page).getByTestId("approval-card").filter({ hasText: host })
 
-  await page.goto(`/e/${env}/network/rules`)
+  await page.goto(`/e/${env}/settings/network`)
   await expect(
     page.getByRole("heading", { name: "Security level", exact: true })
   ).toBeVisible()
@@ -27,7 +27,7 @@ test("the security level decides what no rule covers, and a curated entry can be
       (await api.guest(id)).connections.find((c) => c.host === "deb.debian.org")
     )
     .toMatchObject({ done: true, status: 200 })
-  await page.goto(`/e/${env}/network/activity`)
+  await page.goto(`/e/${env}/settings/activity?kind=network`)
   await expect(
     page
       .getByRole("row")
@@ -36,7 +36,7 @@ test("the security level decides what no rule covers, and a curated entry can be
   ).toBeVisible()
 
   // Locked asks for every host, curated or not.
-  await page.goto(`/e/${env}/network/rules`)
+  await page.goto(`/e/${env}/settings/network`)
   await level("Locked").click()
   await expect(level("Locked")).toHaveAttribute("aria-pressed", "true")
   await api.connect(id, "security.debian.org", 80)

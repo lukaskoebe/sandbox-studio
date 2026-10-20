@@ -75,11 +75,11 @@ the key secret. The host must be a public name or address, the same rule as HTTP
   sandbox. Sandboxes still go through push review.
 - Slow signatures. A signature that takes `DefaultSlowSign` (2 s) or longer means the agent
   asked the user to confirm it: a hardware key touch or a password manager prompt. Studio
-  records `agent_slow_at` on the forge. Settings → Git then shows a dismissible hint with
+  records `agent_slow_at` on the forge. Settings → Git forges then shows a dismissible hint with
   "Set up a Studio key", which switches the forge to `key` and shows the public key. Dismissal is
   `agent_hint_dismissed`, per forge (`POST …/forges/{id}/dismiss-agent-hint`).
 - No agent: the forge's operations fail with "SSH agent not available" and how to fix it.
-  Settings → Git shows the same, and `studio doctor` warns (never fails) while an agent forge exists.
+  Settings → Git forges shows the same, and `studio doctor` warns (never fails) while an agent forge exists.
 
 ### Host key pinning
 
@@ -96,7 +96,7 @@ Pick: **scan and confirm at creation.** The Add forge dialog has two steps for `
 Afterwards every connection pins exactly that key (`HostKeyAlgorithms` restricted to its
 type, `ssh.FixedHostKey`). A mismatch fails the push, fetch or test with
 "the host key of <host> changed (pinned SHA256:a, offered SHA256:b); check with the host's
-admin, then re-pin it in Settings → Git". The forge row shows the same warning; re-pinning is a
+admin, then re-pin it in Settings → Git forges". The forge row shows the same warning; re-pinning is a
 new scan plus confirmation (`POST /forges/{id}/host-key`).
 
 Not an inbox approval: the user is present in the dialog when the forge is created, and an
@@ -259,7 +259,7 @@ is no user endpoint; for `ssh` it authenticates and reports whether the key was 
 
 ## 4. UI
 
-Forges are on **Settings → Git** of each environment (they are per environment, like
+Forges are on **Settings → Git forges** of each environment (they are per environment, like
 secrets).
 
 - **Add forge** dialog: a repository URL first (`git@host:owner/repo.git`,
@@ -293,7 +293,7 @@ secrets).
   - `git.pr` (GitHub): title "Open a pull request on GitHub"; summary "<branch> → <default> in
     <owner>/<repo>".
 - **Sandbox-facing texts** (as `remote:` lines): `This environment has no forge
-  "<forge>". Add it in Sandbox Studio under Settings → Git.`, host-key mismatch, "the forge
+  "<forge>". Add it in Sandbox Studio under Settings → Git forges.`, host-key mismatch, "the forge
   refused Studio's key/token".
 
 ## 5. Schema, API, tests, docs

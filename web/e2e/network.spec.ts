@@ -11,9 +11,9 @@ test("a held connection asks; Allow adds a rule and clears the card in every tab
   const host = `api-${Math.random().toString(36).slice(2, 8)}.example.org`
 
   // Home lists approvals in place, so the stack shows them on other pages.
-  await page.goto(`/e/${env}/secrets`)
+  await page.goto(`/e/${env}/settings/secrets`)
   const other = await context.newPage()
-  await other.goto(`/e/${env}/memory`)
+  await other.goto(`/e/${env}/settings/memory`)
   await api.connect(id, host)
 
   const card = approvals(page)
@@ -36,7 +36,7 @@ test("a held connection asks; Allow adds a rule and clears the card in every tab
     )
     .toMatchObject({ done: true, status: 200, body: `hello from ${host}\n` })
 
-  await page.goto(`/e/${env}/network/rules`)
+  await page.goto(`/e/${env}/settings/network`)
   await expect(
     page.getByRole("cell", { name: host, exact: true })
   ).toBeVisible()
@@ -68,7 +68,7 @@ test("requests that arrive together from one sandbox are one card; Allow all mak
   await expect(group).toBeHidden()
 
   // Each host got a rule of its own, made by an approval.
-  await page.goto(`/e/${env}/network/rules?origin=approval`)
+  await page.goto(`/e/${env}/settings/network?origin=approval`)
   for (const host of hosts) {
     await expect(
       page.getByRole("cell", { name: host, exact: true })
@@ -123,7 +123,7 @@ test("an approval can allow a host for one hour, and the Rules tab counts the ru
     .click()
   await expect(card).toBeHidden()
 
-  await page.goto(`/e/${env}/network/rules`)
+  await page.goto(`/e/${env}/settings/network`)
   await expect(page.getByRole("row").filter({ hasText: host })).toContainText(
     /expires in \d+ min/
   )
@@ -169,9 +169,9 @@ test("allow once and deny once answer the held connection without a rule; Activi
     .toMatchObject({ done: true, status: 403 })
 
   // Neither answer made a rule, and Activity names both.
-  await page.goto(`/e/${env}/network/rules?q=once-`)
+  await page.goto(`/e/${env}/settings/network?q=once-`)
   await expect(page.getByText("No rules match these filters.")).toBeVisible()
-  await page.goto(`/e/${env}/network/activity`)
+  await page.goto(`/e/${env}/settings/activity?kind=network`)
   await expect(
     page.getByRole("row").filter({ hasText: allowed })
   ).toContainText("Approved once")
@@ -234,7 +234,7 @@ test("an allowed navigation approves its site, and the page's requests pass", as
     outcome: "allowed",
   })
 
-  await page.goto(`/e/${env}/network/rules?q=${label}`)
+  await page.goto(`/e/${env}/settings/network?q=${label}`)
   await expect(
     page.getByRole("cell", { name: sessionHost, exact: true })
   ).toBeHidden()
@@ -308,7 +308,7 @@ test("a browser request can be allowed for the session, or by a rule for the tea
   ).toBeVisible()
   await api.dismissApprovals()
 
-  await page.goto(`/e/${env}/network/rules?q=${label}`)
+  await page.goto(`/e/${env}/settings/network?q=${label}`)
   await expect(
     page.getByRole("row").filter({ hasText: browserOnly })
   ).toContainText("browser only")
@@ -339,7 +339,7 @@ test("an approval shows once: in the teammate's conversation, not also in the st
   const cards = page.getByTestId("approval-card").filter({ hasText: host })
   await expect(cards).toHaveCount(1)
   // Elsewhere the stack shows it.
-  await page.goto(`/e/${env}/secrets`)
+  await page.goto(`/e/${env}/settings/secrets`)
   await expect(cards).toHaveCount(1)
   await api.dismissApprovals()
 })

@@ -302,7 +302,7 @@ func (m *app) activityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyFilter):
 		m.filtering = true
 	case key.Matches(msg, keyRules):
-		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/network/rules"), false)
+		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/settings/network"), false)
 	case key.Matches(msg, keyApprovals):
 		m.openApprovals()
 	case key.Matches(msg, keyGit):
@@ -319,7 +319,7 @@ func (m *app) entryKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyBack):
 		m.screen = screenActivity
 	case key.Matches(msg, keyRules):
-		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/network/rules"), false)
+		m.setNotice("open in browser: "+m.browserURL("/e/"+m.env.ID+"/settings/network"), false)
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}

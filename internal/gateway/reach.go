@@ -23,7 +23,7 @@ func (g *Gateway) Unreachable(ctx context.Context, r store.Rule) string {
 		return ""
 	}
 	host := policy.Normalize(r.Host)
-	const toHost = "Sandboxes reach this computer as host.studio.internal, on the ports open to them in Settings → Network."
+	const toHost = "Sandboxes reach this computer as host.studio.internal, on the ports open to them in Settings → Ports and LAN."
 	switch {
 	case host == "localhost" || strings.HasSuffix(host, ".localhost"):
 		return "Connections to localhost stay inside the sandbox, so this rule never applies. " + toHost
@@ -50,7 +50,7 @@ func (g *Gateway) Unreachable(ctx context.Context, r store.Rule) string {
 	case hostAddr(ip):
 		return fmt.Sprintf("%s is an address of this computer, which sandboxes don't reach by its address. %s Make the rule for host.studio.internal instead.", ip, toHost)
 	case !ip.Is4():
-		return fmt.Sprintf("Sandboxes don't reach %s: only IPv4 addresses can be on the local network list. List the host's name in Settings → Network instead.", ip)
+		return fmt.Sprintf("Sandboxes don't reach %s: only IPv4 addresses can be on the local network list. List the host's name in Settings → Ports and LAN instead.", ip)
 	}
 	var list []store.PrivateHost
 	if g.PrivateHosts != nil {
@@ -63,7 +63,7 @@ func (g *Gateway) Unreachable(ctx context.Context, r store.Rule) string {
 		if slices.ContainsFunc(list, func(h store.PrivateHost) bool { return entryCovers(h, addr) }) {
 			return ""
 		}
-		return fmt.Sprintf("Sandboxes reach %s only once it is on the local network list in Settings → Network.", addr)
+		return fmt.Sprintf("Sandboxes reach %s only once it is on the local network list in Settings → Ports and LAN.", addr)
 	}
 	var missing []string
 	for _, p := range r.Ports {
@@ -74,7 +74,7 @@ func (g *Gateway) Unreachable(ctx context.Context, r store.Rule) string {
 	if len(missing) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("Sandboxes reach %s on port %s only once it is on the local network list with that port, in Settings → Network.", addr, strings.Join(missing, ", "))
+	return fmt.Sprintf("Sandboxes reach %s on port %s only once it is on the local network list with that port, in Settings → Ports and LAN.", addr, strings.Join(missing, ", "))
 }
 
 // closedHostPorts says which of the ports rule r allows on this computer are not open to
@@ -89,7 +89,7 @@ func (g *Gateway) closedHostPorts(ctx context.Context, r store.Rule) string {
 	}
 	if len(r.Ports) == 0 {
 		if len(open) == 0 {
-			return "No port of this computer is open to sandboxes, so this rule never applies. Open the ports it is for in Settings → Network."
+			return "No port of this computer is open to sandboxes, so this rule never applies. Open the ports it is for in Settings → Ports and LAN."
 		}
 		return ""
 	}
@@ -103,7 +103,7 @@ func (g *Gateway) closedHostPorts(ctx context.Context, r store.Rule) string {
 	case 0:
 		return ""
 	case 1:
-		return fmt.Sprintf("Port %s of this computer is not open to sandboxes: open it in Settings → Network.", closed[0])
+		return fmt.Sprintf("Port %s of this computer is not open to sandboxes: open it in Settings → Ports and LAN.", closed[0])
 	}
-	return fmt.Sprintf("Ports %s of this computer are not open to sandboxes: open them in Settings → Network.", strings.Join(closed, ", "))
+	return fmt.Sprintf("Ports %s of this computer are not open to sandboxes: open them in Settings → Ports and LAN.", strings.Join(closed, ", "))
 }

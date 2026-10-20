@@ -46,9 +46,7 @@ to an environment.
 | `/e/$env/sandboxes/$id` | redirects to its workspace, with its parameters |
 | `/e/$env/sandboxes/$id/work` | the sandbox: its chats, terminals and the git reviews waiting on it as tabs in one strip, the picked one in full, and one side panel. `?terminal=`, `?chat=` and `?review=` pick a tab; a review that opens by itself waits for a click; `?panel=` names the open panel (browser, connections or files). Open chat tabs are kept in sessionStorage per sandbox; chats with changes this browser hasn't seen (`lib/chat-seen.ts`, revs in localStorage) are marked green, and only they: other counts use the quiet `CountPill` |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
-| `/e/$env/network/rules`, `/requests`, `/activity` | network rules (filters in the URL: search, scope, action, origin, unused; grouped by registrable domain), requests waiting for a decision, decided requests; `/e/$env/network` opens requests when any wait, else rules |
-| `/e/$env/secrets` | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
-| `/e/$env/memory` | shared memory: pages, facts, conflicts, search, sessions |
+| `/e/$env/settings/<section>` | Settings (below) |
 | `/e/$env/teammates` | teammates |
 | `/e/$env/teammates/$id` | the teammate's conversation: its thread, the composer (message, task, teach) and a rail with what it does now. The teammate's tabs are Conversation, Tasks, Chats, Memory, Browser and Settings |
 | `/e/$env/teammates/$id/tasks` | the teammate's task list, and the log of its check-ins |
@@ -56,26 +54,35 @@ to an environment.
 | `/e/$env/teammates/$id/memory` | the teammate's private memory, with the tabs of shared memory |
 | `/e/$env/teammates/$id/browser` | the teammate's browser: the browser window (tabs, toolbar, live view) with Activity and Sites beside it ([browser](browser.md#live-view-and-takeover)) |
 | `/e/$env/teammates/$id/settings` | edit the teammate, its check-ins, network level and secrets (its own, its sandboxes' and the environment's it inherits, with which replaces which; Add secret preselects the teammate's scope), or delete it |
-| `/e/$env/git` | the pushes and pull requests of the environment's sandboxes, waiting ones first; each opens its review |
 | `/e/$env/git/reviews/$id` | one git push review: the commits and diff, decided there while it waits, its outcome after |
 | `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
 | `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |
 
-Settings is a dialog over any page of an environment (`components/settings/`), opened by
-`?settings=<section>` on that page's address, so a section can be linked and closing the dialog
-leaves the page as it was. Its sections:
+Settings is one page (`routes/e.$env.settings.tsx`, the sections in `components/settings/`):
+a nav on the left with the sections grouped by what they belong to, and the section in view at
+`/e/$env/settings/<section>`. A search above the nav filters the sections by name and keywords
+(`components/settings/link.tsx`). On phones the nav is a row above the section that scrolls
+sideways. Its sections:
 
-| `?settings=` | Section |
-|---|---|
-| `general` | start at login, updates (the whole installation), "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
-| `providers` | AI providers of the environment |
-| `git` | the forges of the environment |
-| `network` | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
-| `templates` | template builds and templates of the environment |
-| `runtime` | host checks (doctor) |
+| Group | Section | Shows |
+|---|---|---|
+| This environment | General (`general`) | start at login, "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
+| | Network (`network`) | an intro, the security level, the network rules (filters in the URL: `q`, `scope`, `action`, `origin`, `unused`; grouped by registrable domain) and the curated list ([network](network.md)) |
+| | Secrets (`secrets`) | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
+| | Shared memory (`memory`) | shared memory: pages, facts, conflicts, search, sessions |
+| | Activity (`activity`) | every decided approval of the environment (network requests, git pushes and pull requests, chat tool permissions, browser actions, memory), newest first, with chips for All, Network, Git, Chats, Browser and Memory kept in `?kind=`. Its columns: Decided, What (the kind and the host or a summary; a push links to its review page), From, Decision (with Revert for a reviewer's network decision) and Details (the reason, or a push's outcome) |
+| Accounts | AI providers (`providers`) | AI providers of the environment |
+| | Git forges (`forges`) | the git forges of the environment |
+| This computer | Templates (`templates`) | template builds and templates of the environment |
+| | Runtime (`runtime`) | host checks (doctor) |
+| | Ports and LAN (`ports`) | this computer's ports open to sandboxes (`host.studio.internal`) and the local network list: private addresses, ranges and names, such as a company VPN's ([network](network.md)) |
+| | Updates (`updates`) | the update check (the whole installation) |
 
-The old addresses `/e/$env/settings` and `/e/$env/settings/<section>` open the dialog over
-Home.
+Requests waiting for a decision are on Home and in the approval stack, not in Settings.
+
+`/e/$env/settings` opens General, and `/e/$env/settings/git` opens Git forges. An old
+`?settings=<section>` link on any page of an environment, from when Settings was a dialog,
+redirects to that section (`git` to `forges`, `network` to `ports`).
 
 On the first load of a browser session, `/e/$env` redirects to `/setup` while the setup is
 neither completed nor dismissed and the environment has no sandbox yet; the check runs once
@@ -91,13 +98,15 @@ picked are cloned into `/workspace` one after the other once the sandbox runs, e
 how it went; while nothing was cloned yet, more can be picked there
 ([git review](git-review.md#cloning-into-a-sandbox)).
 
-The old addresses `/e/$env/builds`, `/providers` and `/browser` redirect to the
-settings dialog and teammate browsers above. `/browser?teammate=<id>` opens that teammate's
-browser.
+The old addresses redirect: `/e/$env/network` and `/network/rules` to Settings → Network
+(the rules keep their filters), `/network/requests` to Home, `/network/activity` to Settings →
+Activity with `?kind=network`, `/git` to Settings → Activity with `?kind=git`, and `/secrets`,
+`/memory`, `/providers` and `/builds` to their sections. `/browser` redirects to the teammate
+browsers above; `/browser?teammate=<id>` opens that teammate's browser.
 
 The sidebar is one tree: the environment switcher and Home, then each teammate with its
-sandbox, then the sandboxes without a teammate, and a footer with Settings, the version and
-the theme switch. A teammate's row says where it works and what it is doing: waiting on you
+sandbox, then the sandboxes without a teammate, and a footer with All chats, Settings, the version
+and the theme switch. A teammate's row says where it works and what it is doing: waiting on you
 while one of its approvals is pending (a browser action or credential, a memory share, or a
 tool permission in one of its chats), working while one of its chats is running, and idle
 otherwise. Under a sandbox are its chats, its terminals (tmux sessions, a robot for an
@@ -105,8 +114,8 @@ agent's) and the git reviews waiting on it; each opens its tab in the sandbox's 
 whose URL names the tab in view (`?terminal=`, `?chat=` or `?review=`). A teammate with more
 than one sandbox lists them, each with its status dot (the word is its tooltip) and the count
 of approvals waiting on it. New chat sits at the top, with a menu for a new teammate, a
-sandbox without a teammate or an import; the pages that are off the everyday path (all chats,
-Git, Network, Secrets, Memory) are a row of icons above the footer. The Settings dialog's sections name the environment in their header.
+sandbox without a teammate or an import. The Settings page names the environment in its
+header.
 The approval stack ([approvals](approvals.md#realtime-and-ui)) is rendered by the root route
 on every page.
 
@@ -128,10 +137,10 @@ for its workspace. One panel is open at a time, and on the workspace the URL nam
 panel is resizable from its left edge on wide screens (1024px and up) and covers the screen
 below that. Its width is remembered per page in local storage (`studio.panel.sandbox`,
 `studio.panel.chat`). Sheets remain only for detail opened from outside its context: the
-git push review (from the approval stack and the Git page), a memory conflict (from the
-approval stack and Memory's Conflicts tab) and a build's log (from Settings → Templates). Each of those sheets
-has "Open as page", which leads to the item's own page above; Home's activity, the Git page,
-Settings → Templates and the memory conflicts tab link there too. A page for an item that
+git push review (from the approval stack), a memory conflict (from the approval stack and
+the Conflicts tab of Settings → Shared memory) and a build's log (from Settings → Templates).
+Each of those sheets has "Open as page", which leads to the item's own page above; Home's
+activity, Settings → Activity, Settings → Templates and the memory conflicts tab link there too. A page for an item that
 doesn't exist says so, and one already decided shows the outcome without the buttons.
 
 Links from when a sandbox had a dashboard (`/e/$env/sandboxes/$id`, with or without

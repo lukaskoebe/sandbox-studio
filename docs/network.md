@@ -68,7 +68,7 @@ A rule (`store.Rule`) has a host pattern, ports (empty = any port), an action (`
 headers to set (values may use `{secret.NAME}`) and where its requests go (see
 [proxy rule overrides](#proxy-rule-overrides)); for `caddy`, a Caddyfile snippet.
 
-A rule also records its origin: `manual` for rules written on the Rules page or through the
+A rule also records its origin: `manual` for rules written on Settings → Network or through the
 API, `approval` for rules created by approving or denying a request, and `reviewer` for a rule
 the [AI reviewer](#ai-reviewer-assisted) made. `curated` is reserved: the curated list allows
 hosts as a decision of the level, not as a rule, and Activity shows it (see
@@ -80,18 +80,18 @@ VMs and none of the sandboxes' own connections: the policy leaves it out of matc
 connection or request that isn't a browser VM's (`Engine.active`), so it settles only
 `network.request` approvals, doesn't terminate a sandbox's connections, and doesn't refuse a
 sandbox's lookups. A browser request's card makes its rule browser-only unless the user picks
-"Browser and sandboxes" in Options; the rule dialog has "Only in the browser", the Rules tab marks
-such rules "browser only", and environment files keep the flag.
+"Browser and sandboxes" in Options; the rule dialog has "Only in the browser", Settings → Network
+marks such rules "browser only", and environment files keep the flag.
 
 A rule can expire (`expiresAt`). From that moment it stops matching, and a sweep deletes it
 within a minute. The approval card's Options offer "1 hour"; the API takes
 `expiresAt` when a rule is created and on an allow or deny decision (it must be in the
-future). The Rules tab counts down the time left.
+future). Settings → Network counts down the time left.
 
 A rule counts the connections it decides (`hits`) and when it last did (`lastHitAt`). The
 policy counts them in memory and writes the counts about once a minute and at shutdown, so
 the figures can lag by a minute. A rule is unused when it has decided nothing in 30 days and
-is at least 30 days old; the Rules tab marks those, and `unused=1` shows only them.
+is at least 30 days old; Settings → Network marks those, and `unused=1` shows only them.
 
 A rule no sandbox can reach is saved, but it never applies, and since the connection is refused
 before the policy is asked, it never gets a hit either. The API fills in `unreachable` with the
@@ -100,8 +100,8 @@ reason (`Gateway.Unreachable`, `gateway/reach.go`) when it lists, creates or upd
 `host.studio.internal`), `host.studio.internal` on a port that isn't open, a private address or
 port the [local network](#local-network) list doesn't cover, a `lan.studio.internal` name (rules
 name the address), and addresses no entry can list, such as link-local ones. A name is never
-flagged, since it may resolve anywhere, and neither is a deny rule. The Rules tab shows the
-reason under the host, with a link to Network settings, and the rule dialog warns on save.
+flagged, since it may resolve anywhere, and neither is a deny rule. Settings → Network shows the
+reason under the host, with a link to Settings → Ports and LAN, and the rule dialog warns on save.
 
 Matching (`policy/match.go`):
 
@@ -176,12 +176,13 @@ apt repository, mise's version lists, Node.js, Go, Python's version index and it
 Nix releases (`BuildHosts` in `internal/policy/system.go`). A deny rule still wins. Any other host,
 such as one a spec's `setup` script fetches from, is held and asked as for any sandbox.
 
-## The Network page
+## Network settings
 
-The page (`web/src/routes/e.$env.network*.tsx`) has three tabs, each a route. The private
-hosts list is edited under Settings → Network:
+Two sections of the Settings page ([frontend](frontend.md#routes)) show the network. The
+private hosts list and this computer's ports are edited under Settings → Ports and LAN:
 
-- **Rules** starts with the environment's [security level](#security-levels), then lists the
+- **Settings → Network** (`web/src/routes/e.$env.settings.network.tsx`) starts with an intro
+  and the environment's [security level](#security-levels), then lists the
   rules, the [curated list](#curated-list) with a switch for each entry, and the tracker list with
   its switch. The rules' search and scope, action, origin and unused
   filters are URL search params (`q`, `scope`, `action`, `origin`, `unused=1`), so a filtered
@@ -189,13 +190,14 @@ hosts list is edited under Settings → Network:
   chip. Delete unused removes the unused rules the filters show, after a confirmation. Rules are grouped
   by registrable domain: the last two labels, or three under a short list of two-label
   suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
-- **Requests** lists the pending network approvals (connections and browser requests); Allow, Deny and Ignore work as on the
-  approval card.
-- **Activity** lists decided network approvals, newest first, up to 50: the ones you decided, and
-  the ones a level, the curated list or the [AI reviewer](#ai-reviewer-assisted) allowed or denied.
-  A reviewer's decision has a Revert.
+- **Settings → Activity** (`web/src/routes/e.$env.settings.activity.tsx`) lists every decided
+  approval of the environment, newest first; its Network chip (`?kind=network`) shows the network
+  ones: the ones you decided, and the ones a level, the curated list or the
+  [AI reviewer](#ai-reviewer-assisted) allowed or denied. A reviewer's decision has a Revert.
 
-`/e/$env/network` opens Requests when any wait for a decision, and Rules otherwise.
+Pending network approvals (connections and browser requests) are on Home and in the approval
+stack. The old addresses `/e/$env/network` and `/network/rules` redirect to Settings → Network,
+`/network/requests` to Home and `/network/activity` to Settings → Activity.
 
 ## Hold and ask
 
@@ -262,8 +264,8 @@ allowed this way (`ErrNotBrowser`, 422). Denying for the session denies once.
 Each environment has one level, which decides what happens when no rule matches. Explicit rules
 always win, in either direction, and so do the tracker list and the sites and hosts a browser
 session was approved for, which come before the level. Each teammate can override the level for its own
-sandboxes; "Environment default" follows the environment. The level is set on the Network page's
-Rules tab, in the teammate's settings, and in the setup's network step.
+sandboxes; "Environment default" follows the environment. The level is set on Settings → Network,
+in the teammate's settings, and in the setup's network step.
 
 | Level | No rule matches → | For whom |
 | --- | --- | --- |
@@ -301,7 +303,7 @@ already waiting stay in the inbox.
 Existing environments were made `locked` by migration 030, which is what Studio did before levels,
 so an upgrade opens nothing up. New environments start at `guarded`. An environment import starts at
 `guarded` as well, since the file carries neither the level nor the curated switches. Where no
-provider has a utility model, `assisted` asks like `guarded`, and the Rules tab says so.
+provider has a utility model, `assisted` asks like `guarded`, and Settings → Network says so.
 
 ## Curated list
 
@@ -312,7 +314,7 @@ use. Each entry has a stable `id`, a name, a group, its exact host names and its
 only, and 80 only where the source needs it).
 
 The `guarded`, `assisted` and `open` levels allow an entry's hosts on its ports when no rule matches.
-The Rules tab lists the entries with a search and a switch for each one. A switched-off entry is
+Settings → Network lists the entries with a search and a switch for each one. A switched-off entry is
 asked about like any other host. An environment stores its switched-off IDs (`curated_off`, migration
 030).
 
@@ -361,7 +363,7 @@ sandbox's connection log, once a minute per name, with the rule that refused it.
 ## This computer
 
 The fence refuses the host's addresses, and a sandbox's `localhost` is the sandbox. An
-environment's host ports (Settings → Network → This computer; `store.HostPorts`,
+environment's host ports (Settings → Ports and LAN → This computer; `store.HostPorts`,
 `gateway/host.go`) are the opt-in to a service on the computer Studio runs on:
 
 - A sandbox connects to `host.studio.internal` on an open port. Its resolver answers
@@ -379,7 +381,7 @@ environment's host ports (Settings → Network → This computer; `store.HostPor
 
 Upstream connections refuse non-public addresses, so a NAS at `192.168.178.20` or a company host
 that resolves to a private address, such as `git.company.local` behind a VPN, is unreachable by
-default. An environment's local network list (Settings → Network; `store.PrivateHost`, "private
+default. An environment's local network list (Settings → Ports and LAN; `store.PrivateHost`, "private
 hosts" in the code and the API) is the opt-in for such hosts:
 
 - A connection to a listed name on a listed port may reach the private addresses that name
@@ -429,11 +431,11 @@ VPN was available.
 
 **Setup.**
 
-1. In Settings → Network → Local network, add `*.company.local` (or `git.company.local`). Add a port such as
+1. In Settings → Ports and LAN → Local network, add `*.company.local` (or `git.company.local`). Add a port such as
    `22` only if a protocol other than web needs it.
 2. On the host, check the name resolves: `resolvectl query git.company.local`.
-3. Allow the host: approve the sandbox's request on the Requests tab, or add an allow rule for
-   `*.company.local` on the Rules tab.
+3. Allow the host: approve the sandbox's request on Home, or add an allow rule for
+   `*.company.local` on Settings → Network.
 4. From a sandbox, check the connection: `curl -v https://git.company.local/`. A refusal says
    which rule or address refused it.
 

@@ -25,14 +25,14 @@ An OpenAI-compatible endpoint needs a public HTTPS base URL and a model. If you 
 
 Claude Pro/Max and ChatGPT subscriptions sign in from the provider dialog: Studio runs the vendor's own login in a short-lived VM and keeps the token on the host; sandboxes get placeholders only. A Claude subscription works in terminal sessions and in chats.
 
-A subscription is not an API key. With an API key you paste the key and are done; with a subscription you sign in with your account in the browser and there is no key to paste. Add the provider, or choose **Sign in** next to it under **Settings → Providers**, then follow the steps in the dialog:
+A subscription is not an API key. With an API key you paste the key and are done; with a subscription you sign in with your account in the browser and there is no key to paste. Add the provider, or choose **Sign in** next to it under **Settings → AI providers**, then follow the steps in the dialog:
 
 - **Claude Pro/Max:** open the sign-in page, sign in and choose Authorize, copy the code the page shows, and paste it into the dialog's code field (or press **Paste**). Studio hands the code to Claude Code and saves the sign-in by itself; you don't type into the terminal. **Show the terminal** displays what Claude Code says, and opens by itself if it rejects the code. If you'd rather, run `claude setup-token` on your own computer and paste the `sk-ant-oat…` token it prints under **Use a token from claude setup-token instead**.
 - **ChatGPT Plus/Pro:** open the sign-in page, enter the code the dialog shows, and sign in. Studio notices when you're done; there is nothing to paste back.
 
-![The Providers settings page showing configured API-key providers](../../assets/screenshots/providers.jpg)
+![Settings → AI providers showing configured API-key providers](../../assets/screenshots/providers.jpg)
 
-Add or rotate provider keys under **Settings → Providers**. The key remains in Studio's host-side vault; the guest receives a placeholder, which Studio substitutes only for the provider's bound API host. Provider keys are managed with the provider and cannot be edited from the general Secrets page.
+Add or rotate provider keys under **Settings → AI providers**. The key remains in Studio's host-side vault; the guest receives a placeholder, which Studio substitutes only for the provider's bound API host. Provider keys are managed with the provider and cannot be edited from **Settings → Secrets**.
 
 ## Default teammate
 
@@ -41,7 +41,7 @@ If an environment has no teammates when you add a provider, Studio adds a teamma
 ## Start a teammate session
 
 1. Add a provider and enter its API key, or sign in with a subscription.
-2. Add a teammate and select a supported harness, provider, and model. A teammate needs a provider for its model: in an environment without one, **New teammate** says so and leads to **Settings → Providers**.
+2. Add a teammate and select a supported harness, provider, and model. A teammate needs a provider for its model: in an environment without one, **New teammate** says so and leads to **Settings → AI providers**.
 3. Create a sandbox and assign that teammate.
 4. Open the sandbox and choose **Start session**. Studio opens the harness in a terminal tab.
 

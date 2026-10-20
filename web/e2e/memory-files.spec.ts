@@ -18,7 +18,7 @@ test("a memory scope exports to a markdown file, and the file imports into anoth
     attribute: "deploy.command",
   })
 
-  await page.goto(`/e/${id}/memory`)
+  await page.goto(`/e/${id}/settings/memory`)
   const downloaded = page.waitForEvent("download")
   await page.getByRole("button", { name: "Export", exact: true }).click()
   const file = await downloaded
@@ -33,7 +33,7 @@ test("a memory scope exports to a markdown file, and the file imports into anoth
   const copy = await api.json<{ id: string }>("POST", "/api/environments", {
     name: `Memory ${suffix} copy`,
   })
-  await page.goto(`/e/${copy!.id}/memory`)
+  await page.goto(`/e/${copy!.id}/settings/memory`)
   const chooser = page.waitForEvent("filechooser")
   await page.getByRole("button", { name: "Import", exact: true }).click()
   await (await chooser).setFiles(path)

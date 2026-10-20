@@ -69,9 +69,11 @@ function ConflictPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  render={<Link to="/e/$env/memory" params={{ env }} />}
+                  render={
+                    <Link to="/e/$env/settings/memory" params={{ env }} />
+                  }
                 >
-                  Memory
+                  Shared memory
                 </Button>
               </EmptyContent>
             </Empty>

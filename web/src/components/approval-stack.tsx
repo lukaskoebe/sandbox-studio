@@ -76,7 +76,7 @@ export function ApprovalStack() {
   useTitleCount(all.length)
 
   // What the page shows in place (a chat's permission cards, Home's and a teammate's cards,
-  // the network requests list, the browser's questions) stays out of the stack.
+  // the browser's questions) stays out of the stack.
   const claimed = useClaimedApprovals()
   const items = all.filter((a) => !claimed.has(a.id))
   const { sheet, review } = useApprovalReview(all)

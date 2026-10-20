@@ -76,7 +76,7 @@ export function GitSettings({ env }: { env: string }) {
   return (
     <>
       <PageHeader>
-        <h1 className="text-sm font-medium">Git</h1>
+        <h1 className="text-sm font-medium">Git forges</h1>
         <EnvironmentLabel env={env} />
         <Button size="sm" className="ml-auto" onClick={() => setAdding(true)}>
           <PlusIcon />
@@ -154,15 +154,16 @@ export function GitSettings({ env }: { env: string }) {
         </section>
 
         <p className="text-xs text-muted-foreground">
-          The pushes and pull requests sandboxes made are on the{" "}
+          The pushes and pull requests sandboxes made are in{" "}
           <Link
-            to="/e/$env/git"
+            to="/e/$env/settings/activity"
             params={{ env }}
+            search={{ kind: "git" }}
             className="underline underline-offset-4"
           >
-            Git
-          </Link>{" "}
-          page.
+            Activity
+          </Link>
+          .
         </p>
       </ScrollArea>
       <ForgeDialog env={env} open={adding} onOpenChange={setAdding} />

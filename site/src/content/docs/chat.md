@@ -5,14 +5,14 @@ description: Work with a teammate in a chat, approve its steps, undo its changes
 
 Chat mode lets you work with a teammate's agent like in a messenger instead of in its terminal app. The agent is the same one, with the same harness, model, and sandbox; Studio shows its work as messages, cards, and buttons. The terminal is always one click away.
 
-## Choose Chat or Terminal
+## Chat or Terminal
 
-The guided setup's **Work mode** step lets you pick how you work with agents:
+You can work with an agent in two ways:
 
 - **Chat** (recommended): write to your teammates like in a messenger, see what they do, and approve risky steps with a click.
 - **Terminal**: run each agent's own command-line app in the sandbox, as a developer would.
 
-You can change it any time under **Settings → General → Work mode**. The choice only decides what a sandbox workspace shows first: with Chat, its latest chat; with Terminal, its terminals. Until you choose, a workspace opens on its terminals. Both stay one click away in the workspace strip either way.
+A sandbox's workspace shows its chats, its terminals and the Git reviews waiting on it as tabs in one strip. It opens on the sandbox's latest chat, or on its terminals while it has no chat. The strip's **+** starts a chat with the teammate, the teammate's agent in a terminal, or a shell, so both stay one click away.
 
 ## What chats need
 
@@ -26,7 +26,7 @@ A Claude subscription runs chats too: Studio runs Claude Code itself for the tea
 
 ## Start a chat
 
-Open **Chats** in the sidebar and choose **New chat**, or choose **New chat** on a sandbox's dashboard or in its workspace. Pick the sandbox at the top, write what the teammate should do, and send. The chat starts with that first message, so there are no empty chats.
+Open **All chats** in the sidebar and choose **New chat**, or choose **New chat** on a sandbox's dashboard or in its workspace. Pick the sandbox at the top, write what the teammate should do, and send. The chat starts with that first message, so there are no empty chats.
 
 - **Enter** sends; **Shift+Enter** starts a new line.
 - Use the paperclip to attach files, up to 10 MiB per message in total.

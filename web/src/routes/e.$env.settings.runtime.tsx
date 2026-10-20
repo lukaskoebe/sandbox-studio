@@ -1,13 +1,10 @@
-import { createFileRoute, redirect } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
+import { RuntimeSettings } from "@/components/settings/runtime"
 
-// Settings are a dialog; the page's old address opens it over Home.
 export const Route = createFileRoute("/e/$env/settings/runtime")({
-  beforeLoad: ({ params }) => {
-    throw redirect({
-      to: "/e/$env",
-      params,
-      search: { settings: "runtime" },
-      replace: true,
-    })
-  },
+  component: Section,
 })
+
+function Section() {
+  return <RuntimeSettings />
+}

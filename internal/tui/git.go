@@ -132,7 +132,7 @@ func (m *app) gitBody(w, h int) []string {
 			"No pushes yet. When a sandbox pushes to one of your forges or opens a pull",
 			"request, it waits here for your review.",
 			"",
-			styleDim.Render(clip("Forges are set up in the browser: "+m.browserURL("/e/"+m.env.ID+"?settings=git"), w)))
+			styleDim.Render(clip("Forges are set up in the browser: "+m.browserURL("/e/"+m.env.ID+"/settings/forges"), w)))
 	}
 	const colSandbox, colAge = 16, 8
 	stateW := min(max(w/4, 16), 40) // the outcome, which says what the forge answered

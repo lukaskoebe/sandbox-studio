@@ -131,7 +131,7 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET quality` | the quality numbers of the environment ([Quality](#quality)) |
 | `GET export?scope=`, `POST import` | a scope as one markdown file, and a file read back into a scope ([Export and import](#export-and-import)) |
 
-The Memory page in the environment sidebar shows shared memory: the extraction budget line,
+Settings → Shared memory shows shared memory: the extraction budget line,
 the [quality](#quality) numbers, and tabs for pages, facts, conflicts (with "Dream now", recent
 runs and a sheet that shows both facts side by side with sources, tiers and timeline, and
 resolves; each conflict also has its own page, `/e/$env/memory/conflicts/$id`), search and

@@ -125,7 +125,7 @@ func agentStatus(ctx context.Context, dial func(context.Context) (net.Conn, erro
 }
 
 // agentAuth authenticates with the keys of the host's SSH agent. A signature that takes
-// longer than the slow-sign threshold is recorded on f, so Settings → Git can suggest a
+// longer than the slow-sign threshold is recorded on f, so Settings → Git forges can suggest a
 // Studio key instead. done closes the agent connection once the handshake is over.
 func (s *Service) agentAuth(ctx context.Context, f store.Forge) (auth ssh.AuthMethod, done func(), err error) {
 	conn, err := s.dialAgent(ctx)

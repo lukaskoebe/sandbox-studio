@@ -236,7 +236,7 @@ func TestKindCardsLeaveTheRestToTheBrowser(t *testing.T) {
 	m = press(m, "a")
 	m.approvalCursor = 3
 	m = press(m, "enter")
-	if want := "open in browser: http://127.0.0.1:7878/e/env1/memory"; m.notice.text != want {
+	if want := "open in browser: http://127.0.0.1:7878/e/env1/settings/memory"; m.notice.text != want {
 		t.Fatalf("enter on a conflict: %q", m.notice.text)
 	}
 	m.approvalCursor = 4

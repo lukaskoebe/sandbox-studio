@@ -85,19 +85,28 @@ test("old addresses redirect to the pages that replaced them", async ({
   await page.goto(`/e/${env}/browser`)
   await expect(page).toHaveURL(/\/teammates\/[^/]+\/browser$/)
 
-  // Settings are a dialog over Home; the old pages' addresses open it there.
-  for (const [from, to] of [
-    ["providers", "providers"],
-    ["builds", "templates"],
-    ["settings", "general"],
-    ["settings/git", "git"],
+  // The pages that moved into Settings, and the settings dialog's ?settings= links, open
+  // the section that replaced them.
+  for (const [from, to, label] of [
+    ["providers", "providers", "AI providers"],
+    ["builds", "templates", "Templates"],
+    ["secrets", "secrets", "Secrets"],
+    ["memory", "memory", "Shared memory"],
+    ["git", "activity?kind=git", "Activity"],
+    ["settings", "general", "General"],
+    ["settings/git", "forges", "Git forges"],
+    ["?settings=git", "forges", "Git forges"],
+    ["?settings=network", "ports", "Ports and LAN"],
+    ["?settings=runtime", "runtime", "Runtime"],
   ] as const) {
-    await page.goto(`/e/${env}/${from}`)
-    await expect(page).toHaveURL(new RegExp(`/e/${env}\\?settings=${to}$`))
+    await page.goto(`/e/${env}${from.startsWith("?") ? "" : "/"}${from}`)
+    await expect(page).toHaveURL(
+      new RegExp(`/e/${env}/settings/${to.replace("?", "\\?")}$`)
+    )
     await expect(
       page
         .getByRole("navigation", { name: "Settings" })
-        .getByRole("link", { name: to[0].toUpperCase() + to.slice(1) })
+        .getByRole("link", { name: label, exact: true })
     ).toHaveAttribute("aria-current", "page")
   }
 })

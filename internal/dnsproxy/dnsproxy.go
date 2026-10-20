@@ -551,7 +551,7 @@ const VirtualDomain = "studio.internal"
 var VirtualAddr = netip.AddrFrom4([4]byte{198, 18, 0, 1})
 
 // HostName is the computer Studio runs on, as sandboxes reach it: only on the ports the
-// environment opened to them (Settings → Network), which the gateway dials on loopback. It has an
+// environment opened to them (Settings → Ports and LAN), which the gateway dials on loopback. It has an
 // address of its own, so that a connection that names no server (SSH) still names the host.
 const HostName = "host." + VirtualDomain
 

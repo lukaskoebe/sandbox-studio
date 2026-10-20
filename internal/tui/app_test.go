@@ -187,7 +187,7 @@ func TestBrowserHintsPrintTheURL(t *testing.T) {
 	if m.screen != screenActivity {
 		t.Fatalf("l opens %v", m.screen)
 	}
-	if want := "open in browser: http://127.0.0.1:7878/e/env1/network/rules"; m.notice.text != want {
+	if want := "open in browser: http://127.0.0.1:7878/e/env1/settings/network"; m.notice.text != want {
 		t.Fatalf("rules hint %q", m.notice.text)
 	}
 }

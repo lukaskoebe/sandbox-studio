@@ -30,13 +30,7 @@ export type ApprovalKind = {
   /** Whether the summary is a host or similar and reads best in monospace. */
   mono?: boolean
   /** The environment page that lists approvals of this kind. */
-  page:
-    | "/e/$env"
-    | "/e/$env/network"
-    | "/e/$env/git"
-    | "/e/$env/memory"
-    | "/e/$env/teammates/$id/browser"
-    | "/e/$env/chats"
+  page: "/e/$env" | "/e/$env/teammates/$id/browser" | "/e/$env/chats"
 }
 
 /**
@@ -79,21 +73,21 @@ const kinds: Record<string, ApprovalKind> = {
     icon: GlobeIcon,
     area: "network",
     mono: true,
-    page: "/e/$env/network",
+    page: "/e/$env",
   },
   "git.push": {
     title: "Git push",
     summary: gitSummary,
     icon: GitBranchIcon,
     area: "git",
-    page: "/e/$env/git",
+    page: "/e/$env",
   },
   "git.pr": {
     title: "Pull request",
     summary: gitSummary,
     icon: GitPullRequestIcon,
     area: "git",
-    page: "/e/$env/git",
+    page: "/e/$env",
   },
   "memory.share": {
     title: "Memory share",
@@ -101,7 +95,7 @@ const kinds: Record<string, ApprovalKind> = {
       `${a.memoryShare?.teammateName ?? "A teammate"} wants to share a fact with every teammate`,
     icon: BrainIcon,
     area: "memory",
-    page: "/e/$env/memory",
+    page: "/e/$env",
   },
   "memory.conflict": {
     title: "Memory conflict",
@@ -110,7 +104,7 @@ const kinds: Record<string, ApprovalKind> = {
       "Two memory facts disagree",
     icon: ScalesIcon,
     area: "memory",
-    page: "/e/$env/memory",
+    page: "/e/$env",
   },
   "browser.action": {
     title: "Browser action",

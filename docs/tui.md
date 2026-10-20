@@ -62,7 +62,7 @@ Keys are the same on every screen and cannot be changed. The key bar shows the o
 | **Approvals** (from `a` anywhere) | every pending approval of every environment, grouped like the web stack | see below |
 | **Git** (from `g`, or its tab) | the environment's pushes and pull requests: the ones waiting for a review, then the last 100 decided, with their sandbox and outcome | `↑/↓` move · `enter` the review · `a` approvals · `l` Activity · `esc` back |
 | **Git review** (from `enter` on a git card or a push on the Git screen) | the push's facts, commits and diff, or the pull request | see below |
-| **Activity** (from `l`) | connections and decisions of the environment's sandboxes, newest first | `enter` the entry and its rule · `/` filter by sandbox · `r` print the rules page's URL · `esc` back |
+| **Activity** (from `l`) | connections and decisions of the environment's sandboxes, newest first | `enter` the entry and its rule · `/` filter by sandbox · `r` print the URL of Settings → Network · `esc` back |
 | **Environments** (from `e`) | the environments; `enter` switches | `↑/↓` · `enter` choose · `esc` cancel |
 
 The header always shows the number of pending approvals across all environments, after the
@@ -393,9 +393,9 @@ The attachment uses the same websocket as the web terminal (`.../terminals/{name
 
 ## Stays in the browser
 
-Settings, providers, teammates, templates and the template editor, rules, the network page,
-memory, the browser, lineage, deleting or renaming checkpoints and their schedule, secrets, and
-the git settings. Some answers stay there too, because they need more than a key:
+Settings, providers, teammates, templates and the template editor, rules, memory, the
+browser, lineage, deleting or renaming checkpoints and their schedule, secrets, and the git
+forges. Some answers stay there too, because they need more than a key:
 
 - keeping both facts of a memory conflict, or editing one: two texts to edit;
 - a chat question that is a form of several fields, or a list: a form to fill;

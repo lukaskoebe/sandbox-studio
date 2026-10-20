@@ -447,7 +447,7 @@ func (m *app) approvalURL(a api.ApprovalView) string {
 	env := "/e/" + a.EnvironmentID
 	switch {
 	case strings.HasPrefix(a.Kind, "git."):
-		return m.browserURL(env + "?settings=git")
+		return m.browserURL(env + "/git/reviews/" + a.ID)
 	case a.BrowserAction != nil:
 		return m.browserURL(env + "/teammates/" + a.BrowserAction.TeammateID + "/browser")
 	case a.BrowserCredential != nil:
@@ -455,7 +455,7 @@ func (m *app) approvalURL(a api.ApprovalView) string {
 	case a.BrowserControl != nil:
 		return m.browserURL(env + "/teammates/" + a.BrowserControl.TeammateID + "/browser")
 	case a.MemoryShare != nil || a.MemoryConflict != nil:
-		return m.browserURL(env + "/memory")
+		return m.browserURL(env + "/settings/memory")
 	case a.ChatPermission != nil:
 		return m.browserURL(env + "/chats/" + a.ChatPermission.ChatID)
 	}

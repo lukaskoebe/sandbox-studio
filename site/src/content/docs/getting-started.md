@@ -62,17 +62,17 @@ Studio listens on loopback, so other computers on your network cannot open its U
 
 To give Studio a window and a dock or taskbar icon of its own, install it as an app: in Chrome or Edge, choose **Install Sandbox Studio** in the address bar or the browser menu; in Safari, choose **File → Add to Dock**. The app shows the number of approvals waiting on its icon. It belongs to the address you installed it from, so keep Studio on the same port.
 
-To start Studio when you log in, turn on **Start at login** under **Settings → General**, or run `studio autostart enable`. It is off by default, and so is the update check: turn on **Updates** on the same page to have Studio check GitHub for a newer release at most once a day; it never downloads or installs one by itself.
+To start Studio when you log in, turn on **Start at login** under **Settings → General**, or run `studio autostart enable`. It is off by default, and so is the update check: turn on **Updates** under **Settings → Updates** to have Studio check GitHub for a newer release at most once a day; it never downloads or installs one by itself.
 
-On a first start, Studio opens a guided setup at `/setup`. It checks the host, asks whether you want Chat or Terminal, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
+On a first start, Studio opens a guided setup at `/setup`. It checks the host, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
 
-![The guided setup: seven steps, the host check done and the work mode open](../../assets/screenshots/setup.jpg)
+![The guided setup with the host check done](../../assets/screenshots/setup.jpg)
 
 ## Prepare your first agent
 
 The guided setup adds the provider, creates a default teammate named Iris for it, and creates the first sandbox with Iris. To do the same by hand:
 
-1. In **Settings → Providers**, sign in with a Claude Pro/Max or ChatGPT subscription, or add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
+1. In **Settings → AI providers**, sign in with a Claude Pro/Max or ChatGPT subscription, or add an Anthropic API key, an OpenAI API key, or a supported OpenAI-compatible endpoint.
 2. In Teammates, create a teammate and choose its harness, provider, model, role, and optional working instructions (“soul”).
 3. Create a sandbox and select that teammate. Ownership is fixed when the sandbox is created.
 4. Open the sandbox and select **Start session**. The agent opens in a terminal tab.

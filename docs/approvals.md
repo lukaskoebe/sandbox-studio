@@ -37,8 +37,8 @@ its approval kinds with a decide function, and the API hands the decision to the
 ## Decided without asking
 
 A network request that a security level or the curated list allowed, and the AI reviewer's
-decisions, are decided approvals too, so Activity lists them. The `network.decided` field of the
-payload says how: `open`, `curated` or `reviewer`. `network.reason` holds the curated entry's name or
+decisions, are decided approvals too, so Settings → Activity lists them. The `network.decided`
+field of the payload says how: `open`, `curated` or `reviewer`. `network.reason` holds the curated entry's name or
 the reviewer's reason. A reviewer's allow or deny has the `ruleId` of the rule it made. Revert deletes
 that rule, sets `reverted`, and asks about the request from then on (see
 [network](network.md#ai-reviewer-assisted)).
@@ -63,13 +63,12 @@ change it.
   changed; clients refetch. Slow subscribers are disconnected.
 - The approval stack (`web/src/components/approval-stack.tsx`) shows on every page, for
   every environment, with the environment's name on cards from other environments. Pages
-  that list a kind themselves (network requests on the network page's Requests tab, a chat's
-  own permission requests, Home its environment's approvals, which it shows as cards of its
-  own) leave those out of the stack. Every place that shows an approval card itself claims
-  its ID while it is on screen (`useClaimApprovals` in `web/src/lib/approval-claims.ts`): a
-  teammate's conversation, a chat's permission card, the browser window's questions on its
-  page, the Requests tab and Home. The stack leaves claimed IDs out, so a card shows in one
-  place even when several views are on the page. More than one card, or a narrow page, folds
+  that list a kind themselves (a chat's own permission requests, Home its environment's
+  approvals, which it shows as cards of its own) leave those out of the stack. Every place
+  that shows an approval card itself claims its ID while it is on screen (`useClaimApprovals`
+  in `web/src/lib/approval-claims.ts`): a teammate's conversation, a chat's permission card,
+  the browser window's questions on its page and Home. The stack leaves claimed IDs out, so a
+  card shows in one place even when several views are on the page. More than one card, or a narrow page, folds
   the stack into an "N approvals" pill that opens the cards on click
   ([UI style](design/ui-style.md)). The pending count goes into the page title.
 - A network approval's Options have two rows: who the decision covers and for how long. For a

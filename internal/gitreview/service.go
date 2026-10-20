@@ -230,7 +230,7 @@ func (s *Service) parse(r *http.Request, sb store.Sandbox) (target, int, string)
 	}
 	f, err := s.Store.ForgeByName(r.Context(), sb.EnvironmentID, forge)
 	if errors.Is(err, store.ErrNotFound) {
-		return t, http.StatusNotFound, fmt.Sprintf("This environment has no forge %q. Add it in Sandbox Studio under Settings → Git.", forge)
+		return t, http.StatusNotFound, fmt.Sprintf("This environment has no forge %q. Add it in Sandbox Studio under Settings → Git forges.", forge)
 	}
 	if err != nil {
 		s.Log.Error("git remote: forge", "err", err)
@@ -334,7 +334,7 @@ func (s *Service) uploadPack(w http.ResponseWriter, r *http.Request, t target) {
 		case http.StatusNotFound:
 			code, msg = http.StatusNotFound, fmt.Sprintf("The forge has no repository %s (or the token can't see it).", t.path())
 		case http.StatusUnauthorized, http.StatusForbidden:
-			msg = "The forge refused Sandbox Studio's token. Check the forge in Settings → Git."
+			msg = "The forge refused Sandbox Studio's token. Check the forge in Settings → Git forges."
 		}
 		if text := strings.TrimSpace(string(data)); text != "" && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/plain") {
 			msg += "\n" + mask(text, token)

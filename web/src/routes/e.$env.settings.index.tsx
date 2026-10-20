@@ -3,9 +3,8 @@ import { createFileRoute, redirect } from "@tanstack/react-router"
 export const Route = createFileRoute("/e/$env/settings/")({
   beforeLoad: ({ params }) => {
     throw redirect({
-      to: "/e/$env",
+      to: "/e/$env/settings/general",
       params,
-      search: { settings: "general" },
       replace: true,
     })
   },

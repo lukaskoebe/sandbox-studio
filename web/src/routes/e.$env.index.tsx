@@ -384,7 +384,7 @@ function Earlier({ env }: { env: string }) {
       <div className="flex items-baseline gap-2">
         <Label id="earlier">Earlier</Label>
         <Link
-          to="/e/$env/network/activity"
+          to="/e/$env/settings/activity"
           params={{ env }}
           className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
         >

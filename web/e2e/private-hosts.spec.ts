@@ -5,7 +5,7 @@ function freshName(label: string, suffix: string) {
   return `${label}-${Math.random().toString(36).slice(2, 8)}.${suffix}`
 }
 
-test("Settings > Network adds, lists and removes local network hosts", async ({
+test("Settings > Ports and LAN adds, lists and removes local network hosts", async ({
   page,
   api,
   env,
@@ -17,7 +17,7 @@ test("Settings > Network adds, lists and removes local network hosts", async ({
       `/api/environments/${env}/private-hosts`
     )
 
-  await page.goto(`/e/${env}/settings/network`)
+  await page.goto(`/e/${env}/settings/ports`)
   await expect(
     page.getByRole("heading", { name: "Local network", exact: true })
   ).toBeVisible()
@@ -58,12 +58,12 @@ test("Settings > Network adds, lists and removes local network hosts", async ({
     .not.toContain(host)
 })
 
-test("Settings > Network opens and closes ports of this computer", async ({
+test("Settings > Ports and LAN opens and closes ports of this computer", async ({
   page,
   api,
   env,
 }) => {
-  await page.goto(`/e/${env}/settings/network`)
+  await page.goto(`/e/${env}/settings/ports`)
   await expect(
     page.getByRole("heading", { name: "This computer", exact: true })
   ).toBeVisible()
@@ -92,7 +92,7 @@ test("a rule no sandbox can reach says so, and why", async ({
   api,
   env,
 }) => {
-  await page.goto(`/e/${env}/network/rules`)
+  await page.goto(`/e/${env}/settings/network`)
   await page.getByRole("button", { name: "Add rule", exact: true }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Host", { exact: true }).fill("127.0.0.1")
@@ -103,7 +103,7 @@ test("a rule no sandbox can reach says so, and why", async ({
   const row = page.getByRole("row").filter({ hasText: "5432" })
   await expect(row).toContainText("stay inside the sandbox")
   await expect(
-    row.getByRole("link", { name: "Open network settings" })
+    row.getByRole("link", { name: "Open Ports and LAN" })
   ).toBeVisible()
 
   const rules = await api.json<{ id: string; host: string }[]>(
@@ -120,7 +120,7 @@ test("a proxy rule's Advanced fields are saved with the rule", async ({
   env,
 }) => {
   const host = freshName("proxied", "example.org")
-  await page.goto(`/e/${env}/network/rules`)
+  await page.goto(`/e/${env}/settings/network`)
   await page.getByRole("button", { name: "Add rule", exact: true }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Host", { exact: true }).fill(host)

@@ -20,32 +20,32 @@ Studio holds the original connection for up to 60 seconds. If you allow it befor
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
-The Network page has three tabs. **Rules** sets the security level, lists your rules, grouped by domain, with search and filters for scope and action, and lists the curated hosts. **Requests** lists the connections waiting for your decision, and **Activity** lists the ones you already decided. To see which hosts one sandbox reached, open its **Connections** panel.
+**Settings → Network** sets the security level, lists your rules, grouped by domain, with search and filters for scope and action, and lists the curated hosts. Connections waiting for your decision are on **Home** and in the approval inbox, and **Settings → Activity** lists the ones already decided; its **Network** filter shows only them. To see which hosts one sandbox reached, open its **Connections** panel.
 
 ## Security levels
 
-Each environment has a security level, set on the Network page's **Rules** tab. It decides what happens when no rule matches a host. Rules always win, whichever way they allow or deny.
+Each environment has a security level, set on **Settings → Network**. It decides what happens when no rule matches a host. Rules always win, whichever way they allow or deny.
 
 | Level | When no rule matches |
 | --- | --- |
 | **Locked** | Ask for every host. |
 | **Guarded** | Allow the curated hosts (see below) and ask for the rest. New environments start here. |
 | **Assisted** | Allow the curated hosts. An AI reviewer decides the rest, and asks you when it is unsure. |
-| **Open** | Allow public hosts and log them in Activity. Deny rules and the tracker list still apply. |
+| **Open** | Allow public hosts and log them in Settings → Activity. Deny rules and the tracker list still apply. |
 
 A teammate can have its own level, and **Environment default** follows the environment's. Environments that existed before levels were introduced are Locked, so nothing opens up on upgrade. At every level, a secret reaches only the hosts it is bound to, and a level never allows a private address.
 
 ## The curated list
 
-The **Rules** tab lists the development hosts Studio allows at Guarded, Assisted and Open: package registries, toolchain downloads, container registries, read access to code forges, and content delivery networks. Each entry has a switch. Switch an entry off for an environment, and its hosts ask you like any other.
+**Settings → Network** lists the development hosts Studio allows at Guarded, Assisted and Open: package registries, toolchain downloads, container registries, read access to code forges, and content delivery networks. Each entry has a switch. Switch an entry off for an environment, and its hosts ask you like any other.
 
 ## Assisted and the AI reviewer
 
-At Assisted, a host that no rule and no curated entry covers goes to an AI reviewer first. The reviewer answers from the host, the port, the page a browser request belongs to, and the sandbox's last prompt. It never sees secrets, request bodies, or secret placeholders. Its allow or deny lasts a day and appears in **Activity**, with a **Revert** that undoes it. Without a provider that has a utility model, Assisted asks you like Guarded does.
+At Assisted, a host that no rule and no curated entry covers goes to an AI reviewer first. The reviewer answers from the host, the port, the page a browser request belongs to, and the sandbox's last prompt. It never sees secrets, request bodies, or secret placeholders. Its allow or deny lasts a day and appears in **Settings → Activity**, with a **Revert** that undoes it. Without a provider that has a utility model, Assisted asks you like Guarded does.
 
 ## Add a rule
 
-On the Network page's **Rules** tab, choose **Add rule**. Enter a host such as `api.example.com` or `*.example.com`; a wildcard covers the root host and its subdomains. Add comma-separated ports, or leave ports empty to match every port. Choose whether the rule applies to the whole environment, one teammate, or one sandbox.
+On **Settings → Network**, choose **Add rule**. Enter a host such as `api.example.com` or `*.example.com`; a wildcard covers the root host and its subdomains. Add comma-separated ports, or leave ports empty to match every port. Choose whether the rule applies to the whole environment, one teammate, or one sandbox.
 
 ![The Add rule dialog with host, port, action, and scope fields](../../assets/screenshots/rule-dialog.jpg)
 
@@ -56,7 +56,7 @@ On the Network page's **Rules** tab, choose **Add rule**. Enter a host such as `
 | **Caddy** | Apply a restricted Caddyfile rule to rewrite, answer, or proxy HTTP requests. |
 | **Deny** | Block matching connections. An environment-wide deny always wins. |
 
-Check **Only in the browser** to limit a rule to the pages Studio's browser loads: the sandboxes' own connections to the host still ask, or follow their other rules. The Rules tab marks such rules **browser only**.
+Check **Only in the browser** to limit a rule to the pages Studio's browser loads: the sandboxes' own connections to the host still ask, or follow their other rules. The rules list marks such rules **browser only**.
 
 Environment-level deny rules take precedence as a safety boundary. Otherwise a sandbox-specific rule, then a teammate rule, then other environment rules are considered.
 
@@ -78,11 +78,11 @@ Create the secret first and bind it to `api.example.com`. Studio checks Caddy ru
 
 ## This computer
 
-Sandboxes never reach the computer Studio runs on, so `ssh you@192.168.178.63` or `curl localhost:3000` from a sandbox fails: `localhost` is the sandbox itself, and this computer's own addresses are refused. To let sandboxes reach a service here, open its port under **This computer** on **Settings → Network**. Sandboxes then connect to `host.studio.internal` on that port, for example `ssh you@host.studio.internal`, and Studio connects them to the port on this computer's loopback, so a service listening on `127.0.0.1` or `0.0.0.0` answers. Each connection still needs a rule for `host.studio.internal` or an approval; a security level never allows it. Studio's own ports stay closed.
+Sandboxes never reach the computer Studio runs on, so `ssh you@192.168.178.63` or `curl localhost:3000` from a sandbox fails: `localhost` is the sandbox itself, and this computer's own addresses are refused. To let sandboxes reach a service here, open its port under **This computer** on **Settings → Ports and LAN**. Sandboxes then connect to `host.studio.internal` on that port, for example `ssh you@host.studio.internal`, and Studio connects them to the port on this computer's loopback, so a service listening on `127.0.0.1` or `0.0.0.0` answers. Each connection still needs a rule for `host.studio.internal` or an approval; a security level never allows it. Studio's own ports stay closed.
 
 ## Local network
 
-Sandboxes reach public addresses only, so a NAS at `192.168.178.20` or a company host behind a VPN, such as `git.company.local`, is unreachable by default. To let sandboxes reach one, add it under **Local network** on **Settings → Network**:
+Sandboxes reach public addresses only, so a NAS at `192.168.178.20` or a company host behind a VPN, such as `git.company.local`, is unreachable by default. To let sandboxes reach one, add it under **Local network** on **Settings → Ports and LAN**:
 
 - A **name** or a wildcard such as `*.company.local`. Sandboxes use the name as it is.
 - A **private IPv4 address**, such as `192.168.178.20`, or a **range**, such as `192.168.178.0/24`. Sandboxes can't connect to private addresses directly, so they use the name the list shows, `192-168-178-20.lan.studio.internal`; rules and approvals name the address itself.
@@ -91,7 +91,7 @@ Ports default to 80 and 443; list others, such as 22 for SSH. Each connection st
 
 ## Rules no sandbox can reach
 
-A rule for an address no sandbox can reach, such as `127.0.0.1`, this computer's own address, or a private address that isn't on the local network list, is saved, but it never applies. The Rules page marks such a rule with the reason and a link to the setting that changes it.
+A rule for an address no sandbox can reach, such as `127.0.0.1`, this computer's own address, or a private address that isn't on the local network list, is saved, but it never applies. **Settings → Network** marks such a rule with the reason and a link to the setting that changes it.
 
 ## Requests from the browser
 
@@ -110,4 +110,4 @@ Reports that Chromium sends sites on its own, such as Network Error Logging, are
 
 ## Browser and Git approvals are separate
 
-The network policy controls which hosts a sandbox can reach. Browser actions that change a page can also need a **browser action** approval. Git pushes to a forge configured in **Settings → Git** use **Git push** review. A network allow does not approve either of those actions. See [Browser](../browser/) and [Git review](../git-review/).
+The network policy controls which hosts a sandbox can reach. Browser actions that change a page can also need a **browser action** approval. Git pushes to a forge configured in **Settings → Git forges** use **Git push** review. A network allow does not approve either of those actions. See [Browser](../browser/) and [Git review](../git-review/).

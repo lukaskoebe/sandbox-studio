@@ -1,13 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
-// Settings are a dialog; the page's old address opens it over Home.
+// The forges' old address.
 export const Route = createFileRoute("/e/$env/settings/git")({
   beforeLoad: ({ params }) => {
-    throw redirect({
-      to: "/e/$env",
-      params,
-      search: { settings: "git" },
-      replace: true,
-    })
+    throw redirect({ to: "/e/$env/settings/forges", params, replace: true })
   },
 })

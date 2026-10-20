@@ -3,11 +3,11 @@ title: Git review
 description: Keep forge credentials on the host and approve pushes before Studio sends them upstream.
 ---
 
-For a forge added in **Settings → Git**, Studio can act as the virtual Git remote. When a sandbox pushes through Studio, the change is staged in a private per-sandbox repository and appears in the approval inbox as a diff. The upstream branch does not change until you approve the push.
+For a forge added in **Settings → Git forges**, Studio can act as the virtual Git remote. When a sandbox pushes through Studio, the change is staged in a private per-sandbox repository and appears in the approval inbox as a diff. The upstream branch does not change until you approve the push.
 
-**Git** in the sidebar lists every push and pull request of the environment, the ones waiting for you first, with how many wait next to it. Each opens its review.
+Pushes and pull requests waiting for you are on **Home** and in the approval inbox. **Settings → Activity** lists the decided ones; its **Git** filter shows only them, and each push opens its review.
 
-![The Git settings page showing configured forges](../../assets/screenshots/git.jpg)
+![Settings → Git forges showing configured forges](../../assets/screenshots/git.jpg)
 
 ## Add a forge
 
@@ -18,7 +18,7 @@ Studio supports GitHub, GitLab, Forgejo/Gitea/Codeberg, other HTTPS Git hosts, S
 - For a folder on this computer, paste a repository's path, such as `~/git/app`: Studio makes a **Folder on this computer** forge for the folder it is in, with no token. Sandboxes can fetch every repository in the folder; an approved push goes in with your git, as `git push` to the folder would, so the repository's hooks run and a push to the branch a working copy has checked out is refused unless the repository sets `receive.denyCurrentBranch` to `updateInstead`.
 - For SSH, Studio signs with the keys in your SSH agent, the same ones `ssh` uses. Compare the scanned host-key fingerprint with the fingerprint published by the host, then confirm it. For GitHub, GitLab and Bitbucket, Studio already knows the keys they publish: their scan shows "The key GitHub publishes" (or GitLab, or Bitbucket) with nothing to compare, and any other key is refused. To keep a key for Studio alone, choose a Studio key instead: Studio creates it and shows its public key for you to add to the host.
 
-Forge tokens and Studio's SSH keys stay in Studio's host-side vault. Your SSH agent is only used on the host. Neither reaches a sandbox. If your agent asks you to confirm each signature, as hardware keys and password managers do, Studio's own fetch before a push runs at most once every 30 seconds per sandbox and repository, so a burst of pushes asks once. **Settings → Git** can test a forge connection and replace an expiring token.
+Forge tokens and Studio's SSH keys stay in Studio's host-side vault. Your SSH agent is only used on the host. Neither reaches a sandbox. If your agent asks you to confirm each signature, as hardware keys and password managers do, Studio's own fetch before a push runs at most once every 30 seconds per sandbox and repository, so a burst of pushes asks once. **Settings → Git forges** can test a forge connection and replace an expiring token.
 
 The forge row shows its Studio remote URL, in the form `https://git.studio.internal/<forge>/<path>.git`. Copy that URL when cloning from a plain terminal. When an agent session starts, Studio also writes managed Git URL rules so common URLs for configured forges can route through Studio.
 

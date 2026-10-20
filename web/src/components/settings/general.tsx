@@ -48,7 +48,6 @@ export function GeneralSettings({ env }: { env: string }) {
       >
         <SettingsGroup label="Studio">
           <AutostartSection />
-          <UpdatesSection />
           <SetupSection env={env} />
         </SettingsGroup>
         <SettingsGroup
@@ -56,6 +55,25 @@ export function GeneralSettings({ env }: { env: string }) {
           aside={<EnvironmentLabel env={env} />}
         >
           <EnvironmentFilesSection env={env} />
+        </SettingsGroup>
+      </ScrollArea>
+    </>
+  )
+}
+
+/** Studio's version and how it updates, for the whole installation. */
+export function UpdatesSettings() {
+  return (
+    <>
+      <PageHeader>
+        <h1 className="text-sm font-medium">Updates</h1>
+      </PageHeader>
+      <ScrollArea
+        className="min-h-0 flex-1"
+        viewportClassName="grid max-w-4xl content-start gap-6 p-3 md:p-4"
+      >
+        <SettingsGroup label="Studio">
+          <UpdatesSection />
         </SettingsGroup>
       </ScrollArea>
     </>
@@ -198,7 +216,7 @@ function ImportReport({
           {secrets.map((item) => (
             <li key={`secret-${item.name}-${item.teammate ?? ""}`}>
               <Link
-                to="/e/$env/secrets"
+                to="/e/$env/settings/secrets"
                 params={{ env }}
                 className="underline underline-offset-4"
               >

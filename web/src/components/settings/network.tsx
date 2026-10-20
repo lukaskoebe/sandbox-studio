@@ -31,7 +31,7 @@ export function NetworkSettings({ env }: { env: string }) {
   return (
     <>
       <PageHeader>
-        <h1 className="text-sm font-medium">Network</h1>
+        <h1 className="text-sm font-medium">Ports and LAN</h1>
         <EnvironmentLabel env={env} />
       </PageHeader>
       <ScrollArea
