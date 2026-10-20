@@ -31,6 +31,9 @@ type PushReview struct {
 	Deletions     int      `json:"deletions"`
 	Diff          string   `json:"diff" doc:"Unified diff from the branch's previous state (or where a new branch forked) to the push"`
 	DiffTruncated bool     `json:"diffTruncated"`
+	// The pull request approving can open along with the push, and the one it updates.
+	PullRequest     *PullRequest `json:"pullRequest,omitempty" doc:"The pull request the push can open: set for a branch other than the repository's default, on a forge with an API, when none is open from it"`
+	OpenPullRequest string       `json:"openPullRequest,omitempty" doc:"Web URL of the open pull request from the branch, which the push updates"`
 }
 
 // Commit is one commit of a push.

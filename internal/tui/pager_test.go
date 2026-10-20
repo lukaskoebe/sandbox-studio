@@ -135,3 +135,41 @@ func TestPagerNamesThePullRequest(t *testing.T) {
 		t.Errorf("key bar: %s", bar)
 	}
 }
+
+func TestPagerTogglesThePullRequest(t *testing.T) {
+	m := sampleApp()
+	a := samplePush(m)
+	a.Git.Review.PullRequest = &gitreview.PullRequest{Head: "fix-login", Base: "main", Title: "Submit the login form on enter"}
+	m.approvals = []api.ApprovalView{a}
+	m = press(m, "a", "enter")
+	if body := strings.Join(m.pagerLines(80), "\n"); !strings.Contains(body, "[x] into main: Submit the login form on enter") {
+		t.Fatalf("a new branch's review doesn't open its pull request:\n%s", body)
+	}
+	if bar := m.keyBar(m.width, 0); !strings.Contains(bar, "pull request") {
+		t.Errorf("key bar: %s", bar)
+	}
+	m = press(m, "p")
+	if body := strings.Join(m.pagerLines(80), "\n"); !strings.Contains(body, "[ ] into main") || m.pager.openPR {
+		t.Fatalf("p left the pull request on:\n%s", body)
+	}
+}
+
+func TestPagerOpensAPullRequestLater(t *testing.T) {
+	m := sampleApp()
+	a := samplePush(m)
+	a.Status = "approved"
+	a.Git.Push.State = "pushed"
+	a.Git.Review.PullRequest = &gitreview.PullRequest{Head: "fix-login", Base: "main", Title: "Submit the login form on enter"}
+	m.approvals = nil
+	m.openPager(a)
+	if body := strings.Join(m.pagerLines(80), "\n"); !strings.Contains(body, "pushed without it · o opens it") {
+		t.Fatalf("review:\n%s", body)
+	}
+	if bar := m.keyBar(m.width, 0); !strings.Contains(bar, "open pull request") {
+		t.Errorf("key bar: %s", bar)
+	}
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'o', Text: "o"})
+	if m = next.(*app); cmd == nil || m.screen != screenApprovals {
+		t.Fatalf("o: cmd %v, screen %v", cmd != nil, m.screen)
+	}
+}

@@ -63,9 +63,12 @@ type Adapter interface {
 	DefaultBranch(ctx context.Context, token, owner, repo string) (string, error)
 	// OpenPullRequest proposes merging head into base and returns the PR's web URL.
 	OpenPullRequest(ctx context.Context, token, owner, repo string, pr PullRequest) (string, error)
+	// OpenPullRequestOf returns the web URL of the open pull request from head, a branch of
+	// the repository itself, or "" if there is none.
+	OpenPullRequestOf(ctx context.Context, token, owner, repo, head string) (string, error)
 }
 
-// PullRequest is what a git.pr approval proposes.
+// PullRequest is the pull request a push proposes, and what a git.pr approval opens.
 type PullRequest struct {
 	Head  string `json:"head" doc:"Branch with the changes"`
 	Base  string `json:"base" doc:"Branch to merge into"`
@@ -249,6 +252,10 @@ func (Plain) OpenPullRequest(context.Context, string, string, string, PullReques
 	return "", errNoAPI
 }
 
+func (Plain) OpenPullRequestOf(context.Context, string, string, string, string) (string, error) {
+	return "", errNoAPI
+}
+
 // --- Forgejo -------------------------------------------------------------------------------
 
 // Forgejo talks to a Forgejo (or Gitea) instance's API, /api/v1 under BaseURL.
@@ -292,6 +299,40 @@ func (f *Forgejo) OpenPullRequest(ctx context.Context, token, owner, repo string
 		return fmt.Sprintf("#%d", out.Number), nil
 	}
 	return out.HTMLURL, nil
+}
+
+// OpenPullRequestOf looks through the 50 most recently updated open pull requests, since the
+// API filters them by base branch but not by head.
+func (f *Forgejo) OpenPullRequestOf(ctx context.Context, token, owner, repo, head string) (string, error) {
+	var out []struct {
+		HTMLURL string `json:"html_url"`
+		Number  int    `json:"number"`
+		Head    struct {
+			Ref    string `json:"ref"`
+			RepoID int64  `json:"repo_id"`
+		} `json:"head"`
+		Base struct {
+			RepoID int64 `json:"repo_id"`
+		} `json:"base"`
+	}
+	err := f.call(ctx, token, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo)+"/pulls?state=open&sort=recentupdate&limit=50", nil, &out)
+	if err != nil {
+		return "", err
+	}
+	for _, p := range out {
+		if p.Head.Ref == head && p.Head.RepoID == p.Base.RepoID {
+			return prLink(p.HTMLURL, "#", p.Number), nil
+		}
+	}
+	return "", nil
+}
+
+// prLink is a pull request's web URL, or its number when the forge gave none.
+func prLink(webURL, sign string, n int) string {
+	if webURL == "" {
+		return fmt.Sprintf("%s%d", sign, n)
+	}
+	return webURL
 }
 
 func (f *Forgejo) call(ctx context.Context, token, method, path string, in, out any) error {
@@ -427,6 +468,21 @@ func (g *GitHub) OpenPullRequest(ctx context.Context, token, owner, repo string,
 	return out.HTMLURL, nil
 }
 
+func (g *GitHub) OpenPullRequestOf(ctx context.Context, token, owner, repo, head string) (string, error) {
+	var out []struct {
+		HTMLURL string `json:"html_url"`
+		Number  int    `json:"number"`
+	}
+	q := url.Values{"state": {"open"}, "head": {owner + ":" + head}}
+	if _, err := g.call(ctx, token, http.MethodGet, "/repos/"+url.PathEscape(owner)+"/"+url.PathEscape(repo)+"/pulls?"+q.Encode(), nil, &out); err != nil {
+		return "", err
+	}
+	if len(out) == 0 {
+		return "", nil
+	}
+	return prLink(out[0].HTMLURL, "#", out[0].Number), nil
+}
+
 func (g *GitHub) call(ctx context.Context, token, method, path string, in, out any) (http.Header, error) {
 	return callJSON(ctx, g.Client, "Bearer "+token, token, method, g.api()+path,
 		map[string]string{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": GitHubAPIVersion}, in, out)
@@ -490,6 +546,25 @@ func (g *GitLab) OpenPullRequest(ctx context.Context, token, owner, repo string,
 		return fmt.Sprintf("!%d", out.IID), nil
 	}
 	return out.WebURL, nil
+}
+
+func (g *GitLab) OpenPullRequestOf(ctx context.Context, token, owner, repo, head string) (string, error) {
+	var out []struct {
+		WebURL          string `json:"web_url"`
+		IID             int    `json:"iid"`
+		SourceProjectID int64  `json:"source_project_id"`
+		TargetProjectID int64  `json:"target_project_id"`
+	}
+	q := url.Values{"state": {"opened"}, "source_branch": {head}}
+	if err := g.call(ctx, token, http.MethodGet, "/projects/"+gitlabProject(owner, repo)+"/merge_requests?"+q.Encode(), nil, &out); err != nil {
+		return "", err
+	}
+	for _, mr := range out {
+		if mr.SourceProjectID == mr.TargetProjectID {
+			return prLink(mr.WebURL, "!", mr.IID), nil
+		}
+	}
+	return "", nil
 }
 
 func (g *GitLab) call(ctx context.Context, token, method, path string, in, out any) error {

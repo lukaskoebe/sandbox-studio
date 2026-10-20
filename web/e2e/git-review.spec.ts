@@ -138,7 +138,7 @@ test("a review that doesn't exist says so", async ({ page, env }) => {
 
 // Review feedback goes straight to the agent: line comments and the outcome as a prompt of
 // its chat, or pasted into its terminal.
-test("review comments are sent to the agent's chat or terminal", async ({
+test("review comments are sent to the agent's chat, terminal or a new chat", async ({
   page,
   api,
   env,
@@ -215,4 +215,22 @@ test("review comments are sent to the agent's chat or terminal", async ({
   const rows = terminal(page).rows
   await expect(rows).toContainText("is still waiting for my review")
   await expect(rows).toContainText("Use markdown for the notes")
+
+  // A note in a new chat, the default for a teammate's sandbox.
+  sheet = await review("todo.txt", "Add a todo")
+  await expect(sheet.getByRole("combobox", { name: "Send to" })).toContainText(
+    "A new chat"
+  )
+  await sheet
+    .getByRole("textbox", { name: "Note for the agent" })
+    .fill("Keep the todo list short")
+  await sheet.getByRole("button", { name: "Reject" }).click()
+  await expect(page.getByText("Feedback sent to a new chat")).toBeVisible()
+  const chats = await api.json<{ id: string }[]>(
+    "GET",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  )
+  const fresh = chats!.find((c) => c.id !== chat.id)!
+  await page.goto(`/e/${env}/chats/${fresh.id}`)
+  await expect(page.getByRole("main")).toContainText("Keep the todo list short")
 })

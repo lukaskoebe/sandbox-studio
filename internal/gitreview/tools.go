@@ -84,7 +84,7 @@ func (s *Service) toolPullRequestStatus(ctx context.Context, sb store.Sandbox, p
 		if newest == nil {
 			newest = p
 		}
-		if proposed == nil && p.PRApprovalID != "" && p.ForgeName == newest.ForgeName && repoPath(*p) == repoPath(*newest) {
+		if proposed == nil && (p.PRApprovalID != "" || p.PRResult != "") && p.ForgeName == newest.ForgeName && repoPath(*p) == repoPath(*newest) {
 			proposed = p
 		}
 	}
@@ -104,7 +104,7 @@ func pullRequestView(p store.GitPush) map[string]any {
 	switch {
 	case p.PRResult == "":
 		return map[string]any{"status": "awaiting approval"}
-	case p.PRResult == "opened":
+	case p.PRResult == "opened", p.PRResult == PRUpdated:
 		return map[string]any{"status": "opened", "url": p.PRURL}
 	case strings.HasPrefix(p.PRResult, "not opened"):
 		return map[string]any{"status": "not opened"}

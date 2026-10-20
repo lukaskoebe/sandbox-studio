@@ -117,9 +117,29 @@ export interface paths {
         put?: never;
         /**
          * Send review feedback to the agent
-         * @description Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of its chats (after the running turn, if one runs), or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.
+         * @description Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.
          */
         post: operations["sendReviewFeedback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/approvals/{id}/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a pushed branch's pull request
+         * @description Opens the pull request of a push approved without one, or whose pull request failed to open or was not approved. 409 when the push isn't pushed, went to the default branch, or its pull request is open or waiting for approval; 502 when the forge refuses it. If one turns out to be open from the branch already, the push records that it updates it.
+         */
+        post: operations["openPullRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3034,6 +3054,8 @@ export interface components {
             pathPrefix?: string;
             /** @description Ports the rule covers; omitted means the default ports for the request, empty means any port */
             ports?: number[] | null;
+            /** @description For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval */
+            pullRequest?: components["schemas"]["PullRequestStruct"];
             /** @description For browser.action: allow (or deny) the action on the origin from now on */
             remember?: boolean;
             /**
@@ -3301,12 +3323,16 @@ export interface components {
         FeedbackInBody: {
             /** @description A chat of the approval's sandbox to send the feedback to */
             chat?: string;
+            /** @description Or a new chat in that sandbox, with the feedback as its first prompt */
+            newChat?: boolean;
             /** @description The reviewer's comments, line comments included */
             note?: string;
             /** @description Or an agent's terminal in that sandbox: a tmux session Studio started for claude, codex or opencode */
             terminal?: string;
         };
         FeedbackOut: {
+            /** @description The chat started for it, when sent to a new chat */
+            chat?: string;
             /** @description The chat was busy: the feedback goes out when its running turn ends */
             queued: boolean;
         };
@@ -3848,6 +3874,10 @@ export interface components {
             site?: string;
             tracker?: boolean;
         };
+        OpenInBody: {
+            /** @description The pull request's title; empty keeps the proposed one */
+            title?: string;
+        };
         Page: {
             /** @description A core page, loaded into every session of the scope */
             alwaysLoad: boolean;
@@ -4037,6 +4067,12 @@ export interface components {
             head: string;
             title: string;
         };
+        PullRequestStruct: {
+            /** @description Open the review's pull request along with the push; false pushes without one */
+            open: boolean;
+            /** @description The pull request's title; empty keeps the proposed one */
+            title?: string;
+        };
         PushReview: {
             /** Format: int64 */
             additions: number;
@@ -4062,8 +4098,12 @@ export interface components {
             new: string;
             /** @description The branch on the forge before the push; empty for a new branch */
             old: string;
+            /** @description Web URL of the open pull request from the branch, which the push updates */
+            openPullRequest?: string;
             /** @description The repository path before its last segment; may contain slashes or be empty */
             owner: string;
+            /** @description The pull request the push can open: set for a branch other than the repository's default, on a forge with an API, when none is open from it */
+            pullRequest?: components["schemas"]["PullRequest"];
             repo: string;
             /** @description The sandbox's name */
             sandbox: string;
@@ -5381,6 +5421,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeedbackOut"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    openPullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID of a git push */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["OpenInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalView"];
                 };
             };
             /** @description Error */

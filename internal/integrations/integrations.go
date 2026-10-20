@@ -35,6 +35,15 @@ type Decision struct {
 	// Remember asks to keep the answer for similar requests, where the kind supports
 	// it (browser.action: allow or deny the action on the origin from now on).
 	Remember bool
+	// PullRequest, for an approved git.push the review offers a pull request with, says
+	// whether to open it along with the push. Nil leaves it to a git.pr approval.
+	PullRequest *PullRequestChoice
+}
+
+// PullRequestChoice is whether a push opens its pull request, and under what title.
+type PullRequestChoice struct {
+	Open  bool
+	Title string // empty keeps the proposed title
 }
 
 // ApprovalKind settles approvals of one kind. Decide moves a pending approval out of

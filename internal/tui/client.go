@@ -161,6 +161,12 @@ func (c *Client) Decide(ctx context.Context, env, id string, d Decision) (api.Ap
 	return out, err
 }
 
+// OpenPullRequest opens the pull request of a push approved without one.
+func (c *Client) OpenPullRequest(ctx context.Context, env, id string) error {
+	_, err := c.send(ctx, http.MethodPost, "/api/environments/"+env+"/approvals/"+id+"/pull-request", nil, struct{}{}, nil)
+	return err
+}
+
 // Fork copies a sandbox into a new one named name. It returns at once, with the new sandbox in
 // state creating; the copy and the boot go on in Studio, as a create's do.
 func (c *Client) Fork(ctx context.Context, env, id, name string) (sandboxes.View, error) {

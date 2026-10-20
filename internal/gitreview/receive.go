@@ -367,6 +367,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 			rv.Teammate = p.Name
 		}
 	}
+	base := s.pullRequestFor(ctx, t.forge, &rv)
 
 	// A newer push to the same branch replaces any still waiting.
 	pending, err := s.Store.PendingGitPushes(ctx, t.sb.EnvironmentID, t.sb.ID, t.forge.ID, t.owner, t.repo, cmd.Name.String())
@@ -400,7 +401,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	_, err = s.Store.CreateGitPush(ctx, store.GitPush{
 		ID: id, EnvironmentID: t.sb.EnvironmentID, SandboxID: t.sb.ID, TeammateName: rv.Teammate,
 		ForgeID: t.forge.ID, ForgeName: t.forge.Name, Owner: t.owner, Repo: t.repo, Ref: cmd.Name.String(),
-		OldSHA: current.String(), NewSHA: cmd.New.String(), ApprovalID: a.ID,
+		OldSHA: current.String(), NewSHA: cmd.New.String(), DefaultBranch: base, ApprovalID: a.ID,
 	})
 	if err != nil {
 		s.Log.Error("git remote: record push", "err", err)

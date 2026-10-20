@@ -49,7 +49,16 @@ func (s *Service) Feedback(ctx context.Context, envID, approvalID, note string) 
 		fmt.Fprintf(&b, "Review of your push of %s to %s in %s on %s: ", short(p.NewSHA), branch, repoPath(p), p.ForgeName)
 		switch p.State {
 		case store.PushPushed:
-			b.WriteString("approved and pushed.")
+			switch {
+			case p.PRResult == PRUpdated:
+				fmt.Fprintf(&b, "approved and pushed; it updates the pull request %s.", p.PRURL)
+			case p.PRURL != "":
+				fmt.Fprintf(&b, "approved and pushed, and the pull request is open at %s.", p.PRURL)
+			case strings.HasPrefix(p.PRResult, "failed: ") && p.PRApprovalID == "":
+				fmt.Fprintf(&b, "approved and pushed, but opening the pull request failed: %s", oneLine(strings.TrimPrefix(p.PRResult, "failed: ")))
+			default:
+				b.WriteString("approved and pushed.")
+			}
 		case store.PushFailed:
 			fmt.Fprintf(&b, "approved, but the push failed: %s", oneLine(p.Result))
 		case store.PushRejected:

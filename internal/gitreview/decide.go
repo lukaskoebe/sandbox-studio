@@ -101,7 +101,7 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	// The push outlives the request that approved it.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
 	defer cancel()
-	result, pr, err := s.pushApproved(ctx, p)
+	result, err := s.pushApproved(ctx, p)
 	if err != nil {
 		s.Log.Info("git remote: approved push failed", "push", p.ID, "err", err)
 		return s.Store.SettleGitPush(ctx, p.EnvironmentID, p.ID, store.PushPending, store.PushFailed, err.Error(), d.Note)
@@ -109,72 +109,221 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	if err := s.Store.SettleGitPush(ctx, p.EnvironmentID, p.ID, store.PushPending, store.PushPushed, result, d.Note); err != nil {
 		return err
 	}
-	if pr != nil {
-		s.proposePR(ctx, p, *pr)
-	}
+	s.pullRequestAfterPush(ctx, p, a, d.PullRequest)
 	return nil
 }
 
-// pushApproved pushes p upstream and, for a branch other than the default one on a forge
-// with an API, returns the pull request to propose.
-func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, *PullRequest, error) {
+// pushApproved pushes p upstream.
+func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, error) {
 	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
 	if errors.Is(err, store.ErrNotFound) {
-		return "", nil, errors.New("the forge was removed from Sandbox Studio")
+		return "", errors.New("the forge was removed from Sandbox Studio")
 	}
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	t := target{sb: store.Sandbox{ID: p.SandboxID, EnvironmentID: p.EnvironmentID}, forge: f, owner: p.Owner, repo: p.Repo}
 	token, err := s.token(ctx, f)
 	if err != nil {
-		return "", nil, fmt.Errorf("the forge's credential: %w", err)
+		return "", fmt.Errorf("the forge's credential: %w", err)
 	}
 	rm, err := s.remote(t, token)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
 	path := s.stagingPath(t)
 	unlock := s.lock(path)
 	defer unlock()
 	repo, err := openStaging(path)
 	if err != nil {
-		return "", nil, fmt.Errorf("staging repository: %w", err)
+		return "", fmt.Errorf("staging repository: %w", err)
 	}
 	result, err := rm.pushUpstream(ctx, repo, p)
 	// Pushed or refused, the forge's branches may now be past every sandbox's mirror of the
 	// repository, so the next push to it fetches again however recently the mirror did.
 	s.fetches.forget(mirrorKey(t))
 	if err != nil {
-		return "", nil, errors.New(mask(err.Error(), token))
+		return "", errors.New(mask(err.Error(), token))
 	}
+	return result, nil
+}
+
+// pullRequestFor fills in the pull request a push to rv.Branch comes with: the open one
+// from the branch, which the push updates, or else a proposal, unless the branch is the
+// repository's default. It returns the default branch, or "" when the forge has no API
+// or did not say.
+func (s *Service) pullRequestFor(ctx context.Context, f store.Forge, rv *PushReview) string {
 	if !hasAPI(f.Kind) {
-		return result, nil, nil
+		return ""
 	}
 	ad, err := adapter(f, s.httpClient())
 	if err != nil {
-		return result, nil, nil
+		return ""
 	}
-	base, err := ad.DefaultBranch(ctx, token, p.Owner, p.Repo)
-	branch := strings.TrimPrefix(p.Ref, "refs/heads/")
+	token, err := s.token(ctx, f)
 	if err != nil {
-		s.Log.Info("git remote: default branch", "err", err)
-		return result, nil, nil
+		return ""
 	}
-	if base == "" || base == branch {
-		return result, nil, nil
-	}
-	a, err := s.Store.Approval(ctx, p.EnvironmentID, p.ApprovalID)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	base, err := ad.DefaultBranch(ctx, token, rv.Owner, rv.Repo)
 	if err != nil {
-		return result, nil, nil
+		s.Log.Info("git remote: default branch", "forge", f.Name, "err", err)
+		return ""
 	}
+	if base == "" || base == rv.Branch {
+		return base
+	}
+	open, err := ad.OpenPullRequestOf(ctx, token, rv.Owner, rv.Repo, rv.Branch)
+	if err != nil {
+		// Proposing one anyway: if one is open after all, opening it says so.
+		s.Log.Info("git remote: open pull requests", "forge", f.Name, "err", err)
+	}
+	if open != "" {
+		rv.OpenPullRequest = open
+		return base
+	}
+	pr := prProposal(*rv, base)
+	rv.PullRequest = &pr
+	return base
+}
+
+// pushReview is the review a git.push approval was raised with. A push recorded before
+// reviews carried their pull request, or whose forge didn't answer then, has it looked up.
+func (s *Service) pushReview(ctx context.Context, p store.GitPush, a store.Approval) (PushReview, error) {
 	var rv PushReview
-	if json.Unmarshal(a.Payload, &rv) != nil {
-		return result, nil, nil
+	if err := json.Unmarshal(a.Payload, &rv); err != nil {
+		return rv, err
 	}
-	rv.Branch = branch
-	pr := prProposal(rv, base)
-	return result, &pr, nil
+	if rv.PullRequest == nil && rv.OpenPullRequest == "" && p.DefaultBranch == "" {
+		if f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID); err == nil {
+			s.pullRequestFor(ctx, f, &rv)
+		}
+	}
+	return rv, nil
+}
+
+// pullRequestAfterPush does with the pull request of an approved push what the decision
+// chose: open it, or not. A decision without the choice, from a client that doesn't offer
+// it, raises a git.pr approval instead. A push to a branch with an open pull request
+// records that it updates it.
+func (s *Service) pullRequestAfterPush(ctx context.Context, p store.GitPush, a store.Approval, choice *integrations.PullRequestChoice) {
+	rv, err := s.pushReview(ctx, p, a)
+	if err != nil {
+		return
+	}
+	switch {
+	case rv.OpenPullRequest != "":
+		if err := s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, "", rv.OpenPullRequest, PRUpdated); err != nil {
+			s.Log.Error("git remote: record the pull request a push updates", "push", p.ID, "err", err)
+		}
+	case rv.PullRequest == nil:
+	case choice == nil:
+		s.proposePR(ctx, p, *rv.PullRequest)
+	case choice.Open:
+		pr := *rv.PullRequest
+		if t := strings.TrimSpace(choice.Title); t != "" {
+			pr.Title = truncate(t, 200)
+		}
+		_, _ = s.openPRNow(ctx, p, pr)
+	}
+}
+
+// PRUpdated is the pull request result of a push to a branch with an open pull request.
+const PRUpdated = "updated"
+
+// openPRNow opens a pushed branch's pull request without a git.pr approval, since the
+// reviewer chose to, and records how it went. The error is the forge's, if it refused.
+func (s *Service) openPRNow(ctx context.Context, p store.GitPush, pr PullRequest) (store.GitPush, error) {
+	url, openErr := s.openPR(ctx, p, pr)
+	p.PRApprovalID, p.PRURL, p.PRResult = "", url, "opened"
+	if openErr != nil {
+		p.PRURL, p.PRResult = "", "failed: "+openErr.Error()
+	}
+	if err := s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, "", p.PRURL, p.PRResult); err != nil {
+		s.Log.Error("git remote: record a pull request", "push", p.ID, "err", err)
+	}
+	return p, openErr
+}
+
+// openPullRequestOf is the web URL of the pull request open from head in p's repository,
+// or "" if there is none or the forge did not say.
+func (s *Service) openPullRequestOf(ctx context.Context, p store.GitPush, head string) string {
+	f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID)
+	if err != nil {
+		return ""
+	}
+	ad, err := adapter(f, s.httpClient())
+	if err != nil {
+		return ""
+	}
+	token, err := s.token(ctx, f)
+	if err != nil {
+		return ""
+	}
+	url, _ := ad.OpenPullRequestOf(ctx, token, p.Owner, p.Repo, head)
+	return url
+}
+
+// Errors of OpenPullRequest.
+var (
+	ErrNoPullRequest  = errors.New("the push has no pull request to open: it went to the repository's default branch, or its forge has no API")
+	ErrPullRequestSet = errors.New("the push's pull request is open, or waiting for its approval")
+	ErrNotPushed      = errors.New("only a pushed branch can have a pull request opened")
+	// ErrForge wraps the forge's refusal to open a pull request.
+	ErrForge = errors.New("the forge did not open the pull request")
+)
+
+// OpenPullRequest opens the pull request of a push that was approved without one, or whose
+// pull request failed to open or was not approved, under title if it is set. approvalID is
+// the push's git.push approval. When one turns out to be open from the branch already, the
+// push records that it updates it.
+func (s *Service) OpenPullRequest(ctx context.Context, envID, approvalID, title string) (store.GitPush, error) {
+	s.httpClient()
+	a, err := s.Store.Approval(ctx, envID, approvalID)
+	if err != nil {
+		return store.GitPush{}, err
+	}
+	if a.Kind != KindPush {
+		return store.GitPush{}, ErrNotReview
+	}
+	p, err := s.Store.GitPushByApproval(ctx, envID, approvalID)
+	if err != nil {
+		return p, err
+	}
+	if p.State != store.PushPushed {
+		return p, ErrNotPushed
+	}
+	if p.PRURL != "" || (p.PRApprovalID != "" && p.PRResult == "") {
+		return p, ErrPullRequestSet
+	}
+	rv, err := s.pushReview(ctx, p, a)
+	if err != nil {
+		return p, err
+	}
+	if rv.OpenPullRequest != "" {
+		return p, ErrPullRequestSet
+	}
+	if rv.PullRequest == nil {
+		return p, ErrNoPullRequest
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
+	defer cancel()
+	defer s.publish(envID, approvalID)
+	// Someone may have opened it on the forge since the push.
+	if url := s.openPullRequestOf(ctx, p, rv.PullRequest.Head); url != "" {
+		p.PRApprovalID, p.PRURL, p.PRResult = "", url, PRUpdated
+		return p, s.Store.SetGitPushPR(ctx, p.EnvironmentID, p.ID, "", url, PRUpdated)
+	}
+	pr := *rv.PullRequest
+	if t := strings.TrimSpace(title); t != "" {
+		pr.Title = truncate(t, 200)
+	}
+	p, err = s.openPRNow(ctx, p, pr)
+	if err != nil {
+		return p, fmt.Errorf("%w: %v", ErrForge, err)
+	}
+	return p, nil
 }
 
 // proposePR raises the git.pr approval for an approved push.

@@ -20,6 +20,7 @@ type pagerState struct {
 	back     screen // where esc and a decision return to: the approvals or the Git screen
 	scroll   int    // the first line on show
 	unified  bool   // v turned side by side off, on a terminal wide enough for it
+	openPR   bool   // approving the push also opens the pull request its review offers
 
 	// lines caches the review laid out for width, which a long diff makes worth keeping, and
 	// files where each file's diff starts in it.
@@ -49,6 +50,8 @@ var (
 	keyNextFile  = key.NewBinding(key.WithKeys("]"))
 	keyFilesBar  = key.NewBinding(key.WithKeys("]"), key.WithHelp("[/]", "file"))
 	keySide      = key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "side by side"))
+	keyTogglePR  = key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "pull request"))
+	keyOpenLater = key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "open pull request"))
 )
 
 // sideWidth is the width from which the visual look shows a diff's hunks side by side.
@@ -56,7 +59,7 @@ const sideWidth = 160
 
 // openPager shows the review of a git approval.
 func (m *app) openPager(a api.ApprovalView) {
-	m.pager = pagerState{approval: a, back: screenApprovals}
+	m.pager = pagerState{approval: a, back: screenApprovals, openPR: defaultOpenPR(a)}
 	m.screen = screenPager
 }
 
@@ -168,6 +171,9 @@ func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []dif
 		if rv != nil && rv.Upstream != "" {
 			lines = append(lines, styleDim.Render("Approving pushes it "+rv.Upstream+"."))
 		}
+	}
+	if rv != nil {
+		lines = append(lines, m.pullRequestLines(a)...)
 	}
 
 	if pr != nil {
@@ -461,12 +467,26 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case key.Matches(msg, keySide):
 		p.unified = !p.unified
+	case key.Matches(msg, keyTogglePR) && a.Git.Review != nil && a.Git.Review.PullRequest != nil && gitPending(a):
+		p.openPR = !p.openPR
+		p.lines = nil
+	case key.Matches(msg, keyOpenLater) && canOpenLater(a):
+		m.screen = p.back
+		return m, m.openPullRequest(a)
 	case key.Matches(msg, keyPush):
 		m.screen = p.back
 		if a.Git.PullRequest != nil {
 			return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "allow", Scope: "sandbox"}, "Opening", "the pull request")
 		}
-		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "allow", Scope: "sandbox"}, "Approved", "the push of "+gitBranch(a))
+		d := Decision{Action: "allow", Scope: "sandbox"}
+		what := "the push of " + gitBranch(a)
+		if a.Git.Review != nil && a.Git.Review.PullRequest != nil {
+			d.PullRequest = &PullRequestChoice{Open: p.openPR}
+			if p.openPR {
+				what += " with its pull request"
+			}
+		}
+		return m, m.decide(card{approvals: []api.ApprovalView{a}}, d, "Approved", what)
 	case key.Matches(msg, keyReject):
 		m.screen = p.back
 		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a))
@@ -500,9 +520,16 @@ func (m *app) pagerBindings() []key.Binding {
 	if m.pager.approval.Git.PullRequest != nil {
 		approve = keyOpenPR
 	}
+	a := m.pager.approval
 	bindings := []key.Binding{approve, keyReject, keyIgnore, keyScrollBar}
-	if !gitPending(m.pager.approval) {
+	if a.Git.Review != nil && a.Git.Review.PullRequest != nil {
+		bindings = []key.Binding{approve, keyTogglePR, keyReject, keyIgnore, keyScrollBar}
+	}
+	if !gitPending(a) {
 		bindings = []key.Binding{keyScrollBar}
+		if canOpenLater(a) {
+			bindings = []key.Binding{keyOpenLater, keyScrollBar}
+		}
 	}
 	if !m.look.plain && len(m.pagerFiles()) > 1 {
 		bindings = append(bindings, keyFilesBar)
@@ -516,4 +543,63 @@ func (m *app) pagerBindings() []key.Binding {
 // isGit reports whether an approval is a push or pull request the pager can review.
 func isGit(a api.ApprovalView) bool {
 	return strings.HasPrefix(a.Kind, "git.") && a.Git != nil
+}
+
+// defaultOpenPR is whether approving a push opens its pull request unless p says otherwise:
+// for a new branch, as the web's review has it.
+func defaultOpenPR(a api.ApprovalView) bool {
+	return a.Git != nil && a.Git.Review != nil && a.Git.Review.PullRequest != nil && a.Git.Review.Old == ""
+}
+
+// canOpenLater reports whether a decided push can still have its pull request opened: it was
+// pushed without one, or the one it proposed was not opened.
+func canOpenLater(a api.ApprovalView) bool {
+	if a.Git == nil || a.Git.Review == nil || a.Git.Review.PullRequest == nil || gitPending(a) {
+		return false
+	}
+	p := a.Git.Push
+	return p.State == "pushed" && p.PRURL == "" && (p.PRApprovalID == "" || p.PRResult != "")
+}
+
+// pullRequestLines are the pull request a push comes with: the one it would open, with
+// whether approving opens it, the open one it updates, or the one it opened.
+func (m *app) pullRequestLines(a api.ApprovalView) []string {
+	rv, p := a.Git.Review, a.Git.Push
+	switch {
+	case p.PRURL != "" && p.PRResult == "updated":
+		return []string{"", styleBold.Render("Pull request"), "  updated " + p.PRURL}
+	case p.PRURL != "":
+		return []string{"", styleBold.Render("Pull request"), "  opened " + p.PRURL}
+	case rv.OpenPullRequest != "":
+		return []string{"", styleBold.Render("Pull request"), "  the push updates the open one: " + rv.OpenPullRequest}
+	case rv.PullRequest == nil:
+		return nil
+	case gitPending(a):
+		box, how := "[ ]", styleDim.Render("approving only pushes · p opens it too")
+		if m.pager.openPR {
+			box, how = "[x]", styleDim.Render("approving opens it · p only pushes")
+		}
+		return []string{"", styleBold.Render("Pull request"),
+			"  " + box + " into " + rv.PullRequest.Base + ": " + rv.PullRequest.Title, "      " + how}
+	case canOpenLater(a):
+		why := "pushed without it"
+		if p.PRResult != "" {
+			why = oneLine(p.PRResult)
+		}
+		return []string{"", styleBold.Render("Pull request"), "  " + styleDim.Render(why+" · o opens it: ") + rv.PullRequest.Title}
+	}
+	return nil
+}
+
+// openPullRequest opens the pull request of a push approved without one.
+func (m *app) openPullRequest(a api.ApprovalView) tea.Cmd {
+	ctx, client := m.ctx, m.client
+	return func() tea.Msg {
+		rctx, cancel := requestContext(ctx)
+		defer cancel()
+		if err := client.OpenPullRequest(rctx, a.EnvironmentID, a.ID); err != nil {
+			return actionDone{err: fmt.Errorf("could not open the pull request: %w", err)}
+		}
+		return actionDone{done: "Opened the pull request of " + gitBranch(a) + "."}
+	}
 }

@@ -1829,6 +1829,10 @@
               "null"
             ]
           },
+          "pullRequest": {
+            "$ref": "#/components/schemas/PullRequestStruct",
+            "description": "For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval"
+          },
           "remember": {
             "description": "For browser.action: allow (or deny) the action on the origin from now on",
             "type": "boolean"
@@ -2515,6 +2519,10 @@
             "description": "A chat of the approval's sandbox to send the feedback to",
             "type": "string"
           },
+          "newChat": {
+            "description": "Or a new chat in that sandbox, with the feedback as its first prompt",
+            "type": "boolean"
+          },
           "note": {
             "description": "The reviewer's comments, line comments included",
             "maxLength": 8000,
@@ -2531,6 +2539,10 @@
       "FeedbackOut": {
         "additionalProperties": false,
         "properties": {
+          "chat": {
+            "description": "The chat started for it, when sent to a new chat",
+            "type": "string"
+          },
           "queued": {
             "description": "The chat was busy: the feedback goes out when its running turn ends",
             "type": "boolean"
@@ -4217,6 +4229,17 @@
         ],
         "type": "object"
       },
+      "OpenInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "description": "The pull request's title; empty keeps the proposed one",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Page": {
         "additionalProperties": false,
         "properties": {
@@ -4929,6 +4952,24 @@
         ],
         "type": "object"
       },
+      "PullRequestStruct": {
+        "additionalProperties": false,
+        "properties": {
+          "open": {
+            "description": "Open the review's pull request along with the push; false pushes without one",
+            "type": "boolean"
+          },
+          "title": {
+            "description": "The pull request's title; empty keeps the proposed one",
+            "maxLength": 200,
+            "type": "string"
+          }
+        },
+        "required": [
+          "open"
+        ],
+        "type": "object"
+      },
       "PushReview": {
         "additionalProperties": false,
         "properties": {
@@ -4980,9 +5021,17 @@
             "description": "The branch on the forge before the push; empty for a new branch",
             "type": "string"
           },
+          "openPullRequest": {
+            "description": "Web URL of the open pull request from the branch, which the push updates",
+            "type": "string"
+          },
           "owner": {
             "description": "The repository path before its last segment; may contain slashes or be empty",
             "type": "string"
+          },
+          "pullRequest": {
+            "$ref": "#/components/schemas/PullRequest",
+            "description": "The pull request the push can open: set for a branch other than the repository's default, on a forge with an API, when none is open from it"
           },
           "repo": {
             "type": "string"
@@ -8342,7 +8391,7 @@
     },
     "/api/environments/{env}/approvals/{id}/feedback": {
       "post": {
-        "description": "Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of its chats (after the running turn, if one runs), or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.",
+        "description": "Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.",
         "operationId": "sendReviewFeedback",
         "parameters": [
           {
@@ -8399,6 +8448,69 @@
           }
         },
         "summary": "Send review feedback to the agent",
+        "tags": [
+          "git"
+        ]
+      }
+    },
+    "/api/environments/{env}/approvals/{id}/pull-request": {
+      "post": {
+        "description": "Opens the pull request of a push approved without one, or whose pull request failed to open or was not approved. 409 when the push isn't pushed, went to the default branch, or its pull request is open or waiting for approval; 502 when the forge refuses it. If one turns out to be open from the branch already, the push records that it updates it.",
+        "operationId": "openPullRequest",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Approval ID of a git push",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Approval ID of a git push",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenInBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Open a pushed branch's pull request",
         "tags": [
           "git"
         ]

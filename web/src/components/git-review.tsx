@@ -10,6 +10,8 @@ import {
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
@@ -29,6 +31,7 @@ import {
   UnifiedDiff,
   composeNote,
   feedbackBody,
+  newChatTarget,
   parseDiff,
   useSendFeedback,
   type FeedbackTarget,
@@ -54,26 +57,76 @@ function short(sha: string) {
   return sha.slice(0, 10)
 }
 
-function useDecideGit() {
+function useInvalidateApprovals() {
   const queryClient = useQueryClient()
+  return () => {
+    queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
+    queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/approvals"],
+    })
+    queryClient.invalidateQueries({
+      queryKey: ["get", "/api/environments/{env}/approvals/{id}"],
+    })
+  }
+}
+
+function useDecideGit() {
+  const invalidate = useInvalidateApprovals()
   return $api.useMutation(
     "post",
     "/api/environments/{env}/approvals/{id}/decide",
     {
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/approvals"],
-        })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/approvals/{id}"],
-        })
-      },
+      onSettled: invalidate,
       onError: (err) => {
         if (errorStatus(err) === 409) return
         toast.error("Could not decide", { description: errorMessage(err) })
       },
     }
+  )
+}
+
+/** Opens the pull request of a push approved without one. */
+function useOpenPullRequest() {
+  const invalidate = useInvalidateApprovals()
+  return $api.useMutation(
+    "post",
+    "/api/environments/{env}/approvals/{id}/pull-request",
+    {
+      onSettled: invalidate,
+      onSuccess: () => toast.success("Pull request opened"),
+      onError: (err) =>
+        toast.error("Could not open the pull request", {
+          description: errorMessage(err),
+        }),
+    }
+  )
+}
+
+/** Whether a decided push can still have its pull request opened. */
+function canOpenLater(git: GitDetail) {
+  const p = git.push
+  return (
+    !!git.review?.pullRequest &&
+    p.state === "pushed" &&
+    !p.prUrl &&
+    (!p.prApprovalId || !!p.prResult)
+  )
+}
+
+function PullRequestLink({ url, children }: { url: string; children: string }) {
+  return url.startsWith("http") ? (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="text-xs underline underline-offset-4"
+    >
+      {children}
+    </a>
+  ) : (
+    <span className="text-xs">
+      {children} <Ident>{url}</Ident>
+    </span>
   )
 }
 
@@ -83,14 +136,7 @@ export function GitOutcome({ git }: { git: GitDetail }) {
   if (git.pullRequest) {
     if (p.prUrl)
       return (
-        <a
-          href={p.prUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="text-xs underline underline-offset-4"
-        >
-          Pull request opened
-        </a>
+        <PullRequestLink url={p.prUrl}>Pull request opened</PullRequestLink>
       )
     return p.prResult ? (
       <span className="text-xs text-muted-foreground">{p.prResult}</span>
@@ -108,6 +154,17 @@ export function GitOutcome({ git }: { git: GitDetail }) {
           {[p.result, p.note && `Note: ${p.note}`].filter(Boolean).join(" · ")}
         </span>
       )}
+      {p.prUrl && (
+        <span className="shrink-0">
+          ·{" "}
+          <PullRequestLink url={p.prUrl}>
+            {p.prResult === "updated" ? "Pull request updated" : "Pull request"}
+          </PullRequestLink>
+        </span>
+      )}
+      {!p.prUrl && p.prResult?.startsWith("failed") && (
+        <span className="truncate text-muted-foreground">· {p.prResult}</span>
+      )}
     </span>
   )
 }
@@ -120,8 +177,17 @@ export function GitReview({ approval }: { approval: Approval }) {
   const git = approval.git
   const [note, setNote] = useState("")
   const [comments, setComments] = useState<LineComment[]>([])
-  const [target, setTarget] = useState<FeedbackTarget>("")
+  const review = git?.review
+  const proposal = review?.pullRequest
+  const [target, setTarget] = useState<FeedbackTarget>(
+    git?.push.teammateName ? newChatTarget : ""
+  )
+  // A new branch opens its pull request by default; a push to a branch that has been
+  // pushed before but has none doesn't.
+  const [openPR, setOpenPR] = useState(!!review?.pullRequest && !review.old)
+  const [prTitle, setPRTitle] = useState(proposal?.title ?? "")
   const decide = useDecideGit()
+  const openLater = useOpenPullRequest()
   const feedback = useSendFeedback()
   if (!git) return null
   const pending = approval.status === "pending"
@@ -134,14 +200,24 @@ export function GitReview({ approval }: { approval: Approval }) {
     feedback.mutate({ ...params, body: feedbackBody(target, fullNote()) })
   const busy = (action: Action) =>
     decide.isPending && decide.variables.body.action === action
+  // A new chat starts only when there is something to tell it beyond the outcome.
+  const sends = () => !!target && (target !== newChatTarget || !!fullNote())
   const act = (action: Action) =>
     decide.mutate(
       {
         ...params,
-        // Scope only matters for network approvals.
-        body: { action, scope: "sandbox", note: fullNote() || undefined },
+        body: {
+          action,
+          // Scope only matters for network approvals.
+          scope: "sandbox",
+          note: fullNote() || undefined,
+          pullRequest:
+            proposal && action === "allow"
+              ? { open: openPR, title: openPR ? prTitle.trim() : undefined }
+              : undefined,
+        },
       },
-      { onSuccess: () => target && send() }
+      { onSuccess: () => sends() && send() }
     )
   const rv = git.review
   const pr = git.pullRequest
@@ -217,6 +293,56 @@ export function GitReview({ approval }: { approval: Approval }) {
         </section>
       )}
 
+      {rv?.openPullRequest && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <GitPullRequestIcon className="size-3.5" />
+          The branch has an open pull request; the push updates it.
+          <PullRequestLink url={rv.openPullRequest}>Open it</PullRequestLink>
+        </p>
+      )}
+
+      {proposal && pending && (
+        <section className="grid gap-2 rounded-md p-2 text-xs ring-1 ring-foreground/10">
+          <label className="flex items-center gap-2">
+            <Checkbox checked={openPR} onCheckedChange={setOpenPR} />
+            Also open a pull request into <Ident>{proposal.base}</Ident>
+          </label>
+          {openPR && (
+            <Input
+              aria-label="Pull request title"
+              value={prTitle}
+              maxLength={200}
+              onChange={(e) => setPRTitle(e.target.value)}
+              className="h-7 text-xs"
+            />
+          )}
+          {!openPR && (
+            <p className="text-muted-foreground">
+              Approving only pushes; you can open the pull request later.
+            </p>
+          )}
+        </section>
+      )}
+
+      {!pending && canOpenLater(git) && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <GitPullRequestIcon className="size-3.5" />
+          {git.push.prResult
+            ? "The pull request was not opened."
+            : "Pushed without a pull request."}
+          <Button
+            variant="outline"
+            size="xs"
+            className="ml-auto"
+            disabled={openLater.isPending}
+            onClick={() => openLater.mutate({ ...params, body: {} })}
+          >
+            {openLater.isPending && <Spinner className="size-3" />}
+            Open pull request
+          </Button>
+        </div>
+      )}
+
       {rv && (
         <section className="grid gap-2">
           <SectionHeader
@@ -290,14 +416,17 @@ export function GitReview({ approval }: { approval: Approval }) {
             <FeedbackTargetSelect
               env={approval.environmentId}
               sandboxId={approval.sandboxId}
+              newChat={!!git.push.teammateName}
               value={target}
               onChange={setTarget}
             />
           )}
           <p className="text-xs text-muted-foreground">
-            {target
-              ? "Deciding sends the outcome, the note and your line comments there."
-              : "The agent sees a rejection and its note when it next fetches or gets a prompt."}
+            {target === newChatTarget
+              ? "With a note or line comments, deciding starts a chat in the sandbox that tells the agent the outcome and your comments."
+              : target
+                ? "Deciding sends the outcome, the note and your line comments there."
+                : "The agent sees a rejection and its note when it next fetches or gets a prompt."}
           </p>
           <div className="flex items-center gap-1.5">
             <Button
@@ -335,11 +464,17 @@ export function GitReview({ approval }: { approval: Approval }) {
             </Button>
             <Button
               size="sm"
-              disabled={decide.isPending}
+              disabled={
+                decide.isPending || (!!proposal && openPR && !prTitle.trim())
+              }
               onClick={() => act("allow")}
             >
               {busy("allow") && <Spinner />}
-              {pr ? "Open pull request" : "Approve and push"}
+              {pr
+                ? "Open pull request"
+                : proposal && openPR
+                  ? "Push and open pull request"
+                  : "Approve and push"}
             </Button>
           </div>
         </div>
@@ -356,7 +491,12 @@ export function gitReviewDescription(approval: Approval) {
   const upstream = git?.review?.upstream
   return (
     "The sandbox pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch." +
-    (upstream ? ` Approving pushes it ${upstream}.` : "")
+    (upstream ? ` Approving pushes it ${upstream}` : " Approving pushes it") +
+    (git?.review?.pullRequest
+      ? ", and can open a pull request with it."
+      : git?.review?.openPullRequest
+        ? ", which updates the branch's open pull request."
+        : ".")
   )
 }
 

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -196,6 +197,15 @@ func (f *fakeForge) api(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"login":"studio-bot"}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/owner/repo":
 		_, _ = io.WriteString(w, `{"default_branch":"main"}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/repos/owner/repo/pulls":
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		out := []map[string]any{}
+		for i, p := range f.pulls {
+			out = append(out, map[string]any{"number": i + 1, "html_url": fmt.Sprintf("%s/owner/repo/pulls/%d", f.srv.URL, i+1),
+				"head": map[string]any{"ref": p.Head, "repo_id": 7}, "base": map[string]any{"ref": p.Base, "repo_id": 7}})
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/repos/owner/repo/pulls":
 		var pr PullRequest
 		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
@@ -237,6 +247,16 @@ func (f *fakeForge) githubAPI(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/old":
 		w.Header().Set("Location", f.srv.URL+"/api/v3/repositories/42")
 		w.WriteHeader(http.StatusMovedPermanently)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/repos/owner/repo/pulls":
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		out := []map[string]any{}
+		for i, p := range f.pulls {
+			if r.URL.Query().Get("head") == "owner:"+p.Head && r.URL.Query().Get("state") == "open" {
+				out = append(out, map[string]any{"number": i + 1, "html_url": fmt.Sprintf("%s/owner/repo/pull/%d", f.srv.URL, i+1)})
+			}
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v3/repos/owner/repo/pulls":
 		var pr PullRequest
 		if err := json.NewDecoder(r.Body).Decode(&pr); err != nil {
@@ -275,6 +295,17 @@ func (f *fakeForge) gitlabAPI(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"username":"gl-bot"}`)
 	case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/group%2Fsub%2Fproj":
 		_, _ = io.WriteString(w, `{"default_branch":"trunk"}`)
+	case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/group%2Fsub%2Fproj/merge_requests":
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		out := []map[string]any{}
+		for i, m := range f.merges {
+			if r.URL.Query().Get("source_branch") == m.Source && r.URL.Query().Get("state") == "opened" {
+				out = append(out, map[string]any{"iid": i + 1, "web_url": fmt.Sprintf("%s/group/sub/proj/-/merge_requests/%d", f.srv.URL, i+1),
+					"source_project_id": 3, "target_project_id": 3})
+			}
+		}
+		_ = json.NewEncoder(w).Encode(out)
 	case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/group%2Fsub%2Fproj/merge_requests":
 		var mr mergeRequest
 		if err := json.NewDecoder(r.Body).Decode(&mr); err != nil {
@@ -600,6 +631,112 @@ func TestApprovedBranchPushProposesAPullRequest(t *testing.T) {
 	p, _ := h.st.GitPush(h.ctx, h.env.ID, d.Push.ID)
 	if p.PRURL == "" || p.PRResult != "opened" {
 		t.Fatalf("push = %+v", p)
+	}
+}
+
+func TestPushOpensItsPullRequestWhenChosen(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	repo := g.clone(t)
+	commitFile(t, repo, "a.txt", "a\n", "Add a")
+	if err := push(repo, "refs/heads/main:refs/heads/feature", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	a := h.approvals(t, KindPush, store.StatusPending)[0]
+	d, _ := h.svc.GitDetail(h.ctx, a)
+	if pr := d.Review.PullRequest; pr == nil || pr.Head != "feature" || pr.Base != "main" || pr.Title != "Add a" || d.Review.OpenPullRequest != "" {
+		t.Fatalf("review = %+v", d.Review)
+	}
+	if d.Push.DefaultBranch != "main" {
+		t.Fatalf("push = %+v", d.Push)
+	}
+	k, _ := integrations.Set{h.svc}.Kind(KindPush)
+	if err := k.Decide(h.ctx, a, integrations.Decision{Action: integrations.Allow, PullRequest: &integrations.PullRequestChoice{Open: true, Title: " Better title "}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.approvals(t, KindPR, "")) != 0 {
+		t.Fatal("opening the pull request with the push raised a git.pr approval")
+	}
+	if len(h.forge.pulls) != 1 || h.forge.pulls[0].Title != "Better title" || h.forge.pulls[0].Head != "feature" {
+		t.Fatalf("forge pulls = %+v", h.forge.pulls)
+	}
+	p, _ := h.st.GitPush(h.ctx, h.env.ID, d.Push.ID)
+	if p.PRResult != "opened" || p.PRURL == "" || p.PRApprovalID != "" {
+		t.Fatalf("push = %+v", p)
+	}
+	if _, text, _ := h.svc.Feedback(h.ctx, h.env.ID, a.ID, ""); !strings.Contains(text, "the pull request is open at "+p.PRURL) {
+		t.Fatalf("feedback = %q", text)
+	}
+	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, ""); !errors.Is(err, ErrPullRequestSet) {
+		t.Fatalf("opening it again: %v", err)
+	}
+
+	// The next push to the branch updates the open pull request, without proposing another.
+	commitFile(t, repo, "b.txt", "b\n", "Add b")
+	if err := push(repo, "refs/heads/main:refs/heads/feature", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	a2 := h.approvals(t, KindPush, store.StatusPending)[0]
+	d2, _ := h.svc.GitDetail(h.ctx, a2)
+	if d2.Review.PullRequest != nil || d2.Review.OpenPullRequest != p.PRURL {
+		t.Fatalf("review of the second push = %+v", d2.Review)
+	}
+	h.decide(t, a2, integrations.Allow, "")
+	if len(h.approvals(t, KindPR, "")) != 0 || len(h.forge.pulls) != 1 {
+		t.Fatal("the second push proposed another pull request")
+	}
+	p2, _ := h.st.GitPush(h.ctx, h.env.ID, d2.Push.ID)
+	if p2.PRResult != PRUpdated || p2.PRURL != p.PRURL {
+		t.Fatalf("second push = %+v", p2)
+	}
+	if _, text, _ := h.svc.Feedback(h.ctx, h.env.ID, a2.ID, ""); !strings.Contains(text, "it updates the pull request "+p.PRURL) {
+		t.Fatalf("feedback = %q", text)
+	}
+	res, err := h.svc.toolPullRequestStatus(h.ctx, g.sb, json.RawMessage(`{"branch":"feature"}`))
+	if pr := res.(map[string]any)["pullRequest"].(map[string]any); err != nil || pr["status"] != "opened" || pr["url"] != p.PRURL {
+		t.Fatalf("status = %+v, %v", res, err)
+	}
+}
+
+func TestPushWithoutItsPullRequestCanOpenItLater(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	repo := g.clone(t)
+	commitFile(t, repo, "a.txt", "a\n", "Add a")
+	if err := push(repo, "refs/heads/main:refs/heads/feature", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	a := h.approvals(t, KindPush, store.StatusPending)[0]
+	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, ""); !errors.Is(err, ErrNotPushed) {
+		t.Fatalf("opening the pull request of a pending push: %v", err)
+	}
+	k, _ := integrations.Set{h.svc}.Kind(KindPush)
+	if err := k.Decide(h.ctx, a, integrations.Decision{Action: integrations.Allow, PullRequest: &integrations.PullRequestChoice{}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.approvals(t, KindPR, "")) != 0 || len(h.forge.pulls) != 0 || h.forge.head(t, "feature").IsZero() {
+		t.Fatal("pushing without the pull request did not just push")
+	}
+	if _, text, _ := h.svc.Feedback(h.ctx, h.env.ID, a.ID, ""); !strings.HasSuffix(text, "approved and pushed.") {
+		t.Fatalf("feedback = %q", text)
+	}
+	p, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a.ID, "Later")
+	if err != nil || p.PRResult != "opened" || p.PRURL == "" || len(h.forge.pulls) != 1 || h.forge.pulls[0].Title != "Later" {
+		t.Fatalf("open later = %+v, %v (%+v)", p, err, h.forge.pulls)
+	}
+
+	// A push to the default branch has none to open.
+	commitFile(t, repo, "b.txt", "b\n", "Add b")
+	if err := push(repo, "refs/heads/main:refs/heads/main", false); err != nil {
+		t.Fatalf("push: %v", err)
+	}
+	a2 := h.approvals(t, KindPush, store.StatusPending)[0]
+	if d, _ := h.svc.GitDetail(h.ctx, a2); d.Review.PullRequest != nil || d.Review.OpenPullRequest != "" {
+		t.Fatalf("review of a push to main = %+v", d.Review)
+	}
+	h.decide(t, a2, integrations.Allow, "")
+	if _, err := h.svc.OpenPullRequest(h.ctx, h.env.ID, a2.ID, ""); !errors.Is(err, ErrNoPullRequest) {
+		t.Fatalf("opening a pull request of main: %v", err)
 	}
 }
 
@@ -965,6 +1102,12 @@ func TestForgejoAPI(t *testing.T) {
 	if got := ff.pulls[0]; got != (PullRequest{Head: "f", Base: "main", Title: "T", Body: "B"}) {
 		t.Fatalf("forge got %+v", got)
 	}
+	if open, err := fj.OpenPullRequestOf(ctx, forgeToken, "owner", "repo", "f"); err != nil || !strings.HasSuffix(open, "/pulls/1") {
+		t.Fatalf("open PR of f = %q, %v", open, err)
+	}
+	if open, err := fj.OpenPullRequestOf(ctx, forgeToken, "owner", "repo", "g"); err != nil || open != "" {
+		t.Fatalf("open PR of g = %q, %v", open, err)
+	}
 	if _, err := fj.DefaultBranch(ctx, forgeToken, "owner", "missing"); err == nil {
 		t.Fatal("missing repository")
 	}
@@ -1078,6 +1221,12 @@ func TestGitHubAPI(t *testing.T) {
 	url, err := gh.OpenPullRequest(ctx, forgeToken, "owner", "repo", pr)
 	if err != nil || !strings.HasSuffix(url, "/pull/1") || ff.pulls[0] != pr {
 		t.Fatalf("open PR = %q, %v (%+v)", url, err, ff.pulls)
+	}
+	if open, err := gh.OpenPullRequestOf(ctx, forgeToken, "owner", "repo", "f"); err != nil || !strings.HasSuffix(open, "/pull/1") {
+		t.Fatalf("open PR of f = %q, %v", open, err)
+	}
+	if open, err := gh.OpenPullRequestOf(ctx, forgeToken, "owner", "repo", "g"); err != nil || open != "" {
+		t.Fatalf("open PR of g = %q, %v", open, err)
 	}
 	_, err = gh.OpenPullRequest(ctx, forgeToken, "owner", "repo", pr)
 	if err == nil || !strings.Contains(err.Error(), "A pull request already exists") || strings.Contains(err.Error(), forgeToken) {
@@ -1273,6 +1422,12 @@ func TestGitLabAPI(t *testing.T) {
 	url, err := gl.OpenPullRequest(ctx, forgeToken, "group/sub", "proj", pr)
 	if err != nil || !strings.HasSuffix(url, "/merge_requests/1") || ff.merges[0] != (mergeRequest{Source: "f", Target: "trunk", Title: "T", Description: "B"}) {
 		t.Fatalf("open merge request = %q, %v (%+v)", url, err, ff.merges)
+	}
+	if open, err := gl.OpenPullRequestOf(ctx, forgeToken, "group/sub", "proj", "f"); err != nil || !strings.HasSuffix(open, "/merge_requests/1") {
+		t.Fatalf("open merge request of f = %q, %v", open, err)
+	}
+	if open, err := gl.OpenPullRequestOf(ctx, forgeToken, "group/sub", "proj", "g"); err != nil || open != "" {
+		t.Fatalf("open merge request of g = %q, %v", open, err)
 	}
 	_, err = gl.OpenPullRequest(ctx, forgeToken, "group/sub", "proj", pr)
 	if err == nil || !strings.Contains(err.Error(), "Another open merge request") || strings.Contains(err.Error(), forgeToken) {

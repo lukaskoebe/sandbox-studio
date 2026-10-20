@@ -229,19 +229,25 @@ export function UnifiedDiff({
 /** Where review feedback goes: "" for the agent's next fetch or prompt, or a chat or terminal. */
 export type FeedbackTarget = string
 
+/** The target that starts a chat in the sandbox with the feedback as its first prompt. */
+export const newChatTarget = "new"
+
 /**
- * The sandbox's chats and agent terminals that can take review feedback right away. A chat
- * continued in the terminal is reached through that terminal; a plain shell is left out, as
- * text typed into it would run as commands.
+ * The sandbox's chats and agent terminals that can take review feedback right away, and a
+ * new chat when the sandbox has a teammate to run it. A chat continued in the terminal is
+ * reached through that terminal; a plain shell is left out, as text typed into it would run
+ * as commands.
  */
 export function FeedbackTargetSelect({
   env,
   sandboxId,
+  newChat,
   value,
   onChange,
 }: {
   env: string
   sandboxId: string
+  newChat?: boolean
   value: FeedbackTarget
   onChange: (value: FeedbackTarget) => void
 }) {
@@ -262,6 +268,7 @@ export function FeedbackTargetSelect({
   const options: Record<string, string> = {
     "": "Its next fetch or prompt",
   }
+  if (newChat) options[newChatTarget] = "A new chat"
   for (const c of chats.data ?? []) {
     if (c.state !== "idle" && c.state !== "running") continue
     options[`chat:${c.id}`] =
@@ -312,7 +319,9 @@ export function useSendFeedback() {
         toast.success(
           out.queued
             ? "Feedback queued; the agent gets it when its turn ends"
-            : "Feedback sent to the agent"
+            : out.chat
+              ? "Feedback sent to a new chat"
+              : "Feedback sent to the agent"
         ),
       onError: (err) =>
         toast.error("Could not send the feedback", {
@@ -324,6 +333,7 @@ export function useSendFeedback() {
 
 /** The request body for a target. */
 export function feedbackBody(target: FeedbackTarget, note: string) {
+  if (target === newChatTarget) return { note, newChat: true }
   const [kind, id] = [
     target.slice(0, target.indexOf(":")),
     target.slice(target.indexOf(":") + 1),

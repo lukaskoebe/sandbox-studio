@@ -483,12 +483,20 @@ func (s *Server) registerNetwork(api huma.API) {
 			PathPrefix  string     `json:"pathPrefix,omitempty" doc:"For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path"`
 			ExpiresAt   *time.Time `json:"expiresAt,omitempty" doc:"For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires"`
 			BrowserOnly bool       `json:"browserOnly,omitempty" doc:"For network requests allowed or denied with a rule: the rule covers only the requests of the environment's browser VMs"`
+			PullRequest *struct {
+				Open  bool   `json:"open" doc:"Open the review's pull request along with the push; false pushes without one"`
+				Title string `json:"title,omitempty" maxLength:"200" doc:"The pull request's title; empty keeps the proposed one"`
+			} `json:"pullRequest,omitempty" doc:"For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "decideApproval", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/decide", Tags: []string{"approvals"},
 	}, func(ctx context.Context, in *decideIn) (*struct{ Body ApprovalView }, error) {
-		if a, ok, err := s.decideIntegration(ctx, in.Env, in.ID, integrations.Decision{Action: in.Body.Action, Note: strings.TrimSpace(in.Body.Note), Remember: in.Body.Remember}); ok || err != nil {
+		id := integrations.Decision{Action: in.Body.Action, Note: strings.TrimSpace(in.Body.Note), Remember: in.Body.Remember}
+		if pr := in.Body.PullRequest; pr != nil {
+			id.PullRequest = &integrations.PullRequestChoice{Open: pr.Open, Title: pr.Title}
+		}
+		if a, ok, err := s.decideIntegration(ctx, in.Env, in.ID, id); ok || err != nil {
 			if err != nil {
 				return nil, err
 			}

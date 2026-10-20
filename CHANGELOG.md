@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Git review:** one decision pushes a branch and opens its pull request. The review of a
+  push to a branch other than the default one offers "Also open a pull request", ticked for a
+  new branch, with a title you can edit; unticked, approving only pushes, and the decided
+  review keeps an **Open pull request** button for later. A push to a branch that already has
+  an open pull request says it updates it and no longer proposes a second one that the forge
+  would refuse. In the TUI's review, `p` turns the pull request on or off and `o` opens it
+  after the push. Clients that don't send the choice still get the separate `git.pr`
+  approval.
+- **Git review:** review feedback can go to a new chat in the push's sandbox, the default for
+  a teammate's sandbox; it starts only when there is a note or a line comment to send.
+
 ## v0.4.2 — 2026-10-19
 
 v0.4.1 was tagged but never released; this is that release, with typing after a mouse

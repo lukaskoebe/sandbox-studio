@@ -361,6 +361,10 @@ func TestGitApprovalsAreSettledByTheIntegration(t *testing.T) {
 	if rec := do(h, "POST", url, `{"action":"allow"}`); rec.Code != http.StatusConflict {
 		t.Fatalf("second decision: %d %s", rec.Code, rec.Body)
 	}
+	// A rejected push has no pull request to open.
+	if rec := do(h, "POST", strings.TrimSuffix(url, "/decide")+"/pull-request", `{}`); rec.Code != http.StatusConflict {
+		t.Fatalf("pull request of a rejected push: %d %s", rec.Code, rec.Body)
+	}
 
 	// A link to the review still finds it once decided, with its outcome; other
 	// environments and unknown IDs don't.

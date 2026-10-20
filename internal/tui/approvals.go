@@ -245,6 +245,13 @@ type Decision struct {
 	BrowserOnly bool       `json:"browserOnly,omitempty"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
 	Remember    bool       `json:"remember,omitempty"`
+	// PullRequest, for a push whose review offers one, opens it with the push or not.
+	PullRequest *PullRequestChoice `json:"pullRequest,omitempty"`
+}
+
+// PullRequestChoice is whether approving a push opens its pull request too.
+type PullRequestChoice struct {
+	Open bool `json:"open"`
 }
 
 // decisionFor is the decide call a key of a network card makes, with the card's choice. A
