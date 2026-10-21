@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.5.0 — 2026-10-21
+
+A calmer Studio, built around your teammates: the web's sidebar and the TUI's list are one tree
+of teammates and what they work in, Home is what needs you, a sandbox opens on its chats and
+terminals, and Settings is a page. One decision pushes a branch and opens its pull request,
+and review feedback can go to a new chat.
 
 - **Git review:** one decision pushes a branch and opens its pull request. The review of a
   push to a branch other than the default one offers "Also open a pull request", ticked for a
