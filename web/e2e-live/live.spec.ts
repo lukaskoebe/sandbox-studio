@@ -53,17 +53,20 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
   // Create the sandbox the way a user does.
   const name = `live-${Math.random().toString(36).slice(2, 8)}`
   await page.goto(`/e/${env}`)
-  await page.getByRole("button", { name: "New sandbox" }).first().click()
+  await page.getByRole("button", { name: "More to create" }).click()
+  await page
+    .getByRole("menuitem", { name: /Sandbox without a teammate/ })
+    .click()
   const create = page.getByRole("dialog", { name: "New sandbox" })
   await create.getByLabel("Name", { exact: true }).fill(name)
   await create.getByRole("button", { name: "Create" }).click()
   await expect(page.getByRole("heading", { name })).toBeVisible({
     timeout: 10 * 60_000,
   })
-  const id = page.url().split("/").at(-1)!
+  // A sandbox opens on its workspace, at /e/<env>/sandboxes/<id>/work.
+  const id = page.url().match(/\/sandboxes\/([a-z0-9]+)/)![1]
 
   try {
-    await page.getByRole("link", { name: "Workspace", exact: true }).click()
     const term = terminal(page)
     // The first boot can take a while before the shell prompts.
     await expect(term.rows).toContainText("$", { timeout: 10 * 60_000 })
@@ -113,16 +116,14 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
     )
     await expect(term.rows).toContainText("ready in", { timeout: 5 * 60_000 })
 
-    await page.getByRole("link", { name: "Dashboard", exact: true }).click()
-    const ports = page.getByRole("region", { name: "Ports" })
-    await expect(ports).toContainText(":5173", { timeout: 60_000 })
+    // The workspace's Previews menu lists the listening ports.
+    await expect(page.getByText("ports :5173")).toBeVisible({
+      timeout: 60_000,
+    })
+    await page.getByRole("button", { name: "Previews" }).click()
     const [preview] = await Promise.all([
       page.context().waitForEvent("page"),
-      ports
-        .getByRole("listitem")
-        .filter({ hasText: ":5173" })
-        .getByRole("button", { name: "Open", exact: true })
-        .click(),
+      page.getByRole("menuitem", { name: ":5173", exact: true }).click(),
     ])
     await expect(
       preview.getByRole("heading", { name: "Live preview works" })
