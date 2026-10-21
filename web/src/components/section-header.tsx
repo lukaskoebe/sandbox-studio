@@ -1,7 +1,13 @@
-import type { ReactNode } from "react"
+import { createContext, useContext, type ReactNode } from "react"
 import type { Icon } from "@phosphor-icons/react"
 import { tileClass, type Area } from "@/lib/accents"
 import { cn } from "@/lib/utils"
+
+/**
+ * Whether the section sits in a disclosure card, which shows the title itself: the header then
+ * keeps the title for screen readers only, and its actions.
+ */
+export const InDisclosure = createContext(false)
 
 /**
  * A section's title row: a small icon tile, a semibold title, a count in mono and actions on
@@ -23,6 +29,15 @@ export function SectionHeader({
   actions?: ReactNode
   className?: string
 }) {
+  if (useContext(InDisclosure))
+    return (
+      <>
+        <h2 className="sr-only">{title}</h2>
+        {actions && (
+          <div className="flex items-center justify-end gap-1">{actions}</div>
+        )}
+      </>
+    )
   return (
     <div className={cn("flex h-6 items-center gap-2", className)}>
       {IconComp && (

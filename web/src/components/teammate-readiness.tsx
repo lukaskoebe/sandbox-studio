@@ -9,9 +9,12 @@ import { harnessLabels } from "@/lib/teammates"
 export function Readiness({
   teammate,
   provider,
+  problemsOnly,
 }: {
   teammate: Teammate
   provider?: Provider
+  /** Shows nothing when the teammate is ready, as a header that only flags what blocks it. */
+  problemsOnly?: boolean
 }) {
   if (!provider) {
     // A teammate whose provider was not copied along has none; before the providers load it has one.
@@ -23,7 +26,7 @@ export function Readiness({
     return (
       <Badge
         variant="outline"
-        title={`${provider.name} needs its API key, added on the Providers page`}
+        title={`${provider.name} needs its API key, added in Settings → AI providers`}
       >
         Key required
       </Badge>
@@ -33,7 +36,7 @@ export function Readiness({
     return (
       <Badge
         variant="outline"
-        title={`${provider.name} needs a sign-in, on the Providers page`}
+        title={`${provider.name} needs a sign-in, in Settings → AI providers`}
       >
         {provider.state === "expired" ? "Sign-in expired" : "Sign-in needed"}
       </Badge>
@@ -46,6 +49,7 @@ export function Readiness({
       </Badge>
     )
   }
+  if (problemsOnly) return null
   return (
     <Badge
       variant="secondary"

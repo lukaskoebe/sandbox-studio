@@ -48,12 +48,12 @@ to an environment.
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
 | `/e/$env/settings/<section>` | Settings (below) |
 | `/e/$env/teammates` | teammates |
-| `/e/$env/teammates/$id` | the teammate's conversation: its thread, the composer (message, task, teach) and a rail with what it does now. The teammate's tabs are Conversation, Tasks, Chats, Memory, Browser and Settings |
+| `/e/$env/teammates/$id` | the teammate's conversation: its thread, the composer (message, task, teach) and a rail with what it does now, its computer (its one sandbox; "Sandboxes" once it has more, with a menu to fork it or add another), its last chats, what it knows and its check-ins. The header names its role, harness and presence, and says what keeps it from working. The teammate's tabs are Conversation, Tasks, Memory, Browser and Settings |
 | `/e/$env/teammates/$id/tasks` | the teammate's task list, and the log of its check-ins |
-| `/e/$env/teammates/$id/chats` | the teammate's chats |
+| `/e/$env/teammates/$id/chats` | the teammate's chats, from the rail's "All N" |
 | `/e/$env/teammates/$id/memory` | the teammate's private memory, with the tabs of shared memory |
 | `/e/$env/teammates/$id/browser` | the teammate's browser: the browser window (tabs, toolbar, live view) with Activity and Sites beside it ([browser](browser.md#live-view-and-takeover)) |
-| `/e/$env/teammates/$id/settings` | edit the teammate, its check-ins, network level and secrets (its own, its sandboxes' and the environment's it inherits, with which replaces which; Add secret preselects the teammate's scope), or delete it |
+| `/e/$env/teammates/$id/settings` | one card per part, closed, with what it is set to: identity, agent, git identity, approvals, soul, check-ins, network level, browser, secrets (its own, its sandboxes' and the environment's it inherits, with which replaces which; Add secret preselects the teammate's scope) and delete. `?open=` names the open card (`components/disclosure-card.tsx`) |
 | `/e/$env/git/reviews/$id` | one git push review: the commits and diff, decided there while it waits, its outcome after |
 | `/e/$env/memory/conflicts/$id` | one memory conflict: both sides, resolved there while it is open, its verdict after |
 | `/e/$env/builds/$id` | one template build: its log, and "Use spec" and "Create sandbox" once it is done |

@@ -13,8 +13,8 @@ test("the sidebar opens a teammate, whose tabs each render", async ({
   await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${id}$`))
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible()
 
-  await page.getByRole("tab", { name: "Chats" }).click()
-  await expect(page).toHaveURL(new RegExp(`/teammates/${id}/chats$`))
+  // Its chats are a page of their own, linked from the conversation's rail.
+  await page.goto(`/e/${env}/teammates/${id}/chats`)
   await expect(
     page.getByRole("main").getByRole("link", { name: "New chat" })
   ).toBeVisible()
@@ -31,7 +31,16 @@ test("the sidebar opens a teammate, whose tabs each render", async ({
 
   await page.getByRole("tab", { name: "Settings" }).click()
   await expect(page).toHaveURL(new RegExp(`/teammates/${id}/settings$`))
+  // Each section is a card that opens to its fields, one at a time, kept in the URL.
+  await page
+    .getByRole("button", { name: `Identity ${name}`, exact: true })
+    .click()
+  await expect(page).toHaveURL(/[?&]open=identity/)
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue(name)
+  await page
+    .getByRole("button", { name: new RegExp(`^Delete ${name}`) })
+    .click()
+  await expect(page.getByLabel("Name", { exact: true })).toBeHidden()
   await expect(
     page.getByRole("button", { name: "Delete teammate" })
   ).toBeVisible()

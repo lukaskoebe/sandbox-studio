@@ -11,6 +11,8 @@ import {
   CheckCircleIcon,
   ClockIcon,
   CubeIcon,
+  DotsThreeIcon,
+  GitForkIcon,
   ListChecksIcon,
   PlusIcon,
   SparkleIcon,
@@ -30,6 +32,8 @@ import {
 import { isBrowserAsk } from "@/lib/approval-kinds"
 import { BrowserPanel } from "@/components/browser-panel"
 import { ChatItemView } from "@/components/chat/chat-items"
+import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
+import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { Markdown } from "@/components/chat/markdown"
 import { PlanCard } from "@/components/chat/plan-card"
@@ -37,10 +41,15 @@ import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { toolKind } from "@/components/chat/tool-call-card"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
-import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
-import { Readiness } from "@/components/teammate-readiness"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Collapsible,
   CollapsibleContent,
@@ -59,7 +68,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
-import { presenceLabels, usePresence } from "@/hooks/use-teammate-presence"
 import { tileClass } from "@/lib/accents"
 import {
   $api,
@@ -80,8 +88,7 @@ import {
   type QueuedPrompt,
 } from "@/lib/chats"
 import { heartbeatSentence } from "@/lib/tasks"
-import { harnessLabels, kindLabels } from "@/lib/teammates"
-import { cn } from "@/lib/utils"
+import { cn, formatAge } from "@/lib/utils"
 
 type Event = components["schemas"]["TeammateEvent"]
 type Turn = components["schemas"]["TeammateTurn"]
@@ -227,8 +234,9 @@ export function TeammateConversation({
           env={env}
           teammate={teammate}
           sandboxes={owned}
+          chats={mine}
           running={running}
-          waiting={allWaiting.length}
+          waiting={allWaiting}
           browserWaiting={browserWaiting}
           onWatch={() => setWatching(true)}
         />
@@ -1054,6 +1062,7 @@ function Rail({
   env,
   teammate,
   sandboxes,
+  chats,
   running,
   waiting,
   browserWaiting,
@@ -1062,16 +1071,12 @@ function Rail({
   env: string
   teammate: Teammate
   sandboxes: Sandbox[]
+  chats: Chat[]
   running?: Chat
-  waiting: number
+  waiting: Approval[]
   browserWaiting: boolean
   onWatch: () => void
 }) {
-  const presence = usePresence(env)(teammate.id)
-  const [soul, setSoul] = useState(false)
-  const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
-    params: { path: { env } },
-  })
   const facts = $api.useQuery("get", "/api/environments/{env}/memory/facts", {
     params: {
       path: { env },
@@ -1083,32 +1088,16 @@ function Rail({
     "/api/environments/{env}/teammates/{id}/tasks",
     { params: { path: { env, id: teammate.id } } }
   )
-  const provider = providers.data?.find((p) => p.id === teammate.providerId)
   const open = (tasks.data ?? []).filter((t) => t.status !== "done")
   const known = facts.data ?? []
+  const earlier = chats
+    .filter((c) => c.id !== running?.id)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 
   return (
     <aside className="w-72 shrink-0 border-l max-lg:hidden">
       <ScrollArea className="h-full">
         <div className="grid gap-5 p-4 text-xs">
-          <div className="grid justify-items-center gap-2 pt-2 text-center">
-            <TeammateAvatar
-              name={teammate.name}
-              avatar={teammate.avatar}
-              className="size-14 text-lg"
-            />
-            <div>
-              <div className="text-sm font-semibold">{teammate.name}</div>
-              {teammate.role && (
-                <div className="text-muted-foreground">{teammate.role}</div>
-              )}
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5">
-              <PresenceDot presence={presence} />
-              {presenceLabels[presence]}
-            </span>
-          </div>
-
           <RailSection title="Now">
             <BrowsingNow
               env={env}
@@ -1125,11 +1114,11 @@ function Rail({
                 <Spinner className="size-3" />
                 <span className="truncate">{chatTitle(running)}</span>
               </Link>
-            ) : waiting > 0 ? (
+            ) : waiting.length > 0 ? (
               <p>
-                Waiting for you: {waiting}{" "}
-                {waiting === 1 ? "approval" : "approvals"}, at the end of the
-                conversation.
+                Waiting for you: {waiting.length}{" "}
+                {waiting.length === 1 ? "approval" : "approvals"}, at the end of
+                the conversation.
               </p>
             ) : open.length > 0 ? (
               <ul className="grid gap-1">
@@ -1151,16 +1140,57 @@ function Rail({
             )}
           </RailSection>
 
+          <Computer
+            env={env}
+            teammate={teammate}
+            sandboxes={sandboxes}
+            chats={chats}
+            waiting={waiting}
+          />
+
+          {earlier.length > 0 && (
+            <RailSection
+              title="Earlier chats"
+              action={
+                <Link
+                  to="/e/$env/teammates/$id/chats"
+                  params={{ env, id: teammate.id }}
+                >
+                  All {chats.length}
+                </Link>
+              }
+            >
+              <ul className="grid gap-1.5">
+                {earlier.slice(0, 3).map((c) => (
+                  <li key={c.id} className="flex min-w-0 items-baseline gap-2">
+                    <Link
+                      to="/e/$env/chats/$chat"
+                      params={{ env, chat: c.id }}
+                      className="min-w-0 truncate text-primary underline-offset-4 hover:underline"
+                    >
+                      {chatTitle(c)}
+                    </Link>
+                    <span className="ml-auto shrink-0 text-muted-foreground">
+                      {formatAge(c.updatedAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </RailSection>
+          )}
+
           <RailSection
             title="Knows"
             count={known.length}
             action={
-              <Link
-                to="/e/$env/teammates/$id/memory"
-                params={{ env, id: teammate.id }}
-              >
-                Memory
-              </Link>
+              known.length > 0 && (
+                <Link
+                  to="/e/$env/teammates/$id/memory"
+                  params={{ env, id: teammate.id }}
+                >
+                  All {known.length} {known.length === 1 ? "fact" : "facts"}
+                </Link>
+              )
             }
           >
             {known.length === 0 ? (
@@ -1183,11 +1213,12 @@ function Rail({
           </RailSection>
 
           <RailSection
-            title="Routines"
+            title="Check-ins"
             action={
               <Link
                 to="/e/$env/teammates/$id/settings"
                 params={{ env, id: teammate.id }}
+                search={{ open: "checkins" }}
               >
                 Edit
               </Link>
@@ -1200,87 +1231,152 @@ function Rail({
                 : "No check-ins."}
             </p>
           </RailSection>
-
-          <RailSection title="Sandboxes" count={sandboxes.length}>
-            {sandboxes.length === 0 ? (
-              <p className="text-muted-foreground">
-                None. Pick {teammate.name} as the owner when you create one.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {sandboxes.map((s) => (
-                  <Link
-                    key={s.id}
-                    to="/e/$env/sandboxes/$id"
-                    params={{ env, id: s.id }}
-                    className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono hover:bg-muted"
-                  >
-                    <StatusDot {...phaseDot(phase(s))} compact />
-                    {s.name}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </RailSection>
-
-          <RailSection
-            title="Profile"
-            action={
-              <Link
-                to="/e/$env/teammates/$id/settings"
-                params={{ env, id: teammate.id }}
-              >
-                Edit
-              </Link>
-            }
-          >
-            <dl className="grid grid-cols-[4.5rem_1fr] gap-y-1">
-              <dt className="text-muted-foreground">Runs in</dt>
-              <dd>{harnessLabels[teammate.harness]}</dd>
-              <dt className="text-muted-foreground">Provider</dt>
-              <dd className="truncate">
-                {provider
-                  ? `${provider.name} (${kindLabels[provider.kind]})`
-                  : "None"}
-              </dd>
-              {teammate.model && (
-                <>
-                  <dt className="text-muted-foreground">Model</dt>
-                  <dd className="truncate font-mono">{teammate.model}</dd>
-                </>
-              )}
-              <dt className="text-muted-foreground">Status</dt>
-              <dd>
-                <Readiness teammate={teammate} provider={provider} />
-              </dd>
-            </dl>
-            {teammate.soul && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setSoul(!soul)}
-                  aria-expanded={soul}
-                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-                >
-                  <CaretDownIcon
-                    className={cn(
-                      "size-3 transition-transform",
-                      soul && "rotate-180"
-                    )}
-                  />
-                  Soul
-                </button>
-                {soul && (
-                  <pre className="font-mono text-[0.6875rem]/relaxed break-words whitespace-pre-wrap text-muted-foreground">
-                    {teammate.soul}
-                  </pre>
-                )}
-              </>
-            )}
-          </RailSection>
         </div>
       </ScrollArea>
     </aside>
+  )
+}
+
+/**
+ * The teammate's computer: the sandbox it works in, as a card with what it runs and what waits
+ * there. A teammate has one until you fork it or add another, and the section then lists them
+ * as its sandboxes.
+ */
+function Computer({
+  env,
+  teammate,
+  sandboxes,
+  chats,
+  waiting,
+}: {
+  env: string
+  teammate: Teammate
+  sandboxes: Sandbox[]
+  chats: Chat[]
+  waiting: Approval[]
+}) {
+  const [dialog, setDialog] = useState<"fork" | "another">()
+  const first = sandboxes.at(0)
+  const forkable =
+    first && ["running", "stopped", "suspended"].includes(first.status)
+  return (
+    <RailSection
+      title={sandboxes.length > 1 ? "Sandboxes" : "Computer"}
+      count={sandboxes.length > 1 ? sandboxes.length : undefined}
+      action={
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`More for ${teammate.name}'s sandboxes`}
+              />
+            }
+          >
+            <DotsThreeIcon weight="bold" className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-60">
+            {first && sandboxes.length === 1 && (
+              <DropdownMenuItem
+                disabled={!forkable}
+                onClick={() => setDialog("fork")}
+              >
+                <GitForkIcon />
+                <span className="grid">
+                  Fork {first.name}
+                  <span className="text-[0.6875rem] text-muted-foreground">
+                    A copy to try something risky
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={() => setDialog("another")}>
+              <PlusIcon />
+              <span className="grid">
+                {first ? "Add another sandbox" : "Give it a sandbox"}
+                <span className="text-[0.6875rem] text-muted-foreground">
+                  {first?.templateName
+                    ? `Fresh from ${first.templateName}`
+                    : "A fresh sandbox"}
+                </span>
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+    >
+      {sandboxes.length === 0 ? (
+        <div className="grid justify-items-start gap-2">
+          <p className="text-muted-foreground">
+            None yet. {teammate.name} works in a sandbox of its own.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDialog("another")}
+          >
+            <PlusIcon />
+            Give it a sandbox
+          </Button>
+        </div>
+      ) : (
+        <div className="grid gap-1.5">
+          {sandboxes.map((sb) => {
+            const there = waiting.filter((a) => a.sandboxId === sb.id).length
+            const talks = chats.filter((c) => c.sandboxId === sb.id).length
+            return (
+              <Link
+                key={sb.id}
+                to="/e/$env/sandboxes/$id"
+                params={{ env, id: sb.id }}
+                className="grid gap-0.5 rounded-md border bg-card px-2.5 py-2 hover:border-foreground/25"
+              >
+                <span className="flex items-center gap-1.5">
+                  <StatusDot {...phaseDot(phase(sb))} compact />
+                  <span className="truncate font-mono font-semibold">
+                    {sb.name}
+                  </span>
+                  {there > 0 && (
+                    <span className="ml-auto shrink-0 text-(--st-waiting-fg)">
+                      {there} waiting
+                    </span>
+                  )}
+                </span>
+                <span className="truncate text-muted-foreground">
+                  {[
+                    sb.templateName,
+                    `${sb.cpus} CPU`,
+                    `${Math.round(sb.memoryMiB / 1024)} GB`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <span className="text-muted-foreground">
+                  {talks === 0
+                    ? "No chats yet"
+                    : `${talks} ${talks === 1 ? "chat" : "chats"}`}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+      {first && (
+        <ForkSandboxDialog
+          env={env}
+          sandbox={first}
+          open={dialog === "fork"}
+          onOpenChange={(o) => !o && setDialog(undefined)}
+        />
+      )}
+      <CreateSandboxDialog
+        env={env}
+        teammate={teammate.id}
+        open={dialog === "another"}
+        onOpenChange={(o) => !o && setDialog(undefined)}
+      />
+    </RailSection>
   )
 }
 

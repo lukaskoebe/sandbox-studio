@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { createContext, useContext, useState, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -9,6 +9,7 @@ import {
   SparkleIcon,
   type Icon,
 } from "@phosphor-icons/react"
+import { DisclosureCard } from "@/components/disclosure-card"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -103,6 +104,7 @@ export function TeammateForm({
   providers,
   prefill,
   onSaved,
+  sections,
 }: {
   env: string
   /** The teammate to edit; absent for a new one. */
@@ -111,6 +113,11 @@ export function TeammateForm({
   /** What a new teammate starts with, such as the default one's name. */
   prefill?: { name?: string; role?: string }
   onSaved: () => void
+  /**
+   * Shows each section as a card that opens to its fields, with the open one named here, and
+   * a Save in the open card. Without it the sections follow each other with one Save.
+   */
+  sections?: { open?: string; onOpen: (id: string | undefined) => void }
 }) {
   const queryClient = useQueryClient()
   const [name, setName] = useState(teammate?.name ?? prefill?.name ?? "")
@@ -206,238 +213,28 @@ export function TeammateForm({
     else create.mutate({ params: { path: { env } }, body })
   }
 
-  return (
-    <form
-      className="grid gap-6"
-      onSubmit={(e) => {
-        e.preventDefault()
-        submit()
-      }}
-    >
-      <FormSection title="Identity" icon={IdentificationCardIcon} area="chat">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="teammate-name">Name</FieldLabel>
-            <Input
-              id="teammate-name"
-              autoFocus
-              autoComplete="off"
-              maxLength={64}
-              placeholder="Ada"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="teammate-role">Role</FieldLabel>
-            <Input
-              id="teammate-role"
-              autoComplete="off"
-              maxLength={200}
-              placeholder="Code reviewer"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            />
-          </Field>
-        </div>
-        <Field>
-          <FieldLabel>Avatar</FieldLabel>
-          <AvatarPicker name={name} value={avatar} onChange={setAvatar} />
-          <FieldDescription>
-            An emoji or a generated shape. Without one, the teammate shows its
-            initials.
-          </FieldDescription>
-        </Field>
-      </FormSection>
-      <FormSection title="Agent" icon={RobotIcon} area="chat">
-        <Field>
-          <FieldLabel htmlFor="teammate-provider">Provider</FieldLabel>
-          <Select
-            value={providerId}
-            onValueChange={(v) => {
-              const next = providers.find((p) => p.id === v)
-              if (!next) return
-              setProviderId(next.id)
-              const harnesses = next.harnesses ?? []
-              if (!harness || !harnesses.includes(harness))
-                setHarness(harnesses[0])
-              setFormError(undefined)
-            }}
-            items={Object.fromEntries(providers.map((p) => [p.id, p.name]))}
-          >
-            <SelectTrigger id="teammate-provider" className="w-full">
-              <SelectValue
-                placeholder={
-                  providers.length
-                    ? "Choose a provider"
-                    : "Add a provider first"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {providers.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name}
-                  <span className="text-muted-foreground">
-                    {kindLabels[p.kind]}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field>
-          <FieldLabel>Harness</FieldLabel>
-          <ToggleGroup
-            aria-label="Harness"
-            variant="outline"
-            value={harness ? [harness] : []}
-            onValueChange={(v) => {
-              const next = supported.find((h) => h === v[0])
-              if (next) setHarness(next)
-            }}
-            className="w-full"
-          >
-            {supported.map((h) => (
-              <ToggleGroupItem key={h} value={h} className="flex-1">
-                {harnessLabels[h]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <FieldDescription>
-            The harnesses this provider supports.
-          </FieldDescription>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="teammate-model">Model</FieldLabel>
-          <Input
-            id="teammate-model"
-            className="font-mono"
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={128}
-            placeholder={
-              provider?.kind === "openai_compatible"
-                ? provider.model
-                : provider?.kind === "openai_api"
-                  ? "gpt-6.1-sol"
-                  : needsModel
-                    ? "claude-sonnet-5-5"
-                    : "The subscription's default"
-            }
-            list="teammate-models"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-          />
-          {compatible && (
-            <ModelSuggestions id="teammate-models" {...suggestions} />
-          )}
-        </Field>
-      </FormSection>
-      <FormSection title="Git identity" icon={GitBranchIcon} area="git">
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-2 text-sm">
-            <Switch checked={useHostGit} onCheckedChange={setUseHostGit} />
-            Use my git identity
-          </label>
-          <p className="text-xs text-muted-foreground">
-            {hostGitSet ? (
-              <>
-                Commit as{" "}
-                <span className="font-mono">
-                  {hostGit.name} &lt;{hostGit.email}&gt;
-                </span>
-                , the identity in your git config on this computer.
-              </>
-            ) : (
-              "Your git config on this computer has no user.name and user.email yet, so the name and email below are used."
-            )}
-          </p>
-        </div>
-        <div
-          className={cn(
-            "grid gap-4 sm:grid-cols-2",
-            useHostGit && hostGitSet && "hidden"
-          )}
-        >
-          <Field>
-            <FieldLabel htmlFor="teammate-git-name">Git name</FieldLabel>
-            <Input
-              id="teammate-git-name"
-              autoComplete="off"
-              maxLength={100}
-              placeholder={name.trim() || "The teammate's name"}
-              value={gitName}
-              onChange={(e) => setGitName(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="teammate-git-email">Git email</FieldLabel>
-            <Input
-              id="teammate-git-email"
-              className="font-mono"
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={254}
-              placeholder={`${slug(name) || "name"}@agents.invalid`}
-              value={gitEmail}
-              onChange={(e) => setGitEmail(e.target.value)}
-            />
-          </Field>
-        </div>
-      </FormSection>
-      <FormSection title="Approvals" icon={ShieldCheckIcon} area="network">
-        <Field>
-          <FieldLabel>New rules from approvals apply to</FieldLabel>
-          <ToggleGroup
-            aria-label="New rules from approvals apply to"
-            variant="outline"
-            value={[approvalScope]}
-            onValueChange={(v) => {
-              const next = approvalScopes.find((s) => s === v[0])
-              if (next) setApprovalScope(next)
-            }}
-            className="w-full"
-          >
-            {approvalScopes.map((s) => (
-              <ToggleGroupItem key={s} value={s} className="flex-1">
-                {approvalScopeLabels[s]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <FieldDescription>
-            Preselected on the approval cards for this teammate's sandboxes. The
-            card still lets you pick another scope.
-          </FieldDescription>
-        </Field>
-      </FormSection>
-      <FormSection title="Soul" icon={SparkleIcon} area="chat">
-        <Field data-invalid={soulBytes > maxSoulBytes || undefined}>
-          {/* The section's title is the visible label; the textarea keeps its name. */}
-          <FieldLabel htmlFor="teammate-soul" className="sr-only">
-            Soul
-          </FieldLabel>
-          <textarea
-            id="teammate-soul"
-            rows={8}
-            spellCheck
-            placeholder={
-              "# Ada\n\nYou review changes carefully and explain why."
-            }
-            className="min-h-32 w-full min-w-0 resize-y rounded-md border border-input bg-input/20 px-2 py-1 font-mono text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 md:text-xs/relaxed dark:bg-input/30"
-            aria-invalid={soulBytes > maxSoulBytes}
-            value={soul}
-            onChange={(e) => setSoul(e.target.value)}
-          />
-          {soulBytes > maxSoulBytes ? (
-            <FieldError>The soul is limited to 16 KiB.</FieldError>
-          ) : (
-            <FieldDescription>
-              Personality and working rules, in markdown.
-            </FieldDescription>
-          )}
-        </Field>
-      </FormSection>
+  const soulLine = soul
+    .split("\n")
+    .map((l) => l.replace(/^#+\s*/, "").trim())
+    .find(Boolean)
+  const summaries = {
+    identity: [name.trim(), role.trim()].filter(Boolean).join(" · "),
+    agent: [
+      harness && harnessLabels[harness],
+      provider?.name,
+      model.trim() || undefined,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    git:
+      useHostGit && hostGitSet
+        ? `${hostGit.name} <${hostGit.email}>, yours`
+        : `${gitName.trim() || name.trim()} <${gitEmail.trim() || `${slug(name) || "name"}@agents.invalid`}>`,
+    approvals: `New rules apply to ${approvalScopeLabels[approvalScope].toLowerCase()}`,
+    soul: soulLine ?? "None",
+  }
+  const saveRow = (
+    <>
       {formError && <FieldError>{formError}</FieldError>}
       <div className="flex justify-end">
         <Button type="submit" disabled={!valid || saving}>
@@ -445,7 +242,275 @@ export function TeammateForm({
           {teammate ? "Save" : "Add a teammate"}
         </Button>
       </div>
-    </form>
+    </>
+  )
+
+  return (
+    <FormSections.Provider value={sections && { ...sections, saveRow }}>
+      <form
+        className={cn("grid", sections ? "gap-2.5" : "gap-6")}
+        onSubmit={(e) => {
+          e.preventDefault()
+          submit()
+        }}
+      >
+        <FormSection
+          id="identity"
+          summary={summaries.identity}
+          title="Identity"
+          icon={IdentificationCardIcon}
+          area="chat"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="teammate-name">Name</FieldLabel>
+              <Input
+                id="teammate-name"
+                autoFocus
+                autoComplete="off"
+                maxLength={64}
+                placeholder="Ada"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="teammate-role">Role</FieldLabel>
+              <Input
+                id="teammate-role"
+                autoComplete="off"
+                maxLength={200}
+                placeholder="Code reviewer"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+              />
+            </Field>
+          </div>
+          <Field>
+            <FieldLabel>Avatar</FieldLabel>
+            <AvatarPicker name={name} value={avatar} onChange={setAvatar} />
+            <FieldDescription>
+              An emoji or a generated shape. Without one, the teammate shows its
+              initials.
+            </FieldDescription>
+          </Field>
+        </FormSection>
+        <FormSection
+          id="agent"
+          summary={summaries.agent}
+          title="Agent"
+          icon={RobotIcon}
+          area="chat"
+        >
+          <Field>
+            <FieldLabel htmlFor="teammate-provider">Provider</FieldLabel>
+            <Select
+              value={providerId}
+              onValueChange={(v) => {
+                const next = providers.find((p) => p.id === v)
+                if (!next) return
+                setProviderId(next.id)
+                const harnesses = next.harnesses ?? []
+                if (!harness || !harnesses.includes(harness))
+                  setHarness(harnesses[0])
+                setFormError(undefined)
+              }}
+              items={Object.fromEntries(providers.map((p) => [p.id, p.name]))}
+            >
+              <SelectTrigger id="teammate-provider" className="w-full">
+                <SelectValue
+                  placeholder={
+                    providers.length
+                      ? "Choose a provider"
+                      : "Add a provider first"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                    <span className="text-muted-foreground">
+                      {kindLabels[p.kind]}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <FieldLabel>Harness</FieldLabel>
+            <ToggleGroup
+              aria-label="Harness"
+              variant="outline"
+              value={harness ? [harness] : []}
+              onValueChange={(v) => {
+                const next = supported.find((h) => h === v[0])
+                if (next) setHarness(next)
+              }}
+              className="w-full"
+            >
+              {supported.map((h) => (
+                <ToggleGroupItem key={h} value={h} className="flex-1">
+                  {harnessLabels[h]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <FieldDescription>
+              The harnesses this provider supports.
+            </FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="teammate-model">Model</FieldLabel>
+            <Input
+              id="teammate-model"
+              className="font-mono"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={128}
+              placeholder={
+                provider?.kind === "openai_compatible"
+                  ? provider.model
+                  : provider?.kind === "openai_api"
+                    ? "gpt-6.1-sol"
+                    : needsModel
+                      ? "claude-sonnet-5-5"
+                      : "The subscription's default"
+              }
+              list="teammate-models"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            />
+            {compatible && (
+              <ModelSuggestions id="teammate-models" {...suggestions} />
+            )}
+          </Field>
+        </FormSection>
+        <FormSection
+          id="git"
+          summary={summaries.git}
+          title="Git identity"
+          icon={GitBranchIcon}
+          area="git"
+        >
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={useHostGit} onCheckedChange={setUseHostGit} />
+              Use my git identity
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {hostGitSet ? (
+                <>
+                  Commit as{" "}
+                  <span className="font-mono">
+                    {hostGit.name} &lt;{hostGit.email}&gt;
+                  </span>
+                  , the identity in your git config on this computer.
+                </>
+              ) : (
+                "Your git config on this computer has no user.name and user.email yet, so the name and email below are used."
+              )}
+            </p>
+          </div>
+          <div
+            className={cn(
+              "grid gap-4 sm:grid-cols-2",
+              useHostGit && hostGitSet && "hidden"
+            )}
+          >
+            <Field>
+              <FieldLabel htmlFor="teammate-git-name">Git name</FieldLabel>
+              <Input
+                id="teammate-git-name"
+                autoComplete="off"
+                maxLength={100}
+                placeholder={name.trim() || "The teammate's name"}
+                value={gitName}
+                onChange={(e) => setGitName(e.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="teammate-git-email">Git email</FieldLabel>
+              <Input
+                id="teammate-git-email"
+                className="font-mono"
+                autoComplete="off"
+                spellCheck={false}
+                maxLength={254}
+                placeholder={`${slug(name) || "name"}@agents.invalid`}
+                value={gitEmail}
+                onChange={(e) => setGitEmail(e.target.value)}
+              />
+            </Field>
+          </div>
+        </FormSection>
+        <FormSection
+          id="approvals"
+          summary={summaries.approvals}
+          title="Approvals"
+          icon={ShieldCheckIcon}
+          area="network"
+        >
+          <Field>
+            <FieldLabel>New rules from approvals apply to</FieldLabel>
+            <ToggleGroup
+              aria-label="New rules from approvals apply to"
+              variant="outline"
+              value={[approvalScope]}
+              onValueChange={(v) => {
+                const next = approvalScopes.find((s) => s === v[0])
+                if (next) setApprovalScope(next)
+              }}
+              className="w-full"
+            >
+              {approvalScopes.map((s) => (
+                <ToggleGroupItem key={s} value={s} className="flex-1">
+                  {approvalScopeLabels[s]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <FieldDescription>
+              Preselected on the approval cards for this teammate's sandboxes.
+              The card still lets you pick another scope.
+            </FieldDescription>
+          </Field>
+        </FormSection>
+        <FormSection
+          id="soul"
+          summary={summaries.soul}
+          title="Soul"
+          icon={SparkleIcon}
+          area="chat"
+        >
+          <Field data-invalid={soulBytes > maxSoulBytes || undefined}>
+            {/* The section's title is the visible label; the textarea keeps its name. */}
+            <FieldLabel htmlFor="teammate-soul" className="sr-only">
+              Soul
+            </FieldLabel>
+            <textarea
+              id="teammate-soul"
+              rows={8}
+              spellCheck
+              placeholder={
+                "# Ada\n\nYou review changes carefully and explain why."
+              }
+              className="min-h-32 w-full min-w-0 resize-y rounded-md border border-input bg-input/20 px-2 py-1 font-mono text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 md:text-xs/relaxed dark:bg-input/30"
+              aria-invalid={soulBytes > maxSoulBytes}
+              value={soul}
+              onChange={(e) => setSoul(e.target.value)}
+            />
+            {soulBytes > maxSoulBytes ? (
+              <FieldError>The soul is limited to 16 KiB.</FieldError>
+            ) : (
+              <FieldDescription>
+                Personality and working rules, in markdown.
+              </FieldDescription>
+            )}
+          </Field>
+        </FormSection>
+        {!sections && saveRow}
+      </form>
+    </FormSections.Provider>
   )
 }
 
@@ -490,18 +555,48 @@ function AvatarPicker({
   )
 }
 
-/** A group of fields under a section title, the same sections as the teammate's overview. */
+const FormSections = createContext<
+  | {
+      open?: string
+      onOpen: (id: string | undefined) => void
+      saveRow: ReactNode
+    }
+  | undefined
+>(undefined)
+
+/**
+ * A group of fields under a section title, the same sections as the teammate's overview; or,
+ * in a teammate's settings, a card with the section's summary that opens to them.
+ */
 function FormSection({
+  id,
+  summary,
   title,
   icon,
   area,
   children,
 }: {
+  id: string
+  summary: string
   title: string
   icon: Icon
   area?: Area
   children: ReactNode
 }) {
+  const sections = useContext(FormSections)
+  if (sections)
+    return (
+      <DisclosureCard
+        id={`teammate-${id}`}
+        title={title}
+        summary={summary}
+        open={sections.open === id}
+        onOpenChange={(open) => sections.onOpen(open ? id : undefined)}
+      >
+        {children}
+        {sections.saveRow}
+      </DisclosureCard>
+    )
   return (
     <section className="grid gap-4">
       <SectionHeader title={title} icon={icon} area={area} />

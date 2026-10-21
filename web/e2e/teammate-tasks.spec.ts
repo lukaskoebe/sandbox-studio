@@ -42,7 +42,7 @@ test("check-ins start off, then save their schedule on the settings page", async
     (await api.json<{ heartbeat?: { everyHours: number } }>("GET", teammate))
       ?.heartbeat
 
-  await page.goto(`/e/${env}/teammates/${id}/settings`)
+  await page.goto(`/e/${env}/teammates/${id}/settings?open=checkins`)
   const toggle = page.getByRole("switch", { name: "Check in on open tasks" })
   await expect(toggle).not.toBeChecked()
   expect(await schedule()).toBeUndefined()
@@ -53,13 +53,19 @@ test("check-ins start off, then save their schedule on the settings page", async
   await page.getByLabel("Every (hours)").fill("2")
   await page.getByRole("button", { name: "Save check-ins" }).click()
   await expect.poll(async () => (await schedule())?.everyHours).toBe(2)
+  // The card's summary says the schedule.
   await expect(
-    page.getByText("Every 2 hours, 09:00 to 18:00 local time")
+    page.getByRole("button", {
+      name: "Check-ins Every 2 hours, 09:00 to 18:00 local time",
+    })
   ).toBeVisible()
 
   await toggle.click()
   await expect(toggle).not.toBeChecked()
   await expect.poll(schedule).toBeUndefined()
+  await expect(
+    page.getByRole("button", { name: "Check-ins Off" })
+  ).toBeVisible()
 })
 
 test("a task gets a schedule in its dialog, shows it with its next run, and Run now says why it can't start", async ({

@@ -102,7 +102,7 @@ test("secrets are grouped by scope, and a teammate's settings list what its sand
   ).toBeVisible()
 
   // The teammate's settings list its secrets, its sandbox's and the inherited ones.
-  await page.goto(`/e/${env}/teammates/${teammateId}/settings`)
+  await page.goto(`/e/${env}/teammates/${teammateId}/settings?open=secrets`)
   const secrets = page.getByRole("region", { name: "Secrets" })
   const rows = secrets.getByRole("row")
   await expect(

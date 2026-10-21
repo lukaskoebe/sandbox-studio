@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import type { ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { ShieldCheckIcon, TrashIcon } from "@phosphor-icons/react"
+import { TrashIcon } from "@phosphor-icons/react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,8 +15,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { BrowserSettings } from "@/components/browser-settings"
-import { SectionHeader } from "@/components/section-header"
-import { TeammateLevelSelect } from "@/components/security-level"
+import { DisclosureCard } from "@/components/disclosure-card"
+import {
+  TeammateLevelSelect,
+  securityLevels,
+  useEnvironmentLevel,
+} from "@/components/security-level"
 import { Button } from "@/components/ui/button"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
@@ -23,10 +28,20 @@ import { TeammateForm } from "@/components/teammate-form"
 import { TeammateHeartbeat } from "@/components/teammate-heartbeat"
 import { TeammateSecrets } from "@/components/teammate-secrets"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
+import { heartbeatSentence } from "@/lib/tasks"
 
 export const Route = createFileRoute("/e/$env/teammates/$id/settings")({
+  // The section that is open, so a link can open one: ?open=checkins.
+  validateSearch: (s: Record<string, unknown>): { open?: string } =>
+    typeof s.open === "string" && s.open !== "" ? { open: s.open } : {},
   component: TeammateSettings,
 })
+
+/**
+ * A teammate's settings as cards, each with a one-line summary, that open one at a time: who
+ * it is, which agent it runs, the git identity it commits with, its approvals and soul, its
+ * check-ins, network level, browser and secrets.
+ */
 
 function TeammateSettings() {
   const { env, id } = Route.useParams()
@@ -36,51 +51,106 @@ function TeammateSettings() {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
+  const open = Route.useSearch().open
+  const navigate = Route.useNavigate()
+  const setOpen = (section: string | undefined) =>
+    navigate({ search: section ? { open: section } : {}, replace: true })
+  const card = (section: string, title: string, summary: ReactNode) => ({
+    id: `teammate-${section}`,
+    title,
+    summary,
+    open: open === section,
+    onOpenChange: (on: boolean) => setOpen(on ? section : undefined),
+  })
+
   const teammate = teammates.data?.find((p) => p.id === id)
   if (!teammate || !providers.data) return null
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="grid max-w-3xl gap-2.5">
       <TeammateForm
         key={teammate.id}
         env={env}
         teammate={teammate}
         providers={providers.data}
         onSaved={() => toast.success("Teammate saved")}
+        sections={{ open, onOpen: setOpen }}
       />
-      <div className="border-t pt-6">
+      <DisclosureCard
+        {...card(
+          "checkins",
+          "Check-ins",
+          teammate.heartbeat ? heartbeatSentence(teammate.heartbeat) : "Off"
+        )}
+      >
         <TeammateHeartbeat env={env} teammate={teammate} />
-      </div>
-      <section className="space-y-3 border-t pt-6">
-        <SectionHeader
-          title="Network security level"
-          icon={ShieldCheckIcon}
-          area="network"
-        />
+      </DisclosureCard>
+      <DisclosureCard
+        {...card(
+          "network",
+          "Network",
+          <LevelSummary env={env} teammate={teammate} />
+        )}
+      >
         <Field>
-          <FieldLabel htmlFor="teammate-security-level">Level</FieldLabel>
+          <FieldLabel htmlFor="teammate-security-level">
+            Security level
+          </FieldLabel>
           <TeammateLevelSelect env={env} teammate={teammate} />
           <FieldDescription>
             The level of this teammate's sandboxes. Environment default follows
-            the environment's level, set under Network.
+            the environment's level, set in Settings → Network.
           </FieldDescription>
         </Field>
-      </section>
-      <div className="border-t pt-6">
+      </DisclosureCard>
+      <DisclosureCard
+        {...card(
+          "browser",
+          "Browser",
+          teammate.browserStealth ? "Stealth mode on" : "Stealth mode off"
+        )}
+      >
         <BrowserSettings env={env} teammate={teammate} />
-      </div>
-      <div className="border-t pt-6">
+      </DisclosureCard>
+      <DisclosureCard
+        {...card(
+          "secrets",
+          "Secrets",
+          "Its own, its sandboxes' and the environment's"
+        )}
+      >
         <TeammateSecrets env={env} teammate={teammate} />
-      </div>
-      <section className="space-y-3 border-t pt-6">
-        <SectionHeader title={`Delete ${teammate.name}`} icon={TrashIcon} />
+      </DisclosureCard>
+      <DisclosureCard
+        {...card(
+          "delete",
+          `Delete ${teammate.name}`,
+          "Its sandboxes must be deleted first"
+        )}
+      >
         <p className="text-xs text-muted-foreground">
-          Its sandboxes must be deleted first. Network rules scoped to it go
-          with it.
+          Network rules scoped to it go with it.
         </p>
-        <DeleteTeammate env={env} teammate={teammate} />
-      </section>
+        <div>
+          <DeleteTeammate env={env} teammate={teammate} />
+        </div>
+      </DisclosureCard>
     </div>
+  )
+}
+
+/** The teammate's security level, or the environment's it follows. */
+function LevelSummary({ env, teammate }: { env: string; teammate: Teammate }) {
+  const environment = useEnvironmentLevel(env)
+  const own = securityLevels.find((l) => l.value === teammate.securityLevel)
+  const inherited = securityLevels.find((l) => l.value === environment.level)
+  if (own) return <>{own.label}</>
+  return (
+    <>
+      {inherited
+        ? `${inherited.label}, the environment's`
+        : "The environment's level"}
+    </>
   )
 }
 

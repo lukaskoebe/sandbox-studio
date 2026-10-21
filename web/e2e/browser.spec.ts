@@ -337,11 +337,13 @@ test("stealth mode is switched in the settings and reaches the browser", async (
   await call("browser_snapshot", {})
   expect((await fake())!.browser!.stealth).toBe(false)
 
-  await page.goto(`/e/${env}/teammates/${tm}/settings`)
+  await page.goto(`/e/${env}/teammates/${tm}/settings?open=browser`)
   const stealth = page.getByRole("switch", { name: "Stealth mode" })
   await expect(stealth).not.toBeChecked()
   await stealth.click()
-  await expect(page.getByText("Stealth mode on")).toBeVisible()
+  await expect(
+    page.getByRole("button", { name: "Browser Stealth mode on" })
+  ).toBeVisible()
   await expect(stealth).toBeChecked()
 
   await call("browser_snapshot", {})

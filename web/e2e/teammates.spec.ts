@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures"
+import { addTeammate, expect, sandboxName, test } from "./fixtures"
 
 test("a teammate is copied to another environment from its options menu, and opens there without a provider", async ({
   page,
@@ -71,4 +71,36 @@ test("adding a teammate without a provider explains why and leads to the provide
     new RegExp(`/e/${fresh!.id}/settings/providers$`)
   )
   await expect(dialog).toBeHidden()
+})
+
+test("the rail shows a teammate's computer, and its menu forks it or adds another", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Rail ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  await page.goto(`/e/${env}/teammates/${id}`)
+  const rail = page.getByRole("complementary")
+  await expect(
+    rail.getByText(`None yet. ${name} works in a sandbox`)
+  ).toBeVisible()
+  await rail.getByRole("button", { name: "Give it a sandbox" }).click()
+  await expect(page.getByRole("dialog", { name: "New sandbox" })).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  const sandbox = sandboxName("rail")
+  await api.createSandbox(sandbox, id)
+  await expect(rail.getByRole("heading", { name: "Computer" })).toBeVisible()
+  await expect(
+    rail.getByRole("link", { name: new RegExp(sandbox) })
+  ).toBeVisible()
+  await rail
+    .getByRole("button", { name: `More for ${name}'s sandboxes` })
+    .click()
+  await expect(
+    page.getByRole("menuitem", { name: new RegExp(`^Fork ${sandbox}`) })
+  ).toBeVisible()
+  await page.getByRole("menuitem", { name: /^Add another sandbox/ }).click()
+  await expect(page.getByRole("dialog", { name: "New sandbox" })).toBeVisible()
 })

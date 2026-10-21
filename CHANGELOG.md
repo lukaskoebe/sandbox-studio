@@ -30,6 +30,12 @@
   and Activity lists every decision (network, pushes, tool permissions, browser, memory) with
   a filter by kind. Requests waiting for you are on Home. The old addresses and `?settings=`
   links lead to the section that replaced them.
+- **Web:** a teammate's page has a smaller header with its role, harness and presence, and
+  says there what keeps it from working. The rail shows its computer, the sandbox it works
+  in, with a menu to fork it or add another (two or more are listed as Sandboxes), its last
+  chats, what it knows and its check-ins; the Chats tab is gone, its "All" link leads to the
+  list. Its Settings tab is a column of cards that say what each part is set to and open to
+  edit it.
 - **Web:** the work mode setting is gone, from Settings and from the guided setup, which now
   has six steps. A sandbox's workspace opens its latest chat when no tab is picked; every
   session still opens in the terminal with one click. `GET` and `PUT /api/settings/ui` are

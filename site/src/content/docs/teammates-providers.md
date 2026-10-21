@@ -7,7 +7,7 @@ A teammate is an agent identity in one environment. It has a name, role, avatar,
 
 ![The Teammates page listing agent names, harnesses, providers, models, and Git identities](../../assets/screenshots/teammates.jpg)
 
-Each teammate has a page of its own, reached from **Teammates** in the sidebar. It opens on your conversation with the teammate: its recent chats in brief, what it learned, its tasks and the approvals it waits for, in one thread. Below it, send a message, hand over a task that it starts on right away, or teach it something to remember. The other tabs hold its tasks, chats, private memory, browser, and settings, where you edit it or delete it. To use the same teammate in another environment, choose **Copy to environment…** in its options menu; its sandboxes, chats, memory, secrets and keys stay behind.
+Each teammate has a page of its own, reached from **Teammates** in the sidebar. It opens on your conversation with the teammate: its recent chats in brief, what it learned, its tasks and the approvals it waits for, in one thread. Below it, send a message, hand over a task that it starts on right away, or teach it something to remember. Beside it, its computer: the sandbox it works in, from whose menu you fork it or give it another (with two or more, the list says Sandboxes), its last chats, what it knows and its check-ins. The other tabs hold its tasks, private memory, browser, and settings, where each part (identity, agent, git, check-ins, network level, secrets and more) is a card that says what it is set to and opens to edit it, and where you delete it. To use the same teammate in another environment, choose **Copy to environment…** in its options menu; its sandboxes, chats, memory, secrets and keys stay behind.
 
 ## Choose a provider
 
