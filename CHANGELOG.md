@@ -1,6 +1,9 @@
 # Changelog
 
-## v0.5.0 — 2026-10-21
+## v0.5.1 — 2026-10-21
+
+v0.5.0 was tagged but never released; this is that release, with the live smoke test
+updated for the new sandbox workspace.
 
 A calmer Studio, built around your teammates: the web's sidebar and the TUI's list are one tree
 of teammates and what they work in, Home is what needs you, a sandbox opens on its chats and
