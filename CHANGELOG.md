@@ -36,6 +36,17 @@
   chats, what it knows and its check-ins; the Chats tab is gone, its "All" link leads to the
   list. Its Settings tab is a column of cards that say what each part is set to and open to
   edit it.
+- **TUI:** the list is teammate-first, as the web's sidebar: it starts on Home's row, which
+  says what needs you, then each teammate with its computer and that sandbox's sessions
+  (several sandboxes are listed each under it), then the sandboxes without a teammate. A push
+  waiting for review is a session of its sandbox. On Home's row the pane shows the cards
+  waiting (`tab` the next, `y` `a` `n` on an agent's permission), the sessions working now and
+  what was decided today, and `u` undoes a network decision's rule for a minute. A teammate's
+  row shows its sandboxes, sessions, tasks, what it knows and its network level, with `c`
+  chat, `T` agent, `t` shell, `+` another sandbox and `f` fork. The header's tabs are Home,
+  Activity and Settings; `,` opens Settings, the web's sections with what each is set to.
+  Activity lists every decision, and `←/→` narrows it to network, git, agents or memory. In a
+  git review, `r` requests changes with a note that goes to a new chat.
 - **Web:** the work mode setting is gone, from Settings and from the guided setup, which now
   has six steps. A sandbox's workspace opens its latest chat when no tab is picked; every
   session still opens in the terminal with one click. `GET` and `PUT /api/settings/ui` are

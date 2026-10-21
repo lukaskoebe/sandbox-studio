@@ -89,14 +89,15 @@ func (m *app) cursorMark(selected bool) string {
 	return style.Render("▌") + " "
 }
 
-// groupHeader is a sandbox's row, the header of its sessions in w cells: its name and teammate
-// (and template, on a wide list), a rule, and on the right the approvals waiting on it, its CPU
-// sparkline when there's room, and its status.
-func (m *app) groupHeader(sb sandboxes.View, selected bool, w int) string {
+// groupHeader is a sandbox's row, the header of its sessions in w cells, indent cells in: its
+// name and teammate (and template, on a wide list), a rule, and on the right the approvals
+// waiting on it, its CPU sparkline when there's room, and its status. A sandbox under its
+// teammate's row doesn't name the teammate again.
+func (m *app) groupHeader(sb sandboxes.View, selected bool, indent, w int) string {
 	ph := phaseOf(sb)
 	wide := w >= 64
-	left := m.cursorMark(selected) + styleBold.Render(sb.Name)
-	if t := m.teammates[sb.TeammateID]; t != "" {
+	left := m.cursorMark(selected) + strings.Repeat(" ", indent) + styleBold.Render(sb.Name)
+	if t := m.teammates[sb.TeammateID]; t != "" && indent == 0 {
 		left += styleDim.Render(" · " + t)
 	}
 	if wide && sb.TemplateName != "" {
@@ -108,23 +109,13 @@ func (m *app) groupHeader(sb sandboxes.View, selected bool, w int) string {
 		if wide {
 			waiting += " " + plural(n, "approval", "approvals")
 		}
-		if m.look.plain {
-			waiting = styleAccent.Render(waiting)
-		} else {
-			waiting = m.pal.waiting.Render(waiting)
-		}
-		right = waiting + "  " + right
+		right = m.waitingMark(waiting) + "  " + right
 	}
 	if !m.look.plain && ph != phaseStopped && ph != phaseSuspended && ph != phaseFailed &&
 		w-lipgloss.Width(left)-lipgloss.Width(right)-colSpark-3 >= 4 {
 		right = m.cpuSpark(sb, colSpark) + " " + right
 	}
-	fill := w - lipgloss.Width(left) - lipgloss.Width(right) - 2
-	if fill < 2 {
-		left = fitStyled(left, max(w-lipgloss.Width(right)-4, 6))
-		fill = w - lipgloss.Width(left) - lipgloss.Width(right) - 2
-	}
-	return left + " " + styleDim.Render(strings.Repeat("─", max(fill, 1))) + " " + right
+	return ruledRow(left, right, w)
 }
 
 // groupStatus is a sandbox's status in its header: "● 2h" while it runs ("● up 2h 14m" on a
@@ -169,43 +160,51 @@ func shortUptime(d time.Duration) string {
 	return fmt.Sprintf("%dd", int(d/(24*time.Hour)))
 }
 
-// homeBody is Home: the sidebar of the environment's sandboxes and their sessions, with the pane
-// beside it on a wide terminal.
+// homeBody is Home: the tree of the environment's teammates, sandboxes and sessions, with the
+// pane beside it on a wide terminal.
 func (m *app) homeBody(w, h int) []string {
 	switch {
 	case m.env.ID == "":
 		return []string{styleDim.Render("No environment yet. Start Studio once, then run studio tui again.")}
 	case !m.loaded:
 		return []string{styleDim.Render("Loading…")}
-	case len(m.sandboxes) == 0:
-		return []string{
-			"No sandboxes in " + m.env.Name + " yet.",
-			"",
-			styleDim.Render("Press n to create one."),
-		}
-	}
-	visible := m.visible()
-	if len(visible) == 0 {
-		return []string{styleDim.Render("No sandbox matches “" + m.filter + "”.")}
+	case m.filter != "" && len(m.homeRows()) == 0:
+		return []string{styleDim.Render("Nothing matches “" + m.filter + "”.")}
 	}
 	if m.homeSplit(w) {
-		return m.splitBody(visible, w, h)
+		return m.splitBody(w, h)
 	}
-	return m.sidebar(visible, w, h)
+	if m.at == atHome {
+		return m.narrowHome(w, h)
+	}
+	return m.sidebar(w, h)
 }
 
-// sidebar is the rows of Home's list in w cells and h lines, the cursor's row in view: each
-// sandbox as the header of a group, its sessions under it, and a blank line between groups.
-func (m *app) sidebar(visible []sandboxes.View, w, h int) []string {
-	rows := m.homeRows()
-	at := m.cursorRow(rows)
-	var order []int // the row of each line, -1 for the blank line before a group
+// sidebar is the rows of Home's list in w cells and h lines, the cursor's row in view: Home,
+// each teammate with its sandboxes and sessions under it, and a blank line between teammates.
+func (m *app) sidebar(w, h int) []string {
+	return m.treeLines(m.homeRows(), w, h)
+}
+
+// treeLines draws rows of Home's list in w cells and h lines, the cursor's row in view.
+func (m *app) treeLines(rows []homeRow, w, h int) []string {
+	all := m.homeRows()
+	at := m.cursorRow(all)
+	index := map[homeRow]int{} // a row's index in the whole list, which a click selects
+	for i, r := range all {
+		index[r] = i
+	}
+	const blank, label = -1, -2
+	var order []int // the row of each line, blank or label for the lines between
 	cursorLine := 0
 	for i, r := range rows {
-		if r.sub < 0 && i > 0 {
-			order = append(order, -1)
+		if r.gap && len(order) > 0 {
+			order = append(order, blank)
 		}
-		if i == at {
+		if r.label != "" {
+			order = append(order, label)
+		}
+		if index[r] == at {
 			cursorLine = len(order)
 		}
 		order = append(order, i)
@@ -215,30 +214,23 @@ func (m *app) sidebar(visible []sandboxes.View, w, h int) []string {
 	if cursorLine >= h {
 		offset = cursorLine - h + 1
 	}
+	visible := m.visible()
 	var lines []string
-	sessions := map[int][]session{}
 	for _, i := range order[offset:] {
 		if len(lines) >= h {
 			break
 		}
-		if i < 0 {
+		switch i {
+		case blank:
 			lines = append(lines, "")
+			continue
+		case label:
+			lines = append(lines, "  "+styleDim.Render("no teammate"))
 			continue
 		}
 		r := rows[i]
-		selected := i == at
-		if r.sub < 0 {
-			m.hitRow(len(lines), 0, w, rowSandbox, r.sb)
-			lines = append(lines, m.groupHeader(visible[r.sb], selected, w))
-			continue
-		}
-		list, ok := sessions[r.sb]
-		if !ok {
-			list = m.sessionsOf(visible[r.sb])
-			sessions[r.sb] = list
-		}
-		m.hitSession(len(lines), 0, w, r.sb, r.sub)
-		lines = append(lines, m.sessionRow(list[r.sub], r.num, selected, w))
+		m.hitRow(len(lines), 0, w, rowTree, index[r])
+		lines = append(lines, m.treeLine(r, visible, index[r] == at, w))
 	}
 	return lines
 }

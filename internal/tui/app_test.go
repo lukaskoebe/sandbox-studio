@@ -33,6 +33,7 @@ func sampleApp() *app {
 		{Sandbox: store.Sandbox{ID: "sb4", Name: "demo"}, Status: "starting", TemplateName: "base"},
 	}
 	m.approvals = []api.ApprovalView{{Approval: store.Approval{ID: "a1", SandboxID: "sb2", Kind: "network", Status: "pending"}}}
+	m.at, m.sub = atSandbox, -1 // most tests start on the first sandbox's row, a row below Home's
 	return m
 }
 

@@ -1,4 +1,4 @@
-Sandbox Studio · Default                                            ● 1 approval
+Sandbox Studio · Default                                1 blocked · ▲ 1 need you
 ────────────────────────────────────────────────────────────────────────────────
 Git push  Push 2 commits to fix-login on GitHub/acme/web
 
@@ -20,4 +20,4 @@ Diff
 diff --git a/src/login.tsx b/src/login.tsx
 index 3b18e51..a4c2f0d 100644
 ────────────────────────────────────────────────────────────────────────────────
-y approve and push  n reject  i ignore  ↑↓/pgdn scroll  esc/q back  ? help
+y approve and push  r request changes  n reject  i ignore  ↑↓/pgdn scroll …

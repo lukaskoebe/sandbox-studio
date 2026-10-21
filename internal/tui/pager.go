@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -44,6 +45,8 @@ var (
 	keyPush      = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "approve and push"))
 	keyOpenPR    = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "open pull request"))
 	keyReject    = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "reject"))
+	keyChanges   = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "request changes"))
+	keySendNote  = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send"))
 	keyReview    = key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "review"))
 	keyScrollBar = key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("↑↓/pgdn", "scroll"))
 	keyPrevFile  = key.NewBinding(key.WithKeys("["))
@@ -434,7 +437,7 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keyBack):
 		m.screen = p.back
-	case key.Matches(msg, keyPush, keyReject, keyIgnore) && !gitPending(a):
+	case key.Matches(msg, keyPush, keyReject, keyIgnore, keyChanges) && !gitPending(a):
 		m.setNotice(gitDecidedText(a), false)
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
@@ -487,6 +490,8 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, m.decide(card{approvals: []api.ApprovalView{a}}, d, "Approved", what)
+	case key.Matches(msg, keyChanges) && a.Git.PullRequest == nil:
+		m.askChanges(a)
 	case key.Matches(msg, keyReject):
 		m.screen = p.back
 		return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "deny", Scope: "sandbox"}, "Rejected", gitWhat(a))
@@ -496,6 +501,47 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	p.scroll = max(p.scroll, 0) // pagerBody keeps it off the end
 	return m, nil
+}
+
+// askChanges asks what the agent should change, and then rejects the push with it as the note.
+// For a teammate's sandbox the note also goes to a new chat there, as the web's review does by
+// default, so the agent picks it up and pushes again.
+func (m *app) askChanges(a api.ApprovalView) {
+	who := firstNonEmpty(a.Git.Push.TeammateName, "the agent")
+	m.ask(&linePrompt{
+		label: "What should " + who + " change? ",
+		enter: keySendNote,
+		submit: func(text string) (string, tea.Cmd) {
+			note := strings.TrimSpace(text)
+			if note == "" {
+				return "say what to change", nil
+			}
+			m.screen = m.pager.back
+			return "", m.requestChanges(a, note)
+		},
+	})
+}
+
+// requestChanges rejects a push with a note, and sends the note to a new chat in its sandbox when
+// a teammate pushed it.
+func (m *app) requestChanges(a api.ApprovalView, note string) tea.Cmd {
+	ctx, client := m.ctx, m.client
+	toChat := a.Git.Push.TeammateName != ""
+	return func() tea.Msg {
+		rctx, cancel := requestContext(ctx)
+		defer cancel()
+		if _, err := client.Decide(rctx, a.EnvironmentID, a.ID, Decision{Action: "deny", Scope: "sandbox", Note: note}); err != nil {
+			return actionDone{err: fmt.Errorf("could not decide: %w", err)}
+		}
+		if !toChat {
+			return actionDone{done: "Asked for changes on " + gitBranch(a) + "."}
+		}
+		path := "/api/environments/" + a.EnvironmentID + "/approvals/" + a.ID + "/feedback"
+		if err := client.Do(rctx, http.MethodPost, path, map[string]any{"note": note, "newChat": true}, nil); err != nil {
+			return actionDone{err: fmt.Errorf("rejected the push, but could not send the note: %w", err)}
+		}
+		return actionDone{done: "Asked " + a.Git.Push.TeammateName + " for changes on " + gitBranch(a) + " in a new chat."}
+	}
 }
 
 // gitBranch is the branch a git approval pushes.
@@ -521,9 +567,12 @@ func (m *app) pagerBindings() []key.Binding {
 		approve = keyOpenPR
 	}
 	a := m.pager.approval
-	bindings := []key.Binding{approve, keyReject, keyIgnore, keyScrollBar}
-	if a.Git.Review != nil && a.Git.Review.PullRequest != nil {
-		bindings = []key.Binding{approve, keyTogglePR, keyReject, keyIgnore, keyScrollBar}
+	bindings := []key.Binding{approve, keyChanges, keyReject, keyIgnore, keyScrollBar}
+	switch {
+	case a.Git.PullRequest != nil:
+		bindings = []key.Binding{approve, keyReject, keyIgnore, keyScrollBar}
+	case a.Git.Review != nil && a.Git.Review.PullRequest != nil:
+		bindings = []key.Binding{approve, keyTogglePR, keyChanges, keyReject, keyIgnore, keyScrollBar}
 	}
 	if !gitPending(a) {
 		bindings = []key.Binding{keyScrollBar}

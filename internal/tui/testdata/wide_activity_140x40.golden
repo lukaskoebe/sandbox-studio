@@ -1,9 +1,9 @@
- ◆ Studio  Default ▾   Sandboxes   Approvals 1   Activity   Git                                                                       12:00 
-─────────────────────────────────────────────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────
-Activity · connections and decisions, newest first
+ ◆ Studio  Default ▾   Home 1   Activity   Settings                                                                    ▲ 1 need you · 12:00 
+────────────────────────────────━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────
+Activity · connections and decisions, newest first                                                        all network git agents memory  ←/→
   Busiest hosts                    10 min    
-  nope.invalid                     ▁▁▁▁▁▁█▁▁▁   ● failed            —
-  proxy.golang.org:443             ▁▁▁▁▁▁▁▁▁█   ● allowed           —
+  nope.invalid                     ▁▁▁▁▁▁█▁▁▁   ● failed            
+  proxy.golang.org:443             ▁▁▁▁▁▁▁▁▁█   ● allowed           
   registry.npmjs.org:443           ▁▁▁▁▁▁▁▁▁█   ● allowed           *.npmjs.org
   tracker.example.com:443          ▁▁▁▁▁▁▁▁▁█   ● denied            tracker.example.com
 
@@ -36,4 +36,4 @@ Activity · connections and decisions, newest first
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-enter rule  ↑/k up │ / sandbox  r rules (browser) │ esc/q back  ? more
+enter rule  ↑/k up  ←/→ kind │ / sandbox  r rules (browser) │ esc/q back  ? more

@@ -1,5 +1,5 @@
- ◆ Studio  Default ▾   Sandboxes   Approvals 1   Activity   Git 1                                                                     12:00 
-────────────────────────────────────────────────────────────━━━━━───────────────────────────────────────────────────────────────────────────
+ ◆ Studio  Default ▾   Home 1   Activity   Settings                                                        1 blocked · ▲ 1 need you · 12:00 
+───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
 FILES  2                    │ ± GIT PUSH  Push 2 commits to fix-login on GitHub/acme/web
   src/login.tsx      +−     │ 2 files  +7 −1  █████████████▒▒
   src/login.test.tsx ++++++ │ 
@@ -36,4 +36,4 @@ FILES  2                    │ ± GIT PUSH  Push 2 commits to fix-login on GitH
                             │ --- /dev/null
                             │ +++ b/src/login.test.tsx
 ────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────────────────────
-y approve and push  n reject  i ignore  ↑↓/pgdn scroll  [/] file │ esc/q back  ? more
+y approve and push  r request changes  n reject  i ignore  ↑↓/pgdn scroll  [/] file │ esc/q back  ? more

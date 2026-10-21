@@ -1,4 +1,4 @@
-[1mSandbox Studio[m[2m · [mDefault                                            [1;38;5;221m●[m 1 approval
+[1mSandbox Studio[m[2m · [mDefault                                [2m1 blocked · [m[1;38;5;221m▲ 1 need you[m
 [2m────────────────────────────────────────────────────────────────────────────────[m
 [1;38;5;141m± GIT PUSH[m  [1mPush 2 commits to fix-login on GitHub/acme/web[m
 2 files  [38;5;77m+7[m [38;5;203m−1[m  [38;5;77m█████████████[m[38;5;203m▒▒[m
@@ -20,4 +20,4 @@
 [1mDiff[m
 [1mdiff --git a/src/login.tsx b/src/login.tsx[m
 [2m────────────────────────────────────────────────────────────────────────────────[m
-[1my[m [2mapprove and push[m  [1mn[m [2mreject[m  [1mi[m [2mignore[m  [1m↑↓/pgdn[m [2mscroll[m  [1m[/][m [2mfile[m  [1mesc/q[m [2mback[m[2m …[m
+[1my[m [2mapprove and push[m  [1mr[m [2mrequest changes[m  [1mn[m [2mreject[m  [1mi[m [2mignore[m  [1m↑↓/pgdn[m [2mscroll[m[2m …[m

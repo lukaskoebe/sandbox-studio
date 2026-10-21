@@ -65,15 +65,15 @@ func TestTerminalSmoke(t *testing.T) {
 }
 
 // TestTerminalSmokeWide runs the visual look on a wide 256-color terminal: Home splits into the
-// sidebar and the selected sandbox's dashboard, and a click on the Activity tab opens the log.
+// list and Home's pane, and a click on the Activity tab opens the log.
 func TestTerminalSmokeWide(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusStopped)
 	tui := startTUI(t, s, 140, 40)
-	tui.waitFor("the wide Home", "◆", "Studio", "blub", "stopped", "HISTORY")
+	tui.waitFor("the wide Home", "◆", "Studio", "blub", "stopped", "Needs you", "EARLIER TODAY")
 
 	// A click on the tab, in SGR mouse coordinates that count from 1, acts as l.
-	x := len([]rune(" ◆ Studio  Default ▾   Sandboxes   Approvals   "))
+	x := len([]rune(" ◆ Studio  Default ▾   Home   "))
 	tui.write(fmt.Sprintf("\x1b[<0;%d;1M\x1b[<0;%d;1m", x+2, x+2))
 	tui.waitFor("Activity", "connections and decisions")
 	tui.write("q")

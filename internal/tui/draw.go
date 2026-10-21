@@ -154,10 +154,9 @@ func cardBox(lines []string, w int, rule, frame lipgloss.Style) []string {
 type tab int
 
 const (
-	tabSandboxes tab = iota
-	tabApprovals
+	tabHome tab = iota
 	tabActivity
-	tabGit
+	tabSettings
 )
 
 // tabSpan is where a tab, or the environment, sits on the header line.
@@ -174,25 +173,12 @@ func (m *app) activeTab() tab {
 		s = m.helpBack
 	}
 	switch s {
-	case screenApprovals:
-		return tabApprovals
-	case screenPager, screenGit:
-		return tabGit
-	case screenActivity, screenEntry:
+	case screenActivity, screenEntry, screenGit:
 		return tabActivity
+	case screenSettings:
+		return tabSettings
 	}
-	return tabSandboxes
-}
-
-// gitWaiting counts the pushes and pull requests that wait for a review.
-func (m *app) gitWaiting() int {
-	n := 0
-	for _, a := range m.approvals {
-		if isGit(a) {
-			n++
-		}
-	}
-	return n
+	return tabHome
 }
 
 // tabHeader is the visual look's header of w cells: Studio's mark, the environment, the tabs
@@ -213,16 +199,15 @@ func (m *app) tabHeader(w int) (string, []tabSpan) {
 		name  string
 		count int
 	}{
-		{tabSandboxes, "Sandboxes", 0},
-		{tabApprovals, "Approvals", len(m.approvals)},
+		{tabHome, "Home", m.needCount()},
 		{tabActivity, "Activity", 0},
-		{tabGit, "Git", m.gitWaiting()},
+		{tabSettings, "Settings", 0},
 	}
 	active := m.activeTab()
 	for i, t := range tabs {
 		name := t.name
 		if short {
-			name = map[tab]string{tabSandboxes: "S", tabApprovals: "A", tabActivity: "L", tabGit: "G"}[t.t]
+			name = map[tab]string{tabHome: "H", tabActivity: "L", tabSettings: ","}[t.t]
 		}
 		label := name
 		if t.t == active {
@@ -246,7 +231,11 @@ func (m *app) tabHeader(w int) (string, []tabSpan) {
 			}
 		}
 	}
-	return spread(b.String(), m.sessionsHeader()+styleDim.Render(m.now.Format("15:04"))+" ", w), spans
+	right := styleDim.Render(m.now.Format("15:04")) + " "
+	if n := m.needCount(); n > 0 {
+		right = m.waitingMark(fmt.Sprintf("▲ %d need you", n)) + styleDim.Render(" · ") + right
+	}
+	return spread(b.String(), m.sessionsHeader()+right, w), spans
 }
 
 // tabRule is the rule under the tab header: the accent under the tab on show, dim elsewhere.

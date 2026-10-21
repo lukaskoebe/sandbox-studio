@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
+	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
@@ -34,6 +35,7 @@ const (
 	sessionChat                        // a chat with the sandbox's teammate
 	sessionTerminal                    // any other terminal
 	sessionOlder                       // the row that shows a sandbox's older chats
+	sessionReview                      // a git push or pull request that waits for your review
 )
 
 // session is a row under a sandbox: a terminal by its tmux name, or a chat.
@@ -42,13 +44,17 @@ type session struct {
 	sandbox string
 	term    agentproto.Session
 	chat    store.Chat
-	older   int // the chats the older row hides
+	older   int              // the chats the older row hides
+	review  api.ApprovalView // the push or pull request a review row opens
 }
 
 // id names a session across reads: its sandbox and terminal, or its chat.
 func (s session) id() string {
-	if s.kind == sessionChat {
+	switch s.kind {
+	case sessionChat:
 		return "chat/" + s.chat.ID
+	case sessionReview:
+		return "review/" + s.review.ID
 	}
 	return "term/" + s.sandbox + "/" + s.term.Name
 }
@@ -60,6 +66,8 @@ func (s session) title() string {
 		return chatTitle(s.chat)
 	case sessionOlder:
 		return fmt.Sprintf("+ %d older", s.older)
+	case sessionReview:
+		return reviewTitle(s.review)
 	}
 	return s.term.Name
 }
@@ -242,7 +250,27 @@ func (m *app) sessionsOf(sb sandboxes.View) []session {
 		}
 		out = append(out, session{kind: sessionChat, sandbox: sb.ID, chat: c})
 	}
-	return append(out, plain...)
+	out = append(out, plain...)
+	for _, a := range m.approvals {
+		if isGit(a) && a.SandboxID == sb.ID {
+			out = append(out, session{kind: sessionReview, sandbox: sb.ID, review: a})
+		}
+	}
+	return out
+}
+
+// reviewTitle names a review by its branch, or its pull request's.
+func reviewTitle(a api.ApprovalView) string {
+	if a.Git == nil {
+		return a.Subject
+	}
+	if pr := a.Git.PullRequest; pr != nil {
+		return pr.Head + " → " + pr.Base
+	}
+	if r := a.Git.Review; r != nil && r.Branch != "" {
+		return r.Branch
+	}
+	return strings.TrimPrefix(a.Git.Push.Ref, "refs/heads/")
 }
 
 // stateOf is a session's state. A chat is blocked while one of its permission requests waits;
@@ -250,6 +278,8 @@ func (m *app) sessionsOf(sb sandboxes.View) []session {
 // which process asked.
 func (m *app) stateOf(x session) agentState {
 	switch x.kind {
+	case sessionReview:
+		return stateBlocked
 	case sessionChat:
 		for _, a := range m.approvals {
 			if a.ChatPermission != nil && a.ChatPermission.ChatID == x.chat.ID {
@@ -276,47 +306,11 @@ func (m *app) stateOf(x session) agentState {
 	return stateIdle
 }
 
-// homeRow is a row of Home's list: a sandbox, by its index among the visible ones, or one of its
-// sessions, by its index under it (sub); sub is -1 for the sandbox's own row.
-type homeRow struct {
-	sb, sub int
-	num     int // the session's number, 1 to 9, or 0
-}
-
-// homeRows are the rows of Home's list, in order.
-func (m *app) homeRows() []homeRow {
-	var rows []homeRow
-	num := 0
-	for i, sb := range m.visible() {
-		rows = append(rows, homeRow{sb: i, sub: -1})
-		for j, x := range m.sessionsOf(sb) {
-			r := homeRow{sb: i, sub: j}
-			if x.kind != sessionOlder && num < 9 {
-				num++
-				r.num = num
-			}
-			rows = append(rows, r)
-		}
-	}
-	return rows
-}
-
-// cursorRow is the index of the cursor's row among homeRows.
-func (m *app) cursorRow(rows []homeRow) int {
-	sub := m.subRow()
-	for i, r := range rows {
-		if r.sb == m.cursor && r.sub == sub {
-			return i
-		}
-	}
-	return 0
-}
-
 // subRow is the session under the cursor's sandbox that the cursor is on, -1 for the sandbox
 // itself. A session that went is replaced by the last one left.
 func (m *app) subRow() int {
 	sb := m.selected()
-	if sb == nil {
+	if sb == nil || m.at != atSandbox {
 		return -1
 	}
 	m.sub = min(m.sub, len(m.sessionsOf(*sb))-1)
@@ -326,7 +320,7 @@ func (m *app) subRow() int {
 // selectedSession is the session under the cursor, if the cursor is on one.
 func (m *app) selectedSession() (session, bool) {
 	sb := m.selected()
-	if sb == nil {
+	if sb == nil || m.at != atSandbox {
 		return session{}, false
 	}
 	list := m.sessionsOf(*sb)
@@ -343,7 +337,7 @@ func (m *app) moveRow(dir int) {
 		return
 	}
 	i := min(max(m.cursorRow(rows)+dir, 0), len(rows)-1)
-	m.cursor, m.sub = rows[i].sb, rows[i].sub
+	m.setCursor(rows[i])
 	m.blurButtons()
 	m.pane.answer = false
 }
@@ -353,7 +347,7 @@ func (m *app) moveRow(dir int) {
 func (m *app) numbered(n int) tea.Cmd {
 	for _, r := range m.homeRows() {
 		if r.num == n {
-			m.cursor, m.sub = r.sb, r.sub
+			m.setCursor(r)
 			if _, ok := m.paneTarget(); ok {
 				return m.focusPane()
 			}
@@ -372,14 +366,19 @@ func (m *app) nextWaiting() {
 	for _, want := range []agentState{stateBlocked, stateDone} {
 		for k := 1; k <= len(rows); k++ {
 			r := rows[(at+k)%len(rows)]
-			if r.sub < 0 {
+			if r.kind != atSandbox || r.sub < 0 {
 				continue
 			}
 			if m.stateOf(m.sessionsOf(visible[r.sb])[r.sub]) == want {
-				m.cursor, m.sub = r.sb, r.sub
+				m.setCursor(r)
 				return
 			}
 		}
+	}
+	if m.at != atHome && len(m.cards()) > 0 {
+		m.goHome() // what else waits is on Home's cards
+		m.approvalCursor = 0
+		return
 	}
 	m.setNotice("No session waits for you.", false)
 }
@@ -401,6 +400,10 @@ func (m *app) enterSession() tea.Cmd {
 			m.sess.older = map[string]bool{}
 		}
 		m.sess.older[x.sandbox] = true
+		return nil
+	case sessionReview:
+		m.openPager(x.review)
+		m.pager.back = screenHome
 		return nil
 	case sessionChat:
 		m.chats = chatState{sandbox: *sb, back: m.screen, fold: -1, gen: m.chats.gen}
@@ -461,7 +464,7 @@ func (m *app) stateMark(st agentState) string {
 
 // sessionWords say what a session is and how it is.
 func (m *app) sessionWords(x session, st agentState) string {
-	kind := map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "terminal"}[x.kind]
+	kind := map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "terminal", sessionReview: "review"}[x.kind]
 	switch {
 	case x.kind == sessionChat && x.chat.Heartbeat:
 		kind = "check-in"
@@ -471,6 +474,8 @@ func (m *app) sessionWords(x session, st agentState) string {
 	switch {
 	case x.kind == sessionOlder:
 		return ""
+	case x.kind == sessionReview:
+		return "review · waiting"
 	case st == stateBlocked:
 		return kind + " · blocked"
 	case st == stateWorking:
@@ -495,21 +500,23 @@ func sessionKindWord(x session) string {
 	case x.kind == sessionChat && x.chat.TaskID != "":
 		return "sched"
 	}
-	return map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "term"}[x.kind]
+	return map[sessionKind]string{sessionAgent: "agent", sessionChat: "chat", sessionTerminal: "term", sessionReview: "review"}[x.kind]
 }
 
-// sessionRow is a session's row of the sidebar in w cells: its number, its state's mark and its
-// title, and on the right what it is; a wide list says how it is too.
-func (m *app) sessionRow(x session, num int, selected bool, w int) string {
+// sessionRow is a session's row of the sidebar in w cells, indent cells in: its number, its
+// state's mark and its title, and on the right what it is; a wide list says how it is too.
+func (m *app) sessionRow(x session, num int, selected bool, indent, w int) string {
+	pad := strings.Repeat(" ", indent)
+	w -= indent
 	if x.kind == sessionOlder {
-		return m.cursorMark(selected) + "    " + styleDim.Render(clip(x.title(), max(w-6, 0)))
+		return m.cursorMark(selected) + pad + "    " + styleDim.Render(clip(x.title(), max(w-6, 0)))
 	}
 	n := " "
 	if num > 0 {
 		n = fmt.Sprint(num)
 	}
 	st := m.stateOf(x)
-	lead := m.cursorMark(selected) + styleDim.Render(n) + " " + m.stateMark(st) + " "
+	lead := m.cursorMark(selected) + pad + styleDim.Render(n) + " " + m.stateMark(st) + " "
 	right := sessionKindWord(x)
 	if w >= 64 {
 		right = m.sessionWords(x, st)

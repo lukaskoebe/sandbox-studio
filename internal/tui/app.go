@@ -32,6 +32,7 @@ const (
 	screenProgress    // a new sandbox's create or a fork, until it is ready
 	screenCheckpoints // a sandbox's checkpoints
 	screenGit         // the environment's pushes and pull requests
+	screenSettings    // the sections of Settings
 )
 
 // notice is the one line under the key bar: what the last action did, or what went wrong.
@@ -82,6 +83,8 @@ type app struct {
 	newSb          newState           // a new sandbox, from its form to its create's end
 	checkpoints    checkpointState    // the checkpoints screen
 	ports          portsState         // the open ports of the sandbox on the detail screen
+	at             rowKind            // what the cursor of Home's list is on: Home, a teammate, or a sandbox
+	mate           string             // the teammate whose row the cursor is on
 	cursor         int                // the selected sandbox, among the visible ones
 	sub            int                // the session under the cursor's sandbox the cursor is on; -1 for the sandbox
 	sess           sessionsState      // the sessions of the sandboxes, which Home lists under them
@@ -110,6 +113,9 @@ type app struct {
 	pane     paneState    // what Home's pane shows, and whether it has the keys
 	buttons  buttonFocus  // the control the arrows are on
 	resuming *resumeState // what a decision away from a session returns to
+	home     homeState    // Home's row: the decisions it lists, and the last one u undoes
+	mates    mateState    // the tasks and facts of the teammate on show
+	settings settingsState
 }
 
 // newApp returns the model for a session with the Studio at addr. Its first screen loads on Init.
@@ -128,6 +134,7 @@ func newApp(ctx context.Context, client *Client, addr string) *app {
 		width:     defaultWidth,
 		height:    defaultHeight,
 		look:      look{plain: true},
+		at:        atHome,
 		sub:       -1,
 	}
 }
@@ -154,7 +161,8 @@ func (m *app) Init() tea.Cmd {
 func (m *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	return next, tea.Batch(cmd, m.watchPorts(), m.watchUsage(), m.watchLineage(), m.watchSpin(),
-		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions(), m.watchPane())
+		m.watchToast(), m.watchSlide(), m.watchNet(), m.watchPicture(), m.watchSessions(), m.watchPane(),
+		m.watchHome(), m.watchMate())
 }
 
 // update applies one message to the model.
@@ -190,6 +198,15 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	if cmd, ok := m.gitUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.homeUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.mateUpdate(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.settingsUpdate(msg); ok {
 		return m, cmd
 	}
 	if m.motionUpdate(msg) {
@@ -245,6 +262,9 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for _, t := range msg.teammates {
 			m.teammates[t.ID] = t.Name
 		}
+		if _, ok := m.mateOf(m.mate); m.at == atMate && !ok {
+			m.at = atHome // the teammate on show is gone
+		}
 		if !m.reselect(prev) && m.screen == screenDetail {
 			m.screen = screenHome // the sandbox on show is gone
 			m.report("That sandbox was deleted.", true)
@@ -284,6 +304,10 @@ func (m *app) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.report(msg.err.Error(), true)
 		} else {
 			m.report(msg.done, false)
+		}
+		if msg.undo != nil {
+			msg.undo.until = time.Now().Add(undoFor)
+			m.home.undo = msg.undo
 		}
 		return m, m.refresh()
 	case attachDone:
@@ -385,8 +409,18 @@ func (m *app) reselect(prev string) bool {
 	return found
 }
 
-// selected is the sandbox under the cursor, or nil when none is visible.
+// selected is the sandbox under the cursor, or nil when none is visible: on a teammate's row,
+// its first sandbox, and none on Home's row.
 func (m *app) selected() *sandboxes.View {
+	switch m.at {
+	case atHome:
+		return nil
+	case atMate:
+		if list := m.sandboxesOf(m.mate); len(list) > 0 {
+			return &list[0]
+		}
+		return nil
+	}
 	visible := m.visible()
 	if m.cursor < 0 || m.cursor >= len(visible) {
 		return nil

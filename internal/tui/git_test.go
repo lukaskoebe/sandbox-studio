@@ -42,7 +42,7 @@ func TestGitScreenListsThePushesWaitingFirst(t *testing.T) {
 			t.Errorf("the Git screen lacks %q:\n%s", want, out)
 		}
 	}
-	if m.activeTab() != tabGit {
+	if m.activeTab() != tabActivity {
 		t.Errorf("the header marks %v", m.activeTab())
 	}
 }
@@ -67,12 +67,9 @@ func TestGitScreenReviewsAndReturns(t *testing.T) {
 	}
 }
 
-func TestGitTabOpensTheGitScreen(t *testing.T) {
+func TestTheEmptyGitScreen(t *testing.T) {
 	m := sampleApp()
-	m.openTab(tabSpan{tab: tabGit})
-	if m.screen != screenGit {
-		t.Fatalf("the Git tab opens %v", m.screen)
-	}
+	m.openGit()
 	m.git.loaded = true
 	if out := strings.Join(m.gitBody(80, 20), "\n"); !strings.Contains(out, "No pushes yet") {
 		t.Errorf("the empty Git screen:\n%s", out)

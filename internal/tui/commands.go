@@ -41,6 +41,7 @@ type (
 	actionDone    struct {
 		done string
 		err  error
+		undo *undoState // a decision u can undo for a while
 	}
 )
 

@@ -1,4 +1,4 @@
-Sandbox Studio · Default                                            ● 1 approval
+Sandbox Studio · Default                                1 blocked · ▲ 1 need you
 ────────────────────────────────────────────────────────────────────────────────
    return (
      <form onSubmit={submit}>
@@ -20,4 +20,4 @@ new file mode 100644
 +    expect(form).toBeTruthy()
 +})
 ────────────────────────────────────────────────────────────────────────────────
-y approve and push  n reject  i ignore  ↑↓/pgdn scroll  esc/q back  ? help
+y approve and push  r request changes  n reject  i ignore  ↑↓/pgdn scroll …

@@ -49,6 +49,7 @@ func TestSaveCheckpointThroughTheServer(t *testing.T) {
 	s := startStudio(t)
 	s.addSandbox(t, "blub", runtime.StatusRunning)
 	m := newApp(ctx, connect(t, s), s.Addr)
+	m.at = atSandbox // on the sandbox's row, a row below Home's
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
 	m, cmd := pressCmd(m, "h")

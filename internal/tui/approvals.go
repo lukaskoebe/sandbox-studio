@@ -245,6 +245,7 @@ type Decision struct {
 	BrowserOnly bool       `json:"browserOnly,omitempty"`
 	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
 	Remember    bool       `json:"remember,omitempty"`
+	Note        string     `json:"note,omitempty"`
 	// PullRequest, for a push whose review offers one, opens it with the push or not.
 	PullRequest *PullRequestChoice `json:"pullRequest,omitempty"`
 }
@@ -287,13 +288,15 @@ func (m *app) decide(c card, d Decision, verb, what string) tea.Cmd {
 		rctx, cancel := requestContext(ctx)
 		defer cancel()
 		var failure error
+		var made string // the rule a single decision made
 		decided := 0
 		for _, a := range c.approvals {
 			body := d
 			if c.group {
 				body = Decision{Action: d.Action, Scope: d.Scope, Host: a.Network.Host, BrowserOnly: d.BrowserOnly}
 			}
-			if _, err := client.Decide(rctx, a.EnvironmentID, a.ID, body); err != nil {
+			v, err := client.Decide(rctx, a.EnvironmentID, a.ID, body)
+			if err != nil {
 				if apiStatus(err) == http.StatusConflict {
 					continue
 				}
@@ -301,6 +304,7 @@ func (m *app) decide(c card, d Decision, verb, what string) tea.Cmd {
 				continue
 			}
 			decided++
+			made = v.RuleID
 		}
 		switch {
 		case failure != nil:
@@ -313,7 +317,12 @@ func (m *app) decide(c card, d Decision, verb, what string) tea.Cmd {
 		if what == "" {
 			what = hostOf(c.first())
 		}
-		return actionDone{done: verb + " " + what + "."}
+		done := actionDone{done: verb + " " + what + "."}
+		if made != "" && isNetwork(c.first()) {
+			done.undo = &undoState{env: c.first().EnvironmentID, rule: made, what: strings.ToLower(verb[:1]) + verb[1:] + " " + what}
+			done.done += " u undoes it."
+		}
+		return done
 	}
 }
 

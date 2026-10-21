@@ -257,7 +257,7 @@ func TestGroupedKeyBar(t *testing.T) {
 func TestMouseSelectsAndOpens(t *testing.T) {
 	m := visualApp(80, 24)
 	m.View()                                                                 // records where the rows lead
-	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 4, Button: tea.MouseLeft} // docs-site's header, under two groups
+	click := tea.MouseClickMsg{X: 10, Y: bodyTop + 6, Button: tea.MouseLeft} // docs-site's header, under Home and two groups
 	next, _ := m.Update(click)
 	m = next.(*app)
 	if m.cursor != 2 || m.screen != screenHome {
@@ -299,20 +299,21 @@ func TestClickingATabActsAsItsKey(t *testing.T) {
 	m := visualApp(120, 30)
 	sampleApprovals(m)
 	m.View()
-	var git, activity tabSpan
+	var settings, activity tabSpan
 	for _, s := range m.mouse.tabs {
 		switch {
-		case s.tab == tabGit && !s.env:
-			git = s
+		case s.tab == tabSettings && !s.env:
+			settings = s
 		case s.tab == tabActivity && !s.env:
 			activity = s
 		}
 	}
-	next, _ := m.Update(tea.MouseClickMsg{X: git.x0, Y: 0, Button: tea.MouseLeft})
+	next, _ := m.Update(tea.MouseClickMsg{X: settings.x0, Y: 0, Button: tea.MouseLeft})
 	m = next.(*app)
-	if m.screen != screenGit || m.git.back != screenHome {
-		t.Fatalf("Git opens the Git screen from Home: screen %v, back %v", m.screen, m.git.back)
+	if m.screen != screenSettings || m.settings.back != screenHome {
+		t.Fatalf("Settings opens Settings from Home: screen %v, back %v", m.screen, m.settings.back)
 	}
+	m = press(m, "esc")
 	m.View()
 	next, _ = m.Update(tea.MouseClickMsg{X: activity.x0, Y: 0, Button: tea.MouseLeft})
 	m = next.(*app)

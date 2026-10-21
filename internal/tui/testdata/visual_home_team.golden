@@ -1,0 +1,35 @@
+ ◆ Studio  Default ▾   Home 3   Activity   Settings                                            1 working · 3 blocked · ▲ 3 need you · 12:00 
+───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ Home ─────────────────────── ▲ 3 need you │ Needs you · 3                                                                    tab next card
+                                            │ ──────────────────────────────────────────────────────────────────────────────────────────────
+  Iris · 2 sandboxes ───── ▲ 1  ● 1 running │ ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+    blub ─────────────── ▁▁▁▁▁▁▁▁ ▲ 1  ● 2h │ ┃ ± GIT PUSH   Push 2 commits to feature/login on GitHub/…  api-refactor · Default · 30s ago │
+    1 ▲ claude                        agent │ ┃  enter  Review the diff                                                                    │
+    2 ○ Fix the login form             chat │ ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+    3   main                           term │ ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+    docs-site ─────────────────── ○ stopped │ ┃ ⇅ NETWORK   api-refactor wants 3 hosts                                    Default · 1m ago │
+    4 ○ Update the deploy notes       sched │ ┃ pypi.org:443  files.pythonhosted.org:443  pypi.python.org:443                              │
+    5 ○ Check-in                      check │ ┃ scope environment ‹s›                                                                      │
+    6 ○ Rename the guides              chat │ ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+        + 2 older                           │ ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+                                            │ ┃ ⇅ NETWORK   blub wants registry.npmjs.org:443                            Default · 10m ago │
+  Finn · api-refact… ── ▲ 4  ▂▄▅▆▆▄▃▄ ● 12m │ ┃ pattern *.npmjs.org ‹p›   scope Iris's sandboxes ‹s›   ports default ‹x›                   │
+  7 ▲ codex                           agent │ ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+  8 ⠋ Port the parser to go            chat │ 
+  9   main                             term │ WORKING NOW
+    ▲ feature/login                  review │ ▲ Iris    claude                                                        blub · agent · blocked
+                                            │ ▲ Finn    codex                                                 api-refactor · agent · blocked
+  no teammate                               │ ⠋ Finn    Port the parser to go                                  api-refactor · chat · working
+  demo ───────────────── ▓▒░░░░░░ ◐ booting │ 
+                                            │ EARLIER TODAY
+                                            │ Nothing decided yet today.
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────
+tab next card  enter review  ↓/j down  1-9 jump in  , settings  n new │ l activity │ ? more  q quit

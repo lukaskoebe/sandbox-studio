@@ -173,3 +173,32 @@ func TestPagerOpensAPullRequestLater(t *testing.T) {
 		t.Fatalf("o: cmd %v, screen %v", cmd != nil, m.screen)
 	}
 }
+
+// r on a teammate's push asks for a note, rejects the push with it and sends it to a new chat.
+func TestRequestChangesRejectsAndSendsTheNote(t *testing.T) {
+	m := sampleApp()
+	client, rec := recordingClient(t)
+	m.client = client
+	samplePush(m)
+	m = press(m, "a", "enter", "r")
+	if m.typing == nil || !strings.Contains(m.typing.label, "What should Finn change?") {
+		t.Fatalf("r asks for the note: %+v", m.typing)
+	}
+	m = press(m, "t", "e", "s", "t", "s")
+	m, cmd := pressCmd(m, "enter")
+	m = run(m, cmd)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.requests) != 2 {
+		t.Fatalf("calls: %+v", rec.requests)
+	}
+	if d := rec.requests[0]; d.path != "/api/environments/env1/approvals/g1/decide" || !strings.Contains(d.body, `"deny"`) || !strings.Contains(d.body, `"note":"tests"`) {
+		t.Errorf("the decision: %+v", d)
+	}
+	if f := rec.requests[1]; f.path != "/api/environments/env1/approvals/g1/feedback" || !strings.Contains(f.body, `"newChat":true`) {
+		t.Errorf("the feedback: %+v", f)
+	}
+	if !strings.Contains(m.notice.text, "Asked Finn for changes on fix-login in a new chat.") {
+		t.Errorf("notice %q", m.notice.text)
+	}
+}

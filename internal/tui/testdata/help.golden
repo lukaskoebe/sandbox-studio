@@ -1,23 +1,23 @@
-Sandbox Studio · Default                                            ● 1 approval
+Sandbox Studio · Default                                            ▲ 1 need you
 ────────────────────────────────────────────────────────────────────────────────
 Keys
   1-9        go into that session; Ctrl-] returns to the list
   enter      go into the session under the cursor, or open the sandbox
   alt+1-9    from a session, go into another; alt+z: full screen
-  tab        the next session that waits for you: blocked, then done
+  tab        the next session that waits for you, then Home's cards
+  y / a / n  Home's card: allow, always or deny; tab moves to the next
+  u          undo the last network decision, for a minute after it
   y / o / n  an agent's banner: allow, allow once or deny what blocks it
   t / T      the sandbox's main terminal; T starts its teammate's agent
   c / C      the newest chat with the sandbox's teammate; C a new one
+  +          on a teammate: another sandbox for it
   s / z / d  start, stop or resume; z suspends; d deletes, after asking
   f / h      fork the sandbox; its checkpoints, to save or restore one
   n          new sandbox: a teammate, a template and a name
   e / /      switch environment; filter by name, teammate or template
-  a / l / g  approvals, from every environment; Activity, the log; Git
+  a / l / ,  approvals, from every environment; Activity; Settings
   ↑/↓, j/k   move the cursor
-  esc / q    go back; esc clears the filter, q quits from the list
+  esc / q    Home; esc clears the filter first, q quits from the list
   ?          this help
-
-Settings, providers, teammates, templates, rules, memory and the browser
-stay in the browser, at http://127.0.0.1:7878/.
 ────────────────────────────────────────────────────────────────────────────────
 esc/q back

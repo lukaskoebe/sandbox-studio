@@ -409,6 +409,7 @@ func TestChatScreensLoadFromTheServer(t *testing.T) {
 	sb := s.addSandbox(t, "blub", runtime.StatusRunning)
 	c := s.addChat(t, sb, "Greeting")
 	m := newApp(context.Background(), connect(t, s), s.Addr)
+	m.at = atSandbox // on the sandbox's row, a row below Home's
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
 	m.sandboxes[0].TeammateID = "t1" // the chat is with this teammate

@@ -98,6 +98,8 @@ func (m *app) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.checkpointsKey(msg)
 	case screenGit:
 		return m.gitKey(msg)
+	case screenSettings:
+		return m.settingsKey(msg)
 	default: // help: any key closes it
 		m.screen = m.helpBack
 		return m, nil
@@ -108,10 +110,21 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.bannerKey(msg); ok {
 		return m, cmd
 	}
+	if key.Matches(msg, keyUndo) && m.undoable() != nil {
+		return m, m.undo()
+	}
+	if cmd, ok := m.needsKey(msg); ok {
+		return m, cmd
+	}
+	if cmd, ok := m.mateKey(msg); ok {
+		return m, cmd
+	}
 	_, inPane := m.paneTarget()
 	switch {
 	case key.Matches(msg, keyQuit):
 		return m, tea.Quit
+	case key.Matches(msg, keySettings):
+		return m, m.openSettings()
 	case key.Matches(msg, keyUp):
 		m.moveRow(-1)
 	case key.Matches(msg, keyDown):
@@ -167,7 +180,9 @@ func (m *app) homeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.filter != "" {
 			m.filter = ""
 			m.reselect(m.selectedID())
+			return m, nil
 		}
+		m.goHome()
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
 	}
@@ -223,6 +238,7 @@ func (m *app) envsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.picker < len(m.envs) && m.envs[m.picker].ID != m.env.ID {
 			m.env = m.envs[m.picker]
 			m.sandboxes, m.loaded, m.cursor, m.sub, m.filter = nil, false, 0, -1, ""
+			m.at, m.mate = atHome, ""
 			return m, m.loadSandboxes()
 		}
 	}
@@ -373,6 +389,8 @@ func (m *app) bindings() []key.Binding {
 		return []key.Binding{keyYes, keyNo}
 	}
 	switch m.screen {
+	case screenSettings:
+		return []key.Binding{keyUp, keyOpen, keyActivity, keyBack, keyHelp}
 	case screenDetail:
 		return m.detailBindings()
 	case screenEnvs:
@@ -399,6 +417,12 @@ func (m *app) bindings() []key.Binding {
 	}
 	if b := m.bannerBindings(); b != nil {
 		return b
+	}
+	if m.at == atHome {
+		return m.needsBindings()
+	}
+	if m.at == atMate {
+		return m.mateBindings()
 	}
 	if x, ok := m.paneTarget(); ok {
 		bindings := []key.Binding{keyFocus, keyNumber, keyWaiting}

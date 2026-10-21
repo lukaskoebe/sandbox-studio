@@ -1,0 +1,35 @@
+ ◆ Studio  Default ▾   Home 3   Activity   Settings                                            1 working · 3 blocked · ▲ 3 need you · 12:00 
+───────────────────────━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Home ─────────────────────── ▲ 3 need you │ Iris · frontend                                                                    ▲ needs you
+                                            │ ──────────────────────────────────────────────────────────────────────────────────────────────
+▌ Iris · 2 sandboxes ───── ▲ 1  ● 1 running │ SANDBOXES  ● blub · node-22+python-3.13@2 · 2 CPUs · 2 GiB · up 2h
+    blub ─────────────── ▁▁▁▁▁▁▁▁ ▲ 1  ● 2h │            ○ docs-site · node@3 · stopped
+    1 ▲ claude                        agent │ 
+    2 ○ Fix the login form             chat │ SESSIONS   1 ▲ claude  agent
+    3   main                           term │            2 ○ Fix the login form  chat
+    docs-site ─────────────────── ○ stopped │            3   main  term
+    4 ○ Update the deploy notes       sched │            4 ○ Update the deploy notes  sched
+    5 ○ Check-in                      check │            5 ○ Check-in  check
+    6 ○ Rename the guides              chat │            6 ○ Rename the guides  chat
+        + 2 older                           │ 
+                                            │ TASKS      none
+  Finn · api-refact… ── ▲ 4  ▂▄▅▆▆▄▃▄ ● 12m │ 
+  7 ▲ codex                           agent │ KNOWS      nothing yet
+  8 ⠋ Port the parser to go            chat │ NETWORK    Default, the environment's · new rules apply to Iris's sandboxes
+  9   main                             term │ 
+    ▲ feature/login                  review │ c new chat · T agent in a terminal · t shell · + another sandbox · f fork
+                                            │ 
+  no teammate                               │ 
+  demo ───────────────── ▓▒░░░░░░ ◐ booting │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+                                            │ 
+────────────────────────────────────────────┴───────────────────────────────────────────────────────────────────────────────────────────────
+c new chat  T agent  t shell  + add sandbox  f fork  s start/stop  1-9 jump in  tab next waiting │ ? more  q quit

@@ -54,6 +54,7 @@ func TestStopAndDeleteGoThroughTheServer(t *testing.T) {
 	}
 
 	m := newApp(ctx, c, s.Addr)
+	m.at = atSandbox // on the sandbox's row, a row below Home's
 	m.env = s.Env
 	m = run(m, m.loadSandboxes())
 	m.cursor = 0

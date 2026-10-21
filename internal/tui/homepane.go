@@ -50,7 +50,7 @@ var (
 
 // homeSplit reports whether Home shows the sidebar and the pane.
 func (m *app) homeSplit(w int) bool {
-	return w >= paneWidth && m.env.ID != "" && m.loaded && len(m.visible()) > 0
+	return w >= paneWidth && m.env.ID != "" && m.loaded && (m.filter == "" || len(m.homeRows()) > 0)
 }
 
 // sidebarWidth is the width of Home's sidebar at w columns; the pane gets the rest.
@@ -91,7 +91,7 @@ func (m *app) paneTarget() (session, bool) {
 		return session{}, false
 	}
 	x, ok := m.selectedSession()
-	if !ok || x.kind == sessionOlder {
+	if !ok || x.kind == sessionOlder || x.kind == sessionReview {
 		return session{}, false
 	}
 	return x, true
@@ -99,7 +99,7 @@ func (m *app) paneTarget() (session, bool) {
 
 // dashShows reports whether the pane shows the dashboard of the sandbox under the cursor.
 func (m *app) dashShows() bool {
-	if !m.paneShows() || m.selected() == nil {
+	if !m.paneShows() || m.selected() == nil || m.at != atSandbox {
 		return false
 	}
 	_, ok := m.selectedSession()
@@ -264,7 +264,7 @@ func (m *app) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		n := int(msg.Code - '0')
 		for _, r := range m.homeRows() {
 			if r.num == n {
-				m.cursor, m.sub = r.sb, r.sub
+				m.setCursor(r)
 				return m, m.focusPane()
 			}
 		}
@@ -315,6 +315,12 @@ func (m *app) paneBindings() []key.Binding {
 // paneBody is Home's pane in w cells and h rows: the dashboard of the sandbox under the cursor,
 // or the session under it.
 func (m *app) paneBody(w, h int) []string {
+	switch m.at {
+	case atHome:
+		return m.needsPane(w, h, false)
+	case atMate:
+		return m.matePane(w, h)
+	}
 	sb := m.selected()
 	if sb == nil {
 		return nil
@@ -323,6 +329,8 @@ func (m *app) paneBody(w, h int) []string {
 	switch {
 	case !ok:
 		return m.dashboard(*sb, w, h)
+	case x.kind == sessionReview:
+		return m.reviewPane(x.review, *sb, w)
 	case x.kind == sessionOlder:
 		return []string{"", styleDim.Render(clip(fmt.Sprintf("%d older chats. Enter lists them.", x.older), w))}
 	case x.kind == sessionChat:
@@ -566,12 +574,12 @@ func (m *app) paneCursor() *tea.Cursor {
 
 // splitBody is Home's wide layout: the sidebar, a line, and the pane; the line is the accent's
 // while the pane has the keys. In full screen the pane has the whole width.
-func (m *app) splitBody(visible []sandboxes.View, w, h int) []string {
+func (m *app) splitBody(w, h int) []string {
 	if m.zoomed() {
 		return m.paneBody(w, h)
 	}
 	listW := sidebarWidth(w)
-	left := m.sidebar(visible, listW-1, h) // a cell of room before the line
+	left := m.sidebar(listW-1, h) // a cell of room before the line
 	right := m.paneBody(w-listW-2, h)
 	sep := styleDim.Render("│")
 	if m.paneFocused() {

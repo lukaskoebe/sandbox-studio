@@ -16,15 +16,15 @@ const wheelLines = 3
 type rowTarget int
 
 const (
-	rowSandbox    rowTarget = iota + 1 // a sandbox of Home's list
-	rowCard                            // an approval's card
+	rowCard       rowTarget = iota + 1 // an approval's card
 	rowEntry                           // an entry of the Activity log
-	rowSession                         // a session under a sandbox of Home's list
 	rowCheckpoint                      // a checkpoint
 	rowEnv                             // an environment of the picker
 	rowFold                            // a folded tool call or thought of a transcript
 	rowFile                            // a file of the git review's file list
 	rowPush                            // a push or pull request of the Git screen
+	rowTree                            // a row of Home's list, by its index among homeRows
+	rowSetting                         // a section of Settings
 )
 
 // rowHit is a row of the screen, or the part of it from x0 to x1, and what it leads to.
@@ -32,7 +32,6 @@ type rowHit struct {
 	y, x0, x1 int
 	target    rowTarget
 	index     int
-	sub       int // a session's index under its sandbox
 }
 
 // keyHit is a key drawn on the screen: a keycap of a card or a key of the key bar, on row y from
@@ -56,12 +55,6 @@ type mouseState struct {
 // hitRow records that line of the body, from x0 to x1, leads to the target's index-th item.
 func (m *app) hitRow(line, x0, x1 int, target rowTarget, index int) {
 	m.mouse.rows = append(m.mouse.rows, rowHit{y: bodyTop + line, x0: x0, x1: x1, target: target, index: index})
-}
-
-// hitSession records that line of the body, from x0 to x1, leads to the sub-th session of the
-// index-th sandbox.
-func (m *app) hitSession(line, x0, x1, index, sub int) {
-	m.mouse.rows = append(m.mouse.rows, rowHit{y: bodyTop + line, x0: x0, x1: x1, target: rowSession, index: index, sub: sub})
 }
 
 // hitKeys records the keys of a line on row y of the screen, the line starting at column x.
@@ -143,19 +136,22 @@ func (m *app) click(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 // clickRow selects what a row leads to; a double click opens it, as enter would.
 func (m *app) clickRow(r rowHit, double bool) (tea.Model, tea.Cmd) {
 	switch r.target {
-	case rowSandbox:
-		m.cursor, m.sub, m.pane.focus = r.index, -1, false
 	case rowCard:
 		m.approvalCursor = r.index
 	case rowEntry:
 		m.activity.cursor = r.index
-	case rowSession:
-		m.cursor, m.sub, m.pane.focus = r.index, r.sub, false
+	case rowTree:
+		if rows := m.homeRows(); r.index < len(rows) {
+			m.setCursor(rows[r.index])
+			m.pane.focus = false
+		}
 	case rowCheckpoint:
 		m.checkpoints.cursor = r.index
 		return m, nil // enter does nothing here
 	case rowEnv:
 		m.picker = r.index
+	case rowSetting:
+		m.settings.cursor = r.index
 	case rowPush:
 		m.git.cursor = r.index
 	case rowFold:
@@ -228,7 +224,7 @@ func (m *app) wheelChat(dir int) {
 	c.scroll = min(max(c.scroll-dir*wheelLines, 0), max(total-m.transcriptRows(), 0))
 }
 
-// openTab shows a tab's screen, as its key does: Sandboxes is Home. The environment's name opens the picker from Home, as e does.
+// openTab shows a tab's screen, as its key does: Home is Home's row. The environment's name opens the picker from Home, as e does.
 func (m *app) openTab(s tabSpan) tea.Cmd {
 	if s.env {
 		if m.screen == screenHome {
@@ -242,20 +238,16 @@ func (m *app) openTab(s tabSpan) tea.Cmd {
 		}
 	}
 	switch s.tab {
-	case tabSandboxes:
+	case tabHome:
 		leave()
-		m.screen = screenHome
-	case tabApprovals:
-		if m.screen == screenPager {
-			m.screen = m.pager.back // the review's way back
-		}
-		m.openApprovals()
-	case tabGit:
-		if m.screen == screenGit {
+		m.goHome()
+	case tabSettings:
+		if m.screen == screenSettings {
 			return nil
 		}
 		leave()
-		return m.openGit()
+		m.screen = screenHome
+		return m.openSettings()
 	case tabActivity:
 		if m.screen == screenActivity {
 			return nil

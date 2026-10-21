@@ -1,0 +1,23 @@
+Sandbox Studio · Default                    1 working · 3 blocked · ▲ 3 need you
+────────────────────────────────────────────────────────────────────────────────
+Needs you · 3                                                      tab next card
+────────────────────────────────────────────────────────────────────────────────
+╭──────────────────────────────────────────────────────────────────────────────╮
+┃ ± GIT PUSH   Push 2 commits to feature/lo…  api-refactor · Default · 30s ago │
+┃  enter  Review the diff                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+▲ ⇅ api-refactor wants 3 hosts
+▲ ⇅ blub wants registry.npmjs.org:443
+
+TEAMMATES
+  Iris · 2 sandboxes ────────────────────────────────────────── ▲ 1  ● 1 running
+    blub  node-22+python-3.13@2 ───────────── ▁▁▁▁▁▁▁▁ ▲ 1 approval  ● up 2h 14m
+    1 ▲ claude                                                   agent · blocked
+    2 ○ Fix the login form                                         chat · 3m ago
+    3   main                                                 terminal · attached
+    docs-site  node@3 ──────────────────────────────────────────────── ○ stopped
+    4 ○ Update the deploy notes                               scheduled · 1d ago
+    5 ○ Check-in                                               check-in · 1d ago
+    6 ○ Rename the guides                                           chat · ended
+────────────────────────────────────────────────────────────────────────────────
+tab next card  enter review  ↓/j down  1-9 jump in  , settings  n new …

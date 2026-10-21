@@ -33,14 +33,33 @@ type activityState struct {
 	rules     map[string]store.Rule // by ID
 	cursor    int
 	filter    string // narrows the entries to the sandboxes whose name has it
+	kind      int    // narrows the entries to one of activityKinds; 0 is all
 	gen       int    // counts the times the screen opened, so a tick of an earlier visit stops
 	entry     *activityEntry
 	at        time.Time // when the log was read, which the busy hosts count back from
 }
 
-// activityEntry is one line of the log: a connection, or the decision on a network request.
+// activityKinds are the kinds the log narrows to, as the web's Activity does; ←/→ steps
+// through them.
+var activityKinds = []string{"all", "network", "git", "agents", "memory"}
+
+// approvalKind is the kind of activityKinds an approval is.
+func approvalKind(a api.ApprovalView) string {
+	switch {
+	case isNetwork(a):
+		return "network"
+	case strings.HasPrefix(a.Kind, "git."):
+		return "git"
+	case strings.HasPrefix(a.Kind, "memory."):
+		return "memory"
+	}
+	return "agents"
+}
+
+// activityEntry is one line of the log: a connection, or the decision on an approval.
 type activityEntry struct {
 	at       time.Time
+	kind     string // one of activityKinds but all
 	sandbox  string // its name
 	host     string // host:port
 	verdict  string
@@ -49,6 +68,7 @@ type activityEntry struct {
 	why      string // the reviewer's reason, the curated entry, or why a connection failed
 	decision bool   // a decision on an approval rather than a connection
 	decided  string // how a decision was made without asking: open, curated or reviewer
+	what     string // what a decision other than a network request's was about
 	key      string // identifies the entry across reloads, to keep the cursor on it
 }
 
@@ -175,7 +195,7 @@ func (m *app) activityEntries() []activityEntry {
 	for id, list := range a.conns {
 		for _, c := range list {
 			e := activityEntry{
-				at: c.Started, sandbox: names[id], host: hostPortOf(c.Host, c.Port),
+				kind: "network", at: c.Started, sandbox: names[id], host: hostPortOf(c.Host, c.Port),
 				verdict: connVerdict(c.Verdict), ruleID: c.RuleID, why: c.Error,
 				bad: c.Verdict == gateway.VerdictDenied || c.Verdict == gateway.VerdictFailed,
 				key: fmt.Sprintf("c%s/%d", id, c.ID),
@@ -187,20 +207,26 @@ func (m *app) activityEntries() []activityEntry {
 		}
 	}
 	for _, d := range a.decisions {
-		if !isNetwork(d) || d.Status == "pending" {
+		if d.Status == "pending" {
 			continue
 		}
 		e := activityEntry{
-			at: d.UpdatedAt, sandbox: firstNonEmpty(names[d.SandboxID], approvalSource(d)), host: hostOf(d),
+			kind: approvalKind(d), at: d.UpdatedAt, sandbox: firstNonEmpty(names[d.SandboxID], approvalSource(d)), host: hostOf(d),
 			verdict: decisionWords(d), bad: d.Status == "denied", ruleID: d.RuleID, decision: true, key: "d" + d.ID,
 		}
 		if d.Network != nil {
 			e.why, e.decided = d.Network.Reason, d.Network.Decided
 		}
+		if e.kind != "network" {
+			e.host, e.what = oneLine(firstNonEmpty(summary(d), kindTitle(d.Kind))), decisionText(d)
+		}
 		out = append(out, e)
 	}
 	if a.filter != "" {
 		out = slices.DeleteFunc(out, func(e activityEntry) bool { return !matches(a.filter, e.sandbox) })
+	}
+	if a.kind > 0 {
+		out = slices.DeleteFunc(out, func(e activityEntry) bool { return e.kind != activityKinds[a.kind] })
 	}
 	slices.SortStableFunc(out, func(x, y activityEntry) int {
 		if c := y.at.Compare(x.at); c != 0 {
@@ -274,6 +300,8 @@ func (m *app) ruleCell(e activityEntry) string {
 		return "curated list"
 	case e.decided == "open":
 		return "level Open"
+	case e.kind != "network":
+		return e.kind
 	case e.decision:
 		return "no rule"
 	}
@@ -293,6 +321,10 @@ func (m *app) activityKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.cursor = max(a.cursor-1, 0)
 	case key.Matches(msg, keyDown):
 		a.cursor = min(a.cursor+1, max(len(list)-1, 0))
+	case key.Matches(msg, keyLeft):
+		a.kind, a.cursor = (a.kind+len(activityKinds)-1)%len(activityKinds), 0
+	case key.Matches(msg, keyRight):
+		a.kind, a.cursor = (a.kind+1)%len(activityKinds), 0
 	case key.Matches(msg, keyRule):
 		if a.cursor < len(list) {
 			e := list[a.cursor]
@@ -341,14 +373,29 @@ func (m *app) activityBody(w, h int) []string {
 	if a.filter != "" {
 		head += styleDim.Render(" · ") + "sandbox “" + a.filter + "”"
 	}
+	chips := make([]string, len(activityKinds))
+	for i, k := range activityKinds {
+		switch {
+		case i == a.kind && m.look.plain:
+			chips[i] = styleBold.Render("[" + k + "]")
+		case i == a.kind:
+			chips[i] = m.pal.brand.Render(k)
+		default:
+			chips[i] = styleDim.Render(k)
+		}
+	}
+	head = spread(head, strings.Join(chips, " ")+styleDim.Render("  ←/→"), w)
 	if !a.loaded {
 		return []string{head, "", styleDim.Render("Loading…")}
 	}
 	list := m.activityEntries()
 	if len(list) == 0 {
 		empty := "Connections and decisions show up here as sandboxes make them."
-		if a.filter != "" {
+		switch {
+		case a.filter != "":
 			empty = "Nothing from a sandbox matching “" + a.filter + "” yet."
+		case a.kind > 0:
+			empty = "No " + activityKinds[a.kind] + " activity yet."
 		}
 		return []string{head, "", styleDim.Render(empty)}
 	}
@@ -356,7 +403,7 @@ func (m *app) activityBody(w, h int) []string {
 	ruleW := max(rest/3, 12)
 	hostW := max(rest-ruleW, 12)
 	lines := []string{head}
-	if strip := m.busyHosts(w, h); len(strip) > 0 {
+	if strip := m.busyHosts(w, h); len(strip) > 0 && a.kind <= 1 {
 		lines = append(append(lines, strip...), "")
 	}
 	rows := max(h-len(lines), 1)
@@ -504,7 +551,7 @@ func (m *app) entryBody(w, h int) []string {
 		kind = "Decision"
 	}
 	lines := []string{
-		styleBold.Render(kind) + "  " + e.host,
+		styleBold.Render(kind) + "  " + clip(e.host, max(w-10, 8)),
 		"",
 		fact("Sandbox", firstNonEmpty(e.sandbox, "—")),
 		fact("Verdict", e.verdict),
@@ -512,6 +559,9 @@ func (m *app) entryBody(w, h int) []string {
 	}
 	if e.why != "" {
 		lines = append(lines, fact("Why", fit(oneLine(e.why), w-13)))
+	}
+	if e.kind != "network" {
+		return append(lines, fact("Kind", e.kind), fact("Decided", fit(e.what, w-13)))
 	}
 	lines = append(lines, "")
 	r, ok := m.activity.rules[e.ruleID]
@@ -630,7 +680,9 @@ func (m *app) activityBindings() []key.Binding {
 	if m.screen == screenEntry {
 		return []key.Binding{keyRules, keyBack, keyHelp}
 	}
-	return []key.Binding{keyRule, keyUp, keyFilterSandbox, keyRules, keyBack, keyHelp}
+	return []key.Binding{keyRule, keyUp, keyKind, keyFilterSandbox, keyRules, keyBack, keyHelp}
 }
+
+var keyKind = key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "kind"))
 
 var keyFilterSandbox = key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "sandbox"))

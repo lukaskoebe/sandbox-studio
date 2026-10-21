@@ -54,23 +54,67 @@ Keys are the same on every screen and cannot be changed. The key bar shows the o
 
 | Screen | Shows | Keys |
 |---|---|---|
-| **Home** | the sandboxes of the environment on show: status, name, teammate, template, uptime and the approvals waiting on each; under each, its [sessions](#sessions). From 100 columns, a sidebar of them beside [the pane](#the-pane) | `↑/↓` `j/k` move over sandboxes and sessions · `1`–`9` go into that session · `enter` go into the session, or open the sandbox · `alt+z` the pane in full screen · `y` `o` `n` decide the [banner](#the-approval-banner)'s network request, `a` reviews it on its card, `←/→` and `space` press its buttons · `tab` the next session that waits · `n` new · `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest chat · `C` a new chat · `a` approvals · `l` Activity · `g` Git · `e` environment · `/` filter by name, teammate or template · `?` help · `q` quit |
+| **Home** | [the list](#homes-list): Home's row with what needs you, each teammate with its sandboxes and their [sessions](#sessions), then the sandboxes without a teammate. From 100 columns, the list beside [the pane](#the-pane) | `↑/↓` `j/k` move over the rows · `1`–`9` go into that session · `enter` go into the session, or open the sandbox · `alt+z` the pane in full screen · on Home's row, [its cards](#homes-row): `y` `a` `n` decide, `tab` the next card, `u` undo · `y` `o` `n` decide the [banner](#the-approval-banner)'s network request, `a` reviews it on its card, `←/→` and `space` press its buttons · `tab` the next session that waits, then Home's cards · `n` new · on a teammate, `c` a new chat, `T` its agent, `t` a shell, `+` another sandbox, `f` fork · on a sandbox, `t` terminal · `T` start the teammate's agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete (asks first) · `c` the newest chat · `C` a new chat · `a` approvals · `l` Activity · `,` Settings · `g` Git · `e` environment · `/` filter by name, teammate or template · `esc` back to Home's row · `?` help · `q` quit |
 | **Sandbox** (from `enter`) | status, teammate, template, resources, uptime, approvals, ID, and the open ports with their preview addresses | `t` terminal · `T` agent · `s` start, stop or resume · `z` suspend · `f` fork · `h` checkpoints · `d` delete · `c` chat · `C` new chat · `l` its Activity · `a` approvals · `g` Git · `esc` back |
 | **Checkpoints** (from `h`) | the sandbox's checkpoints, newest first: name, auto or manual, state, age | `n` save one · `r` restore the one under the cursor (asks first) · `↑/↓` move · `esc` back |
 | **New sandbox** (from `n`) | a teammate, a template, a name; then the create's steps. A fork's progress shows here too | see below |
 | **Chat** (from a chat's session, `c` or `C`) | the transcript, streaming | see below |
 | **Approvals** (from `a` anywhere) | every pending approval of every environment, grouped like the web stack | see below |
-| **Git** (from `g`, or its tab) | the environment's pushes and pull requests: the ones waiting for a review, then the last 100 decided, with their sandbox and outcome | `↑/↓` move · `enter` the review · `a` approvals · `l` Activity · `esc` back |
+| **Git** (from `g`) | the environment's pushes and pull requests: the ones waiting for a review, then the last 100 decided, with their sandbox and outcome | `↑/↓` move · `enter` the review · `a` approvals · `l` Activity · `esc` back |
 | **Git review** (from `enter` on a git card or a push on the Git screen) | the push's facts, commits and diff, or the pull request | see below |
-| **Activity** (from `l`) | connections and decisions of the environment's sandboxes, newest first | `enter` the entry and its rule · `/` filter by sandbox · `r` print the URL of Settings → Network · `esc` back |
+| **Activity** (from `l`, or its tab) | connections of the environment's sandboxes and every decision, newest first | `←/→` the kind: all, network, git, agents, memory · `enter` the entry and its rule · `/` filter by sandbox · `r` print the URL of Settings → Network · `esc` back |
+| **Settings** (from `,`, or its tab) | the web's Settings sections in their three groups, each with what it is set to | `↑/↓` move · `enter` Activity opens here, the others print their address in the browser · `l` Activity · `esc` back |
 | **Environments** (from `e`) | the environments; `enter` switches | `↑/↓` · `enter` choose · `esc` cancel |
 
-The header always shows the number of pending approvals across all environments, after the
-environment's working and blocked sessions. When a new approval arrives, the terminal rings
+The header always shows what needs you across all environments, `▲ n need you`, after the
+environment's working and blocked sessions; n counts Home's cards, so requests that arrived
+together count once. The visual look's header has the tabs Home, Activity and Settings. When a new approval arrives, the terminal rings
 its bell once.
 
 A confirmation (delete a sandbox, restore a checkpoint) shows its choices in the notice line,
 `y Delete  [n Keep]`, with Keep focused: `enter` keeps, `y` or `←` then `enter` goes ahead.
+
+### Home's list
+
+Home's list is a tree, as the web's sidebar is, and the cursor starts on its first row:
+
+- **Home**: `▲ n need you`, or `✓ all clear`. Its pane is [what needs you](#homes-row).
+- **each teammate**: its name and its computer, the sandbox it works in, or how many
+  sandboxes it has; on the right, the approvals waiting on them and the sandbox's status. A
+  teammate with one sandbox lists that sandbox's sessions right under it; with two or more,
+  each sandbox is a row of its own, indented, with its sessions under it.
+- **no teammate**: the sandboxes without one, each with its sessions.
+
+`esc` goes back to Home's row from anywhere in the list, after clearing a filter. A filter
+leaves out Home's row and the teammates with nothing that matches.
+
+### Home's row
+
+On Home's row the pane, or the screen below 100 columns, shows what needs you: the cards of
+[the approvals](#approvals) waiting in every environment, under `Needs you · n`. `tab` moves
+to the next card and the cursor's card answers the keys, as on the Approvals screen; on an
+agent's permission `y` allows once, `a` always and `n` denies, as well as the numbers. A git
+push's card opens [its review](#git-review) with `enter`. Below the cards, WORKING NOW lists
+the sessions working or blocked, with their teammate and sandbox, and EARLIER TODAY what was
+decided today. Below 100 columns the cursor's card is drawn in full, the others one line each,
+and the teammates' list follows.
+
+A network decision that made a rule can be undone for a minute: the notice says `u undoes
+it`, and `u` deletes the rule (`DELETE .../rules/{id}`). The request stays decided; the next
+connection asks again. Decisions with no rule, once or ignore, and the other kinds have no
+undo.
+
+### A teammate's row
+
+On a teammate's row the pane shows the teammate as its web page does: its role and how it is
+(needs you, working, done or idle), its COMPUTER (SANDBOXES once it has more) with each
+sandbox's template, resources and uptime, its numbered SESSIONS, its TASKS (`GET
+.../teammates/{id}/tasks`, the open ones first), what it KNOWS (`GET
+.../memory/facts?scope=teammate:{id}`, the newest fact and the count) and its NETWORK level,
+its own or the environment's, and what its new rules apply to. They are read every 10
+seconds while the row is on show. `c` starts a chat in its first sandbox, `T` its agent in a
+terminal, `t` attaches a shell, `f` forks the sandbox and `+` opens the new sandbox's form
+with the teammate chosen. A teammate with no sandbox says that `+` gives it one.
 
 ### Sessions
 
@@ -80,7 +124,9 @@ Under each sandbox, Home lists what can be entered in it, indented:
 - the chats of its teammate in it, the newest three, then a `+ n older` row that shows the
   rest. A check-in's chat says so, and so does a scheduled task's run. A chat continued in a
   terminal is listed once, as its terminal;
-- its other terminals, `main` among them.
+- its other terminals, `main` among them;
+- the pushes of it waiting for a review, as `▲ branch`, kind `review`. `enter` opens the git
+  review, and its pane shows the push's commits.
 
 The first nine sessions get the numbers `1` to `9`, top to bottom. On Home, a number goes
 straight into its session, and so does `enter` on a session's row. From 100 columns the
@@ -131,6 +177,7 @@ check-in's. The pane shows what the cursor is on:
   cursor has rested on it for 150 ms, and lets it go when the cursor moves on; the tmux
   session keeps running.
 - **A chat**: its transcript, streaming.
+- **Home's row, a teammate's row or a review**: what needs you, the teammate, or the push.
 
 `enter`, the session's number or a click on the pane gives the pane the keys. The split
 between the columns turns into the accent `┃`, and every key goes to the terminal, `q` and
@@ -225,8 +272,12 @@ branches, title and body instead. The review is a pager: `↑/↓` `j/k` scroll 
 review, and from 160 columns the diff is side by side, which `v` toggles.
 
 `y` approves and pushes (or opens the pull request), `n` rejects, `i` ignores. Each decides with
-`{action, scope: "sandbox"}`, as the web does, and returns to the approvals. The web's note for
-the agent is not offered; a rejection with a note is written in the browser.
+`{action, scope: "sandbox"}`, as the web does, and returns to where the review was opened. On a
+push to a branch other than the default one, `p` says whether approving opens a pull request
+too, and `o` opens it after a push without one. `r` requests changes: it asks for a note,
+rejects the push with it, and for a teammate's push sends it to a new chat in the sandbox
+(`POST .../approvals/{id}/feedback` with `{note, newChat: true}`), as the web's Request
+changes does. Comments on lines of the diff are written in the browser.
 
 ### Chat
 
@@ -291,7 +342,12 @@ log merges, as the web's Activity does:
   rule that decided it;
 - the decisions on its network requests (`GET .../approvals?status=all`, decided ones only),
   worded as on the web: Allowed, Denied, Allowed once, Ignored, Allowed · reviewer, the curated
-  list or the level Open.
+  list or the level Open;
+- the decisions of the other kinds: pushes and pull requests, agents' permissions and browser
+  actions, memory shares and conflicts.
+
+`←/→` narrows the log to a kind, as the web's filter does: all, network, git, agents or
+memory. The header shows the kinds, the one on show highlighted.
 
 Studio announces no change to the connection logs, so the screen reads them again every two
 seconds while it is on show, as the web's connection panel does. `/` filters by sandbox name;
@@ -393,16 +449,17 @@ The attachment uses the same websocket as the web terminal (`.../terminals/{name
 
 ## Stays in the browser
 
-Settings, providers, teammates, templates and the template editor, rules, memory, the
-browser, lineage, deleting or renaming checkpoints and their schedule, secrets, and the git
+Editing Settings, providers, teammates, templates and the template editor, rules, memory,
+the browser, lineage, deleting or renaming checkpoints and their schedule, secrets, and the git
 forges. Some answers stay there too, because they need more than a key:
 
 - keeping both facts of a memory conflict, or editing one: two texts to edit;
 - a chat question that is a form of several fields, or a list: a form to fill;
 - a preview's first login: a one-time link for a browser.
 
-Where a screen has a key for one, it prints `open in browser: <url>` in the notice line. `?`
-gives the browser's address for the rest.
+Where a screen has a key for one, it prints `open in browser: <url>` in the notice line.
+Settings (`,`) lists the web's sections with what each is set to, and `enter` prints the
+address of one. `?` gives the browser's address for the rest.
 
 ## Look
 
@@ -428,8 +485,8 @@ and [design/tui-visual.md](design/tui-visual.md)):
   colors. 16-color terminals get ANSI colors, so the user's palette still applies there.
   Focus stays the one cyan accent.
 - **Header and key bar.** From 81 columns the header is a tab bar: `◆ Studio`, the
-  environment, Sandboxes, Approvals, Activity and Git, with counts in the waiting color, and
-  the clock. Below 100 columns the tabs shorten to their initials. At 80 columns the header
+  environment, Home, Activity and Settings, Home with the count of what needs you in the
+  waiting color, and the clock. Below 100 columns the tabs shorten to their initials. At 80 columns the header
   is the plain one. The key bar groups keys with a dim `│` between the groups and calls `?`
   "more". When the separators don't fit, it drops them.
 - **Cards.** Approvals are rounded cards with their area's rule, a kind chip, and the
@@ -489,6 +546,9 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   the TUI answers. `pager.go` is the git review, and `git.go` the Git screen.
 - `chat.go` is the chat screen: the stream, the transcript's layout and folds. `composer.go`
   is the composer's box.
+- `tree.go` is Home's list: its rows, the cursor on them, and the Home and teammate rows.
+  `needs.go` is Home's row in the pane (the cards, working now, earlier today) and the undo,
+  `mate.go` a teammate's row and its keys, and `settings.go` the Settings screen.
 - `sessions.go` is Home's sessions: their reads, states, rows, numbers and the ways in.
   `homepane.go` is Home's split, the pane's state, keys, title and approval banner; `buttons.go`
   the focus of the arrows over buttons, the confirmations, and the return to a session after a
@@ -497,7 +557,7 @@ The package is `internal/tui`. `cmd/studio/tui.go` is the subcommand.
   `charts.go` the dashboard and its charts.
   `input.go` is the line editor the composer and the new sandbox's name use, and `linePrompt`,
   the one-line question of the notice line (a fork's name, a checkpoint's name, an answer).
-- `activity.go` is the Activity log and an entry's rule. `newsandbox.go` is the new sandbox's
+- `activity.go` is the Activity log, its kinds and an entry's rule. `newsandbox.go` is the new sandbox's
   form, the fork, and the progress of both. `checkpoints.go` is the checkpoints screen, and
   `ports.go` the detail's ports.
 - `style.go` holds the styles: the look, the palette of each color profile, and the fitting of
@@ -531,8 +591,8 @@ Tests:
   bodies the keys send.
 - A pseudo-terminal test runs the TUI as a child process: it shows Home, opens Activity, goes
   back, opens the approvals, allows a waiting host with `y` (the server then has its rule) and
-  quits. A second one runs at 140×40, where Home splits, and opens Activity by clicking its
-  tab. A third runs the attachment on a real terminal and checks that unbuffered input
+  quits. A second one runs at 140×40, where Home splits into the list and what needs you,
+  and opens Activity by clicking its tab. A third runs the attachment on a real terminal and checks that unbuffered input
   reaches the sandbox and that Ctrl-] detaches. They are skipped on Windows.
 - Model tests run the pane against a fake attachment: its screen, the keys it sends, Ctrl-],
   alt+digits and full screen, and the banner's keys.
