@@ -101,6 +101,30 @@ func TestWindows(t *testing.T) {
 	}
 }
 
+// With the tray launcher next to studio.exe, the entry starts the tray, and an entry that
+// starts studio.exe itself is stale.
+func TestWindowsTray(t *testing.T) {
+	key := fakeRunKey{"Sandbox Studio": `"C:\Users\u\Sandbox Studio\studio.exe" -no-browser`}
+	s := &Service{GOOS: "windows", Exe: `C:\Users\u\Sandbox Studio\studio.exe`, Tray: `C:\Users\u\Sandbox Studio\studiow.exe`, Run: key}
+	if st, err := s.Status(); err != nil || !st.Stale || st.Command != s.Tray {
+		t.Fatalf("status: %+v %v", st, err)
+	}
+	st, err := s.Enable()
+	if err != nil || st.Stale || key["Sandbox Studio"] != `"C:\Users\u\Sandbox Studio\studiow.exe" -no-browser` {
+		t.Fatalf("enable: %+v %v %v", st, err, key)
+	}
+	dir := t.TempDir()
+	if TrayNextTo(filepath.Join(dir, "studio.exe")) != "" {
+		t.Fatal("a tray where there is none")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "studiow.exe"), nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := TrayNextTo(filepath.Join(dir, "studio.exe")); got != filepath.Join(dir, "studiow.exe") {
+		t.Fatalf("tray = %q", got)
+	}
+}
+
 func TestRefusesGoRun(t *testing.T) {
 	s := newService(t, "linux")
 	s.Exe = filepath.Join(os.TempDir(), "go-build123", "b001", "exe", "studio")

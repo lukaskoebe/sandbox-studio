@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Windows:** `studiow.exe`, in the Windows archive next to `studio.exe`, runs Studio without
+  a console window. It starts Studio in the background, opens it in the browser, and puts an
+  icon in the notification area with **Open Studio**, **Logs**, **Start at login** and
+  **Quit**. With it next to `studio.exe`, **Start at login** starts the tray, and an update
+  replaces it too.
+- **CLI:** `studio quit` stops the running Studio and waits until it has.
 - **Sandboxes:** **Merge into** in a fork's options menu brings the fork's changes back into
   the sandbox it was forked from. Studio merges them in a scratch copy of that sandbox: files
   three-way with conflict markers, commits as `fork/<fork>/<branch>` branches, and the tools

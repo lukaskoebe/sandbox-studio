@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/inst
 
 The script downloads the latest release for your platform, checks it against the release's `checksums.txt` (and its build provenance, when the GitHub CLI `gh` is installed and signed in), and installs `studio` to `~/.local/bin` without sudo. If that directory is not on your `PATH`, it prints the line to add to your shell profile. It then checks KVM or Hypervisor.framework access and tells you what to fix; it never installs other software. Set `SANDBOX_STUDIO_VERSION` (for example `v0.3.4`) to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to change the directory.
 
-On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains a single `studio` executable (`studio.exe` on Windows); put it anywhere on your `PATH`.
+On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains the `studio` executable (`studio.exe` on Windows); put it anywhere on your `PATH`. The Windows archive also has `studiow.exe`, the tray launcher; keep it in the same folder as `studio.exe`.
 
 ### Build from source
 
@@ -55,6 +55,8 @@ studio
 ```
 
 Studio opens its local UI at `http://127.0.0.1:7878` in your browser, and prints a one-time link to it too. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, run `studio login-url`, or start `studio` again: a second start opens the running Studio. To only print the link, start it with `studio -no-browser`.
+
+On Windows, double-click `studiow.exe` instead to run Studio without a console window. It starts `studio.exe` in the background, opens Studio in your browser and puts an icon in the notification area: click it to open Studio, or right-click it for **Logs**, **Start at login** and **Quit**. **Quit** stops Studio; your sandboxes keep running. With `studiow.exe` next to `studio.exe`, **Start at login** in Settings starts the tray too.
 
 This is the sign-in for your local Studio app. It does not sign an agent into an AI provider. For agent sessions, add a provider in the environment first: an API key, or a Claude Pro/Max or ChatGPT subscription sign-in.
 

@@ -2,6 +2,7 @@ package updates
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -399,5 +400,71 @@ func TestVerifyBundlesOfARealRelease(t *testing.T) {
 		if err == nil {
 			t.Errorf("%s verified", name)
 		}
+	}
+}
+
+// On Windows the tray launcher next to studio.exe is replaced along with it.
+func TestInstallReplacesTheTrayLauncher(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake release's studio is a shell script")
+	}
+	tag := "v1.1.0"
+	name := "sandbox-studio_" + tag + "_windows_amd64"
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for file, body := range map[string]string{
+		"studio.exe":  "#!/bin/sh\necho \"studio " + tag + "\"\necho \"base image: x\"\n",
+		"studiow.exe": "new tray",
+	} {
+		h := &zip.FileHeader{Name: name + "/" + file, Method: zip.Deflate}
+		h.SetMode(0o755)
+		w, err := zw.CreateHeader(h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.WriteString(w, body)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(buf.Bytes())
+	r := &release{tag: tag, archive: buf.Bytes(), sums: hex.EncodeToString(sum[:]) + "  " + name + ".zip\n"}
+	r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch {
+		case strings.HasSuffix(req.URL.Path, "/checksums.txt"):
+			_, _ = io.WriteString(w, r.sums)
+		case strings.HasSuffix(req.URL.Path, ".zip"):
+			_, _ = w.Write(r.archive)
+		default:
+			http.NotFound(w, req)
+		}
+	}))
+	t.Cleanup(r.srv.Close)
+
+	f := newInstall(t, r)
+	exe := filepath.Join(filepath.Dir(f.exe), "studio.exe")
+	tray := filepath.Join(filepath.Dir(f.exe), "studiow.exe")
+	if err := os.Rename(f.exe, exe); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tray, []byte("old tray"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f.in.Exe, f.in.GOOS, f.in.GOARCH = exe, "windows", "amd64"
+	base := "https://github.com/" + Repository + "/releases/download/" + tag + "/"
+	f.in.Start(Release{Tag: tag, Assets: []Asset{{Name: name + ".zip", URL: base + name + ".zip"}, {Name: "checksums.txt", URL: base + "checksums.txt"}}})
+	select {
+	case <-f.restarts:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("no restart: %+v", f.in.Progress())
+	}
+	if got := read(t, tray); got != "new tray" {
+		t.Errorf("the tray is %q", got)
+	}
+	if got := read(t, filepath.Join(filepath.Dir(exe), "studiow.old.exe")); got != "old tray" {
+		t.Errorf("the old tray is %q", got)
+	}
+	if got := read(t, exe); !strings.Contains(got, "studio "+tag) {
+		t.Errorf("the binary is %q", got)
 	}
 }

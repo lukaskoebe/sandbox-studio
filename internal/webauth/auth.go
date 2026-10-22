@@ -62,6 +62,9 @@ type Auth struct {
 	key       []byte
 	isPreview func(string) bool
 	now       func() time.Time
+	// Quit shuts Studio down for POST /api/auth/quit, which the Windows tray's Quit sends
+	// (cmd/studiow). Without it the endpoint answers 404.
+	Quit func()
 
 	mu      sync.Mutex
 	tickets map[string]*list.Element
@@ -173,8 +176,8 @@ func (a *Auth) consume(token string, kind ticketKind, host string) bool {
 	return true
 }
 
-// ControlToken returns the install-key credential accepted only by
-// POST /api/auth/launch. Invalid key lengths produce an empty token.
+// ControlToken returns the install-key credential accepted only by POST /api/auth/launch
+// and POST /api/auth/quit. Invalid key lengths produce an empty token.
 func ControlToken(key []byte) string {
 	if len(key) != 32 {
 		return ""
@@ -259,6 +262,13 @@ func (a *Auth) serveAuthEndpoint(w http.ResponseWriter, r *http.Request, host st
 		}
 		a.launch(w, r)
 		return true
+	case "/api/auth/quit":
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return true
+		}
+		a.quit(w, r)
+		return true
 	case "/api/auth/logout":
 		if r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -327,6 +337,20 @@ func (a *Auth) launch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Token string `json:"token"`
 	}{Token: token})
+}
+
+// quit answers first and shuts Studio down after, so the caller learns that it will.
+func (a *Auth) quit(w http.ResponseWriter, r *http.Request) {
+	if a.Quit == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !hasControlToken(r.Header.Get("Authorization"), ControlToken(a.key)) {
+		writeAuthRequired(w)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	go a.Quit()
 }
 
 func hasControlToken(header, expected string) bool {

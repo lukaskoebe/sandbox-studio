@@ -258,6 +258,17 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 	if err := extract(archivePath, name+"/"+exeName, newExe); err != nil {
 		return fmt.Errorf("unpack %s: %w", archive, err)
 	}
+	// The Windows tray launcher next to studio.exe comes along when the archive has it.
+	var tray, newTray string
+	if goos == "windows" {
+		if t := filepath.Join(exeDir, trayName); fileExists(t) {
+			nt := filepath.Join(exeDir, ".studiow-"+rel.Tag+".new.exe")
+			if err := extract(archivePath, name+"/"+trayName, nt); err == nil {
+				tray, newTray = t, nt
+				defer os.Remove(newTray)
+			}
+		}
+	}
 	os.Remove(archivePath)
 	keep := false
 	defer func() {
@@ -290,6 +301,13 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 			return fmt.Errorf("record the install: %w; and put the old binary back: %v", err, rerr)
 		}
 		return fmt.Errorf("record the install: %w", err)
+	}
+	if tray != "" {
+		// The running tray keeps its old binary until it starts again; a rollback leaves the
+		// new tray, which only starts and stops studio.exe.
+		if err := swap(tray, newTray, oldExe(tray)); err != nil {
+			in.log().Warn("updating the tray launcher", "err", err)
+		}
 	}
 	in.log().Info("restarting into the Studio update", "version", rel.Tag)
 	in.Restart()
@@ -450,6 +468,14 @@ func checkVersion(ctx context.Context, exe, tag string) error {
 }
 
 // oldExe is where the replaced binary stays until the new one serves.
+// trayName is the Windows tray launcher (cmd/studiow), installed next to studio.exe.
+const trayName = "studiow.exe"
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
 func oldExe(exe string) string {
 	if strings.EqualFold(filepath.Ext(exe), ".exe") {
 		return strings.TrimSuffix(exe, filepath.Ext(exe)) + ".old.exe"

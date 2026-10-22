@@ -47,7 +47,7 @@ and flags. Sandboxes are named by name or ID.
 
 ## Studio's own commands
 
-Unlike the commands above, these work without a running Studio, except `login-url` and `tui`.
+Unlike the commands above, these work without a running Studio, except `login-url`, `tui` and `quit`.
 
 | Command | Does |
 |---|---|
@@ -55,6 +55,7 @@ Unlike the commands above, these work without a running Studio, except `login-ur
 | `studio doctor` | Checks that this machine can run Studio and says how to fix what can't. Exits 1 if a check fails. |
 | `studio login-url` | Prints a fresh one-time login link for the running Studio. |
 | `studio tui` | Opens the [terminal UI](../tui/). |
+| `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. |
 | `studio autostart enable`, `disable`, `status` | Starts Studio when you log in, or stops doing so. It takes effect at the next login. |
 | `studio restore-msb-db [-replace] [file]` | Rebuilds microsandbox's database from one Studio moved aside as damaged. Quit Studio first. See [Troubleshooting](../troubleshooting/#a-sandbox-says-microsandbox-lost-its-vm). |
 | `studio version` | Prints Studio's version and its base image. |

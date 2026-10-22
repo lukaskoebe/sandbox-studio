@@ -200,6 +200,9 @@ jobs:
           path: |
             web/test-results/live
             web/playwright-report/live
+      - name: Quit Studio
+        # `studio quit` is what the Windows tray's Quit runs.
+        run: ./"$EXE" quit
       - name: msb on its own
         # Tells a Studio problem from a host one when the sandbox didn't boot.
         if: failure() && steps.doctor.outcome == 'success'

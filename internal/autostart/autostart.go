@@ -49,6 +49,9 @@ type Service struct {
 	ConfigHome string // XDG_CONFIG_HOME or ~/.config (Linux)
 	Exe        string // the Studio binary to start
 	Run        RunKey // Windows only
+	// Tray is the Windows tray launcher next to Exe (cmd/studiow), if there is one. The
+	// entry starts it, and it starts Exe without a console window.
+	Tray string
 }
 
 // Default returns the service for the current user and binary.
@@ -68,7 +71,28 @@ func Default() (*Service, error) {
 	if cfg == "" {
 		cfg = filepath.Join(home, ".config")
 	}
-	return &Service{GOOS: runtime.GOOS, Home: home, ConfigHome: cfg, Exe: exe, Run: hostRunKey()}, nil
+	s := &Service{GOOS: runtime.GOOS, Home: home, ConfigHome: cfg, Exe: exe, Run: hostRunKey()}
+	if runtime.GOOS == "windows" {
+		s.Tray = TrayNextTo(exe)
+	}
+	return s, nil
+}
+
+// TrayNextTo returns the tray launcher studiow.exe next to a studio.exe, or "" without one.
+func TrayNextTo(exe string) string {
+	tray := filepath.Join(filepath.Dir(exe), "studiow.exe")
+	if info, err := os.Stat(tray); err != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	return tray
+}
+
+// windowsEntry is the binary the Run key value starts.
+func (s *Service) windowsEntry() string {
+	if s.Tray != "" {
+		return s.Tray
+	}
+	return s.Exe
 }
 
 // ErrUnsupported is returned on platforms without an autostart mechanism.
@@ -102,7 +126,7 @@ func (s *Service) Status() (Status, error) {
 		if err != nil || !ok {
 			return Status{Supported: true, Path: path}, err
 		}
-		return Status{Supported: true, Enabled: true, Path: path, Command: s.Exe, Stale: v != windowsCommand(s.Exe)}, nil
+		return Status{Supported: true, Enabled: true, Path: path, Command: s.windowsEntry(), Stale: v != windowsCommand(s.windowsEntry())}, nil
 	}
 	return Status{}, ErrUnsupported
 }
@@ -134,7 +158,7 @@ func (s *Service) Enable() (Status, error) {
 		if s.Run == nil {
 			return Status{}, ErrUnsupported
 		}
-		if err := s.Run.Set(runValue, windowsCommand(s.Exe)); err != nil {
+		if err := s.Run.Set(runValue, windowsCommand(s.windowsEntry())); err != nil {
 			return Status{}, err
 		}
 	default:

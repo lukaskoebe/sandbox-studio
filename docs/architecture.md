@@ -140,8 +140,17 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   the console's QuickEdit, whose selection blocks console writes, and logs to
   `logs/studio.log` (moved to `studio.log.1` past 10 MB at start), with only warnings on the
   console; the Windows autostart entry passes `-no-browser`.
+- The Windows tray launcher (`cmd/studiow`, `studiow.exe` next to `studio.exe`, built with
+  `-H windowsgui` and without cgo) never serves itself. It starts `studio.exe -no-browser` with
+  a console that has no window (`CREATE_NO_WINDOW`, outside the tray's job), tells Studio's
+  state from `GET /api/auth/status`, opens Studio with `studio login-url`, and Quit runs
+  `studio quit`: `POST /api/auth/quit` with the control credential, then a wait until the data
+  directory's lock is free. An update restarts `studio.exe` on its own, and replaces
+  `studiow.exe` too when the archive has one; the running tray keeps its old binary until it
+  starts again. A named mutex keeps one tray per user, and the autostart entry starts the tray
+  when it is there. The icon and menu are plain Win32 (`Shell_NotifyIconW`).
 - Subcommands: `studio` (serve), `openapi`, `login-url`, `tui` (the [terminal UI](tui.md)),
-  `doctor`, `version`, `autostart enable|disable|status`, `restore-msb-db`, and the sandbox commands of
+  `quit`, `doctor`, `version`, `autostart enable|disable|status`, `restore-msb-db`, and the sandbox commands of
   `internal/cli` (`ls`, `show`, `start`, `stop`, `suspend`, `resume`, `create`, `fork`, `rm`,
   `shell`, `ask`, `approvals`, `approve`, `deny`, `checkpoints`, `checkpoint`, `restore`,
   `envs`, `completion`; see [command line](cli.md)). The guest binary is `studio-agent` (see

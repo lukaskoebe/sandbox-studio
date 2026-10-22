@@ -180,6 +180,10 @@ jobs:
           go build -trimpath -tags "$GO_TAGS" \
             -ldflags "-s -w -X $pkg.Version=$VERSION -X $pkg.BaseImage=$BASE_IMAGE -X $pkg.BrowserImage=$BROWSER_IMAGE" \
             -o "dist/$NAME/$EXE" ./cmd/studio
+          if [ "${{ matrix.goos }}" = windows ]; then
+            # The tray launcher: no console window, and no cgo.
+            CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -H windowsgui" -o "dist/$NAME/studiow.exe" ./cmd/studiow
+          fi
           cp LICENSE README.md "dist/$NAME/"
           "dist/$NAME/$EXE" openapi > /dev/null
 
@@ -224,10 +228,12 @@ jobs:
           $pfx = Join-Path $env:RUNNER_TEMP cert.pfx
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
-          & $signtool.FullName sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist\$env:NAME\$env:EXE"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $signtool.FullName verify /pa "dist\$env:NAME\$env:EXE"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($exe in @($env:EXE, "studiow.exe")) {
+            & $signtool.FullName sign /f $pfx /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist\$env:NAME\$exe"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $signtool.FullName verify /pa "dist\$env:NAME\$exe"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           Remove-Item $pfx
 
       - name: package

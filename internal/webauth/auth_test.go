@@ -285,6 +285,33 @@ func TestLaunchRequiresOnlyControlCredentialAndOnlyLaunchAcceptsIt(t *testing.T)
 	}
 }
 
+func TestQuitTakesTheControlCredential(t *testing.T) {
+	a := testAuth(t)
+	headers := make(http.Header)
+	headers.Set("Authorization", "Bearer "+ControlToken(testKey))
+	if rec := request(a, http.MethodPost, "http://localhost:7878/api/auth/quit", "localhost:7878", headers, "", downstream()); rec.Code != http.StatusNotFound {
+		t.Fatalf("quit without a Quit func = %d", rec.Code)
+	}
+	quit := make(chan struct{}, 1)
+	a.Quit = func() { quit <- struct{}{} }
+	session := exchange(t, a, "localhost:7878", a.IssueLogin()).Result().Cookies()[0]
+	req := httptest.NewRequest(http.MethodPost, "http://localhost:7878/api/auth/quit", nil)
+	req.AddCookie(session)
+	rec := httptest.NewRecorder()
+	a.Middleware(downstream()).ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("session cookie authorized quit: %d", rec.Code)
+	}
+	if rec := request(a, http.MethodPost, "http://localhost:7878/api/auth/quit", "localhost:7878", headers, "", downstream()); rec.Code != http.StatusAccepted {
+		t.Fatalf("quit = %d", rec.Code)
+	}
+	select {
+	case <-quit:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Quit was not called")
+	}
+}
+
 func TestAuthenticationEndpointsRejectWrongMethods(t *testing.T) {
 	a := testAuth(t)
 	for _, tc := range []struct {
@@ -294,6 +321,7 @@ func TestAuthenticationEndpointsRejectWrongMethods(t *testing.T) {
 		{"status", http.MethodPost},
 		{"exchange", http.MethodGet},
 		{"launch", http.MethodGet},
+		{"quit", http.MethodGet},
 		{"logout", http.MethodGet},
 	} {
 		req := httptest.NewRequest(tc.method, "http://localhost:7878/api/auth/"+tc.path, nil)

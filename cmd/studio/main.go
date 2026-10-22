@@ -4,6 +4,7 @@
 //	studio openapi    print the API description (used to generate the web client types)
 //	studio login-url  print a fresh one-time browser login link
 //	studio tui        open the terminal UI of the running Studio
+//	studio quit       stop the running Studio
 //	studio doctor     check that this host can run Studio
 //	studio version    print the version and the default base image
 //	studio autostart enable|disable|status
@@ -73,6 +74,8 @@ import (
 var serverCommands = []cli.ServerCommand{
 	{Name: "tui", Summary: "Open the terminal UI of the running Studio.",
 		Detail: "It signs in as the local owner, like the web UI's login link. q quits."},
+	{Name: "quit", Summary: "Stop the running Studio, as Ctrl-C in its window does.",
+		Detail: "It waits until Studio has shut down. Sandboxes keep running, and their agents reconnect\nwhen Studio starts again."},
 	{Name: "doctor", Summary: "Check that this machine can run Studio, and say how to fix what can't.",
 		Detail: "It checks the microsandbox runtime, KVM or the hypervisor, the base image, the data\ndirectory, free disk space and the -addr ports. It exits 1 if a check fails."},
 	{Name: "autostart", Args: "enable|disable|status", Summary: "Start Studio when you log in, or stop doing so.",
@@ -123,6 +126,8 @@ func main() {
 		return
 	case "doctor":
 		os.Exit(runDoctor(os.Stdout, *addr, *image))
+	case "quit":
+		os.Exit(runQuit(context.Background(), os.Stdout, *addr))
 	case "autostart":
 		os.Exit(runAutostart(os.Stdout, flag.Args()[1:]))
 	case "restore-msb-db":
@@ -289,6 +294,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	if err != nil {
 		return err
 	}
+	auth.Quit = stop // `studio quit`, and the Windows tray's Quit
 	// Studio must not run without its vault: without the key the stored secrets are lost.
 	vault, err := secrets.Open(ctx, st, p.Data, log)
 	if err != nil {
