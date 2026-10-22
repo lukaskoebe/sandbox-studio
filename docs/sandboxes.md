@@ -25,7 +25,7 @@ A sandbox is a microsandbox microVM that persists across stop and start. Code:
 | `/home/agent` | owned disk, 4 GiB, included in checkpoints; the agent user's home |
 | `/var/lib/docker` | owned disk, so Docker's overlay isn't nested on the root overlay |
 | `/opt/studio` | read-only bind of `<data>/guest`; the agent is `/opt/studio/bin/studio-agent`, so updating Studio updates every guest |
-| `/opt/mise` | template toolchains and mise config, on the root layer; they are not in the home |
+| `/opt/mise` | template toolchains and mise config, on the root layer; they are not in the home. The agent's `mise use -g` installs there too. The guest agent sets `MISE_TRUSTED_CONFIG_PATHS=/workspace`, so a project's `mise.toml` doesn't prompt, and `MISE_PYTHON_COMPILE=0` |
 
 Owned (not named) volumes, because disk snapshots capture owned volumes and skip named ones
 (spike S5).

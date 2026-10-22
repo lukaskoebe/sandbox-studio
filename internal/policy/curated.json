@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.1",
+  "version": "2026.10.2",
   "entries": [
     {"id": "npm", "name": "npm registry", "group": "Package registries", "hosts": ["registry.npmjs.org"], "ports": [443]},
     {"id": "pypi", "name": "PyPI", "group": "Package registries", "hosts": ["pypi.org", "files.pythonhosted.org"], "ports": [443]},
@@ -14,6 +14,7 @@
     {"id": "nodejs", "name": "Node.js downloads", "group": "Toolchains", "hosts": ["nodejs.org"], "ports": [443]},
     {"id": "go-downloads", "name": "Go downloads", "group": "Toolchains", "hosts": ["go.dev", "dl.google.com"], "ports": [443]},
     {"id": "rust", "name": "Rust toolchains", "group": "Toolchains", "hosts": ["static.rust-lang.org"], "ports": [443]},
+    {"id": "mise", "name": "mise version lists and trust roots", "group": "Toolchains", "hosts": ["mise-versions.jdx.dev", "tuf-repo-cdn.sigstore.dev", "tuf-repo.github.com"], "ports": [443]},
     {"id": "github-releases", "name": "GitHub release downloads", "group": "Toolchains", "hosts": ["objects.githubusercontent.com", "release-assets.githubusercontent.com"], "ports": [443]},
     {"id": "docker-hub", "name": "Docker Hub", "group": "Container registries", "hosts": ["registry-1.docker.io", "auth.docker.io", "production.cloudflare.docker.com"], "ports": [443]},
     {"id": "ghcr", "name": "GitHub Container Registry", "group": "Container registries", "hosts": ["ghcr.io", "pkg-containers.githubusercontent.com"], "ports": [443]},

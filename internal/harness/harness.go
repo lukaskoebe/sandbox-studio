@@ -205,6 +205,7 @@ func instructions(p Teammate, s Sandbox) GuestFile {
 		fmt.Fprintf(&b, "Role: %s\n\n", p.Role)
 	}
 	b.WriteString(whereInstructions(s))
+	b.WriteString(machineInstructions)
 	if soul := strings.TrimSpace(p.Soul); soul != "" {
 		b.WriteString("\n## Your soul\n\n" + soul + "\n")
 	}
@@ -234,6 +235,18 @@ func whereInstructions(s Sandbox) string {
 		"placeholders that only work through the gateway; there is no need to look for real ones.\n")
 	return b.String()
 }
+
+// machineInstructions tells the agent what the sandbox has and how Studio's gateway, previews
+// and git review look from inside it, so it doesn't guess. Anything that changes per sandbox
+// belongs behind a tool, not here.
+const machineInstructions = `
+## This machine
+
+- **Tools:** you have passwordless sudo and Docker. Install a language or CLI with ` + "`mise use -g <tool>@<version>`" + `, or ` + "`mise use <tool>@<version>`" + ` in the project, which writes its ` + "`mise.toml`" + `. Prefer mise to apt or ` + "`curl | sh`" + `.
+- **Network:** a connection to a host Studio hasn't been told about waits up to a minute while the user decides; a download through mise may too. Wait for it, and don't retry in a loop. A 403 with the header ` + "`X-Sandbox-Studio: refused`" + ` is Studio's network policy: tell the user which host you need instead of working around it.
+- **Servers you start** are not reachable at localhost for the user. Tell them the port; they open it in Studio's Previews.
+- **` + "`git push`" + `** goes to Studio's review first: the user approves it before it reaches the forge, and you hear the outcome on your next fetch or in a message.
+`
 
 // tasksInstructions tells the agent about its task list, which the user sees in the Tasks tab.
 const tasksInstructions = `

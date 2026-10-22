@@ -267,3 +267,14 @@ func TestInstructionsNameTheSandboxes(t *testing.T) {
 		}
 	}
 }
+
+// TestInstructionsStayShort caps the managed block without a soul: every session reads it, so
+// details that change belong behind a tool. Raise the cap only on purpose.
+func TestInstructionsStayShort(t *testing.T) {
+	const max = 5000
+	p := teammate
+	p.Soul = ""
+	if n := len(instructions(p, Sandbox{Name: "api"}).Content); n > max {
+		t.Errorf("the instructions block is %d bytes, more than %d", n, max)
+	}
+}

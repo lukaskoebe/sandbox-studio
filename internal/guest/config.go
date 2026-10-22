@@ -29,9 +29,14 @@ const (
 	profileHook = "/etc/profile.d/sandbox-studio-env.sh"
 )
 
-// The hook exports the current secrets into every new login shell, which includes new tmux
-// windows; shells that are already running keep what they had.
-const profileScript = `# Written by the Sandbox Studio guest agent: the environment's secrets, as placeholders.
+// toolEnv is how mise behaves for the agent: it trusts the project's mise.toml without
+// asking, and installs Python's prebuilt builds instead of compiling them.
+var toolEnv = []string{"MISE_TRUSTED_CONFIG_PATHS=/workspace", "MISE_PYTHON_COMPILE=0"}
+
+// The hook exports toolEnv and the current secrets into every new login shell, which
+// includes new tmux windows; shells that are already running keep what they had.
+var profileScript = `# Written by the Sandbox Studio guest agent: mise's settings, and the environment's secrets as placeholders.
+export ` + strings.Join(toolEnv, " ") + `
 if [ -r ` + envFile + ` ]; then
     while IFS='=' read -r name value; do
         [ -n "$name" ] && export "$name=$value"

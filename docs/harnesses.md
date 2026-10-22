@@ -56,8 +56,12 @@ without a provider or a sign-in, leaves the home as it is. The instructions file
 block, or puts it first, and keeps text outside it. The block has the teammate's name,
 role and soul, says where it works (this sandbox, the names of its other sandboxes, and that
 files, unpushed commits, tools, images and servers stay in the sandbox that made them; a
-session can't reach or switch to another, so missing work goes through git or the user) and
-points to the memory tools. Files the harness owns, like Claude Code's `~/.claude.json`, get
+session can't reach or switch to another, so missing work goes through git or the user),
+describes the machine (sudo and Docker; tools through `mise use`; a held connection waits up
+to a minute for the user, and a 403 with `X-Sandbox-Studio: refused` is the policy; servers
+are reached through Studio's Previews, not localhost; `git push` goes to [git
+review](git-review.md)) and points to the memory and task tools. `TestInstructionsStayShort`
+caps the block at 5000 bytes without a soul: what changes per sandbox belongs behind a tool. Files the harness owns, like Claude Code's `~/.claude.json`, get
 only a few keys merged in; the rest of the file is kept. A guest agent older than Studio
 gets no such file, since it would replace the whole file.
 

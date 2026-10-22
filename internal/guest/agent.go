@@ -491,6 +491,7 @@ func (a *Agent) command(name string, args ...string) *exec.Cmd {
 		"LANG=en_US.UTF-8",
 		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 	}
+	env = append(env, toolEnv...)
 	// Secrets come first so that the system's own variables win; Studio refuses secret names
 	// that would shadow them anyway.
 	env = append(env, readEnvironmentFile(envFile)...)
