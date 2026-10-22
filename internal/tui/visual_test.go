@@ -74,7 +74,7 @@ func withNetwork(m *app) {
 
 // withDetailData gives the detail pane of api-refactor its ports, terminals and history.
 func withDetailData(m *app) *app {
-	m.ports = portsState{sandbox: "sb2", loaded: true,
+	m.ports = portsState{sandbox: "sb2", loaded: true, previews: true,
 		list:      []api.PreviewPort{{Port: 3000, URL: "http://3000-sb2.localhost:7878/"}, {Port: 8080, URL: "http://8080-sb2.localhost:7878/"}},
 		terminals: []agentproto.Session{{Name: "main"}, {Name: "claude"}},
 	}

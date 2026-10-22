@@ -209,6 +209,6 @@ STUDIO_LOGIN_URL="$(studio login-url)" pnpm exec playwright test -c e2e-live/pla
 Its one scenario creates a sandbox in the UI, runs `docker run hello-world` in its terminal
 (noted and left out when the image has no Docker), sets the level to Locked so that
 `registry.npmjs.org` gets an approval card and allows it, then starts Vite from npm and opens
-its preview. It puts the level back to Guarded and deletes the sandbox at the end. The smoke
-workflow runs it on Linux after its own steps, and uploads traces, screenshots and videos
-when it fails.
+its preview, with previews turned on. It puts the level and the previews setting back and
+deletes the sandbox at the end. The smoke workflow runs it on Linux after its own steps, and
+uploads traces, screenshots and videos when it fails.

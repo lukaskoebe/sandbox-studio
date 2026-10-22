@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -9,6 +11,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/updates"
 )
 
@@ -108,6 +111,63 @@ func (s *Server) registerSystem(api huma.API) {
 		}
 		st, err := s.System.Updates.SetEnabled(ctx, in.Body.Enabled)
 		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
+	})
+	s.registerPreviewSetting(api)
+}
+
+// settingPreviews stores whether the web and the TUI offer previews of sandbox ports. Absent
+// means off, the default since v0.6, and that the user hasn't chosen yet.
+const settingPreviews = "previews.v1"
+
+// PreviewSetting is whether Studio's pages offer previews of sandbox ports.
+type PreviewSetting struct {
+	Enabled bool `json:"enabled" doc:"The web and the TUI offer previews of sandbox ports; the preview API works either way"`
+	Notice  bool `json:"notice" doc:"Show the one-time notice that previews are off: nobody has chosen yet and sandboxes exist. Any PUT ends it"`
+}
+
+func (s *Server) previewSetting(ctx context.Context) (PreviewSetting, error) {
+	raw, err := s.Store.Setting(ctx, settingPreviews)
+	if errors.Is(err, store.ErrNotFound) {
+		all, err := s.Store.AllSandboxes(ctx)
+		if err != nil {
+			return PreviewSetting{}, err
+		}
+		for _, sb := range all {
+			if sb.Kind == "" && sb.BuildJobID == "" {
+				return PreviewSetting{Notice: true}, nil
+			}
+		}
+		return PreviewSetting{}, nil
+	}
+	if err != nil {
+		return PreviewSetting{}, err
+	}
+	var out PreviewSetting
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return PreviewSetting{}, err
+	}
+	out.Notice = false
+	return out, nil
+}
+
+func (s *Server) registerPreviewSetting(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "getPreviewSetting", Method: http.MethodGet, Path: "/api/system/previews", Tags: []string{"system"},
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body PreviewSetting }, error) {
+		st, err := s.previewSetting(ctx)
+		return &struct{ Body PreviewSetting }{st}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "setPreviewSetting", Method: http.MethodPut, Path: "/api/system/previews", Tags: []string{"system"},
+		Summary: "Offer previews of sandbox ports in the web and the TUI, or stop doing so",
+	}, func(ctx context.Context, in *toggleIn) (*struct{ Body PreviewSetting }, error) {
+		st := PreviewSetting{Enabled: in.Body.Enabled}
+		raw, err := json.Marshal(st)
+		if err == nil {
+			err = s.Store.SetSetting(ctx, settingPreviews, raw)
+		}
+		return &struct{ Body PreviewSetting }{st}, apiError(err)
 	})
 }
 

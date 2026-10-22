@@ -12,6 +12,8 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
   env,
 }) => {
   await api.dismissApprovals()
+  // Links to the sandbox's servers are buttons only while previews are on.
+  await api.json("PUT", "/api/system/previews", { enabled: true })
   const name = `Chatty ${Math.random().toString(36).slice(2, 6)}`
   const teammate = await addTeammate(api, env, name)
   const id = await api.createSandbox(sandboxName("chat"), teammate)

@@ -42,6 +42,7 @@ import {
   onStudioMachine,
   openPreviewTab,
 } from "@/lib/previews"
+import { usePreviewSetting } from "@/lib/preview-setting"
 import { formatAge, formatUptime } from "@/lib/utils"
 
 export function formatMiB(mib: number) {
@@ -174,8 +175,12 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-/** The listening ports, each opening its preview in a tab of its own. */
+/**
+ * The listening ports, each opening its preview in a tab of its own while Settings → General
+ * offers previews, and only listed while it doesn't.
+ */
 function Ports({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
+  const previews = usePreviewSetting()
   const ports = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/ports",
@@ -185,6 +190,12 @@ function Ports({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
   const list = ports.data ?? []
   if (list.length === 0)
     return <span className="text-muted-foreground">None listening</span>
+  if (!previews.enabled)
+    return (
+      <span className="font-mono">
+        {list.map((p) => `:${p.port}`).join(" ")}
+      </span>
+    )
   return (
     <>
       {list.map((p) => (

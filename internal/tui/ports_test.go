@@ -9,8 +9,8 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 )
 
-// The detail of a running sandbox reads its ports, lists them as links, and stops reading once
-// it is left.
+// The detail of a running sandbox reads its ports, lists them as links while previews are on and
+// as numbers while they are off, and stops reading once it is left.
 func TestDetailListsThePorts(t *testing.T) {
 	m := sampleApp()
 	m, cmd := pressCmd(m, "enter")
@@ -20,7 +20,8 @@ func TestDetailListsThePorts(t *testing.T) {
 	if again := m.watchPorts(); again != nil {
 		t.Fatal("a second read started while one was under way")
 	}
-	next, tick := m.Update(portsLoaded{sandbox: "sb1", list: []api.PreviewPort{{Port: 3000, URL: "http://3000-sb1.localhost:7878/"}}})
+	ports := []api.PreviewPort{{Port: 3000, URL: "http://3000-sb1.localhost:7878/"}}
+	next, tick := m.Update(portsLoaded{sandbox: "sb1", list: ports, previews: true})
 	m = next.(*app)
 	if tick == nil {
 		t.Fatal("no next read")
@@ -31,6 +32,11 @@ func TestDetailListsThePorts(t *testing.T) {
 	}
 	if !strings.Contains(view, "\x1b]8;;http://3000-sb1.localhost:7878/") {
 		t.Fatal("the preview address is no link")
+	}
+	next, _ = m.Update(portsLoaded{sandbox: "sb1", list: ports})
+	m = next.(*app)
+	if view := stripANSI(m.View().Content); !strings.Contains(view, "Ports      :3000") || strings.Contains(view, "localhost:7878") {
+		t.Fatalf("previews off:\n%s", view)
 	}
 
 	m = press(m, "esc")
@@ -66,5 +72,8 @@ func TestPortsComeFromTheServer(t *testing.T) {
 	_, err := connect(t, s).Ports(context.Background(), s.Env.ID, sb.ID)
 	if err == nil || !strings.Contains(err.Error(), "not running or still booting") {
 		t.Fatalf("ports: %v", err)
+	}
+	if st, err := connect(t, s).PreviewSetting(context.Background()); err != nil || st.Enabled {
+		t.Fatalf("previews: %+v, %v", st, err)
 	}
 }

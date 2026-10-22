@@ -5,11 +5,12 @@ import { cn } from "@/lib/utils"
 
 /**
  * The sandbox whose servers a chat's links to localhost point at. Inside it they open as
- * Studio previews; elsewhere they stay text.
+ * Studio previews, or stay plain text while previews are off; elsewhere they stay as written.
  */
 export const PreviewSandbox = createContext<{
   env: string
   sandboxId: string
+  enabled: boolean
 } | null>(null)
 
 /**
@@ -397,8 +398,8 @@ function SafeLink({ href, children }: { href: string; children: ReactNode }) {
 
 /**
  * A link to a server in the sandbox, such as localhost:5173/login. The user's own localhost
- * is not the sandbox, so inside a chat it opens the port's preview, on that page; elsewhere it
- * stays as written, a link if it was one.
+ * is not the sandbox, so inside a chat it opens the port's preview, on that page, while
+ * previews are on; elsewhere it stays as written, a link if it was one.
  */
 function PreviewLink({
   port,
@@ -414,6 +415,8 @@ function PreviewLink({
   const sandbox = useContext(PreviewSandbox)
   if (!sandbox)
     return href ? <SafeLink href={href}>{children}</SafeLink> : <>{children}</>
+  // The user's own localhost is not the sandbox, so with previews off the link goes nowhere.
+  if (!sandbox.enabled) return <>{children}</>
   return (
     <button
       type="button"

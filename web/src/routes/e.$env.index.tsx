@@ -1,7 +1,13 @@
 import { useState, type ReactNode } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { BellIcon, PlusIcon, UserPlusIcon, XIcon } from "@phosphor-icons/react"
+import {
+  BellIcon,
+  BroadcastIcon,
+  PlusIcon,
+  UserPlusIcon,
+  XIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   ApprovalCardList,
@@ -18,6 +24,7 @@ import { $api, type Approval } from "@/lib/api/client"
 import type { Chat } from "@/lib/chats"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { useNotificationPermission } from "@/lib/notifications"
+import { usePreviewSetting } from "@/lib/preview-setting"
 import { approvalCards } from "@/lib/approval-groups"
 import {
   approvalDecision,
@@ -71,6 +78,7 @@ function Home() {
           </p>
           <SetupCard env={env} />
           <NotificationsBanner />
+          <PreviewsNotice env={env} />
           {empty ? (
             <GetStarted env={env} />
           ) : (
@@ -133,6 +141,53 @@ function NotificationsBanner() {
         aria-label="Dismiss"
         title="Dismiss"
         onClick={dismiss}
+      >
+        <XIcon />
+      </Button>
+    </section>
+  )
+}
+
+/**
+ * Says once that previews are off by default, and where to turn them on. Either
+ * button records a choice, which ends the notice for every browser.
+ */
+function PreviewsNotice({ env }: { env: string }) {
+  const previews = usePreviewSetting()
+  if (!previews.notice) return null
+  return (
+    <section
+      aria-label="Previews"
+      className="flex flex-wrap items-center gap-3 rounded-(--radius) border bg-card px-4 py-3"
+    >
+      <BroadcastIcon className="size-4 shrink-0 text-muted-foreground" />
+      <p className="min-w-0 flex-1 text-muted-foreground">
+        Previews of sandbox ports are off by default since v0.6. Turn them on
+        here or in{" "}
+        <Link
+          to="/e/$env/settings/general"
+          params={{ env }}
+          className="underline underline-offset-4"
+        >
+          Settings › General
+        </Link>
+        .
+      </p>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={previews.pending}
+        onClick={() => previews.setEnabled(true)}
+      >
+        Turn on previews
+      </Button>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Keep previews off"
+        title="Keep previews off"
+        disabled={previews.pending}
+        onClick={() => previews.setEnabled(false)}
       >
         <XIcon />
       </Button>

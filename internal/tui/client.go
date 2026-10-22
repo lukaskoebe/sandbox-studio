@@ -203,6 +203,13 @@ func (c *Client) Ports(ctx context.Context, env, sandbox string) ([]api.PreviewP
 	return out, err
 }
 
+// PreviewSetting reads whether Studio offers previews of sandbox ports (Settings → General).
+func (c *Client) PreviewSetting(ctx context.Context) (api.PreviewSetting, error) {
+	var out api.PreviewSetting
+	_, err := c.send(ctx, http.MethodGet, "/api/system/previews", nil, nil, &out)
+	return out, err
+}
+
 // Terminals lists a running sandbox's terminals: its tmux sessions.
 func (c *Client) Terminals(ctx context.Context, env, sandbox string) ([]agentproto.Session, error) {
 	var out []agentproto.Session

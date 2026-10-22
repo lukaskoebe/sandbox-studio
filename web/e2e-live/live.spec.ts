@@ -50,6 +50,12 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
       data: { level: name },
     })
 
+  // Previews are off by default: the scenario turns them on, and back as they were at the end.
+  const previews = (await (
+    await page.request.get("/api/system/previews")
+  ).json()) as { enabled: boolean }
+  await page.request.put("/api/system/previews", { data: { enabled: true } })
+
   // Create the sandbox the way a user does.
   const name = `live-${Math.random().toString(36).slice(2, 8)}`
   await page.goto(`/e/${env}`)
@@ -129,8 +135,11 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
       preview.getByRole("heading", { name: "Live preview works" })
     ).toBeVisible({ timeout: 60_000 })
   } finally {
-    // Back to the default level, and the VM gone.
+    // Back to the default level and the previews setting, and the VM gone.
     await level("guarded")
+    await page.request.put("/api/system/previews", {
+      data: { enabled: previews.enabled },
+    })
     await page.request.delete(`/api/environments/${env}/sandboxes/${id}`)
   }
 })

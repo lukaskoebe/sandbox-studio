@@ -24,6 +24,7 @@ type portsState struct {
 	sandbox   string // the sandbox the list is of
 	list      []api.PreviewPort
 	terminals []agentproto.Session
+	previews  bool // Settings → General offers previews, so the list shows their addresses
 	loaded    bool // the list of sandbox arrived
 	busy      bool // a read or the wait for the next one is under way
 }
@@ -33,6 +34,7 @@ type (
 		sandbox   string
 		list      []api.PreviewPort
 		terminals []agentproto.Session
+		previews  bool
 		err       error
 	}
 	portsTick struct{ sandbox string }
@@ -65,8 +67,9 @@ func (m *app) watchPorts() tea.Cmd {
 	return m.loadPorts(id)
 }
 
-// loadPorts reads the open ports of a sandbox, and in the visual look its terminals, which only
-// it draws. A failed read of the terminals leaves them out.
+// loadPorts reads the open ports of a sandbox, whether previews are on, and in the visual look
+// its terminals, which only it draws. A failed read of the terminals leaves them out, and of the
+// setting, the preview addresses.
 func (m *app) loadPorts(id string) tea.Cmd {
 	ctx, client, env, terminals := m.ctx, m.client, m.env.ID, !m.look.plain
 	return func() tea.Msg {
@@ -74,6 +77,10 @@ func (m *app) loadPorts(id string) tea.Cmd {
 		defer cancel()
 		list, err := client.Ports(rctx, env, id)
 		out := portsLoaded{sandbox: id, list: list, err: err}
+		if err == nil {
+			setting, serr := client.PreviewSetting(rctx)
+			out.previews = serr == nil && setting.Enabled
+		}
 		if terminals && err == nil {
 			out.terminals, _ = client.Terminals(rctx, env, id)
 		}
@@ -88,7 +95,7 @@ func (m *app) portsUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 	switch msg := msg.(type) {
 	case portsLoaded:
 		if msg.sandbox == p.sandbox && msg.err == nil {
-			p.list, p.terminals, p.loaded = msg.list, msg.terminals, true
+			p.list, p.terminals, p.previews, p.loaded = msg.list, msg.terminals, msg.previews, true
 		}
 		if m.portsWanted() != msg.sandbox {
 			p.busy = false
@@ -105,8 +112,8 @@ func (m *app) portsUpdate(msg tea.Msg) (cmd tea.Cmd, ok bool) {
 	return nil, false
 }
 
-// portLines are the detail's Ports: each open port with its preview address, a link where the
-// terminal shows links. A stopped sandbox has none.
+// portLines are the detail's Ports: each open port, with its preview address while previews are
+// on, a link where the terminal shows links. A stopped sandbox has none.
 func (m *app) portLines(id string, ready bool) []string {
 	p := &m.ports
 	switch {
@@ -127,6 +134,10 @@ func (m *app) portLines(id string, ready bool) []string {
 		label := ""
 		if i == 0 {
 			label = "Ports"
+		}
+		if !p.previews {
+			lines = append(lines, fact(label, fmt.Sprintf(":%d", port.Port)))
+			continue
 		}
 		link := lipgloss.NewStyle().Hyperlink(port.URL).Render(port.URL)
 		lines = append(lines, fact(label, fit(fmt.Sprintf(":%d", port.Port), 7)+link))

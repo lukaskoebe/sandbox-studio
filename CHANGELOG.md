@@ -8,6 +8,10 @@
   sandbox, the ports listening in it with the links that open them, its security level and
   the network rules that cover it. `STUDIO_SANDBOX_ID` and `STUDIO_SANDBOX_NAME` are set in
   every sandbox.
+- **Previews:** previews of sandbox ports are off until you turn on **Previews** under
+  **Settings → General**. While they are off, the web hides the Previews menu and the chat's
+  Preview tab, links to the sandbox's servers in a chat are plain text, and the details and
+  the TUI list ports without their addresses. If you had sandboxes before, Home says so once.
 
 ## v0.5.2 — 2026-10-22
 

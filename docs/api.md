@@ -10,7 +10,8 @@
 - Almost everything is under `/api/environments/{env}/...`. Global routes: environments,
   `/api/approvals`, `/api/events`, `/api/health`, `/api/provider-kinds`, `/api/setup`
   (the guided setup, for the environment named in `?env=`) and `/api/system/*`
-  (doctor, autostart, updates, the host's git identity, its folders for a local forge).
+  (doctor, autostart, updates, the previews setting, the host's git identity, its folders for
+  a local forge).
 - Streaming endpoints are plain handlers outside huma (`api.go`, `exports.go`, `uploads.go`): SSE at
   `/api/events` for change notices (see [approvals](approvals.md#realtime-and-ui)) and at
   `…/chats/{chat}/stream` for a chat; WebSockets (`coder/websocket`) for terminal attach and

@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { SidePanel, useWideScreen } from "@/components/side-panel"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { changeCount, type Chat, type ChatTurn } from "@/lib/chats"
+import { usePreviewSetting } from "@/lib/preview-setting"
 
 export type PanelTab = "changes" | "files" | "preview"
 
@@ -112,6 +113,7 @@ export function WorkspaceTabs({
   panel: WorkspaceTabsState
 }) {
   const queryClient = useQueryClient()
+  const previews = usePreviewSetting().enabled
   const [where, setWhere] = useState<{ dir: string; file?: string }>({
     dir: "",
   })
@@ -142,7 +144,7 @@ export function WorkspaceTabs({
 
   return (
     <Tabs
-      value={panel.tab}
+      value={panel.tab === "preview" && !previews ? "changes" : panel.tab}
       onValueChange={(v: PanelTab) => panel.setTab(v)}
       className="min-h-0 flex-1 gap-0"
     >
@@ -156,10 +158,12 @@ export function WorkspaceTabs({
             <FolderIcon />
             Files
           </TabsTrigger>
-          <TabsTrigger value="preview">
-            <BroadcastIcon />
-            Preview
-          </TabsTrigger>
+          {previews && (
+            <TabsTrigger value="preview">
+              <BroadcastIcon />
+              Preview
+            </TabsTrigger>
+          )}
         </TabsList>
       </div>
       <TabsContent value="changes" className="flex min-h-0 flex-col">
@@ -192,9 +196,14 @@ export function WorkspaceTabs({
           />
         </ScrollArea>
       </TabsContent>
-      <TabsContent value="preview" className="flex min-h-0 flex-col px-3 pb-3">
-        <PreviewPanel env={env} sandboxId={sandboxId} reloadKey={reloadKey} />
-      </TabsContent>
+      {previews && (
+        <TabsContent
+          value="preview"
+          className="flex min-h-0 flex-col px-3 pb-3"
+        >
+          <PreviewPanel env={env} sandboxId={sandboxId} reloadKey={reloadKey} />
+        </TabsContent>
+      )}
     </Tabs>
   )
 }

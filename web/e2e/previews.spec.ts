@@ -97,3 +97,41 @@ test("previews: an app's service worker works in a preview framed by Studio", as
     )
   ).toBe(0)
 })
+
+// Previews are off until the user turns them on in Settings → General; the sandbox's
+// workspace offers them only then.
+test("previews: the workspace offers them once Settings turns them on", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.json("PUT", "/api/system/previews", { enabled: false })
+  try {
+    const id = await api.createSandbox(sandboxName("previews-off"))
+    await api.guestReady(id)
+    await page.goto(`/e/${env}/sandboxes/${id}/work`)
+    const toolbar = page.getByRole("group", {
+      name: "Workspace tabs and tools",
+    })
+    await expect(
+      toolbar.getByRole("button", { name: "New terminal" })
+    ).toBeVisible()
+    await expect(toolbar.getByRole("button", { name: "Previews" })).toHaveCount(
+      0
+    )
+
+    await page.goto(`/e/${env}/settings/general`)
+    const toggle = page.getByRole("switch", {
+      name: "Offer previews of sandbox ports",
+    })
+    await expect(toggle).not.toBeChecked()
+    await toggle.click()
+    await expect(toggle).toBeChecked()
+    await page.goto(`/e/${env}/sandboxes/${id}/work`)
+    await expect(
+      toolbar.getByRole("button", { name: "Previews" })
+    ).toBeVisible()
+  } finally {
+    await api.json("PUT", "/api/system/previews", { enabled: false })
+  }
+})

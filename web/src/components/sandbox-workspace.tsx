@@ -85,6 +85,7 @@ import {
   onStudioMachine,
   openPreviewTab,
 } from "@/lib/previews"
+import { usePreviewSetting } from "@/lib/preview-setting"
 import { cn } from "@/lib/utils"
 import { pasteFile } from "@/lib/workspace-upload"
 
@@ -862,15 +863,17 @@ function TerminalPane({
   )
 }
 
-/** Previews the sandbox's listening ports in a browser tab. */
+/** Previews the sandbox's listening ports in a browser tab, while Settings → General offers them. */
 function Previews({ env, sandbox: sb }: { env: string; sandbox: Sandbox }) {
+  const { enabled } = usePreviewSetting()
   const ports = $api.useQuery(
     "get",
     "/api/environments/{env}/sandboxes/{id}/ports",
     { params: { path: { env, id: sb.id } } },
-    { refetchInterval: 3000 }
+    { refetchInterval: 3000, enabled }
   )
   const list = ports.data ?? []
+  if (!enabled) return null
 
   return (
     <DropdownMenu>

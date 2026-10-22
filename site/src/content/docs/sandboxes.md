@@ -58,6 +58,8 @@ Once a sandbox was forked, the Home page has a **Family** card. It lists each te
 
 ## Open a preview
 
+Previews are off unless you turn on **Previews** under **Settings → General**, for every environment at once. While they are off, the sandbox's details list its ports without opening them, and the menu and the chat's Preview tab are hidden, and links to its ports in an agent's messages are plain text.
+
 If a web server is listening on a sandbox port, open **Previews** in the workspace toolbar and choose the port. The details its state pill opens list the ports too; choose one to open it. Studio opens a host-scoped `.localhost` link through the agent channel. The link is meant for the browser on the machine running Studio.
 
 Studio removes its own authentication cookies before forwarding preview requests and filters Studio cookies from preview responses. The preview app's own cookies are retained. Preview links do not expose the sandbox to your LAN.

@@ -39,6 +39,7 @@ import {
   type QueuedPrompt,
   type useChat,
 } from "@/lib/chats"
+import { usePreviewSetting } from "@/lib/preview-setting"
 import { cn } from "@/lib/utils"
 
 /** A request's name in lists and dialogs: the start of its message. */
@@ -136,9 +137,10 @@ function ChatLog({
     return () => clearTimeout(t)
   }, [sending?.sent])
 
+  const { enabled: previewsOn } = usePreviewSetting()
   const previews = useMemo(
-    () => ({ env, sandboxId: chat.sandboxId }),
-    [env, chat.sandboxId]
+    () => ({ env, sandboxId: chat.sandboxId, enabled: previewsOn }),
+    [env, chat.sandboxId, previewsOn]
   )
 
   return (

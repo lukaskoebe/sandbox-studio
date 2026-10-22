@@ -2486,6 +2486,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPreviewSetting"];
+        /** Offer previews of sandbox ports in the web and the TUI, or stop doing so */
+        put: operations["setPreviewSetting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/ssh-agent": {
         parameters: {
             query?: never;
@@ -4093,6 +4110,12 @@ export interface components {
             /** Format: int64 */
             port: number;
             url: string;
+        };
+        PreviewSetting: {
+            /** @description The web and the TUI offer previews of sandbox ports; the preview API works either way */
+            enabled: boolean;
+            /** @description Show the one-time notice that previews are off: nobody has chosen yet and sandboxes exist. Any PUT ends it */
+            notice: boolean;
         };
         PrivateHost: {
             /** @description A host name or a wildcard, as in rules (git.company.local or *.company.local), a private IPv4 address (192.168.178.20) or a range of them (192.168.178.0/24) */
@@ -11629,6 +11652,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitIdentity"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getPreviewSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewSetting"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setPreviewSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleInBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewSetting"];
                 };
             };
             /** @description Error */

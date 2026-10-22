@@ -396,7 +396,8 @@ and the schedule, stay in the browser.
 ### Ports
 
 The detail of a running sandbox lists its open ports (`GET .../sandboxes/{id}/ports`) with each
-one's preview address, `http://{port}-{id}.localhost:{studio port}/`. Where the terminal shows
+one's preview address, `http://{port}-{id}.localhost:{studio port}/`, while the previews
+setting (`GET /api/system/previews`) is on; otherwise only the port. Where the terminal shows
 links, the address is one (OSC 8). Studio announces no change to the ports, so the screen
 reads them again every three seconds while it is on show, as the web's Ports region does. It
 lists six and counts the rest.

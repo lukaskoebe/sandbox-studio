@@ -4729,6 +4729,24 @@
         ],
         "type": "object"
       },
+      "PreviewSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "description": "The web and the TUI offer previews of sandbox ports; the preview API works either way",
+            "type": "boolean"
+          },
+          "notice": {
+            "description": "Show the one-time notice that previews are off: nobody has chosen yet and sandboxes exist. Any PUT ends it",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "notice"
+        ],
+        "type": "object"
+      },
       "PrivateHost": {
         "additionalProperties": false,
         "properties": {
@@ -18212,6 +18230,75 @@
           }
         },
         "summary": "The git identity of the user Studio runs as",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/previews": {
+      "get": {
+        "operationId": "getPreviewSetting",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewSetting"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "system"
+        ]
+      },
+      "put": {
+        "operationId": "setPreviewSetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewSetting"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Offer previews of sandbox ports in the web and the TUI, or stop doing so",
         "tags": [
           "system"
         ]

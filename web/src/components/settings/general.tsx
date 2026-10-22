@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import {
   ArrowCircleUpIcon,
   BellIcon,
+  BroadcastIcon,
   DownloadSimpleIcon,
   ListChecksIcon,
   PowerIcon,
@@ -28,6 +29,7 @@ import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
 import { Switch } from "@/components/ui/switch"
 import { useNotificationPermission } from "@/lib/notifications"
+import { usePreviewSetting } from "@/lib/preview-setting"
 import { setupOver, useSetup } from "@/lib/setup"
 import {
   $api,
@@ -51,6 +53,7 @@ export function GeneralSettings({ env }: { env: string }) {
         <SettingsGroup label="Studio">
           <AutostartSection />
           <NotificationsSection />
+          <PreviewsSection />
           <SetupSection env={env} />
         </SettingsGroup>
         <SettingsGroup
@@ -290,6 +293,26 @@ function NotificationsSection() {
         </p>
       )}
     </SettingRow>
+  )
+}
+
+/** Whether the pages offer previews of the ports a sandbox listens on. */
+function PreviewsSection() {
+  const previews = usePreviewSetting()
+  return (
+    <SettingRow
+      icon={BroadcastIcon}
+      title="Previews"
+      description="Open a sandbox's ports in a tab of this browser, from a sandbox's Previews menu, the Preview tab next to a chat and the links to ports in an agent's messages; the terminal UI shows their addresses. When this is off, all of these are hidden and the ports are only listed."
+      control={
+        <Switch
+          aria-label="Offer previews of sandbox ports"
+          checked={previews.enabled}
+          disabled={!previews.loaded || previews.pending}
+          onCheckedChange={previews.setEnabled}
+        />
+      }
+    />
   )
 }
 
