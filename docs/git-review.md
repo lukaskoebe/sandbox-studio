@@ -288,7 +288,15 @@ endpoint (`note` is optional); the integration owning the approval kind handles 
 The delivery above waits for the agent: its next fetch or prompt. The review can also tell
 an agent at once, in the sandbox's chat or terminal it works in.
 
-- **Line comments.** Each line of the review's diff has a comment button (on hover or focus).
+- **The review** (`GitReview` in `web/src/components/git-review.tsx`, the same in the sheet,
+  the review page and the sandbox's Git tab) shows the branch and its change, then a push in
+  tabs: **Changes**, the diff at full length; **Commits**, with the repository and sandbox;
+  and while it waits **Comments**, the note and the line comments, each of which jumps to its
+  line. A footer that stays in view holds Send to, the pull request choice, Reject and
+  Approve, with Send without deciding and Ignore in its More menu. A `git.pr` approval has
+  no diff and no tabs.
+- **Line comments.** Each line of the review's diff has a comment button (on hover or focus,
+  and always on touch screens).
   `web/src/components/review-feedback.tsx` numbers the lines from the hunk headers and folds
   the comments into the note, after the general note: one item per comment with the file, the
   line number and the line's code, then the comment. So they reach the agent by every route,

@@ -80,7 +80,11 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
   await row.getByRole("link").click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/git/reviews/`))
   await expect(page.getByRole("status")).toContainText("This was approved.")
+  await expect(page.getByText("+hello from the sandbox")).toBeVisible()
+  await page.getByRole("tab", { name: /^Commits/ }).click()
   await expect(page.getByText("Add a greeting")).toBeVisible()
+  // A decided push has no comments to write.
+  await expect(page.getByRole("tab", { name: /^Comments/ })).toHaveCount(0)
   await expect(
     page.getByRole("button", { name: "Approve and push" })
   ).toHaveCount(0)
@@ -124,6 +128,7 @@ test("a pending push review opens as a page and is decided there", async ({
   const main = page.getByRole("main")
   await expect(main).toContainText("Start the notes")
   await expect(main).toContainText("+# Notes")
+  await page.getByRole("tab", { name: /^Comments/ }).click()
   await page.getByLabel("Note for the agent").fill("Not this one")
   await page.getByRole("button", { name: "Reject" }).click()
   await expect(page.getByRole("status")).toContainText("This was rejected.")
@@ -192,6 +197,18 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
   await expect(
     sheet.getByRole("note", { name: "Comment on greeting.txt:1" })
   ).toContainText("Say hello to the world")
+  // Comments lists it, and jumps back to its line.
+  await sheet.getByRole("tab", { name: /^Comments/ }).click()
+  const listed = sheet.getByRole("list", { name: "Line comments" })
+  await expect(listed).toContainText("greeting.txt:1")
+  await listed.getByRole("button", { name: /Say hello to the world/ }).click()
+  await expect(sheet.getByRole("tab", { name: "Changes" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  await expect(
+    sheet.getByRole("note", { name: "Comment on greeting.txt:1" })
+  ).toBeInViewport()
   await sheet.getByRole("combobox", { name: "Send to" }).click()
   await page.getByRole("option", { name: /^Chat/ }).click()
   await sheet.getByRole("button", { name: "Reject" }).click()
@@ -206,12 +223,14 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
 
   // A note, pasted into the agent's terminal without deciding.
   sheet = await review("notes.txt", "Add notes")
+  await sheet.getByRole("tab", { name: /^Comments/ }).click()
   await sheet
     .getByRole("textbox", { name: "Note for the agent" })
     .fill("Use markdown for the notes")
   await sheet.getByRole("combobox", { name: "Send to" }).click()
   await page.getByRole("option", { name: /^Terminal/ }).click()
-  await sheet.getByRole("button", { name: "Send without deciding" }).click()
+  await sheet.getByRole("button", { name: "More decisions" }).click()
+  await page.getByRole("menuitem", { name: /^Send without deciding/ }).click()
   await expect(page.getByText("Feedback sent to the agent")).toBeVisible()
   await expect(sheet.getByRole("button", { name: "Reject" })).toBeVisible()
 
@@ -225,6 +244,7 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
   await expect(sheet.getByRole("combobox", { name: "Send to" })).toContainText(
     "A new chat"
   )
+  await sheet.getByRole("tab", { name: /^Comments/ }).click()
   await sheet
     .getByRole("textbox", { name: "Note for the agent" })
     .fill("Keep the todo list short")

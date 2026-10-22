@@ -1,16 +1,24 @@
-import { useState } from "react"
+import { useId, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import {
   ArrowSquareOutIcon,
-  GitCommitIcon,
-  GitDiffIcon,
+  ChatCircleTextIcon,
+  DotsThreeIcon,
+  EyeSlashIcon,
   GitPullRequestIcon,
+  PaperPlaneRightIcon,
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
@@ -21,6 +29,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { CountPill } from "@/components/count-pill"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
 import { SectionHeader } from "@/components/section-header"
@@ -169,14 +179,19 @@ export function GitOutcome({ git }: { git: GitDetail }) {
   )
 }
 
+type Tab = "changes" | "commits" | "comments"
+
 /**
- * The full review of a git approval: commits and diff of a push, or the proposed pull
- * request, with a note and the decision buttons while it is pending.
+ * The full review of a git approval. A push has tabs: its diff, its commits with where it
+ * comes from, and while it is pending the note and line comments. A proposed pull request
+ * shows its text. While pending, a footer that stays in view holds the decision.
  */
 export function GitReview({ approval }: { approval: Approval }) {
   const git = approval.git
   const [note, setNote] = useState("")
   const [comments, setComments] = useState<LineComment[]>([])
+  const [tab, setTab] = useState<Tab>("changes")
+  const ids = useId()
   const review = git?.review
   const proposal = review?.pullRequest
   const [target, setTarget] = useState<FeedbackTarget>(
@@ -194,8 +209,8 @@ export function GitReview({ approval }: { approval: Approval }) {
   const params = {
     params: { path: { env: approval.environmentId, id: approval.id } },
   }
-  const fullNote = () =>
-    composeNote(note, parseDiff(git.review?.diff ?? ""), comments)
+  const lines = parseDiff(git.review?.diff ?? "")
+  const fullNote = () => composeNote(note, lines, comments)
   const send = () =>
     feedback.mutate({ ...params, body: feedbackBody(target, fullNote()) })
   const busy = (action: Action) =>
@@ -222,24 +237,66 @@ export function GitReview({ approval }: { approval: Approval }) {
   const rv = git.review
   const pr = git.pullRequest
   const branch = pr ? `${pr.head} → ${pr.base}` : rv?.branch
+  const lineId = (i: number) => `${ids}-line-${i}`
+  const where = (i: number) => `${lines[i]?.file}:${lines[i]?.line}`
+  const jump = (i: number) => {
+    setTab("changes")
+    // The panel shows on the next frame.
+    requestAnimationFrame(() =>
+      document
+        .getElementById(lineId(i))
+        ?.scrollIntoView({ block: "center", behavior: "smooth" })
+    )
+  }
+
+  const origin = (
+    <>
+      <dt className="text-muted-foreground">Repository</dt>
+      <dd>
+        <Ident>{`${git.push.forgeName}/${git.push.owner}/${git.push.repo}`}</Ident>
+      </dd>
+      <dt className="text-muted-foreground">Sandbox</dt>
+      <dd>
+        {rv?.sandbox ?? <Ident>{git.push.sandboxId}</Ident>}
+        {git.push.teammateName && (
+          <span className="text-muted-foreground">
+            {" "}
+            · teammate {git.push.teammateName}
+          </span>
+        )}
+      </dd>
+    </>
+  )
+
+  const noteField = (
+    <div className="grid gap-2">
+      <textarea
+        aria-label="Note for the agent"
+        placeholder={
+          rv
+            ? "Note for the agent. Comment on a line of the diff with its button."
+            : "Note for the agent"
+        }
+        rows={rv ? 4 : 2}
+        maxLength={4000}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        className={textareaClass}
+      />
+      <p className="text-xs text-muted-foreground">
+        {target === newChatTarget
+          ? "With a note or line comments, deciding starts a chat in the sandbox that tells the agent the outcome and your comments."
+          : target
+            ? "Deciding sends the outcome, the note and your line comments there."
+            : "The agent sees a rejection and its note when it next fetches or gets a prompt."}
+      </p>
+    </div>
+  )
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4">
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt className="text-muted-foreground">Repository</dt>
-        <dd>
-          <Ident>{`${git.push.forgeName}/${git.push.owner}/${git.push.repo}`}</Ident>
-        </dd>
-        <dt className="text-muted-foreground">Sandbox</dt>
-        <dd>
-          {rv?.sandbox ?? <Ident>{git.push.sandboxId}</Ident>}
-          {git.push.teammateName && (
-            <span className="text-muted-foreground">
-              {" "}
-              · teammate {git.push.teammateName}
-            </span>
-          )}
-        </dd>
+        {!rv && origin}
         <dt className="text-muted-foreground">Branch</dt>
         <dd>
           {branch && <Ident>{branch}</Ident>}
@@ -301,29 +358,6 @@ export function GitReview({ approval }: { approval: Approval }) {
         </p>
       )}
 
-      {proposal && pending && (
-        <section className="grid gap-2 rounded-md p-2 text-xs ring-1 ring-foreground/10">
-          <label className="flex items-center gap-2">
-            <Checkbox checked={openPR} onCheckedChange={setOpenPR} />
-            Also open a pull request into <Ident>{proposal.base}</Ident>
-          </label>
-          {openPR && (
-            <Input
-              aria-label="Pull request title"
-              value={prTitle}
-              maxLength={200}
-              onChange={(e) => setPRTitle(e.target.value)}
-              className="h-7 text-xs"
-            />
-          )}
-          {!openPR && (
-            <p className="text-muted-foreground">
-              Approving only pushes; you can open the pull request later.
-            </p>
-          )}
-        </section>
-      )}
-
       {!pending && canOpenLater(git) && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <GitPullRequestIcon className="size-3.5" />
@@ -344,138 +378,228 @@ export function GitReview({ approval }: { approval: Approval }) {
       )}
 
       {rv && (
-        <section className="grid gap-2">
-          <SectionHeader
-            title="Commits"
-            icon={GitCommitIcon}
-            area="git"
-            count={(rv.commits?.length ?? 0) + rv.moreCommits}
-          />
-          <ul className="divide-y rounded-md text-xs ring-1 ring-foreground/10">
-            {(rv.commits ?? []).map((c) => (
-              <li key={c.sha} className="grid gap-0.5 px-2 py-1.5">
-                <div className="flex min-w-0 items-baseline gap-2">
-                  <Ident copy value={c.sha} className="text-muted-foreground">
-                    {short(c.sha)}
-                  </Ident>
-                  <span className="truncate font-medium">{c.subject}</span>
-                  <span className="ml-auto shrink-0 text-muted-foreground">
-                    {c.author} · {formatAge(c.when)}
-                  </span>
-                </div>
-                {c.body && (
-                  <p className="whitespace-pre-wrap text-muted-foreground">
-                    {c.body}
-                  </p>
-                )}
-              </li>
-            ))}
-            {rv.moreCommits > 0 && (
-              <li className="px-2 py-1.5 text-muted-foreground">
-                and {rv.moreCommits} more
-              </li>
+        <Tabs
+          value={tab}
+          onValueChange={(v: Tab) => setTab(v)}
+          className="min-w-0"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <TabsList>
+              <TabsTrigger value="changes">Changes</TabsTrigger>
+              <TabsTrigger value="commits">
+                Commits
+                <CountPill count={(rv.commits?.length ?? 0) + rv.moreCommits} />
+              </TabsTrigger>
+              {pending && (
+                <TabsTrigger value="comments">
+                  Comments
+                  <CountPill count={comments.length + (note.trim() ? 1 : 0)} />
+                </TabsTrigger>
+              )}
+            </TabsList>
+            {rv.diffTruncated && (
+              <Badge variant="outline" className="ml-auto">
+                diff truncated
+              </Badge>
             )}
-          </ul>
-        </section>
+          </div>
+          <TabsContent value="changes" keepMounted className="min-w-0">
+            <UnifiedDiff
+              diff={rv.diff}
+              comments={comments}
+              onComment={pending ? setComments : undefined}
+              fill
+              lineId={lineId}
+            />
+          </TabsContent>
+          <TabsContent
+            value="commits"
+            keepMounted
+            className="grid min-w-0 gap-3"
+          >
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+              {origin}
+            </dl>
+            <ul className="min-w-0 divide-y rounded-md text-xs ring-1 ring-foreground/10">
+              {(rv.commits ?? []).map((c) => (
+                <li key={c.sha} className="grid min-w-0 gap-0.5 px-2 py-1.5">
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <Ident copy value={c.sha} className="text-muted-foreground">
+                      {short(c.sha)}
+                    </Ident>
+                    <span className="truncate font-medium">{c.subject}</span>
+                    <span className="ml-auto shrink-0 text-muted-foreground">
+                      {c.author} · {formatAge(c.when)}
+                    </span>
+                  </div>
+                  {c.body && (
+                    <p className="break-words whitespace-pre-wrap text-muted-foreground">
+                      {c.body}
+                    </p>
+                  )}
+                </li>
+              ))}
+              {rv.moreCommits > 0 && (
+                <li className="px-2 py-1.5 text-muted-foreground">
+                  and {rv.moreCommits} more
+                </li>
+              )}
+            </ul>
+          </TabsContent>
+          {pending && (
+            <TabsContent value="comments" keepMounted className="grid gap-4">
+              {noteField}
+              <section className="grid gap-2">
+                <SectionHeader
+                  title="Line comments"
+                  icon={ChatCircleTextIcon}
+                  area="git"
+                  count={comments.length}
+                />
+                {comments.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    None yet. In Changes, comment on a line with the button at
+                    its start.
+                  </p>
+                ) : (
+                  <ul
+                    aria-label="Line comments"
+                    className="divide-y rounded-md text-xs ring-1 ring-foreground/10"
+                  >
+                    {[...comments]
+                      .sort((a, b) => a.index - b.index)
+                      .map((c) => (
+                        <li key={c.index}>
+                          <button
+                            type="button"
+                            title="Show the line"
+                            className="grid w-full gap-0.5 px-2 py-1.5 text-left hover:bg-muted/50"
+                            onClick={() => jump(c.index)}
+                          >
+                            <Ident className="text-muted-foreground">
+                              {where(c.index)}
+                            </Ident>
+                            <span className="break-words whitespace-pre-wrap">
+                              {c.text}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </section>
+            </TabsContent>
+          )}
+        </Tabs>
       )}
 
-      {rv && (
-        <section className="grid min-w-0 gap-2">
-          <SectionHeader
-            title="Diff"
-            icon={GitDiffIcon}
-            area="git"
-            actions={
-              rv.diffTruncated && <Badge variant="outline">truncated</Badge>
-            }
-          />
-          <UnifiedDiff
-            diff={rv.diff}
-            comments={comments}
-            onComment={pending ? setComments : undefined}
-          />
-        </section>
-      )}
+      {pending && !rv && noteField}
 
       {pending && (
-        <div className="grid gap-2">
-          <textarea
-            aria-label="Note for the agent"
-            placeholder={
-              rv
-                ? "Note for the agent. Comment on a line of the diff with its button."
-                : "Note for the agent"
-            }
-            rows={2}
-            maxLength={4000}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className={textareaClass}
-          />
-          {approval.sandboxId && (
-            <FeedbackTargetSelect
-              env={approval.environmentId}
-              sandboxId={approval.sandboxId}
-              newChat={!!git.push.teammateName}
-              value={target}
-              onChange={setTarget}
-            />
+        <div
+          role="group"
+          aria-label="Decision"
+          className="sticky bottom-0 z-10 grid gap-2 rounded-lg border bg-background/95 p-2 shadow-md backdrop-blur"
+        >
+          {proposal && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-2">
+                <Checkbox checked={openPR} onCheckedChange={setOpenPR} />
+                Also open a pull request into <Ident>{proposal.base}</Ident>
+              </label>
+              {openPR ? (
+                <Input
+                  aria-label="Pull request title"
+                  value={prTitle}
+                  maxLength={200}
+                  onChange={(e) => setPRTitle(e.target.value)}
+                  className="h-7 min-w-48 flex-1 text-xs"
+                />
+              ) : (
+                <span className="text-muted-foreground">
+                  Approving only pushes; you can open the pull request later.
+                </span>
+              )}
+            </div>
           )}
-          <p className="text-xs text-muted-foreground">
-            {target === newChatTarget
-              ? "With a note or line comments, deciding starts a chat in the sandbox that tells the agent the outcome and your comments."
-              : target
-                ? "Deciding sends the outcome, the note and your line comments there."
-                : "The agent sees a rejection and its note when it next fetches or gets a prompt."}
-          </p>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="xs"
-              disabled={decide.isPending}
-              onClick={() => act("dismiss")}
-            >
-              {busy("dismiss") && <Spinner className="size-3" />}
-              Ignore
-            </Button>
-            {target && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="min-w-0 flex-1 basis-56 empty:hidden">
+              {approval.sandboxId && (
+                <FeedbackTargetSelect
+                  env={approval.environmentId}
+                  sandboxId={approval.sandboxId}
+                  newChat={!!git.push.teammateName}
+                  value={target}
+                  onChange={setTarget}
+                />
+              )}
+            </div>
+            <div className="ml-auto flex items-center gap-1.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="More decisions"
+                    />
+                  }
+                >
+                  <DotsThreeIcon weight="bold" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {target && (
+                    <DropdownMenuItem
+                      disabled={feedback.isPending || !fullNote()}
+                      onClick={send}
+                    >
+                      <PaperPlaneRightIcon />
+                      <span className="grid">
+                        Send without deciding
+                        <span className="text-[0.6875rem] text-muted-foreground">
+                          The note and comments; the push keeps waiting
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    disabled={decide.isPending}
+                    onClick={() => act("dismiss")}
+                  >
+                    <EyeSlashIcon />
+                    <span className="grid">
+                      Ignore
+                      <span className="text-[0.6875rem] text-muted-foreground">
+                        Close it without an answer to the agent
+                      </span>
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
-                variant="ghost"
-                size="xs"
-                disabled={feedback.isPending || !fullNote()}
-                title="Send the note and comments, and keep the push waiting"
-                onClick={send}
+                variant="outline"
+                size="sm"
+                disabled={decide.isPending}
+                onClick={() => act("deny")}
               >
-                {feedback.isPending && !decide.isPending && (
-                  <Spinner className="size-3" />
-                )}
-                Send without deciding
+                {busy("deny") && <Spinner />}
+                Reject
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto"
-              disabled={decide.isPending}
-              onClick={() => act("deny")}
-            >
-              {busy("deny") && <Spinner />}
-              Reject
-            </Button>
-            <Button
-              size="sm"
-              disabled={
-                decide.isPending || (!!proposal && openPR && !prTitle.trim())
-              }
-              onClick={() => act("allow")}
-            >
-              {busy("allow") && <Spinner />}
-              {pr
-                ? "Open pull request"
-                : proposal && openPR
-                  ? "Push and open pull request"
-                  : "Approve and push"}
-            </Button>
+              <Button
+                size="sm"
+                disabled={
+                  decide.isPending || (!!proposal && openPR && !prTitle.trim())
+                }
+                onClick={() => act("allow")}
+              >
+                {busy("allow") && <Spinner />}
+                {pr
+                  ? "Open pull request"
+                  : proposal && openPR
+                    ? "Push and open pull request"
+                    : "Approve and push"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

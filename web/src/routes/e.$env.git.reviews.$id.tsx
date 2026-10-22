@@ -58,7 +58,7 @@ function GitReviewPage() {
         <h1 className="text-sm font-medium">Git review</h1>
       </PageHeader>
       <ScrollArea className="min-h-0 flex-1" viewportClassName="p-4">
-        <div className="mx-auto grid max-w-3xl gap-4 text-xs">
+        <div className="mx-auto grid max-w-5xl gap-4 text-xs">
           {approval.isPending ? (
             <Spinner className="mx-auto block" />
           ) : !a || !kind || !isGitApproval(a) ? (

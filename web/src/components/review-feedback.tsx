@@ -104,10 +104,16 @@ export function UnifiedDiff({
   diff,
   comments = [],
   onComment,
+  fill,
+  lineId,
 }: {
   diff: string
   comments?: LineComment[]
   onComment?: (comments: LineComment[]) => void
+  /** Grows with the diff instead of scrolling it at 60vh, for a panel of its own. */
+  fill?: boolean
+  /** The element ID of line i, for a list of comments that jumps to them. */
+  lineId?: (i: number) => string
 }) {
   const [editing, setEditing] = useState<number>()
   const [draft, setDraft] = useState("")
@@ -124,14 +130,14 @@ export function UnifiedDiff({
   return (
     <ScrollArea
       className="rounded-md bg-muted/40 ring-1 ring-foreground/10"
-      viewportClassName="max-h-[60vh]"
+      viewportClassName={fill ? undefined : "max-h-[60vh]"}
     >
       <pre className="py-2 font-mono text-[11px]/[1.45]">
         {lines.map((l, i) => {
           const comment = comments.find((c) => c.index === i)
           const where = l.file && `${l.file}:${l.line}`
           return (
-            <div key={i}>
+            <div key={i} id={lineId?.(i)} className="scroll-mt-12">
               <div
                 className={cn(
                   "group relative px-2 whitespace-pre",
@@ -144,7 +150,7 @@ export function UnifiedDiff({
                     type="button"
                     aria-label={`Comment on ${where}`}
                     title={`Comment on ${where}`}
-                    className="absolute top-0 left-1 grid size-4 place-items-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-foreground/10 hover:text-foreground focus-visible:opacity-100"
+                    className="absolute top-0 left-1 grid size-4 place-items-center rounded-sm text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-foreground/10 hover:text-foreground focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                     onClick={() => {
                       setEditing(i)
                       setDraft(comment?.text ?? "")
