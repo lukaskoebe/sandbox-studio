@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { HostCodexAccount, type HostOffer } from "@/components/host-logins"
 import { ProviderLogin } from "@/components/provider-login"
 import {
   errorMessage,
@@ -53,12 +54,15 @@ const kindHints: Record<ProviderKind, string> = {
 export function ProviderDialog({
   env,
   provider,
+  offer,
   open,
   onOpenChange,
 }: {
   env: string
   /** The provider to edit; absent for a new one. */
   provider?: Provider
+  /** The kind and name a new provider starts with, from a login on this computer. */
+  offer?: HostOffer
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -67,9 +71,10 @@ export function ProviderDialog({
       <DialogContent className="sm:max-w-xl lg:max-w-2xl">
         {/* The form, including a typed key, exists only while the dialog is open. */}
         <ProviderForm
-          key={provider?.id ?? "new"}
+          key={provider?.id ?? offer?.kind ?? "new"}
           env={env}
           provider={provider}
+          offer={offer}
           onDone={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -80,16 +85,18 @@ export function ProviderDialog({
 function ProviderForm({
   env,
   provider,
+  offer,
   onDone,
 }: {
   env: string
   provider?: Provider
+  offer?: HostOffer
   onDone: () => void
 }) {
   const queryClient = useQueryClient()
-  const [name, setName] = useState(provider?.name ?? "")
+  const [name, setName] = useState(provider?.name ?? offer?.name ?? "")
   const [kind, setKind] = useState<ProviderKind>(
-    provider?.kind ?? "anthropic_api"
+    provider?.kind ?? offer?.kind ?? "anthropic_api"
   )
   const [apiKey, setApiKey] = useState("")
   const [showKey, setShowKey] = useState(false)
@@ -250,10 +257,13 @@ function ProviderForm({
         current ? (
           <ProviderLogin env={env} provider={current} />
         ) : (
-          <p className="rounded-md bg-muted px-3 py-2 text-xs/relaxed text-muted-foreground">
-            Add the provider, then sign in with your subscription in your
-            browser. Nothing to paste yet.
-          </p>
+          <>
+            {kind === "chatgpt_subscription" && <HostCodexAccount />}
+            <p className="rounded-md bg-muted px-3 py-2 text-xs/relaxed text-muted-foreground">
+              Add the provider, then sign in with your subscription in your
+              browser. Nothing to paste yet.
+            </p>
+          </>
         )
       ) : (
         <>

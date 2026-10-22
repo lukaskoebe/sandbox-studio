@@ -23,6 +23,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/events"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/login"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
@@ -61,7 +62,10 @@ type Server struct {
 	System       System
 	// HostGit reads the host's git identity (HostGitIdentity); without it the host has none.
 	HostGit func(context.Context) GitIdentity
-	Chats   *chat.Service // its endpoints answer 503 without it
+	// HostLogins finds the CLIs' logins on the host (docs/host-logins.md); without it the host
+	// has none.
+	HostLogins *hostlogins.Finder
+	Chats      *chat.Service // its endpoints answer 503 without it
 	// Login runs the subscription sign-ins; their endpoints answer 503 without it.
 	Login *login.Service
 	// TaskRuns starts the runs of scheduled tasks for Run now; it answers 503 without it.
@@ -113,6 +117,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerForges(api)
 	s.registerForgeRepositories(api)
 	s.registerSystem(api)
+	s.registerHostLogins(api)
 	s.registerFolders(api)
 	s.registerGitIdentity(api)
 	s.registerBrowser(api)

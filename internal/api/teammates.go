@@ -138,60 +138,12 @@ func (s *Server) registerTeammates(api huma.API) {
 		DefaultStatus: http.StatusCreated,
 		Description:   "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. A provider added to an environment without teammates also creates the default teammate.",
 	}, func(ctx context.Context, in *createProviderIn) (*struct{ Body ProviderView }, error) {
-		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+		b := in.Body
+		v, err := s.addProvider(ctx, in.Env, newProvider{Name: b.Name, Kind: b.Kind, APIKey: b.APIKey, BaseURL: b.BaseURL, Model: b.Model})
+		if err != nil {
 			return nil, err
 		}
-		b := in.Body
-		k, ok := teammates.LookupKind(b.Kind)
-		if !ok {
-			return nil, huma.Error422UnprocessableEntity("unknown provider kind")
-		}
-		if err := teammates.CheckName("provider", b.Name); err != nil {
-			return nil, apiError(err)
-		}
-		p := store.Provider{ID: store.NewID(), EnvironmentID: in.Env, Name: b.Name, Kind: b.Kind}
-		host := k.Host
-		if b.Kind == teammates.KindOpenAICompatible {
-			var err error
-			if p.BaseURL, host, err = teammates.BaseURL(b.BaseURL); err != nil {
-				return nil, apiError(err)
-			}
-			if b.Model == "" {
-				return nil, huma.Error422UnprocessableEntity("OpenAI-compatible providers need a model")
-			}
-			if err := teammates.CheckModel(b.Model); err != nil {
-				return nil, apiError(err)
-			}
-			p.Model = b.Model
-		} else if b.BaseURL != "" || b.Model != "" {
-			return nil, huma.Error422UnprocessableEntity("only OpenAI-compatible providers have a base URL and model")
-		}
-		var sec *store.Secret
-		switch {
-		case k.APIKey && b.APIKey == "":
-			return nil, huma.Error422UnprocessableEntity("this provider needs an API key")
-		case k.APIKey:
-			prepared, err := s.Vault.Prepare(in.Env, teammates.SecretName(b.Name, p.ID), b.APIKey, []string{host}, "Key of provider "+b.Name)
-			if err != nil {
-				return nil, apiError(err)
-			}
-			sec = &prepared
-		case b.APIKey != "":
-			return nil, huma.Error422UnprocessableEntity("subscription providers log in instead of taking an API key")
-		}
-		created, err := s.Store.CreateProvider(ctx, p, sec)
-		if err != nil {
-			return nil, apiError(err)
-		}
-		if sec != nil {
-			s.Vault.Changed(in.Env)
-			s.publishSecrets(in.Env)
-		}
-		if err := s.createDefaultTeammate(ctx, in.Env, created); err != nil {
-			s.Log.Warn("default teammate", "environment", in.Env, "err", err)
-		}
-		s.publishTeammates(in.Env)
-		return &struct{ Body ProviderView }{s.providerViewOf(ctx, created)}, nil
+		return &struct{ Body ProviderView }{v}, nil
 	})
 
 	type updateProviderIn struct {
@@ -542,4 +494,66 @@ func (s *Server) checkTeammate(ctx context.Context, env, teammateID string) erro
 // publishTeammates tells open tabs that the environment's teammates or providers changed.
 func (s *Server) publishTeammates(envID string) {
 	s.Bus.Publish(events.Event{Topic: events.TopicTeammates, EnvironmentID: envID})
+}
+
+// newProvider is a provider to create: by the API, or from a key imported from the host.
+type newProvider struct{ Name, Kind, APIKey, BaseURL, Model string }
+
+// addProvider creates a provider of env. An API key is sealed in the vault, bound to the
+// vendor's host; the first provider of an environment without teammates brings the default
+// teammate.
+func (s *Server) addProvider(ctx context.Context, env string, b newProvider) (ProviderView, error) {
+	if err := s.checkEnvironment(ctx, env); err != nil {
+		return ProviderView{}, err
+	}
+	k, ok := teammates.LookupKind(b.Kind)
+	if !ok {
+		return ProviderView{}, huma.Error422UnprocessableEntity("unknown provider kind")
+	}
+	if err := teammates.CheckName("provider", b.Name); err != nil {
+		return ProviderView{}, apiError(err)
+	}
+	p := store.Provider{ID: store.NewID(), EnvironmentID: env, Name: b.Name, Kind: b.Kind}
+	host := k.Host
+	if b.Kind == teammates.KindOpenAICompatible {
+		var err error
+		if p.BaseURL, host, err = teammates.BaseURL(b.BaseURL); err != nil {
+			return ProviderView{}, apiError(err)
+		}
+		if b.Model == "" {
+			return ProviderView{}, huma.Error422UnprocessableEntity("OpenAI-compatible providers need a model")
+		}
+		if err := teammates.CheckModel(b.Model); err != nil {
+			return ProviderView{}, apiError(err)
+		}
+		p.Model = b.Model
+	} else if b.BaseURL != "" || b.Model != "" {
+		return ProviderView{}, huma.Error422UnprocessableEntity("only OpenAI-compatible providers have a base URL and model")
+	}
+	var sec *store.Secret
+	switch {
+	case k.APIKey && b.APIKey == "":
+		return ProviderView{}, huma.Error422UnprocessableEntity("this provider needs an API key")
+	case k.APIKey:
+		prepared, err := s.Vault.Prepare(env, teammates.SecretName(b.Name, p.ID), b.APIKey, []string{host}, "Key of provider "+b.Name)
+		if err != nil {
+			return ProviderView{}, apiError(err)
+		}
+		sec = &prepared
+	case b.APIKey != "":
+		return ProviderView{}, huma.Error422UnprocessableEntity("subscription providers log in instead of taking an API key")
+	}
+	created, err := s.Store.CreateProvider(ctx, p, sec)
+	if err != nil {
+		return ProviderView{}, apiError(err)
+	}
+	if sec != nil {
+		s.Vault.Changed(env)
+		s.publishSecrets(env)
+	}
+	if err := s.createDefaultTeammate(ctx, env, created); err != nil {
+		s.Log.Warn("default teammate", "environment", env, "err", err)
+	}
+	s.publishTeammates(env)
+	return s.providerViewOf(ctx, created), nil
 }

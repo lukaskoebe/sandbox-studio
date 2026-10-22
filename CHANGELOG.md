@@ -26,6 +26,11 @@
   it, checks it against `checksums.txt` and its GitHub build attestation, waits until no chat,
   template build or sign-in is running, backs up its database and restarts into it. If the
   new version doesn't start within two minutes, the old one and the database come back.
+- **Providers:** the setup and **Settings → AI providers** notice Claude Code, Codex and
+  opencode signed in on this computer and offer the matching provider. Studio still signs in on
+  its own, so the computer stays signed in; for ChatGPT it names the account Codex uses.
+  opencode's plain API keys can be imported one by one. [Logins on this computer](docs/host-logins.md)
+  says what Studio reads, and when.
 
 ## v0.5.2 — 2026-10-22
 

@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
+import { HostLoginOffers, type HostOffer } from "@/components/host-logins"
 import { ProviderDialog } from "@/components/provider-dialog"
 import { $api, errorMessage, type Provider } from "@/lib/api/client"
 import { harnessLabels, isSubscription, kindLabels } from "@/lib/teammates"
@@ -48,8 +49,12 @@ const explanation =
   "Providers give teammates access to a model. An API key is stored as a secret bound to the provider's API host, so sandboxes see only its placeholder."
 
 export function ProvidersSettings({ env }: { env: string }) {
-  // The open dialog: an empty object adds a provider, a provider edits it, null is closed.
-  const [dialog, setDialog] = useState<{ provider?: Provider } | null>(null)
+  // The open dialog: an empty object adds a provider, an offer adds one from a login on this
+  // computer, a provider edits it, null is closed.
+  const [dialog, setDialog] = useState<{
+    provider?: Provider
+    offer?: HostOffer
+  } | null>(null)
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
@@ -69,6 +74,15 @@ export function ProvidersSettings({ env }: { env: string }) {
         <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
           {explanation}
         </p>
+        {providers.data && (
+          <div className="max-w-2xl">
+            <HostLoginOffers
+              env={env}
+              providers={list}
+              onUse={(offer) => setDialog({ offer })}
+            />
+          </div>
+        )}
         {providers.isPending ? (
           <Spinner className="mx-auto block" />
         ) : list.length ? (
@@ -185,6 +199,7 @@ export function ProvidersSettings({ env }: { env: string }) {
       <ProviderDialog
         env={env}
         provider={dialog?.provider}
+        offer={dialog?.offer}
         open={dialog !== null}
         onOpenChange={(open) => {
           if (!open) setDialog(null)

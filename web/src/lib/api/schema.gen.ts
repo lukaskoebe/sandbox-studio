@@ -1101,6 +1101,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/providers/import-opencode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Creates a provider from a plain API key opencode stores on this computer. The key is sealed in the vault like a typed one; opencode keeps its own. */
+        post: operations["importOpencodeKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/providers/models": {
         parameters: {
             query?: never;
@@ -2486,6 +2503,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/host-logins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Which of Claude Code, Codex and opencode have a login on the computer Studio runs on. Only checks that their files exist; nothing is read. */
+        get: operations["getHostLogins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/host-logins/codex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The ChatGPT account of the computer's Codex login, from its ID token's claims. Its tokens stay where they are: Studio signs in on its own. */
+        get: operations["getHostCodexAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/host-logins/opencode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The credentials opencode stores on this computer, without their content. Those with a kind are plain API keys Studio can import. */
+        get: operations["listHostOpencodeKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/previews": {
         parameters: {
             query?: never;
@@ -3780,6 +3848,12 @@ export interface components {
             /** @enum {string} */
             status: "ok" | "warn" | "fail";
         };
+        HostCodexAccount: {
+            /** @description The ChatGPT account's email */
+            email?: string;
+            /** @description The ChatGPT plan, as Codex records it: plus, pro, team… */
+            plan?: string;
+        };
         HostFolder: {
             /** @description The subfolders, sorted by name */
             entries: components["schemas"]["HostFolderEntry"][] | null;
@@ -3803,11 +3877,31 @@ export interface components {
             /** @description Its absolute path */
             path: string;
         };
+        HostLogins: {
+            /** @description Claude Code is set up on this computer */
+            claude: boolean;
+            /** @description Codex has a login file on this computer */
+            codex: boolean;
+            /** @description opencode has stored credentials on this computer */
+            opencode: boolean;
+        };
+        HostOpencodeKey: {
+            /** @enum {string} */
+            kind?: "anthropic_api" | "openai_api";
+            provider: string;
+            type: string;
+        };
         ImportInBody: {
             /** @description A file made by export, at most 2 MiB */
             markdown: string;
             /** @description shared or teammate:<id>; the file must be for this scope */
             scope: string;
+        };
+        ImportOpencodeInBody: {
+            /** @description The new provider's name */
+            name: string;
+            /** @description opencode's name of the provider whose key to import */
+            provider: string;
         };
         ImportResult: {
             /**
@@ -8069,6 +8163,42 @@ export interface operations {
             };
         };
     };
+    importOpencodeKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportOpencodeInBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listProviderModels: {
         parameters: {
             query?: never;
@@ -11708,6 +11838,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GitIdentity"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getHostLogins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostLogins"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getHostCodexAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostCodexAccount"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listHostOpencodeKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostOpencodeKey"][] | null;
                 };
             };
             /** @description Error */

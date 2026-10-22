@@ -20,6 +20,7 @@ import {
 import { HostChecks } from "@/components/runtime-card"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { SandboxProgress } from "@/components/sandbox-progress"
+import { HostLoginOffers, type HostOffer } from "@/components/host-logins"
 import { ProviderDialog } from "@/components/provider-dialog"
 import { StatusBadge } from "@/components/status-badge"
 import { TeammateForm } from "@/components/teammate-form"
@@ -108,7 +109,8 @@ function ProviderStep({ env }: { env: string }) {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  const [adding, setAdding] = useState(false)
+  // The add dialog: open, and with the kind and name of a login on this computer.
+  const [adding, setAdding] = useState<{ offer?: HostOffer } | null>(null)
   const [signingIn, setSigningIn] = useState<Provider>()
   const list = providers.data ?? []
   return (
@@ -142,13 +144,23 @@ function ProviderStep({ env }: { env: string }) {
       ) : (
         <p className="text-xs text-muted-foreground">No provider yet.</p>
       )}
+      <HostLoginOffers
+        env={env}
+        providers={list}
+        onUse={(offer) => setAdding({ offer })}
+      />
       <div>
-        <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+        <Button size="sm" variant="outline" onClick={() => setAdding({})}>
           <PlusIcon />
           Add provider
         </Button>
       </div>
-      <ProviderDialog env={env} open={adding} onOpenChange={setAdding} />
+      <ProviderDialog
+        env={env}
+        offer={adding?.offer}
+        open={!!adding}
+        onOpenChange={(open) => !open && setAdding(null)}
+      />
       <ProviderDialog
         env={env}
         provider={signingIn}

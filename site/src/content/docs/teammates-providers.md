@@ -30,6 +30,15 @@ A subscription is not an API key. With an API key you paste the key and are done
 - **Claude Pro/Max:** open the sign-in page, sign in and choose Authorize, copy the code the page shows, and paste it into the dialog's code field (or press **Paste**). Studio hands the code to Claude Code and saves the sign-in by itself; you don't type into the terminal. **Show the terminal** displays what Claude Code says, and opens by itself if it rejects the code. If you'd rather, run `claude setup-token` on your own computer and paste the `sk-ant-oat…` token it prints under **Use a token from claude setup-token instead**.
 - **ChatGPT Plus/Pro:** open the sign-in page, enter the code the dialog shows, and sign in. Studio notices when you're done; there is nothing to paste back.
 
+### Logins on this computer
+
+If Claude Code, Codex or opencode is signed in on the computer Studio runs on, the setup and **Settings → AI providers** list it under **On this computer**:
+
+- **Use Claude subscription** and **Use ChatGPT subscription** open the provider dialog with the kind chosen. Studio still signs in on its own and never copies the computer's login, because a copied login that refreshes first signs the computer out. For ChatGPT, the dialog names the account Codex is signed in with, so you can sign in with the same one.
+- **Import keys…** lists the credentials opencode stores. Anthropic and OpenAI API keys can be imported one by one; they're sealed in Studio's vault like a typed key, and opencode keeps its own. opencode's subscription sign-ins can't be imported; **Sign in** adds the matching subscription instead.
+
+Until you choose one of these, Studio only checks that the CLIs' files exist and reads nothing in them.
+
 ![Settings → AI providers showing configured API-key providers](../../assets/screenshots/providers.jpg)
 
 Add or rotate provider keys under **Settings → AI providers**. The key remains in Studio's host-side vault; the guest receives a placeholder, which Studio substitutes only for the provider's bound API host. Provider keys are managed with the provider and cannot be edited from **Settings → Secrets**.

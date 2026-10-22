@@ -1,3 +1,5 @@
+import { mkdir, rm, writeFile } from "node:fs/promises"
+import path from "node:path"
 import { expect, test } from "./fixtures"
 
 test("a Claude subscription asks for a browser sign-in, not a key", async ({
@@ -88,4 +90,95 @@ test("an OpenAI-compatible endpoint suggests the models it lists", async ({
   await dialog.getByLabel("Model").fill("my-own-model")
   await expect(dialog.getByLabel("Model")).toHaveValue("my-own-model")
   await page.keyboard.press("Escape")
+})
+
+test("logins on this computer become providers without copying a sign-in", async ({
+  page,
+  api,
+  env,
+  studio,
+}) => {
+  // The e2e Studio looks for the CLIs' files in a home of its own.
+  const hostHome = path.join(studio.home, "e2e-host-home")
+  const claims = Buffer.from(
+    JSON.stringify({
+      email: "ada@example.com",
+      "https://api.openai.com/auth": { chatgpt_plan_type: "plus" },
+    })
+  ).toString("base64url")
+  const files: Record<string, unknown> = {
+    ".codex/auth.json": {
+      tokens: {
+        id_token: `aGVhZA.${claims}.c2ln`,
+        access_token: "a.b.c",
+        refresh_token: "rt-host-e2e",
+      },
+    },
+    ".local/share/opencode/auth.json": {
+      anthropic: { type: "api", key: "sk-ant-opencode-e2e" },
+      openai: { type: "oauth", refresh: "rt-host-e2e", access: "at" },
+    },
+  }
+  for (const [rel, body] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(hostHome, rel)), { recursive: true })
+    await writeFile(path.join(hostHome, rel), JSON.stringify(body))
+  }
+  const before = new Set(
+    (
+      (await api.json<{ id: string }[]>(
+        "GET",
+        `/api/environments/${env}/providers`
+      )) ?? []
+    ).map((p) => p.id)
+  )
+  try {
+    await page.goto(`/e/${env}/settings/providers`)
+    const offers = page.getByRole("region", { name: "On this computer" })
+    await expect(offers.getByText("Codex", { exact: true })).toBeVisible()
+
+    // ChatGPT: the dialog names the computer's account, and Studio signs in on its own.
+    await offers
+      .getByRole("button", { name: "Use ChatGPT subscription" })
+      .click()
+    const dialog = page.getByRole("dialog", { name: "Add provider" })
+    await expect(dialog.getByLabel("Name", { exact: true })).toHaveValue(
+      "ChatGPT"
+    )
+    await expect(dialog.getByText("ada@example.com")).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
+
+    // opencode: its plain key is imported, its OAuth sign-in is not.
+    await offers.getByRole("button", { name: "Import keys…" }).click()
+    const importer = page.getByRole("dialog", {
+      name: "Import keys from opencode",
+    })
+    const anthropic = importer
+      .getByRole("listitem")
+      .filter({ hasText: "API key" })
+    await expect(importer.getByText(/A subscription sign-in/)).toBeVisible()
+    await anthropic.getByRole("button", { name: "Import" }).click()
+    await expect(anthropic.getByText("Imported")).toBeVisible()
+    await importer.getByRole("button", { name: "Done" }).click()
+
+    const providers =
+      (await api.json<{ id: string; kind: string; state: string }[]>(
+        "GET",
+        `/api/environments/${env}/providers`
+      )) ?? []
+    const imported = providers.filter((p) => !before.has(p.id))
+    expect(imported.map((p) => [p.kind, p.state])).toEqual([
+      ["anthropic_api", "ready"],
+    ])
+  } finally {
+    for (const rel of Object.keys(files))
+      await rm(path.join(hostHome, rel), { force: true })
+    const providers =
+      (await api.json<{ id: string }[]>(
+        "GET",
+        `/api/environments/${env}/providers`
+      )) ?? []
+    for (const added of providers.filter((p) => !before.has(p.id)))
+      await api.request.delete(`/api/environments/${env}/providers/${added.id}`)
+  }
 })

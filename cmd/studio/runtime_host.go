@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
@@ -117,6 +119,15 @@ func forgeClient(string) *http.Client { return nil }
 // modelsClient lists the models of OpenAI-compatible endpoints; nil is its default, public
 // addresses only.
 func modelsClient() *http.Client { return nil }
+
+// hostLogins finds the CLIs' logins in the home directory of the user Studio runs as.
+func hostLogins(string) *hostlogins.Finder {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	return &hostlogins.Finder{Home: home}
+}
 
 // registerControl adds the e2e control API to the API mux; production has none.
 func registerControl(*http.ServeMux, *store.Store, *policy.Engine) {}

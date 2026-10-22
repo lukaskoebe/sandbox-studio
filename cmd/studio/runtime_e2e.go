@@ -11,6 +11,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/e2e"
 	"github.com/lukaskoebe/sandbox-studio/internal/gateway"
+	"github.com/lukaskoebe/sandbox-studio/internal/hostlogins"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
@@ -59,6 +60,12 @@ func forgeClient(data string) *http.Client {
 // modelsClient sends the model listings of OpenAI-compatible providers to the fake upstream,
 // which answers every /models with the same two models. It follows forgeClient.
 func modelsClient() *http.Client { return fakeUpstream.Client() }
+
+// hostLogins looks in a home of its own in the data directory, which the tests fill: never in
+// the home of the user who runs them, and without the CLIs' variables.
+func hostLogins(data string) *hostlogins.Finder {
+	return &hostlogins.Finder{Home: filepath.Join(data, "e2e-host-home"), Getenv: func(string) string { return "" }}
+}
 
 // registerControl serves the control API behind the API's login, like the rest of the API. Its
 // requests are decided by the policy, as a sandbox's connections are.

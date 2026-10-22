@@ -3586,6 +3586,20 @@
         ],
         "type": "object"
       },
+      "HostCodexAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "The ChatGPT account's email",
+            "type": "string"
+          },
+          "plan": {
+            "description": "The ChatGPT plan, as Codex records it: plus, pro, team…",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "HostFolder": {
         "additionalProperties": false,
         "properties": {
@@ -3656,6 +3670,52 @@
         ],
         "type": "object"
       },
+      "HostLogins": {
+        "additionalProperties": false,
+        "properties": {
+          "claude": {
+            "description": "Claude Code is set up on this computer",
+            "type": "boolean"
+          },
+          "codex": {
+            "description": "Codex has a login file on this computer",
+            "type": "boolean"
+          },
+          "opencode": {
+            "description": "opencode has stored credentials on this computer",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "claude",
+          "codex",
+          "opencode"
+        ],
+        "type": "object"
+      },
+      "HostOpencodeKey": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "anthropic_api",
+              "openai_api"
+            ],
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "type"
+        ],
+        "type": "object"
+      },
       "ImportInBody": {
         "additionalProperties": false,
         "properties": {
@@ -3672,6 +3732,28 @@
         "required": [
           "scope",
           "markdown"
+        ],
+        "type": "object"
+      },
+      "ImportOpencodeInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "The new provider's name",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "provider": {
+            "description": "opencode's name of the provider whose key to import",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "name"
         ],
         "type": "object"
       },
@@ -12592,6 +12674,59 @@
         ]
       }
     },
+    "/api/environments/{env}/providers/import-opencode": {
+      "post": {
+        "description": "Creates a provider from a plain API key opencode stores on this computer. The key is sealed in the vault like a typed one; opencode keeps its own.",
+        "operationId": "importOpencodeKey",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportOpencodeInBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderView"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "providers"
+        ]
+      }
+    },
     "/api/environments/{env}/providers/models": {
       "post": {
         "description": "Studio requests GET \u003cbaseUrl\u003e/models with the key as a bearer token, over public addresses only, and returns the ids. The forms suggest them for the model field.",
@@ -18394,6 +18529,105 @@
           }
         },
         "summary": "The git identity of the user Studio runs as",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/host-logins": {
+      "get": {
+        "description": "Which of Claude Code, Codex and opencode have a login on the computer Studio runs on. Only checks that their files exist; nothing is read.",
+        "operationId": "getHostLogins",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostLogins"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/host-logins/codex": {
+      "get": {
+        "description": "The ChatGPT account of the computer's Codex login, from its ID token's claims. Its tokens stay where they are: Studio signs in on its own.",
+        "operationId": "getHostCodexAccount",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostCodexAccount"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/host-logins/opencode": {
+      "get": {
+        "description": "The credentials opencode stores on this computer, without their content. Those with a kind are plain API keys Studio can import.",
+        "operationId": "listHostOpencodeKeys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HostOpencodeKey"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
         "tags": [
           "system"
         ]

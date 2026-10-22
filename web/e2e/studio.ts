@@ -20,6 +20,8 @@ export function studioPort(slot: number) {
 
 export type Studio = {
   url: string
+  /** The data directory; its e2e-host-home stands in for the home of the user Studio runs as. */
+  home: string
   /** A fresh one-time login link, from `studio login-url`. */
   loginURL: () => Promise<string>
   stop: () => Promise<void>
@@ -95,6 +97,7 @@ export async function startStudio(port: number): Promise<Studio> {
 
   return {
     url,
+    home,
     stop,
     loginURL: async () => {
       const { stdout } = await promisify(execFile)(

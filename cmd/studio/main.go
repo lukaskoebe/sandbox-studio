@@ -491,7 +491,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	mux := http.NewServeMux()
 	apiServer := &api.Server{Store: st, Sandboxes: mgr, Builds: builds, Policy: engine, Vault: vault, Bus: bus, Conns: conns, Caddy: caddy, Auth: auth, Memory: mem, AgentMem: agentMem, Log: log, Addr: addr,
 		Integrations: integs, Git: gitRemote, System: system, Browser: brw, Chats: chats, Login: logins, Reach: gw, HostGit: api.HostGitIdentity,
-		ModelsClient: modelsClient()}
+		HostLogins: hostLogins(p.Data), ModelsClient: modelsClient()}
 	// Heartbeats give teammates with open tasks their check-ins, and run scheduled tasks at their
 	// times, until ctx ends (docs/teammates.md).
 	beats := &heartbeat.Service{Store: st, Sandboxes: mgr, Chats: chats, Plan: apiServer.ChatLaunch, Bus: bus, Log: log}
