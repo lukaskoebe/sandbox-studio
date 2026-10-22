@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.5.2 — 2026-10-22
+
+Fixes from the first round of feedback: Studio on Windows no longer freezes after a click in
+its window, a damaged microsandbox database keeps your sandboxes, and the web has fewer rough
+edges.
+
+- **Windows:** Studio turns off the console's QuickEdit, whose selection froze it after a
+  click in the window, and logs to `%LOCALAPPDATA%\Sandbox Studio\logs\studio.log` with only
+  warnings and errors on the console. The login link is clickable in Windows Terminal.
+- **Start:** Studio opens its login link in the browser when started in a terminal
+  (`-no-browser` turns that off; autostart passes it). Starting it again while it runs opens
+  the running Studio and exits, instead of a second Studio on the same data. A page left on
+  the login screen connects by itself once Studio answers again.
+- **Start:** Studio refuses a database that a newer version migrated, untouched, instead of
+  running on tables it doesn't know. Closing Studio's terminal shuts it down like Ctrl-C.
+- **Runtime:** when microsandbox's database is damaged, the repair keeps the rows it can and
+  leaves out msb's maintenance leases instead of giving up; `studio restore-msb-db` rebuilds it
+  from the file a repair moved aside. A sandbox msb lost says so, and Studio warns about VMs
+  that still run during a repair.
+- **Runtime:** a pull refused because of an expired `docker login` says so and gives
+  `docker logout` as the fix, and `studio doctor` mentions a saved login for the base image's
+  registry.
+- **Agents:** the instructions describe their machine: sudo and Docker, installing tools
+  with mise, that a held connection waits for you and a refused one says so, that servers open
+  in Studio's Previews, and that pushes go to review. mise trusts `/workspace` and installs
+  Python prebuilt, and its downloads are on the curated list.
+- **Network:** the security level is chosen from cards, in Settings → Network, the guided
+  setup and a teammate's settings, each saying what connects without asking and what asks.
+  A rule made from an approval keeps the note written under the card's Options, or one saying
+  what was asked, by which sandbox and when. Network sits under Home in the sidebar with the
+  count of approvals waiting.
+- **Git review:** a push's review has tabs, Changes, Commits and Comments, above a footer that
+  stays in view with Reject and Approve, the rest under More. Comment buttons show on touch
+  screens.
+- **Web:** a sandbox that is down shows Start or Resume in its header, its menu, its
+  workspace and above its chats. A teammate's settings have one save bar and no longer run off
+  the right edge. Approvals notify whenever Studio's window is not in front, and Settings →
+  General has the button to allow notifications. Terminals follow the light and dark theme,
+  with Always dark in their menu, and Claude Code's theme is auto.
+- **Web:** chats close their stream in hidden tabs, so background tabs no longer hold up every
+  request, and the change stream reopens after Studio restarts. A sandbox's status says it may
+  be out of date only after 15 s without fresh data. A rule's note shows in full on hover in
+  the rules table and in Activity, and a secret Studio manages links to where it is changed.
+  A sandbox's History and checkpoints sheet is wide enough for its history line.
+- **Site:** a Docs link on the landing page, screenshots that open full size, a comparison
+  with other ways to sandbox an agent, and the videos' cursors click where they point. The
+  screenshots show this release, and the sandbox, checkpoint and chat pages describe the
+  sandbox's header and options menu instead of the dashboard v0.5.1 replaced.
+
 ## v0.5.1 — 2026-10-21
 
 v0.5.0 was tagged but never released; this is that release, with the live smoke test
