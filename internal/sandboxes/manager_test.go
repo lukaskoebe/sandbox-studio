@@ -3,6 +3,8 @@ package sandboxes
 import (
 	"errors"
 	"testing"
+
+	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 )
 
 func TestDeleteForgetsHostState(t *testing.T) {
@@ -47,5 +49,15 @@ func TestStartRecordsWhenTheVMStarted(t *testing.T) {
 	}
 	if stopped.StartedAt == nil || stopped.StartedAt.Unix() != started.StartedAt.Unix() {
 		t.Fatalf("stopped view StartedAt = %v, want %v", stopped.StartedAt, started.StartedAt)
+	}
+}
+
+// msb lost the VM's record: Start says so instead of passing on msb's "sandbox not found".
+func TestStartALostVMSaysWhy(t *testing.T) {
+	f := newCheckpointFixture(t)
+	f.runtime.setStatus(VMName(f.sandbox), runtime.StatusAbsent)
+	_, err := f.manager.Start(f.ctx, f.env.ID, f.sandbox.ID)
+	if !errors.Is(err, ErrLifecycleState) || err.Error() != LostVM {
+		t.Fatalf("Start = %v, want the lost-VM lifecycle error", err)
 	}
 }

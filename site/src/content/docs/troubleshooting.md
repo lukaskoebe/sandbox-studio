@@ -11,6 +11,18 @@ On Windows, if creating a sandbox fails with "Access is denied", Studio was star
 
 On first start, Studio may need to download the runtime and base image. Check the host's network connection and available disk space. The app listens on loopback at `127.0.0.1:7878` by default.
 
+## A sandbox says microsandbox lost its VM
+
+microsandbox keeps its list of sandboxes in its own database, `~/.microsandbox/db/msb.db`. When Studio starts and finds that database damaged, it moves it aside as `msb.db.broken-<time>`, keeping it, and rebuilds it from the rows it can still read. If it could read none, microsandbox starts with an empty list, and the sandboxes it lost can't start, although their disks are kept.
+
+To get them back, quit Studio and run:
+
+```sh
+studio restore-msb-db
+```
+
+It rebuilds the database from the newest `msb.db.broken-*` file and moves the one in place aside as `msb.db.replaced-<time>`. If you have made sandboxes since, it names them and stops; run it with `-replace` to restore anyway. Those sandboxes then can't start, though their disks are kept as well. To restore from an older file, name it: `studio restore-msb-db ~/.microsandbox/db/msb.db.broken-20261022T072947Z`.
+
 ## An agent cannot start
 
 - Confirm the sandbox is running and has a teammate assigned.

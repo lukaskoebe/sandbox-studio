@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentbin"
@@ -61,6 +62,7 @@ func repairMSBDB(ctx context.Context, log *slog.Logger) {
 		return
 	}
 	msbRepaired = r.Summary()
+	msbOpened.Store(true)
 	if n, err := runtime.ReindexSnapshots(ctx); err != nil {
 		log.Error("msb could not index its snapshots again", "err", err)
 		msbRepaired += "; indexing the checkpoints again failed: " + err.Error()
@@ -71,15 +73,22 @@ func repairMSBDB(ctx context.Context, log *slog.Logger) {
 		"partial", r.Partial, "summary", msbRepaired)
 }
 
-// checkMSBDB is the doctor's probe of msb's database: its integrity, then whether msb can
-// read it.
+// msbOpened is set once this process's msb library has opened msb's database. From then on
+// only msb reads it here: SQLite's locks belong to the process, and Studio's own SQLite
+// closing the file would drop the library's locks with it, so that another msb process
+// could write the database at the same time and damage it.
+var msbOpened atomic.Bool
+
+// checkMSBDB is the doctor's probe of msb's database: its integrity, while this process's
+// msb library hasn't opened it yet, then whether msb can read it.
 func checkMSBDB(ctx context.Context) (problem, repaired, fix string) {
-	if path, err := msbdb.Path(); err == nil {
+	if path, err := msbdb.Path(); err == nil && !msbOpened.Load() {
 		var d *msbdb.Damaged
 		if err := msbdb.Check(ctx, path); errors.As(err, &d) {
 			return d.Error(), "", runtime.RepairOnRestart
 		}
 	}
+	msbOpened.Store(true)
 	var ce *runtime.CatalogError
 	if err := runtime.CheckCatalog(ctx); errors.As(err, &ce) {
 		return ce.Err.Error(), "", ce.Fix

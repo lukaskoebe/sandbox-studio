@@ -118,8 +118,13 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   "file is not a database" or "database disk image is malformed") is moved aside with its
   `-wal` and `-shm` files as `msb.db.broken-<UTC time>` and never deleted. In its place goes
   a new database with the schema and every row that still reads, provided the migration list
-  comes through whole; otherwise msb starts an empty one. Then msb indexes the snapshots on disk
-  again. The `msb-db` doctor check, in `studio doctor` and Settings, fails for a damaged
+  comes through whole; otherwise msb starts an empty one. A row the table's constraints refuse
+  is left out, and `maintenance_lease` (msb's runtimes' coordination leases, which two writers
+  damage first) starts empty. Then msb indexes the snapshots on disk again. `studio
+  restore-msb-db` rebuilds the database from a moved-aside one later, with Studio stopped,
+  moving the one in place aside as `msb.db.replaced-<UTC time>`. Once the SDK has opened the
+  database, the doctor no longer opens it with Studio's own SQLite: SQLite's POSIX locks belong
+  to the process, so closing a second handle would drop the SDK's locks. The `msb-db` doctor check, in `studio doctor` and Settings, fails for a damaged
   database or one a newer msb migrated (fix: `msb self downgrade <Studio's msb>`), and warns
   after a repair with what was kept and lost. Runtime calls that fail on the database answer
   503 with that fix instead of a bare SQLite error.
@@ -129,7 +134,7 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
   reconcile sandboxes, recover chats and build jobs, then serve the API and UI.
 - Subcommands: `studio` (serve), `openapi`, `login-url`, `tui` (the [terminal UI](tui.md)),
-  `doctor`, `version`, `autostart enable|disable|status`, and the sandbox commands of
+  `doctor`, `version`, `autostart enable|disable|status`, `restore-msb-db`, and the sandbox commands of
   `internal/cli` (`ls`, `show`, `start`, `stop`, `suspend`, `resume`, `create`, `fork`, `rm`,
   `shell`, `ask`, `approvals`, `approve`, `deny`, `checkpoints`, `checkpoint`, `restore`,
   `envs`, `completion`; see [command line](cli.md)). The guest binary is `studio-agent` (see

@@ -220,3 +220,119 @@ func TestCheckPassesACatalogInUse(t *testing.T) {
 		t.Fatalf("Check = %v", err)
 	}
 }
+
+// constrain gives table the schema after its rows went in, the way a damaged page can
+// read back as a row its constraints refuse.
+func constrain(t *testing.T, path string, rows []string, table, schema string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, q := range append(rows,
+		"PRAGMA writable_schema = ON",
+		"UPDATE sqlite_master SET sql = '"+strings.ReplaceAll(schema, "'", "''")+"' WHERE name = '"+table+"'",
+	) {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+}
+
+// A run of two writers left maintenance_lease with a NULL key and a duplicated volume: the
+// rebuild leaves the lease out and the refused row behind, and keeps every sandbox.
+func TestFixSkipsRowsTheConstraintsRefuse(t *testing.T) {
+	ctx := context.Background()
+	path := catalog(t)
+	constrain(t, path, []string{
+		"CREATE TABLE maintenance_lease (name TEXT, holder_pid INTEGER)",
+		"INSERT INTO maintenance_lease VALUES (NULL, 42), ('install_exclusive', 7)",
+	}, "maintenance_lease", "CREATE TABLE maintenance_lease (name TEXT NOT NULL PRIMARY KEY, holder_pid INTEGER)")
+	constrain(t, path, []string{
+		"CREATE TABLE volume (name TEXT)",
+		"INSERT INTO volume VALUES ('data'), ('data'), (NULL), ('cache')",
+	}, "volume", "CREATE TABLE volume (name TEXT NOT NULL UNIQUE)")
+
+	r, err := Fix(ctx, path, now)
+	if err != nil || !r.Salvaged {
+		t.Fatalf("repair = %+v, %v; want salvaged", r, err)
+	}
+	if strings.Join(r.Partial, ",") != "volume" {
+		t.Fatalf("partial = %v, want volume", r.Partial)
+	}
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var leases, layers int
+	var volumes string
+	for q, dest := range map[string]any{
+		"SELECT count(*) FROM maintenance_lease":           &leases,
+		"SELECT group_concat(name) FROM volume ORDER BY 1": &volumes,
+		"SELECT count(*) FROM layer":                       &layers,
+	} {
+		if err := db.QueryRow(q).Scan(dest); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	if leases != 0 || volumes != "data,cache" || layers != 3000 {
+		t.Fatalf("leases %d, volumes %q, layers %d", leases, volumes, layers)
+	}
+	if names, err := Sandboxes(ctx, path); err != nil || strings.Join(names, ",") != "ss-a" {
+		t.Fatalf("sandboxes = %v, %v", names, err)
+	}
+}
+
+// An older Studio couldn't salvage a catalog and msb started an empty one; Restore rebuilds
+// it from the moved-aside file and keeps the empty one aside in turn.
+func TestRestoreRebuildsFromTheMovedAsideCatalog(t *testing.T) {
+	ctx := context.Background()
+	path := catalog(t)
+	aside := path + ".broken-20261018T120000Z"
+	if err := moveAside(path, aside); err != nil {
+		t.Fatal(err)
+	}
+	// What msb made in its place.
+	fresh, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fresh.Exec("CREATE TABLE sandbox (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"); err != nil {
+		t.Fatal(err)
+	}
+	fresh.Close()
+	if found, err := Asides(path); err != nil || len(found) != 1 || found[0] != aside {
+		t.Fatalf("asides = %v, %v", found, err)
+	}
+
+	r, err := Restore(ctx, path, aside, now)
+	if err != nil || !r.Salvaged {
+		t.Fatalf("restore = %+v, %v", r, err)
+	}
+	if names, err := Sandboxes(ctx, path); err != nil || strings.Join(names, ",") != "ss-a" {
+		t.Fatalf("sandboxes = %v, %v", names, err)
+	}
+	if _, err := os.Stat(aside); err != nil {
+		t.Fatalf("the moved-aside catalog is gone: %v", err)
+	}
+	if r.Aside != path+".replaced-20261019T160000Z" {
+		t.Fatalf("replaced = %s", r.Aside)
+	}
+	if _, err := os.Stat(r.Aside); err != nil {
+		t.Fatalf("the replaced catalog is gone: %v", err)
+	}
+
+	// From a file that can't be salvaged, the catalog in place stays.
+	junk := filepath.Join(t.TempDir(), "junk.db")
+	if err := os.WriteFile(junk, bytes.Repeat([]byte("x"), 4096), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Restore(ctx, path, junk, now.Add(time.Minute)); err == nil {
+		t.Fatal("restored from junk")
+	}
+	if names, err := Sandboxes(ctx, path); err != nil || strings.Join(names, ",") != "ss-a" {
+		t.Fatalf("after a failed restore: %v, %v", names, err)
+	}
+}

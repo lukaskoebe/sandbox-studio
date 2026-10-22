@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
@@ -72,6 +73,8 @@ var serverCommands = []cli.ServerCommand{
 		Detail: "It checks the microsandbox runtime, KVM or the hypervisor, the base image, the data\ndirectory, free disk space and the -addr ports. It exits 1 if a check fails."},
 	{Name: "autostart", Args: "enable|disable|status", Summary: "Start Studio when you log in, or stop doing so.",
 		Detail: "status is the default. It writes a systemd user unit on Linux, a LaunchAgent on macOS\nand a Run key value on Windows, which take effect at the next login."},
+	{Name: "restore-msb-db", Args: "[-replace] [file]", Summary: "Rebuild microsandbox's database from one a repair moved aside.",
+		Detail: "When Studio finds microsandbox's database damaged, it moves it aside to\nmsb.db.broken-<time> and rebuilds it from the rows it can read. If it could read none,\nmicrosandbox starts empty and its sandboxes can't start. This rebuilds the database from\nfile, by default the newest one moved aside, and keeps the one in place aside in turn.\nQuit Studio first. It refuses while the database in place knows sandboxes, unless -replace."},
 	{Name: "login-url", Summary: "Print a one-time login link for the running Studio."},
 	{Name: "version", Summary: "Print Studio's version and its base image."},
 	{Name: "openapi", Summary: "Print the OpenAPI document of Studio's HTTP API."},
@@ -117,6 +120,8 @@ func main() {
 		os.Exit(runDoctor(os.Stdout, *addr, *image))
 	case "autostart":
 		os.Exit(runAutostart(os.Stdout, flag.Args()[1:]))
+	case "restore-msb-db":
+		os.Exit(runRestoreMSBDB(os.Stdout, *addr, flag.Args()[1:]))
 	}
 	if flag.Arg(0) == "login-url" {
 		link, err := requestLoginURL(context.Background(), *addr)
@@ -197,7 +202,9 @@ func run(addr, image string, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// Closing the terminal Studio runs in sends SIGHUP, and a service manager SIGTERM: both
+	// shut it down like Ctrl-C does, closing its databases, instead of killing it mid-write.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
 	defer stop()
 
 	p, err := paths.Default()

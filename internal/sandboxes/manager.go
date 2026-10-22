@@ -511,6 +511,10 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 	return out, nil
 }
 
+// LostVM is why a sandbox whose VM microsandbox no longer knows can't start, and what to do.
+const LostVM = "microsandbox has no record of this sandbox's VM, so it can't start; its disks are kept. " +
+	"If Studio repaired microsandbox's database, quit Studio and run `studio restore-msb-db` to rebuild it from the damaged one"
+
 // Start boots a stopped sandbox.
 func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	defer m.publish(envID, id)
@@ -540,6 +544,8 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 		return View{}, err
 	} else if status == runtime.StatusSuspended {
 		return View{}, lifecycleError("the sandbox is suspended; resume it instead")
+	} else if status == runtime.StatusAbsent {
+		return View{}, lifecycleError(LostVM)
 	}
 	if _, err := m.Egress.Attach(rec); err != nil {
 		return View{}, err

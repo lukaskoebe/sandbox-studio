@@ -13,7 +13,12 @@ import {
 import { Ident } from "@/components/ident"
 import { LineageTimeline } from "@/components/lineage-timeline"
 import { ResizeSandboxDialog } from "@/components/resize-sandbox-dialog"
-import { StartButton, StopButton } from "@/components/sandbox-lifecycle"
+import {
+  lostVM,
+  StartButton,
+  StopButton,
+  wakeAction,
+} from "@/components/sandbox-lifecycle"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { SandboxOwner } from "@/components/teammate-avatar"
@@ -68,9 +73,11 @@ export function SandboxDetails({
       ? "Your workspace, home directory and Docker images are kept."
       : p === "suspended"
         ? "Suspended: resume it to continue where it left off."
-        : p === "failed"
-          ? "The sandbox stopped unexpectedly. Your workspace is kept. Start it again to continue."
-          : undefined
+        : sb.status === "absent"
+          ? lostVM
+          : p === "failed"
+            ? "The sandbox stopped unexpectedly. Your workspace is kept. Start it again to continue."
+            : undefined
   return (
     <>
       <Popover>
@@ -133,7 +140,7 @@ export function SandboxDetails({
             )}
           </dl>
           <div className="flex flex-wrap gap-2">
-            {(p === "stopped" || p === "failed") && (
+            {wakeAction(sb) === "start" && (
               <StartButton env={env} sandbox={sb} />
             )}
             {(p === "ready" || p === "booting" || p === "suspended") && (

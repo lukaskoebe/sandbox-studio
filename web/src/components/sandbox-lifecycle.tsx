@@ -104,6 +104,13 @@ export function wakeAction(sb: Sandbox): "start" | "resume" | undefined {
   return undefined
 }
 
+/**
+ * Why a sandbox whose VM microsandbox no longer knows ("absent") can't start: a damaged
+ * microsandbox database Studio rebuilt without it.
+ */
+export const lostVM =
+  "microsandbox lost the record of this sandbox's VM, so it can't start. Its disks are kept: quit Studio and run `studio restore-msb-db` to rebuild microsandbox's database from the damaged one."
+
 /** Start or Resume, whichever brings the sandbox back; nothing while it runs. */
 export function WakeButton({
   env,

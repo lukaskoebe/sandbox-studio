@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
+	"github.com/lukaskoebe/sandbox-studio/internal/cli"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/memory"
+	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -87,6 +89,69 @@ func runDoctor(w io.Writer, addr, image string) int {
 	if r.Status == doctor.Fail {
 		return 1
 	}
+	return 0
+}
+
+// runRestoreMSBDB rebuilds microsandbox's catalog from one that a repair moved aside, by
+// default the newest: a repair that kept none of its rows left msb an empty catalog, and so
+// lost its sandboxes, though their disks are kept. The catalog in place is moved aside in
+// turn. It refuses while Studio runs, and while the catalog in place knows sandboxes unless
+// -replace is given, since those would be lost from msb then.
+func runRestoreMSBDB(w io.Writer, addr string, args []string) int {
+	replace := false
+	var from string
+	for _, a := range args {
+		switch {
+		case a == "-replace" || a == "--replace":
+			replace = true
+		case strings.HasPrefix(a, "-") || from != "":
+			fmt.Fprintf(os.Stderr, "studio restore-msb-db: unexpected %q. Usage: studio restore-msb-db [-replace] [file]\n", a)
+			return cli.ExitUsage
+		default:
+			from = a
+		}
+	}
+	ctx := context.Background()
+	if studioRunning(ctx, addr) {
+		fmt.Fprintf(os.Stderr, "studio restore-msb-db: Studio is running on %s. Quit it first, then run this again.\n", addr)
+		return 1
+	}
+	path, err := msbdb.Path()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if from == "" {
+		asides, err := msbdb.Asides(path)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if len(asides) == 0 {
+			fmt.Fprintf(os.Stderr, "studio restore-msb-db: there is no damaged database next to %s to restore from.\n", path)
+			return 1
+		}
+		from = asides[0]
+	}
+	if known, err := msbdb.Sandboxes(ctx, path); err == nil && len(known) > 0 && !replace {
+		fmt.Fprintf(os.Stderr, "studio restore-msb-db: %s knows %d sandboxes (%s), which msb would lose. "+
+			"Run it with -replace to restore anyway; the database in place is kept aside.\n", path, len(known), strings.Join(known, ", "))
+		return 1
+	}
+	r, err := msbdb.Restore(ctx, path, from, time.Now())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "studio restore-msb-db:", err)
+		return 1
+	}
+	known, _ := msbdb.Sandboxes(ctx, path)
+	fmt.Fprintf(w, "Rebuilt %s from %s: %d rows, %d sandboxes.\n", path, from, r.Rows, len(known))
+	if len(r.Partial) > 0 {
+		fmt.Fprintf(w, "Rows were lost from %s.\n", strings.Join(r.Partial, ", "))
+	}
+	if _, err := os.Stat(r.Aside); err == nil {
+		fmt.Fprintf(w, "The database that was in place is kept at %s.\n", r.Aside)
+	}
+	fmt.Fprintln(w, "Start Studio again; the sandboxes start from their disks.")
 	return 0
 }
 

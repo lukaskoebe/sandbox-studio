@@ -30,7 +30,7 @@ import {
   gitReviewDescription,
   isGitApproval,
 } from "@/components/git-review"
-import { StartButton, WakeButton } from "@/components/sandbox-lifecycle"
+import { lostVM, StartButton, WakeButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import {
@@ -771,6 +771,18 @@ function TerminalPane({
           <EmptyDescription>
             Terminals open once the sandbox is up.
           </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    )
+  if (sb.status === "absent")
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <WarningIcon />
+          </EmptyMedia>
+          <EmptyTitle>microsandbox lost this sandbox&apos;s VM</EmptyTitle>
+          <EmptyDescription>{lostVM}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     )

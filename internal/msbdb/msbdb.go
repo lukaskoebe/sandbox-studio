@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -135,46 +136,132 @@ func (r Repair) Summary() string {
 // suffixes are the files of a catalog in WAL mode.
 var suffixes = []string{"", "-wal", "-shm"}
 
+// expendable are tables a rebuilt catalog starts empty. maintenance_lease holds the leases
+// msb's runtimes take to coordinate their maintenance sweeps; a lease expires on its own and
+// the next runtime takes a new one, so its rows are never worth losing the others for. Two
+// processes writing at once damage it first: every runtime writes it when it starts.
+var expendable = map[string]bool{"maintenance_lease": true}
+
+// moveAside renames the catalog at path, with its -wal and -shm files, to aside.
+func moveAside(path, aside string) error {
+	for _, s := range suffixes {
+		if err := os.Rename(path+s, aside+s); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+// rebuild salvages the catalog at from, which it leaves as it was, into a new file at path.
+func rebuild(ctx context.Context, from, path string) (rows int, partial []string, err error) {
+	// Read a copy, so opening it (which may replay its WAL) leaves from's files as they were.
+	work, err := os.MkdirTemp(filepath.Dir(path), "msb.db.salvage-")
+	if err != nil {
+		return 0, nil, err
+	}
+	defer os.RemoveAll(work)
+	src := filepath.Join(work, "src.db")
+	for _, s := range suffixes {
+		if err := copyFile(from+s, src+s); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return 0, nil, err
+		}
+	}
+	out := filepath.Join(work, "new.db")
+	if rows, partial, err = salvage(ctx, src, out); err != nil {
+		return 0, nil, err
+	}
+	return rows, partial, os.Rename(out, path)
+}
+
 // Fix moves the damaged catalog at path aside, never deleting it, and puts in its place a
 // new catalog with every row that can still be read. When none can be read safely, path is
 // left free for msb to create an empty catalog. It must run before any msb call opens path.
 func Fix(ctx context.Context, path string, now time.Time) (Repair, error) {
 	aside := path + ".broken-" + now.UTC().Format("20060102T150405Z")
-	for _, s := range suffixes {
-		if err := os.Rename(path+s, aside+s); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return Repair{}, fmt.Errorf("move the damaged database aside: %w", err)
-		}
+	if err := moveAside(path, aside); err != nil {
+		return Repair{}, fmt.Errorf("move the damaged database aside: %w", err)
 	}
 	r := Repair{Aside: aside}
-	// Read a copy, so opening it (which may replay its WAL) leaves the moved-aside files as
-	// they were.
-	work, err := os.MkdirTemp(filepath.Dir(path), "msb.db.salvage-")
-	if err != nil {
-		return r, err
-	}
-	defer os.RemoveAll(work)
-	src := filepath.Join(work, "src.db")
-	for _, s := range suffixes {
-		if err := copyFile(aside+s, src+s); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return r, err
-		}
-	}
-	out := filepath.Join(work, "new.db")
-	r.Rows, r.Partial, err = salvage(ctx, src, out)
+	var err error
+	r.Rows, r.Partial, err = rebuild(ctx, aside, path)
 	if err != nil {
 		r.Why = err.Error()
 		return r, nil
-	}
-	if err := os.Rename(out, path); err != nil {
-		return r, err
 	}
 	r.Salvaged = true
 	return r, nil
 }
 
+// Asides lists the damaged catalogs Fix moved aside next to path, newest first.
+func Asides(path string) ([]string, error) {
+	found, err := filepath.Glob(path + ".broken-*")
+	if err != nil {
+		return nil, err
+	}
+	var asides []string
+	for _, f := range found {
+		if !strings.HasSuffix(f, "-wal") && !strings.HasSuffix(f, "-shm") {
+			asides = append(asides, f)
+		}
+	}
+	// The names end in a UTC time, so they sort by it.
+	slices.Sort(asides)
+	slices.Reverse(asides)
+	return asides, nil
+}
+
+// Restore rebuilds the catalog at path from from, a damaged catalog Fix moved aside: when an
+// earlier Studio could not salvage it, a newer one may. The catalog in place is moved aside to
+// path.replaced-<time>, never deleted, and put back if from can't be salvaged either. msb must
+// not have path open: Studio and every sandbox are stopped.
+func Restore(ctx context.Context, path, from string, now time.Time) (Repair, error) {
+	if _, err := os.Stat(from); err != nil {
+		return Repair{}, err
+	}
+	replaced := path + ".replaced-" + now.UTC().Format("20060102T150405Z")
+	if err := moveAside(path, replaced); err != nil {
+		return Repair{}, fmt.Errorf("move the current database aside: %w", err)
+	}
+	r := Repair{Aside: replaced}
+	var err error
+	if r.Rows, r.Partial, err = rebuild(ctx, from, path); err != nil {
+		if back := moveAside(replaced, path); back != nil {
+			return r, fmt.Errorf("%s can't be salvaged (%w), and the database in place could not be put back from %s: %v", from, err, replaced, back)
+		}
+		return r, fmt.Errorf("%s can't be salvaged: %w", from, err)
+	}
+	r.Salvaged = true
+	return r, nil
+}
+
+// Sandboxes lists the names of the sandboxes the catalog at path knows.
+func Sandboxes(ctx context.Context, path string) ([]string, error) {
+	db, err := open(path, "mode=ro")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	q, err := db.QueryContext(ctx, "SELECT name FROM sandbox ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer q.Close()
+	var names []string
+	for q.Next() {
+		var n string
+		if err := q.Scan(&n); err != nil {
+			return nil, err
+		}
+		names = append(names, n)
+	}
+	return names, q.Err()
+}
+
 // salvage copies the schema and every readable row of src into a new catalog at out. A
-// table that stops reading part way keeps the rows before; its name is in partial. The
-// migration table must come through whole: without it msb would migrate its tables again.
+// table that stops reading part way keeps the rows before, and a row its constraints refuse
+// (a damaged page can read back as a NULL key or a duplicate) is left out; either way the
+// table's name is in partial. Expendable tables are created empty. The migration table must
+// come through whole: without it msb would migrate its tables again.
 func salvage(ctx context.Context, src, out string) (rows int, partial []string, err error) {
 	from, err := open(src)
 	if err != nil {
@@ -226,6 +313,9 @@ func salvage(ctx context.Context, src, out string) (rows int, partial []string, 
 		if _, err := to.ExecContext(ctx, o.sql); err != nil {
 			return 0, nil, fmt.Errorf("table %s can't be created again: %w", o.name, err)
 		}
+		if expendable[o.name] {
+			continue
+		}
 		n, whole, err := copyRows(ctx, from, to, o.name)
 		if err != nil {
 			return 0, nil, err
@@ -271,7 +361,8 @@ func salvage(ctx context.Context, src, out string) (rows int, partial []string, 
 }
 
 // copyRows copies table's rows from one database to the other until one can't be read.
-// whole is false if reading stopped early; err is for failures to write.
+// A row the table's constraints refuse is skipped. whole is false if reading stopped early
+// or a row was skipped; err is for other failures to write.
 func copyRows(ctx context.Context, from, to *sql.DB, table string) (n int, whole bool, err error) {
 	name := `"` + strings.ReplaceAll(table, `"`, `""`) + `"`
 	q, err := from.QueryContext(ctx, "SELECT * FROM "+name)
@@ -303,17 +394,29 @@ func copyRows(ctx context.Context, from, to *sql.DB, table string) (n int, whole
 	for i := range vals {
 		ptrs[i] = &vals[i]
 	}
+	skipped := false
 	for q.Next() {
 		if err := q.Scan(ptrs...); err != nil {
 			break
 		}
 		if _, err := ins.ExecContext(ctx, vals...); err != nil {
-			return 0, false, fmt.Errorf("copy a row of %s: %w", table, err)
+			// SQLite undoes just the refused statement; the transaction goes on.
+			if !refused(err) {
+				return 0, false, fmt.Errorf("copy a row of %s: %w", table, err)
+			}
+			skipped = true
+			continue
 		}
 		n++
 	}
-	whole = q.Err() == nil
+	whole = q.Err() == nil && !skipped
 	return n, whole, tx.Commit()
+}
+
+// refused reports whether err is a row breaking a constraint: NOT NULL, UNIQUE, a primary
+// key or a CHECK.
+func refused(err error) bool {
+	return strings.Contains(err.Error(), "constraint failed")
 }
 
 func copyFile(from, to string) error {
