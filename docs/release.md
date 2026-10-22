@@ -69,7 +69,7 @@ Each run of the workflow:
    is published unless this passes; if it fails on a flake, re-run the failed jobs.
 6. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives named
    `sandbox-studio_<tag>_<os>_<arch>`, each holding a directory of the same name with
-   `studio`, `LICENSE` and `README.md`. It writes `checksums.txt`, adds build provenance
+   `studio`, `LICENSE` and `README.md`, and on Windows also `studiow.exe`, the tray launcher. It writes `checksums.txt`, adds build provenance
    attestations, and creates the GitHub release with generated notes. Only a tag's run does
    this; a release branch's run keeps the archives as workflow artifacts.
 
@@ -80,6 +80,14 @@ in step when changing the workflow. It installs the newest non-prerelease, or th
 release.
 
 Locally, `make build BASE_IMAGE=ghcr.io/…@sha256:…` sets the same ldflag.
+
+Once a tag's run succeeds, [`screenshots.yml`](../.github/workflows/screenshots.yml) takes the
+docs screenshots with that release's Linux binary on a KVM runner (`site/scripts/screenshots.mjs`,
+with main's script) and opens a pull request `screenshots/<tag>` with the images whose pixels
+changed (`site/scripts/screenshots-changed.py`: more than 0.2% of the pixels). Run it by hand
+for any release from the Actions tab. It needs "Allow GitHub Actions to create and approve
+pull requests" under Settings → Actions → General. Checks don't start on a pull request the
+workflow opened; push to it, or close and reopen it, to run them.
 
 ## First release
 

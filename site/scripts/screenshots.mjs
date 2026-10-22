@@ -6,6 +6,8 @@
 // real one: it seeds demo data with fake keys, creates two sandboxes and leaves them for
 // you to delete. It uses an installed Chromium (CHROMIUM, default /snap/bin/chromium) and
 // never downloads a browser. No harness session is started, so no model API is called.
+// STUDIO_DATA_DIR, the scratch Studio's data directory, is shown as the default one. It exits
+// 1 if a screenshot failed, after taking the others (.github/workflows/screenshots.yml).
 // Names after the link capture only those screenshots; the login link works once, so later
 // runs pass the session cookie Studio's first run saved instead (see `session` below).
 import { mkdir, readFile, writeFile } from "node:fs/promises"
@@ -173,15 +175,16 @@ for (const pattern of [
 
 // The scratch instance runs on other ports and paths; show the defaults instead.
 async function tidy(p = page) {
-  await p.evaluate(() => {
+  await p.evaluate((data) => {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (data) n.nodeValue = n.nodeValue.replaceAll(data, "~/.local/share/sandbox-studio")
       n.nodeValue = n.nodeValue
         .replace(/\/home\/[^/\s]+\/git\/\.scratch-docs-site\/data/g, "~/.local/share/sandbox-studio")
         .replace(/\/home\/[^/\s]+\//g, "~/")
         .replace(/127\.0\.0\.1:79(7[89]|80)/g, (_, p) => `127.0.0.1:78${p}`)
     }
-  })
+  }, process.env.STUDIO_DATA_DIR ?? "")
 }
 async function shot(name, p = page) {
   await p.waitForLoadState("networkidle").catch(() => {})
@@ -215,11 +218,13 @@ async function clearApprovals() {
     await api("POST", `/api/environments/${a.environmentId}/approvals/${a.id}/decide`, { action: "dismiss", scope: "environment" })
 }
 /** Runs one screenshot step; a failure is reported and the next step goes on. */
+let failed = 0
 async function step(name, fn) {
   if (!wanted(name)) return
   try {
     await fn()
   } catch (err) {
+    failed++
     console.error(`failed ${name}: ${err.message.split("\n")[0]}`)
     await page.keyboard.press("Escape").catch(() => {})
   }
@@ -350,3 +355,4 @@ await step("browser", async () => {
 })
 
 await browser.close()
+if (failed) process.exitCode = 1
