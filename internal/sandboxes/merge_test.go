@@ -170,9 +170,15 @@ func TestMergeForkIntoSource(t *testing.T) {
 		t.Fatalf("last event = %+v", last)
 	}
 	checkpoints, err := f.manager.Checkpoints(f.ctx, f.env.ID, f.sandbox.ID)
-	// One per Accept: the refused one, and this one.
-	if err != nil || len(checkpoints) != 2 || accepted.CheckpointID != checkpoints[0].ID || checkpoints[0].Name != "before merging copy (2)" {
+	// One per Accept: the refused one, and this one. Both are taken in the same second, so
+	// their order isn't fixed.
+	if err != nil || len(checkpoints) != 2 {
 		t.Fatalf("checkpoints = %+v, %v", checkpoints, err)
+	}
+	for _, c := range checkpoints {
+		if (c.ID == accepted.CheckpointID) != (c.Name == "before merging copy (2)") {
+			t.Fatalf("accepted checkpoint %s, checkpoints = %+v", accepted.CheckpointID, checkpoints)
+		}
 	}
 }
 

@@ -24,6 +24,7 @@ type fakeShellStudio struct {
 	pending   []api.ApprovalView
 	decided   map[string]Decision
 	attaches  int
+	polls     int
 	connected chan struct{}
 }
 
@@ -51,6 +52,7 @@ func newFakeShellStudio(t *testing.T) (*fakeShellStudio, *Client) {
 		case r.URL.Path == "/api/approvals":
 			f.mu.Lock()
 			defer f.mu.Unlock()
+			f.polls++
 			_ = json.NewEncoder(w).Encode(f.pending)
 		case strings.HasSuffix(r.URL.Path, "/decide"):
 			var d Decision
@@ -79,6 +81,13 @@ func (f *fakeShellStudio) request(id, host string) {
 	}}
 }
 
+// polled is how many times the pending approvals were asked for.
+func (f *fakeShellStudio) polled() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.polls
+}
+
 func (f *fakeShellStudio) decision(id string) (Decision, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -97,6 +106,8 @@ func TestShellAnswersAnApprovalAndAttachesAgain(t *testing.T) {
 	waitFor(t, "the terminal", func() bool { return strings.Contains(out.String(), "codex is ready") })
 
 	// A request that comes in while attached names itself in the title, and Ctrl-] asks about it.
+	// The watch's first look takes what waits already as old, so the request comes after it.
+	waitFor(t, "a look at the approvals", func() bool { return f.polled() > 0 })
 	f.request("ap1", "proxy.golang.org")
 	waitFor(t, "the title", func() bool { return strings.Contains(out.String(), "wants proxy.golang.org:443 · Ctrl-] answers it") })
 	if _, err := keys.Write([]byte{detachKey}); err != nil {
@@ -117,6 +128,8 @@ func TestShellAnswersAnApprovalAndAttachesAgain(t *testing.T) {
 	}
 
 	// q at the question detaches, and leaves the approval waiting.
+	polls := f.polled()
+	waitFor(t, "a look at the approvals", func() bool { return f.polled() > polls })
 	f.request("ap2", "registry.npmjs.org")
 	waitFor(t, "the second title", func() bool { return strings.Contains(out.String(), "wants registry.npmjs.org:443") })
 	if _, err := keys.Write([]byte{detachKey}); err != nil {
