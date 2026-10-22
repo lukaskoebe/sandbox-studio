@@ -214,7 +214,7 @@ func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocke
 		if sb != nil {
 			_ = sb.Detach(ctx)
 		}
-		return fmt.Errorf("create sandbox: %w", result.Err)
+		return fmt.Errorf("create sandbox: %w", explainPull(ctx, result.Err))
 	}
 	if sb == nil {
 		return errors.New("create sandbox: microsandbox returned no sandbox")

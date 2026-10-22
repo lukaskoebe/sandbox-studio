@@ -6,8 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -163,4 +167,50 @@ func splitRef(ref string) (host, repo, reference string, err error) {
 		return host, name, digest, nil
 	}
 	return host, name, tag, nil
+}
+
+// dockerConfig is the path of Docker's client config: $DOCKER_CONFIG/config.json, or
+// ~/.docker/config.json.
+func dockerConfig() string {
+	if dir := os.Getenv("DOCKER_CONFIG"); dir != "" {
+		return filepath.Join(dir, "config.json")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".docker", "config.json")
+}
+
+// DockerLogins returns the registry hosts that Docker's config at path has a login for: the
+// keys of "auths" and "credHelpers". The credentials themselves are skipped unread. No file
+// means no logins.
+func DockerLogins(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) || path == "" {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var config struct {
+		Auths       map[string]json.RawMessage `json:"auths"`
+		CredHelpers map[string]json.RawMessage `json:"credHelpers"`
+	}
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("docker config: %w", err)
+	}
+	var hosts []string
+	for _, keys := range []map[string]json.RawMessage{config.Auths, config.CredHelpers} {
+		for key := range keys {
+			// Old configs key auths by URL, such as https://index.docker.io/v1/.
+			key = strings.TrimPrefix(strings.TrimPrefix(key, "https://"), "http://")
+			host, _, _ := strings.Cut(key, "/")
+			if host != "" && !slices.Contains(hosts, host) {
+				hosts = append(hosts, host)
+			}
+		}
+	}
+	slices.Sort(hosts)
+	return hosts, nil
 }

@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -51,5 +54,23 @@ func TestSplitRef(t *testing.T) {
 		if err != nil || [3]string{h, r, ref2} != want {
 			t.Errorf("%s: %s %s %s %v", ref, h, r, ref2, err)
 		}
+	}
+}
+
+func TestDockerLogins(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if hosts, err := DockerLogins(path); err != nil || hosts != nil {
+		t.Fatalf("no config: %v %v", hosts, err)
+	}
+	config := `{"auths": {"ghcr.io": {"auth": "c2VjcmV0"}, "https://index.docker.io/v1/": {}},
+		"credHelpers": {"123.dkr.ecr.eu-west-1.amazonaws.com": "ecr-login"}, "credsStore": "desktop"}`
+	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	hosts, err := DockerLogins(path)
+	want := []string{"123.dkr.ecr.eu-west-1.amazonaws.com", "ghcr.io", "index.docker.io"}
+	if err != nil || !slices.Equal(hosts, want) {
+		t.Fatalf("got %v %v, want %v", hosts, err, want)
 	}
 }

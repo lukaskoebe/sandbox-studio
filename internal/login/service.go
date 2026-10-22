@@ -408,7 +408,12 @@ func (s *Service) run(ctx context.Context, a *attempt) {
 	}
 	sb, err := s.VMs.EnsureSystem(ctx, p.EnvironmentID, kind, name)
 	if err != nil {
-		s.abort(ctx, a, "The login VM didn't start: "+err.Error()+". Try again.")
+		msg := "The login VM didn't start: " + err.Error()
+		// A refused pull already says what to do before trying again (runtime.StaleLoginError).
+		if !strings.HasSuffix(msg, "try again") {
+			msg += ". Try again"
+		}
+		s.abort(ctx, a, msg+".")
 		return
 	}
 	a.set(func(a *attempt) { a.sandboxID = sb.ID })

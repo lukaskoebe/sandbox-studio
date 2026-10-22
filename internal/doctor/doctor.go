@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 	"time"
 )
@@ -98,6 +99,8 @@ type Probes struct {
 	ImageCached func(ctx context.Context, ref string) (bool, error)
 	// ImagePullable checks that the registry serves the image.
 	ImagePullable func(ctx context.Context, ref string) error
+	// RegistryLogins returns the registry hosts Docker's config has a saved login for.
+	RegistryLogins func() ([]string, error)
 
 	// Writable checks that a file can be created in dir.
 	Writable func(dir string) error
@@ -347,7 +350,26 @@ func checkImage(ctx context.Context, p Probes, ref string) Check {
 		return c.with(Warn, ref+" is not cached and its registry did not answer: "+err.Error(),
 			"Check the network connection; the image is pulled when the first sandbox is created.")
 	}
+	// microsandbox pulls with a saved login when there is one, and an expired one fails
+	// the pull of this public image (runtime.StaleLoginError).
+	if host := savedLogin(p, ref); host != "" {
+		return c.with(Warn, ref+" is not cached yet. Docker has a saved login for "+host+", which the pull uses; if it has expired, the pull fails.",
+			"If creating a sandbox says "+host+" refused the login, run `docker logout "+host+"`.")
+	}
 	return c.with(OK, ref+" is not cached yet; it is pulled when the first sandbox is created.", "")
+}
+
+// savedLogin returns ref's registry host if Docker's config has a login for it.
+func savedLogin(p Probes, ref string) string {
+	if p.RegistryLogins == nil {
+		return ""
+	}
+	host, _, _ := strings.Cut(ref, "/")
+	logins, err := p.RegistryLogins()
+	if err != nil || !slices.Contains(logins, host) {
+		return ""
+	}
+	return host
 }
 
 func checkData(p Probes, dir string) []Check {

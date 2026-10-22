@@ -22,9 +22,12 @@ func HostProbes() Probes {
 		Run:           run,
 		Stat:          os.Stat,
 		ImagePullable: (&Registry{Client: &http.Client{Timeout: 10 * time.Second}}).Pullable,
-		Writable:      writable,
-		DiskFree:      diskspace.Free,
-		PortFree:      portFree,
+		RegistryLogins: func() ([]string, error) {
+			return DockerLogins(dockerConfig())
+		},
+		Writable: writable,
+		DiskFree: diskspace.Free,
+		PortFree: portFree,
 	}
 	hostVirtualization(&p)
 	return p

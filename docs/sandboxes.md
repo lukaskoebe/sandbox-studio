@@ -369,3 +369,12 @@ agent's home as the skeleton that home disks are seeded from. No init system. Re
 publish it to `ghcr.io/lukaskoebe/sandbox-studio-base` and pin it by digest
 (`version.BaseImage`); dev builds use `sandbox-studio-base:dev` from `make image`. Templates
 build on top of it: [template builds](template-builds.md).
+
+Studio passes no credentials for its own public images, and microsandbox then uses the first
+login it finds: its own, then Docker's config and credential helpers, with no anonymous
+fallback. A pull it refuses ("Not authorized" for a manifest) is checked again without
+credentials; if that works, the error is `runtime.StaleLoginError`, which names the registry and
+says to `docker logout` it. `studio doctor` warns about a saved Docker login for the base image's
+registry while the image isn't cached, reading only the hosts of Docker's config, never the
+credentials. Pulling anonymously by default needs an anonymous option in microsandbox's Go
+binding, which it doesn't have yet.

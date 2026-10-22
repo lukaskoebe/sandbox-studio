@@ -544,7 +544,7 @@ func (sdkTemplateBaseEngine) createPrewarm(ctx context.Context, request prewarmR
 		return sdkPrewarmVM{sandbox: result.Sandbox}, result.Err
 	}
 	if result.Err != nil {
-		return nil, result.Err
+		return nil, explainPull(ctx, result.Err)
 	}
 	return nil, errors.New("microsandbox returned an empty prewarm result")
 }

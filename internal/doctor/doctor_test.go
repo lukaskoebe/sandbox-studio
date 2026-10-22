@@ -158,6 +158,12 @@ func TestImage(t *testing.T) {
 	if c := find(t, Run(context.Background(), p, opts), "image"); c.Status != OK || !strings.Contains(c.Message, "pulled") {
 		t.Fatalf("pullable: %+v", c)
 	}
+	// A saved login for the registry is what the pull uses, and an expired one breaks it.
+	p.RegistryLogins = func() ([]string, error) { return []string{"docker.io", "ghcr.io"}, nil }
+	if c := find(t, Run(context.Background(), p, opts), "image"); c.Status != Warn || !strings.Contains(c.Fix, "docker logout ghcr.io") {
+		t.Fatalf("saved login: %+v", c)
+	}
+	p.RegistryLogins = nil
 	p.ImagePullable = func(context.Context, string) error { return errors.New("offline") }
 	if c := find(t, Run(context.Background(), p, opts), "image"); c.Status != Warn {
 		t.Fatalf("offline: %+v", c)
