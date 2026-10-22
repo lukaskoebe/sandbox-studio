@@ -143,6 +143,13 @@ func (m *Manager) config(ctx context.Context, sb store.Sandbox) (agentproto.Conf
 	if err != nil {
 		return agentproto.Config{}, err
 	}
+	// Which sandbox this is, for scripts and the agent's shell; names are slugs, so they
+	// pass the guest's check of what a value may hold.
+	env = maps.Clone(env)
+	if env == nil {
+		env = map[string]string{}
+	}
+	env["STUDIO_SANDBOX_ID"], env["STUDIO_SANDBOX_NAME"] = sb.ID, sb.Name
 	if f := m.harness.f.Load(); f != nil && sb.TeammateID != "" && Public(sb) {
 		// A teammate that can't run yet (no provider, no sign-in) leaves the home as it is.
 		files, henv, err := (*f)(ctx, sb)
@@ -152,10 +159,6 @@ func (m *Manager) config(ctx context.Context, sb store.Sandbox) (agentproto.Conf
 		case m.Hub.WriteHomeFiles(ctx, sb.ID, files) != nil:
 			m.Log.Info("writing the harness config", "sandbox", sb.ID)
 		default:
-			env = maps.Clone(env)
-			if env == nil {
-				env = map[string]string{}
-			}
 			maps.Copy(env, henv)
 		}
 	}

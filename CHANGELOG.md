@@ -4,6 +4,10 @@
 
 - **Chat:** a link to a server in the sandbox, like `http://localhost:5173/login`, is a button
   that opens that page in the port's preview.
+- **Agents:** the `sandbox_info` tool, and `studio-agent info` in a terminal, tell an agent its
+  sandbox, the ports listening in it with the links that open them, its security level and
+  the network rules that cover it. `STUDIO_SANDBOX_ID` and `STUDIO_SANDBOX_NAME` are set in
+  every sandbox.
 
 ## v0.5.2 — 2026-10-22
 

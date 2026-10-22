@@ -30,6 +30,14 @@ A sandbox is a microsandbox microVM that persists across stop and start. Code:
 Owned (not named) volumes, because disk snapshots capture owned volumes and skip named ones
 (spike S5).
 
+Login shells also get `STUDIO_SANDBOX_ID` and `STUDIO_SANDBOX_NAME`, sent with the
+configuration push next to the secrets' placeholders. An agent learns the rest from the
+`sandbox_info` tool on the `studio` MCP server, or `studio-agent info` in a shell: the sandbox
+and its teammate, the listening ports with a `http://localhost:<port>/` link each (Studio's
+chat turns it into a preview button), the security level that decides its connections and
+what it means, and the rules that cover it (its own, its teammate's and the environment's,
+without browser-only or expired rules, their configuration or notes; the first 50).
+
 The home disk is seeded once, on the sandbox's first boot, from the skeleton the image keeps
 at `/usr/share/sandbox-studio/home-skel` (the base image's home, or the template's home as
 its last build step left it). Nothing seeds it again, so files you delete stay deleted. Its

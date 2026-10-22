@@ -73,6 +73,13 @@ func publicHost(host string) bool {
 	return err != nil || Public(ip)
 }
 
+// Level returns the security level that decides the requests of a teammate's sandboxes, or of
+// unowned sandboxes when teammateID is empty.
+func (e *Engine) Level(ctx context.Context, envID, teammateID string) (string, error) {
+	level, _, err := e.level(ctx, envID, teammateID)
+	return level, err
+}
+
 // level returns the security level that decides a sandbox's requests, and the curated entries the
 // environment turned off: the teammate's override, or else the environment's level.
 func (e *Engine) level(ctx context.Context, envID, teammateID string) (string, []string, error) {

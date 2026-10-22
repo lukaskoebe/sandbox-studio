@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentcall"
 	"github.com/lukaskoebe/sandbox-studio/internal/agenthook"
@@ -120,6 +121,14 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: mcp: %v\n", err)
 			os.Exit(1)
 		}
+	case "info":
+		// This sandbox, its ports and its network policy, as the sandbox_info tool returns them.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := agentcall.RunInfo(ctx, agentcall.SocketCaller{}, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: info: %v\n", err)
+			os.Exit(1)
+		}
 	case "oci-runtime":
 		// Docker's runtime inside the sandbox: see guest.OCIRuntime.
 		if err := ociRuntime(os.Args[2:]); err != nil {
@@ -143,7 +152,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|claude-acp|claude-permission]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }

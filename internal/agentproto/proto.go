@@ -167,6 +167,9 @@ const (
 	MethodTaskCreate       = "task_create"
 	MethodTaskUpdateStatus = "task_update_status"
 	MethodTaskAddNote      = "task_add_note"
+
+	// MethodSandboxInfo is the sandbox describing itself: its ports and its network policy.
+	MethodSandboxInfo = "sandbox_info"
 )
 
 // TaskMethodPrefix starts every task method, as BrowserMethodPrefix does for browser ones.

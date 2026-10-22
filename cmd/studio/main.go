@@ -53,6 +53,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/preview"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxinfo"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
@@ -386,6 +387,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 		Bus:       bus,
 	}
 	hub.OnConnect = mgr.Configure
+	integs = append(integs, &sandboxinfo.Service{Store: st, Ports: hub.Ports, Level: engine.Level})
 	// Every integration that serves MCP tools is in integs by now; the chat service serves none.
 	tsk := &tasks.Service{Store: st, Bus: bus, Log: log}
 	hub.OnCall = routeCalls(st, integs, brw, tsk, log, agentMem.HandleCall)

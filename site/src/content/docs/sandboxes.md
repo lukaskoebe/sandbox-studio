@@ -64,6 +64,8 @@ Studio removes its own authentication cookies before forwarding preview requests
 
 Each port keeps its own browser storage, so a service worker an app registered stays after the app stops, and may keep serving it to whatever runs on the port next. In **Previews**, choose **Open fresh** and then the port (or the broom next to a port in the sandbox's details, or **Reload fresh** in a chat's preview) to clear the preview's caches, storage and service workers before it opens. Its cookies stay.
 
+An agent can list the ports itself, with the `sandbox_info` tool of Studio's MCP server or `studio-agent info` in a terminal; the same tool tells it the sandbox's security level and the network rules that cover it.
+
 ## Export a workspace
 
 Use **Export** in the options menu to save a `.studio-sandbox` file that can be imported in another environment or Studio install, with **Import sandbox** on Home. It contains the template specification, resource settings, `/workspace`, and the home directory (`/home/agent`), which holds your agent's sessions and anything you saved there. Read the home directory before you share the file. It does not include secrets, approvals, Git credentials, checkpoints, or Docker data. A live export is not frozen; stop the sandbox first for a consistent copy. See [Export and import](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/export-import.md).

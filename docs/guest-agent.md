@@ -140,7 +140,8 @@ When the agent applies a config (`internal/guest/config.go`):
   `/etc/ssl/certs/ca-certificates.crt`, and writes `ca.crt` and `ca-bundle.crt` (the system
   roots including the CA) to `/etc/sandbox-studio`;
 - it writes the placeholders to a profile hook, `/etc/profile.d/sandbox-studio-env.sh`, so
-  new login shells export `NAME=studio-…` for each secret.
+  new login shells export `NAME=studio-…` for each secret, and `STUDIO_SANDBOX_ID` and
+  `STUDIO_SANDBOX_NAME`.
 
 The base image points `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE` and
 `GIT_SSL_CAINFO` at the system bundle, and sets `PIP_DEFAULT_TIMEOUT=60` and an apt
