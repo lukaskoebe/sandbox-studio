@@ -269,7 +269,7 @@ export function HistorySheet({
   const building = sb.status === "creating" || sb.status === "failed"
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl">
+      <SheetContent className="data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
         <SheetHeader>
           <SheetTitle>History and checkpoints</SheetTitle>
           <SheetDescription>
