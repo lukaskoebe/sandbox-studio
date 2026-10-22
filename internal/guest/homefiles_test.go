@@ -177,6 +177,26 @@ func TestHomeFilesKeys(t *testing.T) {
 	}
 }
 
+// Defaults are set where the file has none, and a value the user chose stays.
+func TestHomeFilesDefaults(t *testing.T) {
+	home := t.TempDir()
+	path := filepath.Join(home, ".claude.json")
+	f := agentproto.HomeFile{Path: ".claude.json", Content: `{"hasCompletedOnboarding":true}`, Defaults: `{"theme":"auto"}`, Mode: 0o600, Keys: true}
+	must(t, writeAsMe(home, f))
+	if b, _ := os.ReadFile(path); !strings.Contains(string(b), `"theme": "auto"`) {
+		t.Fatalf("fresh: %q", b)
+	}
+	must(t, os.WriteFile(path, []byte(`{"theme":"light-daltonized"}`), 0o600))
+	must(t, writeAsMe(home, f))
+	b, _ := os.ReadFile(path)
+	if !strings.Contains(string(b), `"theme": "light-daltonized"`) || !strings.Contains(string(b), `"hasCompletedOnboarding": true`) {
+		t.Fatalf("merged: %s", b)
+	}
+	if err := writeAsMe(home, agentproto.HomeFile{Path: "x.json", Content: "{}", Defaults: `{"a":1}`, Mode: 0o600}); err == nil {
+		t.Fatal("accepted defaults without keys")
+	}
+}
+
 func TestReadBodyBounded(t *testing.T) {
 	var v agentproto.HomeFiles
 	long := `{"files":[{"path":"` + strings.Repeat("x", 100) + `"}]}` + "\n"

@@ -47,7 +47,85 @@ export function useThemeMode(): ThemeMode {
 /** Applies the stored mode and keeps following the OS preference. Call once at startup. */
 export function initTheme() {
   apply()
-  window.matchMedia(systemDark).addEventListener("change", apply)
+  window.matchMedia(systemDark).addEventListener("change", () => {
+    apply()
+    listeners.forEach((listen) => listen())
+  })
+}
+
+/** Whether the page shows dark now: the mode picked, or the OS preference under "system". */
+function resolvedDark() {
+  return document.documentElement.classList.contains("dark")
+}
+
+/** "light" or "dark", whichever the page shows, re-rendering when it changes. */
+export function useResolvedTheme(): "light" | "dark" {
+  return useSyncExternalStore(
+    (listen) => {
+      listeners.add(listen)
+      return () => {
+        listeners.delete(listen)
+      }
+    },
+    () => (resolvedDark() ? "dark" : "light"),
+    () => "dark"
+  )
+}
+
+const terminalKey = "studio.terminal-theme"
+
+/**
+ * Whether terminals stay dark in the light theme, as picked in this browser. Several viewers
+ * can watch one tmux session, and a program in it that picked its colors for a dark
+ * background stays readable this way.
+ */
+function terminalsDark() {
+  try {
+    return localStorage.getItem(terminalKey) === "dark"
+  } catch {
+    return false
+  }
+}
+
+/** Keeps terminals dark in the light theme, or lets them follow it again. */
+export function setTerminalsDark(dark: boolean) {
+  try {
+    if (dark) localStorage.setItem(terminalKey, "dark")
+    else localStorage.removeItem(terminalKey)
+  } catch {
+    // Without storage the choice lasts until the page reloads.
+  }
+  listeners.forEach((listen) => listen())
+}
+
+/** "light" or "dark", the palette terminals use now, re-rendering when it changes. */
+export function useTerminalTheme(): "light" | "dark" {
+  const page = useResolvedTheme()
+  const dark = useSyncExternalStore(
+    (listen) => {
+      listeners.add(listen)
+      return () => {
+        listeners.delete(listen)
+      }
+    },
+    terminalsDark,
+    () => false
+  )
+  return dark ? "dark" : page
+}
+
+/** Whether terminals are kept dark in this browser, re-rendering when it changes. */
+export function useTerminalsDark(): boolean {
+  return useSyncExternalStore(
+    (listen) => {
+      listeners.add(listen)
+      return () => {
+        listeners.delete(listen)
+      }
+    },
+    terminalsDark,
+    () => false
+  )
 }
 
 function apply() {

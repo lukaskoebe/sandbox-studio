@@ -63,7 +63,9 @@ func (Claude) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, err
 	return []GuestFile{
 		{Path: ".claude/settings.json", Content: b, Mode: 0o644},
 		{Path: claudeMCPConfig, Content: mcp, Mode: 0o644},
-		{Path: ".claude.json", Content: state, Mode: 0o600, Keys: true},
+		// Claude Code's dark theme is hard to read in a light terminal; auto follows the
+		// terminal's background (since 2.1.111). It's a default: /theme in the sandbox stays.
+		{Path: ".claude.json", Content: state, Defaults: `{"theme":"auto"}`, Mode: 0o600, Keys: true},
 		memory,
 	}, nil
 }

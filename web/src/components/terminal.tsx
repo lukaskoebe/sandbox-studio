@@ -10,6 +10,7 @@ import "@xterm/xterm/css/xterm.css"
 import { TerminalControls } from "@/components/terminal-controls"
 import {
   ContextMenu,
+  ContextMenuCheckboxItem,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
@@ -18,11 +19,16 @@ import {
 } from "@/components/ui/context-menu"
 import { errorMessage } from "@/lib/api/client"
 import { copyText } from "@/lib/clipboard"
+import {
+  setTerminalsDark,
+  useTerminalsDark,
+  useTerminalTheme,
+} from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
 // The TUI's terminal palette, so a sandbox's terminal looks the same in the browser and in
 // `studio tui`.
-const theme = {
+const dark = {
   background: "#15171b",
   foreground: "#d7dade",
   cursor: "#58b8c8",
@@ -45,6 +51,34 @@ const theme = {
   brightCyan: "#7fd0dc",
   brightWhite: "#f2f4f5",
 }
+
+// The light theme's: the page's light background and text, the primary teal for the cursor,
+// and the ANSI colors darkened to read on it.
+const light = {
+  background: "#fbfcfc",
+  foreground: "#172024",
+  cursor: "#0f7686",
+  cursorAccent: "#fbfcfc",
+  selectionBackground: "#cde3e7",
+  black: "#172024",
+  red: "#c22f2a",
+  green: "#1b7a3b",
+  yellow: "#8a6100",
+  blue: "#215fc2",
+  magenta: "#7a4bbb",
+  cyan: "#0f7686",
+  white: "#c5ccd0",
+  brightBlack: "#56636b",
+  brightRed: "#d6423c",
+  brightGreen: "#22894a",
+  brightYellow: "#9b6e00",
+  brightBlue: "#2e6dd3",
+  brightMagenta: "#8858c9",
+  brightCyan: "#18879a",
+  brightWhite: "#e3e8ea",
+}
+
+const palettes = { light, dark }
 
 const controlArrowKeys: Record<string, string> = {
   "\x1b[A": "\x1b[1;5A",
@@ -156,6 +190,11 @@ export function Terminal({
   const container = useRef<HTMLDivElement>(null)
   const fitRef = useRef<FitAddon>(null)
   const termRef = useRef<XTerm>(null)
+  // The terminal follows the page's light or dark theme, unless this browser keeps it dark.
+  const palette = palettes[useTerminalTheme()]
+  const keptDark = useTerminalsDark()
+  const paletteRef = useRef(palette)
+  paletteRef.current = palette
   const [connected, setConnected] = useState(false)
   const [ctrlArmed, setCtrlArmed] = useState(false)
   const connectedRef = useRef(false)
@@ -282,7 +321,7 @@ export function Terminal({
         '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
       fontSize: 13,
       cursorBlink: true,
-      theme,
+      theme: paletteRef.current,
       allowProposedApi: true,
       macOptionClickForcesSelection: true,
     })
@@ -470,6 +509,10 @@ export function Terminal({
   }, [suspended])
 
   useEffect(() => {
+    if (termRef.current) termRef.current.options.theme = palette
+  }, [palette])
+
+  useEffect(() => {
     if (!active) {
       ctrlArmedRef.current = false
       setCtrlArmed(false)
@@ -483,10 +526,11 @@ export function Terminal({
     // No ScrollArea: xterm.js scrolls its own scrollback.
     <div
       className={cn(
-        "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#15171b] p-2",
+        "relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden p-2",
         !active && "hidden",
         className
       )}
+      style={{ background: palette.background }}
     >
       <ContextMenu
         onOpenChange={(open) => {
@@ -514,6 +558,13 @@ export function Terminal({
             <ContextMenuShortcut>{isMac ? "⌘V" : "Ctrl+V"}</ContextMenuShortcut>
           </ContextMenuItem>
           <ContextMenuSeparator />
+          <ContextMenuCheckboxItem
+            checked={keptDark}
+            onCheckedChange={setTerminalsDark}
+          >
+            Always dark
+          </ContextMenuCheckboxItem>
+          <ContextMenuSeparator />
           <p className="max-w-56 px-2 py-1 text-[0.6875rem] text-muted-foreground">
             Drag to select: it is copied when you let go and stays marked until
             you click.
@@ -523,7 +574,11 @@ export function Terminal({
       {(copied || pasting) && (
         <span
           role="status"
-          className="pointer-events-none absolute top-3 right-4 rounded-md bg-[#33363b] px-2 py-0.5 text-xs text-[#d7dade] shadow"
+          className="pointer-events-none absolute top-3 right-4 rounded-md px-2 py-0.5 text-xs shadow"
+          style={{
+            background: palette.selectionBackground,
+            color: palette.foreground,
+          }}
         >
           {pasting ? "Pasting…" : "Copied"}
         </span>

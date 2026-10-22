@@ -65,6 +65,12 @@ func checkHomeFiles(files []agentproto.HomeFile) error {
 				return fmt.Errorf("%s: keys must be a JSON object, and not a managed block", f.Path)
 			}
 		}
+		if f.Defaults != "" {
+			var defaults map[string]any
+			if !f.Keys || json.Unmarshal([]byte(f.Defaults), &defaults) != nil || defaults == nil {
+				return fmt.Errorf("%s: defaults must be a JSON object, with keys", f.Path)
+			}
+		}
 	}
 	return nil
 }
@@ -106,7 +112,7 @@ func writeHomeFile(root, uid, gid int, f agentproto.HomeFile) error {
 		if err != nil {
 			return err
 		}
-		if content, err = mergeKeys(existing, f.Content); err != nil {
+		if content, err = mergeKeys(existing, f.Content, f.Defaults); err != nil {
 			return err
 		}
 		if len(content) > agentproto.MaxKeysFileBytes {
@@ -218,7 +224,7 @@ func mergeBlock(existing, block string) (string, error) {
 // mergeKeys merges the JSON object keys into the JSON object existing (agentproto.HomeFile
 // Keys). A missing or blank file counts as an empty object; one that isn't a JSON object is
 // left alone with an error rather than replaced.
-func mergeKeys(existing, keys string) (string, error) {
+func mergeKeys(existing, keys, defaults string) (string, error) {
 	file := map[string]any{}
 	if strings.TrimSpace(existing) != "" {
 		if err := json.Unmarshal([]byte(existing), &file); err != nil || file == nil {
@@ -230,11 +236,33 @@ func mergeKeys(existing, keys string) (string, error) {
 		return "", err
 	}
 	mergeObject(file, add)
+	if defaults != "" {
+		var missing map[string]any
+		if err := json.Unmarshal([]byte(defaults), &missing); err != nil {
+			return "", err
+		}
+		fillObject(file, missing)
+	}
 	b, err := json.MarshalIndent(file, "", "  ")
 	if err != nil {
 		return "", err
 	}
 	return string(b) + "\n", nil
+}
+
+// fillObject sets src's keys that dst lacks, and inside objects both have, the same way.
+func fillObject(dst, src map[string]any) {
+	for k, v := range src {
+		have, ok := dst[k]
+		if !ok {
+			dst[k] = v
+			continue
+		}
+		sub, isObject := v.(map[string]any)
+		if haveObject, hasObject := have.(map[string]any); isObject && hasObject {
+			fillObject(haveObject, sub)
+		}
+	}
 }
 
 func mergeObject(dst, src map[string]any) {

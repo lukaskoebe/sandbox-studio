@@ -128,6 +128,9 @@ type HomeFile struct {
 	// A guest older than the host would ignore it and replace the file, so the host sends
 	// such files only to a guest of its own version (agentchan.Hub.WriteHomeFiles).
 	Keys bool `json:"keys,omitempty"`
+	// Defaults, with Keys, is a JSON object of keys set only where the file has none yet:
+	// a starting value the harness's user may change, which Studio doesn't set back.
+	Defaults string `json:"defaults,omitempty"`
 }
 
 // HomeFiles is the body of a KindHomeFiles stream.

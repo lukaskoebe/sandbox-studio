@@ -7,7 +7,7 @@ Direction B, not chosen, is kept below as a design record.
 
 Since 2026-10-18 the app shares one look with the TUI, the website, the docs and the videos:
 Instrument Sans for text, JetBrains Mono for headings, labels, keys, identifiers and terminals,
-cool grays with one teal accent, and terminals in the TUI's palette. The brand mark, the cube
+cool grays with one teal accent, and dark terminals in the TUI's palette. The brand mark, the cube
 of the app icon, favicon and logo, is teal too (`#5cc3d1` on the dark background, `#0f7686` for
 the light logo). Green is kept for running and ok, so it always means "good".
 
@@ -120,10 +120,12 @@ Pitch: a tool you keep open all day. Dense, tabular, graphite neutrals, identifi
   `#ffffff` / `#151b1e`. Border `#dbe1e4` / `#263035`. Foreground `#172024` / `#e1e7ea`. Muted
   text `#56636b` / `#93a1a9`. Primary teal `#0f7686` / `#5cc3d1`, with white / `#06181b`
   labels (5.3:1 and 8.8:1). Sidebar `#eef1f2` / `#0c1012`. Radius 0.375 rem.
-- **Terminals** use the TUI's palette in both themes: background `#15171b`, text `#d7dade`,
-  cursor and cyan `#58b8c8`, red `#fa6863`, green `#47c86e`, yellow `#f0c551`, magenta
-  `#b09de9`, selection `#353a41`. The docs' and the videos' terminal panels use the same
-  colors (`--t-*` in `site/src/styles/custom.css`).
+- **Terminals** follow the theme. Dark is the TUI's palette: background `#15171b`, text
+  `#d7dade`, cursor and cyan `#58b8c8`, red `#fa6863`, green `#47c86e`, yellow `#f0c551`,
+  magenta `#b09de9`, selection `#353a41`. The docs' and the videos' terminal panels use the
+  same colors (`--t-*` in `site/src/styles/custom.css`). Light is background `#fbfcfc`, text
+  `#172024` and cursor `#0f7686`, with ANSI colors dark enough to read on it. "Always dark"
+  in a terminal's right-click menu keeps every terminal dark in the light theme.
 
 ## Primitives
 

@@ -4,6 +4,7 @@ import { cn } from "cn"
 // The items, separators and shortcuts are the dropdown menu's: a context menu is the same menu
 // opened at the pointer.
 export {
+  DropdownMenuCheckboxItem as ContextMenuCheckboxItem,
   DropdownMenuItem as ContextMenuItem,
   DropdownMenuSeparator as ContextMenuSeparator,
   DropdownMenuShortcut as ContextMenuShortcut,

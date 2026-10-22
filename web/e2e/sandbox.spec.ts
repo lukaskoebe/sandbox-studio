@@ -94,6 +94,38 @@ test("terminal: a tmux copy reaches the clipboard, and right-click opens Copy an
   await expect(term.line("pasted")).toHaveCount(1)
 })
 
+test("terminal: follows the light and dark theme, unless it is kept dark", async ({
+  page,
+  api,
+  env,
+}) => {
+  const light = "rgb(251, 252, 252)"
+  const dark = "rgb(21, 23, 27)"
+  const id = await api.createSandbox(sandboxName("theme"))
+  await page.emulateMedia({ colorScheme: "light" })
+  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  const term = terminal(page)
+  await expect(term.rows).toContainText("$")
+  const viewport = page
+    .locator(".xterm-scrollable-element")
+    .filter({ visible: true })
+  await expect(viewport).toHaveCSS("background-color", light)
+  await page.emulateMedia({ colorScheme: "dark" })
+  await expect(viewport).toHaveCSS("background-color", dark)
+  await page.emulateMedia({ colorScheme: "light" })
+  await expect(viewport).toHaveCSS("background-color", light)
+  await page
+    .locator(".xterm")
+    .filter({ visible: true })
+    .click({ button: "right" })
+  await page.getByRole("menuitemcheckbox", { name: "Always dark" }).click()
+  await expect(viewport).toHaveCSS("background-color", dark)
+  // The choice is kept for every terminal, after a reload too.
+  await page.reload()
+  await expect(term.rows).toContainText("$")
+  await expect(viewport).toHaveCSS("background-color", dark)
+})
+
 test("terminal: a pasted screenshot goes into the sandbox, and its path into the terminal", async ({
   page,
   api,
