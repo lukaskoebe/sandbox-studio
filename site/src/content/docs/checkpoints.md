@@ -11,7 +11,7 @@ You can save a checkpoint while a sandbox is running or stopped. If it is runnin
 
 ## Save and delete
 
-The **Checkpoints** section of the sandbox's dashboard lists them. Select **Save checkpoint**, enter a name and select **Save**.
+Choose **History and checkpoints** in the options menu (**⋯**) of the sandbox's header to see them. Select **Save checkpoint** there, or **Checkpoint** in the header, enter a name and select **Save**.
 
 Deleting a checkpoint removes only that snapshot, in any order. It does not change the sandbox.
 

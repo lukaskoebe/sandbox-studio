@@ -70,8 +70,7 @@ async function ensure(path, match, body) {
 const FAKE_KEY = "sk-demo-not-a-real-key"
 const envs = await list("/api/environments")
 const env = envs[0].id
-// Terminals rather than chats, and the guided setup out of the way.
-await api("PUT", "/api/settings/ui", { agentView: "terminal" })
+// The guided setup out of the way.
 await api("PUT", `/api/setup?env=${env}`, { steps: {}, dismissed: true })
 await ensure("/api/environments", (e) => e.name === "Private", { name: "Private" })
 const E = `/api/environments/${env}`
@@ -236,7 +235,8 @@ await step("setup", async () => {
 })
 await step("new-sandbox", async () => {
   await go("")
-  await page.getByTitle("New sandbox").click()
+  await page.getByLabel("More to create").click()
+  await page.getByRole("menuitem", { name: /Sandbox without a teammate/ }).click()
   await page.getByLabel("Name").fill("my-project")
   await shot("new-sandbox")
   await closeDialog()
@@ -283,7 +283,10 @@ await step("checkpoints", async () => {
   const checkpoints = await list(`${E}/sandboxes/${storefront.id}/checkpoints`)
   if (!checkpoints.some?.((c) => c.name === "before-upgrade"))
     await api("POST", `${E}/sandboxes/${storefront.id}/checkpoints`, { name: "before-upgrade" })
+  // A sandbox's checkpoints are in the sheet its header's ⋯ menu opens.
   await go(`/sandboxes/${storefront.id}`)
+  await page.getByLabel("Sandbox options").click()
+  await page.getByRole("menuitem", { name: /History and checkpoints/ }).click()
   await page.getByRole("region", { name: "Checkpoints" }).waitFor()
   await shot("checkpoints")
 })

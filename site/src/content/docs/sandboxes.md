@@ -18,7 +18,7 @@ You can create a blank sandbox or choose a ready template from **Settings → Te
 
 ## Work in a terminal
 
-Open a sandbox from the sidebar to see its dashboard: a band with its status, owner, template, resources and age, then its chats, terminals, history and checkpoints, with ports and recent connections at the side. Choose **Workspace** in its header to work in it. Terminals run inside the sandbox at `/workspace`. Use **+** in the tab strip to open an additional terminal, run a shell yourself, or start the selected teammate's agent session with **Start session**. The sandbox's chats open in the same strip. The sidebar lists a running sandbox's terminals under its name, agent sessions included; choose one to open it in the workspace from any page. Docker runs inside the sandbox and uses its persistent Docker disk. The status line along the bottom of the workspace shows the sandbox's state, ID, template, ports and waiting approvals, and while it runs its CPU and memory use, such as `cpu 12% · mem 1.2/4 GiB` (CPU as a share of all its CPUs).
+Open a sandbox from the sidebar to work in it. Its header names its teammate and shows a pill with its state, CPUs and memory; the pill opens its details: template, resources, age, ID and listening ports, with **Start** or **Stop** and **Resources**. While the sandbox is down, the header also has **Start** or **Resume**. Terminals run inside the sandbox at `/workspace`. Use **+** in the tab strip for a new chat with the teammate, the teammate's agent in a terminal, or a shell. The sandbox's chats open in the same strip. The sidebar lists a running sandbox's terminals under its name, agent sessions included; choose one to open it in the workspace from any page. Docker runs inside the sandbox and uses its persistent Docker disk. The status line along the bottom of the workspace shows the sandbox's state, ID, template, ports and waiting approvals, and while it runs its CPU and memory use, such as `cpu 12% · mem 1.2/4 GiB` (CPU as a share of all its CPUs).
 
 ![A terminal open at /workspace in a running sandbox](../../assets/screenshots/sandbox-terminal.jpg)
 
@@ -26,17 +26,18 @@ To copy from a terminal, drag across the text: it is copied when you let go. Rig
 
 ## Stop, suspend, and resume
 
-Start and stop are on the dashboard. The options menu (**⋯**, on both pages) has these actions:
+The options menu (**⋯**) in the sandbox's header has these actions, and **Start** and **Resume** while it is down:
 
 | Action | What it does |
 | --- | --- |
+| **History and checkpoints** | Shows where the sandbox came from and its [checkpoints](../checkpoints/). |
 | **Stop** | Powers off the VM. Files on its disks stay, but running processes and terminal sessions end. Use **Start** to boot it again. |
 | **Suspend** | Pauses a running VM with its memory and processes. **Resume** continues it, including terminal sessions. Suspended memory does not survive a host reboot. |
 | **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are copied; Docker images, containers and volumes are not. The fork gets its own network approvals. |
 | **Rebase** | Moves the sandbox onto another template (see below). |
 | **Delete** | Permanently removes the sandbox and its disks. Export the sandbox first if you need a portable backup. |
 
-To change a sandbox's CPUs or memory, choose **Resources** on its dashboard. The change applies the next time the sandbox starts: the microsandbox version Studio uses can't resize a running VM, so stop and start a running sandbox to get it.
+To change a sandbox's CPUs or memory, choose **Resources** in the details its state pill opens. The change applies the next time the sandbox starts: the microsandbox version Studio uses can't resize a running VM, so stop and start a running sandbox to get it.
 
 ## Side panels
 
@@ -57,11 +58,11 @@ Once a sandbox was forked, the Home page has a **Family** card. It lists each te
 
 ## Open a preview
 
-If a web server is listening on a sandbox port, open **Previews** in the workspace toolbar and choose the port. The dashboard lists the ports too, each with **Open**. Studio opens a host-scoped `.localhost` link through the agent channel. The link is meant for the browser on the machine running Studio.
+If a web server is listening on a sandbox port, open **Previews** in the workspace toolbar and choose the port. The details its state pill opens list the ports too; choose one to open it. Studio opens a host-scoped `.localhost` link through the agent channel. The link is meant for the browser on the machine running Studio.
 
 Studio removes its own authentication cookies before forwarding preview requests and filters Studio cookies from preview responses. The preview app's own cookies are retained. Preview links do not expose the sandbox to your LAN.
 
-Each port keeps its own browser storage, so a service worker an app registered stays after the app stops, and may keep serving it to whatever runs on the port next. In **Previews**, choose **Open fresh** and then the port (or the broom next to **Open** on the dashboard, or **Reload fresh** in a chat's preview) to clear the preview's caches, storage and service workers before it opens. Its cookies stay.
+Each port keeps its own browser storage, so a service worker an app registered stays after the app stops, and may keep serving it to whatever runs on the port next. In **Previews**, choose **Open fresh** and then the port (or the broom next to a port in the sandbox's details, or **Reload fresh** in a chat's preview) to clear the preview's caches, storage and service workers before it opens. Its cookies stay.
 
 ## Export a workspace
 
