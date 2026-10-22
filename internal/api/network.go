@@ -477,7 +477,7 @@ func (s *Server) registerNetwork(api huma.API) {
 			Host        string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports       []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
 			Scope       string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
-			Note        string     `json:"note,omitempty" maxLength:"8000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments"`
+			Note        string     `json:"note,omitempty" maxLength:"8000" doc:"For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments. For network requests allowed or denied with a rule: why, kept on the rule (at most 500 characters); empty gets a note of what was asked, by which sandbox and when"`
 			Remember    bool       `json:"remember,omitempty" doc:"For browser.action: allow (or deny) the action on the origin from now on"`
 			Method      string     `json:"method,omitempty" doc:"For network requests allowed or denied with a rule: the request method the rule covers; empty covers any"`
 			PathPrefix  string     `json:"pathPrefix,omitempty" doc:"For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path"`
@@ -502,7 +502,8 @@ func (s *Server) registerNetwork(api huma.API) {
 			}
 			return &struct{ Body ApprovalView }{s.approvalView(ctx, a)}, nil
 		}
-		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope, Method: in.Body.Method, PathPrefix: in.Body.PathPrefix, BrowserOnly: in.Body.BrowserOnly}
+		d := policy.Decision{Action: in.Body.Action, Host: in.Body.Host, Ports: in.Body.Ports, Scope: in.Body.Scope, Method: in.Body.Method, PathPrefix: in.Body.PathPrefix, BrowserOnly: in.Body.BrowserOnly,
+			Note: in.Body.Note}
 		if in.Body.ExpiresAt != nil {
 			d.ExpiresAt = *in.Body.ExpiresAt
 		}

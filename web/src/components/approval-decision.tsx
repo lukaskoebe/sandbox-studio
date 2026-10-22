@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { CaretDownIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
@@ -109,6 +110,7 @@ function scopeOf(
  * a rule for the host pattern and the scope (a browser request's reach). The browser session
  * allows a navigation's site, or another request's host pattern, in the teammate's browser
  * without a rule; denying for it denies once. Once answers the held connections of this request.
+ * A rule keeps the note; without one the server writes what was asked, by whom and when.
  */
 export function decisionBody(
   a: Approval,
@@ -121,6 +123,7 @@ export function decisionBody(
     ports?: number[]
     method?: string
     pathPrefix?: string
+    note?: string
   }
 ): DecideBody {
   const scope = scopeOf(a, choice.scope, choice.reach)
@@ -140,6 +143,7 @@ export function decisionBody(
     ports: choice.ports,
     method: choice.method,
     pathPrefix: choice.pathPrefix,
+    ...(choice.note?.trim() ? { note: choice.note.trim() } : {}),
     ...(isBrowserRequest(a) && choice.reach !== "everywhere"
       ? { browserOnly: true }
       : {}),
@@ -389,6 +393,7 @@ export function ApprovalDecision({
   const [scope, setScope] = useState<DecisionScope>(defaultScope)
   const [reach, setReach] = useState<BrowserReach>(defaultReach(approval))
   const [lifetime, setLifetime] = useState<Lifetime>("always")
+  const [note, setNote] = useState("")
   const [optionsOpen, setOptionsOpen] = useState(false)
   const decide = useDecideApproval()
   const [chosen, setChosen] = useState<string>()
@@ -397,6 +402,7 @@ export function ApprovalDecision({
   const changed =
     anyPort ||
     lifetime !== "always" ||
+    note.trim() !== "" ||
     (browser ? reach !== defaultReach(approval) : scope !== defaultScope)
 
   const act = (choice: "allow" | "deny" | "dismiss") => {
@@ -414,6 +420,7 @@ export function ApprovalDecision({
         reach,
         host: pattern,
         ports: anyPort ? [] : undefined,
+        note,
         ...(requestLevel && net?.method && net.pathPattern
           ? { method: net.method, pathPrefix: net.pathPattern }
           : {}),
@@ -517,6 +524,16 @@ export function ApprovalDecision({
                 ? `Allows the site ${net.site} in this browser until it stops.`
                 : `Allows ${pattern} in this browser until it stops.`}
             </p>
+          )}
+          {(lifetime === "always" || lifetime === "hour") && (
+            <Input
+              aria-label="Why? (saved on the rule)"
+              placeholder="Why? (saved on the rule)"
+              maxLength={500}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="h-7 text-xs"
+            />
           )}
         </>
       )}

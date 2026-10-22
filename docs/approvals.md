@@ -28,8 +28,12 @@ its approval kinds with a decide function, and the API hands the decision to the
 - `POST /api/environments/{env}/approvals/{id}/decide` with `action` `allow`, `deny` or
   `dismiss`. For `network`, allow and deny create a rule (`host`, `ports`, `scope`, and
   `expiresAt` for a rule that stops matching at that time), and dismiss only closes the
-  request. `allow_once` and `deny_once` answer only the connections held for the request, with
-  no rule; the approval then has `once: true`. Git approvals take an optional `note`;
+  request. The rule keeps `note` (at most 500 characters), written under the card's Options as
+  "Why?"; without one it gets a note of what was asked, by which sandbox and when, such as
+  "Allowed for blub on 22 Oct 2026 (GET pypi.org/simple/requests)". The rules table shows it in
+  full on hover, offers Add note on a rule without one, and Activity shows the note of the rule
+  a decision made. `allow_once` and `deny_once` answer only the connections held for the
+  request, with no rule; the approval then has `once: true`. Git approvals take an optional `note`;
   `browser.action` takes `remember` to allow or deny the action on that origin from now on.
 - `POST /api/environments/{env}/approvals/{id}/revert` undoes a decision of the AI reviewer. Other
   decisions can't be reverted, and a reviewer's decision only once.

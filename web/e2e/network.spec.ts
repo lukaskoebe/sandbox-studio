@@ -365,3 +365,47 @@ test("the sidebar's Network item counts the waiting network approvals and opens 
   await expect(page).toHaveURL(/\/settings\/network/)
   await expect(item).toHaveAttribute("data-active", "")
 })
+
+test("a rule made from an approval keeps the note written on it, or one that says where it came from", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const name = sandboxName("note")
+  const id = await api.createSandbox(name)
+  const noted = freshHost("noted")
+  const plain = freshHost("plain")
+
+  await page.goto(`/e/${env}`)
+  await api.connect(id, noted)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: noted })
+  await card.getByRole("button", { name: "Options", exact: true }).click()
+  await card
+    .getByRole("textbox", { name: "Why? (saved on the rule)" })
+    .fill("pip installs for the docs build")
+  await card.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(card).toBeHidden()
+
+  await api.connect(id, plain)
+  const plainCard = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: plain })
+  await plainCard.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(plainCard).toBeHidden()
+
+  await page.goto(`/e/${env}/settings/network`)
+  await expect(page.getByRole("row").filter({ hasText: noted })).toContainText(
+    "pip installs for the docs build"
+  )
+  await expect(page.getByRole("row").filter({ hasText: plain })).toContainText(
+    `Allowed for ${name} on`
+  )
+
+  await page.goto(`/e/${env}/settings/activity`)
+  await expect(page.getByRole("row").filter({ hasText: noted })).toContainText(
+    "pip installs for the docs build"
+  )
+})

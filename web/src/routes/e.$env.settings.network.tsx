@@ -323,9 +323,25 @@ function RulesTab() {
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        <span className="block max-w-48 truncate">
-                          {r.note}
-                        </span>
+                        {r.note ? (
+                          <span
+                            className="block max-w-48 truncate"
+                            title={r.note}
+                          >
+                            {r.note}
+                          </span>
+                        ) : (
+                          // Why a rule is there is easy to forget; a note says it later.
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            onClick={() => setDialog({ rule: r })}
+                          >
+                            <PencilSimpleIcon />
+                            Add note
+                          </Button>
+                        )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatAge(r.createdAt)}

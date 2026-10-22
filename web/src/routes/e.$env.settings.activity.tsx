@@ -59,6 +59,11 @@ function ActivitySettings() {
     { params: { path: { env }, query: { status: "all" } } },
     { refetchInterval: 5000 }
   )
+  // A network decision that made a rule shows the rule's note: why it was allowed.
+  const rules = $api.useQuery("get", "/api/environments/{env}/rules", {
+    params: { path: { env } },
+  })
+  const notes = new Map((rules.data ?? []).map((r) => [r.id, r.note]))
   const revert = $api.useMutation(
     "post",
     "/api/environments/{env}/approvals/{id}/revert",
@@ -172,9 +177,12 @@ function ActivitySettings() {
                           <GitOutcome git={a.git} />
                         </div>
                       ) : (
-                        <span className="block truncate">
-                          {a.network?.reason}
-                        </span>
+                        <Details
+                          text={
+                            a.network?.reason ||
+                            (a.ruleId ? notes.get(a.ruleId) : undefined)
+                          }
+                        />
                       )}
                     </TableCell>
                   </TableRow>
@@ -185,6 +193,15 @@ function ActivitySettings() {
         )}
       </ScrollArea>
     </>
+  )
+}
+
+/** One line of details, in full on hover. */
+function Details({ text }: { text?: string }) {
+  return (
+    <span className="block truncate" title={text}>
+      {text}
+    </span>
   )
 }
 

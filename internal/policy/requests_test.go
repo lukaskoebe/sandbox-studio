@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -107,6 +108,10 @@ func TestRequestApprovalAllowsAMethodAndPath(t *testing.T) {
 	if len(rules) != 1 || rules[0].Method != "GET" || rules[0].PathPrefix != "/repos/*" {
 		t.Fatalf("rules: %+v", rules)
 	}
+	// Allowed without a note, the rule says what was asked, by which sandbox and when.
+	if want := RuleNote("allow", req, e.now()); rules[0].Note != want || !strings.Contains(want, "(GET api.example.com/repos/a/b)") {
+		t.Fatalf("note %q, want %q", rules[0].Note, want)
+	}
 
 	// A connection's approval can't carry a method or path.
 	go func() {
@@ -118,5 +123,37 @@ func TestRequestApprovalAllowsAMethodAndPath(t *testing.T) {
 				t.Errorf("a connection's approval took a path: %v", err)
 			}
 		}
+	}
+}
+
+// The note given with an allow is kept on the rule; one that is too long is refused.
+func TestResolveKeepsTheNote(t *testing.T) {
+	ctx := context.Background()
+	e, env, sb := newEngine(t)
+	go func() {
+		_, _ = e.Decide(ctx, Request{EnvironmentID: env.ID, SandboxID: sb.ID, SandboxName: sb.Name, Host: "notes.example.org", Port: 443})
+	}()
+	a := waitPending(t, e, env.ID, 1)["notes.example.org:443"]
+	long := strings.Repeat("x", MaxNote+1)
+	if _, err := e.Resolve(ctx, env.ID, a.ID, Decision{Action: "allow", Scope: "environment", Note: long}); !errors.Is(err, ErrNoteTooLong) {
+		t.Fatalf("a long note: %v", err)
+	}
+	if _, err := e.Resolve(ctx, env.ID, a.ID, Decision{Action: "allow", Scope: "environment", Note: "  pip installs for the docs build "}); err != nil {
+		t.Fatal(err)
+	}
+	rules, _ := e.Store.Rules(ctx, env.ID)
+	if len(rules) != 1 || rules[0].Note != "pip installs for the docs build" {
+		t.Fatalf("rules: %+v", rules)
+	}
+}
+
+func TestRuleNote(t *testing.T) {
+	at := time.Date(2026, 10, 22, 12, 0, 0, 0, time.Local)
+	if got := RuleNote("deny", NetworkRequest{Host: "x.example.org", Port: 443, SandboxName: "blub"}, at); got != "Denied for blub on 22 Oct 2026 (x.example.org:443)" {
+		t.Errorf("got %q", got)
+	}
+	long := NetworkRequest{Host: "a.example.org", Port: 443, HTTPRequest: HTTPRequest{Method: "GET", Path: "/" + strings.Repeat("p", 600)}}
+	if got := []rune(RuleNote("allow", long, at)); len(got) != MaxNote {
+		t.Errorf("a long request's note has %d characters", len(got))
 	}
 }

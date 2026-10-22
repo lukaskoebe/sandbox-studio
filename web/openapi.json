@@ -1842,7 +1842,7 @@
             "type": "string"
           },
           "note": {
-            "description": "For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments",
+            "description": "For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments. For network requests allowed or denied with a rule: why, kept on the rule (at most 500 characters); empty gets a note of what was asked, by which sandbox and when",
             "maxLength": 8000,
             "type": "string"
           },

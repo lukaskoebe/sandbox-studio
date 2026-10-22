@@ -3142,7 +3142,7 @@ export interface components {
             host?: string;
             /** @description For network requests allowed or denied with a rule: the request method the rule covers; empty covers any */
             method?: string;
-            /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments */
+            /** @description For git approvals: a note passed on to the sandbox, such as why a push was rejected, with the reviewer's line comments. For network requests allowed or denied with a rule: why, kept on the rule (at most 500 characters); empty gets a note of what was asked, by which sandbox and when */
             note?: string;
             /** @description For network requests allowed or denied with a rule: a path prefix ending in *, such as /repos/*, that the rule covers; empty covers any path */
             pathPrefix?: string;

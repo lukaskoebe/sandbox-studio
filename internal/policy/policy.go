@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +50,7 @@ var (
 	ErrDoesNotCover = errors.New("the rule must cover the requested host and port")
 	ErrNoTeammate   = errors.New("the sandbox has no teammate")
 	ErrExpired      = errors.New("a rule must expire in the future")
+	ErrNoteTooLong  = fmt.Errorf("a rule's note has at most %d characters", MaxNote)
 	// ErrPerRequest is what Decide returns for a deferred connection that no rule covers: the
 	// connection is not held, and its requests are decided one at a time (HTTP set).
 	ErrPerRequest = errors.New("the browser's requests are decided one at a time")
@@ -423,6 +425,32 @@ type Decision struct {
 	PathPrefix string
 	// BrowserOnly limits the rule to the requests of browser VMs.
 	BrowserOnly bool
+	// Note is why the rule was made. Empty gets one that says where it came from (RuleNote).
+	Note string
+}
+
+// MaxNote is the longest note a rule keeps, in characters.
+const MaxNote = 500
+
+// RuleNote is the note of a rule made from an approval without one: what was asked, by which
+// sandbox and when, so a rule says later why it is there.
+func RuleNote(action string, req NetworkRequest, at time.Time) string {
+	verb := "Allowed"
+	if action == store.ActionDeny {
+		verb = "Denied"
+	}
+	what := fmt.Sprintf("%s:%d", req.Host, req.Port)
+	if req.Method != "" {
+		what = req.Method + " " + req.Host + req.Path
+	}
+	note := fmt.Sprintf("%s for %s on %s (%s)", verb, req.SandboxName, at.Local().Format("2 Jan 2006"), what)
+	if req.SandboxName == "" {
+		note = fmt.Sprintf("%s on %s (%s)", verb, at.Local().Format("2 Jan 2006"), what)
+	}
+	if r := []rune(note); len(r) > MaxNote {
+		note = string(r[:MaxNote-1]) + "…"
+	}
+	return note
 }
 
 // Resolve answers a pending network approval, creating a rule unless it is dismissed.
@@ -458,7 +486,14 @@ func (e *Engine) Resolve(ctx context.Context, envID, id string, d Decision) (sto
 	if err := json.Unmarshal(a.Payload, &req); err != nil {
 		return a, fmt.Errorf("approval %s: %w", id, err)
 	}
-	rule := store.Rule{EnvironmentID: envID, Host: req.Host, Ports: d.Ports, Action: d.Action, Origin: store.OriginApproval, BrowserOnly: d.BrowserOnly}
+	rule := store.Rule{EnvironmentID: envID, Host: req.Host, Ports: d.Ports, Action: d.Action, Origin: store.OriginApproval, BrowserOnly: d.BrowserOnly,
+		Note: strings.TrimSpace(d.Note)}
+	if len([]rune(rule.Note)) > MaxNote {
+		return a, ErrNoteTooLong
+	}
+	if rule.Note == "" {
+		rule.Note = RuleNote(d.Action, req, e.now())
+	}
 	if d.Host != "" {
 		rule.Host = d.Host
 	}
