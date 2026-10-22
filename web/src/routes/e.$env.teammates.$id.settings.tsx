@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { BackToSetup, fromSetup } from "@/components/back-to-setup"
 import { BrowserSettings } from "@/components/browser-settings"
+import { SaveBar } from "@/components/save-bar"
 import { DisclosureCard } from "@/components/disclosure-card"
 import {
   TeammateLevelSelect,
@@ -75,76 +76,78 @@ function TeammateSettings() {
   if (!teammate || !providers.data) return null
 
   return (
-    <div className="grid max-w-3xl grid-cols-1 gap-2.5">
-      {from === "setup" && <BackToSetup step="teammate" />}
-      <TeammateForm
-        key={teammate.id}
-        env={env}
-        teammate={teammate}
-        providers={providers.data}
-        onSaved={() => toast.success("Teammate saved")}
-        sections={{ open, onOpen: setOpen }}
-      />
-      <DisclosureCard
-        {...card(
-          "checkins",
-          "Check-ins",
-          teammate.heartbeat ? heartbeatSentence(teammate.heartbeat) : "Off"
-        )}
-      >
-        <TeammateHeartbeat env={env} teammate={teammate} />
-      </DisclosureCard>
-      <DisclosureCard
-        {...card(
-          "network",
-          "Network",
-          <LevelSummary env={env} teammate={teammate} />
-        )}
-      >
-        <Field>
-          <FieldLabel htmlFor="teammate-security-level">
-            Security level
-          </FieldLabel>
-          <TeammateLevelSelect env={env} teammate={teammate} />
-          <FieldDescription>
-            The level of this teammate's sandboxes. Environment default follows
-            the environment's level, set in Settings → Network.
-          </FieldDescription>
-        </Field>
-      </DisclosureCard>
-      <DisclosureCard
-        {...card(
-          "browser",
-          "Browser",
-          teammate.browserStealth ? "Stealth mode on" : "Stealth mode off"
-        )}
-      >
-        <BrowserSettings env={env} teammate={teammate} />
-      </DisclosureCard>
-      <DisclosureCard
-        {...card(
-          "secrets",
-          "Secrets",
-          "Its own, its sandboxes' and the environment's"
-        )}
-      >
-        <TeammateSecrets env={env} teammate={teammate} />
-      </DisclosureCard>
-      <DisclosureCard
-        {...card(
-          "delete",
-          `Delete ${teammate.name}`,
-          "Its sandboxes must be deleted first"
-        )}
-      >
-        <p className="text-xs text-muted-foreground">
-          Network rules scoped to it go with it.
-        </p>
-        <div>
-          <DeleteTeammate env={env} teammate={teammate} />
-        </div>
-      </DisclosureCard>
-    </div>
+    <SaveBar>
+      <div className="grid max-w-3xl grid-cols-1 gap-2.5">
+        {from === "setup" && <BackToSetup step="teammate" />}
+        <TeammateForm
+          key={teammate.id}
+          env={env}
+          teammate={teammate}
+          providers={providers.data}
+          onSaved={() => toast.success("Teammate saved")}
+          sections={{ open, onOpen: setOpen }}
+        />
+        <DisclosureCard
+          {...card(
+            "checkins",
+            "Check-ins",
+            teammate.heartbeat ? heartbeatSentence(teammate.heartbeat) : "Off"
+          )}
+        >
+          <TeammateHeartbeat env={env} teammate={teammate} />
+        </DisclosureCard>
+        <DisclosureCard
+          {...card(
+            "network",
+            "Network",
+            <LevelSummary env={env} teammate={teammate} />
+          )}
+        >
+          <Field>
+            <FieldLabel htmlFor="teammate-security-level">
+              Security level
+            </FieldLabel>
+            <TeammateLevelSelect env={env} teammate={teammate} />
+            <FieldDescription>
+              The level of this teammate's sandboxes. Environment default
+              follows the environment's level, set in Settings → Network.
+            </FieldDescription>
+          </Field>
+        </DisclosureCard>
+        <DisclosureCard
+          {...card(
+            "browser",
+            "Browser",
+            teammate.browserStealth ? "Stealth mode on" : "Stealth mode off"
+          )}
+        >
+          <BrowserSettings env={env} teammate={teammate} />
+        </DisclosureCard>
+        <DisclosureCard
+          {...card(
+            "secrets",
+            "Secrets",
+            "Its own, its sandboxes' and the environment's"
+          )}
+        >
+          <TeammateSecrets env={env} teammate={teammate} />
+        </DisclosureCard>
+        <DisclosureCard
+          {...card(
+            "delete",
+            `Delete ${teammate.name}`,
+            "Its sandboxes must be deleted first"
+          )}
+        >
+          <p className="text-xs text-muted-foreground">
+            Network rules scoped to it go with it.
+          </p>
+          <div>
+            <DeleteTeammate env={env} teammate={teammate} />
+          </div>
+        </DisclosureCard>
+      </div>
+    </SaveBar>
   )
 }
 

@@ -51,8 +51,11 @@ test("check-ins start off, then save their schedule on the settings page", async
   await expect(toggle).toBeChecked()
   await expect(page.getByLabel("Every (hours)")).toHaveValue("4")
   await page.getByLabel("Every (hours)").fill("2")
-  await page.getByRole("button", { name: "Save check-ins" }).click()
+  // The page's one save bar saves the times.
+  const bar = page.getByRole("region", { name: "Unsaved changes" })
+  await bar.getByRole("button", { name: "Save", exact: true }).click()
   await expect.poll(async () => (await schedule())?.everyHours).toBe(2)
+  await expect(bar).toBeHidden()
   // The card's summary says the schedule.
   await expect(
     page.getByRole("button", {

@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { HeartbeatIcon } from "@phosphor-icons/react"
+import { useSavePart } from "@/components/save-bar"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -85,6 +86,13 @@ export function TeammateHeartbeat({
     saved.everyHours === draft.everyHours &&
     saved.fromHour === draft.fromHour &&
     saved.toHour === draft.toHour
+  // In a SaveBar the page's bar saves the times with the teammate's other changes.
+  const inBar = useSavePart("checkins", {
+    dirty: saved !== undefined && !unchanged,
+    valid,
+    save: () => set.mutateAsync({ ...path, body: draft }),
+    discard: () => setDraft(saved ?? defaultHeartbeat),
+  })
 
   return (
     <section className="grid gap-4">
@@ -173,10 +181,12 @@ export function TeammateHeartbeat({
             <FieldDescription>
               {heartbeatSentence(draft)}, in this Studio's local time.
             </FieldDescription>
-            <Button type="submit" disabled={!valid || busy || unchanged}>
-              {busy && <Spinner />}
-              Save check-ins
-            </Button>
+            {!inBar && (
+              <Button type="submit" disabled={!valid || busy || unchanged}>
+                {busy && <Spinner />}
+                Save check-ins
+              </Button>
+            )}
           </div>
         </form>
       )}

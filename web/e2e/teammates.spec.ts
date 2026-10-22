@@ -104,3 +104,60 @@ test("the rail shows a teammate's computer, and its menu forks it or adds anothe
   await page.getByRole("menuitem", { name: /^Add another sandbox/ }).click()
   await expect(page.getByRole("dialog", { name: "New sandbox" })).toBeVisible()
 })
+
+test("a teammate's settings have one save bar for the changes in every section, and leaving with changes asks", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("Saver")
+  const id = await addTeammate(api, env, name)
+  const teammate = () =>
+    api.json<{ role: string; gitName: string }>(
+      "GET",
+      `/api/environments/${env}/teammates/${id}`
+    )
+  await page.goto(`/e/${env}/teammates/${id}/settings?open=identity`)
+  const bar = page.getByRole("region", { name: "Unsaved changes" })
+  await expect(page.getByLabel("Role")).toBeVisible()
+  await expect(bar).toBeHidden()
+
+  // A change in one section, then another: opening a section keeps the first change.
+  await page.getByLabel("Role").fill("Reviewer")
+  await expect(bar).toBeVisible()
+  await page.getByRole("button", { name: /^Git identity/ }).click()
+  const gitName = await page.getByLabel("Git name").inputValue()
+  await page.getByLabel("Git name").fill("Saver Bot")
+  await bar.getByRole("button", { name: "Discard" }).click()
+  await expect(bar).toBeHidden()
+  await expect(page.getByLabel("Git name")).toHaveValue(gitName)
+
+  await page.getByLabel("Git name").fill("Saver Bot")
+  await page.getByRole("button", { name: /^Identity/ }).click()
+  await page.getByLabel("Role").fill("Reviewer")
+  await bar.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(bar).toBeHidden()
+  expect(await teammate()).toMatchObject({
+    role: "Reviewer",
+    gitName: "Saver Bot",
+  })
+
+  // Leaving with a change asks; Stay keeps it, Leave goes.
+  await page.getByLabel("Role").fill("Writer")
+  await page
+    .locator('[data-sidebar="sidebar"]')
+    .getByRole("link", { name: /^Home/ })
+    .click()
+  const ask = page.getByRole("alertdialog", { name: "Leave without saving?" })
+  await ask.getByRole("button", { name: "Stay" }).click()
+  await expect(page.getByLabel("Role")).toHaveValue("Writer")
+  await page
+    .locator('[data-sidebar="sidebar"]')
+    .getByRole("link", { name: /^Home/ })
+    .click()
+  await ask.getByRole("button", { name: "Leave" }).click()
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible()
+  expect((await teammate())?.role).toBe("Reviewer")
+})

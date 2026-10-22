@@ -10,6 +10,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react"
 import { DisclosureCard } from "@/components/disclosure-card"
+import { useSavePart } from "@/components/save-bar"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -114,8 +115,9 @@ export function TeammateForm({
   prefill?: { name?: string; role?: string }
   onSaved: () => void
   /**
-   * Shows each section as a card that opens to its fields, with the open one named here, and
-   * a Save in the open card. Without it the sections follow each other with one Save.
+   * Shows each section as a card that opens to its fields, with the open one named here. In a
+   * SaveBar the page's bar saves the changes; otherwise the open card has a Save. Without it the
+   * sections follow each other with one Save.
    */
   sections?: { open?: string; onOpen: (id: string | undefined) => void }
 }) {
@@ -192,26 +194,72 @@ export function TeammateForm({
   )
   const saving = create.isPending || update.isPending
 
+  // Only a valid form is saved, and a valid form has a harness.
+  const body = (h: Harness) => ({
+    name: name.trim(),
+    role: role.trim() || undefined,
+    soul: soul || undefined,
+    harness: h,
+    providerId,
+    model: model.trim() || undefined,
+    gitName: gitName.trim() || undefined,
+    gitEmail: gitEmail.trim() || undefined,
+    useHostGitIdentity: useHostGit || undefined,
+    avatar: avatar || undefined,
+    approvalScope,
+  })
   const submit = () => {
     if (!valid || saving) return
     setFormError(undefined)
-    const body = {
-      name: name.trim(),
-      role: role.trim() || undefined,
-      soul: soul || undefined,
-      harness,
-      providerId,
-      model: model.trim() || undefined,
-      gitName: gitName.trim() || undefined,
-      gitEmail: gitEmail.trim() || undefined,
-      useHostGitIdentity: useHostGit || undefined,
-      avatar: avatar || undefined,
-      approvalScope,
-    }
     if (teammate)
-      update.mutate({ params: { path: { env, id: teammate.id } }, body })
-    else create.mutate({ params: { path: { env } }, body })
+      update.mutate({
+        params: { path: { env, id: teammate.id } },
+        body: body(harness),
+      })
+    else create.mutate({ params: { path: { env } }, body: body(harness) })
   }
+
+  // What differs from the saved teammate, for the page's save bar.
+  const dirty =
+    teammate !== undefined &&
+    (name !== teammate.name ||
+      role !== teammate.role ||
+      providerId !== teammate.providerId ||
+      harness !== teammate.harness ||
+      model !== teammate.model ||
+      gitName !== teammate.gitName ||
+      gitEmail !== teammate.gitEmail ||
+      useHostGit !== teammate.useHostGitIdentity ||
+      soul !== teammate.soul ||
+      avatar !== teammate.avatar ||
+      approvalScope !== teammate.approvalScope)
+  const inBar = useSavePart("teammate", {
+    dirty,
+    valid,
+    save: () => {
+      if (!teammate || !harness) return Promise.resolve()
+      setFormError(undefined)
+      return update.mutateAsync({
+        params: { path: { env, id: teammate.id } },
+        body: body(harness),
+      })
+    },
+    discard: () => {
+      if (!teammate) return
+      setName(teammate.name)
+      setRole(teammate.role)
+      setProviderId(teammate.providerId)
+      setHarness(teammate.harness)
+      setModel(teammate.model)
+      setGitName(teammate.gitName)
+      setGitEmail(teammate.gitEmail)
+      setUseHostGit(teammate.useHostGitIdentity)
+      setSoul(teammate.soul)
+      setAvatar(teammate.avatar)
+      setApprovalScope(teammate.approvalScope)
+      setFormError(undefined)
+    },
+  })
 
   const soulLine = soul
     .split("\n")
@@ -233,7 +281,9 @@ export function TeammateForm({
     approvals: `New rules apply to ${approvalScopeLabels[approvalScope].toLowerCase()}`,
     soul: soulLine ?? "None",
   }
-  const saveRow = (
+  const saveRow = inBar ? (
+    formError && <FieldError>{formError}</FieldError>
+  ) : (
     <>
       {formError && <FieldError>{formError}</FieldError>}
       <div className="flex justify-end">
