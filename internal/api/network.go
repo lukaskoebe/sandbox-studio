@@ -26,6 +26,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 	"github.com/lukaskoebe/sandbox-studio/internal/integrations"
 	"github.com/lukaskoebe/sandbox-studio/internal/policy"
+	"github.com/lukaskoebe/sandbox-studio/internal/secretcheck"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -57,6 +58,8 @@ type ApprovalView struct {
 	BrowserShow       *browser.ShowPayload       `json:"browserShow,omitempty" doc:"An agent shows the user a page in its browser"`
 	// GitCredential is set for git.credential approvals.
 	GitCredential *gitreview.GitCredentialPayload `json:"gitCredential,omitempty" doc:"git in a sandbox wants credentials for a host no forge covers"`
+	// SecretRejected is set for secret.rejected approvals.
+	SecretRejected *secretcheck.RejectedPayload `json:"secretRejected,omitempty" doc:"A host keeps refusing a secret's value"`
 	// ChatPermission is set for chat.permission approvals.
 	ChatPermission *chat.PermissionPayload `json:"chatPermission,omitempty" doc:"A chat's agent asks to run a tool"`
 }
@@ -102,6 +105,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p gitreview.GitCredentialPayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.GitCredential = &p
+		}
+	case secretcheck.Kind:
+		var p secretcheck.RejectedPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.SecretRejected = &p
 		}
 	case chat.ApprovalKind:
 		var p chat.PermissionPayload

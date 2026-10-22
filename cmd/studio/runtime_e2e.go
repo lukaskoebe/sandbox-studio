@@ -69,7 +69,15 @@ func hostLogins(data string) *hostlogins.Finder {
 
 // registerControl serves the control API behind the API's login, like the rest of the API. Its
 // requests are decided by the policy, as a sandbox's connections are.
-func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine) {
+func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine, gw *gateway.Gateway) {
+	e2e.Rejected = func(ctx context.Context, sandboxID, host string, names []string) error {
+		sb, err := st.LookupSandbox(ctx, sandboxID)
+		if err != nil {
+			return err
+		}
+		gw.Rejected(sb, host, names)
+		return nil
+	}
 	e2e.Requests = func(ctx context.Context, sandboxID, host string, port int, req policy.HTTPRequest) (store.Rule, error) {
 		sb, err := st.LookupSandbox(ctx, sandboxID)
 		if err != nil {

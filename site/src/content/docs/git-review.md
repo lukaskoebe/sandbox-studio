@@ -24,6 +24,8 @@ The forge row shows its Studio remote URL, in the form `https://git.studio.inter
 
 When git in a sandbox wants credentials for an HTTPS host no forge covers, such as a private repository on `github.com` before you added GitHub, Home shows a card: "<teammate> needs access to github.com". **Add forge** opens the Add forge dialog filled in from the repository's URL; the agent's next try goes through Studio. **Not now** keeps Studio from asking about that host for a day. The agent reads in git's output that you have the card, and git still fails until the forge exists: sandboxes never hold a credential.
 
+When git in a sandbox connects over SSH to a forge's host, such as `git@github.com:owner/repo.git`, the network card for port 22 says so. Sandboxes hold no SSH key, so the card points to the repository's `https://` URL instead, which goes through Studio with the forge's credential, and offers **Add forge** when Studio has none for the host.
+
 ## Push and review
 
 When a sandbox pushes through a configured forge, Studio stages the push and asks for review. The review shows the branch and its change above three tabs: **Changes** with the diff, **Commits** with where the push comes from, and **Comments** with your note and line comments. **Approve** and **Reject** stay at the bottom while you read; **Ignore** and **Send without deciding** are under **More**. Studio checks that the upstream branch has not changed unexpectedly before it pushes the approved commit.

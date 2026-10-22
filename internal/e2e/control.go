@@ -24,6 +24,10 @@ const ControlPrefix = "/api/e2e/"
 // /api/e2e/requests). Studio sets it: the request needs no browser VM, only the policy.
 var Requests func(ctx context.Context, sandboxID, host string, port int, req policy.HTTPRequest) (store.Rule, error)
 
+// Rejected reports a host's 401 to a request of a sandbox's that carried the secrets names, as
+// the gateway does (POST /api/e2e/rejected). Studio sets it.
+var Rejected func(ctx context.Context, sandboxID, host string, names []string) error
+
 // Control returns the control API, which Studio mounts under ControlPrefix on its API mux:
 // it gets the same login and Host and Origin checks as the rest of the API. It exists only
 // in the e2e build.
@@ -45,6 +49,8 @@ var Requests func(ctx context.Context, sandboxID, host string, port int, req pol
 //	POST /api/e2e/requests                {"sandboxId", "host", "port", "method", "path", "navigation",
 //	                                    "site"}: decides one browser request, as the gateway would, and
 //	                                    answers with the outcome once it is decided
+//	POST /api/e2e/rejected                {"sandboxId", "host", "names"}: a 401 to a request that
+//	                                    carried those secrets, as the gateway reports it
 //	PUT  /api/e2e/upstream/{repo...}      (re)creates the upstream bare repository <host>/<path> with
 //	                                    one commit on main, and lists its branches
 //	GET  /api/e2e/upstream/{repo...}      the upstream repository's branches
@@ -141,6 +147,22 @@ func (r *Runtime) Control() http.Handler {
 		writeJSON(w, http.StatusOK, struct {
 			Outcome string `json:"outcome"`
 		}{outcome})
+	})
+	mux.HandleFunc("POST /api/e2e/rejected", func(w http.ResponseWriter, req *http.Request) {
+		var body struct {
+			SandboxID string   `json:"sandboxId"`
+			Host      string   `json:"host"`
+			Names     []string `json:"names"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil || body.SandboxID == "" || body.Host == "" || len(body.Names) == 0 {
+			http.Error(w, "want {sandboxId, host, names}", http.StatusBadRequest)
+			return
+		}
+		if err := Rejected(req.Context(), body.SandboxID, body.Host, body.Names); err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		writeJSON(w, http.StatusAccepted, struct{}{})
 	})
 	mux.HandleFunc("POST /api/e2e/sandboxes/{id}/calls", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))

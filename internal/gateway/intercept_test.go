@@ -83,8 +83,9 @@ type interceptHarness struct {
 	envCA *x509.CertPool // what sandboxes of the environment trust
 	upCA  *x509.CertPool // what the upstream servers' certificates chain to
 
-	mu   sync.Mutex
-	seen []seen
+	mu       sync.Mutex
+	seen     []seen
+	rejected []string // "sandbox host NAME,NAME" per 401 to a request with secrets
 }
 
 // newInterceptHarness runs a gateway with a CA and secrets in front of an HTTPS upstream
@@ -126,6 +127,10 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 			return
 		}
 		w.Header().Set("X-Echo-Auth", r.Header.Get("Authorization"))
+		if r.URL.Path == "/unauthorized" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		if r.URL.Path == "/trailer" {
 			w.Header().Add("Trailer", "X-Echo-Secret")
 			w.WriteHeader(http.StatusOK)
@@ -205,6 +210,11 @@ func newInterceptHarness(t *testing.T) *interceptHarness {
 				up = tlsUp.Listener.Addr().String()
 			}
 			return (&net.Dialer{}).DialContext(ctx, network, up)
+		},
+		Rejected: func(sb store.Sandbox, host string, names []string) {
+			h.mu.Lock()
+			h.rejected = append(h.rejected, sb.ID+" "+host+" "+strings.Join(names, ","))
+			h.mu.Unlock()
 		},
 		upstreamRoots: h.upCA,
 		Caddy:         sharedCaddy(),
@@ -343,6 +353,23 @@ func TestInterceptSubstitutesPlaceholders(t *testing.T) {
 		log := h.gw.Conns.List("sb1")
 		return len(log) == 1 && log[0].Intercepted && log[0].Verdict == VerdictAllowed && log[0].Error == ""
 	}, func() string { return fmt.Sprintf("%+v", h.gw.Conns.List("sb1")) })
+}
+
+// A 401 to a request that carried secrets names them, so Studio can say the value looks
+// wrong. A 401 to a request without one, and other statuses, say nothing.
+func TestInterceptReportsRejectedSecrets(t *testing.T) {
+	h := newInterceptHarness(t)
+	c := h.client(t, h.envCA)
+	get(t, c, "https://example.com/unauthorized?p="+pathPlaceholder, "Authorization", "Bearer "+apiPlaceholder)
+	get(t, c, "https://example.com/unauthorized")
+	get(t, c, "https://example.com/ok", "Authorization", "Bearer "+apiPlaceholder)
+	get(t, c, "https://proxied.example/unauthorized")
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	want := []string{"sb1 example.com API_KEY,PATH_KEY", "sb1 proxied.example HEADER_KEY"}
+	if !slices.Equal(h.rejected, want) {
+		t.Errorf("rejected %q, want %q", h.rejected, want)
+	}
 }
 
 func TestInterceptRefusesMisplacedSecrets(t *testing.T) {

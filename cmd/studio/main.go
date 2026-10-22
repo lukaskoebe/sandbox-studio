@@ -55,6 +55,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/sandboxinfo"
+	"github.com/lukaskoebe/sandbox-studio/internal/secretcheck"
 	"github.com/lukaskoebe/sandbox-studio/internal/secrets"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/tasks"
@@ -346,12 +347,15 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	integs := integrations.Set{gitRemote}
 	brw := newBrowser(st, vault, bus, p.Data, image, log) // settles browser.action, browser.credential and browser.control approvals
 	integs = append(integs, brw)
-	engine.Browsers = brw // a browser's requests are attributed to its page
+	engine.Browsers = brw                                              // a browser's requests are attributed to its page
+	secretCheck := &secretcheck.Service{Store: st, Bus: bus, Log: log} // settles secret.rejected approvals
+	integs = append(integs, secretCheck)
 	gw := &gateway.Gateway{
 		Addr: gatewayAddr, Key: key, Policy: engine, Sandbox: st.LookupSandbox,
 		Resolvers: resolvers, Conns: conns, Log: log, CA: authority, Secrets: vault, Caddy: caddy,
 		Virtual: integs.Routes(), Dial: upstreamDial(),
 		PrivateHosts: st.PrivateHosts, HostPorts: st.HostPorts, Own: []string{addr, gatewayAddr, templateRegistryAddr},
+		Rejected: secretCheck.Rejected,
 	}
 	gl, err := net.Listen("tcp", gatewayAddr)
 	if err != nil {
@@ -500,7 +504,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	mgr.SetHarnessConfig(apiServer.HarnessConfig)
 	apiServer.Register(mux)
 	mux.Handle("/", webui.Handler())
-	registerControl(mux, st, engine)
+	registerControl(mux, st, engine, gw)
 	handler := api.Guard(auth.Middleware(preview.Route(mgr.DialPreviewTCP, mux)))
 
 	// Long-lived requests (event streams, terminals) end with the server instead of holding up

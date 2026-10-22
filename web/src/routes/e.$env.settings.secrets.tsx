@@ -43,6 +43,10 @@ import { groupByScope, scopeValue, type SecretGroup } from "@/lib/secrets"
 import { formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings/secrets")({
+  // edit opens the dialog of the secret with that ID, as a secret.rejected card does.
+  validateSearch: (s: Record<string, unknown>): { edit?: string } => ({
+    edit: typeof s.edit === "string" && s.edit !== "" ? s.edit : undefined,
+  }),
   component: SecretsPage,
 })
 
@@ -56,10 +60,19 @@ type DialogState = { secret?: Secret; scope?: string } | null
 
 function SecretsPage() {
   const { env } = Route.useParams()
+  const { edit } = Route.useSearch()
+  const navigate = Route.useNavigate()
   const [dialog, setDialog] = useState<DialogState>(null)
   const secrets = $api.useQuery("get", "/api/environments/{env}/secrets", {
     params: { path: { env } },
   })
+  // A card's link to a secret opens its dialog once, when the list has it.
+  const [opened, setOpened] = useState<string>()
+  const linked = edit ? secrets.data?.find((s) => s.id === edit) : undefined
+  if (linked && opened !== linked.id) {
+    setOpened(linked.id)
+    setDialog({ secret: linked })
+  }
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
@@ -134,7 +147,9 @@ function SecretsPage() {
         sandboxes={sandboxes.data ?? []}
         open={dialog !== null}
         onOpenChange={(open) => {
-          if (!open) setDialog(null)
+          if (open) return
+          setDialog(null)
+          if (edit) void navigate({ search: {}, replace: true })
         }}
       />
     </>

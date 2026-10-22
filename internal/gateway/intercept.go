@@ -55,6 +55,7 @@ type interception struct {
 	gate       func(*http.Request) string // decides each request before it is rewritten; "" lets it on
 	proxy      *httputil.ReverseProxy
 	log        *slog.Logger
+	rejected   func(names []string) // told when the upstream refuses a request that carried secrets
 
 	mu      sync.Mutex
 	problem string // the last refused request, for the connection log
@@ -142,11 +143,11 @@ func caddySecrets(host string, c *caddyrule.Compiled, all []secrets.Binding) (ma
 
 // intercept serves the sandbox's requests on c until it hangs up, through caddy if it isn't
 // nil. It returns the bytes sent and received on c and the last refused request, if any.
-func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string) (sent, received int64, problem string) {
+func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, port int, isTLS bool, rule store.Rule, all []secrets.Binding, caddy *caddyrule.Compiled, gate func(*http.Request) string, rejected func(names []string)) (sent, received int64, problem string) {
 	// Requests go to the rule's upstream, which is the host unless the rule names another. The
 	// secrets are bound to the upstream, since that is what receives them.
 	upstream, upPort := upstreamOf(rule.Config.Upstream, host, port)
-	ic := &interception{host: host, upstream: upstream, tls: isTLS, headers: rule.Config.Headers, hostHeader: rule.Config.HostHeader, log: g.Log, gate: gate}
+	ic := &interception{host: host, upstream: upstream, tls: isTLS, headers: rule.Config.Headers, hostHeader: rule.Config.HostHeader, log: g.Log, gate: gate, rejected: rejected}
 	var transport http.RoundTripper
 	if caddy == nil {
 		ic.bound, ic.unbound = boundTo(all, upstream)
@@ -197,9 +198,12 @@ func (g *Gateway) intercept(c net.Conn, br *bufio.Reader, envID, host string, po
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.Out.URL.Scheme, pr.Out.URL.Host = scheme, net.JoinHostPort(upstream, strconv.Itoa(upPort))
 		},
-		Transport:      transport,
-		FlushInterval:  -1, // streamed responses (server-sent events) pass through as they come
-		ModifyResponse: ic.maskResponse,
+		Transport:     transport,
+		FlushInterval: -1, // streamed responses (server-sent events) pass through as they come
+		ModifyResponse: func(resp *http.Response) error {
+			ic.noteRejection(resp)
+			return ic.maskResponse(resp)
+		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if errors.Is(err, context.Canceled) { // the sandbox went away
 				return
@@ -251,22 +255,46 @@ func (ic *interception) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if ic.hostHeader != "" {
 		out.Host = ic.hostHeader
 	}
-	if err := ic.rewrite(out); err != nil {
+	sent := &sentSecrets{}
+	out = out.WithContext(context.WithValue(out.Context(), sentSecretsKey{}, sent))
+	if err := ic.rewrite(out, sent); err != nil {
 		ic.refuse(w, http.StatusForbidden, err.Error())
 		return
 	}
 	ic.proxy.ServeHTTP(w, out)
 }
 
+// sentSecrets are the names of the secrets whose values a request carries.
+type sentSecrets struct{ names []string }
+
+func (s *sentSecrets) add(name string) {
+	if s != nil && !slices.Contains(s.names, name) {
+		s.names = append(s.names, name)
+	}
+}
+
+type sentSecretsKey struct{}
+
+// noteRejection tells rejected when the upstream answers 401 to a request that carried
+// secrets: the values are probably wrong or expired (docs/network.md).
+func (ic *interception) noteRejection(resp *http.Response) {
+	if ic.rejected == nil || resp.StatusCode != http.StatusUnauthorized || resp.Request == nil {
+		return
+	}
+	if sent, _ := resp.Request.Context().Value(sentSecretsKey{}).(*sentSecrets); sent != nil && len(sent.names) > 0 {
+		ic.rejected(sent.names)
+	}
+}
+
 // rewrite swaps placeholders for values and sets the rule's headers.
-func (ic *interception) rewrite(r *http.Request) error {
+func (ic *interception) rewrite(r *http.Request, sent *sentSecrets) error {
 	for name, values := range r.Header {
 		for i, v := range values {
 			var err error
 			if strings.EqualFold(name, "Authorization") && len(v) > 6 && strings.EqualFold(v[:6], "Basic ") {
-				v, err = ic.substituteBasic(v)
+				v, err = ic.substituteBasic(v, sent)
 			} else {
-				v, err = ic.substitute(v, "the "+name+" header", nil)
+				v, err = ic.substitute(v, "the "+name+" header", nil, sent)
 			}
 			if err != nil {
 				return err
@@ -275,7 +303,7 @@ func (ic *interception) rewrite(r *http.Request) error {
 		}
 	}
 	if path := r.URL.EscapedPath(); path != "" {
-		escaped, err := ic.substitute(path, "the URL path", url.PathEscape)
+		escaped, err := ic.substitute(path, "the URL path", url.PathEscape, sent)
 		if err != nil {
 			return err
 		}
@@ -286,13 +314,13 @@ func (ic *interception) rewrite(r *http.Request) error {
 			}
 		}
 	}
-	query, err := ic.substitute(r.URL.RawQuery, "the URL query", url.QueryEscape)
+	query, err := ic.substitute(r.URL.RawQuery, "the URL query", url.QueryEscape, sent)
 	if err != nil {
 		return err
 	}
 	r.URL.RawQuery = query
 	for name, tmpl := range ic.headers {
-		v, err := ic.expand(name, tmpl)
+		v, err := ic.expand(name, tmpl, sent)
 		if err != nil {
 			return err
 		}
@@ -307,9 +335,9 @@ func (ic *interception) rewrite(r *http.Request) error {
 }
 
 // substitute swaps the placeholders in s for their values, escaped by escape if it isn't
-// nil. A placeholder of a secret that isn't bound to the host is refused, since sending it
-// shows the sandbox expects it to work there.
-func (ic *interception) substitute(s, where string, escape func(string) string) (string, error) {
+// nil, and notes them in sent. A placeholder of a secret that isn't bound to the host is
+// refused, since sending it shows the sandbox expects it to work there.
+func (ic *interception) substitute(s, where string, escape func(string) string, sent *sentSecrets) (string, error) {
 	if !strings.Contains(s, placeholderPrefix) {
 		return s, nil
 	}
@@ -342,6 +370,7 @@ func (ic *interception) substitute(s, where string, escape func(string) string) 
 			v = escape(v)
 		}
 		s = strings.ReplaceAll(s, b.Placeholder, v)
+		sent.add(b.Name)
 	}
 	return s, nil
 }
@@ -350,12 +379,12 @@ func (ic *interception) substitute(s, where string, escape func(string) string) 
 const placeholderPrefix = "studio-"
 
 // substituteBasic swaps placeholders inside HTTP basic credentials, which are base64.
-func (ic *interception) substituteBasic(header string) (string, error) {
+func (ic *interception) substituteBasic(header string, sent *sentSecrets) (string, error) {
 	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(header[6:]))
 	if err != nil {
-		return ic.substitute(header, "the Authorization header", nil)
+		return ic.substitute(header, "the Authorization header", nil, sent)
 	}
-	creds, err := ic.substitute(string(decoded), "the Authorization header", nil)
+	creds, err := ic.substitute(string(decoded), "the Authorization header", nil, sent)
 	if err != nil || creds == string(decoded) {
 		return header, err
 	}
@@ -374,12 +403,13 @@ func SecretRefs(value string) []string {
 }
 
 // expand resolves the {secret.NAME} references of a rule header.
-func (ic *interception) expand(header, tmpl string) (string, error) {
+func (ic *interception) expand(header, tmpl string, sent *sentSecrets) (string, error) {
 	var err error
 	v := secretRef.ReplaceAllStringFunc(tmpl, func(ref string) string {
 		name := secretRef.FindStringSubmatch(ref)[1]
 		if b, ok := named(ic.bound, name); ok {
 			if ic.tls {
+				sent.add(name)
 				return string(b.Value)
 			}
 			err = plaintextError(name, ic.host)

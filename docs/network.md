@@ -483,6 +483,23 @@ On intercepted connections (`intercept.go`):
   overlapping values included), and secret-bearing responses drop trailers. This masks
   literal values only; it can't detect an upstream that transforms a credential.
 
+### Refused secrets
+
+The sandbox only sees placeholders, so it can't tell an expired or mistyped value from any
+other failure. The gateway notes which secrets it swapped into each request, in the headers,
+path, query or a rule's `{secret.NAME}` headers, and reports a `401` answer to one with the
+names of those secrets (`Gateway.Rejected`). `internal/secretcheck` counts the reports per
+sandbox, secret and host: three within ten minutes post a `secret.rejected` card, "<host>
+refused the secret <NAME>". **Update secret** opens the secret's dialog under **Settings →
+Secrets** (`?edit=<id>`); for a provider's API key, **Update key** opens **Settings → AI
+providers**. **Not now** stops asking about that secret and host for a day. A subscription's
+token is left out: Studio refreshes it itself, and the providers page shows a sign-in that
+needs renewing.
+
+Only 401 counts. A 403 often means the credential works but lacks access to that one
+resource, which a new value wouldn't fix. Connections the gateway doesn't intercept (no
+secret bound to the host, no proxy rule) are spliced, so their statuses are never seen.
+
 ## Caddy rules
 
 A `caddy` rule's config is the body of one site block, compiled by Caddy's Caddyfile adapter

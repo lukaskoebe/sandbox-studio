@@ -33,4 +33,6 @@ A teammate's **Settings** tab has a **Secrets** section with everything its sand
 
 Use the edit control to replace a value, change its allowed hosts, or update its note. The name and scope stay the same; to change them, delete the secret and add it again. Deleting it removes it from the environment. If an agent needs the changed value, start a new session or retry its request after the secret update.
 
+When a host answers **401 Unauthorized** three times within ten minutes to requests that carried a secret, Home shows a card saying the host keeps refusing it: the value is probably wrong or expired, which the sandbox can't tell because it only sees the placeholder. **Update secret** opens the secret's edit dialog; for a provider's API key, **Update key** opens **Settings → AI providers**. **Not now** stops asking about that secret and host for a day.
+
 Provider API keys and Git forge credentials are managed under **Settings → AI providers** and **Settings → Git forges**. Studio-only Git credentials cannot be added to sandbox requests. See [Teammates and providers](../teammates-providers/) and [Git review](../git-review/).

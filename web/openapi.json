@@ -229,6 +229,10 @@
           "sandboxId": {
             "type": "string"
           },
+          "secretRejected": {
+            "$ref": "#/components/schemas/RejectedPayload",
+            "description": "A host keeps refusing a secret's value"
+          },
           "status": {
             "enum": [
               "pending",
@@ -5607,6 +5611,49 @@
         },
         "required": [
           "templateId"
+        ],
+        "type": "object"
+      },
+      "RejectedPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "The host that answered 401",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's name, as the sandbox's environment variable",
+            "type": "string"
+          },
+          "providerId": {
+            "description": "The AI provider whose key the secret is; its key is changed in Settings → AI providers",
+            "type": "string"
+          },
+          "providerName": {
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "secretId": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretId",
+          "name",
+          "host",
+          "sandboxId",
+          "sandboxName"
         ],
         "type": "object"
       },

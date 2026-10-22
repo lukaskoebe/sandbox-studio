@@ -14,6 +14,8 @@ is pending raises `attempts` instead of adding a row.
 | `git.push`, `git.pr` | a push to the virtual remote, which can open its PR; a PR proposal after a push approved by a client that doesn't offer that | `internal/gitreview` ([git review](git-review.md)) |
 | `browser.action`, `browser.credential`, `browser.control` | broker tools that need a decision; `fill_credential`; `browser_request_control` while the user drives | `internal/browser` ([browser](browser.md)) |
 | `memory.share`, `memory.conflict` | `share`, `remember` with scope `shared`, "promote to shared"; consolidation | `internal/agentmem` ([memory](memory.md)) |
+| `git.credential` | git asking credentials for a host no forge covers | `internal/gitreview` ([git review](git-review.md#credential-hints)) |
+| `secret.rejected` | a host answering 401 three times in ten minutes to requests carrying a secret | `internal/secretcheck` ([network](network.md#refused-secrets)) |
 | `chat.permission` | a permission request from an ACP agent | `internal/chat` ([chat design](design/chat-mode.md)) |
 
 Kinds other than `network` belong to an integration (`internal/integrations`): each declares
@@ -54,6 +56,11 @@ and the scope of the rule. Without an owner the scopes are the environment and t
 sandbox. For a sandbox a teammate owns, the card also offers the teammate's sandboxes, and
 starts with the scope the teammate sets (`approvalScope`, [teammates](teammates.md)). The
 response's `teammate` field carries the owner and that scope; the user can still pick another.
+
+A card for port 22 of a forge's host (`github.com`, `gitlab.com`, `codeberg.org`,
+`bitbucket.org`, or the host of a forge in Studio) is git over SSH. It says so and points to
+the repository's `https://` URL, which goes through Studio's git remote with the forge's token;
+without a forge for the host it offers **Add forge for <host>**.
 
 The pattern level is remembered per teammate: `exact` (the host itself) or `wildcard` (its
 registrable domain), whichever the last allow or deny of one of its sandboxes used. Its next

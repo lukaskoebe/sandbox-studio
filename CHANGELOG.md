@@ -20,6 +20,13 @@
   card. **Add forge** opens the Add forge dialog filled in from the repository's URL, **Not
   now** stops asking about the host for a day, and the agent reads in git's output that you
   have the card.
+- **Secrets:** when a host answers 401 three times in ten minutes to requests that carried a
+  secret, Home shows a card saying the host keeps refusing it. **Update secret** opens the
+  secret, or **Settings → AI providers** for a provider's key, and **Not now** stops asking
+  for a day.
+- **Network:** a card for git over SSH to a forge's host (port 22 of `github.com`, for
+  example) points to the repository's `https://` URL, which goes through Studio's git remote,
+  and offers to add the forge if Studio has none for the host.
 - **Updates:** Studio checks GitHub for a newer release once a day unless you turn **Updates**
   off under **Settings → General**; before, the check was off until you turned it on, and a
   choice you made stays. **Install automatically** also installs the release: Studio downloads

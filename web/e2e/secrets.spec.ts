@@ -1,5 +1,12 @@
 import type { Response } from "@playwright/test"
-import { addTeammate, expect, sandboxName, terminal, test } from "./fixtures"
+import {
+  addTeammate,
+  approvals,
+  expect,
+  sandboxName,
+  terminal,
+  test,
+} from "./fixtures"
 
 test("a secret reaches the guest only as its placeholder", async ({
   page,
@@ -131,4 +138,43 @@ test("secrets are grouped by scope, and a teammate's settings list what its sand
   const created = list!.find((s) => s.name === added)!
   expect(created.teammateId).toBe(teammateId)
   expect(created.sandboxId).toBeFalsy()
+})
+
+// A host that keeps answering 401 to a secret's value raises a card; Update secret opens it.
+test("a secret a host keeps refusing asks to be updated", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const name = sandboxName("rej")
+  const id = await api.createSandbox(name)
+  const secret = `E2E_REFUSED_${Math.random().toString(36).slice(2, 8).toUpperCase()}`
+  const created = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/secrets`,
+    { name: secret, value: "expired", hosts: ["registry.example.org"] }
+  ))!
+  try {
+    await page.goto(`/e/${env}`)
+    for (let i = 0; i < 3; i++)
+      await api.json("POST", "/api/e2e/rejected", {
+        sandboxId: id,
+        host: "registry.example.org",
+        names: [secret],
+      })
+    const card = approvals(page)
+      .getByTestId("approval-card")
+      .filter({ hasText: `registry.example.org keeps refusing ${secret}` })
+    await expect(card.getByText(/probably wrong or expired/)).toBeVisible()
+    await card.getByRole("button", { name: "Update secret" }).click()
+    await expect(page).toHaveURL(/\/settings\/secrets\?edit=/)
+    const dialog = page.getByRole("dialog", { name: "Edit secret" })
+    await expect(dialog.getByLabel("Name", { exact: true })).toHaveValue(secret)
+    await expect(card).toHaveCount(0)
+    await page.keyboard.press("Escape")
+    await expect(page).toHaveURL(/\/settings\/secrets$/)
+  } finally {
+    await api.request.delete(`/api/environments/${env}/secrets/${created.id}`)
+  }
 })

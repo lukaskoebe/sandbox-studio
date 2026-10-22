@@ -130,4 +130,4 @@ func hostLogins(string) *hostlogins.Finder {
 }
 
 // registerControl adds the e2e control API to the API mux; production has none.
-func registerControl(*http.ServeMux, *store.Store, *policy.Engine) {}
+func registerControl(*http.ServeMux, *store.Store, *policy.Engine, *gateway.Gateway) {}

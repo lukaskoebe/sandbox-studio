@@ -77,6 +77,10 @@ type Gateway struct {
 	// teammate's browser VM is decided by the agent sandbox driving it, or by its teammate
 	// while the user drives (internal/browser).
 	Driver func(ctx context.Context, sb store.Sandbox) store.Sandbox
+	// Rejected, if set, is told when an upstream answers 401 to a request whose secrets the
+	// gateway swapped in, with the names of those secrets. sb is the sandbox the secrets are
+	// the scope of.
+	Rejected func(sb store.Sandbox, host string, names []string)
 
 	names         func(sandboxID string) Names // replaces Resolvers.Names in tests
 	upstreamRoots *x509.CertPool               // replaces the system roots in tests
@@ -285,7 +289,11 @@ func (g *Gateway) handle(c net.Conn) {
 		}
 		g.Conns.opened(entry, ruleID, true)
 		verdict = VerdictAllowed
-		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate)
+		var rejected func([]string)
+		if g.Rejected != nil {
+			rejected = func(names []string) { g.Rejected(decider, host, names) }
+		}
+		sent, received, problem = g.intercept(c, br, sb.EnvironmentID, host, port, proto == "tls", rule, all, caddy, gate, rejected)
 		return
 	}
 

@@ -2714,6 +2714,8 @@ export interface components {
             reverted?: boolean;
             ruleId?: string;
             sandboxId?: string;
+            /** @description A host keeps refusing a secret's value */
+            secretRejected?: components["schemas"]["RejectedPayload"];
             /** @enum {string} */
             status: "pending" | "approved" | "denied" | "dismissed";
             subject: string;
@@ -4475,6 +4477,20 @@ export interface components {
         RebaseInBody: {
             /** @description A ready template in the same environment */
             templateId: string;
+        };
+        RejectedPayload: {
+            /** @description The host that answered 401 */
+            host: string;
+            /** @description The secret's name, as the sandbox's environment variable */
+            name: string;
+            /** @description The AI provider whose key the secret is; its key is changed in Settings → AI providers */
+            providerId?: string;
+            providerName?: string;
+            sandboxId: string;
+            sandboxName: string;
+            secretId: string;
+            teammateId?: string;
+            teammateName?: string;
         };
         RenameCheckpointInBody: {
             /** @description Human-readable checkpoint name */

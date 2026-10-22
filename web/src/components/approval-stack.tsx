@@ -19,6 +19,7 @@ import {
   MemoryConflictDecision,
 } from "@/components/memory-conflict"
 import { GitCredentialDecision } from "@/components/git-credential"
+import { SecretRejectedDecision } from "@/components/secret-rejected"
 import { MemoryShareDecision } from "@/components/memory-sessions"
 import { PermissionDecision } from "@/components/chat/permission-card"
 import { Ident } from "@/components/ident"
@@ -312,6 +313,8 @@ function ApprovalCard({
           <BrowserShowDecision approval={approval} />
         ) : approval.kind === "git.credential" ? (
           <GitCredentialDecision approval={approval} />
+        ) : approval.kind === "secret.rejected" ? (
+          <SecretRejectedDecision approval={approval} />
         ) : approval.kind === "chat.permission" && approval.chatPermission ? (
           <ChatPermissionSummary approval={approval} />
         ) : isNetworkApproval(approval) ? (

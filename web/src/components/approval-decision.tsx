@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react"
 import { useQueryClient, type QueryClient } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { CaretDownIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,73 @@ type DecideBody =
   paths["/api/environments/{env}/approvals/{id}/decide"]["post"]["requestBody"]["content"]["application/json"]
 
 const hour = 60 * 60 * 1000
+
+/** Forges whose git also answers over SSH on port 22, where an HTTPS forge does better. */
+const sshForgeHosts = new Set([
+  "github.com",
+  "gitlab.com",
+  "codeberg.org",
+  "bitbucket.org",
+])
+
+/**
+ * Git over SSH to a forge's host (git@github.com:…) asks for port 22. Studio's git remote
+ * works over HTTPS, with the forge's token, so the card offers that instead: the forge
+ * Studio has for the host, or the Add forge dialog for it.
+ */
+function SSHForgeHint({ approval }: { approval: Approval }) {
+  const net = approval.network
+  const env = approval.environmentId
+  const navigate = useNavigate()
+  const forges = $api.useQuery("get", "/api/environments/{env}/forges", {
+    params: { path: { env } },
+  }).data
+  if (!net || net.port !== 22) return null
+  const host = net.host.toLowerCase()
+  const forge = forges?.find((f) => {
+    try {
+      return f.kind !== "ssh" && new URL(f.baseUrl).hostname === host
+    } catch {
+      return false
+    }
+  })
+  if (!forge && !sshForgeHosts.has(host)) return null
+  return (
+    <div className="grid gap-1.5 rounded-md bg-muted px-2.5 py-2 text-xs/relaxed text-muted-foreground">
+      {forge ? (
+        <p>
+          This is git over SSH. Studio has the forge{" "}
+          <span className="text-foreground">{forge.name}</span> for {host}: the
+          repository's <span className="font-mono">https://{host}/</span> URL
+          goes through Studio's git remote, with no key in the sandbox.
+        </p>
+      ) : (
+        <>
+          <p>
+            This is git over SSH. With a forge for {host}, the repository's{" "}
+            <span className="font-mono">https://{host}/</span> URL goes through
+            Studio's git remote instead, with no key in the sandbox.
+          </p>
+          <div>
+            <Button
+              size="xs"
+              variant="outline"
+              onClick={() =>
+                void navigate({
+                  to: "/e/$env/settings/forges",
+                  params: { env },
+                  search: { add: `https://${host}/` },
+                })
+              }
+            >
+              Add forge for {host}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 /** The host-pattern toggle's value for a rule that names a request's method and path. */
 const REQUEST_LEVEL = "request"
@@ -430,6 +498,7 @@ export function ApprovalDecision({
 
   return (
     <div className="grid grid-cols-1 gap-2">
+      <SSHForgeHint approval={approval} />
       {net?.method && (
         <div className="grid gap-0.5 text-xs">
           <p className="truncate font-mono" title={`${net.method} ${net.path}`}>

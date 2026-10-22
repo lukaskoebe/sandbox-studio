@@ -409,3 +409,26 @@ test("a rule made from an approval keeps the note written on it, or one that say
     "pip installs for the docs build"
   )
 })
+
+// git over SSH to a forge's host asks for port 22; the card points to the HTTPS URL and
+// Studio's git remote instead.
+test("a connection to a forge's SSH port offers a forge", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const id = await api.createSandbox(sandboxName("ssh"))
+  await page.goto(`/e/${env}`)
+  await api.connect(id, "codeberg.org", 22)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "codeberg.org" })
+  await expect(card.getByText(/This is git over SSH/)).toBeVisible()
+  await card.getByRole("button", { name: "Add forge for codeberg.org" }).click()
+  await expect(page).toHaveURL(/\/settings\/forges\?add=/)
+  await expect(
+    page.getByRole("dialog", { name: "Add forge" }).getByLabel("Repository URL")
+  ).toHaveValue("https://codeberg.org/")
+  await api.dismissApprovals()
+})
