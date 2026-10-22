@@ -41,12 +41,13 @@ import { Spinner } from "@/components/ui/spinner"
 import {
   useInvalidateSandboxes,
   useSandboxLifecycle,
+  wakeAction,
 } from "@/components/sandbox-lifecycle"
 import { $api, errorMessage, type Sandbox } from "@/lib/api/client"
 
 /**
  * The actions that are not on a sandbox's everyday path, on both of its pages: fork,
- * rebase, export, suspend or resume, stop and delete.
+ * rebase, export, start, suspend or resume, stop and delete.
  */
 export function SandboxOptionsMenu({
   env,
@@ -58,7 +59,14 @@ export function SandboxOptionsMenu({
   const [dialog, setDialog] = useState<
     "history" | "fork" | "another" | "rebase" | "delete"
   >()
-  const { path, stop, suspend, resume, phase: p } = useSandboxLifecycle(env, sb)
+  const {
+    path,
+    start,
+    stop,
+    suspend,
+    resume,
+    phase: p,
+  } = useSandboxLifecycle(env, sb)
   // A create or fork that runs or failed has no guest yet; only deleting it makes sense.
   const building = sb.status === "creating" || sb.status === "failed"
   const available = sb.status === "running" || sb.status === "stopped"
@@ -166,6 +174,18 @@ export function SandboxOptionsMenu({
                   </DropdownMenuItem>
                 )}
               </DropdownMenuGroup>
+            </>
+          )}
+          {!building && wakeAction(sb) === "start" && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={start.isPending}
+                onClick={() => start.mutate(path)}
+              >
+                {start.isPending ? <Spinner /> : <PlayIcon />}
+                Start
+              </DropdownMenuItem>
             </>
           )}
           {!building &&

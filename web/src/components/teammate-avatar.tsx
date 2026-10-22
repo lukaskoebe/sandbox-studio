@@ -85,6 +85,7 @@ const presenceDots: Record<Presence, string> = {
   working: "bg-(--st-running) animate-pulse",
   waiting: "bg-(--st-waiting)",
   idle: "bg-(--st-stopped)",
+  offline: "ring-1 ring-(--st-stopped) ring-inset",
 }
 
 /** A teammate's presence as a dot. The words go in the title and beside it where there is room. */

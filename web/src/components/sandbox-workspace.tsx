@@ -30,7 +30,7 @@ import {
   gitReviewDescription,
   isGitApproval,
 } from "@/components/git-review"
-import { StartButton } from "@/components/sandbox-lifecycle"
+import { StartButton, WakeButton } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxButton } from "@/components/sandbox-options-menu"
 import { useSandboxPage } from "@/components/sandbox-page"
 import {
@@ -814,6 +814,9 @@ function TerminalPane({
             Resume it to continue where it left off.
           </EmptyDescription>
         </EmptyHeader>
+        <EmptyContent>
+          <WakeButton env={env} sandbox={sb} />
+        </EmptyContent>
       </Empty>
     )
   if (sessionsPending) return <Spinner className="m-auto" />

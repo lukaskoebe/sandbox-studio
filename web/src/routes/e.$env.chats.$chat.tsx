@@ -16,6 +16,8 @@ import {
   WorkspacePanel,
 } from "@/components/chat/workspace-panel"
 import { PageHeader } from "@/components/page-header"
+import { phase, phaseDot } from "@/components/status-badge"
+import { StatusDot } from "@/components/status-dot"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import {
   AlertDialog,
@@ -53,6 +55,12 @@ function ChatPage() {
   const chat = log.chat
   const panel = useWorkspacePanel()
   const owner = teammates.data?.find((t) => t.id === chat?.teammateId)
+  const sandbox = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}",
+    { params: { path: { env, id: chat?.sandboxId ?? "" } } },
+    { enabled: !!chat, refetchInterval: 5000 }
+  )
   const teammateName = owner?.name ?? "Teammate"
 
   const label = (t: ChatTurn) => requestLabel(log.items, t)
@@ -125,6 +133,9 @@ function ChatPage() {
           >
             <CubeIcon />
             <span className="max-sm:sr-only">Sandbox</span>
+            {sandbox.data && (
+              <StatusDot {...phaseDot(phase(sandbox.data))} compact />
+            )}
           </Button>
           {(chat.state === "idle" || chat.state === "running") && (
             <OpenInTerminal env={env} chat={chat} />

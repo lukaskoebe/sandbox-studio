@@ -34,11 +34,15 @@ test("sandbox lifecycle: create, terminal, stop, start, delete", async ({
   ).toBeVisible()
   expect((await api.guest(id)).connected).toBe(false)
 
-  // The stopped workspace offers Start too.
+  // The stopped workspace offers Start too, as does the header.
   await page.keyboard.press("Escape")
+  await expect(
+    page.getByRole("main").getByRole("button", { name: "Start", exact: true })
+  ).toHaveCount(2)
   await page
     .getByRole("main")
     .getByRole("button", { name: "Start", exact: true })
+    .last()
     .click()
   await term.run("echo back")
   await expect(term.line("back")).toHaveCount(1)

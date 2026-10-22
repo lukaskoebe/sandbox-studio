@@ -183,3 +183,50 @@ test("a chat started from the workspace opens in the workspace", async ({
   await page.waitForTimeout(1500)
   await expect(page).toHaveURL(/\/work\?chat=/)
 })
+
+// A chat whose sandbox is down says so above the composer, and its button brings it back; the
+// teammate's header and computer card start it too.
+test("a chat says when its sandbox is suspended or stopped, and starts it", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Sleepy ${Math.random().toString(36).slice(2, 6)}`
+  const teammate = await addTeammate(api, env, name)
+  const sbName = sandboxName("asleep")
+  const id = await api.createSandbox(sbName, teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  const lifecycle = (action: string) =>
+    api.json("POST", `/api/environments/${env}/sandboxes/${id}/${action}`)
+
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  const main = page.getByRole("main")
+  const banner = main.getByRole("status").filter({ hasText: sbName })
+  await expect(main.getByRole("textbox", { name: "Message" })).toBeVisible()
+  await expect(banner).toHaveCount(0)
+
+  await lifecycle("suspend")
+  await expect(banner).toContainText(`${sbName} is suspended.`)
+  await banner.getByRole("button", { name: "Resume" }).click()
+  await expect(banner).toHaveCount(0)
+
+  await lifecycle("stop")
+  await expect(banner).toContainText(`${sbName} is stopped.`)
+
+  // The teammate is offline, and its header starts its one sandbox.
+  await page.goto(`/e/${env}/teammates/${teammate}`)
+  const header = page.locator('[data-slot="page-header"]')
+  await expect(header).toContainText("Offline")
+  await expect(
+    main.getByRole("status").filter({ hasText: sbName })
+  ).toContainText("is stopped.")
+  await header.getByRole("button", { name: "Start", exact: true }).click()
+  await expect(header).not.toContainText("Offline", { timeout: 20_000 })
+  await expect(
+    header.getByRole("button", { name: "Start", exact: true })
+  ).toHaveCount(0)
+})

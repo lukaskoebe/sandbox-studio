@@ -16,6 +16,7 @@ import {
   ListChecksIcon,
   PlusIcon,
   SparkleIcon,
+  StopIcon,
   TerminalWindowIcon,
   WarningIcon,
   type Icon,
@@ -39,6 +40,11 @@ import { Markdown } from "@/components/chat/markdown"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { toolKind } from "@/components/chat/tool-call-card"
+import {
+  SandboxStateBanner,
+  useSandboxLifecycle,
+  WakeButton,
+} from "@/components/sandbox-lifecycle"
 import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { TeammateAvatar } from "@/components/teammate-avatar"
@@ -952,6 +958,7 @@ function TeammateComposer({
 
   return (
     <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-4 pb-4">
+      {mode !== "teach" && <SandboxStateBanner env={env} sandbox={sandbox} />}
       {continuing?.state === "running" && (
         <QueuedPrompts
           env={env}
@@ -1037,6 +1044,7 @@ function SandboxPicker({
     <label className="ml-auto inline-flex h-6 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground">
       <CubeIcon className="size-3.5" />
       in
+      {value && <StatusDot {...phaseDot(phase(value))} compact />}
       <span className="relative inline-flex items-center">
         <select
           value={value?.id}
@@ -1046,7 +1054,9 @@ function SandboxPicker({
         >
           {sandboxes.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name}
+              {phase(s) === "ready"
+                ? s.name
+                : `${s.name} (${phaseDot(phase(s)).label.toLowerCase()})`}
             </option>
           ))}
         </select>
@@ -1325,23 +1335,29 @@ function Computer({
           {sandboxes.map((sb) => {
             const there = waiting.filter((a) => a.sandboxId === sb.id).length
             const talks = chats.filter((c) => c.sandboxId === sb.id).length
+            // The whole card opens the sandbox; its power button sits above the link.
             return (
-              <Link
+              <div
                 key={sb.id}
-                to="/e/$env/sandboxes/$id"
-                params={{ env, id: sb.id }}
-                className="grid gap-0.5 rounded-md border bg-card px-2.5 py-2 hover:border-foreground/25"
+                className="relative grid gap-0.5 rounded-md border bg-card px-2.5 py-2 hover:border-foreground/25"
               >
                 <span className="flex items-center gap-1.5">
                   <StatusDot {...phaseDot(phase(sb))} compact />
-                  <span className="truncate font-mono font-semibold">
+                  <Link
+                    to="/e/$env/sandboxes/$id"
+                    params={{ env, id: sb.id }}
+                    className="truncate font-mono font-semibold after:absolute after:inset-0 after:rounded-md"
+                  >
                     {sb.name}
+                  </Link>
+                  <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                    {there > 0 && (
+                      <span className="text-(--st-waiting-fg)">
+                        {there} waiting
+                      </span>
+                    )}
+                    <Power env={env} sandbox={sb} />
                   </span>
-                  {there > 0 && (
-                    <span className="ml-auto shrink-0 text-(--st-waiting-fg)">
-                      {there} waiting
-                    </span>
-                  )}
                 </span>
                 <span className="truncate text-muted-foreground">
                   {[
@@ -1357,7 +1373,7 @@ function Computer({
                     ? "No chats yet"
                     : `${talks} ${talks === 1 ? "chat" : "chats"}`}
                 </span>
-              </Link>
+              </div>
             )
           })}
         </div>
@@ -1377,6 +1393,30 @@ function Computer({
         onOpenChange={(o) => !o && setDialog(undefined)}
       />
     </RailSection>
+  )
+}
+
+/** A computer card's power button: Start or Resume while it is down, Stop while it runs. */
+function Power({ env, sandbox }: { env: string; sandbox: Sandbox }) {
+  const { path, stop, phase: p } = useSandboxLifecycle(env, sandbox)
+  if (p !== "ready" && p !== "booting")
+    return (
+      <span className="relative z-10">
+        <WakeButton env={env} sandbox={sandbox} size="xs" variant="outline" />
+      </span>
+    )
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      className="relative z-10"
+      aria-label={`Stop ${sandbox.name}`}
+      title={`Stop ${sandbox.name}; its disk is kept`}
+      disabled={stop.isPending}
+      onClick={() => stop.mutate(path)}
+    >
+      {stop.isPending ? <Spinner /> : <StopIcon />}
+    </Button>
   )
 }
 

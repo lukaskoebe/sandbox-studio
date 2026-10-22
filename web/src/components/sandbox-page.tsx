@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import { PageHeader } from "@/components/page-header"
 import { CheckpointButton, SandboxDetails } from "@/components/sandbox-details"
+import { WakeButton } from "@/components/sandbox-lifecycle"
 import { SandboxOptionsMenu } from "@/components/sandbox-options-menu"
 import { $api, type Sandbox } from "@/lib/api/client"
 
@@ -32,7 +33,8 @@ export function useSandboxPage() {
 
 /**
  * The sandbox's header: whose it is and its name, a pill with its state that opens its details,
- * a checkpoint button and the menu of what is off the everyday path.
+ * Start or Resume while it is down, a checkpoint button and the menu of what is off the
+ * everyday path.
  */
 export function SandboxHeader({ env, sandbox: sb }: SandboxPage) {
   const teammates = $api.useQuery(
@@ -62,6 +64,7 @@ export function SandboxHeader({ env, sandbox: sb }: SandboxPage) {
         </h1>
       </div>
       <SandboxDetails env={env} sandbox={sb} />
+      <WakeButton env={env} sandbox={sb} size="sm" />
       <span className="flex-1" />
       <CheckpointButton env={env} sandbox={sb} />
       <SandboxOptionsMenu env={env} sandbox={sb} />

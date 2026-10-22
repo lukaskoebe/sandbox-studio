@@ -12,6 +12,7 @@ import { Readiness } from "@/components/teammate-readiness"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePresence, presenceLabels } from "@/hooks/use-teammate-presence"
+import { WakeButton } from "@/components/sandbox-lifecycle"
 import { $api } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 
@@ -66,9 +67,15 @@ function TeammateLayout() {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
+  const sandboxes = $api.useQuery("get", "/api/environments/{env}/sandboxes", {
+    params: { path: { env } },
+  })
   const presence = usePresence(env)
   const state = presence(id)
   const teammate = teammates.data?.find((p) => p.id === id)
+  // A teammate with one sandbox is started from here, on any screen: the rail is for wide ones.
+  const mine = (sandboxes.data ?? []).filter((sb) => sb.teammateId === id)
+  const computer = mine.length === 1 ? mine[0] : undefined
   const active = tabs.find((t) => matchRoute({ to: t.to, params: { env, id } }))
   const chats = !!matchRoute({
     to: "/e/$env/teammates/$id/chats",
@@ -100,6 +107,7 @@ function TeammateLayout() {
           </span>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {computer && <WakeButton env={env} sandbox={computer} size="sm" />}
           <Readiness
             teammate={teammate}
             provider={providers.data?.find((p) => p.id === teammate.providerId)}

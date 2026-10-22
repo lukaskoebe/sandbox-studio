@@ -11,6 +11,7 @@ import { Composer, type Prompt } from "@/components/chat/composer"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { TurnFooter } from "@/components/chat/turn-footer"
+import { SandboxStateBanner } from "@/components/sandbox-lifecycle"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -267,6 +268,12 @@ function ChatComposer({
   const [error, setError] = useState<string>()
   const [insert, setInsert] = useState<{ id: string; text: string }>()
   const path = { env, chat: chat.id }
+  const sandbox = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}",
+    { params: { path: { env, id: chat.sandboxId } } },
+    { refetchInterval: 5000 }
+  )
 
   if (chat.state === "terminal") return <InTerminal env={env} chat={chat} />
   if (chat.state === "orphaned") {
@@ -319,6 +326,7 @@ function ChatComposer({
 
   return (
     <>
+      <SandboxStateBanner env={env} sandbox={sandbox.data} />
       <QueuedPrompts
         env={env}
         chatId={chat.id}
