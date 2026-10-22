@@ -15,6 +15,7 @@ import { Ident } from "@/components/ident"
 import { SecretDialog } from "@/components/secret-dialog"
 import {
   DeleteSecret,
+  ManagedHint,
   SecretHosts,
   SecretName,
   editable,
@@ -89,7 +90,7 @@ export function TeammateSecrets({
                 <TableHead>Name</TableHead>
                 <TableHead>Scope</TableHead>
                 <TableHead>Hosts</TableHead>
-                <TableHead>
+                <TableHead className="sticky right-0 bg-card">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
@@ -115,8 +116,8 @@ export function TeammateSecrets({
                   <TableCell className="whitespace-normal">
                     <SecretHosts secret={row.secret} />
                   </TableCell>
-                  <TableCell>
-                    {!row.inherited && editable(row.secret, managed) && (
+                  <TableCell className="sticky right-0 bg-card">
+                    {row.inherited ? null : editable(row.secret, managed) ? (
                       <div className="flex justify-end gap-0.5">
                         <Button
                           variant="ghost"
@@ -127,6 +128,14 @@ export function TeammateSecrets({
                           <PencilSimpleIcon />
                         </Button>
                         <DeleteSecret env={env} secret={row.secret} />
+                      </div>
+                    ) : (
+                      <div className="flex justify-end">
+                        <ManagedHint
+                          env={env}
+                          secret={row.secret}
+                          managed={managed}
+                        />
                       </div>
                     )}
                   </TableCell>

@@ -23,7 +23,7 @@ export function DisclosureCard({
   children: ReactNode
 }) {
   return (
-    <div className="rounded-lg bg-card ring-1 ring-foreground/10">
+    <div className="min-w-0 rounded-lg bg-card ring-1 ring-foreground/10">
       <button
         type="button"
         aria-expanded={open}
@@ -34,7 +34,10 @@ export function DisclosureCard({
         <span className="w-32 shrink-0 text-[0.8125rem] font-semibold sm:w-40">
           {title}
         </span>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <span
+          title={typeof summary === "string" ? summary : undefined}
+          className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+        >
           {summary}
         </span>
         <CaretRightIcon

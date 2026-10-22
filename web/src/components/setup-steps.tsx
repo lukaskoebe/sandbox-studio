@@ -65,7 +65,7 @@ export function SetupStepBody({ step, env }: { step: SetupKey; env: string }) {
 }
 
 function Column({ children }: { children: ReactNode }) {
-  return <div className="grid gap-3">{children}</div>
+  return <div className="grid grid-cols-1 gap-3">{children}</div>
 }
 
 function Hint({ children }: { children: ReactNode }) {

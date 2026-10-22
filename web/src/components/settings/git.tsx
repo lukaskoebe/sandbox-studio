@@ -117,7 +117,7 @@ export function GitSettings({ env }: { env: string }) {
                     <TableHead>Name</TableHead>
                     <TableHead>Forge</TableHead>
                     <TableHead>Remote URL</TableHead>
-                    <TableHead>
+                    <TableHead className="sticky right-0 bg-background">
                       <span className="sr-only">Actions</span>
                     </TableHead>
                   </TableRow>
@@ -340,7 +340,7 @@ function ForgeRow({
           </Button>
         </div>
       </TableCell>
-      <TableCell className="align-top">
+      <TableCell className="sticky right-0 bg-background align-top">
         <div className="flex justify-end gap-0.5">
           {forge.kind === "ssh" ? (
             <Button

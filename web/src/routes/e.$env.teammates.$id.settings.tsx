@@ -67,7 +67,7 @@ function TeammateSettings() {
   if (!teammate || !providers.data) return null
 
   return (
-    <div className="grid max-w-3xl gap-2.5">
+    <div className="grid max-w-3xl grid-cols-1 gap-2.5">
       <TeammateForm
         key={teammate.id}
         env={env}

@@ -32,6 +32,7 @@ import {
   DeleteSecret,
   SecretHosts,
   SecretName,
+  ManagedHint,
   SecretPlaceholder,
   editable,
   useManagedSecrets,
@@ -196,7 +197,7 @@ function ScopeSection({
         }
       />
       <div className="rounded-lg ring-1 ring-foreground/10">
-        <Table className="min-w-[46rem] table-fixed">
+        <Table className="min-w-[40rem] table-fixed">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[28%]">Name</TableHead>
@@ -204,7 +205,7 @@ function ScopeSection({
               <TableHead className="w-[20%]">Placeholder</TableHead>
               <TableHead>Note</TableHead>
               <TableHead className="w-24">Updated</TableHead>
-              <TableHead className="w-20">
+              <TableHead className="sticky right-0 w-24 bg-background">
                 <span className="sr-only">Actions</span>
               </TableHead>
             </TableRow>
@@ -227,8 +228,8 @@ function ScopeSection({
                 <TableCell className="text-muted-foreground">
                   {formatAge(s.updatedAt)}
                 </TableCell>
-                <TableCell>
-                  {editable(s, managed) && (
+                <TableCell className="sticky right-0 bg-background">
+                  {editable(s, managed) ? (
                     <div className="flex justify-end gap-0.5">
                       <Button
                         variant="ghost"
@@ -239,6 +240,10 @@ function ScopeSection({
                         <PencilSimpleIcon />
                       </Button>
                       <DeleteSecret env={env} secret={s} />
+                    </div>
+                  ) : (
+                    <div className="flex justify-end">
+                      <ManagedHint env={env} secret={s} managed={managed} />
                     </div>
                   )}
                 </TableCell>

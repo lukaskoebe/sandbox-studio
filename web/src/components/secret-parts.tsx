@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { CopyIcon, TrashIcon } from "@phosphor-icons/react"
 import {
@@ -37,6 +38,36 @@ export function useManagedSecrets(env: string) {
 /** Whether a secret can be edited and deleted from a list. */
 export function editable(secret: Secret, managed: Map<string, string>) {
   return !managed.has(secret.id) && !secret.studioOnly
+}
+
+/**
+ * Where a secret Studio manages is changed instead: the provider that holds the key, or the forge
+ * that holds the token.
+ */
+export function ManagedHint({
+  env,
+  secret,
+  managed,
+}: {
+  env: string
+  secret: Secret
+  managed: Map<string, string>
+}) {
+  const provider = managed.get(secret.id)
+  return (
+    <Link
+      to={provider ? "/e/$env/settings/providers" : "/e/$env/settings/forges"}
+      params={{ env }}
+      title={
+        provider
+          ? `Studio manages this key for the provider ${provider}: edit or remove it there`
+          : "Studio manages this credential for a git forge: replace or remove it there"
+      }
+      className="text-xs whitespace-nowrap text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+    >
+      {provider ? "In Providers" : "In Git forges"}
+    </Link>
+  )
 }
 
 /** A secret's name in mono, with a badge when Studio manages it. */

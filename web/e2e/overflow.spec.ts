@@ -130,3 +130,32 @@ test("the setup card on Home and the setup fit a phone", async ({
     })
   }
 })
+
+for (const width of [390, 1440])
+  test(`a teammate's settings fit the page at ${width}px with a long soul`, async ({
+    page,
+    api,
+    env,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const id = await addTeammate(
+      api,
+      env,
+      `a-teammate-${Math.random().toString(36).slice(2, 8)}`
+    )
+    const { name, harness, providerId, model } = (await api.json<
+      Record<string, string>
+    >("GET", `/api/environments/${env}/teammates/${id}`))!
+    // The soul's first line is the card's summary: one paragraph, much wider than the page.
+    await api.json("PUT", `/api/environments/${env}/teammates/${id}`, {
+      name,
+      harness,
+      providerId,
+      model,
+      soul: "You are careful and thorough, ".repeat(40),
+    })
+
+    await page.goto(`/e/${env}/teammates/${id}/settings`)
+    await expect(page.getByRole("button", { name: /^Soul/ })).toBeVisible()
+    expect(await overflowing(page.getByRole("main"))).toEqual([])
+  })

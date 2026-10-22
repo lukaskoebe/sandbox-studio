@@ -248,7 +248,7 @@ export function TeammateForm({
   return (
     <FormSections.Provider value={sections && { ...sections, saveRow }}>
       <form
-        className={cn("grid", sections ? "gap-2.5" : "gap-6")}
+        className={cn("grid grid-cols-1", sections ? "gap-2.5" : "gap-6")}
         onSubmit={(e) => {
           e.preventDefault()
           submit()
