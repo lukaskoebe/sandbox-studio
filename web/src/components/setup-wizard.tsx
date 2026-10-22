@@ -10,6 +10,7 @@ import {
   firstOpenStep,
   setupSteps,
   useSetup,
+  type SetupKey,
   type SetupSteps,
 } from "@/lib/setup"
 import { cn } from "@/lib/utils"
@@ -27,7 +28,7 @@ const outcomeWords: Record<Outcome | "todo", string> = {
  * the buttons to move on. Steps are skippable and resumable: the setup opens on the first step
  * without an outcome, and any row can be picked.
  */
-export function SetupWizard({ env }: { env: string }) {
+export function SetupWizard({ env, step }: { env: string; step?: SetupKey }) {
   const { setup, record, saving, isPending, error } = useSetup(env)
   if (!setup)
     return isPending ? (
@@ -37,7 +38,15 @@ export function SetupWizard({ env }: { env: string }) {
         {error ? errorMessage(error) : "The setup could not be loaded."}
       </p>
     )
-  return <Stepper env={env} setup={setup} record={record} saving={saving} />
+  return (
+    <Stepper
+      env={env}
+      setup={setup}
+      record={record}
+      saving={saving}
+      step={step}
+    />
+  )
 }
 
 /**
@@ -49,14 +58,20 @@ function Stepper({
   setup,
   record,
   saving,
+  step: initial,
 }: {
   env: string
   setup: Setup
   record: (steps: SetupSteps) => void
   saving: boolean
+  /** The step to open in place of the first open one. */
+  step?: SetupKey
 }) {
   const navigate = useNavigate()
-  const [current, setCurrent] = useState(() => firstOpenStep(setup))
+  const [current, setCurrent] = useState(() => {
+    const i = setupSteps.findIndex((s) => s.key === initial)
+    return i >= 0 ? i : firstOpenStep(setup)
+  })
   const last = setupSteps.length - 1
   // Records the step's outcome with the others as they stand. The last step ends the setup on
   // Home; any other moves to the next row.

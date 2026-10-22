@@ -41,9 +41,14 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await expect(page.getByText("Anthropic", { exact: true })).toBeVisible()
     await next().click()
 
-    // Teammate: the first provider brought Iris along; accept her as she is.
+    // Teammate: the first provider brought Iris along. Her settings lead back to this step;
+    // accept her as she is.
     await open("Teammate")
     await expect(page.getByText("Iris", { exact: true })).toBeVisible()
+    await page.getByRole("link", { name: "Edit", exact: true }).click()
+    await expect(page).toHaveURL(/\/teammates\/[^/]+\/settings\?from=setup/)
+    await page.getByRole("link", { name: "Back to setup" }).click()
+    await open("Teammate")
     await page.getByRole("button", { name: "Accept", exact: true }).click()
 
     // Git: no forge yet, so leave it. Going Home in the middle shows where the setup stands,
@@ -81,6 +86,8 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     ).toBeVisible({ timeout: 30_000 })
     await page.getByRole("link", { name: "Open workspace" }).click()
     await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+\/work(\?|$)/)
+    await page.getByRole("link", { name: "Back to setup" }).click()
+    await open("First sandbox")
 
     // Every step is done or skipped now, so the setup is complete and Home has no card.
     await page.goto("/")

@@ -16,6 +16,7 @@ import {
   CheckIcon,
   GearIcon,
   GitBranchIcon,
+  GlobeSimpleIcon,
   PlusIcon,
   RobotIcon,
   TrayIcon,
@@ -70,6 +71,7 @@ import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
 import { isGitApproval } from "@/components/git-review"
+import { isNetworkApproval } from "@/lib/approval-kinds"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { presenceLabels, usePresence } from "@/hooks/use-teammate-presence"
 import {
@@ -135,9 +137,11 @@ export function AppSidebar({ env }: { env: string }) {
   const waiting = new Map<string, number>()
   const reviews: Approval[] = []
   let envWaiting = 0
+  let networkWaiting = 0
   for (const a of approvals.data ?? []) {
     if (a.environmentId !== env) continue
     envWaiting++
+    if (isNetworkApproval(a)) networkWaiting++
     if (a.sandboxId)
       waiting.set(a.sandboxId, (waiting.get(a.sandboxId) ?? 0) + 1)
     if (isGitApproval(a)) reviews.push(a)
@@ -149,11 +153,17 @@ export function AppSidebar({ env }: { env: string }) {
     waiting,
   }
   const matchRoute = useMatchRoute()
-  const settingsOpen = !!matchRoute({
-    to: "/e/$env/settings",
+  const networkOpen = !!matchRoute({
+    to: "/e/$env/settings/network",
     params: { env },
-    fuzzy: true,
   })
+  const settingsOpen =
+    !networkOpen &&
+    !!matchRoute({
+      to: "/e/$env/settings",
+      params: { env },
+      fuzzy: true,
+    })
   const all = sandboxes.data ?? []
   // A sandbox whose teammate is gone counts as without one; until the teammates load, only
   // a sandbox that never had one does.
@@ -193,6 +203,18 @@ export function AppSidebar({ env }: { env: string }) {
                 <TrayIcon />
                 <span className="min-w-0 flex-1 truncate">Home</span>
                 <WaitingCount count={envWaiting} />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="sm"
+                tooltip="Network"
+                isActive={networkOpen}
+                render={<SettingsLink section="network" />}
+              >
+                <GlobeSimpleIcon />
+                <span className="min-w-0 flex-1 truncate">Network</span>
+                <WaitingCount count={networkWaiting} />
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
@@ -309,7 +331,7 @@ export function AppSidebar({ env }: { env: string }) {
                 </span>
               ) : (
                 <span className="ml-auto truncate text-[0.625rem] text-muted-foreground">
-                  network, git, keys
+                  git, keys, providers
                 </span>
               )}
             </SidebarMenuButton>

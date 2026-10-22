@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { BackToSetup, fromSetup } from "@/components/back-to-setup"
 import { BrowserSettings } from "@/components/browser-settings"
 import { DisclosureCard } from "@/components/disclosure-card"
 import {
@@ -31,9 +32,13 @@ import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 import { heartbeatSentence } from "@/lib/tasks"
 
 export const Route = createFileRoute("/e/$env/teammates/$id/settings")({
-  // The section that is open, so a link can open one: ?open=checkins.
-  validateSearch: (s: Record<string, unknown>): { open?: string } =>
-    typeof s.open === "string" && s.open !== "" ? { open: s.open } : {},
+  // The section that is open, so a link can open one: ?open=checkins. ?from=setup links back.
+  validateSearch: (
+    s: Record<string, unknown>
+  ): { open?: string; from?: "setup" } => ({
+    ...(typeof s.open === "string" && s.open !== "" ? { open: s.open } : {}),
+    ...fromSetup(s),
+  }),
   component: TeammateSettings,
 })
 
@@ -51,10 +56,13 @@ function TeammateSettings() {
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  const open = Route.useSearch().open
+  const { open, from } = Route.useSearch()
   const navigate = Route.useNavigate()
   const setOpen = (section: string | undefined) =>
-    navigate({ search: section ? { open: section } : {}, replace: true })
+    navigate({
+      search: (prev) => ({ from: prev.from, open: section }),
+      replace: true,
+    })
   const card = (section: string, title: string, summary: ReactNode) => ({
     id: `teammate-${section}`,
     title,
@@ -68,6 +76,7 @@ function TeammateSettings() {
 
   return (
     <div className="grid max-w-3xl grid-cols-1 gap-2.5">
+      {from === "setup" && <BackToSetup step="teammate" />}
       <TeammateForm
         key={teammate.id}
         env={env}

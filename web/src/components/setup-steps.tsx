@@ -207,6 +207,7 @@ function TeammateRow({ env, teammate }: { env: string; teammate: Teammate }) {
         <Link
           to="/e/$env/teammates/$id/settings"
           params={{ env, id: teammate.id }}
+          search={{ from: "setup" }}
           className="ml-auto underline underline-offset-4"
         >
           Edit
@@ -333,6 +334,7 @@ function SandboxStep({ env }: { env: string }) {
                 <Link
                   to="/e/$env/sandboxes/$id/work"
                   params={{ env, id: latest.id }}
+                  search={{ from: "setup" }}
                 />
               }
             >

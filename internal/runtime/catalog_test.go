@@ -27,3 +27,17 @@ func TestCatalogErrorNamesTheFix(t *testing.T) {
 		t.Fatal("other errors must pass through")
 	}
 }
+
+func TestCatalogBusy(t *testing.T) {
+	for msg, want := range map[string]bool{
+		"Database error: error returned from database: (code: 5) database is locked": true,
+		"database table is locked":                            true,
+		"pool timed out while waiting for an open connection": true,
+		"database disk image is malformed":                    false,
+		"sandbox not found: ss-a-g1":                          false,
+	} {
+		if got := catalogBusy(errors.New(msg)); got != want {
+			t.Errorf("catalogBusy(%q) = %v, want %v", msg, got, want)
+		}
+	}
+}

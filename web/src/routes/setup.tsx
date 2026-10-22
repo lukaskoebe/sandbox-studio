@@ -3,14 +3,21 @@ import { SetupWizard } from "@/components/setup-wizard"
 import { Spinner } from "@/components/ui/spinner"
 import { $api } from "@/lib/api/client"
 import { lastEnvironment } from "@/lib/environment"
+import { setupSteps, type SetupKey } from "@/lib/setup"
 
 // The guided setup. It sits outside an environment's layout: it works on the
 // environment last opened here, or the first one.
 export const Route = createFileRoute("/setup")({
+  // The step to open, so a page the setup links to comes back to it: ?step=teammate.
+  validateSearch: (s: Record<string, unknown>): { step?: SetupKey } => {
+    const step = setupSteps.find((st) => st.key === s.step)?.key
+    return step ? { step } : {}
+  },
   component: SetupPage,
 })
 
 function SetupPage() {
+  const { step } = Route.useSearch()
   const envs = $api.useQuery("get", "/api/environments")
   const last = lastEnvironment()
   const env = envs.data?.find((e) => e.id === last) ?? envs.data?.at(0)
@@ -31,7 +38,7 @@ function SetupPage() {
         )}
       </header>
       {env ? (
-        <SetupWizard env={env.id} />
+        <SetupWizard env={env.id} step={step} />
       ) : envs.isPending ? (
         <Spinner className="mx-auto block" />
       ) : (

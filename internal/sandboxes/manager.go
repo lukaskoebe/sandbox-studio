@@ -720,6 +720,7 @@ func (m *Manager) DialPreviewTCP(ctx context.Context, sandboxID string, port int
 func (m *Manager) view(ctx context.Context, rec store.Sandbox) (View, error) {
 	st, err := m.Runtime.Status(ctx, VMName(rec))
 	if err != nil {
+		m.Log.Warn("sandbox status", "sandbox", rec.ID, "vm", VMName(rec), "err", err)
 		return View{}, err
 	}
 	name := ""

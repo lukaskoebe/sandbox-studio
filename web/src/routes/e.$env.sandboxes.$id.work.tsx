@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { BackToSetup, fromSetup } from "@/components/back-to-setup"
 import {
   SandboxWorkspace,
   workspacePanels,
@@ -19,11 +20,13 @@ export const Route = createFileRoute("/e/$env/sandboxes/$id/work")({
     chat?: string
     review?: string
     panel?: WorkspacePanelId
+    from?: "setup"
   } => ({
     terminal: text(s.terminal) ?? text(s.session),
     chat: text(s.chat),
     review: text(s.review),
     panel: workspacePanels.find((p) => p === s.panel),
+    ...fromSetup(s),
   }),
   component: WorkspaceRoute,
 })
@@ -32,17 +35,27 @@ function WorkspaceRoute() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   return (
-    <SandboxWorkspace
-      search={search}
-      onPanel={(panel) =>
-        void navigate({ search: (prev) => ({ ...prev, panel }), replace: true })
-      }
-      onTab={(tab) =>
-        void navigate({
-          search: (prev) => ({ panel: prev.panel, ...tab }),
-          replace: true,
-        })
-      }
-    />
+    <>
+      {search.from === "setup" && (
+        <div className="shrink-0 border-b px-3 py-1.5">
+          <BackToSetup step="sandbox" />
+        </div>
+      )}
+      <SandboxWorkspace
+        search={search}
+        onPanel={(panel) =>
+          void navigate({
+            search: (prev) => ({ ...prev, panel }),
+            replace: true,
+          })
+        }
+        onTab={(tab) =>
+          void navigate({
+            search: (prev) => ({ panel: prev.panel, from: prev.from, ...tab }),
+            replace: true,
+          })
+        }
+      />
+    </>
   )
 }

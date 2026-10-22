@@ -439,15 +439,53 @@ func (r *Runtime) Remove(ctx context.Context, name string) error {
 }
 
 // Status returns the runtime state of name.
+//
+// msb's catalog is busy now and then while another sandbox starts, stops or checkpoints, so a
+// busy catalog is tried again shortly, and then read through the list call, which fails less
+// often.
 func (r *Runtime) Status(ctx context.Context, name string) (Status, error) {
-	h, err := msb.GetSandbox(ctx, name)
-	if err != nil {
+	var err error
+	for try := 0; ; try++ {
+		var h *msb.SandboxHandle
+		h, err = msb.GetSandbox(ctx, name)
+		if err == nil {
+			return statusOf(h.Status()), nil
+		}
 		if msb.IsKind(err, msb.ErrSandboxNotFound) {
 			return StatusAbsent, nil
 		}
-		return "", catalogError(err)
+		if !catalogBusy(err) || try == len(busyBackoff) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(busyBackoff[try]):
+		}
 	}
-	return statusOf(h.Status()), nil
+	if catalogBusy(err) {
+		if all, lerr := r.Statuses(ctx, name); lerr == nil {
+			if st, ok := all[name]; ok {
+				return st, nil
+			}
+		}
+	}
+	return "", catalogError(err)
+}
+
+// busyBackoff is how long Status waits before each new try on a busy catalog.
+var busyBackoff = []time.Duration{50 * time.Millisecond, 150 * time.Millisecond, 400 * time.Millisecond}
+
+// catalogBusy reports whether msb failed because another writer held its database: SQLite's
+// "database is locked" or "database table is locked", or its connection pool waiting too long.
+func catalogBusy(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, busy := range []string{"database is locked", "table is locked", "sqlite_busy", "pool timed out"} {
+		if strings.Contains(msg, busy) {
+			return true
+		}
+	}
+	return false
 }
 
 // Statuses returns the state of every sandbox whose name starts with prefix.

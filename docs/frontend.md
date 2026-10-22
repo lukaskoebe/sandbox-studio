@@ -42,7 +42,7 @@ to an environment.
 | Route | Page |
 |---|---|
 | `/e/$env` | Home: what needs you (the approvals waiting, decided on the spot), the chats working now, and earlier: the latest network activity. The setup card shows until the setup is complete or dismissed, and an environment with neither a teammate nor a sandbox offers to make the first |
-| `/setup` | the guided setup: host check, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome; it works on the environment last opened, or the first |
+| `/setup` | the guided setup: host check, AI provider, teammate, git, network level and a first sandbox. Each step can be skipped, and the setup resumes at the first step without an outcome, or at `?step=`; it works on the environment last opened, or the first. The teammate's Edit and the sandbox's Open workspace add `?from=setup`, and those pages then link back to their step |
 | `/e/$env/sandboxes/$id` | redirects to its workspace, with its parameters |
 | `/e/$env/sandboxes/$id/work` | the sandbox: its chats, terminals and the git reviews waiting on it as tabs in one strip, the picked one in full, and one side panel. `?terminal=`, `?chat=` and `?review=` pick a tab; a review that opens by itself waits for a click; `?panel=` names the open panel (browser, connections or files). Open chat tabs are kept in sessionStorage per sandbox; chats with changes this browser hasn't seen (`lib/chat-seen.ts`, revs in localStorage) are marked green, and only they: other counts use the quiet `CountPill` |
 | `/e/$env/chats`, `/chats/new`, `/chats/$chat` | chats ([design](design/chat-mode.md)). `/chats/new` takes `?teammate=` or `?sandbox=` to preselect a sandbox; `?origin=workspace` (the workspace's New chat) opens the chat it creates in `/sandboxes/$id/work?chat=` instead of the chat page |
@@ -104,7 +104,8 @@ Activity with `?kind=network`, `/git` to Settings → Activity with `?kind=git`,
 `/memory`, `/providers` and `/builds` to their sections. `/browser` redirects to the teammate
 browsers above; `/browser?teammate=<id>` opens that teammate's browser.
 
-The sidebar is one tree: the environment switcher and Home, then each teammate with its
+The sidebar is one tree: the environment switcher, Home and Network (the rules, with the
+count of network approvals waiting), then each teammate with its
 sandbox, then the sandboxes without a teammate, and a footer with All chats, Settings, the version
 and the theme switch. A teammate's row says where it works and what it is doing: waiting on you
 while one of its approvals is pending (a browser action or credential, a memory share, or a
