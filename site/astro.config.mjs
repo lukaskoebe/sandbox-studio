@@ -85,7 +85,7 @@ export default defineConfig({
         },
         {
           label: 'Reference',
-          items: ['troubleshooting', 'developers'],
+          items: ['comparison', 'troubleshooting', 'developers'],
         },
       ],
     }),
