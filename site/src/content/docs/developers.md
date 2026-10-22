@@ -46,4 +46,4 @@ Start with the [developer docs index](https://github.com/lukaskoebe/sandbox-stud
 
 ## Release process
 
-Releases are built from version tags by `.github/workflows/release.yml`. The process builds and attests the images and platform binaries. Do not treat an untagged branch as a released version. Read the [release guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/release.md) before preparing a release.
+Releases are built from version tags by `.github/workflows/release.yml`. A release branch (`release/v1.2.3`) runs the same build and smoke tests without publishing, and the tag is pushed only once that run passes. The process builds and attests the images and platform binaries. Do not treat an untagged branch as a released version. Read the [release guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/release.md) before preparing a release.

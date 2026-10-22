@@ -1,41 +1,77 @@
 # Cutting a release
 
-Releases are built by [`.github/workflows/release.yml`](../.github/workflows/release.yml) when a
-version tag is pushed:
+Releases are built by [`.github/workflows/release.yml`](../.github/workflows/release.yml).
+A release is cut from a release branch, and its version tag is pushed only after everything
+has built and passed on that branch:
 
-Before tagging, give the version's section in [CHANGELOG.md](../CHANGELOG.md) its date and
-commit that to main.
+1. Branch `release/v0.6.0` from main. On the branch, give the version's section in
+   [CHANGELOG.md](../CHANGELOG.md) its date, commit, and push the branch:
 
-```sh
-git switch main && git pull
-git tag -a v0.1.0 -m v0.1.0     # a tag with a hyphen (v0.1.0-rc.1) becomes a pre-release
-git push origin v0.1.0
-```
+   ```sh
+   git switch main && git pull
+   git switch -c release/v0.6.0
+   # rename "## Unreleased" to "## v0.6.0 — YYYY-MM-DD" and commit it
+   git push -u origin release/v0.6.0
+   ```
 
-The workflow then:
+2. The push runs ci and the release workflow's dry run. The dry run is every step below
+   except publishing: it builds the images (pushed as `<version>-candidate`), the UI, the
+   agents and all four binaries, and runs the smoke tests. Wait for both to pass on the
+   branch's head:
+
+   ```sh
+   gh run list --branch release/v0.6.0
+   gh run watch <id> --exit-status
+   ```
+
+   A fix goes onto the branch (and into main); push it and wait again. A flake is re-run with
+   `gh run rerun <id> --failed`.
+
+3. Tag the head that passed and push the tag, which builds again and publishes:
+
+   ```sh
+   git tag -a v0.6.0 -m v0.6.0 release/v0.6.0   # a tag with a hyphen (v0.6.0-rc.1) becomes a pre-release
+   git push origin v0.6.0
+   ```
+
+4. Merge the branch back into main, so main has the dated changelog and any fixes, and delete
+   it:
+
+   ```sh
+   git switch main && git pull && git merge release/v0.6.0 && git push
+   git push origin --delete release/v0.6.0
+   ```
+
+The branch's name gives the version (`release/v0.6.0-rc.1` for a pre-release); the workflow
+refuses one that doesn't name a version. A patch release branches from the release it fixes,
+e.g. `git switch -c release/v0.6.1 v0.6.0`, with the fixes cherry-picked from main.
+
+Each run of the workflow:
 
 1. Builds `images/base` and `images/browser` for linux/amd64 and linux/arm64. It pushes them
    to `ghcr.io/lukaskoebe/sandbox-studio-base:<tag>` and
-   `ghcr.io/lukaskoebe/sandbox-studio-browser:<tag>` and attests both. The resulting
+   `ghcr.io/lukaskoebe/sandbox-studio-browser:<tag>` (`<version>-candidate` from a release
+   branch) and attests both. The resulting
    `…@sha256:` references are the images that release uses.
 2. Builds the web UI and both Linux guest agents once.
 3. Builds `studio` on a native runner for each target: linux/amd64, linux/arm64,
    darwin/arm64 and windows/amd64. The microsandbox SDK needs CGO, so nothing is
    cross-compiled. The build embeds the UI and the agents. Its ldflags set
-   `internal/version.Version` to the tag, and `internal/version.BaseImage` and
+   `internal/version.Version` to the version, and `internal/version.BaseImage` and
    `internal/version.BrowserImage` to the image digests.
 4. Signs and notarizes the macOS binary, and signs the Windows binary, when the secrets below
    exist. Without them those steps are skipped and the binaries are unsigned.
 5. Runs [`smoke.yml`](../.github/workflows/smoke.yml) with the pushed base image: on Linux,
-   macOS and Windows runners, Studio built from the tag creates a sandbox from that image
-   and waits for its guest agent, Linux and Windows run the live browser tests
+   macOS and Windows runners, Studio built from the tag or branch creates a sandbox from that
+   image and waits for its guest agent, Linux and Windows run the live browser tests
    (`web/e2e-live`), and every host embeds with the real local model. The macOS runners have
    no Hypervisor.framework, so they skip the boot with a warning. Nothing
    is published unless this passes; if it fails on a flake, re-run the failed jobs.
 6. Packages `.tar.gz` (Linux and macOS) and `.zip` (Windows) archives named
    `sandbox-studio_<tag>_<os>_<arch>`, each holding a directory of the same name with
    `studio`, `LICENSE` and `README.md`. It writes `checksums.txt`, adds build provenance
-   attestations, and creates the GitHub release with generated notes.
+   attestations, and creates the GitHub release with generated notes. Only a tag's run does
+   this; a release branch's run keeps the archives as workflow artifacts.
 
 [`install.sh`](../install.sh) depends on those names: it downloads
 `sandbox-studio_<tag>_<os>_<arch>.tar.gz` and `checksums.txt` from the release, so keep them
