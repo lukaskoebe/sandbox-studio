@@ -55,6 +55,8 @@ type ApprovalView struct {
 	BrowserCredential *browser.CredentialPayload `json:"browserCredential,omitempty" doc:"An agent asks Studio to fill a vault credential into a page"`
 	BrowserControl    *browser.ControlPayload    `json:"browserControl,omitempty" doc:"An agent asks the user, who drives the browser, to hand it back"`
 	BrowserShow       *browser.ShowPayload       `json:"browserShow,omitempty" doc:"An agent shows the user a page in its browser"`
+	// GitCredential is set for git.credential approvals.
+	GitCredential *gitreview.GitCredentialPayload `json:"gitCredential,omitempty" doc:"git in a sandbox wants credentials for a host no forge covers"`
 	// ChatPermission is set for chat.permission approvals.
 	ChatPermission *chat.PermissionPayload `json:"chatPermission,omitempty" doc:"A chat's agent asks to run a tool"`
 }
@@ -95,6 +97,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p browser.ShowPayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.BrowserShow = &p
+		}
+	case gitreview.KindCredential:
+		var p gitreview.GitCredentialPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.GitCredential = &p
 		}
 	case chat.ApprovalKind:
 		var p chat.PermissionPayload

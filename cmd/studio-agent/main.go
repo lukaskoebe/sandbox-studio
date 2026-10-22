@@ -129,6 +129,18 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: info: %v\n", err)
 			os.Exit(1)
 		}
+	case "git-credential":
+		// git's credential helper: see agentcall.RunGitCredential. It always exits 0 without a
+		// credential, so git goes on as it would without it.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		action := ""
+		if len(os.Args) > 2 {
+			action = os.Args[2]
+		}
+		if err := agentcall.RunGitCredential(ctx, agentcall.SocketCaller{}, action, os.Stdin, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: git-credential: %v\n", err)
+		}
 	case "oci-runtime":
 		// Docker's runtime inside the sandbox: see guest.OCIRuntime.
 		if err := ociRuntime(os.Args[2:]); err != nil {
@@ -152,7 +164,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|claude-acp|claude-permission]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }

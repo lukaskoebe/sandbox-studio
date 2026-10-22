@@ -194,6 +194,10 @@
             "$ref": "#/components/schemas/GitDetail",
             "description": "Set for git.push and git.pr approvals"
           },
+          "gitCredential": {
+            "$ref": "#/components/schemas/GitCredentialPayload",
+            "description": "git in a sandbox wants credentials for a host no forge covers"
+          },
           "id": {
             "type": "string"
           },
@@ -3234,6 +3238,48 @@
         },
         "required": [
           "name"
+        ],
+        "type": "object"
+      },
+      "GitCredentialPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "The host git asked credentials for, with its port when git named one",
+            "type": "string"
+          },
+          "kind": {
+            "description": "The kind of forge the URL suggests",
+            "enum": [
+              "forgejo",
+              "github",
+              "gitlab",
+              "https"
+            ],
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
+            "type": "string"
+          },
+          "url": {
+            "description": "The repository's URL, for the Add forge dialog",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sandboxId",
+          "sandboxName",
+          "host",
+          "url"
         ],
         "type": "object"
       },

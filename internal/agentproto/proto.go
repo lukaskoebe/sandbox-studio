@@ -162,6 +162,9 @@ const (
 	// MethodGitPushStatus and MethodGitPullRequestStatus are the git tools (docs/git-review.md).
 	MethodGitPushStatus        = "git_push_status"
 	MethodGitPullRequestStatus = "git_pull_request_status"
+	// MethodGitCredential is git's credential helper in the sandbox asking about a host. It
+	// is no MCP tool, and Studio answers it with a hint, never a credential.
+	MethodGitCredential = "git_credential"
 
 	MethodTasksList        = "tasks_list"
 	MethodTaskCreate       = "task_create"

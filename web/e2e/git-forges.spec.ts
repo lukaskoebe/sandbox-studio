@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { expect, test } from "./fixtures"
+import { expect, sandboxName, test } from "./fixtures"
 
 // GitLab is a forge kind of its own: the Add forge dialog fills in its address and says which
 // token scopes it needs.
@@ -146,4 +146,41 @@ test("a local forge's folder can be picked by browsing", async ({
   await expect(
     dialog.getByLabel("Name in Studio", { exact: true })
   ).toHaveValue(/^local(-\d+)?$/)
+})
+
+// git in a sandbox asking credentials for a host no forge covers gets a hint and posts a
+// card; Add forge opens the dialog filled in from the repository's URL.
+test("git asking for credentials offers to add the forge", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const name = sandboxName("cred")
+  const sb = await api.createSandbox(name)
+  const call = (await api.json<{ result: { message: string } }>(
+    "POST",
+    `/api/e2e/sandboxes/${sb}/calls`,
+    {
+      method: "git_credential",
+      params: { protocol: "https", host: "github.com", path: "acme/web.git" },
+      wait: true,
+    }
+  ))!
+  expect(call.result.message).toContain("no credentials for github.com")
+
+  await page.goto(`/e/${env}`)
+  const card = page
+    .getByTestId("approval-card")
+    .filter({ hasText: `${name} needs access to github.com` })
+  await expect(card.getByText("https://github.com/acme/web.git")).toBeVisible()
+  await card.getByRole("button", { name: "Add forge" }).click()
+  await expect(page).toHaveURL(/\/settings\/forges\?add=/)
+  const dialog = page.getByRole("dialog", { name: "Add forge" })
+  await expect(dialog.getByLabel("Repository URL")).toHaveValue(
+    "https://github.com/acme/web.git"
+  )
+  await expect(card).toHaveCount(0)
+  await dialog.getByRole("button", { name: "Close" }).click()
+  await expect(page).toHaveURL(/\/settings\/forges$/)
 })

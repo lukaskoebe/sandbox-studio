@@ -166,6 +166,9 @@ func GitConfig(p Teammate, rewrites []GitRewrite) GuestFile {
 		// teammates.CheckGitName and CheckGitEmail refuse quotes, backslashes and newlines.
 		fmt.Fprintf(&b, "[user]\n\tname = %q\n\temail = %s\n", p.GitName, p.GitEmail)
 	}
+	// Sandboxes hold no forge credentials. When git wants some, the helper tells Studio, which
+	// offers the user to add a forge for the host (docs/git-review.md); it never answers.
+	b.WriteString("[credential]\n\thelper = " + AgentPath + " git-credential\n\tuseHttpPath = true\n")
 	for _, r := range rewrites {
 		if !plainValue(r.URL) {
 			continue

@@ -90,6 +90,18 @@ const kinds: Record<string, ApprovalKind> = {
     area: "git",
     page: "/e/$env",
   },
+  "git.credential": {
+    title: "Git access",
+    summary: (a) => {
+      const cred = a.gitCredential
+      return cred
+        ? `${cred.teammateName || cred.sandboxName} needs access to ${cred.host}`
+        : a.subject
+    },
+    icon: KeyIcon,
+    area: "git",
+    page: "/e/$env",
+  },
   "memory.share": {
     title: "Memory share",
     summary: (a) =>
@@ -213,6 +225,7 @@ export function approvalSource(a: Approval): string | undefined {
     a.browserCredential?.sandboxName ??
     a.browserControl?.sandboxName ??
     a.browserShow?.sandboxName ??
+    a.gitCredential?.sandboxName ??
     a.chatPermission?.sandboxName
   )
 }
@@ -231,6 +244,8 @@ const decisionWords: Record<string, string> = {
 export function approvalDecision(a: Approval): string {
   if (a.kind === "browser.show")
     return a.status === "approved" ? "Took the wheel" : "Seen"
+  if (a.kind === "git.credential")
+    return a.status === "approved" ? "Adding a forge" : "Not now"
   if (a.network?.tracker) return "Denied · tracker"
   if (a.reverted) return "Reverted · reviewer"
   switch (a.network?.decided) {

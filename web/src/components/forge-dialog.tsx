@@ -163,17 +163,26 @@ async function copy(text: string) {
 export function ForgeDialog({
   env,
   open,
+  initialURL,
   onOpenChange,
 }: {
   env: string
   open: boolean
+  /** A repository URL the form starts from, as if pasted. */
+  initialURL?: string
   onOpenChange: (open: boolean) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl lg:max-w-2xl">
         {/* The form, including a typed token, exists only while the dialog is open. */}
-        {open && <ForgeForm env={env} onDone={() => onOpenChange(false)} />}
+        {open && (
+          <ForgeForm
+            env={env}
+            initialURL={initialURL}
+            onDone={() => onOpenChange(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -235,9 +244,17 @@ function isSSHCloneURL(v: string) {
   return /^ssh:\/\/[^\s/]+\/[^\s/][^\s]*$/.test(v)
 }
 
-function ForgeForm({ env, onDone }: { env: string; onDone: () => void }) {
+function ForgeForm({
+  env,
+  initialURL,
+  onDone,
+}: {
+  env: string
+  initialURL?: string
+  onDone: () => void
+}) {
   const invalidate = useInvalidateForges()
-  const [repoURL, setRepoURL] = useState("")
+  const [repoURL, setRepoURL] = useState(initialURL ?? "")
   const [repoPath, setRepoPath] = useState("")
   const [kind, setKind] = useState<Kind>("github")
   // The name the user typed; until then the forge is named after its host.

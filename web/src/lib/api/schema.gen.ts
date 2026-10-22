@@ -2631,6 +2631,8 @@ export interface components {
             environmentId: string;
             /** @description Set for git.push and git.pr approvals */
             git?: components["schemas"]["GitDetail"];
+            /** @description git in a sandbox wants credentials for a host no forge covers */
+            gitCredential?: components["schemas"]["GitCredentialPayload"];
             id: string;
             kind: string;
             /** @description Two facts that disagree */
@@ -3659,6 +3661,21 @@ export interface components {
         ForkInBody: {
             /** @description Name of the new sandbox */
             name: string;
+        };
+        GitCredentialPayload: {
+            /** @description The host git asked credentials for, with its port when git named one */
+            host: string;
+            /**
+             * @description The kind of forge the URL suggests
+             * @enum {string}
+             */
+            kind?: "forgejo" | "github" | "gitlab" | "https";
+            sandboxId: string;
+            sandboxName: string;
+            teammateId?: string;
+            teammateName?: string;
+            /** @description The repository's URL, for the Add forge dialog */
+            url: string;
         };
         GitDetail: {
             /** @description Set for git.pr approvals */

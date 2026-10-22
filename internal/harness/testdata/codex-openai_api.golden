@@ -154,6 +154,9 @@ The user sees your task list in the Tasks tab. The `studio` MCP server has tools
 [user]
 	name = "Ada Lovelace"
 	email = ada@example.com
+[credential]
+	helper = /opt/studio/bin/studio-agent git-credential
+	useHttpPath = true
 == acp command
 ["codex-acp"]
 == acp env CODEX_PATH=/usr/local/bin/codex

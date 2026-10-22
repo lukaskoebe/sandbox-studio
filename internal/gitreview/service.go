@@ -78,6 +78,10 @@ type Service struct {
 	locks  sync.Map // staging path -> *sync.Mutex
 	// fetches rate-limits the staging mirrors' fetches from the forge.
 	fetches fetchLimiter
+	// snoozed holds, per environment and host, until when "Not now" on a git.credential
+	// card keeps Studio from asking again.
+	credMu  sync.Mutex
+	snoozed map[string]time.Time
 }
 
 func (s *Service) httpClient() *http.Client {

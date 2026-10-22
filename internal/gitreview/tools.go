@@ -18,6 +18,8 @@ func (s *Service) Tools() []integrations.Tool {
 	return []integrations.Tool{
 		{Def: agentcall.GitPushStatusTool, Handle: s.toolPushStatus},
 		{Def: agentcall.GitPullRequestStatusTool, Handle: s.toolPullRequestStatus},
+		// Not an MCP tool: the guest's git credential helper calls it.
+		{Def: agentcall.GitCredentialCall, Handle: s.credential},
 	}
 }
 

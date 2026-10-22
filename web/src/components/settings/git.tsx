@@ -62,8 +62,20 @@ import {
 import { copyText } from "@/lib/clipboard"
 import { hasAPI, kindLabels, remoteHost, type Auth } from "@/lib/forges"
 
-export function GitSettings({ env }: { env: string }) {
-  const [adding, setAdding] = useState(false)
+/**
+ * Settings → Git forges. addURL opens the Add forge dialog filled in from a repository URL;
+ * onAdded is called when that dialog closes.
+ */
+export function GitSettings({
+  env,
+  addURL,
+  onAdded,
+}: {
+  env: string
+  addURL?: string
+  onAdded?: () => void
+}) {
+  const [adding, setAdding] = useState(addURL !== undefined)
   const forges = $api.useQuery("get", "/api/environments/{env}/forges", {
     params: { path: { env } },
   })
@@ -166,7 +178,15 @@ export function GitSettings({ env }: { env: string }) {
           .
         </p>
       </ScrollArea>
-      <ForgeDialog env={env} open={adding} onOpenChange={setAdding} />
+      <ForgeDialog
+        env={env}
+        open={adding || addURL !== undefined}
+        initialURL={addURL}
+        onOpenChange={(open) => {
+          setAdding(open)
+          if (!open && addURL !== undefined) onAdded?.()
+        }}
+      />
     </>
   )
 }

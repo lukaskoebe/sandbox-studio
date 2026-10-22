@@ -235,6 +235,7 @@ func TestGitConfig(t *testing.T) {
 		{URL: "https://git.studio.internal/bad/", InsteadOf: []string{"a\"b", "x\ny", "ssh://git@host/"}},
 	}
 	want := "# Managed by Sandbox Studio: rewritten when a session starts.\n" +
+		"[credential]\n\thelper = /opt/studio/bin/studio-agent git-credential\n\tuseHttpPath = true\n" +
 		"[url \"https://git.studio.internal/gh/\"]\n\tinsteadOf = \"https://github.com/\"\n\tinsteadOf = \"git@github.com:\"\n" +
 		"[url \"https://git.studio.internal/bad/\"]\n\tinsteadOf = \"ssh://git@host/\"\n"
 	if got := GitConfig(Teammate{}, rw); got.Content != want || got.Path != ".config/git/config" {

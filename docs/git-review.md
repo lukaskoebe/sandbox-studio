@@ -196,6 +196,31 @@ starts with the code.
   stays in `/workspace` and can't start with a dash. git refuses a folder that exists and
   isn't empty; the answer is 409 with the end of git's output, as for any failed clone.
 
+## Credential hints
+
+The managed git config also names Studio's credential helper and sends it the path:
+
+```
+[credential]
+	helper = /opt/studio/bin/studio-agent git-credential
+	useHttpPath = true
+```
+
+git calls it when an HTTPS host answers 401, which a forge's host never does, since its URLs go
+to the virtual remote. `studio-agent git-credential get` sends `{protocol, host, path}` to
+Studio (`git_credential`, a call that isn't among the agent's MCP tools) and prints Studio's
+answer to stderr, where git shows it to the agent. It never prints a credential, so git fails
+as it would have. `store` and `erase` and other protocols are ignored.
+
+Studio (`gitreview/credential.go`) posts a `git.credential` approval for the host, one at a
+time per subject (`<teammate or sandbox> needs access to <host>`), with the repository's URL
+and the kind `ParseRepoURL` reads from it. **Add forge** allows it and opens Settings → Git
+forges with `?add=<url>`, which opens the Add forge dialog as if the URL had been pasted.
+**Not now** dismisses it and, until Studio restarts or for 24 hours, answers the host with
+"the user chose not to" and no card. Hosts under `studio.internal` and the hosts of existing
+forges get no card. Sandboxes pick up the helper when their next session starts, like the URL
+rules.
+
 ## Fetch
 
 `GET info/refs?service=git-upload-pack` and `POST git-upload-pack` are proxied to

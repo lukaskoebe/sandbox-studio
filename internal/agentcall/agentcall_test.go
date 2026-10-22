@@ -439,3 +439,35 @@ func TestHookEphemeral(t *testing.T) {
 		t.Fatalf("Studio was called: %+v", fc.calls)
 	}
 }
+
+// The credential helper hands git nothing, tells Studio about an HTTPS get only, and prints
+// Studio's hint where git shows it.
+func TestGitCredentialAsksStudioAndAnswersNothing(t *testing.T) {
+	fc := &fakeCaller{reply: func(method string, params json.RawMessage) (any, error) {
+		return map[string]string{"message": "Sandbox Studio: add a forge"}, nil
+	}}
+	var stderr strings.Builder
+	in := "protocol=https\nhost=github.com\npath=acme/web.git\nusername=x\n\n"
+	if err := RunGitCredential(context.Background(), fc, "get", strings.NewReader(in), &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if len(fc.calls) != 1 || fc.calls[0].Method != agentproto.MethodGitCredential ||
+		string(fc.calls[0].Params) != `{"host":"github.com","path":"acme/web.git","protocol":"https"}` {
+		t.Fatalf("calls = %+v", fc.calls)
+	}
+	if stderr.String() != "Sandbox Studio: add a forge\n" {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+	for _, c := range []struct{ action, in string }{
+		{"store", in},
+		{"erase", in},
+		{"get", "protocol=ssh\nhost=github.com\n\n"},
+	} {
+		if err := RunGitCredential(context.Background(), fc, c.action, strings.NewReader(c.in), &stderr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(fc.calls) != 1 {
+		t.Errorf("calls = %+v", fc.calls)
+	}
+}

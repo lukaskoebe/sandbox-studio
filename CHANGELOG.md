@@ -16,6 +16,10 @@
   browser, under the browser's rules, and posts a card with the address and its note. **Watch**
   opens the teammate's Browser page and **Take the wheel** also hands you control; the agent
   carries on meanwhile.
+- **Git:** when git in a sandbox wants credentials for a host no forge covers, Home shows a
+  card. **Add forge** opens the Add forge dialog filled in from the repository's URL, **Not
+  now** stops asking about the host for a day, and the agent reads in git's output that you
+  have the card.
 
 ## v0.5.2 — 2026-10-22
 
