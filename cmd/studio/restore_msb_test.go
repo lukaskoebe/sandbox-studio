@@ -47,9 +47,16 @@ func TestRestoreMSBDBRebuildsFromTheNewestAside(t *testing.T) {
 	writeCatalog(t, path+".broken-20261022T072947Z", "studio-a-g1", "studio-b-g2")
 	// Nothing listens on port 1, so no Studio runs.
 	const addr = "127.0.0.1:1"
+	vms := []msbdb.VM{{PID: 42, Name: "ss-a-g1"}}
+	runningVMs = func(string) []msbdb.VM { return vms }
+	t.Cleanup(func() { runningVMs = msbdb.RunningVMs })
+	var out bytes.Buffer
+	if status := runRestoreMSBDB(&out, addr, []string{"-replace"}); status != 1 {
+		t.Fatalf("with a VM running: status %d", status)
+	}
+	vms = nil
 
 	writeCatalog(t, path, "studio-new-g1")
-	var out bytes.Buffer
 	if status := runRestoreMSBDB(&out, addr, nil); status != 1 {
 		t.Fatalf("over a catalog with sandboxes: status %d", status)
 	}

@@ -336,3 +336,16 @@ func TestRestoreRebuildsFromTheMovedAsideCatalog(t *testing.T) {
 		t.Fatalf("after a failed restore: %v, %v", names, err)
 	}
 }
+
+func TestVMName(t *testing.T) {
+	for args, want := range map[string]string{
+		"/home/u/.microsandbox/bin/msb machine --name studio-abc-g1 --sandbox-id 3": "studio-abc-g1",
+		"msb machine --restore --name studio-x-g2":                                  "studio-x-g2",
+		"vim --name studio-abc-g1":                                                  "",
+		"msb machine --name":                                                        "",
+	} {
+		if got, _ := vmName(strings.Fields(args)); got != want {
+			t.Errorf("vmName(%q) = %q, want %q", args, got, want)
+		}
+	}
+}

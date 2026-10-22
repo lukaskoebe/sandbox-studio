@@ -20,6 +20,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/msbdb"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
@@ -92,6 +93,9 @@ func runDoctor(w io.Writer, addr, image string) int {
 	return 0
 }
 
+// runningVMs lists the VM processes msb runs; tests replace it.
+var runningVMs = msbdb.RunningVMs
+
 // runRestoreMSBDB rebuilds microsandbox's catalog from one that a repair moved aside, by
 // default the newest: a repair that kept none of its rows left msb an empty catalog, and so
 // lost its sandboxes, though their disks are kept. The catalog in place is moved aside in
@@ -114,6 +118,16 @@ func runRestoreMSBDB(w io.Writer, addr string, args []string) int {
 	ctx := context.Background()
 	if studioRunning(ctx, addr) {
 		fmt.Fprintf(os.Stderr, "studio restore-msb-db: Studio is running on %s. Quit it first, then run this again.\n", addr)
+		return 1
+	}
+	// A VM that outlived Studio holds the damaged file open and writes to it.
+	if vms := runningVMs(sandboxes.VMPrefix); len(vms) > 0 {
+		var list []string
+		for _, vm := range vms {
+			list = append(list, fmt.Sprintf("%s (pid %d)", vm.Name, vm.PID))
+		}
+		fmt.Fprintf(os.Stderr, "studio restore-msb-db: %d sandbox VMs still run: %s. Stop them first, for example with kill <pid>; their disks are kept.\n",
+			len(vms), strings.Join(list, ", "))
 		return 1
 	}
 	path, err := msbdb.Path()
@@ -151,7 +165,7 @@ func runRestoreMSBDB(w io.Writer, addr string, args []string) int {
 	if _, err := os.Stat(r.Aside); err == nil {
 		fmt.Fprintf(w, "The database that was in place is kept at %s.\n", r.Aside)
 	}
-	fmt.Fprintln(w, "Start Studio again; the sandboxes start from their disks.")
+	fmt.Fprintln(w, "Start Studio again; the sandboxes start from their disks. If one hangs while starting, stop it and start it again.")
 	return 0
 }
 

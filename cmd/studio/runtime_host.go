@@ -56,12 +56,21 @@ func repairMSBDB(ctx context.Context, log *slog.Logger) {
 		return
 	}
 	log.Error("microsandbox's database is damaged; repairing it", "path", path, "problem", d.Detail)
+	// VMs outlive Studio. One still running keeps writing the damaged file, so the rebuilt
+	// database may not match what it does; stopping and starting it settles that.
+	running := runningVMs(sandboxes.VMPrefix)
+	for _, vm := range running {
+		log.Warn("a sandbox's VM is still running while microsandbox's database is repaired", "vm", vm.Name, "pid", vm.PID)
+	}
 	r, err := msbdb.Fix(ctx, path, time.Now())
 	if err != nil {
 		log.Error("could not repair microsandbox's database", "path", path, "err", err)
 		return
 	}
 	msbRepaired = r.Summary()
+	if len(running) > 0 {
+		msbRepaired += fmt.Sprintf("; %d sandboxes kept running through the repair: if one shows as stopped or hangs, stop it and start it again", len(running))
+	}
 	msbOpened.Store(true)
 	if n, err := runtime.ReindexSnapshots(ctx); err != nil {
 		log.Error("msb could not index its snapshots again", "err", err)
