@@ -102,7 +102,7 @@ func (s *Service) Status() (Status, error) {
 		if err != nil || !ok {
 			return Status{Supported: true, Path: path}, err
 		}
-		return Status{Supported: true, Enabled: true, Path: path, Command: s.Exe, Stale: v != quoteWindows(s.Exe)}, nil
+		return Status{Supported: true, Enabled: true, Path: path, Command: s.Exe, Stale: v != windowsCommand(s.Exe)}, nil
 	}
 	return Status{}, ErrUnsupported
 }
@@ -134,7 +134,7 @@ func (s *Service) Enable() (Status, error) {
 		if s.Run == nil {
 			return Status{}, ErrUnsupported
 		}
-		if err := s.Run.Set(runValue, quoteWindows(s.Exe)); err != nil {
+		if err := s.Run.Set(runValue, windowsCommand(s.Exe)); err != nil {
 			return Status{}, err
 		}
 	default:
@@ -257,6 +257,10 @@ func isAbs(goos, p string) bool {
 }
 
 func quoteWindows(s string) string { return `"` + s + `"` }
+
+// windowsCommand is the Run value. Started at login, Studio runs in a console of its own and
+// doesn't open the browser.
+func windowsCommand(exe string) string { return quoteWindows(exe) + " -no-browser" }
 
 func xmlEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;").Replace(s)

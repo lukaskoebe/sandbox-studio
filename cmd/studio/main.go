@@ -63,6 +63,7 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/version"
 	"github.com/lukaskoebe/sandbox-studio/internal/webauth"
 	"github.com/lukaskoebe/sandbox-studio/internal/webui"
+	"golang.org/x/term"
 )
 
 // serverCommands are the commands main runs itself, for the help.
@@ -83,6 +84,7 @@ var serverCommands = []cli.ServerCommand{
 func main() {
 	addr := flag.String("addr", "127.0.0.1:7878", "listen address (loopback only)")
 	image := flag.String("image", defaultImage(), "base image for new sandboxes")
+	noBrowser := flag.Bool("no-browser", false, "don't open the login link in the browser on start")
 	flag.Usage = func() { cli.Help(flag.CommandLine.Output(), "", serverCommands, flag.CommandLine) }
 	if len(os.Args) > 1 && cli.IsHelp(os.Args[1]) {
 		cli.Help(os.Stdout, "", serverCommands, flag.CommandLine)
@@ -148,11 +150,35 @@ func main() {
 		return
 	}
 
-	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	if err := run(*addr, *image, log); err != nil {
+	prepareConsole()
+	log, logPath := serverLogger()
+	// Studio opens the login link itself when it runs in a terminal, as when studio.exe is
+	// double-clicked; not under a service manager or in tests.
+	open := !*noBrowser && term.IsTerminal(int(os.Stderr.Fd()))
+	if err := run(*addr, *image, open, logPath, log); err != nil {
 		log.Error("studio stopped", "err", err)
 		os.Exit(1)
 	}
+}
+
+// serverLogger logs to stderr, except on Windows, where the console is a window of its own:
+// there the log goes to a file in the data directory and the console gets only warnings and
+// errors. It returns the file's path, if any.
+func serverLogger() (*slog.Logger, string) {
+	stderr := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	if goruntime.GOOS != "windows" {
+		return stderr, ""
+	}
+	p, err := paths.Default()
+	if err != nil {
+		return stderr, ""
+	}
+	log, path, _, err := fileLogger(filepath.Join(p.Data, "logs"), os.Stderr)
+	if err != nil {
+		stderr.Warn("logging to the console: can't open the log file", "err", err)
+		return stderr, ""
+	}
+	return log, path
 }
 
 // serviceAddrs derives the loopback addresses of the network gateway (port+1) and the
@@ -190,7 +216,7 @@ func defaultImage() string {
 // `git describe` output such as v1.2.3-4-gabc1234 or a bare commit hash.
 var releaseTag = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$`)
 
-func run(addr, image string, log *slog.Logger) error {
+func run(addr, image string, open bool, logPath string, log *slog.Logger) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return err
@@ -214,6 +240,16 @@ func run(addr, image string, log *slog.Logger) error {
 	if err := p.Ensure(); err != nil {
 		return err
 	}
+	// One Studio per data directory: a second start, such as a double-click on studio.exe
+	// while it runs, opens the running one instead of migrating and serving the same data.
+	release, err := store.TryLock(filepath.Join(p.Data, "studio.lock"))
+	if errors.Is(err, store.ErrLocked) {
+		return openRunning(ctx, addr, p.Data, open, logPath, log)
+	}
+	if err != nil {
+		return err
+	}
+	defer release()
 	repairMSBDB(ctx, log)
 	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil))
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
@@ -463,13 +499,44 @@ func run(addr, image string, log *slog.Logger) error {
 	// Sandboxes are detached VMs: they keep running when Studio stops, and their agents
 	// reconnect when it comes back.
 	log.Info("sandbox studio listening", "url", "http://"+addr, "version", version.Version, "data", p.Data, "image", image)
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
 	link := loginURL(addr, auth.IssueLogin())
 	log.Info("open Studio with this one-time login link", "url", link)
-	printLoginBanner(link)
-	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	printLoginBanner(link, logPath)
+	if open {
+		// A link of its own, so the banner's still works once the browser used this one.
+		openLogin(loginURL(addr, auth.IssueLogin()), log)
+	}
+	if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
+}
+
+// openRunning is a start while another Studio holds the data directory: it opens that Studio
+// in the browser with a fresh login link and exits.
+func openRunning(ctx context.Context, addr, data string, open bool, logPath string, log *slog.Logger) error {
+	link, err := requestLoginURL(ctx, addr)
+	if err != nil {
+		return fmt.Errorf("Studio is already running with the data in %s, but not on %s (start this one with that Studio's -addr): %w", data, addr, err)
+	}
+	log.Info("Studio is already running", "url", "http://"+addr, "data", data)
+	if open {
+		openLogin(link, log)
+		return nil
+	}
+	log.Info("open Studio with this one-time login link", "url", link)
+	printLoginBanner(link, logPath)
+	return nil
+}
+
+func openLogin(link string, log *slog.Logger) {
+	if err := openBrowser(link); err != nil && !errors.Is(err, errNoDisplay) {
+		log.Warn("could not open the browser; open the login link instead", "err", err)
+	}
 }
 
 // studioRuntime is what Studio needs from the VM runtime: sandbox lifecycles and template

@@ -128,11 +128,18 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
   database or one a newer msb migrated (fix: `msb self downgrade <Studio's msb>`), and warns
   after a repair with what was kept and lost. Runtime calls that fail on the database answer
   503 with that fix instead of a bare SQLite error.
-- Startup (`cmd/studio/main.go`): data dir, a check of msb's own database
+- Startup (`cmd/studio/main.go`): data dir and its lock `studio.lock` (held: ask the running
+  Studio for a login link with the control credential, open it and exit), a check of msb's own database
   (`~/.microsandbox/db/msb.db`, `internal/msbdb`), doctor (warnings only), install the guest agent
   binaries, open the catalog and vault, make sure an environment exists, start the
   template registry, the runtime, the gateway and its resolvers, the agent channel hub,
-  reconcile sandboxes, recover chats and build jobs, then serve the API and UI.
+  reconcile sandboxes, recover chats and build jobs, then serve the API and UI. Once it listens,
+  Studio prints the login banner (the link as an OSC 8 hyperlink) and, when stderr is a terminal
+  and `-no-browser` is unset, opens a second link in the browser (`rundll32
+  url.dll,FileProtocolHandler`, `open`, or `xdg-open` with a display). On Windows it turns off
+  the console's QuickEdit, whose selection blocks console writes, and logs to
+  `logs/studio.log` (moved to `studio.log.1` past 10 MB at start), with only warnings on the
+  console; the Windows autostart entry passes `-no-browser`.
 - Subcommands: `studio` (serve), `openapi`, `login-url`, `tui` (the [terminal UI](tui.md)),
   `doctor`, `version`, `autostart enable|disable|status`, `restore-msb-db`, and the sandbox commands of
   `internal/cli` (`ls`, `show`, `start`, `stop`, `suspend`, `resume`, `create`, `fork`, `rm`,
@@ -155,6 +162,8 @@ One data directory (`internal/paths`):
 | Path | What |
 |---|---|
 | `studio.db` | SQLite catalog: everything per environment, including memory, encrypted secrets and CA keys |
+| `studio.lock` | held by the running Studio, one per data directory |
+| `logs/studio.log` | Studio's log, on Windows only |
 | `vault.key` | master key file, only when no OS keychain is available |
 | `guest/bin/` | the `studio-agent` binary, mounted read-only into every sandbox |
 | `run/<id>.sock` | per-sandbox agent channel sockets (named pipes on Windows, see [guest-agent](guest-agent.md)) |

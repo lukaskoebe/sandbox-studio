@@ -51,7 +51,7 @@ Unlike the commands above, these work without a running Studio, except `login-ur
 
 | Command | Does |
 |---|---|
-| `studio` | Starts Studio and prints a one-time login link. |
+| `studio` | Starts Studio, prints a one-time login link and, in a terminal, opens it in the browser; `-no-browser` leaves it printed. If Studio already runs with the same data directory, it opens that one instead and exits. |
 | `studio doctor` | Checks that this machine can run Studio and says how to fix what can't. Exits 1 if a check fails. |
 | `studio login-url` | Prints a fresh one-time login link for the running Studio. |
 | `studio tui` | Opens the [terminal UI](../tui/). |

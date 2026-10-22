@@ -31,7 +31,11 @@ from other local users and from web pages:
 - At start Studio logs a one-time login link, and on a color terminal also prints it in a
   framed box (not when `NO_COLOR` is set or stderr is not a terminal). The ticket is in the
   URL fragment, removed before the app loads data, and exchanged once within ten minutes for
-  a host-bound, signed `studio_session` cookie (HttpOnly, SameSite=Strict, 30 days).
+  a host-bound, signed `studio_session` cookie (HttpOnly, SameSite=Strict, 30 days). In a
+  terminal Studio also opens a second link in the browser (`-no-browser` turns that off).
+- The web app's login gate polls `/api/auth/status` every three seconds while its tab is
+  visible, so a page opened while Studio was down, or left on the gate during a restart,
+  connects by itself with the cookie it has.
 - `studio login-url` asks the running server for a fresh link, authenticating with a control
   token derived from the install key; only the short-lived ticket reaches the browser.
 - Previews: opening one issues a one-minute ticket that sets a separate host-scoped

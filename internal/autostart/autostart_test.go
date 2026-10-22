@@ -93,7 +93,7 @@ func TestWindows(t *testing.T) {
 	key := fakeRunKey{}
 	s := &Service{GOOS: "windows", Exe: `C:\Users\u\Sandbox Studio\studio.exe`, Run: key}
 	st, err := s.Enable()
-	if err != nil || !st.Enabled || key["Sandbox Studio"] != `"C:\Users\u\Sandbox Studio\studio.exe"` {
+	if err != nil || !st.Enabled || key["Sandbox Studio"] != `"C:\Users\u\Sandbox Studio\studio.exe" -no-browser` {
 		t.Fatalf("enable: %+v %v %v", st, err, key)
 	}
 	if st, err = s.Disable(); err != nil || st.Enabled || len(key) != 0 {

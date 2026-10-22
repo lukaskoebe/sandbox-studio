@@ -13,6 +13,10 @@ On first start, Studio may need to download the runtime and base image. Check th
 
 If creating a sandbox or signing in says that `ghcr.io` refused the login saved on this computer, a `docker login ghcr.io` from earlier has probably expired. microsandbox pulls with a saved login when there is one and doesn't fall back to pulling without it, although Studio's images are public. Run `docker logout ghcr.io` (or `msb registry logout ghcr.io` if you logged in through msb), then try again. `studio doctor` mentions a saved login for the base image's registry while the image isn't downloaded yet.
 
+## Studio stops answering on Windows
+
+Studio's console window must stay open: closing it stops Studio. Studio turns off the console's selection mode (QuickEdit), which used to freeze it after a click in the window. A page that lost Studio connects again by itself once Studio runs. The log is `%LOCALAPPDATA%\Sandbox Studio\logs\studio.log`.
+
 ## A sandbox says microsandbox lost its VM
 
 microsandbox keeps its list of sandboxes in its own database, `~/.microsandbox/db/msb.db`. When Studio starts and finds that database damaged, it moves it aside as `msb.db.broken-<time>`, keeping it, and rebuilds it from the rows it can still read. If it could read none, microsandbox starts with an empty list, and the sandboxes it lost can't start, although their disks are kept.

@@ -54,7 +54,7 @@ Then start the app:
 studio
 ```
 
-Studio prints a one-time link to its local UI at `http://127.0.0.1:7878`. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, run `studio login-url`.
+Studio opens its local UI at `http://127.0.0.1:7878` in your browser, and prints a one-time link to it too. Open that link on the same machine. It expires after ten minutes and can be used once. If you need another link while Studio is running, run `studio login-url`, or start `studio` again: a second start opens the running Studio. To only print the link, start it with `studio -no-browser`.
 
 This is the sign-in for your local Studio app. It does not sign an agent into an AI provider. For agent sessions, add a provider in the environment first: an API key, or a Claude Pro/Max or ChatGPT subscription sign-in.
 
@@ -89,7 +89,7 @@ The default data directory is:
 | macOS | `~/Library/Application Support/Sandbox Studio` |
 | Windows | `%LOCALAPPDATA%\Sandbox Studio` |
 
-This directory holds the catalog and local Studio data. Set `SANDBOX_STUDIO_HOME` before starting Studio to use another location. The encrypted vault's master key is kept in the OS keychain where available; on systems without one, Studio uses an owner-only file.
+This directory holds the catalog and local Studio data. On Windows, Studio's log is in its `logs` folder, and the console window shows only warnings and errors. Set `SANDBOX_STUDIO_HOME` before starting Studio to use another location. The encrypted vault's master key is kept in the OS keychain where available; on systems without one, Studio uses an owner-only file.
 
 ## Host-specific help
 

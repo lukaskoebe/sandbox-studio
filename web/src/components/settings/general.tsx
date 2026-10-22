@@ -332,7 +332,7 @@ function AutostartSection() {
       )}
       {st?.stale && (
         <p className="flex items-center gap-2">
-          The entry starts a different Studio binary.
+          The entry is out of date.
           <Button
             size="xs"
             variant="outline"

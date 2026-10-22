@@ -1,7 +1,12 @@
 export type AuthBootstrapResult = {
   authenticated: boolean
   error?: string
+  /** Studio didn't answer, as while it restarts. */
+  unreachable?: boolean
 }
+
+/** Studio didn't answer, or answered that it can't serve yet. */
+export class UnreachableError extends Error {}
 
 /** Read the launch token and remove its fragment before any route can load. */
 function consumeLaunchToken(): string | null {
@@ -34,7 +39,11 @@ export function bootstrapAuth(): Promise<AuthBootstrapResult> {
     try {
       return { authenticated: await readAuthStatus(), error: exchangeError }
     } catch (error) {
-      return { authenticated: false, error: authErrorMessage(error) }
+      return {
+        authenticated: false,
+        error: authErrorMessage(error),
+        unreachable: error instanceof UnreachableError,
+      }
     }
   })()
 }
@@ -77,13 +86,13 @@ export async function readAuthStatus(): Promise<boolean> {
       headers: { Accept: "application/json" },
     })
   } catch {
-    throw new Error(
-      "Could not reach Studio. Check the connection and try again."
+    throw new UnreachableError(
+      "Could not reach Studio. This page connects by itself once Studio runs again."
     )
   }
 
   if (!response.ok) {
-    throw new Error(
+    throw new UnreachableError(
       `Studio could not check the login state (HTTP ${response.status}). Retry when the connection is available.`
     )
   }

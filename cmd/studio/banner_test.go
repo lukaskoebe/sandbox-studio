@@ -27,7 +27,7 @@ func TestBannerWanted(t *testing.T) {
 func TestLoginBannerKeepsTheLinkOnOneFramedLine(t *testing.T) {
 	url := loginURL("127.0.0.1:7878", strings.Repeat("t", 43))
 	var b strings.Builder
-	writeLoginBanner(&b, url)
+	writeLoginBanner(&b, url, `C:\Users\u\AppData\Local\Sandbox Studio\logs\studio.log`)
 	out := b.String()
 	var framed []string
 	for _, line := range strings.Split(out, "\n") {
@@ -52,11 +52,26 @@ func TestLoginBannerKeepsTheLinkOnOneFramedLine(t *testing.T) {
 	if !found {
 		t.Fatalf("banner does not contain the link unbroken:\n%s", out)
 	}
+	if !strings.Contains(out, "\x1b]8;;"+url+"\x1b\\"+url+"\x1b]8;;\x1b\\") {
+		t.Errorf("the link is not an OSC 8 hyperlink:\n%q", out)
+	}
+	if !strings.Contains(stripANSI(out), `Log: C:\Users\u\AppData\Local\Sandbox Studio\logs\studio.log`) {
+		t.Errorf("banner does not say where the log is:\n%s", out)
+	}
 }
 
 func stripANSI(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
+		if s[i] == 0x1b && i+1 < len(s) && s[i+1] == ']' {
+			// OSC, up to its ESC \ terminator
+			end := strings.Index(s[i:], "\x1b\\")
+			if end < 0 {
+				break
+			}
+			i += end + 1
+			continue
+		}
 		if s[i] == 0x1b {
 			for i < len(s) && s[i] != 'm' {
 				i++

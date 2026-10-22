@@ -19,6 +19,7 @@ import {
   exchangeToken,
   readAuthStatus,
   tokenFromLoginInput,
+  UnreachableError,
   type AuthBootstrapResult,
 } from "@/lib/auth"
 
@@ -31,6 +32,8 @@ export function AuthGate({
 }) {
   const queryClient = useQueryClient()
   const expired = useRef(false)
+  // Whether the last check found Studio down, so the next answer clears that error.
+  const unreachable = useRef(false)
   const [authenticated, setAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -41,6 +44,7 @@ export function AuthGate({
     let mounted = true
     bootstrap.then((result) => {
       if (!mounted || expired.current) return
+      unreachable.current = !!result.unreachable
       setAuthenticated(result.authenticated)
       setError(result.authenticated ? null : (result.error ?? null))
       setLoading(false)
@@ -63,6 +67,26 @@ export function AuthGate({
     window.addEventListener("studio-auth-expired", onExpired)
     return () => window.removeEventListener("studio-auth-expired", onExpired)
   }, [queryClient])
+
+  // While the gate shows, Studio may be restarting: a page opened while it was down connects
+  // by itself once it answers, with the session it already has.
+  useEffect(() => {
+    if (authenticated || loading) return
+    const id = window.setInterval(() => {
+      if (document.hidden) return
+      readAuthStatus().then(
+        (ok) => {
+          if (ok) setAuthenticated(true)
+          else if (unreachable.current) setError(null)
+          unreachable.current = false
+        },
+        (cause: unknown) => {
+          if (cause instanceof UnreachableError) unreachable.current = true
+        }
+      )
+    }, 3000)
+    return () => window.clearInterval(id)
+  }, [authenticated, loading])
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -102,6 +126,7 @@ export function AuthGate({
         )
       }
     } catch (cause) {
+      unreachable.current = cause instanceof UnreachableError
       setError(
         cause instanceof Error
           ? cause.message

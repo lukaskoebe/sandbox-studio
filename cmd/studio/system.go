@@ -218,7 +218,7 @@ func runAutostart(w io.Writer, args []string) int {
 	case !st.Enabled:
 		fmt.Fprintln(w, "autostart is off")
 	case st.Stale:
-		fmt.Fprintf(w, "autostart is on (%s), but it starts a different binary; run `studio autostart enable` to update it\n", st.Path)
+		fmt.Fprintf(w, "autostart is on (%s), but its entry is out of date; run `studio autostart enable` to update it\n", st.Path)
 	default:
 		fmt.Fprintf(w, "autostart is on: %s starts %s at login\n", st.Path, st.Command)
 	}

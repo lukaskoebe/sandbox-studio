@@ -119,3 +119,20 @@ test("old addresses redirect to the pages that replaced them", async ({
     ).toHaveAttribute("aria-current", "page")
   }
 })
+
+test("a page opened while Studio is down connects by itself once it answers", async ({
+  page,
+  env,
+}) => {
+  await page.route("**/api/auth/status", (route) => route.abort())
+  await page.goto(`/e/${env}`)
+  await expect(
+    page.getByRole("heading", { name: "Connect to Studio" })
+  ).toBeVisible()
+  await expect(page.getByText("Could not reach Studio")).toBeVisible()
+
+  await page.unroute("**/api/auth/status")
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible({ timeout: 10_000 })
+})
