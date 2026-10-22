@@ -32,7 +32,7 @@ import {
   codeHighlightStyle,
   editorChangeListener,
 } from "@/lib/code-editor"
-import { exampleTemplateSource } from "@/lib/template-spec-example"
+import { templateExamples } from "@/lib/template-spec-example"
 import {
   templateSpecCompletion,
   templateSpecDiagnostics,
@@ -146,7 +146,7 @@ export function TemplateSpecEditor({
     })
   }, [disabled, readOnlyCompartment])
 
-  function insertExample() {
+  function insertExample(source: string) {
     const view = editorRef.current
     if (!view) return
 
@@ -154,7 +154,7 @@ export function TemplateSpecEditor({
       changes: {
         from: 0,
         to: view.state.doc.length,
-        insert: exampleTemplateSource,
+        insert: source,
       },
       scrollIntoView: true,
       annotations: Transaction.userEvent.of("input"),
@@ -181,7 +181,14 @@ export function TemplateSpecEditor({
             Insert example
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-40">
-            <DropdownMenuItem onClick={insertExample}>Web app</DropdownMenuItem>
+            {templateExamples.map((example) => (
+              <DropdownMenuItem
+                key={example.name}
+                onClick={() => insertExample(example.source)}
+              >
+                {example.name}
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -202,7 +209,7 @@ export function TemplateSpecEditor({
             variant="outline"
             size="sm"
             disabled={disabled}
-            onClick={insertExample}
+            onClick={() => insertExample(templateExamples[0].source)}
           >
             Insert the Web app example
           </Button>

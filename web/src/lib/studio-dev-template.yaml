@@ -1,0 +1,16 @@
+# Studio dev: work on Sandbox Studio itself. Go, Node.js with pnpm, and Chromium for the
+# end-to-end tests. Sandboxes can't run VMs of their own yet, so Studio runs here as its
+# e2e build (make e2e-bin), with in-process fakes for the VMs and the guest agent.
+resources:
+  cpus: 4
+  memory: 8GiB
+  workspace: 30GiB
+  docker: 10GiB
+tools:
+  go: "1.26"
+  node: "22"
+apt:
+  - chromium
+setup: |
+  corepack enable
+  corepack install --global pnpm@11

@@ -31,6 +31,9 @@
   its own, so the computer stays signed in; for ChatGPT it names the account Codex uses.
   opencode's plain API keys can be imported one by one. [Logins on this computer](docs/host-logins.md)
   says what Studio reads, and when.
+- **Templates:** the editor's **Insert example** menu has **Studio dev**, with Go, Node.js
+  and pnpm, and Chromium, for working on Studio in a sandbox. Studio runs there as its e2e
+  build, since sandboxes can't run VMs of their own yet.
 
 ## v0.5.2 — 2026-10-22
 

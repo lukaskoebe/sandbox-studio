@@ -157,3 +157,23 @@ func TestWebExampleTemplateParses(t *testing.T) {
 		t.Fatalf("example resources = %+v", r)
 	}
 }
+
+// The editor offers the Studio dev example (docs/template-builds.md); it must stay valid, with
+// the Go and Node versions Studio's own build needs (CONTRIBUTING.md).
+func TestStudioDevTemplateParses(t *testing.T) {
+	source, err := os.ReadFile("../../web/src/lib/studio-dev-template.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseYAML(source)
+	if err != nil {
+		t.Fatalf("ParseYAML(studio dev) error = %v", err)
+	}
+	tools := map[string]string{}
+	for _, tool := range spec.Tools {
+		tools[tool.Name] = tool.Version
+	}
+	if tools["go"] != "1.26" || tools["node"] != "22" || len(spec.Apt) != 1 || spec.Apt[0] != "chromium" {
+		t.Fatalf("studio dev spec = %+v", spec)
+	}
+}

@@ -48,6 +48,24 @@ setup: |
   corepack enable
 ```
 
+The editor's **Insert example** menu also has **Studio dev**
+(`web/src/lib/studio-dev-template.yaml`), for working on Sandbox Studio itself: Go 1.26,
+Node.js 22 with pnpm 11, and Debian's `chromium` for the end-to-end tests, on 4 CPUs and
+8 GiB. A sandbox can't run VMs of its own yet (microsandbox turns nested virtualisation
+off), so Studio runs there as its e2e build, with in-process fakes for the VMs and the guest
+agent ([end-to-end tests](frontend.md#end-to-end-tests)). In a sandbox from it, with the
+repository cloned:
+
+```sh
+make test                                 # the Go tests
+make web e2e-bin                          # the web UI and bin/studio-e2e
+cd web && PW_CHROMIUM=/usr/bin/chromium pnpm e2e
+```
+
+The UI of a Studio running in a sandbox can't be opened through a preview yet: previews
+strip Studio's own cookies before they reach the sandbox, and the inner Studio uses the
+same names. Its Playwright tests run headless in the sandbox instead.
+
 `resources` accepts `cpus`, `memory`, `max_memory`, `workspace`, and `docker`. CPU
 counts are plain decimal integers. Memory and disk sizes are strings in `MiB`, `GiB`, or
 `G`; Studio validates the resolved values against shared limits before persisting the
