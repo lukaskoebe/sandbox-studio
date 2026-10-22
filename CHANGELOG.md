@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.6.0 — 2026-10-22
+
+Forks merge back into the sandbox they came from, Windows gets a tray launcher, agents can
+show you what they built, Studio keeps itself up to date if you let it, and it upgrades
+microsandbox to 0.7.8 on its own.
+
 - **Windows:** `studiow.exe`, in the Windows archive next to `studio.exe`, runs Studio without
   a console window. It starts Studio in the background, opens it in the browser, and puts an
   icon in the notification area with **Open Studio**, **Logs**, **Start at login** and
