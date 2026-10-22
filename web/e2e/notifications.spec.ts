@@ -5,6 +5,21 @@ test("notifications: Home asks once, and Settings → General has the button", a
   context,
   env,
 }) => {
+  // Chrome's headless shell, which CI runs, says "denied" where a browser asks first, and
+  // after a grant too.
+  const permission = (value: NotificationPermission) =>
+    context.addInitScript((v) => {
+      // A real grant reads "granted"; the first stub reads "default".
+      if (
+        Notification.permission !== "granted" &&
+        Notification.permission !== v
+      )
+        Object.defineProperty(Notification, "permission", {
+          get: () => v,
+          configurable: true,
+        })
+    }, value)
+  await permission("default")
   await page.goto(`/e/${env}`)
   const banner = page.getByRole("region", { name: "Notifications" })
   await expect(
@@ -22,6 +37,7 @@ test("notifications: Home asks once, and Settings → General has the button", a
     row.getByRole("button", { name: "Enable notifications" })
   ).toBeVisible()
   await context.grantPermissions(["notifications"])
+  await permission("granted")
   await page.reload()
   await expect(row).toContainText("On")
   await expect(row.getByRole("button")).toHaveCount(0)
