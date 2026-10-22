@@ -249,7 +249,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	if err != nil {
 		return err
 	}
-	defer release()
+	defer func() { _ = release() }()
 	repairMSBDB(ctx, log)
 	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil))
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {

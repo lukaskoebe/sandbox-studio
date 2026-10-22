@@ -41,7 +41,7 @@ func TestFileLoggerMovesALargeLogAside(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closeLog()
+	defer func() { _ = closeLog() }()
 	if info, err := os.Stat(path + ".1"); err != nil || info.Size() != maxLogSize+1 {
 		t.Fatalf("studio.log.1 = %v, %v", info, err)
 	}

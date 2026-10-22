@@ -12,7 +12,7 @@ func TestRunningVMsFindsAnMSBMachineProcess(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() })
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		for _, vm := range RunningVMs("studio-proctest-") {
