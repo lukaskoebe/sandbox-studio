@@ -31,7 +31,8 @@ func TestExplainPull(t *testing.T) {
 		t.Fatalf("checked %q", asked[0])
 	}
 	tagged := errors.New("Not authorized: url https://registry.example.com/v2/team/app/manifests/v1")
-	if explainPull(context.Background(), tagged); asked[1] != "registry.example.com/team/app:v1" {
+	_ = explainPull(context.Background(), tagged)
+	if asked[1] != "registry.example.com/team/app:v1" {
 		t.Fatalf("checked %q", asked[1])
 	}
 

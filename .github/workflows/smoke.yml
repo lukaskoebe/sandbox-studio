@@ -138,9 +138,10 @@ jobs:
           $r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $cmd; CurrentDirectory = $env:GITHUB_WORKSPACE }
           if ($r.ReturnValue -ne 0) { throw "Win32_Process.Create returned $($r.ReturnValue)" }
           # On Windows the console gets only warnings and errors; the rest is in the data
-          # directory's logs\studio.log. The health check answers once Studio listens.
+          # directory's logs\studio.log. The auth status answers once Studio listens, without
+          # a session, which /api/health needs.
           for ($i = 0; $i -lt 600; $i++) {
-            try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 http://127.0.0.1:7878/api/health | Out-Null; exit 0 } catch { }
+            try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 http://127.0.0.1:7878/api/auth/status | Out-Null; exit 0 } catch { }
             Start-Sleep 1
           }
           Get-Content $log
