@@ -115,6 +115,30 @@
     el.textContent = fmt(lerp(from, to, p(t, a, b, ease.outCubic)))
   }
 
+  /**
+   * A point of an element in stage pixels, by default its centre, from layout alone, so a
+   * card's entrance or a button's press doesn't move it: cursors aim at it, wherever the
+   * layout puts the button. fx and fy are fractions of its width and height.
+   */
+  function centre(el, fx = 0.5, fy = 0.5) {
+    let x = el.offsetWidth * fx
+    let y = el.offsetHeight * fy
+    for (let n = el; n && !n.classList.contains("stage"); n = n.offsetParent) {
+      x += n.offsetLeft + (n.offsetParent?.clientLeft ?? 0)
+      y += n.offsetTop + (n.offsetParent?.clientTop ?? 0)
+    }
+    return { x, y }
+  }
+
+  /**
+   * Where a cursor goes to click el: the cursor icon's tip, 7 px right of and 4 px below its
+   * corner, on el's centre or the point fx, fy of it.
+   */
+  function aim(el, fx, fy) {
+    const c = centre(el, fx, fy)
+    return [c.x - 7, c.y - 4]
+  }
+
   const scenes = []
   /**
    * A scene shows between start and end; update gets the time since start and the scene's
@@ -189,5 +213,5 @@
   window.addEventListener("resize", fit)
   window.addEventListener("load", fit)
 
-  window.M = { clamp, lerp, ease, p, set, rise, words, reveal, type, caret, count, scene, each, start, $: (s, r = document) => r.querySelector(s), $$: (s, r = document) => [...r.querySelectorAll(s)] }
+  window.M = { clamp, lerp, ease, p, set, rise, words, reveal, type, caret, count, centre, aim, scene, each, start, $: (s, r = document) => r.querySelector(s), $$: (s, r = document) => [...r.querySelectorAll(s)] }
 })()

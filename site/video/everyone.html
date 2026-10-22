@@ -847,7 +847,7 @@
     <script src="icons.js"></script>
     <script src="engine.js"></script>
     <script>
-      const { p, set, rise, reveal, type, caret, scene, each, ease, lerp, clamp, $ } = M
+      const { p, set, rise, reveal, type, caret, scene, each, ease, lerp, clamp, $, aim } = M
       const byId = (id) => document.getElementById(id)
 
       // Background: the glow drifts slowly the whole time.
@@ -868,8 +868,10 @@
         const down = press === undefined ? 0 : p(lt, press, press + 0.08) * (1 - p(lt, press + 0.12, press + 0.3))
         set(el, { x: lerp(from[0], to[0], k), y: lerp(from[1], to[1], k), s: 1 - down * 0.18, o })
       }
-      function ripple(el, lt, at, x, y) {
+      /** A click's ripple on the centre of target, or its point fx, fy. */
+      function ripple(el, lt, at, target, fx, fy) {
         const k = p(lt, at, at + 0.6, ease.outCubic)
+        const { x, y } = M.centre(target, fx, fy)
         el.style.left = `${x}px`
         el.style.top = `${y}px`
         set(el, { o: lt < at ? 0 : 1 - k, s: 0.3 + k * 1.2 })
@@ -883,9 +885,10 @@
       // 1 · Intro, 0–5.2
       scene(0, 5.2, byId("s1"), (lt, len) => {
         set(byId("s1-halo"), { o: p(lt, 0.2, 2.2) * 0.9, s: 0.6 + p(lt, 0.2, 2.6) * 0.4 })
-        const top = p(lt, 0.15, 1.05, ease.outBack)
-        const left = p(lt, 0.35, 1.25, ease.outBack)
-        const right = p(lt, 0.55, 1.45, ease.outBack)
+        // The faces land without overshooting: they are translucent, so crossing shows a doubled seam.
+        const top = p(lt, 0.15, 1.05, ease.outQuart)
+        const left = p(lt, 0.35, 1.25, ease.outQuart)
+        const right = p(lt, 0.55, 1.45, ease.outQuart)
         set(byId("s1-top"), { o: p(lt, 0.15, 0.5), y: (1 - top) * -140 })
         set(byId("s1-left"), { o: p(lt, 0.35, 0.7), x: (1 - left) * -120, y: (1 - left) * 70 })
         set(byId("s1-right"), { o: p(lt, 0.55, 0.9), x: (1 - right) * 120, y: (1 - right) * 70 })
@@ -1007,8 +1010,8 @@
         const c = p(lt, 2.7, 3.3, ease.outBack)
         const cOut = p(lt, 4.6, 5.0, ease.inCubic)
         set(byId("s4-card"), { o: p(lt, 2.7, 2.9) * (1 - cOut), y: (1 - c) * 40 - cOut * 20, s: 0.94 + c * 0.06 - cOut * 0.04 })
-        glide(byId("s4-cursor"), lt, 3.3, 4.2, [1800, 980], [1522, 352], 4.3, p(lt, 3.1, 3.3) * (1 - p(lt, 4.8, 5.1)))
-        ripple(byId("s4-ripple"), lt, 4.33, 1528, 358)
+        glide(byId("s4-cursor"), lt, 3.3, 4.2, [1800, 980], aim(byId("s4-allow")), 4.3, p(lt, 3.1, 3.3) * (1 - p(lt, 4.8, 5.1)))
+        ripple(byId("s4-ripple"), lt, 4.33, byId("s4-allow"))
         press(byId("s4-allow"), lt, 4.3)
 
         const f = p(lt, 5.8, 6.5, ease.outCubic)
@@ -1070,15 +1073,17 @@
         const agent = byId("s6-agent")
         const k = p(lt, 1.6, 2.8, ease.inOutCubic)
         const hover = Math.sin(lt * 3) * 3
-        set(agent, { o: p(lt, 1.4, 1.7), x: lerp(1240, 1595, k), y: lerp(330, 706, k) + hover * p(lt, 2.8, 3.2) })
+        // High on the button, so her name tag sits above it rather than over its label.
+        const [px, py] = aim(byId("s6-place"), 0.5, 0.25)
+        set(agent, { o: p(lt, 1.4, 1.7), x: lerp(1240, px, k), y: lerp(330, py, k) + hover * p(lt, 2.8, 3.2) })
         const ask = p(lt, 3.1, 3.7, ease.outBack)
         const askOut = p(lt, 5.4, 5.8, ease.inCubic)
         set(byId("s6-ask"), { o: p(lt, 3.1, 3.3) * (1 - askOut), y: (1 - ask) * 50 + askOut * 20 })
-        glide(byId("s6-cursor"), lt, 3.9, 4.9, [1500, 1060], [1650, 822], 5.0, p(lt, 3.7, 3.9) * (1 - p(lt, 5.5, 5.8)))
-        ripple(byId("s6-ripple"), lt, 5.03, 1656, 828)
+        glide(byId("s6-cursor"), lt, 3.9, 4.9, [1500, 1060], aim(byId("s6-allow")), 5.0, p(lt, 3.7, 3.9) * (1 - p(lt, 5.5, 5.8)))
+        ripple(byId("s6-ripple"), lt, 5.03, byId("s6-allow"))
         press(byId("s6-allow"), lt, 5.0)
         // Then Ada clicks, and the order goes through.
-        ripple(byId("s6-ripple2"), lt, 6.0, 1600, 712)
+        ripple(byId("s6-ripple2"), lt, 6.0, byId("s6-place"), 0.5, 0.25)
         press(byId("s6-place"), lt, 5.95)
         const d = p(lt, 6.3, 6.9, ease.outBack)
         set(byId("s6-done"), { o: p(lt, 6.3, 6.5), y: (1 - d) * 16 })
@@ -1088,7 +1093,7 @@
       // 7 · Outro, 43.0–50
       scene(43.0, 50, byId("s7"), (lt, len) => {
         set(byId("s7-halo"), { o: p(lt, 0.2, 1.8) * 0.8, s: 0.7 + p(lt, 0.2, 2.2) * 0.3 })
-        const l = p(lt, 0.2, 1.1, ease.outBack)
+        const l = p(lt, 0.2, 1.1, ease.outQuart)
         set(byId("s7-logo"), { o: p(lt, 0.2, 0.5), s: 0.6 + l * 0.4, y: Math.sin(lt * 1.6) * 5 })
         reveal(byId("s7-mark"), lt, 0.6, undefined, 0.09)
         reveal(byId("s7-line"), lt, 1.2, undefined, 0.04)
