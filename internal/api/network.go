@@ -49,11 +49,12 @@ type ApprovalView struct {
 	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A teammate's proposal for shared memory"`
 	// MemoryConflict is set for memory.conflict approvals.
 	MemoryConflict *agentmem.ConflictPayload `json:"memoryConflict,omitempty" doc:"Two facts that disagree"`
-	// BrowserAction, BrowserCredential and BrowserControl are set for browser.action,
-	// browser.credential and browser.control.
+	// BrowserAction, BrowserCredential, BrowserControl and BrowserShow are set for
+	// browser.action, browser.credential, browser.control and browser.show.
 	BrowserAction     *browser.ActionPayload     `json:"browserAction,omitempty" doc:"An agent's browser action on a new origin"`
 	BrowserCredential *browser.CredentialPayload `json:"browserCredential,omitempty" doc:"An agent asks Studio to fill a vault credential into a page"`
 	BrowserControl    *browser.ControlPayload    `json:"browserControl,omitempty" doc:"An agent asks the user, who drives the browser, to hand it back"`
+	BrowserShow       *browser.ShowPayload       `json:"browserShow,omitempty" doc:"An agent shows the user a page in its browser"`
 	// ChatPermission is set for chat.permission approvals.
 	ChatPermission *chat.PermissionPayload `json:"chatPermission,omitempty" doc:"A chat's agent asks to run a tool"`
 }
@@ -89,6 +90,11 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 		var p browser.ControlPayload
 		if json.Unmarshal(a.Payload, &p) == nil {
 			v.BrowserControl = &p
+		}
+	case browser.KindShow:
+		var p browser.ShowPayload
+		if json.Unmarshal(a.Payload, &p) == nil {
+			v.BrowserShow = &p
 		}
 	case chat.ApprovalKind:
 		var p chat.PermissionPayload

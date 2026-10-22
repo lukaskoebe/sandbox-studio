@@ -192,6 +192,46 @@ test("an agent asks for the browser back while the user drives", async ({
   )
 })
 
+// browser_show posts a card and returns at once: Watch opens the teammate's Browser page and
+// clears the card, Take the wheel also hands the user control.
+test("an agent shows the user a page, to watch or to take the wheel", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const { name, tm, base, call } = await browsing(page, api, env)
+  await page.goto(`/e/${env}`)
+  const shown = (await call("browser_show", {
+    url: "https://example.com/login",
+    title: "Login page",
+    note: "Try a wrong password",
+  }))!
+  expect(JSON.stringify(shown.result)).toContain(
+    "Showing https://example.com/login"
+  )
+  const card = page
+    .getByTestId("approval-card")
+    .filter({ hasText: `${name} wants to show you: Login page` })
+  await expect(card.getByText("Try a wrong password")).toBeVisible()
+  await card.getByRole("button", { name: "Watch" }).click()
+  await expect(page).toHaveURL(new RegExp(`/teammates/${tm}/browser$`))
+  await expect(card).toHaveCount(0)
+  await expect(page.getByLabel("Browser address")).toHaveValue(
+    "example.com/login"
+  )
+  expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
+
+  await call("browser_show", { url: "https://example.com/a" })
+  await page
+    .getByTestId("approval-card")
+    .filter({ hasText: `${name} wants to show you: https://example.com/a` })
+    .getByRole("button", { name: "Take the wheel" })
+    .click()
+  await expect(page.getByText("You're driving.")).toBeVisible()
+  expect((await api.json<Status>("GET", base))!.takeover).toBe(true)
+})
+
 // The live view maps a click through the frame to the page: pressing "Sign in" on the canvas
 // lands on the button, which goes to /welcome.
 test("a click on the live view lands on the right page coordinates", async ({

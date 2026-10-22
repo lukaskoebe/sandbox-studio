@@ -130,6 +130,7 @@ type state struct {
 	grants   []grant
 	sites    []string // registrable domains the user approved for this browser session
 	hosts    []string // host patterns the user allowed for this browser session
+	shown    string   // the teammate's latest browser.show card, which a newer one replaces
 	page
 	eph map[string]*page // ephemeral sessions by ID
 }

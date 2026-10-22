@@ -12,6 +12,10 @@
   **Settings → General**. While they are off, the web hides the Previews menu and the chat's
   Preview tab, links to the sandbox's servers in a chat are plain text, and the details and
   the TUI list ports without their addresses. If you had sandboxes before, Home says so once.
+- **Browser:** an agent shows you what it built with `browser_show`: it opens the page in its
+  browser, under the browser's rules, and posts a card with the address and its note. **Watch**
+  opens the teammate's Browser page and **Take the wheel** also hands you control; the agent
+  carries on meanwhile.
 
 ## v0.5.2 — 2026-10-22
 

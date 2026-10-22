@@ -175,6 +175,10 @@
             "$ref": "#/components/schemas/CredentialPayload",
             "description": "An agent asks Studio to fill a vault credential into a page"
           },
+          "browserShow": {
+            "$ref": "#/components/schemas/ShowPayload",
+            "description": "An agent shows the user a page in its browser"
+          },
           "chatPermission": {
             "$ref": "#/components/schemas/PermissionPayload",
             "description": "A chat's agent asks to run a tool"
@@ -6560,6 +6564,43 @@
           "teammateId",
           "teammateName",
           "model"
+        ],
+        "type": "object"
+      },
+      "ShowPayload": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "What the agent wants the user to look at",
+            "type": "string"
+          },
+          "sandboxId": {
+            "type": "string"
+          },
+          "sandboxName": {
+            "type": "string"
+          },
+          "teammateId": {
+            "type": "string"
+          },
+          "teammateName": {
+            "type": "string"
+          },
+          "title": {
+            "description": "What the agent calls the page",
+            "type": "string"
+          },
+          "url": {
+            "description": "The page the browser is on after opening it, in full",
+            "type": "string"
+          }
+        },
+        "required": [
+          "teammateId",
+          "teammateName",
+          "sandboxId",
+          "sandboxName",
+          "url"
         ],
         "type": "object"
       },

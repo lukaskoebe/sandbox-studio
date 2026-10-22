@@ -10,7 +10,8 @@ const browserInstructions = " Studio's browser: browser_open a page, browser_sna
 	"do so later. Log in with browser_fill_credential: Studio fills the vault secret itself after the user approves, " +
 	"and you never see its value. Script, cookie and storage access is not available. " +
 	"For a throwaway browser that keeps no cookies or storage, browser_open with ephemeral true, pass the session it returns " +
-	"to the other browser tools, and browser_close it when done."
+	"to the other browser tools, and browser_close it when done. When you have built something the user can see, " +
+	"show it to them with browser_show rather than describing it."
 
 // session is the optional session argument of every browser tool.
 func session() map[string]any {
@@ -71,8 +72,19 @@ func init() {
 		Tools = append(Tools, withSession(t))
 	}
 	Tools = append(Tools, Tool{agentproto.MethodBrowserClose, "End an ephemeral browser session; its cookies, storage and downloads are deleted.",
-		obj([]string{"session"}, map[string]any{"session": session()})}, BrowserDownloadsTool, BrowserDownloadToWorkspaceTool, BrowserRequestControlTool)
+		obj([]string{"session"}, map[string]any{"session": session()})}, BrowserShowTool, BrowserDownloadsTool, BrowserDownloadToWorkspaceTool, BrowserRequestControlTool)
 }
+
+// BrowserShowTool opens a page in the persistent profile and gives the user a card for it.
+var BrowserShowTool = Tool{agentproto.MethodBrowserShow,
+	"Show the user a page: open it in your browser, as browser_open does, and give them a card in Studio to watch your browser " +
+		"or take the wheel. Use it for what you built (localhost and 127.0.0.1 are this sandbox, as in browser_open) or a page " +
+		"outside it, such as docs. It doesn't wait for the user. It uses your persistent profile, not an ephemeral session.",
+	obj([]string{"url"}, map[string]any{
+		"url":   str("An http or https URL", "maxLength", 4000),
+		"title": str("What the page is, in a few words for the card, e.g. Login page", "maxLength", 120),
+		"note":  str("What the user should look at or try", "maxLength", 500),
+	})}
 
 // BrowserRequestControlTool asks the user for the browser back; the browser service answers it.
 var BrowserRequestControlTool = Tool{agentproto.MethodBrowserRequestControl,

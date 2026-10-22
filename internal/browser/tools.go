@@ -51,6 +51,7 @@ var tools = map[string]tool{
 	agentproto.MethodBrowserBack:           (*call).back,
 	agentproto.MethodBrowserFillCredential: (*call).fillCredential,
 	agentproto.MethodBrowserClose:          (*call).closeSession,
+	agentproto.MethodBrowserShow:           (*call).show,
 }
 
 // HandleCall answers one browser call of sandboxID's guest. The caller is the sandbox the

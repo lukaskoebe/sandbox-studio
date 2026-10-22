@@ -310,6 +310,13 @@ disconnecting clears the local input buffer.
   **Keep driving** tells the agent to carry on with other work, and the call waits up to
   30 s for the answer. A handback another way settles a pending request, and stopping the
   browser dismisses it. When no one drives it answers at once that the agent can go ahead.
+- **Showing the user a page.** `browser_show` (`show.go`: `url`, with an optional `title`
+  and `note`) opens the URL in the persistent profile as `browser_open` does, through the
+  same policy, and then raises a `browser.show` approval that the agent doesn't wait for:
+  a notification, and a card on Home, in the floating stack and on the Browser page with
+  the page's full address. **Watch** dismisses it and opens the Browser page, **Take the
+  wheel** approves it and starts a takeover of the profile, and **Ignore** dismisses it.
+  A teammate's newer card dismisses its older one.
 - **What the agent hears after a handback.** The session's `userTurn` (`turn.go`) keeps
   what Studio saw while the user drove: the pages the browser was on (from navigation and
   the stream's URL messages, 10 at most and a count of the rest) and downloads the user

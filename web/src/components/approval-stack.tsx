@@ -6,6 +6,7 @@ import { NetworkGroupCard } from "@/components/approval-group"
 import {
   BrowserActionDecision,
   BrowserControlDecision,
+  BrowserShowDecision,
   BrowserCredentialDecision,
 } from "@/components/browser-approval"
 import {
@@ -306,6 +307,8 @@ function ApprovalCard({
           <BrowserCredentialDecision approval={approval} />
         ) : approval.kind === "browser.control" ? (
           <BrowserControlDecision approval={approval} />
+        ) : approval.kind === "browser.show" ? (
+          <BrowserShowDecision approval={approval} />
         ) : approval.kind === "chat.permission" && approval.chatPermission ? (
           <ChatPermissionSummary approval={approval} />
         ) : isNetworkApproval(approval) ? (

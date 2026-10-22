@@ -25,6 +25,7 @@ func (s *Service) ApprovalKinds() []integrations.ApprovalKind {
 		{Kind: KindAction, Decide: s.decideAction},
 		{Kind: KindCredential, Decide: s.decideCredentialKind},
 		{Kind: KindControl, Decide: s.decideControl},
+		{Kind: KindShow, Decide: s.decideShow},
 	}
 }
 

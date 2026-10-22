@@ -79,6 +79,7 @@ const (
 	MethodBrowserBack           = "browser_back"
 	MethodBrowserFillCredential = "browser_fill_credential"
 	MethodBrowserClose          = "browser_close"
+	MethodBrowserShow           = "browser_show"
 )
 
 // BrowserMethodPrefix starts every browser method.

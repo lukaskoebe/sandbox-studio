@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -229,6 +230,61 @@ export function BrowserControlDecision({ approval }: { approval: Approval }) {
         >
           {decide.isPending && <Spinner />}
           Hand back
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Answers a browser.show card: an agent opened a page in its browser for the user to see.
+ * Watch opens the Browser page and clears the card; Take the wheel also hands the user
+ * control. The full address shows first, so the user sees where the browser is.
+ */
+export function BrowserShowDecision({ approval }: { approval: Approval }) {
+  const show = approval.browserShow
+  const navigate = useNavigate()
+  const decide = useDecide("card")
+  const send = (action: "allow" | "dismiss", open: boolean) => {
+    decide.mutate({
+      params: { path: { env: approval.environmentId, id: approval.id } },
+      body: { action, scope: "teammate", remember: false },
+    })
+    if (open && show)
+      void navigate({
+        to: "/e/$env/teammates/$id/browser",
+        params: { env: approval.environmentId, id: show.teammateId },
+      })
+  }
+  return (
+    <div className="grid gap-2">
+      {show && <p className="font-mono text-xs break-all">{show.url}</p>}
+      {show?.note && <p className="text-xs">{show.note}</p>}
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={decide.isPending}
+          onClick={() => send("dismiss", false)}
+        >
+          Ignore
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          disabled={decide.isPending || !show}
+          onClick={() => send("dismiss", true)}
+        >
+          Watch
+        </Button>
+        <Button
+          size="sm"
+          disabled={decide.isPending || !show}
+          onClick={() => send("allow", true)}
+        >
+          {decide.isPending && <Spinner />}
+          Take the wheel
         </Button>
       </div>
     </div>

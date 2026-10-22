@@ -64,6 +64,11 @@ func TestBrowserSessionArguments(t *testing.T) {
 			if hasSession {
 				t.Errorf("%s takes a session, but it lists them all", tl.Name)
 			}
+		case agentproto.MethodBrowserShow:
+			// The user watches and takes over the persistent profile.
+			if hasSession {
+				t.Errorf("%s takes a session, but shows the persistent profile", tl.Name)
+			}
 		default:
 			if !hasSession || slices.Contains(required, "session") {
 				t.Errorf("%s takes no optional session", tl.Name)

@@ -2,6 +2,7 @@ import {
   BrainIcon,
   ChatCircleDotsIcon,
   CursorClickIcon,
+  EyeIcon,
   GitBranchIcon,
   GitPullRequestIcon,
   GlobeIcon,
@@ -147,6 +148,18 @@ const kinds: Record<string, ApprovalKind> = {
     area: "browser",
     page: "/e/$env/teammates/$id/browser",
   },
+  "browser.show": {
+    title: "Browser",
+    summary: (a) => {
+      const show = a.browserShow
+      return show
+        ? `${show.teammateName} wants to show you: ${show.title || show.url}`
+        : a.subject
+    },
+    icon: EyeIcon,
+    area: "browser",
+    page: "/e/$env/teammates/$id/browser",
+  },
   "chat.permission": {
     title: "Agent permission",
     summary: (a) => a.chatPermission?.title ?? a.subject,
@@ -176,7 +189,8 @@ export function approvalTeammateId(a: Approval): string | undefined {
   return (
     a.browserAction?.teammateId ??
     a.browserCredential?.teammateId ??
-    a.browserControl?.teammateId
+    a.browserControl?.teammateId ??
+    a.browserShow?.teammateId
   )
 }
 
@@ -198,6 +212,7 @@ export function approvalSource(a: Approval): string | undefined {
     a.browserAction?.sandboxName ??
     a.browserCredential?.sandboxName ??
     a.browserControl?.sandboxName ??
+    a.browserShow?.sandboxName ??
     a.chatPermission?.sandboxName
   )
 }
@@ -214,6 +229,8 @@ const decisionWords: Record<string, string> = {
  * reviewer's decision.
  */
 export function approvalDecision(a: Approval): string {
+  if (a.kind === "browser.show")
+    return a.status === "approved" ? "Took the wheel" : "Seen"
   if (a.network?.tracker) return "Denied · tracker"
   if (a.reverted) return "Reverted · reviewer"
   switch (a.network?.decided) {

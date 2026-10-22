@@ -2622,6 +2622,8 @@ export interface components {
             browserControl?: components["schemas"]["ControlPayload"];
             /** @description An agent asks Studio to fill a vault credential into a page */
             browserCredential?: components["schemas"]["CredentialPayload"];
+            /** @description An agent shows the user a page in its browser */
+            browserShow?: components["schemas"]["ShowPayload"];
             /** @description A chat's agent asks to run a tool */
             chatPermission?: components["schemas"]["PermissionPayload"];
             /** Format: date-time */
@@ -4760,6 +4762,18 @@ export interface components {
             model: string;
             teammateId: string;
             teammateName: string;
+        };
+        ShowPayload: {
+            /** @description What the agent wants the user to look at */
+            note?: string;
+            sandboxId: string;
+            sandboxName: string;
+            teammateId: string;
+            teammateName: string;
+            /** @description What the agent calls the page */
+            title?: string;
+            /** @description The page the browser is on after opening it, in full */
+            url: string;
         };
         Source: {
             authorTeammate?: string;

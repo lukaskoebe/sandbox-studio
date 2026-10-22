@@ -31,6 +31,8 @@ The browser is one window that looks like any browser: tabs, Back, Forward, Relo
 
 The line under the toolbar always says who drives. To use the page yourself, type an address and press Enter, press Back or Reload, or choose **Take the wheel**: the teammate's browser calls wait until you choose **Hand back**. Its next browser step then tells the teammate that you drove, which pages you were on, any downloads you sent and where the page is now. What you clicked or typed is not passed on. When the teammate asks to click or fill something, the question shows on the page with its answers.
 
+When the teammate has something to show you, such as the login page it just built, it opens the page and you get a card on Home and over the other pages with the page's full address and what to look at. **Watch** opens the browser, **Take the wheel** opens it with you driving, and **Ignore** clears the card. The page opens like any other the teammate opens, through the browser's network rules, so a host no rule or level allows still asks you first.
+
 The shield in the address bar shows what the teammate may do on the site: **Ask first**, **Allowed** or **Blocked** for clicks and typing, and which fields are hidden from it. **Sites** lists every site with a rule or a visit, and **Add a rule or hide a field** covers single actions and fields. **Activity** lists every step by session; click one to see the page as it was after it.
 
 A browser sleeps after a while unused and wakes when the teammate browses or you open a page. **Reset profile** in the options menu signs the teammate out of every site.
