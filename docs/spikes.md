@@ -32,7 +32,8 @@ S7 and S8 details: [harnesses](harnesses.md#verified-vs-pending).
 - **Harness churn.** Config formats and hooks change often. The base image pins harness
   versions; adapters have contract tests against recorded payloads.
 - **microsandbox is pre-1.0 (0.7.x).** The SDK version is pinned, wrapped in
-  `internal/runtime` and upgraded deliberately.
+  `internal/runtime` and upgraded deliberately. The SDK refuses to launch VMs on an older
+  msb, so Studio upgrades the msb in its home when it starts (S11).
 
 ## S1 — Gateway and Docker in a sandbox
 
@@ -392,6 +393,21 @@ What follows for the design:
    from an MCP prompt or the first prompt, or the block goes into `/workspace/AGENTS.md`.
    That is a product decision.
 
+## S11 — Upgrading msb under running sandboxes (2026-10-22)
+
+`spikes/msb-upgrade`, with the steps in its README
+
+SDK 0.7.8 refuses to launch on msb 0.7.7 ("no tested sandbox launch contract"), and the SDK's
+`EnsureRuntime` keeps an msb that is already installed. So `runtime.Ensure` runs
+`msb --version` and, when that msb is older and in msb's home, installs the SDK's release
+over it with `InstallRuntime(Force)`. That stages the new files and renames them over the old
+ones.
+
+On Linux amd64, a VM booted by msb 0.7.7 kept running through the upgrade to 0.7.8 (5.5 s).
+SDK 0.7.8 ran commands in it and checkpointed it, running and stopped, and it started again
+on msb 0.7.8 with its workspace intact. 0.7.8 has no database migrations. macOS and Windows
+are untested, and restore is still disabled (#1736).
+
 ## Still open
 
 - S1–S3 on the Mac: GitHub's macOS runners have no Hypervisor.framework, so this needs a
@@ -411,5 +427,6 @@ What follows for the design:
 - No live run of suspend/resume (`spikes/suspend`) is recorded.
 - Browser broker items pending a live run, including arm64
   ([browser](browser.md#verified-vs-pending-live)).
+- S11 on macOS and Windows: upgrading msb under a running sandbox.
 - S10: an exchange with a real Cursor API key, to measure how long its access tokens live,
   and a session through the gateway.

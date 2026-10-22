@@ -218,7 +218,8 @@ func checkMSB(ctx context.Context, p Probes, o Options) []Check {
 	if o.MSBVersion != "" && got != strings.TrimPrefix(o.MSBVersion, "v") {
 		version.Status = Warn
 		version.Message += fmt.Sprintf("; Studio is built for %s", o.MSBVersion)
-		version.Fix = "Run `msb self downgrade` or `msb update` to match, or delete ~/.microsandbox/bin/msb and restart Studio."
+		version.Fix = "Studio upgrades an older msb in ~/.microsandbox when it starts, which needs network access: restart Studio. " +
+			"For a newer msb, run `msb self downgrade` to match."
 	}
 	doctor := Check{ID: "msb-doctor", Name: "msb doctor", Status: OK, Message: "msb's own host checks passed."}
 	if out, err := p.Run(ctx, path, "doctor"); err != nil {

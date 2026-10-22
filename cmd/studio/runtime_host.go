@@ -27,7 +27,7 @@ import (
 
 func installGuestAgent(dir, arch string) error { return agentbin.Install(dir, arch) }
 
-func ensureRuntime(ctx context.Context) error { return runtime.Ensure(ctx) }
+func ensureRuntime(ctx context.Context) (*runtime.Upgrade, error) { return runtime.Ensure(ctx) }
 
 func newRuntime(opts runtime.Options, _ *slog.Logger) studioRuntime { return runtime.New(opts) }
 

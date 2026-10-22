@@ -105,8 +105,12 @@ React SPA (embedded) ── HTTP · SSE · WebSocket ──┐
 
 - Studio is a normal user process, optionally started at login (`studio autostart`). There
   is no system service.
-- The SDK installs `msb` and `libkrunfw` into `~/.microsandbox` on first start
-  (`runtime.Ensure`). Its home must stay short: Unix socket paths are limited to 108 bytes.
+- The SDK installs `msb` and `libkrunfw` into `~/.microsandbox` on first start, and Studio
+  replaces an msb there that is older than the SDK's release (`runtime.Ensure`). The new files
+  are renamed over the old ones, so running VMs keep the old msb until they restart. A failed
+  upgrade is a warning: Studio serves, but sandboxes don't start until the next start of
+  Studio upgrades msb. An msb that is newer, or that `MSB_PATH` or the configuration picks, is
+  left alone. msb's home must stay short: Unix socket paths are limited to 108 bytes.
 - Listeners, all on loopback: the UI and API on `-addr` (default `127.0.0.1:7878`, must be
   loopback), the gateway on the next port, the template registry on the one after. Keep
   `-addr` stable for a data directory: VM configs store the gateway address and template

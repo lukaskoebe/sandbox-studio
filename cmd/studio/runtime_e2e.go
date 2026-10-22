@@ -25,7 +25,7 @@ var fakeRuntime *e2e.Runtime
 
 func installGuestAgent(string, string) error { return nil }
 
-func ensureRuntime(context.Context) error { return nil }
+func ensureRuntime(context.Context) (*runtime.Upgrade, error) { return nil, nil }
 
 func repairMSBDB(context.Context, *slog.Logger) {}
 

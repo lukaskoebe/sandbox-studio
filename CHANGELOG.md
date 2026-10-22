@@ -54,6 +54,11 @@
 - **Templates:** the editor's **Insert example** menu has **Studio dev**, with Go, Node.js
   and pnpm, and Chromium, for working on Studio in a sandbox. Studio runs there as its e2e
   build, since sandboxes can't run VMs of their own yet.
+- **Runtime:** microsandbox 0.7.8. When it starts, Studio upgrades an older msb in
+  `~/.microsandbox`, which needs network access once. Running sandboxes keep the old msb
+  until they restart. If the upgrade fails, Studio still starts and says so, and sandboxes
+  start again once a later start of Studio has upgraded msb. An msb that `MSB_PATH` points
+  at, or a newer one, is left alone, and `studio doctor` reports the mismatch.
 
 ## v0.5.2 — 2026-10-22
 

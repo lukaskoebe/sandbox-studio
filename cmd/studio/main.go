@@ -322,8 +322,17 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 		}
 	}()
 	log.Info("checking the microsandbox runtime")
-	if err := ensureRuntime(ctx); err != nil {
+	upgrade, err := ensureRuntime(ctx)
+	var upErr *runtime.UpgradeError
+	switch {
+	case errors.As(err, &upErr):
+		// Studio still serves; sandboxes can't start until msb is upgraded, which the doctor shows.
+		log.Warn("could not upgrade msb; sandboxes won't start until it is, at the next start of Studio", "err", err)
+	case err != nil:
 		return fmt.Errorf("microsandbox runtime: %w", err)
+	}
+	if upgrade != nil {
+		log.Info("upgraded msb; running sandboxes stay on the old one until they restart", "from", upgrade.From, "to", upgrade.To)
 	}
 
 	// Every sandbox connection goes through the gateway. Its address is stored in each VM's

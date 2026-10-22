@@ -101,12 +101,6 @@ type Runtime struct {
 // windows, its 5-second margin, and time for msb to start and return the command.
 const guestShutdownExecTimeout = 70 * time.Second
 
-// Ensure installs the msb runtime if needed. It is idempotent.
-func Ensure(ctx context.Context) error {
-	_, err := msb.EnsureRuntime(ctx, msb.RuntimeConfig{}, msb.InstallOptions{})
-	return err
-}
-
 // New returns a runtime with the given options.
 func New(opts Options) *Runtime { return &Runtime{opts: opts} }
 
