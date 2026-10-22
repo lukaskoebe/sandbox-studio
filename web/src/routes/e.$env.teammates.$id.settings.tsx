@@ -19,12 +19,11 @@ import { BrowserSettings } from "@/components/browser-settings"
 import { SaveBar } from "@/components/save-bar"
 import { DisclosureCard } from "@/components/disclosure-card"
 import {
-  TeammateLevelSelect,
+  TeammateLevelPicker,
   securityLevels,
   useEnvironmentLevel,
 } from "@/components/security-level"
 import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Spinner } from "@/components/ui/spinner"
 import { TeammateForm } from "@/components/teammate-form"
 import { TeammateHeartbeat } from "@/components/teammate-heartbeat"
@@ -103,16 +102,11 @@ function TeammateSettings() {
             <LevelSummary env={env} teammate={teammate} />
           )}
         >
-          <Field>
-            <FieldLabel htmlFor="teammate-security-level">
-              Security level
-            </FieldLabel>
-            <TeammateLevelSelect env={env} teammate={teammate} />
-            <FieldDescription>
-              The level of this teammate's sandboxes. Environment default
-              follows the environment's level, set in Settings → Network.
-            </FieldDescription>
-          </Field>
+          <p className="text-xs text-muted-foreground">
+            The security level of this teammate's sandboxes: what happens when
+            one connects to a host that no rule covers.
+          </p>
+          <TeammateLevelPicker env={env} teammate={teammate} />
         </DisclosureCard>
         <DisclosureCard
           {...card(

@@ -85,8 +85,11 @@ function NetworkLevelStep({ env }: { env: string }) {
         may connect without asking. Change it later in Network.
       </Hint>
       <SecurityLevelPicker
+        env={env}
         value={level}
-        onChange={setLevel}
+        onChange={(v) => {
+          if (v) setLevel(v)
+        }}
         disabled={saving}
       />
       <a

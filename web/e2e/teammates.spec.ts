@@ -161,3 +161,30 @@ test("a teammate's settings have one save bar for the changes in every section, 
   ).toBeVisible()
   expect((await teammate())?.role).toBe("Reviewer")
 })
+
+test("a teammate's security level is a card, or the environment's default", async ({
+  page,
+  api,
+  env,
+}) => {
+  const id = await addTeammate(api, env, sandboxName("Leveled"))
+  const level = () =>
+    api
+      .json<{ securityLevel: string }>(
+        "GET",
+        `/api/environments/${env}/teammates/${id}`
+      )
+      .then((t) => t!.securityLevel)
+  await page.goto(`/e/${env}/teammates/${id}/settings?open=network`)
+  const picker = page.getByRole("group", { name: "Security level" })
+  await expect(
+    picker.getByRole("radio", { name: /^Environment default/ })
+  ).toBeChecked()
+  await picker.getByRole("radio", { name: "Locked", exact: true }).click()
+  await expect(
+    picker.getByRole("radio", { name: "Locked", exact: true })
+  ).toBeChecked()
+  await expect.poll(level).toBe("locked")
+  await picker.getByRole("radio", { name: /^Environment default/ }).click()
+  await expect.poll(level).toBe("")
+})

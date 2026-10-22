@@ -63,7 +63,10 @@ export function CuratedList({ env }: { env: string }) {
     })
 
   return (
-    <section className="space-y-3 rounded-lg p-3 ring-1 ring-foreground/10">
+    <section
+      id="curated-list"
+      className="scroll-mt-4 space-y-3 rounded-lg p-3 ring-1 ring-foreground/10"
+    >
       <SectionHeader
         title="Curated list"
         icon={PackageIcon}

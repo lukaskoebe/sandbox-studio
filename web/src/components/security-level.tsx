@@ -1,39 +1,18 @@
+import { useId, type ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { ShieldCheckIcon } from "@phosphor-icons/react"
 import { SectionHeader } from "@/components/section-header"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 
 /** The four security levels, from the most closed to the most open (docs/network.md). */
 export const securityLevels = [
-  {
-    value: "locked",
-    label: "Locked",
-    text: "Ask for every host that no rule covers, as Studio did before levels.",
-  },
-  {
-    value: "guarded",
-    label: "Guarded",
-    text: "Allow the curated list of development infrastructure and ask for every other host.",
-  },
-  {
-    value: "assisted",
-    label: "Assisted",
-    text: "Allow the curated list, let an AI reviewer decide the other hosts, and ask when it is unsure.",
-  },
-  {
-    value: "open",
-    label: "Open",
-    text: "Allow every public host and log it in Activity. Deny rules and the tracker list still apply.",
-  },
+  { value: "locked", label: "Locked" },
+  { value: "guarded", label: "Guarded" },
+  { value: "assisted", label: "Assisted" },
+  { value: "open", label: "Open" },
 ] as const
 
 export type SecurityLevel = (typeof securityLevels)[number]["value"]
@@ -65,52 +44,185 @@ export function useEnvironmentLevel(env: string) {
   }
 }
 
-/** The four levels as a segmented control. The sentence of the selected level is shown beneath it. */
-export function SecurityLevelPicker({
-  value,
-  onChange,
-  disabled,
-}: {
-  value?: string
-  onChange: (value: SecurityLevel) => void
-  disabled?: boolean
-}) {
-  const current = securityLevels.find((l) => l.value === value)
+/** What a level lets through and what it asks about, with examples. */
+function LevelExamples({ env, level }: { env: string; level: SecurityLevel }) {
+  const curated = (
+    <Link
+      to="/e/$env/settings/network"
+      params={{ env }}
+      hash="curated-list"
+      className="underline underline-offset-4"
+    >
+      curated list
+    </Link>
+  )
+  const examples = {
+    locked: [
+      "Only hosts your rules allow.",
+      "Every other host: even npm install asks.",
+    ],
+    guarded: [
+      <>
+        npm, PyPI, Go, crates, Docker Hub, GitHub reads and the rest of the{" "}
+        {curated}.
+      </>,
+      "Every other host.",
+    ],
+    assisted: [
+      <>The {curated}, and the hosts an AI reviewer allows.</>,
+      "The hosts the reviewer is unsure about.",
+    ],
+    open: [
+      "Any public host, logged in Activity.",
+      "No public host. Your deny rules and the tracker list still apply.",
+    ],
+  }[level]
   return (
-    <div className="space-y-2">
-      <ToggleGroup
-        aria-label="Security level"
-        variant="outline"
-        value={value ? [value] : []}
-        disabled={disabled || !value}
-        onValueChange={(v) => {
-          const next = securityLevels.find((l) => l.value === v[0])
-          if (next) onChange(next.value)
-        }}
-        className="w-full"
-      >
-        {securityLevels.map((l) => (
-          <ToggleGroupItem key={l.value} value={l.value} className="flex-1">
-            {l.label}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      {current && (
-        <p className="text-xs text-muted-foreground">{current.text}</p>
-      )}
-    </div>
+    <dl className="grid gap-1">
+      <div>
+        <dt className="text-muted-foreground">Connects without asking</dt>
+        <dd>{examples[0]}</dd>
+      </div>
+      <div>
+        <dt className="text-muted-foreground">Asks you</dt>
+        <dd>{examples[1]}</dd>
+      </div>
+    </dl>
+  )
+}
+
+/** Who reviews at Assisted: the environment's utility model, or nobody, so it asks like Guarded. */
+function ReviewerLine({ env }: { env: string }) {
+  const reviewer = $api.useQuery("get", "/api/environments/{env}/reviewer", {
+    params: { path: { env } },
+  })
+  if (!reviewer.data) return null
+  return (
+    <p className="text-muted-foreground">
+      {reviewer.data.available
+        ? `Reviewer: ${reviewer.data.model} on ${reviewer.data.provider}. Its decisions show in Activity, where you can revert them.`
+        : "No provider has a utility model yet, so it asks like Guarded."}
+    </p>
+  )
+}
+
+function LevelCard({
+  name,
+  value,
+  checked,
+  onSelect,
+  title,
+  badge,
+  children,
+}: {
+  name: string
+  value: string
+  checked: boolean
+  onSelect: () => void
+  title: string
+  badge?: string
+  children: ReactNode
+}) {
+  const id = `${name}-${value || "default"}`
+  return (
+    <label className="grid cursor-pointer content-start gap-2 rounded-lg p-3 text-xs/relaxed ring-1 ring-foreground/10 transition-colors hover:bg-muted/40 has-checked:bg-primary/5 has-checked:ring-2 has-checked:ring-primary has-focus-visible:outline-2 has-focus-visible:outline-ring has-disabled:cursor-default">
+      <span className="flex items-center gap-2">
+        <input
+          type="radio"
+          name={name}
+          value={value}
+          checked={checked}
+          onChange={onSelect}
+          aria-labelledby={id}
+          aria-describedby={`${id}-text`}
+          className="size-3.5 accent-primary outline-none"
+        />
+        <span id={id} className="text-sm font-medium">
+          {title}
+        </span>
+        {badge && <Badge variant="secondary">{badge}</Badge>}
+      </span>
+      <div id={`${id}-text`} className="grid gap-2 pl-5.5">
+        {children}
+      </div>
+    </label>
   )
 }
 
 /**
- * The Rules page's security level: what happens to a host no rule covers, and whether Assisted can
- * ask a reviewer or, without a utility model, asks the user like Guarded.
+ * The four levels as radio cards, two by two where there is room, each saying what connects
+ * without asking and what asks. A teammate's picker adds the environment's default before them.
  */
+export function SecurityLevelPicker({
+  env,
+  value,
+  onChange,
+  disabled,
+  environmentDefault,
+}: {
+  env: string
+  value?: string
+  /** The level chosen, or "" for the environment's default. */
+  onChange: (value: SecurityLevel | "") => void
+  disabled?: boolean
+  /** For a teammate: offers "Environment default", the environment's level, as "". */
+  environmentDefault?: { level?: string }
+}) {
+  const name = useId()
+  const inherited = securityLevels.find(
+    (l) => l.value === environmentDefault?.level
+  )
+  return (
+    <fieldset
+      disabled={disabled || value === undefined}
+      className="@container grid min-w-0 gap-2"
+    >
+      <legend className="sr-only">Security level</legend>
+      {environmentDefault && (
+        <LevelCard
+          name={name}
+          value=""
+          checked={value === ""}
+          onSelect={() => onChange("")}
+          title={
+            inherited
+              ? `Environment default (${inherited.label})`
+              : "Environment default"
+          }
+        >
+          <p className="text-muted-foreground">
+            Follows the environment's level, set in Settings → Network.
+          </p>
+        </LevelCard>
+      )}
+      <div className="grid gap-2 @lg:grid-cols-2">
+        {securityLevels.map((l) => (
+          <LevelCard
+            key={l.value}
+            name={name}
+            value={l.value}
+            checked={value === l.value}
+            onSelect={() => onChange(l.value)}
+            title={l.label}
+            badge={l.value === "guarded" ? "Recommended" : undefined}
+          >
+            <LevelExamples env={env} level={l.value} />
+            {l.value === "assisted" && <ReviewerLine env={env} />}
+          </LevelCard>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        At every level your rules come first, and no level lets through the
+        local network, this computer, or a secret sent to a host it isn't bound
+        to.
+      </p>
+    </fieldset>
+  )
+}
+
+/** Settings → Network's security level: what happens to a host no rule covers. */
 export function LevelSection({ env }: { env: string }) {
   const { level, saving, setLevel } = useEnvironmentLevel(env)
-  const reviewer = $api.useQuery("get", "/api/environments/{env}/reviewer", {
-    params: { path: { env } },
-  })
   return (
     <section className="space-y-2 rounded-lg p-3 ring-1 ring-foreground/10">
       <SectionHeader
@@ -119,27 +231,22 @@ export function LevelSection({ env }: { env: string }) {
         area="network"
       />
       <p className="text-xs text-muted-foreground">
-        Sets what happens when no rule matches. Explicit rules always win, and
-        secrets only reach the hosts they are bound to at every level.
+        What happens when a sandbox connects to a host that no rule covers.
       </p>
       <SecurityLevelPicker
+        env={env}
         value={level}
-        onChange={setLevel}
+        onChange={(v) => {
+          if (v) setLevel(v)
+        }}
         disabled={saving}
       />
-      {level === "assisted" && reviewer.data && (
-        <p className="text-xs text-muted-foreground">
-          {reviewer.data.available
-            ? `The reviewer is ${reviewer.data.model} on ${reviewer.data.provider}. Its decisions show in Activity, where you can revert them.`
-            : "No provider of this environment has a utility model, so Assisted asks like Guarded until one does."}
-        </p>
-      )}
     </section>
   )
 }
 
-/** A teammate's override of the environment's level, or the environment's level ("Environment default"). */
-export function TeammateLevelSelect({
+/** A teammate's override of the environment's level, or "Environment default", which follows it. */
+export function TeammateLevelPicker({
   env,
   teammate,
 }: {
@@ -162,43 +269,18 @@ export function TeammateLevelSelect({
         }),
     }
   )
-  const defaultValue = "environment"
-  const value = teammate.securityLevel || defaultValue
-  const items = {
-    [defaultValue]: environment.level
-      ? `Environment default (${environment.level})`
-      : "Environment default",
-    ...Object.fromEntries(securityLevels.map((l) => [l.value, l.label])),
-  }
   return (
-    <Select
-      value={value}
+    <SecurityLevelPicker
+      env={env}
+      value={teammate.securityLevel}
       disabled={set.isPending}
-      items={items}
-      onValueChange={(v) => {
-        if (!v) return
+      environmentDefault={{ level: environment.level }}
+      onChange={(level) =>
         set.mutate({
           params: { path: { env, id: teammate.id } },
-          body: { level: v === defaultValue ? "" : v },
+          body: { level },
         })
-      }}
-    >
-      <SelectTrigger id="teammate-security-level" className="w-full">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={defaultValue}>
-          Environment default
-          <span className="text-muted-foreground">
-            {environment.level ?? ""}
-          </span>
-        </SelectItem>
-        {securityLevels.map((l) => (
-          <SelectItem key={l.value} value={l.value}>
-            {l.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      }
+    />
   )
 }

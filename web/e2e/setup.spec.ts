@@ -68,13 +68,13 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     // Network level: new environments start at Guarded; choosing Locked is saved as it is made.
     await open("Network level")
     await expect(
-      page.getByRole("button", { name: "Guarded", exact: true })
-    ).toHaveAttribute("aria-pressed", "true")
+      page.getByRole("radio", { name: "Guarded", exact: true })
+    ).toBeChecked()
     await expect(page.getByRole("link", { name: "Learn more" })).toBeVisible()
-    await page.getByRole("button", { name: "Locked", exact: true }).click()
+    await page.getByRole("radio", { name: "Locked", exact: true }).click()
     await expect(
-      page.getByRole("button", { name: "Locked", exact: true })
-    ).toHaveAttribute("aria-pressed", "true")
+      page.getByRole("radio", { name: "Locked", exact: true })
+    ).toBeChecked()
     await next().click()
 
     // First sandbox: created by Iris, with its progress shown until the workspace opens.

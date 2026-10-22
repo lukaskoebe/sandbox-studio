@@ -265,7 +265,11 @@ Each environment has one level, which decides what happens when no rule matches.
 always win, in either direction, and so do the tracker list and the sites and hosts a browser
 session was approved for, which come before the level. Each teammate can override the level for its own
 sandboxes; "Environment default" follows the environment. The level is set on Settings → Network,
-in the teammate's settings, and in the setup's network step.
+in the teammate's settings, and in the setup's network step, with one card per level
+(`SecurityLevelPicker` in `web/src/components/security-level.tsx`): what connects without asking,
+with examples and a link to the curated list, what asks, and at `assisted` the reviewer's model or
+that there is none. Guarded is marked recommended, and a line beneath says what no level lets
+through (below).
 
 | Level | No rule matches → | For whom |
 | --- | --- | --- |
