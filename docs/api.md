@@ -56,7 +56,10 @@ from other local users and from web pages:
   foreign keys on and a 5 s busy timeout.
 - Migrations are embedded SQL files, `internal/store/migrations/NNN_name.sql`, applied in
   order, each in its own transaction (foreign keys off during the migration and checked
-  before commit, as SQLite's table-rebuild procedure needs).
+  before commit, as SQLite's table-rebuild procedure needs). `PRAGMA user_version` counts the
+  applied ones. A database with more than this binary knows, which a newer Studio migrated, is
+  refused (`store.ErrNewerSchema`) and left untouched, so an older binary never runs on tables
+  it doesn't know, and a downgrade or an updater's rollback needs the backup from before.
 - Every query on environment-owned data takes an environment ID, so rows can't leak across
   environments by accident.
 - Memory keeps its own tables in the same database (`internal/memory`).

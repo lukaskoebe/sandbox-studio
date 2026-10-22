@@ -31,6 +31,10 @@ var ErrNotFound = errors.New("not found")
 // ErrExists is returned when a name is already taken.
 var ErrExists = errors.New("already exists")
 
+// ErrNewerSchema is returned by Open for a database that a newer Studio has migrated: this
+// binary doesn't know its tables, so it would misread or damage them.
+var ErrNewerSchema = errors.New("the database is from a newer version of Studio")
+
 // Store wraps the catalog database.
 type Store struct {
 	db                  *sql.DB
@@ -87,6 +91,9 @@ func (s *Store) migrateTo(ctx context.Context, last int) error {
 		return err
 	}
 	sort.Strings(names)
+	if current > len(names) {
+		return fmt.Errorf("%w (schema %d; this one knows %d): run that version, or restore a backup of the database from before it", ErrNewerSchema, current, len(names))
+	}
 	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
 		return err
 	}
