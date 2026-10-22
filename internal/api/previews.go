@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -18,6 +19,8 @@ type previewOpenPath struct {
 	// Embed is for the chat's preview panel, which frames the preview.
 	Embed bool `query:"embed" doc:"Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned"`
 	Fresh bool `query:"fresh" doc:"Clear the preview's caches and storage, its service workers among them, as it logs in"`
+	// Path is for a link the agent wrote, such as localhost:5173/login.
+	Path string `query:"path" maxLength:"2000" doc:"The page to land on after the login, a path on the preview's host such as /login; the root when empty"`
 }
 
 type previewOpenBody struct {
@@ -74,6 +77,13 @@ func (s *Server) registerPreviews(api huma.API) {
 		}
 		if in.Fresh {
 			query.Set("fresh", "1")
+		}
+		if in.Path != "" && in.Path != "/" {
+			// The login checks it again; this only refuses what could never land.
+			if !strings.HasPrefix(in.Path, "/") || strings.HasPrefix(in.Path, "//") {
+				return nil, huma.Error422UnprocessableEntity("preview path must start with a single /")
+			}
+			query.Set("next", in.Path)
 		}
 		u.RawQuery = query.Encode()
 		return &struct{ Body previewOpenBody }{Body: previewOpenBody{URL: u.String()}}, nil

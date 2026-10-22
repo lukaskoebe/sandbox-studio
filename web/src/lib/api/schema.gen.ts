@@ -9385,6 +9385,8 @@ export interface operations {
                 embed?: boolean;
                 /** @description Clear the preview's caches and storage, its service workers among them, as it logs in */
                 fresh?: boolean;
+                /** @description The page to land on after the login, a path on the preview's host such as /login; the root when empty */
+                path?: string;
             };
             header?: never;
             path: {

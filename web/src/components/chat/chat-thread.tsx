@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { ChatCircleDotsIcon, TerminalWindowIcon } from "@phosphor-icons/react"
@@ -8,6 +8,7 @@ import {
   turnUsage,
 } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
+import { PreviewSandbox } from "@/components/chat/markdown"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { TurnFooter } from "@/components/chat/turn-footer"
@@ -135,108 +136,115 @@ function ChatLog({
     return () => clearTimeout(t)
   }, [sending?.sent])
 
+  const previews = useMemo(
+    () => ({ env, sandboxId: chat.sandboxId }),
+    [env, chat.sandboxId]
+  )
+
   return (
-    <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <MessageScroller className="min-h-0 flex-1">
-          <MessageScrollerViewport aria-label="Messages">
-            <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
-              {items.length === 0 && !sending && (
-                <MessageScrollerItem className="m-auto">
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <ChatCircleDotsIcon />
-                      </EmptyMedia>
-                      <EmptyTitle>Nothing here yet</EmptyTitle>
-                      <EmptyDescription>
-                        Say what {teammateName} should do.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                </MessageScrollerItem>
-              )}
-              {items.map((item, i) => {
-                const turn = turnById.get(item.turnId)
-                const lastOfTurn = items.at(i + 1)?.turnId !== item.turnId
-                const footer =
-                  lastOfTurn &&
-                  turn?.endedAt &&
-                  (changeCount(turn) > 0 || turnUsage(turn))
-                    ? turn
-                    : undefined
-                // The note that changes were undone belongs to the undone turn but
-                // stays readable.
-                const dim =
-                  turn?.undoneAt &&
-                  !(item.kind === "marker" && item.marker?.kind === "undo")
-                if (item.id === pinned?.id) return null
-                return (
-                  <Fragment key={item.id}>
-                    <MessageScrollerItem
-                      messageId={item.id}
-                      scrollAnchor={item.kind === "user"}
-                      className={cn(dim && "opacity-50")}
-                      title={turn?.undoneAt ? "Undone" : undefined}
-                    >
-                      <ChatItemView
-                        item={item}
-                        ctx={{
-                          env,
-                          chatId: chat.id,
-                          teammateName,
-                          live: item.id === liveId,
-                        }}
-                      />
-                    </MessageScrollerItem>
-                    {footer && (
+    <PreviewSandbox.Provider value={previews}>
+      <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <MessageScroller className="min-h-0 flex-1">
+            <MessageScrollerViewport aria-label="Messages">
+              <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
+                {items.length === 0 && !sending && (
+                  <MessageScrollerItem className="m-auto">
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <ChatCircleDotsIcon />
+                        </EmptyMedia>
+                        <EmptyTitle>Nothing here yet</EmptyTitle>
+                        <EmptyDescription>
+                          Say what {teammateName} should do.
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  </MessageScrollerItem>
+                )}
+                {items.map((item, i) => {
+                  const turn = turnById.get(item.turnId)
+                  const lastOfTurn = items.at(i + 1)?.turnId !== item.turnId
+                  const footer =
+                    lastOfTurn &&
+                    turn?.endedAt &&
+                    (changeCount(turn) > 0 || turnUsage(turn))
+                      ? turn
+                      : undefined
+                  // The note that changes were undone belongs to the undone turn but
+                  // stays readable.
+                  const dim =
+                    turn?.undoneAt &&
+                    !(item.kind === "marker" && item.marker?.kind === "undo")
+                  if (item.id === pinned?.id) return null
+                  return (
+                    <Fragment key={item.id}>
                       <MessageScrollerItem
-                        className={cn(footer.undoneAt && "opacity-50")}
+                        messageId={item.id}
+                        scrollAnchor={item.kind === "user"}
+                        className={cn(dim && "opacity-50")}
+                        title={turn?.undoneAt ? "Undone" : undefined}
                       >
-                        <TurnFooter
-                          env={env}
-                          chat={chat}
-                          turn={footer}
-                          turns={turns}
-                          label={label}
-                          onShowChanges={onShowChanges}
+                        <ChatItemView
+                          item={item}
+                          ctx={{
+                            env,
+                            chatId: chat.id,
+                            teammateName,
+                            live: item.id === liveId,
+                          }}
                         />
                       </MessageScrollerItem>
-                    )}
-                  </Fragment>
-                )
-              })}
-              {sending && (
-                <MessageScrollerItem key={sending.key} scrollAnchor>
-                  <SendingMessage prompt={sending.prompt} />
-                </MessageScrollerItem>
-              )}
-              {running && !liveId && !sending && (
-                <MessageScrollerItem>
-                  <p className="shimmer text-xs text-muted-foreground">
-                    {teammateName} is starting…
-                  </p>
-                </MessageScrollerItem>
-              )}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <MessageScrollerButton />
-        </MessageScroller>
-        <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-4 pb-4">
-          {pinned?.plan && (
-            <PlanCard entries={pinned.plan.entries ?? []} live />
-          )}
-          <ChatComposer
-            env={env}
-            chat={chat}
-            queued={queued}
-            teammateName={teammateName}
-            onSending={onSending}
-            onSent={() => setSending((s) => s && { ...s, sent: true })}
-          />
+                      {footer && (
+                        <MessageScrollerItem
+                          className={cn(footer.undoneAt && "opacity-50")}
+                        >
+                          <TurnFooter
+                            env={env}
+                            chat={chat}
+                            turn={footer}
+                            turns={turns}
+                            label={label}
+                            onShowChanges={onShowChanges}
+                          />
+                        </MessageScrollerItem>
+                      )}
+                    </Fragment>
+                  )
+                })}
+                {sending && (
+                  <MessageScrollerItem key={sending.key} scrollAnchor>
+                    <SendingMessage prompt={sending.prompt} />
+                  </MessageScrollerItem>
+                )}
+                {running && !liveId && !sending && (
+                  <MessageScrollerItem>
+                    <p className="shimmer text-xs text-muted-foreground">
+                      {teammateName} is starting…
+                    </p>
+                  </MessageScrollerItem>
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton />
+          </MessageScroller>
+          <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-4 pb-4">
+            {pinned?.plan && (
+              <PlanCard entries={pinned.plan.entries ?? []} live />
+            )}
+            <ChatComposer
+              env={env}
+              chat={chat}
+              queued={queued}
+              teammateName={teammateName}
+              onSending={onSending}
+              onSent={() => setSending((s) => s && { ...s, sent: true })}
+            />
+          </div>
         </div>
-      </div>
-    </MessageScrollerProvider>
+      </MessageScrollerProvider>
+    </PreviewSandbox.Provider>
   )
 }
 

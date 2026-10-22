@@ -43,6 +43,18 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
     "Result",
   ])
   await expect(table.getByRole("cell")).toHaveText(["./... | tee", "ok"])
+  // A link to a server in the sandbox opens its preview, on that page.
+  const opened = page.waitForRequest(
+    (r) =>
+      r.method() === "POST" &&
+      r.url().includes(`/sandboxes/${id}/previews/5173/open?path=%2Flogin`)
+  )
+  const popup = page.waitForEvent("popup")
+  await main
+    .getByRole("button", { name: "http://localhost:5173/login" })
+    .click()
+  await opened
+  await (await popup).close()
   await expect(
     main.getByRole("button", { name: "Allow", exact: true })
   ).toHaveCount(0)

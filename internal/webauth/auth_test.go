@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -520,6 +521,39 @@ func TestPreviewTicketTargetBindingCookieIsolationAndRedirect(t *testing.T) {
 	a.Middleware(downstream()).ServeHTTP(main, mainReq)
 	if main.Code != http.StatusOK || strings.Contains(main.Body.String(), `"authenticated":true`) {
 		t.Fatalf("preview cookie authenticated main session: %d %q", main.Code, main.Body.String())
+	}
+}
+
+func TestPreviewLoginLandsOnItsOwnHostOnly(t *testing.T) {
+	a := testAuth(t)
+	host := "5173-sb.localhost:7878"
+	for next, want := range map[string]string{
+		"/login?tab=2":          "/login?tab=2",
+		"/":                     "/",
+		"":                      "/",
+		"//evil.example/":       "/",
+		"/\\evil.example":       "/",
+		"https://evil.example/": "/",
+		"login":                 "/",
+		"/a\r\nSet-Cookie: x=1": "/",
+	} {
+		token, err := a.IssuePreview(host)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+token+"&next="+url.QueryEscape(next), host, nil, "", downstream())
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != want {
+			t.Errorf("next %q: %d to %q, want %q", next, rec.Code, rec.Header().Get("Location"), want)
+		}
+	}
+	// A fresh login lands there too, through its page.
+	token, err := a.IssuePreview(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+token+"&fresh=1&next="+url.QueryEscape(`/a"b`), host, nil, "", downstream())
+	if !strings.Contains(rec.Body.String(), `url=/a&#34;b"`) {
+		t.Fatalf("fresh login page %q", rec.Body.String())
 	}
 }
 

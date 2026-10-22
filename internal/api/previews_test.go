@@ -74,6 +74,35 @@ func TestOpenPreviewTicket(t *testing.T) {
 	}
 }
 
+func TestOpenPreviewLandsOnAPath(t *testing.T) {
+	h, s, env, sb := previewFixture(t)
+	s.Auth = previewTestAuth(t, func(string) bool { return true })
+	path := "http://localhost:7878/api/environments/" + url.PathEscape(env.ID) + "/sandboxes/" + url.PathEscape(sb.ID) + "/previews/5173/open"
+
+	rec := do(h, http.MethodPost, path+"?path="+url.QueryEscape("/login?tab=2"), "")
+	var body previewOpenBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("open preview with a path: %d %s", rec.Code, rec.Body)
+	}
+	if u, err := url.Parse(body.URL); err != nil || u.Query().Get("next") != "/login?tab=2" {
+		t.Fatalf("preview URL %q, want next=/login?tab=2", body.URL)
+	}
+
+	// The root needs no next, and a path that leaves the host is refused.
+	rec = do(h, http.MethodPost, path+"?path=%2F", "")
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("open preview at the root: %d %s", rec.Code, rec.Body)
+	}
+	if u, _ := url.Parse(body.URL); u.Query().Has("next") {
+		t.Fatalf("root preview URL %q has next", body.URL)
+	}
+	for _, bad := range []string{"//evil.example/", "https://evil.example/", "login"} {
+		if rec := do(h, http.MethodPost, path+"?path="+url.QueryEscape(bad), ""); rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("path %q: got %d, want 422", bad, rec.Code)
+		}
+	}
+}
+
 func TestOpenPreviewValidatesSandboxEnvironment(t *testing.T) {
 	h, s, _, sb := previewFixture(t)
 	other, err := s.Store.CreateEnvironment(context.Background(), "other-preview-test")

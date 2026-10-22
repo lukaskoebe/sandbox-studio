@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Chat:** a link to a server in the sandbox, like `http://localhost:5173/login`, is a button
+  that opens that page in the port's preview.
+
 ## v0.5.2 — 2026-10-22
 
 Fixes from the first round of feedback: Studio on Windows no longer freezes after a click in

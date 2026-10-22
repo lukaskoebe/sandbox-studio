@@ -1,10 +1,22 @@
-import type { ReactNode } from "react"
+import { createContext, useContext, type ReactNode } from "react"
+import { BroadcastIcon } from "@phosphor-icons/react"
+import { openPreviewTab, parseSandboxLocalLink } from "@/lib/previews"
 import { cn } from "@/lib/utils"
+
+/**
+ * The sandbox whose servers a chat's links to localhost point at. Inside it they open as
+ * Studio previews; elsewhere they stay text.
+ */
+export const PreviewSandbox = createContext<{
+  env: string
+  sandboxId: string
+} | null>(null)
 
 /**
  * A small markdown renderer for agent messages: headings, paragraphs, lists, quotes, code
  * blocks, tables, rules, and inline code, bold, italics and links. It builds React elements and
  * never HTML, so agent text can't inject markup. Anything it doesn't know stays plain text.
+ * Links to localhost:<port> open the sandbox's preview inside a PreviewSandbox.
  */
 export function Markdown({
   text,
@@ -292,9 +304,10 @@ export function CodeBlock({
   )
 }
 
-// Inline code first, so markup inside backticks stays literal.
+// Inline code first, so markup inside backticks stays literal. A link to localhost comes before
+// other URLs, so http://localhost:5173 is one.
 const inlinePattern =
-  /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|(?<![\w*])\*(?!\s)([\s\S]+?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]+?)(?<!\s)_(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/
+  /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|(?<![\w*])\*(?!\s)([\s\S]+?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]+?)(?<!\s)_(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w./@:-])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/(?:[^\s<>()]*[^\s<>().,;:!?'"])?)?)(?![\w:])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/
 
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
@@ -309,7 +322,7 @@ function inline(text: string): ReactNode[] {
     if (m.index > 0) out.push(rest.slice(0, m.index))
     const k = key++
     if (m[2] !== undefined) {
-      out.push(
+      const code = (
         <code
           key={k}
           className="rounded bg-muted px-1 py-px font-mono text-[0.6875rem]"
@@ -317,20 +330,48 @@ function inline(text: string): ReactNode[] {
           {m[2].trim() || m[2]}
         </code>
       )
+      const local = parseSandboxLocalLink(m[2])
+      out.push(
+        local ? (
+          <PreviewLink key={k} {...local}>
+            {code}
+          </PreviewLink>
+        ) : (
+          code
+        )
+      )
     } else if (m[3] !== undefined || m[4] !== undefined) {
       out.push(<strong key={k}>{inline(m[3] ?? m[4] ?? "")}</strong>)
     } else if (m[5] !== undefined || m[6] !== undefined) {
       out.push(<em key={k}>{inline(m[5] ?? m[6] ?? "")}</em>)
     } else if (m[7] !== undefined) {
+      const local = parseSandboxLocalLink(m[8] ?? "")
       out.push(
-        <SafeLink key={k} href={m[8] ?? ""}>
-          {inline(m[7])}
-        </SafeLink>
+        local ? (
+          <PreviewLink key={k} {...local} href={m[8]}>
+            {inline(m[7])}
+          </PreviewLink>
+        ) : (
+          <SafeLink key={k} href={m[8] ?? ""}>
+            {inline(m[7])}
+          </SafeLink>
+        )
+      )
+    } else if (m[9] !== undefined) {
+      const local = parseSandboxLocalLink(m[9])
+      out.push(
+        local ? (
+          <PreviewLink key={k} {...local} href={m[9]}>
+            {m[9]}
+          </PreviewLink>
+        ) : (
+          m[9]
+        )
       )
     } else {
       out.push(
-        <SafeLink key={k} href={m[9] ?? ""}>
-          {m[9]}
+        <SafeLink key={k} href={m[10] ?? ""}>
+          {m[10]}
         </SafeLink>
       )
     }
@@ -351,5 +392,39 @@ function SafeLink({ href, children }: { href: string; children: ReactNode }) {
     >
       {children}
     </a>
+  )
+}
+
+/**
+ * A link to a server in the sandbox, such as localhost:5173/login. The user's own localhost
+ * is not the sandbox, so inside a chat it opens the port's preview, on that page; elsewhere it
+ * stays as written, a link if it was one.
+ */
+function PreviewLink({
+  port,
+  path,
+  href,
+  children,
+}: {
+  port: number
+  path?: string
+  href?: string
+  children: ReactNode
+}) {
+  const sandbox = useContext(PreviewSandbox)
+  if (!sandbox)
+    return href ? <SafeLink href={href}>{children}</SafeLink> : <>{children}</>
+  return (
+    <button
+      type="button"
+      title={`Open port ${port} of the sandbox in Studio's preview`}
+      onClick={() =>
+        void openPreviewTab(sandbox.env, sandbox.sandboxId, port, false, path)
+      }
+      className="inline-flex max-w-full items-center gap-1 rounded-md border bg-muted/40 px-1 align-baseline underline-offset-3 hover:bg-muted hover:underline [&_code]:bg-transparent [&_code]:p-0"
+    >
+      <BroadcastIcon className="size-3 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 truncate">{children}</span>
+    </button>
   )
 }

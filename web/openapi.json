@@ -14687,6 +14687,17 @@
               "description": "Clear the preview's caches and storage, its service workers among them, as it logs in",
               "type": "boolean"
             }
+          },
+          {
+            "description": "The page to land on after the login, a path on the preview's host such as /login; the root when empty",
+            "explode": false,
+            "in": "query",
+            "name": "path",
+            "schema": {
+              "description": "The page to land on after the login, a path on the preview's host such as /login; the root when empty",
+              "maxLength": 2000,
+              "type": "string"
+            }
           }
         ],
         "responses": {

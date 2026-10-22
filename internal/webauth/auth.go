@@ -11,10 +11,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"html"
 	"io"
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -350,6 +352,7 @@ func (a *Auth) servePreviewLogin(w http.ResponseWriter, r *http.Request, host st
 		http.Error(w, "Open this preview from Sandbox Studio.", http.StatusForbidden)
 		return
 	}
+	next := previewNext(r.URL.Query().Get("next"))
 	cookie := a.signedCookie(r, PreviewCookie, "preview", host, a.now().Add(previewSessionLife), http.SameSiteLaxMode)
 	if r.URL.Query().Get("embed") == "1" {
 		// The chat's preview panel frames the preview, which is cross-site to Studio: only a
@@ -371,10 +374,23 @@ func (a *Auth) servePreviewLogin(w http.ResponseWriter, r *http.Request, host st
 		// just set does. A page rather than a redirect, so that every browser applies it.
 		w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/"><title>Opening preview</title>`)
+		_, _ = io.WriteString(w, `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=`+html.EscapeString(next)+`"><title>Opening preview</title>`)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
+}
+
+// previewNext is the page a preview login lands on: next when it is a path on the preview's
+// own host, such as /login?tab=2 from a link the agent wrote, and the root otherwise.
+func previewNext(next string) string {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.ContainsAny(next, "\\\x00\r\n\t") {
+		return "/"
+	}
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil {
+		return "/"
+	}
+	return next
 }
 
 func (a *Auth) setSignedCookie(w http.ResponseWriter, r *http.Request, name, kind, host string, expires time.Time, sameSite http.SameSite) {

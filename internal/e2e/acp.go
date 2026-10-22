@@ -19,6 +19,8 @@ const (
 	ACPDone     = "The tests passed."
 	// ACPTable follows ACPDone in the same message: a markdown table, with a pipe in a code span.
 	ACPTable = "\n\n| Package | Result |\n| --- | :---: |\n| `./... | tee` | ok |\n"
+	// ACPPreview ends the message with a link to a server in the sandbox, as agents write them.
+	ACPPreview = "\nThe app runs at http://localhost:5173/login."
 )
 
 // acpTurns is the script of every prompt: the agent answers, asks to run a command, runs it
@@ -50,6 +52,7 @@ func acpTurns(n int) []acptest.Turn {
 			{Update: raw(map[string]any{"sessionUpdate": "tool_call_update", "toolCallId": id, "status": "completed"})},
 			{Update: text(ACPDone)},
 			{Update: text(ACPTable)},
+			{Update: text(ACPPreview)},
 		}}
 	}
 	return turns
