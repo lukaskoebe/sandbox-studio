@@ -349,6 +349,49 @@ does not complete all M3 work.
 See the [kernel overlay documentation](https://docs.kernel.org/filesystems/overlayfs.html)
 and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze.8.html).
 
+## S10 — Cursor's CLI behind the gateway (2026-10-22)
+
+Read from the CLI's bundle, version `2026.10.22-27dcf5f` (`agent-cli-package.tar.gz` for
+linux/x64: 185 MB, 558 MB unpacked, with its own Node). Nothing was run: there is no Cursor
+key to run it with.
+
+- `CURSOR_API_KEY` is only used once, sent as `Authorization: Bearer <key>` to
+  `POST https://api2.cursor.sh/auth/exchange_user_api_key`. The gateway can swap a placeholder
+  there. But the response body holds a real access token (a JWT) and a refresh token, and the
+  CLI saves both in `~/.config/cursor/auth.json`. **A placeholder API key would put a real
+  session token in the guest.** So `cursor_api` can't be a plain placeholder provider.
+- Every later request sends `authorization: Bearer <access token>`, which a placeholder can
+  carry. The agent's stream is Connect over HTTP/2. The gateway serves h2 to the guest and
+  dials h2 upstream, so headers are swapped on it like on any other request.
+- The CLI decodes the token's payload. It checks `exp` and refreshes when the token is less
+  than 5 minutes from expiry or the payload doesn't parse. It reads `sub` too, and fails with
+  "No auth ID found" without it. A guest token must be a JWT with the real header and
+  payload. The Codex login does the same: its signature is the placeholder (`codexGuestAuth`).
+- With `CURSOR_AUTH_TOKEN` and no API key, the CLI never refreshes. A refresh attempt finds no
+  key, gives up and keeps the token. The CLI reads `auth.json` once and keeps the token in
+  memory, so rewriting the file doesn't reach a running agent.
+- Hosts: `api2.cursor.sh` for auth and the API. The agent URL comes from the server's config
+  (`agentUrl`, `agentnUrl`), and `repo42.cursor.sh` and `api3.cursor.sh` also appear. The key
+  must be bound to `*.cursor.sh`.
+- Files: `~/.cursor/mcp.json`, `~/.cursor/hooks.json` and `~/.cursor/cli-config.json`.
+  Instructions come from `AGENTS.md`, `CLAUDE.md` and `.cursor/rules/**/*.mdc` in the
+  project. No global rules file was found in the home, so the managed block would have to go
+  into `/workspace`, which every other harness avoids. The hook names include
+  `beforeSubmitPrompt`, `stop`, `preCompact`, `afterAgentResponse` and `subagentStop`. No
+  session-start hook was found.
+
+What follows for the design:
+
+1. Studio exchanges the key on the host, as it refreshes ChatGPT logins (`login/refresh.go`),
+   and writes the guest an `auth.json` whose access token's signature is the placeholder.
+2. A re-exchange changes the token's header and payload, which an agent that is already
+   running keeps in memory. So each exchanged token needs a placeholder of its own, valid
+   until the token expires, and Studio has to exchange well before that. How long the
+   tokens live isn't documented. It needs one exchange with a real key to measure.
+3. The managed instructions have no home in the home directory. Either Cursor reads them
+   from an MCP prompt or the first prompt, or the block goes into `/workspace/AGENTS.md`.
+   That is a product decision.
+
 ## Still open
 
 - S1–S3 on the Mac: GitHub's macOS runners have no Hypervisor.framework, so this needs a
@@ -368,3 +411,5 @@ and [filesystem freeze semantics](https://man7.org/linux/man-pages/man8/fsfreeze
 - No live run of suspend/resume (`spikes/suspend`) is recorded.
 - Browser broker items pending a live run, including arm64
   ([browser](browser.md#verified-vs-pending-live)).
+- S10: an exchange with a real Cursor API key, to measure how long its access tokens live,
+  and a session through the gateway.
