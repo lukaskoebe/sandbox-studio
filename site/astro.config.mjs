@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
+import starlightImageZoom from 'starlight-image-zoom'
 
 export default defineConfig({
   site: 'https://lukaskoebe.github.io',
@@ -10,6 +11,8 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Sandbox Studio',
+      // Screenshots open full size on click.
+      plugins: [starlightImageZoom()],
       description:
         'AI teammates that work safely on your computer: Claude Code, Codex and OpenCode in their own microVM sandboxes.',
       logo: { light: './src/assets/logo-light.svg', dark: './src/assets/logo-dark.svg' },
@@ -27,6 +30,8 @@ export default defineConfig({
       components: {
         // The landing page's hero, with the install command and the overview video.
         Hero: './src/components/Hero.astro',
+        // A Docs link on the landing page, on phones too.
+        Header: './src/components/Header.astro',
       },
       expressiveCode: {
         styleOverrides: {
