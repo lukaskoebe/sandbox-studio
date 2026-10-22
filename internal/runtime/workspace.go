@@ -37,8 +37,27 @@ func (r *Runtime) ImportTree(ctx context.Context, owned OwnedVM, tree Tree, rd i
 	return r.runAgent(ctx, owned, string(tree)+"-import", RunCommand{Stdin: rd})
 }
 
+// RunAgentCommand runs `studio-agent <args>` in a running VM as the agent user, in its home,
+// with stdin and stdout streamed. A failure carries the start of its stderr.
+func (r *Runtime) RunAgentCommand(ctx context.Context, owned OwnedVM, args []string, stdin io.Reader, stdout io.Writer) error {
+	if len(args) == 0 {
+		return fmt.Errorf("no studio-agent command")
+	}
+	return r.runAgentAs(ctx, owned, args, RunCommand{
+		User: "agent", Cwd: HomePath, Stdin: stdin, Stdout: stdout,
+		Env: map[string]string{"HOME": HomePath, "USER": "agent", "LOGNAME": "agent",
+			"PATH": "/home/agent/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"},
+	})
+}
+
 func (r *Runtime) runAgent(ctx context.Context, owned OwnedVM, subcommand string, command RunCommand) error {
-	command.Path, command.Args, command.User, command.Cwd = AgentPath, []string{subcommand}, "root", "/"
+	command.User, command.Cwd = "root", "/"
+	return r.runAgentAs(ctx, owned, []string{subcommand}, command)
+}
+
+func (r *Runtime) runAgentAs(ctx context.Context, owned OwnedVM, args []string, command RunCommand) error {
+	subcommand := args[0]
+	command.Path, command.Args = AgentPath, args
 	stderr := make(chan RunOutput, 64)
 	result, err := r.Run(ctx, owned, command, stderr)
 	// Late output may still arrive after Run returns, so the channel is drained, not closed.

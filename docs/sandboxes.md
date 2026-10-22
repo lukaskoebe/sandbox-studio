@@ -258,7 +258,7 @@ as the guard.
 
 Each sandbox keeps its history in `sandbox_events` (`store.SandboxEvent`): one row per
 successful step, in order. The kinds are `create` (also an import), `fork`, `rebase`,
-`restore`, `checkpoint` and `delete`. A failed operation writes nothing. Code:
+`restore`, `checkpoint`, `merge` and `delete`. A failed operation writes nothing. Code:
 `internal/sandboxes/lineage.go` and `internal/store/lineage.go`.
 
 - A fork refers to its source by ID, generation and time (`forked_from_*` on the sandbox,
@@ -268,6 +268,8 @@ successful step, in order. The kinds are `create` (also an import), `fork`, `reb
 - A rebase or restore records its event in the same transaction as the generation switch
   (`CommitRebase`, `CommitRestore`), so it is recorded once, even when cleanup or recovery
   runs later.
+- An accepted merge records a `merge` event on the source, with the fork as the other
+  sandbox, in the same transaction that closes the merge.
 - A delete records a tombstone: the event keeps the sandbox's name, template and fork
   source. A deleted sandbox's history stays, and its forks stay under it in the family tree.
   A sandbox whose create failed leaves no tombstone.
@@ -317,6 +319,42 @@ Studio therefore keeps suspend in place.
   two VMs, and the home too where there is a home disk. Docker data is not copied.
 - [Export and import](export-import.md): a `.studio-sandbox` file (manifest, home tar and
   workspace tar), recreated through a template build and the same copies.
+
+## Merge a fork back
+
+**Merge into <source>** in a fork's options menu brings what changed in the fork back into the
+sandbox it was forked from. Studio does the merge in a scratch sandbox, a fresh fork of the
+source named `<source>-merge-<n>`, and changes the source only on **Accept**. The rules for
+what is merged and how are in [the design](design/fork-merge.md). Code: `internal/forkmerge`
+(run in the guest by `studio-agent merge-*`, as the agent user), `internal/sandboxes/merge.go`
+and `internal/store/merges.go`.
+
+- Right after a fork boots, Studio records its base (`studio-agent merge-base`): what the
+  fork, and so the source, held at fork time. A fork made before v0.6 has none, so its merge
+  can't tell an addition from a deletion: nothing counts as deleted and every file the two
+  sides hold differently is a conflict.
+- The fork must be running, and only one merge into a sandbox can be open. A merge is
+  `preparing` while Studio creates the scratch sandbox and merges into it, then `ready` or
+  `conflicts`, or `failed` with its error.
+- Conflicts are resolved in the scratch sandbox, by hand or by its teammate, which can also run
+  the tests. A text file is resolved once it has no conflict markers; any other conflict once
+  its artifact under `/workspace/.studio-merge` is deleted. **Check again** recounts them.
+- **Accept** takes a checkpoint of the source (`before merging <fork>`), then copies
+  everything that changed in the scratch sandbox since it was made into the source. If the
+  source changed one of those paths in the meantime, nothing is copied, the merge stays open
+  and the answer names the paths. Otherwise Studio records a `merge` event and deletes the
+  scratch sandbox. The source must be running.
+- **Abort** deletes the scratch sandbox; the source was never changed. Deleting the source,
+  the fork or the scratch sandbox aborts an open merge; the scratch sandbox of one whose source
+  or fork went stays, for what was done in it. A merge still preparing when Studio stopped
+  fails on the next start, and the merge page offers to delete its scratch sandbox.
+
+The API: `POST /api/environments/{env}/sandboxes/{id}/merge` starts merging fork `{id}` and
+answers 202 with the merge; `GET .../sandboxes/{id}/merges` lists the merges a sandbox takes
+part in; `GET /api/environments/{env}/merges/{merge}` gives one with its report, and `POST
+.../merges/{merge}/check`, `/accept` and `/abort` act on it. A conflict with the merge's state
+answers 409. The web shows a merge at `/e/{env}/merges/{merge}`, and a banner on each sandbox
+an open merge involves.
 
 ## SSH access
 

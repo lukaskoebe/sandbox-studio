@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Sandboxes:** **Merge into** in a fork's options menu brings the fork's changes back into
+  the sandbox it was forked from. Studio merges them in a scratch copy of that sandbox: files
+  three-way with conflict markers, commits as `fork/<fork>/<branch>` branches, and the tools
+  the fork installed. You resolve conflicts there, or ask its teammate to, then **Accept**
+  checkpoints the original and copies the result in, and **Abort** deletes the copy. Forks
+  made from now on record what they started from; an older fork's merge treats every
+  difference as a conflict.
 - **Chat:** a link to a server in the sandbox, like `http://localhost:5173/login`, is a button
   that opens that page in the port's preview.
 - **Agents:** the `sandbox_info` tool, and `studio-agent info` in a terminal, tell an agent its

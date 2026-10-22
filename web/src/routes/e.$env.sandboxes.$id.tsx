@@ -8,6 +8,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
+import { MergeBanner } from "@/components/merge-fork"
 import { SandboxHeader, SandboxPageProvider } from "@/components/sandbox-page"
 import { $api, errorMessage, errorStatus, isReady } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
@@ -94,6 +95,7 @@ function SandboxLayout() {
         updatedAt={sandbox.dataUpdatedAt}
         error={sandbox.error}
       />
+      <MergeBanner env={env} sandbox={sb} />
       <div className="flex min-h-0 flex-1 flex-col">
         <Outlet />
       </div>

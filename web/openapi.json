@@ -351,6 +351,28 @@
         ],
         "type": "object"
       },
+      "BranchResult": {
+        "additionalProperties": false,
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "branch"
+        ],
+        "type": "object"
+      },
       "BrowserAction": {
         "additionalProperties": false,
         "properties": {
@@ -2767,6 +2789,34 @@
         ],
         "type": "object"
       },
+      "FileResult": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "type": "string"
+          },
+          "conflict": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "resolved": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "outcome"
+        ],
+        "type": "object"
+      },
       "FileRule": {
         "additionalProperties": false,
         "properties": {
@@ -4088,7 +4138,8 @@
               "rebase",
               "restore",
               "checkpoint",
-              "delete"
+              "delete",
+              "merge"
             ],
             "type": "string"
           },
@@ -4097,7 +4148,7 @@
             "type": "string"
           },
           "otherSandboxId": {
-            "description": "For a fork, the other sandbox. On a delete event, the source the sandbox was forked from",
+            "description": "For a fork, the other sandbox. On a delete event, the source the sandbox was forked from. For a merge, the fork merged",
             "type": "string"
           },
           "sandboxId": {
@@ -4460,6 +4511,78 @@
         "required": [
           "filename",
           "markdown"
+        ],
+        "type": "object"
+      },
+      "MergeView": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpointId": {
+            "description": "The source's checkpoint taken before Accept",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "forkId": {
+            "type": "string"
+          },
+          "forkName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "report": {
+            "$ref": "#/components/schemas/Report"
+          },
+          "scratchId": {
+            "description": "The sandbox the merge is done in; empty until it exists",
+            "type": "string"
+          },
+          "scratchName": {
+            "type": "string"
+          },
+          "sourceId": {
+            "description": "The sandbox the fork is merged into",
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "preparing",
+              "ready",
+              "conflicts",
+              "failed",
+              "accepted",
+              "aborted"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceName",
+          "forkName",
+          "id",
+          "environmentId",
+          "sourceId",
+          "forkId",
+          "state",
+          "createdAt",
+          "updatedAt"
         ],
         "type": "object"
       },
@@ -5735,6 +5858,61 @@
         ],
         "type": "object"
       },
+      "Report": {
+        "additionalProperties": false,
+        "properties": {
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/BranchResult"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "conflicts": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileResult"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "fork": {
+            "type": "string"
+          },
+          "installs": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "noBase": {
+            "type": "boolean"
+          },
+          "unchanged": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fork",
+          "unchanged",
+          "files",
+          "branches",
+          "installs",
+          "conflicts"
+        ],
+        "type": "object"
+      },
       "ResizeApplied": {
         "additionalProperties": false,
         "properties": {
@@ -5809,6 +5987,10 @@
             "type": "integer"
           },
           "environmentId": {
+            "type": "string"
+          },
+          "forkOf": {
+            "description": "The ID of the sandbox this one was forked from, which it can be merged back into",
             "type": "string"
           },
           "generation": {
@@ -8298,6 +8480,10 @@
             "type": "integer"
           },
           "environmentId": {
+            "type": "string"
+          },
+          "forkOf": {
+            "description": "The ID of the sandbox this one was forked from, which it can be merged back into",
             "type": "string"
           },
           "generation": {
@@ -12516,6 +12702,214 @@
         ]
       }
     },
+    "/api/environments/{env}/merges/{merge}": {
+      "get": {
+        "operationId": "getMerge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Merge ID",
+            "in": "path",
+            "name": "merge",
+            "required": true,
+            "schema": {
+              "description": "Merge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "A merge and its report",
+        "tags": [
+          "merges"
+        ]
+      }
+    },
+    "/api/environments/{env}/merges/{merge}/abort": {
+      "post": {
+        "description": "Deletes the scratch sandbox. The source was never touched.",
+        "operationId": "abortMerge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Merge ID",
+            "in": "path",
+            "name": "merge",
+            "required": true,
+            "schema": {
+              "description": "Merge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Abort a merge",
+        "tags": [
+          "merges"
+        ]
+      }
+    },
+    "/api/environments/{env}/merges/{merge}/accept": {
+      "post": {
+        "description": "Checkpoints the source, copies everything that changed in the scratch sandbox into it, and deletes the scratch sandbox. The source and the scratch sandbox must run, and no conflicts may be left. If the source changed a path since the merge started, nothing is copied and the answer is 409, naming the paths. It continues if the client disconnects.",
+        "operationId": "acceptMerge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Merge ID",
+            "in": "path",
+            "name": "merge",
+            "required": true,
+            "schema": {
+              "description": "Merge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Accept a merge",
+        "tags": [
+          "merges"
+        ]
+      }
+    },
+    "/api/environments/{env}/merges/{merge}/check": {
+      "post": {
+        "description": "A text file is resolved once it has no conflict markers; any other conflict once its file under /workspace/.studio-merge/conflicts is deleted. The scratch sandbox must run.",
+        "operationId": "checkMerge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Merge ID",
+            "in": "path",
+            "name": "merge",
+            "required": true,
+            "schema": {
+              "description": "Merge ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Count the conflicts left",
+        "tags": [
+          "merges"
+        ]
+      }
+    },
     "/api/environments/{env}/private-hosts": {
       "get": {
         "description": "The local network list: names whose connections may reach private addresses, such as company hosts behind a VPN, and private addresses sandboxes may reach, such as a NAS.",
@@ -14861,6 +15255,120 @@
         },
         "tags": [
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/merge": {
+      "post": {
+        "description": "Starts merging the fork {id}, which must run, into the sandbox it was forked from. Studio forks the source into a scratch sandbox \u003csource\u003e-merge-\u003cn\u003e and merges the fork's changes there; the source isn't touched until the merge is accepted. It answers at once in state preparing; the merge becomes ready, conflicts or failed.",
+        "operationId": "startMerge",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Merge a fork back into its source",
+        "tags": [
+          "merges"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/merges": {
+      "get": {
+        "description": "As source, fork or scratch sandbox, newest first.",
+        "operationId": "listMerges",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MergeView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "The merges a sandbox takes part in",
+        "tags": [
+          "merges"
         ]
       }
     },

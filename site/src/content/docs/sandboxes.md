@@ -56,6 +56,21 @@ The sandbox page has a **History** section. It draws the sandbox's history as a 
 
 Once a sandbox was forked, the Home page has a **Family** card. It lists each template with its sandboxes, and shows each fork under the sandbox it was made from. Green marks a running sandbox, amber one that is still starting or being created, and red one that failed.
 
+## Merge a fork back
+
+A fork's options menu has **Merge into** followed by the name of the sandbox it was forked from. Start the fork first: Studio reads its changes while it runs.
+
+Studio makes a scratch copy of the original sandbox, named like `my-app-merge-1`, and merges the fork's changes into that copy. The original isn't touched until you accept. The merge page lists what it did:
+
+- Files in `/workspace` and the home directory that only the fork changed come over as they are. A text file both sides changed is merged line by line, and lines both changed get conflict markers.
+- Commits arrive as new branches named `fork/<fork>/<branch>`, so no branch of the original is overwritten.
+- Tools the fork installed with mise, cargo or go are copied if the original lacks them.
+- Caches, ignored files and Docker state are left out.
+
+If there are conflicts, open the scratch sandbox and resolve them, or copy the prompt on the merge page into a chat with its teammate. Run the tests there if you like, then **Check again**. **Accept** takes a checkpoint of the original, so you can go back, copies the result into it and deletes the scratch copy. **Abort** deletes the scratch copy and leaves the original as it was.
+
+A fork made before Studio 0.6 doesn't know what it started from, so every file the two sides hold differently is a conflict.
+
 ## Open a preview
 
 Previews are off unless you turn on **Previews** under **Settings → General**, for every environment at once. While they are off, the sandbox's details list its ports without opening them, and the menu and the chat's Preview tab are hidden, and links to its ports in an agent's messages are plain text.

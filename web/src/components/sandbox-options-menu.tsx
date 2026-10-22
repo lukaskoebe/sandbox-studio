@@ -5,6 +5,7 @@ import {
   DotsThreeIcon,
   DownloadSimpleIcon,
   GitForkIcon,
+  GitMergeIcon,
   ArrowClockwiseIcon,
   ClockCounterClockwiseIcon,
   PauseIcon,
@@ -15,6 +16,7 @@ import {
 } from "@phosphor-icons/react"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
+import { MergeForkDialog } from "@/components/merge-fork"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
 import { HistorySheet } from "@/components/sandbox-details"
 import { Button } from "@/components/ui/button"
@@ -57,7 +59,7 @@ export function SandboxOptionsMenu({
   sandbox: Sandbox
 }) {
   const [dialog, setDialog] = useState<
-    "history" | "fork" | "another" | "rebase" | "delete"
+    "history" | "fork" | "merge" | "another" | "rebase" | "delete"
   >()
   const {
     path,
@@ -71,6 +73,14 @@ export function SandboxOptionsMenu({
   const building = sb.status === "creating" || sb.status === "failed"
   const available = sb.status === "running" || sb.status === "stopped"
   const exportable = available
+  // A fork can be merged back while the sandbox it was forked from exists.
+  const sandboxes = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes",
+    { params: { path: { env } } },
+    { enabled: !!sb.forkOf }
+  )
+  const source = sandboxes.data?.find((s) => s.id === sb.forkOf)
   const exportHref = `/api/environments/${encodeURIComponent(env)}/sandboxes/${encodeURIComponent(sb.id)}/export`
 
   return (
@@ -111,6 +121,20 @@ export function SandboxOptionsMenu({
                   <GitForkIcon />
                   Fork
                 </DropdownMenuItem>
+                {source && (
+                  <DropdownMenuItem
+                    disabled={sb.status !== "running"}
+                    title={
+                      sb.status === "running"
+                        ? `Merge what changed here into ${source.name}`
+                        : "Start this sandbox to merge it"
+                    }
+                    onClick={() => setDialog("merge")}
+                  >
+                    <GitMergeIcon />
+                    <span className="truncate">Merge into {source.name}</span>
+                  </DropdownMenuItem>
+                )}
                 {sb.teammateId && (
                   <DropdownMenuItem onClick={() => setDialog("another")}>
                     <PlusIcon />
@@ -227,6 +251,15 @@ export function SandboxOptionsMenu({
         open={dialog === "fork"}
         onOpenChange={(open) => setDialog(open ? "fork" : undefined)}
       />
+      {source && (
+        <MergeForkDialog
+          env={env}
+          sandbox={sb}
+          source={source}
+          open={dialog === "merge"}
+          onOpenChange={(open) => setDialog(open ? "merge" : undefined)}
+        />
+      )}
       <RebaseSandboxDialog
         env={env}
         sandbox={sb}

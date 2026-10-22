@@ -53,3 +53,7 @@ func homeExport(io.Writer, io.Writer) error {
 func homeImport(io.Reader) error {
 	return errors.New("studio-agent home-import only runs inside Linux sandboxes")
 }
+
+func merge(string, []string, io.Reader, io.Writer) error {
+	return errors.New("studio-agent merge commands only run inside Linux sandboxes")
+}

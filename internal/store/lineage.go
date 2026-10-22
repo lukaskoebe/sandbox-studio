@@ -23,14 +23,14 @@ type SandboxEvent struct {
 	ID             int64     `json:"id"`
 	EnvironmentID  string    `json:"environmentId"`
 	SandboxID      string    `json:"sandboxId"`
-	Kind           string    `json:"kind" enum:"create,fork,rebase,restore,checkpoint,delete"`
+	Kind           string    `json:"kind" enum:"create,fork,rebase,restore,checkpoint,delete,merge"`
 	Generation     int       `json:"generation" doc:"The sandbox's generation after the event"`
 	Name           string    `json:"name" doc:"The sandbox's name at the time"`
 	TemplateID     string    `json:"templateId,omitempty" doc:"The template of the generation; empty for none"`
 	FromTemplateID string    `json:"fromTemplateId,omitempty" doc:"For a rebase, the template it moved from"`
 	CheckpointID   string    `json:"checkpointId,omitempty"`
 	CheckpointName string    `json:"checkpointName,omitempty"`
-	OtherSandboxID string    `json:"otherSandboxId,omitempty" doc:"For a fork, the other sandbox. On a delete event, the source the sandbox was forked from"`
+	OtherSandboxID string    `json:"otherSandboxId,omitempty" doc:"For a fork, the other sandbox. On a delete event, the source the sandbox was forked from. For a merge, the fork merged"`
 	CreatedAt      time.Time `json:"createdAt"`
 }
 

@@ -32,6 +32,8 @@ const stale: Record<string, string[]> = {
     "/api/environments/{env}/sandboxes/{id}/checkpoints",
     "/api/environments/{env}/sandboxes/{id}/checkpoint-schedule",
     "/api/environments/{env}/sandboxes/{id}/lineage",
+    "/api/environments/{env}/sandboxes/{id}/merges",
+    "/api/environments/{env}/merges/{merge}",
     "/api/environments/{env}/lineage",
   ],
   browser: ["/api/environments/{env}/teammates/{teammate}/browser/actions"],

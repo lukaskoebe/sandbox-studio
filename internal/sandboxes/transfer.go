@@ -122,6 +122,12 @@ func ownedVM(rec store.Sandbox) runtime.OwnedVM {
 // state is not copied. The fork is returned in state creating; the copy runs in the
 // background, holding the source, and a failed fork keeps its record in state failed.
 func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error) {
+	return m.fork(ctx, envID, id, name, true)
+}
+
+// fork is Fork. With recordBase, the fork records the base a merge back finds its changes
+// against; a merge's scratch sandbox doesn't need one.
+func (m *Manager) fork(ctx context.Context, envID, id, name string, recordBase bool) (View, error) {
 	if err := runtime.ValidName(name); err != nil {
 		return View{}, err
 	}
@@ -196,6 +202,9 @@ func (m *Manager) Fork(ctx context.Context, envID, id, name string) (View, error
 	m.background(rec, transferTimeout, func() { unlockFork(); unlock() }, func(ctx context.Context) error {
 		if err := m.forkInto(ctx, rt, sb, rec, image, sourceRunning, home); err != nil {
 			return m.removeFailedVM(ctx, rec, err, false)
+		}
+		if recordBase {
+			m.recordMergeBase(ctx, rec)
 		}
 		m.recordFork(ctx, sb, rec)
 		return nil

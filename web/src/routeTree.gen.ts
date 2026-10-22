@@ -24,6 +24,7 @@ import { Route as EEnvChatsChatRouteImport } from './routes/e.$env.chats.$chat'
 import { Route as EEnvChatsNewRouteImport } from './routes/e.$env.chats.new'
 import { Route as EEnvGitIndexRouteImport } from './routes/e.$env.git.index'
 import { Route as EEnvMemoryIndexRouteImport } from './routes/e.$env.memory.index'
+import { Route as EEnvMergesMergeRouteImport } from './routes/e.$env.merges.$merge'
 import { Route as EEnvNetworkIndexRouteImport } from './routes/e.$env.network.index'
 import { Route as EEnvNetworkActivityRouteImport } from './routes/e.$env.network.activity'
 import { Route as EEnvNetworkRequestsRouteImport } from './routes/e.$env.network.requests'
@@ -128,6 +129,11 @@ const EEnvGitIndexRoute = EEnvGitIndexRouteImport.update({
 const EEnvMemoryIndexRoute = EEnvMemoryIndexRouteImport.update({
   id: '/memory/',
   path: '/memory/',
+  getParentRoute: () => EEnvRoute,
+} as any)
+const EEnvMergesMergeRoute = EEnvMergesMergeRouteImport.update({
+  id: '/merges/$merge',
+  path: '/merges/$merge',
   getParentRoute: () => EEnvRoute,
 } as any)
 const EEnvNetworkIndexRoute = EEnvNetworkIndexRouteImport.update({
@@ -293,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
+  '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
@@ -338,6 +345,7 @@ export interface FileRoutesByTo {
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
+  '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
@@ -384,6 +392,7 @@ export interface FileRoutesById {
   '/e/$env/builds/$id': typeof EEnvBuildsIdRoute
   '/e/$env/chats/$chat': typeof EEnvChatsChatRoute
   '/e/$env/chats/new': typeof EEnvChatsNewRoute
+  '/e/$env/merges/$merge': typeof EEnvMergesMergeRoute
   '/e/$env/network/activity': typeof EEnvNetworkActivityRoute
   '/e/$env/network/requests': typeof EEnvNetworkRequestsRoute
   '/e/$env/network/rules': typeof EEnvNetworkRulesRoute
@@ -433,6 +442,7 @@ export interface FileRouteTypes {
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
+    | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
     | '/e/$env/network/requests'
     | '/e/$env/network/rules'
@@ -478,6 +488,7 @@ export interface FileRouteTypes {
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
+    | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
     | '/e/$env/network/requests'
     | '/e/$env/network/rules'
@@ -523,6 +534,7 @@ export interface FileRouteTypes {
     | '/e/$env/builds/$id'
     | '/e/$env/chats/$chat'
     | '/e/$env/chats/new'
+    | '/e/$env/merges/$merge'
     | '/e/$env/network/activity'
     | '/e/$env/network/requests'
     | '/e/$env/network/rules'
@@ -670,6 +682,13 @@ declare module '@tanstack/react-router' {
       path: '/memory'
       fullPath: '/e/$env/memory/'
       preLoaderRoute: typeof EEnvMemoryIndexRouteImport
+      parentRoute: typeof EEnvRoute
+    }
+    '/e/$env/merges/$merge': {
+      id: '/e/$env/merges/$merge'
+      path: '/merges/$merge'
+      fullPath: '/e/$env/merges/$merge'
+      preLoaderRoute: typeof EEnvMergesMergeRouteImport
       parentRoute: typeof EEnvRoute
     }
     '/e/$env/network/': {
@@ -966,6 +985,7 @@ interface EEnvRouteChildren {
   EEnvBuildsIdRoute: typeof EEnvBuildsIdRoute
   EEnvChatsChatRoute: typeof EEnvChatsChatRoute
   EEnvChatsNewRoute: typeof EEnvChatsNewRoute
+  EEnvMergesMergeRoute: typeof EEnvMergesMergeRoute
   EEnvNetworkActivityRoute: typeof EEnvNetworkActivityRoute
   EEnvNetworkRequestsRoute: typeof EEnvNetworkRequestsRoute
   EEnvNetworkRulesRoute: typeof EEnvNetworkRulesRoute
@@ -990,6 +1010,7 @@ const EEnvRouteChildren: EEnvRouteChildren = {
   EEnvBuildsIdRoute: EEnvBuildsIdRoute,
   EEnvChatsChatRoute: EEnvChatsChatRoute,
   EEnvChatsNewRoute: EEnvChatsNewRoute,
+  EEnvMergesMergeRoute: EEnvMergesMergeRoute,
   EEnvNetworkActivityRoute: EEnvNetworkActivityRoute,
   EEnvNetworkRequestsRoute: EEnvNetworkRequestsRoute,
   EEnvNetworkRulesRoute: EEnvNetworkRulesRoute,

@@ -120,6 +120,7 @@ type View struct {
 	Agent                      *AgentInfo     `json:"agent,omitempty"`
 	Progress                   *Progress      `json:"progress,omitempty" doc:"The create or fork that runs or failed"`
 	TemplateName               string         `json:"templateName,omitempty" doc:"The display name of the template the sandbox runs, such as node-22+python-3.13@2"`
+	ForkOf                     string         `json:"forkOf,omitempty" doc:"The ID of the sandbox this one was forked from, which it can be merged back into"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -152,6 +153,7 @@ func vmNameAtGeneration(sb store.Sandbox, generation int) string {
 // A create or fork that ran when Studio stopped has failed (see recoverProgress).
 func (m *Manager) Reconcile(ctx context.Context) error {
 	m.recoverImports(ctx)
+	m.recoverMerges(ctx)
 	all, err := m.Store.AllSandboxes(ctx)
 	if err != nil {
 		return err
@@ -396,7 +398,7 @@ func (m *Manager) discardRecord(ctx context.Context, rec store.Sandbox, cause er
 func (m *Manager) acceptedView(ctx context.Context, rec store.Sandbox) View {
 	v, err := m.view(ctx, rec)
 	if err != nil {
-		return m.withAgent(View{Sandbox: rec, Status: StatusCreating})
+		return m.withAgent(View{Sandbox: rec, Status: StatusCreating, ForkOf: rec.ForkedFromID})
 	}
 	return v
 }
@@ -506,7 +508,7 @@ func (m *Manager) List(ctx context.Context, envID string) ([]View, error) {
 		if !ok {
 			st = runtime.StatusAbsent
 		}
-		out = append(out, m.withAgent(View{Sandbox: rec, Status: st, TemplateName: names[rec.TemplateID]}))
+		out = append(out, m.withAgent(View{Sandbox: rec, Status: st, TemplateName: names[rec.TemplateID], ForkOf: rec.ForkedFromID}))
 	}
 	return out, nil
 }
@@ -631,6 +633,7 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 	}
 	m.forgetProgress(ctx, id)
 	m.forget(envID, id)
+	m.closeMergesOf(ctx, envID, id)
 	m.publish(envID, id)
 	return nil
 }
@@ -731,7 +734,7 @@ func (m *Manager) view(ctx context.Context, rec store.Sandbox) (View, error) {
 		}
 		name = names[rec.TemplateID]
 	}
-	return m.withAgent(View{Sandbox: rec, Status: st, TemplateName: name}), nil
+	return m.withAgent(View{Sandbox: rec, Status: st, TemplateName: name, ForkOf: rec.ForkedFromID}), nil
 }
 
 // markStarted records that rec's VM has just started, and returns rec with that time. A

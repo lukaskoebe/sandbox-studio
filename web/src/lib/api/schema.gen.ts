@@ -1066,6 +1066,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/merges/{merge}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A merge and its report */
+        get: operations["getMerge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/merges/{merge}/abort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abort a merge
+         * @description Deletes the scratch sandbox. The source was never touched.
+         */
+        post: operations["abortMerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/merges/{merge}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a merge
+         * @description Checkpoints the source, copies everything that changed in the scratch sandbox into it, and deletes the scratch sandbox. The source and the scratch sandbox must run, and no conflicts may be left. If the source changed a path since the merge started, nothing is copied and the answer is 409, naming the paths. It continues if the client disconnects.
+         */
+        post: operations["acceptMerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/merges/{merge}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Count the conflicts left
+         * @description A text file is resolved once it has no conflict markers; any other conflict once its file under /workspace/.studio-merge/conflicts is deleted. The scratch sandbox must run.
+         */
+        post: operations["checkMerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/private-hosts": {
         parameters: {
             query?: never;
@@ -1561,6 +1638,46 @@ export interface paths {
         };
         /** @description The sandbox's history: its events in order, the sandbox it was forked from, the forks made from it and its checkpoints. Deleted forks and sources stay visible as tombstones. */
         get: operations["getSandboxLineage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge a fork back into its source
+         * @description Starts merging the fork {id}, which must run, into the sandbox it was forked from. Studio forks the source into a scratch sandbox <source>-merge-<n> and merges the fork's changes there; the source isn't touched until the merge is accepted. It answers at once in state preparing; the merge becomes ready, conflicts or failed.
+         */
+        post: operations["startMerge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/sandboxes/{id}/merges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The merges a sandbox takes part in
+         * @description As source, fork or scratch sandbox, newest first.
+         */
+        get: operations["listMerges"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2750,6 +2867,12 @@ export interface components {
             reason?: string;
             teammateId: string;
         };
+        BranchResult: {
+            branch: string;
+            error?: string;
+            ref?: string;
+            repo: string;
+        };
         BrowserAction: {
             action: string;
             /** @enum {string} */
@@ -3581,6 +3704,14 @@ export interface components {
             model?: string;
             name: string;
         };
+        FileResult: {
+            artifact?: string;
+            conflict?: string;
+            detail?: string;
+            outcome: string;
+            path: string;
+            resolved?: boolean;
+        };
         FileRule: {
             /** @enum {string} */
             action: "allow" | "proxy" | "caddy" | "deny";
@@ -4013,10 +4144,10 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete";
+            kind: "create" | "fork" | "rebase" | "restore" | "checkpoint" | "delete" | "merge";
             /** @description The sandbox's name at the time */
             name: string;
-            /** @description For a fork, the other sandbox. On a delete event, the source the sandbox was forked from */
+            /** @description For a fork, the other sandbox. On a delete event, the source the sandbox was forked from. For a merge, the fork merged */
             otherSandboxId?: string;
             sandboxId: string;
             /** @description The template of the generation; empty for none */
@@ -4119,6 +4250,28 @@ export interface components {
         MemoryExportView: {
             filename: string;
             markdown: string;
+        };
+        MergeView: {
+            /** @description The source's checkpoint taken before Accept */
+            checkpointId?: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            error?: string;
+            forkId: string;
+            forkName: string;
+            id: string;
+            report?: components["schemas"]["Report"];
+            /** @description The sandbox the merge is done in; empty until it exists */
+            scratchId?: string;
+            scratchName?: string;
+            /** @description The sandbox the fork is merged into */
+            sourceId: string;
+            sourceName: string;
+            /** @enum {string} */
+            state: "preparing" | "ready" | "conflicts" | "failed" | "accepted" | "aborted";
+            /** Format: date-time */
+            updatedAt: string;
         };
         NavigateBrowserInBody: {
             /** @description An ephemeral session's ID; empty for the persistent profile */
@@ -4517,6 +4670,17 @@ export interface components {
             /** @description The repository's path on the forge, without .git */
             path: string;
         };
+        Report: {
+            branches: components["schemas"]["BranchResult"][] | null;
+            /** Format: int64 */
+            conflicts: number;
+            files: components["schemas"]["FileResult"][] | null;
+            fork: string;
+            installs: string[] | null;
+            noBase?: boolean;
+            /** Format: int64 */
+            unchanged: number;
+        };
         ResizeApplied: {
             /** @enum {string} */
             cpus: "unchanged" | "live" | "nextStart";
@@ -4546,6 +4710,8 @@ export interface components {
             /** Format: int64 */
             dockerMiB: number;
             environmentId: string;
+            /** @description The ID of the sandbox this one was forked from, which it can be merged back into */
+            forkOf?: string;
             /** Format: int64 */
             generation: number;
             id: string;
@@ -5408,6 +5574,8 @@ export interface components {
             /** Format: int64 */
             dockerMiB: number;
             environmentId: string;
+            /** @description The ID of the sandbox this one was forked from, which it can be merged back into */
+            forkOf?: string;
             /** Format: int64 */
             generation: number;
             id: string;
@@ -8043,6 +8211,140 @@ export interface operations {
             };
         };
     };
+    getMerge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Merge ID */
+                merge: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    abortMerge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Merge ID */
+                merge: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    acceptMerge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Merge ID */
+                merge: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    checkMerge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Merge ID */
+                merge: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     listPrivateHosts: {
         parameters: {
             query?: never;
@@ -9515,6 +9817,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Lineage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    startMerge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listMerges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeView"][] | null;
                 };
             };
             /** @description Error */

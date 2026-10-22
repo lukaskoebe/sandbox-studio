@@ -65,6 +65,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "studio-agent: home-import: %v\n", err)
 			os.Exit(1)
 		}
+	case "merge-base", "merge-export", "merge-apply", "merge-status", "merge-replay-export", "merge-replay":
+		// Studio runs these as the agent user to merge a fork back: see forkmerge.
+		if err := merge(cmd, os.Args[2:], os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "studio-agent: %s: %v\n", cmd, err)
+			os.Exit(1)
+		}
 	case "__capture-watchdog":
 		if len(os.Args) != 3 {
 			fmt.Fprintln(os.Stderr, "studio-agent: capture watchdog: missing freeze limit")
@@ -164,7 +170,7 @@ func main() {
 			os.Exit(1)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|claude-acp|claude-permission]\n")
+		fmt.Fprintf(os.Stderr, "usage: studio-agent [connect|boot|shutdown|version|hook|mcp|info|git-credential|oci-runtime|export-layer|workspace-export|workspace-import|home-export|home-import|merge-base|merge-export|merge-apply|merge-status|merge-replay-export|merge-replay|claude-acp|claude-permission]\n")
 		os.Exit(2)
 	}
 }
