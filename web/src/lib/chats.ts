@@ -126,6 +126,10 @@ function reduce(s: State, a: Action): State {
  * log's rev. Every event carries its rev; after a disconnect the stream reopens from the
  * last one, so nothing is missed and nothing is applied twice out of order. Without a chat
  * id there is nothing to follow, so the log stays empty.
+ *
+ * The stream closes while the tab is hidden and reopens from the rev when it is back: over
+ * HTTP/1.1 the browser has six connections to Studio for all its tabs, and streams held open
+ * by tabs in the background leave every other request waiting.
  */
 export function useChat(env: string, chatId: string | undefined) {
   const [state, dispatch] = useReducer(reduce, initial)
@@ -141,6 +145,9 @@ export function useChat(env: string, chatId: string | undefined) {
 
     const connect = () => {
       if (done.closed) return
+      source?.close()
+      source = undefined
+      if (document.visibilityState === "hidden") return
       source = new EventSource(
         `/api/environments/${encodeURIComponent(env)}/chats/${encodeURIComponent(chatId)}/stream?after=${rev}`
       )
@@ -205,17 +212,34 @@ export function useChat(env: string, chatId: string | undefined) {
     }
 
     // Studio unreachable: say so and keep trying.
-    const reload = () =>
+    const reload = () => {
+      retry = undefined
       void load().catch((err: unknown) => {
         if (done.closed) return
         dispatch({ type: "failed", error: errorMessage(err), gone: false })
         retry = setTimeout(reload, 5000)
       })
+    }
+    // Hidden: close the stream. Back in view: reopen it from the rev, or load the log if it
+    // never loaded. A retry already waiting does either by itself.
+    const visibility = () => {
+      if (done.closed) return
+      if (document.visibilityState === "hidden") {
+        source?.close()
+        source = undefined
+        return
+      }
+      if (source || retry !== undefined) return
+      if (rev === 0) reload()
+      else connect()
+    }
     reload()
+    document.addEventListener("visibilitychange", visibility)
     return () => {
       done.closed = true
       clearTimeout(retry)
       source?.close()
+      document.removeEventListener("visibilitychange", visibility)
     }
   }, [env, chatId])
 

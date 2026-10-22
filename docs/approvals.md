@@ -96,7 +96,12 @@ change it.
   chosen under Options. The grouping is client-side (`web/src/lib/approval-groups.ts`), so
   the API has no group. The server records arrival to the second, so the window is
   approximate.
-- New approvals raise a browser notification (Notification API) once the user allows it.
+- New approvals raise a browser notification (Notification API) once the user allows it,
+  whenever Studio's window is not in front, even while its tab is in view behind another app.
+  Home asks once (dismissable), and Settings → General has the button for later. The pending
+  approvals keep polling in a background tab, and the change stream reopens by itself after
+  Studio restarts. A chat's stream closes while its tab is hidden and resumes from its last
+  rev: over HTTP/1.1 the browser has six connections to Studio for all its tabs.
 - The terminal UI ([terminal UI](tui.md)) lists the same approvals and decides network approvals
   through the same endpoint, with the same choices. It reviews git pushes and pull requests in
   its pager, with their commits and diff, and decides them there. Browser, memory and chat

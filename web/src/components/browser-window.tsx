@@ -65,6 +65,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Spinner } from "@/components/ui/spinner"
+import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import {
   $api,
   errorMessage,
@@ -175,12 +176,7 @@ export function BrowserWindow({
   useEffect(() => setStreamURL(undefined), [sessionID, running])
   const pageURL = streamURL ?? (session ? session.url : st?.url)
 
-  const pending = $api.useQuery(
-    "get",
-    "/api/approvals",
-    { params: { query: { status: "pending" } } },
-    { refetchInterval: 15000 }
-  )
+  const pending = usePendingApprovals()
   const asks = (pending.data ?? []).filter(
     (a) => a.environmentId === env && isBrowserAsk(a, teammate)
   )

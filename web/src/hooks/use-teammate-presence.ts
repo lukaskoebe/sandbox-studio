@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { phase } from "@/components/status-badge"
+import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api } from "@/lib/api/client"
 
 export type Presence = "working" | "waiting" | "idle" | "offline"
@@ -22,12 +23,7 @@ export function usePresence(env: string): (teammateId: string) => Presence {
   const chats = $api.useQuery("get", "/api/environments/{env}/chats", {
     params: { path: { env } },
   })
-  const approvals = $api.useQuery(
-    "get",
-    "/api/approvals",
-    { params: { query: { status: "pending" } } },
-    { refetchInterval: 15000 }
-  )
+  const approvals = usePendingApprovals()
   const sandboxes = $api.useQuery("get", "/api/environments/{env}/sandboxes", {
     params: { path: { env } },
   })

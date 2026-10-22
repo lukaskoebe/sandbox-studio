@@ -42,26 +42,66 @@ const stale: Record<string, string[]> = {
   ],
 }
 
+/** The longest wait between two tries to reopen the stream. */
+const maxBackoff = 30_000
+
 /**
  * Keeps the API queries current from the server's change stream. Events say what changed,
  * so the affected queries refetch.
+ *
+ * EventSource retries a dropped connection by itself, but gives up for good after an answer
+ * that isn't the stream, such as a 502 while Studio restarts. Then the stream is opened again
+ * with a growing wait, and at once when the network or the tab comes back.
  */
 export function useEvents() {
   const queryClient = useQueryClient()
   useEffect(() => {
-    const source = new EventSource("/api/events")
+    let source: EventSource | undefined
+    let retry: ReturnType<typeof setTimeout> | undefined
+    let backoff = 1000
     let opened = false
-    source.onopen = () => {
-      // The first open is the normal start. A later one follows an error, so events may have been missed.
-      if (opened) queryClient.invalidateQueries()
-      opened = true
-    }
-    source.onmessage = (msg: MessageEvent<string>) => {
-      const change = JSON.parse(msg.data) as { topic: string }
-      for (const path of stale[change.topic] ?? []) {
-        queryClient.invalidateQueries({ queryKey: ["get", path] })
+    let closed = false
+
+    const connect = () => {
+      clearTimeout(retry)
+      retry = undefined
+      source?.close()
+      source = new EventSource("/api/events")
+      source.onopen = () => {
+        backoff = 1000
+        // The first open is the normal start. A later one follows an error, so events may have been missed.
+        if (opened) queryClient.invalidateQueries()
+        opened = true
+      }
+      source.onmessage = (msg: MessageEvent<string>) => {
+        const change = JSON.parse(msg.data) as { topic: string }
+        for (const path of stale[change.topic] ?? []) {
+          queryClient.invalidateQueries({ queryKey: ["get", path] })
+        }
+      }
+      source.onerror = () => {
+        if (closed || source?.readyState !== EventSource.CLOSED) return
+        retry = setTimeout(connect, backoff)
+        backoff = Math.min(backoff * 2, maxBackoff)
       }
     }
-    return () => source.close()
+    // Back online or in view again: a stream that gave up opens now, not after its wait.
+    const wake = () => {
+      if (document.visibilityState !== "visible") return
+      if (source?.readyState === EventSource.CLOSED) {
+        backoff = 1000
+        connect()
+      }
+    }
+    connect()
+    window.addEventListener("online", wake)
+    document.addEventListener("visibilitychange", wake)
+    return () => {
+      closed = true
+      clearTimeout(retry)
+      source?.close()
+      window.removeEventListener("online", wake)
+      document.removeEventListener("visibilitychange", wake)
+    }
   }, [queryClient])
 }

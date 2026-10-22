@@ -33,6 +33,8 @@ const browser = await chromium.launch({
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
   colorScheme: "dark",
+  // Granted, so Home doesn't ask for them in every shot.
+  permissions: ["notifications"],
   baseURL: base,
   storageState: saved?.state,
 })

@@ -20,6 +20,8 @@ import {
 import { MemoryShareDecision } from "@/components/memory-sessions"
 import { PermissionDecision } from "@/components/chat/permission-card"
 import { Ident } from "@/components/ident"
+import { usePendingApprovals } from "@/hooks/use-pending-approvals"
+import { shouldNotify, useNotificationPermission } from "@/lib/notifications"
 import { KindChip } from "@/components/kind-chip"
 import { WaitingCount } from "@/components/waiting-count"
 import { Button } from "@/components/ui/button"
@@ -60,12 +62,7 @@ const maxCards = 3
  * someone asks for it (docs/design/ui-style.md).
  */
 export function ApprovalStack() {
-  const pending = $api.useQuery(
-    "get",
-    "/api/approvals",
-    { params: { query: { status: "pending" } } },
-    { refetchInterval: 15000 }
-  )
+  const pending = usePendingApprovals()
   const envs = $api.useQuery("get", "/api/environments")
   const notifications = useNotifications(pending.data)
   const [expanded, setExpanded] = useState(false)
@@ -362,18 +359,12 @@ function ChatPermissionSummary({ approval }: { approval: Approval }) {
   )
 }
 
-function notificationPermission(): NotificationPermission | "unsupported" {
-  return typeof Notification === "undefined"
-    ? "unsupported"
-    : Notification.permission
-}
-
 /**
- * Notifies about approvals that arrive while the tab is in the background. The ones pending on
+ * Notifies about approvals that arrive while the window is not in front. The ones pending on
  * the first load are only remembered, so opening the app does not notify.
  */
 function useNotifications(data: Approval[] | null | undefined) {
-  const [permission, setPermission] = useState(notificationPermission)
+  const { permission, request } = useNotificationPermission()
   const seen = useRef<Set<string> | null>(null)
 
   useEffect(() => {
@@ -383,22 +374,14 @@ function useNotifications(data: Approval[] | null | undefined) {
     for (const a of data) {
       if (known.has(a.id)) continue
       known.add(a.id)
-      if (
-        !first &&
-        document.visibilityState !== "visible" &&
-        notificationPermission() === "granted"
-      ) {
-        notify(a)
-      }
+      if (!first && shouldNotify()) notify(a)
     }
     seen.current = known
   }, [data])
 
   return {
     canAsk: permission === "default",
-    request: () => {
-      Notification.requestPermission().then(setPermission)
-    },
+    request,
   }
 }
 

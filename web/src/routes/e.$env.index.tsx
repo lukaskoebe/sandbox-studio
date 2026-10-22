@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { PlusIcon, UserPlusIcon } from "@phosphor-icons/react"
+import { BellIcon, PlusIcon, UserPlusIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   ApprovalCardList,
@@ -17,6 +17,7 @@ import { usePendingApprovals } from "@/hooks/use-pending-approvals"
 import { $api, type Approval } from "@/lib/api/client"
 import type { Chat } from "@/lib/chats"
 import { useClaimApprovals } from "@/lib/approval-claims"
+import { useNotificationPermission } from "@/lib/notifications"
 import { approvalCards } from "@/lib/approval-groups"
 import {
   approvalDecision,
@@ -69,6 +70,7 @@ function Home() {
             {summary(waiting.length, running.length)}
           </p>
           <SetupCard env={env} />
+          <NotificationsBanner />
           {empty ? (
             <GetStarted env={env} />
           ) : (
@@ -85,6 +87,56 @@ function Home() {
         </div>
       </ScrollArea>
     </>
+  )
+}
+
+const bannerKey = "studio.notifications-banner"
+
+/**
+ * Asks once whether Studio may notify. It goes away when the browser has the answer, or for
+ * good when it is dismissed; Settings → General still has the button.
+ */
+function NotificationsBanner() {
+  const { permission, request } = useNotificationPermission()
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(bannerKey) === "dismissed"
+    } catch {
+      return false
+    }
+  })
+  if (permission !== "default" || dismissed) return null
+  const dismiss = () => {
+    setDismissed(true)
+    try {
+      localStorage.setItem(bannerKey, "dismissed")
+    } catch {
+      // The banner just shows again next time.
+    }
+  }
+  return (
+    <section
+      aria-label="Notifications"
+      className="flex items-center gap-3 rounded-(--radius) border bg-card px-4 py-3"
+    >
+      <BellIcon className="size-4 shrink-0 text-muted-foreground" />
+      <p className="min-w-0 flex-1 text-muted-foreground">
+        Get a notification when an approval waits while Studio isn&apos;t in
+        front.
+      </p>
+      <Button size="sm" variant="outline" onClick={request}>
+        Enable notifications
+      </Button>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Dismiss"
+        title="Dismiss"
+        onClick={dismiss}
+      >
+        <XIcon />
+      </Button>
+    </section>
   )
 }
 

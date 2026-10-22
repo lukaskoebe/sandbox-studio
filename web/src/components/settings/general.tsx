@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   ArrowCircleUpIcon,
+  BellIcon,
   DownloadSimpleIcon,
   ListChecksIcon,
   PowerIcon,
@@ -26,6 +27,7 @@ import { Ident } from "@/components/ident"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
 import { Switch } from "@/components/ui/switch"
+import { useNotificationPermission } from "@/lib/notifications"
 import { setupOver, useSetup } from "@/lib/setup"
 import {
   $api,
@@ -48,6 +50,7 @@ export function GeneralSettings({ env }: { env: string }) {
       >
         <SettingsGroup label="Studio">
           <AutostartSection />
+          <NotificationsSection />
           <SetupSection env={env} />
         </SettingsGroup>
         <SettingsGroup
@@ -253,6 +256,40 @@ function ImportReport({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** The browser's permission to notify about approvals while Studio's window is not in front. */
+function NotificationsSection() {
+  const { permission, request } = useNotificationPermission()
+  return (
+    <SettingRow
+      icon={BellIcon}
+      title="Notifications"
+      description="Tells you when an approval waits while Studio's window is not in front. This browser keeps the choice for this address."
+      control={
+        permission === "default" ? (
+          <Button size="sm" variant="outline" onClick={request}>
+            Enable notifications
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">
+            {permission === "granted"
+              ? "On"
+              : permission === "denied"
+                ? "Blocked"
+                : "Not supported in this browser"}
+          </span>
+        )
+      }
+    >
+      {permission === "denied" && (
+        <p className="text-muted-foreground">
+          The browser blocks them for this site. Allow notifications in its site
+          settings, next to the address bar.
+        </p>
+      )}
+    </SettingRow>
   )
 }
 
