@@ -27,6 +27,13 @@ import { Spinner } from "@/components/ui/spinner"
 import { Ident } from "@/components/ident"
 import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { useNotificationPermission } from "@/lib/notifications"
 import { usePreviewSetting } from "@/lib/preview-setting"
@@ -36,6 +43,9 @@ import {
   errorMessage,
   fetchClient,
   type ImportedEnvironment,
+  type InstallProgress,
+  type UpdateMode,
+  type UpdateState,
 } from "@/lib/api/client"
 import { formatAge } from "@/lib/utils"
 
@@ -369,30 +379,57 @@ function AutostartSection() {
   )
 }
 
+const updateModes: Record<UpdateMode, string> = {
+  off: "Off",
+  tell: "Tell me",
+  install: "Install automatically",
+}
+
 function UpdatesSection() {
   const queryClient = useQueryClient()
-  const state = $api.useQuery("get", "/api/system/updates")
+  const state = $api.useQuery("get", "/api/system/updates", undefined, {
+    // An install under way moves through its phases; poll while it does.
+    refetchInterval: (q) => (installing(q.state.data) ? 3000 : false),
+  })
   const set = $api.useMutation("put", "/api/system/updates", {
     onSuccess: (data) =>
       queryClient.setQueryData(["get", "/api/system/updates"], data),
     onError: (err) =>
-      toast.error("Could not change the update check", {
+      toast.error("Could not change updates", {
         description: errorMessage(err),
       }),
   })
   const st = state.data
+  const modes = st?.canInstall
+    ? updateModes
+    : { off: updateModes.off, tell: updateModes.tell }
   return (
     <SettingRow
       icon={ArrowCircleUpIcon}
       title="Updates"
-      description="Checks GitHub for a newer release at most once a day. Studio never downloads or installs anything by itself."
+      description={
+        st?.mode === "install"
+          ? "Checks GitHub for a newer release once a day. Studio downloads it, verifies its build attestation, and restarts into it once no chat, template build or sign-in is running. If the new version doesn't start, the old one and its database come back."
+          : "Checks GitHub for a newer release once a day and tells you here. Install automatically also downloads, verifies and installs it when Studio is idle."
+      }
       control={
-        <Switch
-          aria-label="Check for updates"
-          checked={!!st?.enabled}
+        <Select
+          value={st?.mode ?? "tell"}
+          onValueChange={(v) => v && set.mutate({ body: { mode: v } })}
+          items={modes}
           disabled={!st || set.isPending}
-          onCheckedChange={(enabled) => set.mutate({ body: { enabled } })}
-        />
+        >
+          <SelectTrigger size="sm" aria-label="Updates" className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(modes).map(([v, text]) => (
+              <SelectItem key={v} value={v}>
+                {text}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       }
     >
       {st && (
@@ -403,10 +440,16 @@ function UpdatesSection() {
           )}
         </p>
       )}
+      {st && !st.canInstall && (
+        <p className="text-muted-foreground">
+          This Studio can't install releases itself, like a development build.
+          Install them with install.sh or from the release page.
+        </p>
+      )}
       {st?.enabled && st.error && (
         <p className="text-destructive">Last check failed: {st.error}</p>
       )}
-      {st?.available && (
+      {st?.available && !installing(st) && (
         <p className="flex items-center gap-2">
           <Badge>Update available</Badge>
           {st.url ? (
@@ -423,8 +466,56 @@ function UpdatesSection() {
           )}
         </p>
       )}
+      {st?.install && <InstallLine install={st.install} />}
     </SettingRow>
   )
+}
+
+function installing(st: UpdateState | undefined) {
+  const phase = st?.install?.phase
+  return (
+    phase === "downloading" || phase === "waiting" || phase === "restarting"
+  )
+}
+
+/** The automatic install under way, or how the last one ended. */
+function InstallLine({ install }: { install: InstallProgress }) {
+  const v = <span className="font-mono">{install.version}</span>
+  switch (install.phase) {
+    case "downloading":
+      return (
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <Spinner /> Downloading and verifying {v}…
+        </p>
+      )
+    case "waiting":
+      return (
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <Spinner /> {v} is ready. It installs once Studio is idle
+          {install.detail ? `; now ${install.detail}` : ""}.
+        </p>
+      )
+    case "restarting":
+      return (
+        <p className="flex items-center gap-2 text-muted-foreground">
+          <Spinner /> Restarting into {v}…
+        </p>
+      )
+    case "installed":
+      return (
+        <p className="text-muted-foreground">
+          Updated to {v}
+          {install.from && <> from {install.from}</>} {formatAge(install.at)}.
+        </p>
+      )
+    case "failed":
+      return (
+        <p className="text-destructive">
+          Installing {v} failed: {install.error}.
+          {install.from && <> Studio went back to {install.from}.</>}
+        </p>
+      )
+  }
 }
 
 /** The way back to the guided setup once Home's card for it is gone (dismissed or complete). */

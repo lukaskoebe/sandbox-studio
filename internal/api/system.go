@@ -48,6 +48,12 @@ func doctorReport(r doctor.Report) DoctorReport {
 	return out
 }
 
+type updateModeIn struct {
+	Body struct {
+		Mode string `json:"mode" enum:"off,tell,install"`
+	}
+}
+
 type toggleIn struct {
 	Body struct {
 		Enabled bool `json:"enabled"`
@@ -104,12 +110,15 @@ func (s *Server) registerSystem(api huma.API) {
 
 	huma.Register(api, huma.Operation{
 		OperationID: "setUpdates", Method: http.MethodPut, Path: "/api/system/updates", Tags: []string{"system"},
-		Summary: "Turn the daily update check on or off; turning it on checks right away",
-	}, func(ctx context.Context, in *toggleIn) (*struct{ Body UpdateState }, error) {
+		Summary: "Set the update mode: off, tell (check daily; the default) or install (also install a newer release when Studio is idle). A mode that checks checks right away",
+	}, func(ctx context.Context, in *updateModeIn) (*struct{ Body UpdateState }, error) {
 		if s.System.Updates == nil {
 			return nil, huma.Error503ServiceUnavailable("the update check is not available")
 		}
-		st, err := s.System.Updates.SetEnabled(ctx, in.Body.Enabled)
+		st, err := s.System.Updates.SetMode(ctx, in.Body.Mode)
+		if errors.Is(err, updates.ErrCannotInstall) {
+			return nil, huma.Error409Conflict(err.Error())
+		}
 		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
 	})
 	s.registerPreviewSetting(api)

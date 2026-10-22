@@ -267,6 +267,22 @@ func (s *Service) Status(providerID string) View {
 	return a.view()
 }
 
+// Busy reports whether a sign-in is running, which a restart would cut off.
+func (s *Service) Busy() bool {
+	s.mu.Lock()
+	attempts := make([]*attempt, 0, len(s.attempts))
+	for _, a := range s.attempts {
+		attempts = append(attempts, a)
+	}
+	s.mu.Unlock()
+	for _, a := range attempts {
+		if a.running() {
+			return true
+		}
+	}
+	return false
+}
+
 // Cancel ends a running sign-in and removes its login VM. Without one it does nothing.
 func (s *Service) Cancel(ctx context.Context, envID, providerID string) error {
 	s.mu.Lock()

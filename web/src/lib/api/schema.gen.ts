@@ -2531,7 +2531,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getUpdates"];
-        /** Turn the daily update check on or off; turning it on checks right away */
+        /** Set the update mode: off, tell (check daily; the default) or install (also install a newer release when Studio is idle). A mode that checks checks right away */
         put: operations["setUpdates"];
         post?: never;
         delete?: never;
@@ -3834,6 +3834,20 @@ export interface components {
             templates: string[] | null;
             /** @description Provider keys and secret values to add */
             toAdd: components["schemas"]["ToAdd"][] | null;
+        };
+        InstallProgress: {
+            /** Format: date-time */
+            at: string;
+            /** @description What the install waits for */
+            detail?: string;
+            /** @description Why it failed */
+            error?: string;
+            /** @description The version it replaces, once installed or rolled back */
+            from?: string;
+            /** @enum {string} */
+            phase: "downloading" | "waiting" | "restarting" | "installed" | "failed";
+            /** @description The release being installed */
+            version: string;
         };
         Item: {
             approvalId?: string;
@@ -5178,6 +5192,10 @@ export interface components {
             /** @description The prompt response's usage, as the agent reports it */
             tokens?: unknown;
         };
+        UpdateModeInBody: {
+            /** @enum {string} */
+            mode: "off" | "tell" | "install";
+        };
         UpdateProviderInBody: {
             /** @description A new key. Omit it to keep the stored one. */
             apiKey?: string;
@@ -5196,15 +5214,22 @@ export interface components {
         UpdateState: {
             /** @description Latest is newer than Current */
             available: boolean;
+            /** @description This Studio can install releases itself */
+            canInstall: boolean;
             /** Format: date-time */
             checkedAt?: string;
             /** @description The running Studio version */
             current: string;
+            /** @description Mode is not off */
             enabled: boolean;
             /** @description Why the last check failed */
             error?: string;
+            /** @description The automatic install of a release: under way, or how the last one ended */
+            install?: components["schemas"]["InstallProgress"];
             /** @description The newest release's tag, from the last check */
             latest?: string;
+            /** @enum {string} */
+            mode: "off" | "tell" | "install";
             /** @description The newest release's page */
             url?: string;
         };
@@ -11825,7 +11850,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ToggleInBody"];
+                "application/json": components["schemas"]["UpdateModeInBody"];
             };
         };
         responses: {

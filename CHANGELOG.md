@@ -20,6 +20,12 @@
   card. **Add forge** opens the Add forge dialog filled in from the repository's URL, **Not
   now** stops asking about the host for a day, and the agent reads in git's output that you
   have the card.
+- **Updates:** Studio checks GitHub for a newer release once a day unless you turn **Updates**
+  off under **Settings → General**; before, the check was off until you turned it on, and a
+  choice you made stays. **Install automatically** also installs the release: Studio downloads
+  it, checks it against `checksums.txt` and its GitHub build attestation, waits until no chat,
+  template build or sign-in is running, backs up its database and restarts into it. If the
+  new version doesn't start within two minutes, the old one and the database come back.
 
 ## v0.5.2 — 2026-10-22
 

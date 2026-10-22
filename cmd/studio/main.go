@@ -27,6 +27,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -156,7 +157,12 @@ func main() {
 	// Studio opens the login link itself when it runs in a terminal, as when studio.exe is
 	// double-clicked; not under a service manager or in tests.
 	open := !*noBrowser && term.IsTerminal(int(os.Stderr.Fd()))
-	if err := run(*addr, *image, open, logPath, log); err != nil {
+	err := run(*addr, *image, open, logPath, log)
+	var restart *updateRestart
+	if errors.As(err, &restart) {
+		os.Exit(restartForUpdate(restart.resume, log))
+	}
+	if err != nil {
 		log.Error("studio stopped", "err", err)
 		os.Exit(1)
 	}
@@ -250,7 +256,17 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	if err != nil {
 		return err
 	}
-	defer release()
+	defer func() { _ = release() }()
+	// The install record of an update, before the database opens: a rollback restores it.
+	resume, err := updates.ResumeInstall(updatesDir(p), version.Version, log)
+	if err != nil {
+		log.Warn("read the update's install record", "err", err)
+	}
+	if resume.Exit {
+		return &updateRestart{resume}
+	}
+	served := make(chan struct{})
+	resume.Watchdog(served, log)
 	repairMSBDB(ctx, log)
 	logDoctor(log, doctorCheck(ctx, p.Data, image, addr, false, 0, nil))
 	if err := installGuestAgent(p.Guest(), goruntime.GOARCH); err != nil {
@@ -436,7 +452,6 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	}()
 
 	checker := &updates.Checker{Settings: st, Current: version.Version, Log: log}
-	go checker.Run(ctx)
 	system := api.System{Updates: checker, Doctor: func(ctx context.Context) doctor.Report {
 		agentForges, err := st.AgentForges(ctx)
 		if err != nil {
@@ -457,6 +472,12 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 		bus.Publish(events.Event{Topic: events.TopicSecrets, EnvironmentID: envID})
 	}
 	go logins.Run(ctx)
+	// Automatic updates restart Studio: run ends, and main starts the new binary.
+	var restarting atomic.Bool
+	if checker.Installer = newInstaller(ctx, p, st, logins, func() { restarting.Store(true); stop() }, log); checker.Installer != nil {
+		checker.Installer.SetProgress(resume.Progress)
+	}
+	go checker.Run(ctx)
 	agentMem.Utility = func(p store.Provider, key string) (agentmem.LLM, agentmem.UtilityModel, error) {
 		if k, _ := teammates.LookupKind(p.Kind); k.Login {
 			return logins.Utility(p)
@@ -505,6 +526,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	if err != nil {
 		return err
 	}
+	markServed(addr, resume, checker.Installer, served, log)
 	link := loginURL(addr, auth.IssueLogin())
 	log.Info("open Studio with this one-time login link", "url", link)
 	printLoginBanner(link, logPath)
@@ -514,6 +536,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	}
 	if err := srv.Serve(l); !errors.Is(err, http.ErrServerClosed) {
 		return err
+	}
+	if restarting.Load() {
+		return &updateRestart{resume}
 	}
 	return nil
 }

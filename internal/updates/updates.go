@@ -1,5 +1,6 @@
-// Package updates checks GitHub for a newer Studio release. It is off until the user turns
-// it on, checks at most once a day, and only reports: it never downloads or installs.
+// Package updates checks GitHub for a newer Studio release, at most once a day. By default it
+// only tells the user; "Install automatically" also downloads the release, verifies it and
+// swaps it in when Studio is idle (install.go).
 package updates
 
 import (
@@ -27,6 +28,13 @@ const Interval = 24 * time.Hour
 
 const settingKey = "update-check"
 
+// The update modes.
+const (
+	ModeOff     = "off"     // no checks
+	ModeTell    = "tell"    // check daily and show a newer release; the default
+	ModeInstall = "install" // also install it when Studio is idle
+)
+
 // Settings persists the checker's state.
 type Settings interface {
 	Setting(ctx context.Context, key string) ([]byte, error)
@@ -35,22 +43,41 @@ type Settings interface {
 
 // State is what the UI shows.
 type State struct {
-	Enabled   bool       `json:"enabled"`
-	Current   string     `json:"current" doc:"The running Studio version"`
-	Latest    string     `json:"latest,omitempty" doc:"The newest release's tag, from the last check"`
-	URL       string     `json:"url,omitempty" doc:"The newest release's page"`
-	Available bool       `json:"available" doc:"Latest is newer than Current"`
-	CheckedAt *time.Time `json:"checkedAt,omitempty"`
-	Error     string     `json:"error,omitempty" doc:"Why the last check failed"`
+	Mode      string           `json:"mode" enum:"off,tell,install"`
+	Enabled   bool             `json:"enabled" doc:"Mode is not off"`
+	Current   string           `json:"current" doc:"The running Studio version"`
+	Latest    string           `json:"latest,omitempty" doc:"The newest release's tag, from the last check"`
+	URL       string           `json:"url,omitempty" doc:"The newest release's page"`
+	Available bool             `json:"available" doc:"Latest is newer than Current"`
+	CheckedAt *time.Time       `json:"checkedAt,omitempty"`
+	Error     string           `json:"error,omitempty" doc:"Why the last check failed"`
+	Install   *InstallProgress `json:"install,omitempty" doc:"The automatic install of a release: under way, or how the last one ended"`
+	// CanInstall is false where Studio can't replace its own binary, like a development build.
+	CanInstall bool `json:"canInstall" doc:"This Studio can install releases itself"`
 }
 
-// saved is the persisted part of State.
+// saved is the persisted part of State. Mode is empty in a row written before the modes, where
+// Enabled says whether the user turned the check on.
 type saved struct {
+	Mode      string     `json:"mode,omitempty"`
 	Enabled   bool       `json:"enabled"`
 	Latest    string     `json:"latest,omitempty"`
 	URL       string     `json:"url,omitempty"`
 	CheckedAt *time.Time `json:"checkedAt,omitempty"`
 	Error     string     `json:"error,omitempty"`
+	Assets    []Asset    `json:"assets,omitempty"`
+}
+
+// mode is the saved mode. Without a row it is "tell"; a row from before the modes is "tell" if
+// the user turned the check on and "off" if they turned it off.
+func (s saved) mode(exists bool) string {
+	switch {
+	case s.Mode != "":
+		return s.Mode
+	case !exists || s.Enabled:
+		return ModeTell
+	}
+	return ModeOff
 }
 
 // Checker checks for updates.
@@ -61,6 +88,9 @@ type Checker struct {
 	Current  string // the running version
 	Now      func() time.Time
 	Log      *slog.Logger
+	// Installer installs releases in the "install" mode; nil means this Studio can't, and the
+	// mode then only tells.
+	Installer *Installer
 
 	mu sync.Mutex // serializes checks and settings writes
 }
@@ -71,50 +101,69 @@ func (c *Checker) State(ctx context.Context) (State, error) {
 	return c.view(s), err
 }
 
-// SetEnabled turns checking on or off. Turning it on checks right away if the last check
-// is more than a day old.
-func (c *Checker) SetEnabled(ctx context.Context, on bool) (State, error) {
+// SetMode sets the mode. A mode that checks checks right away if the last check is more than
+// a day old, and "install" starts installing a newer release it knows of.
+func (c *Checker) SetMode(ctx context.Context, mode string) (State, error) {
+	switch mode {
+	case ModeOff, ModeTell, ModeInstall:
+	default:
+		return State{}, fmt.Errorf("unknown update mode %q", mode)
+	}
+	if mode == ModeInstall && c.Installer == nil {
+		return State{}, ErrCannotInstall
+	}
 	c.mu.Lock()
 	s, err := c.load(ctx)
 	if err == nil {
-		s.Enabled = on
+		s.Mode, s.Enabled = mode, mode != ModeOff
 		err = c.save(ctx, s)
 	}
 	c.mu.Unlock()
 	if err != nil {
 		return State{}, err
 	}
-	if on {
-		return c.CheckIfDue(ctx)
+	if mode == ModeOff {
+		if c.Installer != nil {
+			c.Installer.Cancel()
+		}
+		return c.view(s), nil
 	}
-	return c.view(s), nil
+	return c.CheckIfDue(ctx)
 }
 
-// CheckIfDue checks GitHub if checking is enabled and the last check is a day old.
+// ErrCannotInstall is the "install" mode on a Studio that can't replace its own binary.
+var ErrCannotInstall = errors.New("this Studio can't install releases itself; install them with install.sh or from the release page")
+
+// CheckIfDue checks GitHub if the mode checks and the last check is a day old. In the
+// "install" mode it then starts installing a newer release, unless an install is under way.
 func (c *Checker) CheckIfDue(ctx context.Context) (State, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	s, err := c.load(ctx)
-	if err != nil || !s.Enabled {
+	// A development build never sees an update (Newer), so it doesn't ask.
+	if err != nil || s.Mode == ModeOff || !releaseBuild(c.Current) {
 		return c.view(s), err
 	}
 	now := c.now()
-	if s.CheckedAt != nil && now.Sub(*s.CheckedAt) < Interval && now.After(*s.CheckedAt) {
-		return c.view(s), nil
-	}
-	tag, url, err := c.fetch(ctx)
-	s.CheckedAt = &now
-	if err != nil {
-		s.Error = err.Error()
-	} else {
-		s.Latest, s.URL, s.Error = tag, url, ""
-	}
-	if err := c.save(ctx, s); err != nil {
-		return c.view(s), err
+	if s.CheckedAt == nil || now.Sub(*s.CheckedAt) >= Interval || !now.After(*s.CheckedAt) {
+		rel, err := c.fetch(ctx)
+		s.CheckedAt = &now
+		if err != nil {
+			s.Error = err.Error()
+		} else {
+			s.Latest, s.URL, s.Assets, s.Error = rel.Tag, rel.URL, rel.Assets, ""
+		}
+		if err := c.save(ctx, s); err != nil {
+			return c.view(s), err
+		}
+		if v := c.view(s); v.Available && c.Log != nil {
+			c.Log.Info("a Studio update is available", "current", c.Current, "latest", rel.Tag, "url", rel.URL)
+		}
 	}
 	v := c.view(s)
-	if v.Available && c.Log != nil {
-		c.Log.Info("a Studio update is available", "current", c.Current, "latest", tag, "url", url)
+	if s.Mode == ModeInstall && v.Available && c.Installer != nil {
+		c.Installer.Start(Release{Tag: s.Latest, URL: s.URL, Assets: s.Assets})
+		v = c.view(s)
 	}
 	return v, nil
 }
@@ -135,7 +184,21 @@ func (c *Checker) Run(ctx context.Context) {
 	}
 }
 
-func (c *Checker) fetch(ctx context.Context) (tag, url string, err error) {
+// Release is a published release, from GitHub's API.
+type Release struct {
+	Tag    string
+	URL    string
+	Assets []Asset
+}
+
+// Asset is one file of a release.
+type Asset struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+	Size int64  `json:"size"`
+}
+
+func (c *Checker) fetch(ctx context.Context) (Release, error) {
 	u := c.URL
 	if u == "" {
 		u = LatestURL
@@ -144,7 +207,7 @@ func (c *Checker) fetch(ctx context.Context) (tag, url string, err error) {
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return "", "", err
+		return Release{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "sandbox-studio/"+c.Current)
@@ -154,48 +217,65 @@ func (c *Checker) fetch(ctx context.Context) (tag, url string, err error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return Release{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return "", "", errors.New("no release has been published yet")
+		return Release{}, errors.New("no release has been published yet")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("GitHub answered %s", resp.Status)
+		return Release{}, fmt.Errorf("GitHub answered %s", resp.Status)
 	}
 	var body struct {
 		TagName string `json:"tag_name"`
 		HTMLURL string `json:"html_url"`
+		Assets  []struct {
+			Name string `json:"name"`
+			URL  string `json:"browser_download_url"`
+			Size int64  `json:"size"`
+		} `json:"assets"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
-		return "", "", fmt.Errorf("read the release: %w", err)
+		return Release{}, fmt.Errorf("read the release: %w", err)
 	}
 	if _, ok := parse(body.TagName); !ok {
-		return "", "", fmt.Errorf("the latest release has an unexpected tag %q", body.TagName)
+		return Release{}, fmt.Errorf("the latest release has an unexpected tag %q", body.TagName)
 	}
 	// Only GitHub release pages are linked from the UI.
 	if !strings.HasPrefix(body.HTMLURL, "https://github.com/") {
 		body.HTMLURL = ""
 	}
-	return body.TagName, body.HTMLURL, nil
+	rel := Release{Tag: body.TagName, URL: body.HTMLURL}
+	for _, a := range body.Assets {
+		rel.Assets = append(rel.Assets, Asset{Name: a.Name, URL: a.URL, Size: a.Size})
+	}
+	return rel, nil
 }
 
 func (c *Checker) view(s saved) State {
-	st := State{Enabled: s.Enabled, Current: c.Current, Latest: s.Latest, URL: s.URL, CheckedAt: s.CheckedAt, Error: s.Error}
-	st.Available = s.Enabled && Newer(s.Latest, c.Current)
+	st := State{Mode: s.Mode, Enabled: s.Mode != ModeOff, Current: c.Current, Latest: s.Latest, URL: s.URL, CheckedAt: s.CheckedAt,
+		Error: s.Error, CanInstall: c.Installer != nil}
+	st.Available = st.Enabled && Newer(s.Latest, c.Current)
+	if c.Installer != nil {
+		st.Install = c.Installer.Progress()
+	}
 	return st
 }
 
+// load reads the saved state, with Mode filled in.
 func (c *Checker) load(ctx context.Context) (saved, error) {
 	var s saved
 	data, err := c.Settings.Setting(ctx, settingKey)
 	if errors.Is(err, store.ErrNotFound) {
+		s.Mode = s.mode(false)
 		return s, nil
 	}
 	if err != nil {
 		return s, err
 	}
-	return s, json.Unmarshal(data, &s)
+	err = json.Unmarshal(data, &s)
+	s.Mode = s.mode(true)
+	return s, err
 }
 
 func (c *Checker) save(ctx context.Context, s saved) error {
@@ -238,16 +318,23 @@ func parse(s string) (version, bool) {
 	return v, true
 }
 
+// releaseBuild reports whether a running version is a release (or pre-release) build: `git
+// describe` builds (v1.2.3-4-gabcdef, -dirty) are development builds, and so is anything that
+// doesn't parse.
+func releaseBuild(current string) bool {
+	_, ok := parse(current)
+	return ok && !strings.Contains(current, "-g") && !strings.HasSuffix(current, "-dirty")
+}
+
 // Newer reports whether release tag latest is newer than current. Development builds and
 // other unparsable versions never see an update.
 func Newer(latest, current string) bool {
-	// `git describe` builds (v1.2.3-4-gabcdef, -dirty) are development builds.
-	if strings.Contains(current, "-g") || strings.HasSuffix(current, "-dirty") {
+	if !releaseBuild(current) {
 		return false
 	}
 	l, ok1 := parse(latest)
-	c, ok2 := parse(current)
-	if !ok1 || !ok2 {
+	c, _ := parse(current)
+	if !ok1 {
 		return false
 	}
 	for i := range l.n {

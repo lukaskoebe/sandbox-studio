@@ -47,12 +47,16 @@ func TestSystemSettings(t *testing.T) {
 
 	var up updates.State
 	rec = do(h, "GET", "http://localhost:7878/api/system/updates", "")
-	if json.Unmarshal(rec.Body.Bytes(), &up) != nil || up.Enabled || up.Available {
+	if json.Unmarshal(rec.Body.Bytes(), &up) != nil || up.Mode != updates.ModeTell || up.Available || up.CanInstall {
 		t.Fatalf("updates default: %d %s", rec.Code, rec.Body)
 	}
-	rec = do(h, "PUT", "http://localhost:7878/api/system/updates", `{"enabled":true}`)
+	rec = do(h, "PUT", "http://localhost:7878/api/system/updates", `{"mode":"tell"}`)
 	if json.Unmarshal(rec.Body.Bytes(), &up) != nil || !up.Available || up.Latest != "v9.0.0" {
 		t.Fatalf("enable updates: %d %s", rec.Code, rec.Body)
+	}
+	// This Studio has no installer.
+	if rec = do(h, "PUT", "http://localhost:7878/api/system/updates", `{"mode":"install"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("install mode without an installer: %d %s", rec.Code, rec.Body)
 	}
 }
 

@@ -28,6 +28,7 @@ data locations, repository layout, security model, testing and conventions.
 | [Browser broker](browser.md) | browser VM, tools, policy, redaction, credentials, live view | `internal/browser` |
 | [Git review](git-review.md) | forges, virtual remote, staged pushes, PRs, integration interface | `internal/gitreview` |
 | [Release](release.md) | cutting a release | `.github/workflows/release.yml` |
+| [Updates](updates.md) | the update check and automatic installs: verification, swap, restart, rollback | `internal/updates` |
 
 ## Background
 

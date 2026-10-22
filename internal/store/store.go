@@ -69,6 +69,12 @@ func Open(ctx context.Context, path string) (*Store, error) {
 // DB is the catalog connection, for packages that keep their own tables in it (memory).
 func (s *Store) DB() *sql.DB { return s.db }
 
+// Backup writes a consistent copy of the database to path, which must not exist (VACUUM INTO).
+func (s *Store) Backup(ctx context.Context, path string) error {
+	_, err := s.db.ExecContext(ctx, "VACUUM INTO ?", path)
+	return err
+}
+
 // Close closes the database without releasing an outstanding build worker lease.
 func (s *Store) Close() error { return s.db.Close() }
 

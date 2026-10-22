@@ -3745,6 +3745,47 @@
         ],
         "type": "object"
       },
+      "InstallProgress": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "description": "What the install waits for",
+            "type": "string"
+          },
+          "error": {
+            "description": "Why it failed",
+            "type": "string"
+          },
+          "from": {
+            "description": "The version it replaces, once installed or rolled back",
+            "type": "string"
+          },
+          "phase": {
+            "enum": [
+              "downloading",
+              "waiting",
+              "restarting",
+              "installed",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "description": "The release being installed",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "phase",
+          "at"
+        ],
+        "type": "object"
+      },
       "Item": {
         "additionalProperties": false,
         "properties": {
@@ -7818,6 +7859,23 @@
         },
         "type": "object"
       },
+      "UpdateModeInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "off",
+              "tell",
+              "install"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
       "UpdateProviderInBody": {
         "additionalProperties": false,
         "properties": {
@@ -7875,6 +7933,10 @@
             "description": "Latest is newer than Current",
             "type": "boolean"
           },
+          "canInstall": {
+            "description": "This Studio can install releases itself",
+            "type": "boolean"
+          },
           "checkedAt": {
             "format": "date-time",
             "type": "string"
@@ -7884,14 +7946,27 @@
             "type": "string"
           },
           "enabled": {
+            "description": "Mode is not off",
             "type": "boolean"
           },
           "error": {
             "description": "Why the last check failed",
             "type": "string"
           },
+          "install": {
+            "$ref": "#/components/schemas/InstallProgress",
+            "description": "The automatic install of a release: under way, or how the last one ended"
+          },
           "latest": {
             "description": "The newest release's tag, from the last check",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "off",
+              "tell",
+              "install"
+            ],
             "type": "string"
           },
           "url": {
@@ -7900,9 +7975,11 @@
           }
         },
         "required": [
+          "mode",
           "enabled",
           "current",
-          "available"
+          "available",
+          "canInstall"
         ],
         "type": "object"
       },
@@ -18458,7 +18535,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ToggleInBody"
+                "$ref": "#/components/schemas/UpdateModeInBody"
               }
             }
           },
@@ -18486,7 +18563,7 @@
             "description": "Error"
           }
         },
-        "summary": "Turn the daily update check on or off; turning it on checks right away",
+        "summary": "Set the update mode: off, tell (check daily; the default) or install (also install a newer release when Studio is idle). A mode that checks checks right away",
         "tags": [
           "system"
         ]

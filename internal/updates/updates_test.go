@@ -40,12 +40,26 @@ func fakeGitHub(t *testing.T, tag string) (*httptest.Server, *atomic.Int32) {
 	return srv, &hits
 }
 
-func TestOffByDefault(t *testing.T) {
+// Without a choice Studio tells about releases. A row from before the modes keeps the choice
+// it records: off stays off, on tells.
+func TestTellsByDefault(t *testing.T) {
 	srv, hits := fakeGitHub(t, "v1.1.0")
 	c := &Checker{Settings: memSettings{}, Client: srv.Client(), URL: srv.URL, Current: "v1.0.0"}
 	st, err := c.CheckIfDue(context.Background())
-	if err != nil || st.Enabled || st.Available || hits.Load() != 0 {
+	if err != nil || st.Mode != ModeTell || !st.Available || hits.Load() != 1 || st.CanInstall {
 		t.Fatalf("%+v %v hits=%d", st, err, hits.Load())
+	}
+	for row, want := range map[string]string{`{"enabled":false}`: ModeOff, `{"enabled":true}`: ModeTell, `{"mode":"install","enabled":true}`: ModeInstall} {
+		c := &Checker{Settings: memSettings{settingKey: []byte(row)}, Client: srv.Client(), URL: srv.URL, Current: "v1.0.0"}
+		if st, err := c.State(context.Background()); err != nil || st.Mode != want {
+			t.Errorf("%s: %+v %v", row, st, err)
+		}
+	}
+	if _, err := c.SetMode(context.Background(), ModeInstall); err != ErrCannotInstall {
+		t.Errorf("install without an installer: %v", err)
+	}
+	if _, err := c.SetMode(context.Background(), "sometimes"); err == nil {
+		t.Error("an unknown mode was accepted")
 	}
 }
 
@@ -55,7 +69,7 @@ func TestChecksAtMostDaily(t *testing.T) {
 	c := &Checker{Settings: memSettings{}, Client: srv.Client(), URL: srv.URL, Current: "v1.0.0", Now: func() time.Time { return now }}
 	ctx := context.Background()
 
-	st, err := c.SetEnabled(ctx, true)
+	st, err := c.SetMode(ctx, ModeTell)
 	if err != nil || !st.Available || st.Latest != "v1.1.0" || st.URL == "" || hits.Load() != 1 {
 		t.Fatalf("enable: %+v %v hits=%d", st, err, hits.Load())
 	}
@@ -63,10 +77,10 @@ func TestChecksAtMostDaily(t *testing.T) {
 	if _, err := c.CheckIfDue(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.SetEnabled(ctx, false); err != nil {
+	if _, err := c.SetMode(ctx, ModeOff); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.SetEnabled(ctx, true); err != nil {
+	if _, err := c.SetMode(ctx, ModeTell); err != nil {
 		t.Fatal(err)
 	}
 	if hits.Load() != 1 {
@@ -76,8 +90,8 @@ func TestChecksAtMostDaily(t *testing.T) {
 	if st, _ = c.CheckIfDue(ctx); hits.Load() != 2 || !st.Available {
 		t.Fatalf("after a day: %+v hits=%d", st, hits.Load())
 	}
-	// Disabled checkers keep the last result but don't show it.
-	if st, _ = c.SetEnabled(ctx, false); st.Available {
+	// A checker that is off keeps the last result but doesn't show it.
+	if st, _ = c.SetMode(ctx, ModeOff); st.Available {
 		t.Fatalf("disabled but available: %+v", st)
 	}
 }
@@ -88,7 +102,7 @@ func TestFailedCheck(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := &Checker{Settings: memSettings{}, Client: srv.Client(), URL: srv.URL, Current: "v1.0.0"}
-	st, err := c.SetEnabled(context.Background(), true)
+	st, err := c.SetMode(context.Background(), ModeTell)
 	if err != nil || st.Error == "" || st.Available || st.CheckedAt == nil {
 		t.Fatalf("%+v %v", st, err)
 	}
