@@ -21,7 +21,9 @@ function terminal(page: Page) {
   return {
     rows,
     async run(command: string) {
-      await root.click()
+      // Focus rather than a click: tmux takes two clicks within 300 ms as a double-click,
+      // which enters copy mode, and a fast command's result comes back sooner than that.
+      await root.locator(".xterm-helper-textarea").focus()
       await page.keyboard.type(`clear; ${command}`)
       await page.keyboard.press("Enter")
     },
