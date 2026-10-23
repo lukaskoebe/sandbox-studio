@@ -78,6 +78,9 @@ The image is `sandbox-studio-browser`, at the same version as the base image. Bu
     host were confused.
   - `close` passes only as the whole command on an ephemeral slot, where it ends the session.
     It never reaches the persistent profile.
+  - `element-at x y` isn't agent-browser's: the guest runs its own fixed, read-only script
+    for it, for a note the user pins (see [Live view and takeover](#live-view-and-takeover)).
+    The host passes only the point; it can't pass a script, and a batch can't carry it.
 - **Egress goes through the same gateway, MITM CA and rules.** The VM's HTTPS is always
   terminated with the environment's CA (agent sandboxes' connections are spliced unless a rule
   or a secret needs them checked), so its requests can be checked one by one.
@@ -348,7 +351,14 @@ disconnecting clears the local input buffer.
   page shows without scrolling: as wide as the window's body, or as its height less the
   controls under the frame allows (the body is a CSS size container, `cqw` and `cqh`), and on
   the teammate's page at most 72rem wide. The controls' height is measured, since they wrap
-  on a narrow window.
+  on a narrow window. The body holds the frame alone: the side panel's questions and the
+  "couldn't refresh" notice sit above it, and the page's questions float over it, so nothing
+  takes height the size container doesn't know of. Under the live view the body clips
+  (`overflow: clip`) rather than scrolls, so a frame drawn before the controls are measured,
+  a pixel of rounding, or a focus that would scroll something into view can't leave the view
+  scrolled; the "take the wheel" offer truncates its label inside a narrow panel.
+  `e2e/browser-layout.spec.ts` checks that the body never overflows while watching, driving,
+  with the keyboard controls open and after handing back, on the page and in the panel.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
   (device width, offset and page scale), its shape, and the letterbox of the canvas. The
   page's height comes from the frame's shape, not the metadata: agent-browser 0.39 reports
@@ -368,17 +378,51 @@ disconnecting clears the local input buffer.
   - While notes are open the view holds still: frames are acknowledged but not painted, and
     input is off, so the screenshot shows what the notes point at. The newest frame is
     painted when the notes are sent or cleared.
+  - Each note names the element under it. When a note is made, Studio asks the page for it
+    (`GET …/browser/element?x=&y=&session=`, `Service.ElementAt` in
+    `internal/browser/element.go`) while the popover is already open, and the popover then
+    says what the note is on. The element's outline shows on the frame while its note is open
+    or its marker hovered. A note made while the page has moved on from the held frame (a
+    newer frame waits with another address or scroll position) isn't looked up, as the page
+    would name what is there now.
   - The notes bar says how many there are and where they go: the teammate's open chats, the
     one in the sandbox that drove the browser last first, or a new chat in one of its
-    sandboxes. **Send to chat** posts one message as the user's (`POST …/chats/{chat}/queue`
-    or `POST …/sandboxes/{id}/chats`): the frame at its own resolution as a JPEG, with each
-    number in a circle on its spot, and the notes as a numbered list in the text with the
-    page's address and each point in CSS pixels. The notes go in the text, not in a legend
-    on the image, because the agent reads text exactly and in full. A harness that can't
-    take images refuses the message, and the notes stay.
-  - The page doesn't say which element is under a note. agent-browser 0.39's allow-listed
-    commands have no hit test (`get box`, CDP or eval), and a snapshot for it would renumber
-    the refs the policy checks rely on.
+    sandboxes. **Send to chat** waits for lookups still running and posts one message as the
+    user's (`POST …/chats/{chat}/queue` or `POST …/sandboxes/{id}/chats`): the frame at its
+    own resolution as a JPEG, with a box around each note's element and each number in a
+    circle on its spot, and the notes as a numbered list in the text with the page's address.
+    A note reads `1. button "Save" (#save-btn), text "Save changes", at [120, 306] — <note>`,
+    or `1. At [120, 306] — <note>` where the page couldn't say; the point is in CSS pixels
+    from the top left of the visible page. The notes go in the text, not in a legend on the
+    image, because the agent reads text exactly and in full, and the text alone says what
+    each is about.
+  - An agent that can't take images refuses the screenshot (422 with the error's location
+    `body.attachments`, `chat.ErrNoImages`; a queued prompt is checked against the running
+    agent at once, not when its turn comes). The notes then go as text alone, and a toast
+    says the screenshot stayed behind.
+  - **The lookup.** agent-browser 0.39's allow-listed commands have no hit test, and a
+    snapshot would renumber the element refs the agents' calls and the policy checks rely
+    on. The host sends the guest `[element-at, x, y]` (`agentproto.BrowserElementAt`), and
+    the guest runs its own fixed script with agent-browser's `eval -b`
+    (`internal/guest/browser_element.go`): the host passes only the two numbers, `eval`
+    stays off the allow-list, a batch can't carry the lookup, and agents never reach the
+    browser VM, so no one gains a way to run a script. CDP through the live view's stream
+    isn't an option: the stream takes only input and pacing. `eval` leaves the refs alone;
+    only navigation, reload, launch and close reset them.
+    - The script only reads: `document.elementFromPoint`, into open shadow roots, then the
+      element's tag, role (explicit or implied by the tag), accessible name (aria-labelledby,
+      aria-label, a field's label, placeholder or title, an image's alt, or the text of a
+      button, link or heading), id, a short CSS path (up to a unique ID or five steps; `>>>`
+      steps out of a shadow root), its border box, and up to 300 characters of visible text.
+    - It never reads what a form field holds, which may be a login filled from the vault: an
+      input, textarea, select or editable element has its type, name and placeholder
+      instead, and a container's text leaves out the fields in it. A button-like input's
+      value is its visible label.
+    - The broker treats the answer as the page's: strings are capped, control characters
+      dropped and the session's credentials scrubbed, a field's text is dropped again, and a
+      box must be finite. The lookup waits at most 1.5 s for another command (409 otherwise),
+      takes at most 3 s, isn't logged, and is refused while a credential shows on the page.
+      A note whose lookup fails keeps its point alone.
 
 ## Ephemeral sessions
 

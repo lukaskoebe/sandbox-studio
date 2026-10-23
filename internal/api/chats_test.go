@@ -182,6 +182,41 @@ func TestChats(t *testing.T) {
 	}
 }
 
+// An image an agent can't take is refused with the attachments as the error's location, which
+// the browser notes read to send their text alone; a new chat whose first prompt was refused
+// goes again.
+func TestChatRefusesImagesTheAgentCantTake(t *testing.T) {
+	agent := &acptest.Agent{SessionID: "ses_1", Init: json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{"loadSession":true,` +
+		`"promptCapabilities":{"image":false,"embeddedContext":true},"sessionCapabilities":{"resume":{}}},"authMethods":[],"agentInfo":{"name":"fake","version":"1"}}`)}
+	h, s, _, env := newChatServer(t, agent)
+	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	sb := newChatSandbox(t, h, s, env, prov.ID, "claude")
+	envBase := testOrigin + "/api/environments/" + env.ID
+	const shot = `{"text":"1. At [10, 20]: this","attachments":[{"name":"notes.jpg","mimeType":"image/jpeg","data":"/9j/4A=="}]}`
+
+	refused := func(rec *httptest.ResponseRecorder, what string) {
+		t.Helper()
+		var body struct {
+			Errors []struct{ Location, Message string }
+		}
+		if rec.Code != http.StatusUnprocessableEntity || json.Unmarshal(rec.Body.Bytes(), &body) != nil ||
+			len(body.Errors) != 1 || body.Errors[0].Location != "body.attachments" {
+			t.Fatalf("%s: %d %s", what, rec.Code, rec.Body)
+		}
+	}
+	refused(do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", shot), "a new chat")
+	if list := decode[[]store.Chat](t, do(h, "GET", envBase+"/chats", "")); len(list) != 0 {
+		t.Fatalf("the refused chat stayed: %+v", list)
+	}
+	rec := do(h, "POST", envBase+"/sandboxes/"+sb.ID+"/chats", `{"text":"1. At [10, 20]: this"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("the text alone: %d %s", rec.Code, rec.Body)
+	}
+	base := envBase + "/chats/" + decode[store.Chat](t, rec).ID
+	waitIdle(t, h, base)
+	refused(do(h, "POST", base+"/queue", shot), "the queue")
+}
+
 func TestChatUndoAndFiles(t *testing.T) {
 	h, s, g, env := newChatServer(t, &acptest.Agent{SessionID: "ses_1"})
 	prov := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)

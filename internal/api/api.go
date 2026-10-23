@@ -359,6 +359,9 @@ func apiError(err error) error {
 		return huma.Error409Conflict(err.Error())
 	case errors.Is(err, agentchan.ErrNotConnected):
 		return huma.Error409Conflict("the sandbox is not running or still booting")
+	case errors.Is(err, chat.ErrNoImages):
+		// The location tells the web that the text alone would go.
+		return huma.Error422UnprocessableEntity(err.Error(), &huma.ErrorDetail{Location: "body.attachments", Message: "the agent can't take images"})
 	case errors.Is(err, runtime.ErrInvalidName), errors.Is(err, sandboxes.ErrInvalidSpec),
 		errors.Is(err, policy.ErrDoesNotCover), errors.Is(err, policy.ErrInvalidPattern), errors.Is(err, policy.ErrExpired),
 		errors.Is(err, policy.ErrNoteTooLong),

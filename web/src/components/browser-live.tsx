@@ -82,6 +82,8 @@ function frameMetadata(
     deviceHeight: (deviceWidth * height) / width,
     offsetTop: field(m.offsetTop, 0),
     pageScaleFactor: field(m.pageScaleFactor, 1, true),
+    scrollOffsetX: field(m.scrollOffsetX, 0),
+    scrollOffsetY: field(m.scrollOffsetY, 0),
   }
 }
 
@@ -177,11 +179,16 @@ export function BrowserLive({
   // painted when the view thaws, as a page that stopped changing sends no more frames.
   const frozenRef = useRef(frozen)
   const heldFrame = useRef<(() => void) | undefined>(undefined)
+  // The page the held frame shows, and where it is scrolled to.
+  const heldView = useRef<
+    { url?: string; metadata: FrameMetadata } | undefined
+  >(undefined)
   useLayoutEffect(() => {
     frozenRef.current = frozen
     if (frozen) return
     const paint = heldFrame.current
     heldFrame.current = undefined
+    heldView.current = undefined
     paint?.()
   }, [frozen])
   const measureControls = useCallback((el: HTMLDivElement | null) => {
@@ -370,6 +377,10 @@ export function BrowserLive({
         img.onload = () => {
           if (!frozenRef.current || !drawnFrame.current) return paint()
           heldFrame.current = paint
+          heldView.current = {
+            url: framePageURL,
+            metadata: frameMetadata(metadataValue, img.width, img.height),
+          }
           if (isCurrent()) setState("live")
         }
         img.src = `data:image/jpeg;base64,${data}`
@@ -841,11 +852,22 @@ export function BrowserLive({
     const box = c.getBoundingClientRect()
     const at = pointerToPage({ x: e.clientX, y: e.clientY }, box, frame, false)
     if (!at) return
+    // A newer frame waits behind the held one once the page changed. The page is asked what
+    // is under a note as it is now, so only while it still shows what the frame does: the
+    // same address, scrolled to the same place.
+    const held = heldView.current
+    const fresh =
+      !held ||
+      (held.url === drawnPageURL.current &&
+        held.metadata.scrollOffsetX === frame.metadata.scrollOffsetX &&
+        held.metadata.scrollOffsetY === frame.metadata.scrollOffsetY)
     onNote({
       u: (e.clientX - box.left) / box.width,
       v: (e.clientY - box.top) / box.height,
       ...at,
       url: drawnPageURL.current,
+      view: frame.metadata,
+      fresh,
     })
   }
 

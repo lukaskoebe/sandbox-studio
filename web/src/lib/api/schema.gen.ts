@@ -2275,6 +2275,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/teammates/{teammate}/browser/element": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The element at a point of a session's page, for a note the user pins there: what it is, its accessible name, a CSS path, its box and the text it shows, never what a form field holds. It doesn't wait for another command (409), and it leaves the page and the agents' element refs as they are (docs/browser.md). */
+        get: operations["getBrowserElement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/teammates/{teammate}/browser/go": {
         parameters: {
             query?: never;
@@ -3497,6 +3514,44 @@ export interface components {
             superseded: number;
             /** @description ID of the teammate whose provider's utility model judged */
             teammate?: string;
+        };
+        Element: {
+            /** @description Its border box in CSS pixels of the viewport */
+            box: components["schemas"]["ElementBox"];
+            /** @description The element in one line, as a note's message names it */
+            description: string;
+            /** @description It is a form field; its value is never read */
+            field?: boolean;
+            /** @description A field's name attribute */
+            fieldName?: string;
+            /** @description Where a link goes */
+            href?: string;
+            /** @description Its id attribute */
+            id?: string;
+            /** @description Its accessible name: aria-labelledby, aria-label, a field's label, placeholder or title, an image's alt, or the text of a button, link or heading */
+            name?: string;
+            /** @description A field's placeholder */
+            placeholder?: string;
+            /** @description Its ARIA role, explicit or implied by the tag */
+            role?: string;
+            /** @description A short CSS path to it: up to an element with a unique ID, or five steps up. >>> steps out of a shadow root to its host */
+            selector?: string;
+            /** @description The element's tag name, such as button */
+            tag: string;
+            /** @description Up to 300 characters of the text it shows, without the contents of form fields; empty for a field */
+            text?: string;
+            /** @description An input's type attribute */
+            type?: string;
+        };
+        ElementBox: {
+            /** Format: double */
+            height: number;
+            /** Format: double */
+            width: number;
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
         };
         Environment: {
             blockTrackers: boolean;
@@ -11406,6 +11461,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UploadedFile"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getBrowserElement: {
+        parameters: {
+            query: {
+                /** @description The point's x in CSS pixels of the page's viewport */
+                x: number;
+                /** @description The point's y in CSS pixels of the page's viewport */
+                y: number;
+                /** @description An ephemeral session's ID; empty for the persistent profile */
+                session?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Teammate ID */
+                teammate: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Element"];
                 };
             };
             /** @description Error */

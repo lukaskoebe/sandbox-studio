@@ -52,6 +52,8 @@ type fakeBrowser struct {
 	// last told to forward.
 	ports    map[string][]int
 	forwards map[string][]int
+	// element is what the page's script answers to element-at, which nil leaves null.
+	element any
 }
 
 // fakeUpload is a file the fake sandboxes received.
@@ -132,6 +134,9 @@ func (f *fakeBrowser) answer(args []string) (any, error) {
 		return map[string]any{}, nil
 	case "click", "press", "select", "scroll", "back", "forward", "reload", "wait":
 		return map[string]any{}, nil
+	case agentproto.BrowserElementAt:
+		// The guest turns this into an eval of its own script, which answers like eval.
+		return map[string]any{"result": f.element, "origin": f.url}, nil
 	}
 	return nil, fmt.Errorf("unknown command %q", args[0])
 }

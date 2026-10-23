@@ -44,7 +44,7 @@ func promptBlocks(caps acp.AgentCapabilities, p Prompt) ([]acp.ContentBlock, []A
 		switch {
 		case strings.HasPrefix(mt, "image/"):
 			if !caps.PromptCapabilities.Image {
-				return nil, nil, fmt.Errorf("%w: this agent can't take images", ErrInvalid)
+				return nil, nil, ErrNoImages
 			}
 			blocks = append(blocks, acp.ContentBlock{Type: "image", MimeType: mt, Data: base64.StdEncoding.EncodeToString(f.Data)})
 		default:

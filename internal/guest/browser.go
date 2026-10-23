@@ -219,10 +219,17 @@ func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 		}
 		return agentproto.WriteJSONLine(st, agentproto.BrowserResult{Output: json.RawMessage(`{"success":true,"data":null,"error":null}`)})
 	}
-	if err := checkBrowserArgs(req.Args, false); err != nil {
+	args := req.Args
+	if len(args) > 0 && args[0] == agentproto.BrowserElementAt {
+		// Studio's own lookup for a note runs a fixed script, not a command of the
+		// allow-list (browser_element.go).
+		if args, err = elementAtArgs(req); err != nil {
+			return replyError(st, err)
+		}
+	} else if err := checkBrowserArgs(args, false); err != nil {
 		return replyError(st, err)
 	}
-	if req.Args[0] == "batch" {
+	if args[0] == "batch" {
 		if len(req.Stdin) > agentproto.MaxBrowserStdin {
 			return replyError(st, errors.New("batch too large"))
 		}
@@ -262,7 +269,7 @@ func (a *Agent) browser(st net.Conn, br *bufio.Reader) error {
 			}
 		}
 	}
-	out, err := a.runBrowser(ctx, slot, req.Args, req.Stdin)
+	out, err := a.runBrowser(ctx, slot, args, req.Stdin)
 	if err != nil {
 		return replyError(st, err)
 	}

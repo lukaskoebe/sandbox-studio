@@ -56,6 +56,12 @@ type BrowserCommand struct {
 	Stealth bool `json:"stealth,omitempty"`
 }
 
+// BrowserElementAt is the one command the guest runs that isn't agent-browser's own: Args
+// [BrowserElementAt, x, y] describe the element at (x, y), in CSS pixels of the page's
+// viewport, for a note the user pins on the live view. The guest evaluates its own fixed,
+// read-only script there; the host passes only the two numbers (docs/browser.md).
+const BrowserElementAt = "element-at"
+
 // BrowserResult is agent-browser's JSON response and the optional screenshot.
 type BrowserResult struct {
 	Output     json.RawMessage `json:"output"`

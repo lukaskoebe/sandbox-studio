@@ -7,6 +7,9 @@ export type FrameMetadata = {
   offsetTop: number
   /** Pinch zoom: DIP per CSS pixel. */
   pageScaleFactor: number
+  /** How far the page is scrolled, in CSS pixels: a frame scrolled elsewhere shows other elements. */
+  scrollOffsetX: number
+  scrollOffsetY: number
 }
 
 /** A frame as it is painted: its pixel size and the metadata that came with it. */
@@ -60,5 +63,20 @@ export function pointerToPage(
   return {
     x: Math.round(Math.min(Math.max(x, 0), maxX)),
     y: Math.round(Math.min(Math.max(y, 0), maxY)),
+  }
+}
+
+/**
+ * Maps a point in CSS pixels on the page to fractions (u, v) across and down the frame: the
+ * inverse of pointerToPage, for drawing what the page reports, such as an element's box, over
+ * the frame.
+ */
+export function pageToFrame(
+  point: { x: number; y: number },
+  m: FrameMetadata
+): { u: number; v: number } {
+  return {
+    u: (point.x * m.pageScaleFactor) / m.deviceWidth,
+    v: (point.y * m.pageScaleFactor + m.offsetTop) / m.deviceHeight,
   }
 }

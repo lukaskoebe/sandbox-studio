@@ -41,11 +41,13 @@ type BrowserDownloadInput struct {
 
 func (s *Server) browserError(err error) error {
 	switch {
-	case errors.Is(err, browser.ErrBadPattern), errors.Is(err, browser.ErrBadURL), errors.Is(err, browser.ErrBadMove):
+	case errors.Is(err, browser.ErrBadPattern), errors.Is(err, browser.ErrBadURL), errors.Is(err, browser.ErrBadMove),
+		errors.Is(err, browser.ErrBadPoint):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover):
+	case errors.Is(err, browser.ErrNotLive), errors.Is(err, browser.ErrNoTakeover), errors.Is(err, browser.ErrHidden),
+		errors.Is(err, browser.ErrBusy):
 		return huma.Error409Conflict(err.Error())
-	case errors.Is(err, browser.ErrNoSession):
+	case errors.Is(err, browser.ErrNoSession), errors.Is(err, browser.ErrNoElement):
 		return huma.Error404NotFound(err.Error())
 	}
 	return apiError(err)
@@ -219,6 +221,29 @@ func (s *Server) registerBrowser(api huma.API) {
 		}
 		st, err := s.Browser.Status(ctx, in.Env, in.Teammate)
 		return &struct{ Body browser.BrowserStatus }{st}, s.browserError(err)
+	})
+
+	type elementIn struct {
+		Env      string  `path:"env" doc:"Environment ID"`
+		Teammate string  `path:"teammate" doc:"Teammate ID"`
+		X        float64 `query:"x" required:"true" minimum:"0" maximum:"100000" doc:"The point's x in CSS pixels of the page's viewport"`
+		Y        float64 `query:"y" required:"true" minimum:"0" maximum:"100000" doc:"The point's y in CSS pixels of the page's viewport"`
+		Session  string  `query:"session" maxLength:"32" doc:"An ephemeral session's ID; empty for the persistent profile"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "getBrowserElement", Method: http.MethodGet, Path: "/api/environments/{env}/teammates/{teammate}/browser/element", Tags: []string{"browser"},
+		Description: "The element at a point of a session's page, for a note the user pins there: what it is, its accessible name, a CSS path, " +
+			"its box and the text it shows, never what a form field holds. It doesn't wait for another command (409), and it leaves the page " +
+			"and the agents' element refs as they are (docs/browser.md).",
+	}, func(ctx context.Context, in *elementIn) (*struct{ Body browser.Element }, error) {
+		if err := need(); err != nil {
+			return nil, err
+		}
+		el, err := s.Browser.ElementAt(ctx, in.Env, in.Teammate, in.Session, in.X, in.Y)
+		if err != nil {
+			return nil, s.browserError(err)
+		}
+		return &struct{ Body browser.Element }{el}, nil
 	})
 
 	type actionsIn struct {

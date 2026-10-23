@@ -139,6 +139,38 @@ func (t *tab) element(ref string) (element, bool) {
 	return element{}, false
 }
 
+// elementAt describes what is at (x, y) as the guest's element-at script does: a field by
+// its label, type and name, never by what was typed into it, and the page's body where
+// nothing is. A page that isn't http(s) has no element.
+func (t *tab) elementAt(x, y float64) any {
+	if t.elements() == nil {
+		return nil
+	}
+	box := func(r image.Rectangle) map[string]int {
+		return map[string]int{"x": r.Min.X, "y": r.Min.Y, "width": r.Dx(), "height": r.Dy()}
+	}
+	at := image.Pt(int(x), int(y))
+	for _, e := range t.elements() {
+		if !at.In(e.rect) {
+			continue
+		}
+		id := strings.ReplaceAll(strings.ToLower(e.name), " ", "-")
+		out := map[string]any{"role": e.role, "name": e.name, "id": id, "selector": "#" + id, "box": box(e.rect)}
+		switch e.role {
+		case "textbox":
+			out["tag"], out["field"], out["type"], out["fieldName"] = "input", true, e.typ, id
+		case "link":
+			u, _ := url.Parse(t.url())
+			u.Path, u.RawQuery, u.Fragment = "/login", "", ""
+			out["tag"], out["text"], out["href"] = "a", e.name, u.String()
+		default:
+			out["tag"], out["text"] = "button", e.name
+		}
+		return out
+	}
+	return map[string]any{"tag": "body", "selector": "body", "box": box(image.Rect(0, 0, viewW, viewH))}
+}
+
 // open goes to a new page: the forward history and the old page's values are gone.
 func (t *tab) open(u string) {
 	t.history = append(t.history[:t.at+1], u)
@@ -309,6 +341,14 @@ func (t *tab) answer(args []string) (any, bool, error) {
 		return map[string]any{}, true, nil
 	case "select", "scroll", "wait", "screenshot":
 		return map[string]any{}, false, nil
+	case agentproto.BrowserElementAt:
+		// The guest evaluates its own script for this; eval answers with its result.
+		x, errX := strconv.ParseFloat(arg(1), 64)
+		y, errY := strconv.ParseFloat(arg(2), 64)
+		if errX != nil || errY != nil || len(args) != 3 {
+			return nil, false, errors.New("element-at takes the x and y of a point")
+		}
+		return map[string]any{"result": t.elementAt(x, y), "origin": t.url()}, false, nil
 	}
 	return nil, false, fmt.Errorf("unknown command %q", args[0])
 }

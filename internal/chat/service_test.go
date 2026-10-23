@@ -652,6 +652,51 @@ func TestQueueWaitsForTheRunningTurn(t *testing.T) {
 	}
 }
 
+// An image for an agent that can't take images is refused as ErrNoImages, so the user can
+// send the text alone: at once on an idle chat, and while a turn runs too, rather than once
+// the queued prompt's turn comes.
+func TestImageForAnAgentWithoutImagesIsRefused(t *testing.T) {
+	release := make(chan struct{})
+	var prompts atomic.Int32
+	f := newFixture(t, &acptest.Agent{
+		Init: json.RawMessage(`{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false,"embeddedContext":true},` +
+			`"sessionCapabilities":{"resume":{}}},"authMethods":[],"agentInfo":{"name":"fake","version":"1"}}`),
+		BeforePrompt: func() {
+			if prompts.Add(1) == 1 {
+				<-release
+			}
+		},
+	})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	shot := Prompt{Text: "1. button \"Sign in\" (#sign-in) at [120, 306]: does nothing", Attachments: []File{{Name: "notes.jpg", MimeType: "image/jpeg", Data: []byte("\xff\xd8jpeg")}}}
+	first := f.send(t, "work")
+	if _, queued, err := f.s.Enqueue(ctx, env, f.chat.ID, f.launch(), shot, nil); !errors.Is(err, ErrNoImages) || !errors.Is(err, ErrInvalid) || queued {
+		t.Fatalf("Enqueue with an image while a turn runs = %v, %v; want ErrNoImages", queued, err)
+	}
+	if q := f.s.Queued(f.chat.ID); len(q) != 0 {
+		t.Fatalf("queued %+v", q)
+	}
+	text := Prompt{Text: shot.Text}
+	if _, queued, err := f.s.Enqueue(ctx, env, f.chat.ID, f.launch(), text, nil); err != nil || !queued {
+		t.Fatalf("Enqueue of the text alone = %v, %v; want queued", queued, err)
+	}
+	close(release)
+	f.wait(t, first.ID)
+	deadline := time.Now().Add(5 * time.Second)
+	for len(f.s.Queued(f.chat.ID)) > 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	log, err := f.s.Get(ctx, env, f.chat.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.wait(t, log.Turns[len(log.Turns)-1].ID)
+	if _, err := f.s.Send(ctx, env, f.chat.ID, f.launch(), shot); !errors.Is(err, ErrNoImages) {
+		t.Fatalf("Send with an image to an idle chat = %v; want ErrNoImages", err)
+	}
+}
+
 // Prompts queued while a turn runs show in the chat in order, one taken off never goes, and the
 // rest go one turn after another.
 func TestQueuedPromptsShowAndCanBeTakenOff(t *testing.T) {

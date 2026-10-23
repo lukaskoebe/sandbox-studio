@@ -168,6 +168,8 @@ export function BrowserWindow({
   const statusMissing = status.isError && errorStatus(status.error) === 404
   const st = statusMissing ? undefined : status.data
   const running = st?.vm === "running"
+  // The window's body shows the live view, rather than the sleeping card, a replay or a notice.
+  const liveView = running && !replay
 
   // The tab the window shows: "" is the profile; a picked session that has ended falls back.
   const [picked, setPicked] = useState("")
@@ -182,7 +184,7 @@ export function BrowserWindow({
   const pageURL = streamURL ?? (session ? session.url : st?.url)
 
   // The user's notes on the live view, on the frame they hold; they belong to that view.
-  const notes = useBrowserNotes()
+  const notes = useBrowserNotes(env, teammate, sessionID)
   const frame = useRef<HTMLCanvasElement>(null)
   const noting = notes.notes.length > 0 && running && !replay
   const clearNotes = notes.clear
@@ -504,22 +506,37 @@ export function BrowserWindow({
           panel={size === "panel"}
         />
       )}
+      {status.isRefetchError && !statusMissing && (
+        <p
+          role="status"
+          className="flex shrink-0 items-center gap-1.5 border-b bg-amber-500/5 px-3 py-1 text-xs text-amber-700 dark:text-amber-400"
+        >
+          <WarningIcon className="size-3 shrink-0" />
+          Couldn't refresh the browser's state. Retrying…
+        </p>
+      )}
+      {/* In the side panel the questions sit above the view, which then has less room, rather
+          than in it, where they would push the frame out of its box. */}
+      {liveView && size === "panel" && asksHere.length > 0 && (
+        <div className="grid max-h-[50%] shrink-0 gap-2 overflow-y-auto border-b p-2">
+          {asksHere.map((a) => (
+            <AskCard key={a.id} approval={a} name={name} />
+          ))}
+        </div>
+      )}
       <div
+        data-testid="browser-view"
         className={cn(
           // A size container: the live view fits its frame into the room it has (cqw, cqh).
-          "[container-type:size] relative flex min-h-0 flex-1 flex-col overflow-auto bg-muted/50",
-          size === "full" ? "p-4" : "p-0"
+          "[container-type:size] relative flex min-h-0 flex-1 flex-col bg-muted/50",
+          size === "full" ? "p-4" : "p-0",
+          // The live view fits by construction, so it never scrolls: clip rather than hidden,
+          // which would still let focus or a scrollIntoView scroll it with no way back, takes
+          // a sub-pixel of rounding or the frame before the controls under it are measured.
+          // The other states can be taller than a short panel and scroll.
+          liveView ? "overflow-clip" : "overflow-auto"
         )}
       >
-        {status.isRefetchError && !statusMissing && (
-          <p
-            role="status"
-            className="mb-2 flex shrink-0 items-center gap-1.5 rounded-md bg-amber-500/5 px-2 py-1 text-xs text-amber-700 dark:text-amber-400"
-          >
-            <WarningIcon className="size-3 shrink-0" />
-            Couldn't refresh the browser's state. Retrying…
-          </p>
-        )}
         {statusMissing ? (
           <Notice title="Browser unavailable">
             This teammate no longer exists.
@@ -553,15 +570,8 @@ export function BrowserWindow({
           <Replayed w={w} replay={replay} />
         ) : (
           <>
-            {asksHere.length > 0 && (
-              <div
-                className={cn(
-                  "z-20 grid gap-2",
-                  size === "full"
-                    ? "absolute top-6 left-6 w-80 max-w-[calc(100%-3rem)]"
-                    : "m-2"
-                )}
-              >
+            {size === "full" && asksHere.length > 0 && (
+              <div className="absolute top-6 left-6 z-20 grid max-h-[calc(100%-3rem)] w-80 max-w-[calc(100%-3rem)] gap-2 overflow-y-auto">
                 {asksHere.map((a) => (
                   <AskCard key={a.id} approval={a} name={name} />
                 ))}
@@ -592,16 +602,20 @@ export function BrowserWindow({
                 </span>
               )}
               {!driving && !noting && (
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-4 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                // The offer stays inside the frame however narrow it is: a wider one made the
+                // view scroll sideways in a narrow side panel once the wheel was handed back.
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-2 pb-4 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="pointer-events-auto bg-background/95 shadow-md"
+                    className="pointer-events-auto max-w-full min-w-0 bg-background/95 shadow-md"
                     disabled={busy}
                     onClick={() => void setWheel(true)}
                   >
                     <HandIcon />
-                    Watching {name} · take the wheel to use the page
+                    <span className="truncate">
+                      Watching {name} · take the wheel to use the page
+                    </span>
                   </Button>
                 </div>
               )}

@@ -348,3 +348,41 @@ func TestBrowserHistoryAndLiveView(t *testing.T) {
 		t.Errorf("browser state %+v", b)
 	}
 }
+
+// A note's lookup reaches the fake page through the channel and names what the frame draws
+// at the point: a field by its label and type, never by what was typed into it.
+func TestBrowserElementAtThroughTheChannel(t *testing.T) {
+	f := newBrowserFixture(t)
+	if err := f.svc.Start(f.ctx, f.env, f.teammate); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.ElementAt(f.ctx, f.env, f.teammate, "", 120, 306); !errors.Is(err, browser.ErrNoElement) {
+		t.Fatalf("about:blank: %v", err)
+	}
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.teammate, "", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.Navigate(f.ctx, f.env, f.teammate, "", "https://example.com/login"); err != nil {
+		t.Fatal(err)
+	}
+	b := f.vm.browserVM()
+	b.mu.Lock()
+	b.tabs[0].values["e1"] = "ada-secret@example.com"
+	b.mu.Unlock()
+	for _, c := range []struct {
+		x, y float64
+		want string
+	}{
+		{120, 306, `button "Sign in" (#sign-in)`},
+		{300, 128, `textbox "Email" (#email), a field of type email named "email"`},
+		{500, 100, `body`},
+	} {
+		el, err := f.svc.ElementAt(f.ctx, f.env, f.teammate, "", c.x, c.y)
+		if err != nil || el.Description != c.want {
+			t.Errorf("at %v, %v: %q, %v; want %q", c.x, c.y, el.Description, err, c.want)
+		}
+		if b, _ := json.Marshal(el); strings.Contains(string(b), "ada-secret") {
+			t.Errorf("the field's value came back: %s", b)
+		}
+	}
+}

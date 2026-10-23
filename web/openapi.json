@@ -2181,6 +2181,97 @@
         ],
         "type": "object"
       },
+      "Element": {
+        "additionalProperties": false,
+        "properties": {
+          "box": {
+            "$ref": "#/components/schemas/ElementBox",
+            "description": "Its border box in CSS pixels of the viewport"
+          },
+          "description": {
+            "description": "The element in one line, as a note's message names it",
+            "type": "string"
+          },
+          "field": {
+            "description": "It is a form field; its value is never read",
+            "type": "boolean"
+          },
+          "fieldName": {
+            "description": "A field's name attribute",
+            "type": "string"
+          },
+          "href": {
+            "description": "Where a link goes",
+            "type": "string"
+          },
+          "id": {
+            "description": "Its id attribute",
+            "type": "string"
+          },
+          "name": {
+            "description": "Its accessible name: aria-labelledby, aria-label, a field's label, placeholder or title, an image's alt, or the text of a button, link or heading",
+            "type": "string"
+          },
+          "placeholder": {
+            "description": "A field's placeholder",
+            "type": "string"
+          },
+          "role": {
+            "description": "Its ARIA role, explicit or implied by the tag",
+            "type": "string"
+          },
+          "selector": {
+            "description": "A short CSS path to it: up to an element with a unique ID, or five steps up. \u003e\u003e\u003e steps out of a shadow root to its host",
+            "type": "string"
+          },
+          "tag": {
+            "description": "The element's tag name, such as button",
+            "type": "string"
+          },
+          "text": {
+            "description": "Up to 300 characters of the text it shows, without the contents of form fields; empty for a field",
+            "type": "string"
+          },
+          "type": {
+            "description": "An input's type attribute",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "box",
+          "description"
+        ],
+        "type": "object"
+      },
+      "ElementBox": {
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "format": "double",
+            "type": "number"
+          },
+          "width": {
+            "format": "double",
+            "type": "number"
+          },
+          "x": {
+            "format": "double",
+            "type": "number"
+          },
+          "y": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "type": "object"
+      },
       "Environment": {
         "additionalProperties": false,
         "properties": {
@@ -17854,6 +17945,98 @@
               }
             },
             "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "browser"
+        ]
+      }
+    },
+    "/api/environments/{env}/teammates/{teammate}/browser/element": {
+      "get": {
+        "description": "The element at a point of a session's page, for a note the user pins there: what it is, its accessible name, a CSS path, its box and the text it shows, never what a form field holds. It doesn't wait for another command (409), and it leaves the page and the agents' element refs as they are (docs/browser.md).",
+        "operationId": "getBrowserElement",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Teammate ID",
+            "in": "path",
+            "name": "teammate",
+            "required": true,
+            "schema": {
+              "description": "Teammate ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The point's x in CSS pixels of the page's viewport",
+            "explode": false,
+            "in": "query",
+            "name": "x",
+            "required": true,
+            "schema": {
+              "description": "The point's x in CSS pixels of the page's viewport",
+              "format": "double",
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "description": "The point's y in CSS pixels of the page's viewport",
+            "explode": false,
+            "in": "query",
+            "name": "y",
+            "required": true,
+            "schema": {
+              "description": "The point's y in CSS pixels of the page's viewport",
+              "format": "double",
+              "maximum": 100000,
+              "minimum": 0,
+              "type": "number"
+            }
+          },
+          {
+            "description": "An ephemeral session's ID; empty for the persistent profile",
+            "explode": false,
+            "in": "query",
+            "name": "session",
+            "schema": {
+              "description": "An ephemeral session's ID; empty for the persistent profile",
+              "maxLength": 32,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Element"
+                }
+              }
+            },
+            "description": "OK"
           },
           "default": {
             "content": {

@@ -58,6 +58,10 @@ var ErrStopped = Conflict("stopped before the agent started on it")
 // ErrInvalid marks a prompt the agent can't take.
 var ErrInvalid = errors.New("invalid prompt")
 
+// ErrNoImages is ErrInvalid for an image attached for an agent that can't take images, so
+// that the user can send the text alone.
+var ErrNoImages = fmt.Errorf("%w: this agent can't take images", ErrInvalid)
+
 // ErrInvalidAnswer marks a question response that does not match its form.
 var ErrInvalidAnswer = errors.New("invalid chat answer")
 
@@ -399,6 +403,12 @@ func (s *Service) Enqueue(ctx context.Context, envID, chatID string, launch Laun
 			sent()
 		}
 		return QueuedPrompt{}, false, err
+	}
+	// A prompt the running agent can't take is refused now, not once it is its turn.
+	if l := s.get(chatID); l != nil {
+		if _, _, err := promptBlocks(l.caps, p); err != nil {
+			return QueuedPrompt{}, false, err
+		}
 	}
 	view := QueuedPrompt{ID: store.NewID(), Text: p.Text, QueuedAt: time.Now().UTC()}
 	for _, f := range p.Attachments {

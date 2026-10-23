@@ -36,6 +36,8 @@ var Rejected func(ctx context.Context, sandboxID, host string, names []string) e
 //	POST /api/e2e/sandboxes/{id}/connect  {"host": "example.com", "port": 80}: an HTTP request
 //	                                    through the gateway, in the background
 //	PUT  /api/e2e/sandboxes/{id}/ports    {"ports": [3000]}: the listening ports
+//	PUT  /api/e2e/sandboxes/{id}/images   {"on": false}: the chat agents it starts from now on
+//	                                    take no images
 //	POST /api/e2e/sandboxes/{id}/calls    {"method": "browser_click", "params": {"ref": "e4"}, "wait": false}:
 //	                                    a call to Studio from the sandbox, as `studio-agent mcp` makes
 //	                                    for a tool. With wait it answers with the Call once Studio
@@ -228,6 +230,22 @@ func (r *Runtime) Control() http.Handler {
 			return
 		}
 		g.SetPorts(body.Ports)
+		writeJSON(w, http.StatusOK, g.State())
+	})
+	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/images", func(w http.ResponseWriter, req *http.Request) {
+		g, ok := r.Guest(req.PathValue("id"))
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		var body struct {
+			On bool `json:"on"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil {
+			http.Error(w, "want {on}", http.StatusBadRequest)
+			return
+		}
+		g.SetImages(body.On)
 		writeJSON(w, http.StatusOK, g.State())
 	})
 	return mux

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp/acptest"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -66,6 +67,9 @@ type ACPAgent struct {
 	Outcomes []json.RawMessage `json:"outcomes"`
 }
 
+// acpInitWithoutImages is acptest.DefaultInit for an adapter that takes no images.
+var acpInitWithoutImages = json.RawMessage(strings.Replace(string(acptest.DefaultInit), `"image":true`, `"image":false`, 1))
+
 type acpProcess struct {
 	start agentproto.StartACP
 	agent *acptest.Agent
@@ -81,6 +85,9 @@ func (g *Guest) serveACP(st net.Conn, br *bufio.Reader) error {
 	}
 	a := &acptest.Agent{SessionID: "e2e-session-" + req.Chat, Turns: acpTurns(20)}
 	g.mu.Lock()
+	if g.noImages {
+		a.Init = acpInitWithoutImages
+	}
 	g.acp = append(g.acp, &acpProcess{start: req, agent: a})
 	g.mu.Unlock()
 	if err := agentproto.WriteJSONLine(st, struct{}{}); err != nil {

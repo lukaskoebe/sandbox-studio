@@ -80,6 +80,14 @@ func TestBrowserAPI(t *testing.T) {
 	if rec := do(h, "POST", base+"/navigate", `{"url":"https://example.org"}`); rec.Code != 409 {
 		t.Errorf("navigation without takeover: %d %s", rec.Code, rec.Body)
 	}
+	if rec := do(h, "GET", base+"/element?x=10&y=20", ""); rec.Code != 409 {
+		t.Errorf("the element at a point of a browser that is not running: %d %s", rec.Code, rec.Body)
+	}
+	for _, q := range []string{"x=-1&y=20", "x=10", "x=10&y=200001", "x=a&y=1"} {
+		if rec := do(h, "GET", base+"/element?"+q, ""); rec.Code != 422 {
+			t.Errorf("the element at %s: %d %s", q, rec.Code, rec.Body)
+		}
+	}
 	if rec := do(h, "GET", base+"/downloads", ""); rec.Code != 200 || !json.Valid(rec.Body.Bytes()) {
 		t.Errorf("downloads of a browser that is not running: %d %s", rec.Code, rec.Body)
 	}

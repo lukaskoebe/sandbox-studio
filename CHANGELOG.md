@@ -7,9 +7,14 @@
   the Browser page kept saying the browser had stopped unexpectedly, even once an agent had
   opened a page. When waking fails, the card now says why, with **Try again**.
 - **Browser notes:** right-click the live browser to pin a numbered note on the page, as many
-  as you like. **Send to chat** posts one screenshot with the numbers drawn on it, and the
-  notes as text, to one of the teammate's chats or a new one. The view holds still while you
+  as you like. Each note names the element it is on, such as a button and its label, and
+  outlines it while you write. **Send to chat** posts one screenshot with the numbers and
+  boxes drawn on it, and the notes as text, to one of the teammate's chats or a new one. The
+  text says what each note is on, so an agent that can't take images gets the notes as text
+  alone. Studio never reads what a form field holds for a note. The view holds still while you
   write.
+- **Browser:** the live view no longer turns scrollable in a narrow side panel after you hand
+  the wheel back.
 - **Sidebar:** Network leaves the sidebar for now; the rules and the security level stay in
   Settings → Network, and waiting network approvals still count under Home.
 - **Site:** one overview video on the landing page in place of the two: an agent gets its own

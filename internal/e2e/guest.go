@@ -60,6 +60,7 @@ type Guest struct {
 	calls    []*Call
 	browser  *browserVM // the browser of this boot, once Studio sent a browser stream
 	acp      []*acpProcess
+	noImages bool // the chat agents it starts can't take images
 }
 
 type session struct {
@@ -501,6 +502,13 @@ func (g *Guest) serveTCP(st net.Conn, br *bufio.Reader, port int) error {
 			return nil
 		}
 	}
+}
+
+// SetImages says whether the chat agents the guest starts from now on take images.
+func (g *Guest) SetImages(on bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.noImages = !on
 }
 
 // SetPorts replaces the ports the guest reports as listening.
