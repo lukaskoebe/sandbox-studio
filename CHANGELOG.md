@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.6.1 — 2026-10-23
+
+A crashed browser wakes up again, notes you pin on the live browser go to a chat with the
+elements they are on, and Network moves back into Settings.
 
 - **Browser:** a teammate's browser that crashed, or stopped outside Studio, wakes up again.
   Studio trusted the connection left from the run that ended, so **Wake up** did nothing and
