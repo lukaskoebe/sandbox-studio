@@ -42,6 +42,16 @@ async function rightClick(page: Page, x: number, y: number) {
   )
 }
 
+/**
+ * The open note n. A note that just closed can still be on the page while it fades out, with
+ * its own Remove and Done, so its buttons are found within the note.
+ */
+function noteDialog(page: Page, n: number) {
+  return page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("textbox", { name: `Note ${n}` }) })
+}
+
 /** Drives the browser to the fake sign-in page. */
 async function signInPage(page: Page, api: Api, base: string) {
   const address = page.getByLabel("Browser address")
@@ -116,7 +126,7 @@ test("right-clicks pin numbered notes, and Send posts them with a screenshot", a
   await page
     .getByRole("textbox", { name: "Note 2" })
     .fill("Which email does it want?")
-  await page.getByRole("button", { name: "Done" }).click()
+  await noteDialog(page, 2).getByRole("button", { name: "Done" }).click()
   await expect(
     page.getByRole("button", { name: "Note 2: Which email does it want?" })
   ).toBeVisible()
@@ -249,7 +259,7 @@ test("Remove takes one note away, and Clear the rest", async ({
   await expect(page.getByText("3 notes", { exact: true })).toBeVisible()
 
   await page.getByRole("button", { name: "Note 1: Spot 1" }).click()
-  await page.getByRole("button", { name: "Remove" }).click()
+  await noteDialog(page, 1).getByRole("button", { name: "Remove" }).click()
   await expect(page.getByText("2 notes", { exact: true })).toBeVisible()
   await expect(
     page.getByRole("button", { name: "Note 1: Spot 2" })
