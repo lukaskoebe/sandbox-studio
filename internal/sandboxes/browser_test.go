@@ -132,6 +132,48 @@ func TestEnsureBrowserWaitsForNewGuestThenConfiguresIt(t *testing.T) {
 	}
 }
 
+// A guest session still open on a browser VM that msb reports crashed is left from the run
+// that ended. EnsureBrowser drops it, starts the VM and configures the new run's guest; it
+// used to take the session for a running VM, so waking a crashed browser changed nothing.
+func TestEnsureBrowserStartsCrashedVMDespiteOpenSession(t *testing.T) {
+	f := newCheckpointFixture(t)
+	p := browserTeammate(t, f)
+	sb, err := f.manager.createBrowser(f.ctx, f.env.ID, p.ID, "sandbox-studio-browser:dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale, ctx := setupConfigTest(t, f, sb.ID, newConfigTestSecrets(nil, nil))
+	f.runtime.setStatus(VMName(sb), runtime.StatusCrashed)
+
+	result := make(chan browserEnsureResult, 1)
+	go func() {
+		got, err := f.manager.EnsureBrowser(ctx, f.env.ID, p.ID, "ignored")
+		result <- browserEnsureResult{sandbox: got, err: err}
+	}()
+	select {
+	case <-stale.session.CloseChan():
+	case <-ctx.Done():
+		t.Fatal("the session of the crashed run was not dropped")
+	}
+	assertQuiet(t, ctx, result, "EnsureBrowser before the new run's guest connects")
+
+	guest := startConfigTestGuest(t, f, sb.ID)
+	call := receive(t, ctx, guest.calls, configTestTimeout, "new run's guest configuration")
+	call.reply <- configTestReply{}
+	out := receive(t, ctx, result, configTestTimeout, "EnsureBrowser result")
+	if out.err != nil || out.sandbox.ID != sb.ID {
+		t.Fatalf("EnsureBrowser = %+v, %v", out.sandbox, out.err)
+	}
+	if n := f.runtime.countCall("start:" + VMName(sb)); n != 1 {
+		t.Errorf("crashed browser VM started %d times, want 1", n)
+	}
+	select {
+	case <-stale.calls:
+		t.Error("the session of the crashed run was configured")
+	default:
+	}
+}
+
 // The browser VM runs the browser image, is one per teammate and stays out of every public
 // sandbox path: the API, terminals and previews (which would reach its DevTools port).
 func TestBrowserVMIsPrivate(t *testing.T) {

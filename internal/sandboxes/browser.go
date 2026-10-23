@@ -38,10 +38,28 @@ func (m *Manager) EnsureBrowser(ctx context.Context, envID, teammateID, image st
 	return rec, m.ready(ctx, rec, browserReady)
 }
 
-// ready starts a VM that isn't connected, and waits until its guest agent is connected and
+// ready starts a VM that isn't running, and waits until its guest agent is connected and
 // configured. The lifecycle lock is released before it waits for the guest.
+//
+// A connected guest doesn't prove that the VM runs: msb says whether it does, as it does for
+// the status the user sees. A session still open on a VM that msb reports stopped or crashed
+// is left from the run that ended, and is dropped before the VM starts again: the hub would
+// refuse the new run's guest while the old session looks live, and WaitReady would take the
+// old session for the new one. Trusting the session instead left a crashed browser crashed
+// for good: waking it changed nothing, and the Browser page kept saying it had stopped.
 func (m *Manager) ready(ctx context.Context, rec store.Sandbox, timeout time.Duration) error {
-	if _, ok := m.Hub.Connected(rec.ID); !ok {
+	start := true
+	if _, ok := m.Hub.Connected(rec.ID); ok {
+		status, err := m.Runtime.Status(ctx, VMName(rec))
+		if err != nil {
+			return err
+		}
+		if start = runEnded(status); start {
+			m.Log.Warn("guest agent connected to a VM that does not run; starting it", "sandbox", rec.ID, "status", status)
+			m.Hub.Disconnect(rec.ID)
+		}
+	}
+	if start {
 		if err := m.ensureVMRunning(ctx, rec); err != nil {
 			return err
 		}
@@ -78,6 +96,11 @@ func (m *Manager) ensureVMRunning(ctx context.Context, rec store.Sandbox) error 
 		err = m.Runtime.Start(ctx, VMName(rec))
 	}
 	return err
+}
+
+// runEnded reports whether a VM in status has no run a guest agent could be connected from.
+func runEnded(status runtime.Status) bool {
+	return status == runtime.StatusCreated || status == runtime.StatusStopped || status == runtime.StatusCrashed
 }
 
 func (m *Manager) createBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {

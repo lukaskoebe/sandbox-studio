@@ -36,7 +36,11 @@ const stale: Record<string, string[]> = {
     "/api/environments/{env}/merges/{merge}",
     "/api/environments/{env}/lineage",
   ],
-  browser: ["/api/environments/{env}/teammates/{teammate}/browser/actions"],
+  // A new step in the action log can come from a run that just started: the status too.
+  browser: [
+    "/api/environments/{env}/teammates/{teammate}/browser",
+    "/api/environments/{env}/teammates/{teammate}/browser/actions",
+  ],
   builds: [
     "/api/environments/{env}/builds",
     "/api/environments/{env}/builds/{id}",

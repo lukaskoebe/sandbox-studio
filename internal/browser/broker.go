@@ -390,8 +390,11 @@ func (s *Service) batch(ctx context.Context, st *state, pg *page, cmds [][]strin
 	return items, nil
 }
 
-// boot makes sure the teammate's browser VM is running and its state knows it.
+// boot makes sure the teammate's browser VM is running and its state knows it. A run that
+// ended without the broker, in a crash or a stop elsewhere, is forgotten first, so that the
+// new run doesn't inherit it. The caller holds st.run.
 func (s *Service) boot(ctx context.Context, st *state) error {
+	s.endRun(ctx, st)
 	vm, err := s.VMs.EnsureBrowser(ctx, st.env, st.teammate, s.Image)
 	if err != nil {
 		return fmt.Errorf("starting the browser: %w", err)
@@ -404,6 +407,51 @@ func (s *Service) boot(ctx context.Context, st *state) error {
 		st.session = store.NewID()
 	}
 	return nil
+}
+
+// endRun forgets st's run when msb reports that its VM no longer runs. Stop and the idle
+// stop forget the runs they end; a VM that crashed, or was stopped outside the broker, left
+// its run behind: the user's takeover, which keeps agents waiting on a browser that is gone,
+// the ephemeral sessions, the sites and hosts approved for the session, and the action log's
+// session. The caller holds st.run.
+func (s *Service) endRun(ctx context.Context, st *state) {
+	s.mu.Lock()
+	known := st.vm != ""
+	s.mu.Unlock()
+	if !known {
+		return
+	}
+	_, status, err := s.VMs.BrowserStatus(ctx, st.env, st.teammate)
+	if err != nil || !runEnded(status) {
+		return
+	}
+	s.endTakeovers(st)
+	s.mu.Lock()
+	st.reset()
+	st.vm = ""
+	s.mu.Unlock()
+}
+
+// tryEndRun is endRun for callers that don't hold st.run: it does nothing while a command
+// runs, since that command boots or ends the run itself.
+func (s *Service) tryEndRun(ctx context.Context, st *state) {
+	select {
+	case st.run <- struct{}{}:
+	default:
+		return
+	}
+	defer func() { <-st.run }()
+	s.endRun(ctx, st)
+}
+
+// runEnded reports whether a browser VM in status has no run: it never started, stopped,
+// crashed or is gone.
+func runEnded(status runtime.Status) bool {
+	switch status {
+	case runtime.StatusAbsent, runtime.StatusCreated, runtime.StatusStopped, runtime.StatusCrashed:
+		return true
+	}
+	return false
 }
 
 // reset forgets a browser run: the pages, their refs and the credentials filled into them.
@@ -521,7 +569,25 @@ func (s *Service) Run(ctx context.Context) {
 		case <-t.C:
 			s.stopIdle(ctx, idle)
 			s.endIdleEphemeral(ctx, ephIdle)
+			s.endDrivenRuns(ctx)
 		}
+	}
+}
+
+// endDrivenRuns forgets the runs whose VM stopped while the user drove them. Agents wait on
+// the user's takeover before they boot the browser, so boot never sees that such a run
+// ended, and the idle stop leaves driven browsers alone.
+func (s *Service) endDrivenRuns(ctx context.Context) {
+	s.mu.Lock()
+	var driven []*state
+	for _, st := range s.states {
+		if st.vm != "" && st.anyTakeover() {
+			driven = append(driven, st)
+		}
+	}
+	s.mu.Unlock()
+	for _, st := range driven {
+		s.tryEndRun(ctx, st)
 	}
 }
 

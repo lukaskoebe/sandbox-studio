@@ -4,6 +4,8 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
+  type RefObject,
 } from "react"
 import { cn } from "@/lib/utils"
 import {
@@ -11,6 +13,7 @@ import {
   type DrawnFrame,
   type FrameMetadata,
 } from "@/lib/browser-coords"
+import type { NoteSpot } from "@/lib/browser-notes"
 
 // Chrome accepts CDP char text one Unicode code point at a time.
 const mobileInputSentinel = "\u200b"
@@ -95,6 +98,10 @@ export function BrowserLive({
   inputEnabled = true,
   pageURL,
   onPageURL,
+  frozen = false,
+  onNote,
+  overlay,
+  canvasRef,
   className,
 }: {
   url: string
@@ -102,6 +109,14 @@ export function BrowserLive({
   inputEnabled?: boolean
   pageURL?: string
   onPageURL?: (url: string) => void
+  /** Holds the frame on the canvas, and the input, while the user takes notes on it. */
+  frozen?: boolean
+  /** A right-click on the frame: it pins a note there instead of reaching the page. */
+  onNote?: (spot: NoteSpot) => void
+  /** Drawn over the frame, in a box of the frame's size: the notes' markers. */
+  overlay?: ReactNode
+  /** Is given the canvas, for a screenshot of the frame it shows. */
+  canvasRef?: RefObject<HTMLCanvasElement | null>
   className?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -113,6 +128,8 @@ export function BrowserLive({
   const activeSocketURL = useRef<string | undefined>(undefined)
   // The frame on the canvas, with its own metadata: clicks map through it, not a newer frame's.
   const drawnFrame = useRef<DrawnFrame | undefined>(undefined)
+  // The page the drawn frame shows, for a note on it: the address can move on while frozen.
+  const drawnPageURL = useRef<string | undefined>(undefined)
   // The button a press holds: a move while it is held is a drag, and its release names it.
   const heldButton = useRef<string | undefined>(undefined)
   const onPageURLRef = useRef(onPageURL)
@@ -154,7 +171,19 @@ export function BrowserLive({
   const [desktopControlsOpen, setDesktopControlsOpen] = useState(false)
   // The height of the controls under the frame, which wrap on a narrow window.
   const [controlsHeight, setControlsHeight] = useState(0)
-  const canDrive = driving && inputEnabled
+  const canDrive = driving && inputEnabled && !frozen
+  // While frozen, frames are still acknowledged, so the screencast keeps coming, but not
+  // painted: the notes stay on the frame they were made on. The newest one waits here and is
+  // painted when the view thaws, as a page that stopped changing sends no more frames.
+  const frozenRef = useRef(frozen)
+  const heldFrame = useRef<(() => void) | undefined>(undefined)
+  useLayoutEffect(() => {
+    frozenRef.current = frozen
+    if (frozen) return
+    const paint = heldFrame.current
+    heldFrame.current = undefined
+    paint?.()
+  }, [frozen])
   const measureControls = useCallback((el: HTMLDivElement | null) => {
     if (!el) return
     const observer = new ResizeObserver(() =>
@@ -273,7 +302,8 @@ export function BrowserLive({
       setNotice("")
       setRenderedPageURL(undefined)
       setHasRenderedFrame(false)
-      drawnFrame.current = undefined
+      // A frozen view keeps its frame through a reconnect: the canvas still shows it.
+      if (!frozenRef.current) drawnFrame.current = undefined
       const isCurrent = () =>
         !stopped && activeSocket === ws && socket.current === ws
       ws.onopen = () => {
@@ -314,7 +344,7 @@ export function BrowserLive({
         // The metadata is applied when this frame is painted, not when it arrives.
         const metadataValue = parsed.metadata
         const img = new Image()
-        img.onload = () => {
+        const paint = () => {
           if (!isCurrent() || frameNumber < paintedFrameSerial) return
           const c = canvas.current
           if (!c) return
@@ -327,6 +357,7 @@ export function BrowserLive({
           if (!context) return
           context.drawImage(img, 0, 0)
           paintedFrameSerial = frameNumber
+          drawnPageURL.current = framePageURL
           drawnFrame.current = {
             width: img.width,
             height: img.height,
@@ -335,6 +366,11 @@ export function BrowserLive({
           setRenderedPageURL(framePageURL)
           setHasRenderedFrame(true)
           setState("live")
+        }
+        img.onload = () => {
+          if (!frozenRef.current || !drawnFrame.current) return paint()
+          heldFrame.current = paint
+          if (isCurrent()) setState("live")
         }
         img.src = `data:image/jpeg;base64,${data}`
       }
@@ -790,65 +826,94 @@ export function BrowserLive({
     return () => input.removeEventListener("beforeinput", handleBeforeInput)
   }, [])
 
+  // A right-click on the frame pins a note on its spot. The handler is on the frame's box, as
+  // the canvas takes no pointer events while the user only watches; the notes' own popups,
+  // portaled but inside this tree for React's events, stop theirs.
+  const note = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onNote) {
+      if (canDrive) e.preventDefault()
+      return
+    }
+    e.preventDefault()
+    const c = canvas.current
+    const frame = drawnFrame.current
+    if (!c || !frame || state !== "live") return
+    const box = c.getBoundingClientRect()
+    const at = pointerToPage({ x: e.clientX, y: e.clientY }, box, frame, false)
+    if (!at) return
+    onNote({
+      u: (e.clientX - box.left) / box.width,
+      v: (e.clientY - box.top) / box.height,
+      ...at,
+      url: drawnPageURL.current,
+    })
+  }
+
   return (
     <div className={cn("relative bg-muted", className)}>
       {/* The frame keeps its shape and fills the room it has, so the whole page shows without
           scrolling: as wide as the browser window's body (cqw), or as its height (cqh) less
           the controls under the frame allows, and no wider than --live-max. Until the first
           frame, the canvas has the shape of a browser VM's page. */}
-      <canvas
-        ref={canvas}
-        width={1280}
-        height={577}
-        tabIndex={canDrive ? 0 : -1}
-        aria-label="Live view of the browser"
-        style={
-          {
-            "--controls": `${controlsHeight}px`,
-            width:
-              "min(100cqw, var(--live-max, 100cqw), calc((100cqh - var(--controls)) * var(--aspect, 1280 / 577)))",
-          } as React.CSSProperties
-        }
-        className={cn(
-          "block h-auto touch-none outline-none",
-          canDrive
-            ? "cursor-default ring-2 ring-primary"
-            : "pointer-events-none",
-          state !== "live" && "opacity-40"
-        )}
-        onPointerDown={(e) => {
-          if (!e.isPrimary) return
-          // Capture keeps moves and the release coming when the pointer leaves the canvas.
-          e.currentTarget.setPointerCapture(e.pointerId)
-          if (e.pointerType === "mouse") e.currentTarget.focus()
-          else e.preventDefault()
-          const button = buttons[e.button]
-          if (mouse("mousePressed", e, button)) heldButton.current = button
-        }}
-        onPointerMove={(e) => {
-          if (!e.isPrimary) return
-          const now = performance.now()
-          if (now - lastMove.current < 50) return
-          lastMove.current = now
-          const held = heldButton.current
-          mouse("mouseMoved", e, held ?? "none", held !== undefined)
-        }}
-        onPointerUp={(e) => {
-          // A touch tap focuses the hidden input once its release is sent: focusing earlier
-          // opens the keyboard, which shifts the layout before the release is mapped.
-          if (release(e) && e.pointerType !== "mouse") focusMobileInput()
-        }}
-        onPointerCancel={release}
-        onWheel={(e) =>
-          mouse("mouseWheel", e, buttons[e.button], false, {
-            deltaX: wheelPixels(e.deltaX, e.deltaMode),
-            deltaY: wheelPixels(e.deltaY, e.deltaMode),
-          })
-        }
-        onContextMenu={(e) => canDrive && e.preventDefault()}
-        onKeyDown={(e) => key("keyDown", e)}
-        onKeyUp={(e) => key("keyUp", e)}
-      />
+      <div className="relative w-fit" onContextMenu={note}>
+        <canvas
+          ref={(el) => {
+            canvas.current = el
+            if (canvasRef) canvasRef.current = el
+          }}
+          width={1280}
+          height={577}
+          tabIndex={canDrive ? 0 : -1}
+          aria-label="Live view of the browser"
+          style={
+            {
+              "--controls": `${controlsHeight}px`,
+              width:
+                "min(100cqw, var(--live-max, 100cqw), calc((100cqh - var(--controls)) * var(--aspect, 1280 / 577)))",
+            } as React.CSSProperties
+          }
+          className={cn(
+            "block h-auto touch-none outline-none",
+            canDrive
+              ? "cursor-default ring-2 ring-primary"
+              : "pointer-events-none",
+            state !== "live" && "opacity-40"
+          )}
+          onPointerDown={(e) => {
+            // The right button pins a note (the context menu, above), so the page doesn't get it.
+            if (!e.isPrimary || (onNote && e.button === 2)) return
+            // Capture keeps moves and the release coming when the pointer leaves the canvas.
+            e.currentTarget.setPointerCapture(e.pointerId)
+            if (e.pointerType === "mouse") e.currentTarget.focus()
+            else e.preventDefault()
+            const button = buttons[e.button]
+            if (mouse("mousePressed", e, button)) heldButton.current = button
+          }}
+          onPointerMove={(e) => {
+            if (!e.isPrimary) return
+            const now = performance.now()
+            if (now - lastMove.current < 50) return
+            lastMove.current = now
+            const held = heldButton.current
+            mouse("mouseMoved", e, held ?? "none", held !== undefined)
+          }}
+          onPointerUp={(e) => {
+            // A touch tap focuses the hidden input once its release is sent: focusing earlier
+            // opens the keyboard, which shifts the layout before the release is mapped.
+            if (release(e) && e.pointerType !== "mouse") focusMobileInput()
+          }}
+          onPointerCancel={release}
+          onWheel={(e) =>
+            mouse("mouseWheel", e, buttons[e.button], false, {
+              deltaX: wheelPixels(e.deltaX, e.deltaMode),
+              deltaY: wheelPixels(e.deltaY, e.deltaMode),
+            })
+          }
+          onKeyDown={(e) => key("keyDown", e)}
+          onKeyUp={(e) => key("keyUp", e)}
+        />
+        {overlay}
+      </div>
       <textarea
         ref={mobileInput}
         aria-label="Type into the remote browser"

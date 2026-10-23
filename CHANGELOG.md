@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Browser:** a teammate's browser that crashed, or stopped outside Studio, wakes up again.
+  Studio trusted the connection left from the run that ended, so **Wake up** did nothing and
+  the Browser page kept saying the browser had stopped unexpectedly, even once an agent had
+  opened a page. When waking fails, the card now says why, with **Try again**.
+- **Browser notes:** right-click the live browser to pin a numbered note on the page, as many
+  as you like. **Send to chat** posts one screenshot with the numbers drawn on it, and the
+  notes as text, to one of the teammate's chats or a new one. The view holds still while you
+  write.
 - **Site:** one overview video on the landing page in place of the two: an agent gets its own
   microVM on your computer, a new website asks you first, copies run Claude Code, Codex and
   opencode side by side, and its push waits for your review.

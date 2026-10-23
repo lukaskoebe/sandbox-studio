@@ -296,8 +296,19 @@ type fakeVMs struct {
 	st         *store.Store
 	mu         sync.Mutex
 	stopped    map[string]bool
+	crashed    map[string]bool // by teammate: the VM died without being stopped
 	stops      int
 	statusHook func()
+}
+
+// crash makes a teammate's browser VM stop unexpectedly, as msb reports it.
+func (v *fakeVMs) crash(teammateID string) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.crashed == nil {
+		v.crashed = map[string]bool{}
+	}
+	v.crashed[teammateID] = true
 }
 
 func (v *fakeVMs) EnsureBrowser(ctx context.Context, envID, teammateID, image string) (store.Sandbox, error) {
@@ -307,6 +318,7 @@ func (v *fakeVMs) EnsureBrowser(ctx context.Context, envID, teammateID, image st
 	}
 	v.mu.Lock()
 	delete(v.stopped, teammateID)
+	delete(v.crashed, teammateID)
 	v.mu.Unlock()
 	return sb, err
 }
@@ -336,10 +348,13 @@ func (v *fakeVMs) BrowserStatus(ctx context.Context, envID, teammateID string) (
 		return sb, runtime.StatusAbsent, nil
 	}
 	v.mu.Lock()
-	stopped, hook := v.stopped[teammateID], v.statusHook
+	stopped, crashed, hook := v.stopped[teammateID], v.crashed[teammateID], v.statusHook
 	v.mu.Unlock()
 	if hook != nil {
 		hook()
+	}
+	if crashed {
+		return sb, runtime.StatusCrashed, nil
 	}
 	if stopped {
 		return sb, runtime.StatusStopped, nil

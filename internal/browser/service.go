@@ -124,9 +124,17 @@ func (s *Service) Status(ctx context.Context, envID, teammateID string) (Browser
 	if err != nil {
 		return BrowserStatus{}, err
 	}
+	s.mu.Lock()
+	st := s.states[teammateID]
+	stale := st != nil && st.env == envID && st.vm != "" && runEnded(vm)
+	s.mu.Unlock()
+	if stale {
+		// The page shows a VM that stopped without the broker as it is: asleep, not driven.
+		s.tryEndRun(ctx, st)
+	}
 	out := BrowserStatus{TeammateID: teammateID, VM: string(vm), Sessions: []BrowserSession{}}
 	s.mu.Lock()
-	if st := s.states[teammateID]; st != nil && st.env == envID {
+	if st != nil && st.env == envID {
 		out = st.statusLocked(string(vm))
 	}
 	s.mu.Unlock()

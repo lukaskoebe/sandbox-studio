@@ -38,6 +38,11 @@ import {
 } from "@/components/browser-approval"
 import { BrowserDownloads } from "@/components/browser-downloads"
 import { BrowserLive } from "@/components/browser-live"
+import {
+  NoteMarkers,
+  NotesBar,
+  useBrowserNotes,
+} from "@/components/browser-notes"
 import { KindChip } from "@/components/kind-chip"
 import {
   AlertDialog,
@@ -176,6 +181,13 @@ export function BrowserWindow({
   useEffect(() => setStreamURL(undefined), [sessionID, running])
   const pageURL = streamURL ?? (session ? session.url : st?.url)
 
+  // The user's notes on the live view, on the frame they hold; they belong to that view.
+  const notes = useBrowserNotes()
+  const frame = useRef<HTMLCanvasElement>(null)
+  const noting = notes.notes.length > 0 && running && !replay
+  const clearNotes = notes.clear
+  useEffect(() => clearNotes(), [sessionID, running, clearNotes])
+
   const pending = usePendingApprovals()
   const asks = (pending.data ?? []).filter(
     (a) => a.environmentId === env && isBrowserAsk(a, teammate)
@@ -196,7 +208,6 @@ export function BrowserWindow({
     toast.error(`Could not ${what}`, { description: errorMessage(err) })
   const control = $api.useMutation("post", `${statusPath}/{action}`, {
     onSettled: refresh,
-    onError: onError("change the browser"),
   })
   const takeover = $api.useMutation("put", `${statusPath}/takeover`, {
     onSettled: refresh,
@@ -271,12 +282,30 @@ export function BrowserWindow({
     if (!(await takeWheel())) return
     move.mutate({ params: { path }, body: { to, session: sessionID } })
   }
+  // Why the last wake failed, on the sleeping browser's card until the next try: a toast
+  // that fades left the card as it was, as if waking had done nothing.
+  const [wakeError, setWakeError] = useState("")
+  useEffect(() => {
+    if (running) setWakeError("")
+  }, [running])
   const wake = async (raw: string) => {
+    setWakeError("")
+    let next: BrowserStatus
     try {
-      await control.mutateAsync({
+      next = await control.mutateAsync({
         params: { path: { ...path, action: "start" } },
       })
-    } catch {
+    } catch (err) {
+      setWakeError(errorMessage(err))
+      return
+    }
+    // The answer is the browser's state after the start: the card goes at once.
+    queryClient.setQueryData<BrowserStatus>(
+      ["get", statusPath, statusParams],
+      next
+    )
+    if (next.vm !== "running" && next.vm !== "starting") {
+      setWakeError(`It still reports “${vmWords(next.vm)}”.`)
       return
     }
     if (raw.trim()) {
@@ -416,9 +445,10 @@ export function BrowserWindow({
                 <DropdownMenuItem
                   disabled={busy}
                   onClick={() =>
-                    control.mutate({
-                      params: { path: { ...path, action: "stop" } },
-                    })
+                    control.mutate(
+                      { params: { path: { ...path, action: "stop" } } },
+                      { onError: onError("put the browser to sleep") }
+                    )
                   }
                 >
                   <MoonIcon />
@@ -463,6 +493,17 @@ export function BrowserWindow({
         </p>
       )}
       {running && <DriverBar w={w} />}
+      {noting && (
+        <NotesBar
+          env={env}
+          teammate={teammate}
+          name={name}
+          driver={session ? session.sandbox : st.driver}
+          notes={notes}
+          canvas={frame}
+          panel={size === "panel"}
+        />
+      )}
       <div
         className={cn(
           // A size container: the live view fits its frame into the room it has (cqw, cqh).
@@ -502,7 +543,12 @@ export function BrowserWindow({
             </div>
           )
         ) : !running ? (
-          <Asleep w={w} waking={control.isPending} onWake={wake} />
+          <Asleep
+            w={w}
+            waking={control.isPending}
+            error={wakeError}
+            onWake={wake}
+          />
         ) : replay ? (
           <Replayed w={w} replay={replay} />
         ) : (
@@ -535,13 +581,22 @@ export function BrowserWindow({
                 inputEnabled={!busy}
                 pageURL={pageURL}
                 onPageURL={setStreamURL}
+                frozen={noting}
+                onNote={notes.add}
+                overlay={<NoteMarkers notes={notes} name={name} />}
+                canvasRef={frame}
               />
-              {!driving && (
-                <div className="absolute inset-x-0 bottom-0 flex justify-center pb-4 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+              {!noting && (
+                <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-background/95 px-2 py-1 text-[0.6875rem] text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition group-hover:opacity-100">
+                  Right-click to add a note for {name}
+                </span>
+              )}
+              {!driving && !noting && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-4 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="bg-background/95 shadow-md"
+                    className="pointer-events-auto bg-background/95 shadow-md"
                     disabled={busy}
                     onClick={() => void setWheel(true)}
                   >
@@ -1252,10 +1307,13 @@ function Notice({ title, children }: { title: string; children: ReactNode }) {
 function Asleep({
   w,
   waking,
+  error,
   onWake,
 }: {
   w: Win
   waking: boolean
+  /** Why the last wake failed. */
+  error: string
   onWake: (url: string) => Promise<void>
 }) {
   const [url, setUrl] = useState("")
@@ -1336,9 +1394,17 @@ function Asleep({
                 className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 font-mono text-xs outline-none placeholder:font-sans focus:border-ring focus:ring-2 focus:ring-ring/30"
               />
               <Button size="sm" type="submit">
-                {url.trim() ? "Open" : "Wake up"}
+                {url.trim() ? "Open" : error ? "Try again" : "Wake up"}
               </Button>
             </form>
+            {error && (
+              <p
+                role="alert"
+                className="rounded-md bg-destructive/5 px-2 py-1 text-left text-xs text-destructive"
+              >
+                Couldn't wake the browser. {error}
+              </p>
+            )}
             {last?.url && (
               <p className="text-[0.6875rem] text-muted-foreground">
                 Last page <span className="font-mono">{hostOf(last.url)}</span>

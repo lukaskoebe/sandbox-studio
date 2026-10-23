@@ -1,0 +1,144 @@
+import type { Sandbox } from "@/lib/api/client"
+import type { Chat } from "@/lib/chats"
+
+/**
+ * A note the user pinned on the live view with a right-click. It sits at (u, v), fractions of
+ * the frame across and down, so it stays on its spot as the view resizes; x and y are the
+ * same point in CSS pixels from the top left of the page's viewport, for the agent. url is
+ * the page the frame showed.
+ */
+export type BrowserNote = {
+  id: number
+  u: number
+  v: number
+  x: number
+  y: number
+  url?: string
+  text: string
+}
+
+/** A spot on the live view: where a right-click landed, before it has a note. */
+export type NoteSpot = Omit<BrowserNote, "id" | "text">
+
+/** The notes that say something, in the order they were placed: their numbers. */
+export function writtenNotes(notes: BrowserNote[]) {
+  return notes.filter((n) => n.text.trim())
+}
+
+/**
+ * The message that goes with the screenshot. The notes go in the text rather than drawn into
+ * the image: the agent reads text exactly and in full, however long a note is, while the image
+ * keeps only the numbers, small enough to cover little of the page.
+ */
+export function composeNotes(notes: BrowserNote[]) {
+  const url = notes.at(0)?.url
+  const page = url && url !== "about:blank" ? `, ${url}` : ""
+  const count = notes.length === 1 ? "a spot" : `${notes.length} spots`
+  const head =
+    `I marked ${count} on your browser's page${page}. The attached screenshot shows ` +
+    `${notes.length === 1 ? "it as a numbered circle" : "them as numbered circles"}; ` +
+    `the brackets give each point in CSS pixels from the top left of the visible page.`
+  const list = notes.map(
+    (n, i) =>
+      `${i + 1}. [${n.x}, ${n.y}] ${n.text.trim().replace(/\n/g, "\n   ")}`
+  )
+  return [head, ...list].join("\n\n")
+}
+
+/** The colors of a note's circle: the theme's primary, as the markers on the live view. */
+function noteColors() {
+  const root = getComputedStyle(document.documentElement)
+  return {
+    fill: root.getPropertyValue("--primary").trim() || "#0f7686",
+    text: root.getPropertyValue("--primary-foreground").trim() || "#ffffff",
+  }
+}
+
+/**
+ * The frame on canvas, at its own resolution, with each note's number in a circle on its
+ * spot, as a JPEG. A circle's size goes with the frame's width, so that it reads the same
+ * on a frame from a HiDPI page.
+ */
+export function drawNotes(
+  canvas: HTMLCanvasElement,
+  notes: BrowserNote[]
+): Promise<Blob> {
+  const out = document.createElement("canvas")
+  out.width = canvas.width
+  out.height = canvas.height
+  const ctx = out.getContext("2d")
+  if (!ctx) return Promise.reject(new Error("Could not draw the screenshot"))
+  ctx.drawImage(canvas, 0, 0)
+  const { fill, text } = noteColors()
+  const r = Math.max(10, Math.round(out.width / 90))
+  notes.forEach((n, i) => {
+    const x = n.u * out.width
+    const y = n.v * out.height
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, 2 * Math.PI)
+    ctx.fillStyle = fill
+    ctx.fill()
+    ctx.lineWidth = Math.max(2, r / 5)
+    ctx.strokeStyle = "#ffffff"
+    ctx.stroke()
+    ctx.fillStyle = text
+    ctx.font = `600 ${Math.round(r * 1.1)}px ui-sans-serif, system-ui, sans-serif`
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    ctx.fillText(String(i + 1), x, y + r * 0.05)
+  })
+  return new Promise((resolve, reject) =>
+    out.toBlob(
+      (blob) =>
+        blob
+          ? resolve(blob)
+          : reject(new Error("Could not encode the screenshot")),
+      "image/jpeg",
+      0.92
+    )
+  )
+}
+
+/** Where notes can go: a chat of the teammate's, or a new chat in one of its sandboxes. */
+export type NoteTarget =
+  { kind: "chat"; chat: Chat } | { kind: "new"; sandbox: Sandbox }
+
+/** A target's key for a select. */
+export function targetKey(t: NoteTarget) {
+  return t.kind === "chat" ? `chat:${t.chat.id}` : `new:${t.sandbox.id}`
+}
+
+/**
+ * The places a teammate's notes can go, the likeliest first: its open chats, newest first,
+ * with those in the sandbox that drove the browser last ahead, then a new chat in each of its
+ * sandboxes. Heartbeats and task runs are left out, as the composer does.
+ */
+export function noteTargets(
+  chats: Chat[],
+  sandboxes: Sandbox[],
+  teammate: string,
+  driver?: string
+): NoteTarget[] {
+  const mine = sandboxes.filter((s) => s.teammateId === teammate)
+  const drove = mine.find((s) => s.name === driver)?.id
+  const open = chats
+    .filter(
+      (c) =>
+        c.teammateId === teammate &&
+        !c.heartbeat &&
+        !c.taskId &&
+        (c.state === "idle" || c.state === "running")
+    )
+    .sort(
+      (a, b) =>
+        Number(b.sandboxId === drove) - Number(a.sandboxId === drove) ||
+        b.updatedAt.localeCompare(a.updatedAt)
+    )
+  const fresh = [...mine].sort(
+    (a, b) => Number(b.id === drove) - Number(a.id === drove)
+  )
+  return [
+    ...open.map((chat): NoteTarget => ({ kind: "chat", chat })),
+    ...fresh.map((sandbox): NoteTarget => ({ kind: "new", sandbox })),
+  ]
+}

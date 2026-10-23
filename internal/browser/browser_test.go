@@ -895,6 +895,72 @@ func TestIdleStop(t *testing.T) {
 	}
 }
 
+// A VM that crashed leaves its run behind: the user's takeover, the ephemeral sessions and
+// the action log's session. The Browser page shows the crashed browser as it is, asleep and
+// not driven, and waking it starts a new run.
+func TestCrashedBrowserForgetsItsRun(t *testing.T) {
+	f := newFixture(t)
+	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.openEphemeral(f.sbAda, "https://example.com/a")
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := f.svc.Status(f.ctx, f.env, f.ada.ID)
+	if !before.Takeover || before.SessionID == "" || len(before.Sessions) != 1 {
+		t.Fatalf("status before the crash %+v", before)
+	}
+	f.vms.crash(f.ada.ID)
+	st, err := f.svc.Status(f.ctx, f.env, f.ada.ID)
+	if err != nil || st.VM != "crashed" || st.Takeover || st.SessionID != "" || st.URL != "" || len(st.Sessions) != 0 {
+		t.Fatalf("crashed status %+v, %v", st, err)
+	}
+	if err := f.svc.Start(f.ctx, f.env, f.ada.ID); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = f.svc.Status(f.ctx, f.env, f.ada.ID)
+	if st.VM != "running" || st.Takeover || st.SessionID == "" || st.SessionID == before.SessionID {
+		t.Errorf("status after waking %+v", st)
+	}
+}
+
+// An agent call after a crash that nobody looked at starts a new run: the crashed run's
+// ephemeral sessions are gone, and the action log starts a new session.
+func TestAgentCallAfterCrashStartsNewRun(t *testing.T) {
+	f := newFixture(t)
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	eph := f.openEphemeral(f.sbAda, "https://example.com/a")
+	before, _ := f.svc.Status(f.ctx, f.env, f.ada.ID)
+	f.vms.crash(f.ada.ID)
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	st, _ := f.svc.Status(f.ctx, f.env, f.ada.ID)
+	if st.VM != "running" || st.SessionID == "" || st.SessionID == before.SessionID || len(st.Sessions) != 0 {
+		t.Errorf("status after the agent's call %+v", st)
+	}
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{"session":"`+eph+`"}`); err == nil || !strings.Contains(err.Error(), "there is no ephemeral session") {
+		t.Errorf("crashed run's ephemeral session: %v", err)
+	}
+}
+
+// Agents wait on the user's takeover before they boot the browser, so a driven VM that
+// crashed held them off until the user woke it and handed back. The sweep ends that run.
+func TestAgentNotHeldByTakeoverOfCrashedBrowser(t *testing.T) {
+	f := newFixture(t)
+	f.mustCall(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`)
+	if err := f.svc.SetTakeover(f.ctx, f.env, f.ada.ID, "", true); err != nil {
+		t.Fatal(err)
+	}
+	f.vms.crash(f.ada.ID)
+	f.svc.endDrivenRuns(f.ctx)
+	if _, err := f.call(f.sbAda, agentproto.MethodBrowserSnapshot, `{}`); err != nil {
+		t.Fatalf("agent call after the driven browser crashed: %v", err)
+	}
+	if st, _ := f.svc.Status(f.ctx, f.env, f.ada.ID); st.VM != "running" || st.Takeover {
+		t.Errorf("status %+v", st)
+	}
+}
+
 func TestFilterInput(t *testing.T) {
 	click := `{"type":"input_mouse","eventType":"mousePressed","x":10,"y":20,"button":"left","clickCount":1,"evil":"x"}`
 	if FilterInput([]byte(click), false) != nil {

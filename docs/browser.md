@@ -44,6 +44,14 @@ Why per teammate:
   memory and a 2 GiB disk for the profile.
 - **Stopped when idle.** A VM with no call and no live viewer for 10 minutes stops. The
   profile disk stays.
+- **A crash ends the run.** msb's status says whether the VM runs, for the browser window
+  and for the broker alike. A VM that crashed, or stopped outside Studio, is started on the
+  next call or Wake up even while a guest session from its old run looks open: the hub
+  drops that session first (`Manager.ready`). The broker forgets the old run when it next
+  looks: the user's takeover, the ephemeral sessions, the sites and hosts approved for the
+  session and the action log's session. A driven VM is checked every minute, since agents
+  wait on the takeover without booting. A failed wake stays on the window's card with its
+  reason.
 - **Deleted on demand.** Reset profile… in the options menu removes the VM and its profile
   but keeps the history and the site rules. Deleting the teammate also drops its history,
   and its rules go with it. Deleting a teammate is refused while it still has agent
@@ -350,6 +358,27 @@ disconnecting clears the local input buffer.
   and above the page are not sent. A drag that leaves the canvas still releases at its edge. On touch, the tap is sent before the hidden input takes
   focus, so the keyboard does not move the page under the tap. Wheel deltas are pixels, with
   lines and pages converted.
+- **Notes.** A right-click on the live view pins a numbered note on that spot
+  (`browser-notes.tsx`, `lib/browser-notes.ts`), whether the user drives or watches; the
+  right button doesn't reach the page. The note opens in a popover with a textarea: Enter
+  keeps it, Shift+Enter starts a line, and Escape or a click elsewhere closes it, keeping
+  what it says. A note left empty goes, so the markers' numbers are the ones sent. A marker
+  opens its note to edit or remove it. Markers sit at fractions of the frame, so they keep
+  their spot as the window resizes.
+  - While notes are open the view holds still: frames are acknowledged but not painted, and
+    input is off, so the screenshot shows what the notes point at. The newest frame is
+    painted when the notes are sent or cleared.
+  - The notes bar says how many there are and where they go: the teammate's open chats, the
+    one in the sandbox that drove the browser last first, or a new chat in one of its
+    sandboxes. **Send to chat** posts one message as the user's (`POST …/chats/{chat}/queue`
+    or `POST …/sandboxes/{id}/chats`): the frame at its own resolution as a JPEG, with each
+    number in a circle on its spot, and the notes as a numbered list in the text with the
+    page's address and each point in CSS pixels. The notes go in the text, not in a legend
+    on the image, because the agent reads text exactly and in full. A harness that can't
+    take images refuses the message, and the notes stay.
+  - The page doesn't say which element is under a note. agent-browser 0.39's allow-listed
+    commands have no hit test (`get box`, CDP or eval), and a snapshot for it would renumber
+    the refs the policy checks rely on.
 
 ## Ephemeral sessions
 
