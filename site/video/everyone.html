@@ -25,7 +25,7 @@
         width: 600px;
         height: 600px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(92, 195, 209, 0.24), rgba(92, 195, 209, 0) 65%);
+        background: radial-gradient(circle, rgba(var(--accent-rgb), 0.24), rgba(var(--accent-rgb), 0) 65%);
       }
       .wordmark {
         position: absolute;
@@ -125,7 +125,7 @@
         position: absolute;
         inset: 0;
         border-radius: 50%;
-        border: 3px solid rgba(255, 255, 255, 0.12);
+        border: 3px solid rgba(var(--ink-rgb), 0.12);
         border-top-color: var(--accent);
       }
       .chk {
@@ -133,7 +133,7 @@
         inset: 0;
         border-radius: 50%;
         background: var(--ok);
-        color: #0b1a10;
+        color: var(--on-ok);
         display: grid;
         place-items: center;
       }
@@ -301,8 +301,8 @@
         width: 4px;
         height: 520px;
         border-radius: 4px;
-        background: linear-gradient(var(--accent), rgba(92, 195, 209, 0.15));
-        box-shadow: 0 0 40px rgba(92, 195, 209, 0.6);
+        background: linear-gradient(var(--accent), rgba(var(--accent-rgb), 0.15));
+        box-shadow: 0 0 40px rgba(var(--accent-rgb), 0.6);
         transform-origin: 50% 0;
       }
       .yours {
@@ -408,7 +408,7 @@
         backface-visibility: hidden;
       }
       .packet.real {
-        background: #15291d;
+        background: var(--ok-solid);
         border-color: var(--ok-line);
         color: var(--ok);
       }
@@ -516,7 +516,7 @@
         background: var(--card);
         color: var(--fg);
         border: 1px solid var(--accent-line);
-        box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.6);
+        box-shadow: 0 24px 50px -10px rgba(var(--shadow-rgb), calc(0.6 * var(--shadow-k)));
       }
       .ask .q {
         flex: 1;
@@ -976,7 +976,7 @@
         })
         // The wall glows when it is hit.
         const glow = shots.reduce((g, s) => g + Math.max(0, 1 - Math.abs(lt - s.at - 0.6) * 3), 0)
-        byId("s3-wall").style.boxShadow = `0 0 ${40 + glow * 60}px rgba(92,195,209,${0.6 + glow * 0.4})`
+        byId("s3-wall").style.boxShadow = `0 0 ${40 + glow * 60}px rgba(var(--accent-rgb), ${0.6 + glow * 0.4})`
         exit(byId("s3"), lt, len)
       })
 
@@ -1002,7 +1002,7 @@
         pk.style.top = "637px"
         const waiting = lt >= 2.6 && lt < 5.0
         const pulse = waiting ? (Math.sin((lt - 2.6) * 7) + 1) / 2 : 0
-        pk.style.borderColor = waiting ? `rgba(240,197,81,${0.5 + pulse * 0.5})` : "var(--line-2)"
+        pk.style.borderColor = waiting ? `rgba(var(--amber-rgb), ${0.5 + pulse * 0.5})` : "var(--line-2)"
         pk.style.color = waiting ? "var(--amber)" : lt >= 5.0 ? "var(--ok)" : "var(--fg)"
         set(pk, { o: p(lt, 1.6, 1.8) * (1 - p(lt, 5.7, 5.95)), s: 1 + pulse * 0.04 })
 
@@ -1049,8 +1049,8 @@
         set(byId("s5-real"), { ry: 180 + turn * 180 })
         // The vault lights up as the key is filled in.
         const lit = Math.max(0, 1 - Math.abs(lt - 3.65) * 2.2)
-        byId("s5-vault").style.borderColor = lit > 0 ? `rgba(92,195,209,${0.2 + lit * 0.6})` : "var(--line-2)"
-        byId("s5-vault").style.boxShadow = `0 40px 80px -20px rgba(0,0,0,.7), 0 0 ${lit * 60}px rgba(92,195,209,${lit * 0.3})`
+        byId("s5-vault").style.borderColor = lit > 0 ? `rgba(var(--accent-rgb), ${0.2 + lit * 0.6})` : "var(--line-2)"
+        byId("s5-vault").style.boxShadow = `0 40px 80px -20px rgba(var(--shadow-rgb), calc(0.7 * var(--shadow-k))), 0 0 ${lit * 60}px rgba(var(--accent-rgb), ${lit * 0.3})`
         const f = p(lt, 3.3, 4.0, ease.outCubic)
         set(byId("s5-flash"), { o: lt < 3.3 ? 0 : 1 - f, s: 1 + f * 0.35 })
         const f2 = p(lt, 5.2, 5.9, ease.outCubic)

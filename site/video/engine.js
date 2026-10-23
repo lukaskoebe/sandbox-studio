@@ -170,6 +170,8 @@
     window.DURATION = total
     window.seek = seek
     const params = new URLSearchParams(location.search)
+    // ?theme=light switches to the light tokens in style.css.
+    if (params.get("theme") === "light") document.documentElement.dataset.theme = "light"
     if (params.has("render")) {
       document.documentElement.classList.add("render")
       seek(0)

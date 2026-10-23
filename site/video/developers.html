@@ -15,7 +15,7 @@
       }
       .bold {
         font-weight: 700;
-        color: #f2f4f5;
+        color: var(--strong);
       }
       .link {
         color: var(--t-acc);
@@ -51,7 +51,7 @@
         width: 600px;
         height: 600px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(92, 195, 209, 0.22), rgba(92, 195, 209, 0) 65%);
+        background: radial-gradient(circle, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0) 65%);
       }
       .mark {
         position: absolute;
@@ -155,7 +155,7 @@
         gap: 8px;
         padding: 7px 14px;
         border-radius: 6px;
-        background: #15291d;
+        background: var(--ok-solid);
         border: 1px solid var(--ok-line);
         color: var(--ok);
         font-size: 16px;
@@ -199,11 +199,11 @@
         color: var(--ok);
       }
       .v-hold {
-        background: rgba(240, 197, 81, 0.14);
+        background: rgba(var(--amber-rgb), 0.14);
         color: var(--amber);
       }
       .v-deny {
-        background: rgba(250, 104, 99, 0.15);
+        background: rgba(var(--red-rgb), 0.15);
         color: var(--red);
       }
       .log-row .why {
@@ -312,7 +312,7 @@
       }
       .diff .file {
         padding: 8px 18px;
-        background: #1b1e23;
+        background: var(--diff-file);
         color: var(--t-dim);
         border-bottom: 1px solid var(--t-edge);
       }
@@ -324,12 +324,12 @@
         color: var(--t-acc);
       }
       .diff .del {
-        background: rgba(250, 104, 99, 0.12);
-        color: #f6a6a3;
+        background: rgba(var(--red-rgb), 0.12);
+        color: var(--del);
       }
       .diff .add {
-        background: rgba(71, 200, 110, 0.12);
-        color: #9fe0b5;
+        background: rgba(var(--ok-rgb), 0.12);
+        color: var(--add);
       }
       .review .row {
         display: flex;
@@ -502,7 +502,7 @@
           <div class="vm-foot"><span class="pill"><span class="dot"></span>running</span><span class="pill">2 vCPU · 4 GiB</span></div>
         </div>
         <div class="win vm" id="s2-v2" style="left: 710px">
-          <div class="vm-head"><div class="avatar" style="background: #1f6fa8">I</div>Iris<span class="harness">codex</span></div>
+          <div class="vm-head"><div class="avatar" style="background: #1f6fa8; color: #fff">I</div>Iris<span class="harness">codex</span></div>
           <div class="term"><span class="pr">$</span> <span id="s2-c2"></span>
 <span id="s2-o2"><span class="ok">✓</span> 214 tests passed <span class="muted">(8.2s)</span></span>
 <span class="pr">$</span> <span id="s2-c2b"></span>
@@ -511,7 +511,7 @@
           <div class="snap" id="s2-snap"><span data-icon="clock"></span>Checkpoint saved</div>
         </div>
         <div class="win vm" id="s2-v3" style="left: 1270px">
-          <div class="vm-head"><div class="avatar" style="background: #8a5a1e">L</div>Linus<span class="harness">opencode</span></div>
+          <div class="vm-head"><div class="avatar" style="background: #8a5a1e; color: #fff">L</div>Linus<span class="harness">opencode</span></div>
           <div class="term"><span class="pr">$</span> <span id="s2-c3"></span>
 <span id="s2-o3"><span class="muted">ok</span>  api/orders  <span class="muted">0.41s</span></span>
 <span class="pr">$</span> <span id="s2-c3b"></span>
@@ -763,8 +763,8 @@
         byId("s3-why4").textContent = denied ? "denied by you" : "waiting for you"
         const pulse = !denied && lt > 2.6 ? (Math.sin(lt * 7) + 1) / 2 : 0
         byId("s3-r4").style.background = denied
-          ? `rgba(250,104,99,${0.1 * (1 - p(lt, 5.0, 6.5))})`
-          : `rgba(240,197,81,${0.04 + pulse * 0.06})`
+          ? `rgba(var(--red-rgb), ${0.1 * (1 - p(lt, 5.0, 6.5))})`
+          : `rgba(var(--amber-rgb), ${0.04 + pulse * 0.06})`
 
         const c = p(lt, 2.9, 3.5, ease.outBack)
         const cOut = p(lt, 4.9, 5.3, ease.inCubic)

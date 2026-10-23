@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sandbox Studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="kit.css" />
+    <style>
+      .caption {
+        position: absolute;
+        left: 120px;
+        right: 120px;
+        top: 96px;
+        text-align: center;
+      }
+      .caption .big-sub {
+        margin-top: 22px;
+      }
+      .ok-glow {
+        position: absolute;
+        width: 600px;
+        height: 600px;
+        margin: -300px 0 0 -300px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(var(--ok-rgb), 0.26), rgba(var(--ok-rgb), 0) 62%);
+        opacity: 0;
+      }
+
+      /* Your computer: a laptop, with your files in a column on the right. */
+      .world {
+        position: absolute;
+        inset: 0;
+      }
+      .laptop {
+        position: absolute;
+        left: 20px;
+        top: 400px;
+        width: 1560px;
+        height: 572px;
+        transform-origin: 50% 40%;
+      }
+      .screen {
+        position: absolute;
+        left: 60px;
+        top: 0;
+        width: 1440px;
+        height: 540px;
+        border-radius: 26px 26px 6px 6px;
+        border: 3px solid var(--line-2);
+        background: rgba(var(--ink-rgb), 0.025);
+        box-shadow: 0 40px 80px -30px rgba(var(--shadow-rgb), calc(0.7 * var(--shadow-k)));
+      }
+      .menu {
+        height: 50px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 26px;
+        border-bottom: 1px solid var(--line);
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .menu > span {
+        display: flex;
+      }
+      .menu svg {
+        width: 26px;
+        height: 26px;
+      }
+      .deck {
+        position: absolute;
+        left: 0;
+        top: 540px;
+        width: 1560px;
+        height: 32px;
+        border-radius: 4px 4px 22px 22px;
+        background: var(--line-2);
+      }
+      .deck::after {
+        content: "";
+        position: absolute;
+        left: 700px;
+        top: 0;
+        width: 160px;
+        height: 12px;
+        border-radius: 0 0 10px 10px;
+        background: var(--line);
+      }
+      .files {
+        position: absolute;
+        left: 1290px;
+        top: 470px;
+        width: 200px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .files .tile {
+        height: 98px;
+        font-size: 22px;
+        gap: 8px;
+      }
+      .files .tile svg {
+        width: 34px;
+        height: 34px;
+      }
+
+      /* The agent's own computer: a microVM whose outline draws itself around the agent. */
+      .box {
+        position: absolute;
+      }
+      .box svg {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+      }
+      .box rect {
+        fill: none;
+        stroke: var(--accent);
+        stroke-width: 5;
+      }
+      .box .fill {
+        position: absolute;
+        inset: 0;
+        border-radius: 28px;
+        background: linear-gradient(rgba(var(--accent-rgb), 0.13), rgba(var(--accent-rgb), 0.04));
+      }
+      .box .head {
+        position: absolute;
+        left: 28px;
+        right: 22px;
+        top: 22px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        font-size: 26px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+      .box .tag {
+        margin-left: auto;
+        padding: 5px 14px;
+        border-radius: 999px;
+        background: var(--accent-low);
+        border: 1px solid var(--accent-line);
+        color: var(--accent);
+        font-family: var(--mono);
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .box .cmdline {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 56px;
+        text-align: center;
+        font-family: var(--mono);
+        font-size: 30px;
+        opacity: 0;
+      }
+      .cmdline .pr {
+        color: var(--ok);
+        font-weight: 700;
+      }
+      .fork {
+        position: absolute;
+        gap: 10px;
+        height: 54px;
+        font-size: 24px;
+        box-shadow: 0 14px 30px -10px rgba(var(--shadow-rgb), calc(0.6 * var(--shadow-k)));
+      }
+      .fork svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      .pop.guard {
+        border-color: var(--accent-line);
+      }
+      .pop.guard svg {
+        color: var(--accent);
+      }
+
+      .globe.repo {
+        color: var(--fg);
+      }
+      .flow .review {
+        padding: 26px 32px;
+      }
+      .review .diff {
+        margin: 2px 0 18px;
+        padding: 10px 18px;
+        border-radius: 8px;
+        background: var(--t-bg);
+        border: 1px solid var(--t-edge);
+        font-family: var(--mono);
+        font-size: 25px;
+        line-height: 1.45;
+      }
+      .review .diff > div {
+        white-space: pre;
+      }
+      .review .add {
+        color: var(--add);
+      }
+      .review .del {
+        color: var(--del);
+      }
+
+      .gate-disc {
+        position: absolute;
+        width: 104px;
+        height: 104px;
+        margin: -52px 0 0 -52px;
+        border-radius: 22px;
+        background: var(--card);
+        border: 3px solid var(--accent);
+        color: var(--accent);
+        display: grid;
+        place-items: center;
+      }
+      .gate-disc svg,
+      .globe svg {
+        width: 56px;
+        height: 56px;
+      }
+      .globe {
+        position: absolute;
+        width: 150px;
+        height: 150px;
+        margin: -75px 0 0 -75px;
+        border-radius: 24px;
+        background: var(--card);
+        border: 1px solid var(--line-2);
+        color: var(--blue);
+        display: grid;
+        place-items: center;
+      }
+      .globe-name {
+        position: absolute;
+        transform: translateX(-50%);
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The overview video: one picture, drawn inside your laptop. Your files on one side, the
+         agent's microVM on the other, copies of it made with a click, and its work reviewed
+         before it leaves. ?cut=slow plays a calmer cut that gives each step more time. -->
+    <div class="stage">
+      <div class="bg-glow" id="glow1"></div>
+      <div class="bg-glow two" id="glow2"></div>
+      <div class="bg-grid" id="grid"></div>
+
+      <section class="scene" id="d">
+        <div class="caption"><h1 class="big" id="c1">Coding agents work best when you let them&nbsp;loose.</h1></div>
+        <div class="caption"><h1 class="big" id="c2">On your computer, that's a&nbsp;risk.</h1></div>
+        <div class="caption">
+          <h1 class="big" id="c3">Give your agent a computer of its&nbsp;own.</h1>
+          <p class="big-sub" id="c3s">Open-source microVMs, right on your&nbsp;machine.</p>
+        </div>
+        <div class="caption"><h1 class="big" id="c4">Inside: install anything, run&nbsp;anything.</h1></div>
+        <div class="caption"><h1 class="big" id="c5">Outside: only what you&nbsp;allow.</h1></div>
+        <div class="caption"><h1 class="big" id="c6">Create as many as you&nbsp;want.</h1></div>
+        <div class="caption"><h1 class="big" id="c7">Run any harness you&nbsp;want.</h1></div>
+        <div class="caption"><h1 class="big" id="c8">Review its work, then ship&nbsp;it.</h1></div>
+
+        <!-- Let loose -->
+        <div class="pop ok" id="a1"><span data-icon="check"></span>apt install</div>
+        <div class="pop ok" id="a2"><span data-icon="check"></span>docker run</div>
+        <div class="pop ok" id="a3"><span data-icon="check"></span>npm test</div>
+
+        <!-- Your computer, and all that is on it: centred until the network appears -->
+        <div class="world" id="world">
+          <div class="laptop" id="laptop">
+            <div class="screen"><div class="menu"><span data-icon="laptop"></span>Your computer</div></div>
+            <div class="deck"></div>
+          </div>
+          <div class="files" id="files">
+            <div class="tile" id="t1"><span data-icon="folder"></span>Documents<span class="mark" data-icon="x"></span></div>
+            <div class="tile" id="t2"><span data-icon="key"></span>SSH keys<span class="mark" data-icon="x"></span></div>
+            <div class="tile" id="t3"><span data-icon="lock"></span>Passwords<span class="mark" data-icon="x"></span></div>
+            <div class="tile" id="t4"><span data-icon="git"></span>Other projects<span class="mark" data-icon="x"></span></div>
+          </div>
+
+          <div class="ok-glow" id="okglow"></div>
+
+          <!-- Its own computer, and the copies of it -->
+          <div class="box" id="f1">
+            <div class="fill"></div>
+            <svg><rect rx="28" pathLength="1" /></svg>
+            <div class="head"><span class="name">Its own computer</span><span class="tag">microVM</span></div>
+            <div class="cmdline"><span class="pr">$</span> <span class="cmd">claude</span></div>
+          </div>
+          <div class="box" id="f2">
+            <div class="fill"></div>
+            <svg><rect rx="28" pathLength="1" /></svg>
+            <div class="head"><span class="name">Its own computer</span><span class="tag">microVM</span></div>
+            <div class="cmdline"><span class="pr">$</span> <span class="cmd">codex</span></div>
+          </div>
+          <div class="box" id="f3">
+            <div class="fill"></div>
+            <svg><rect rx="28" pathLength="1" /></svg>
+            <div class="head"><span class="name">Its own computer</span><span class="tag">microVM</span></div>
+            <div class="cmdline"><span class="pr">$</span> <span class="cmd">opencode</span></div>
+          </div>
+          <div class="bot" id="ag1" data-agent></div>
+          <div class="bot" id="ag2" data-agent></div>
+          <div class="bot" id="ag3" data-agent></div>
+          <span class="btn fork" id="fork"><span data-icon="git"></span>Fork</span>
+
+          <div class="pop bad" id="k1"><span data-icon="x"></span>deleted</div>
+          <div class="pop bad" id="k2"><span data-icon="x"></span>copied</div>
+          <div class="pop bad" id="k3"><span data-icon="x"></span>leaked</div>
+          <div class="pop bad" id="k4"><span data-icon="x"></span>broken</div>
+          <div class="pop guard" id="x1"><span data-icon="shield"></span>Blocked</div>
+          <div class="pop guard" id="x2"><span data-icon="shield"></span>Blocked</div>
+          <div class="probe bad" id="r1"></div><div class="probe bad" id="r2"></div><div class="probe bad" id="r3"></div><div class="probe bad" id="r4"></div>
+          <div class="hit" id="rh1" style="border-color: var(--red)"></div><div class="hit" id="rh2" style="border-color: var(--red)"></div><div class="hit" id="rh3" style="border-color: var(--red)"></div><div class="hit" id="rh4" style="border-color: var(--red)"></div>
+          <div class="probe" id="b1"></div><div class="probe" id="b2"></div><div class="probe" id="b3"></div>
+          <div class="hit" id="bh1"></div><div class="hit" id="bh2"></div><div class="hit" id="bh3"></div>
+
+          <!-- Inside -->
+          <div class="pop ok" id="i1"><span data-icon="check"></span>sudo apt install postgresql</div>
+          <div class="pop ok" id="i2"><span data-icon="check"></span>docker compose up -d</div>
+          <div class="pop ok" id="i3"><span data-icon="check"></span>npm run build</div>
+
+          <div class="ripple" id="ripple"></div>
+          <div class="cursor" id="cursor"><span data-icon="cursor"></span></div>
+        </div>
+
+        <!-- Outside: the internet is beyond your computer -->
+        <div class="track" id="track" style="left: 720px; top: 624px; width: 1000px"></div>
+        <div class="gate-disc" id="gate" style="left: 960px; top: 625px" data-icon="shield"></div>
+        <div class="globe" id="globe" style="left: 1720px; top: 625px" data-icon="globe"></div>
+        <div class="globe-name" id="globe-name" style="left: 1720px; top: 720px">stripe.com</div>
+        <div class="flow"><div class="packet" id="packet"><span data-icon="globe"></span>stripe.com</div></div>
+        <div class="flow"><div class="win approval" id="card" style="left: 1180px; top: 205px">
+          <div class="head"><span class="badge"><span data-icon="globe"></span>Network access</span>your agent · just now</div>
+          <div class="host">stripe.com</div>
+          <div class="why">It wants to connect to stripe.com to set up payments.</div>
+          <div class="row"><span class="ghost">Ignore</span><span class="btn">Deny</span><span class="btn primary" id="allow">Allow</span></div>
+        </div></div>
+        <div class="flow"><div class="chip" id="chip" style="left: 1590px; top: 780px"><span data-icon="check"></span>Allowed · stripe.com</div></div>
+
+        <!-- Its work: a push waits at the edge of your computer until you approve it -->
+        <div class="track" id="track2" style="left: 1245px; top: 626px; width: 475px"></div>
+        <div class="gate-disc" id="gate2" style="left: 1520px; top: 627px" data-icon="shield"></div>
+        <div class="globe repo" id="repo" style="left: 1720px; top: 627px" data-icon="git"></div>
+        <div class="globe-name" id="repo-name" style="left: 1720px; top: 722px">your repository</div>
+        <div class="flow"><div class="packet" id="push"><span data-icon="git"></span>changes</div></div>
+        <div class="flow"><div class="win approval review" id="review" style="left: 1230px; top: 202px; width: 600px">
+          <div class="head"><span class="badge"><span data-icon="git"></span>Review</span>opencode · just now</div>
+          <div class="host">my-app → main</div>
+          <div class="diff">
+            <div class="add">+ export function pay(cart) {</div>
+            <div class="add">+   return charge(cart.total)</div>
+            <div class="del">- // TODO: payments</div>
+          </div>
+          <div class="row"><span class="ghost">3 files · +42 −7</span><span class="btn">Reject</span><span class="btn primary" id="approve">Approve</span></div>
+        </div></div>
+        <div class="flow"><div class="chip" id="chip2"><span data-icon="check"></span>Pull request opened</div></div>
+      </section>
+
+      <!-- Outro -->
+      <section class="scene" id="s7">
+        <div class="halo" id="s7-halo" style="left: 660px; top: -30px"></div>
+        <div class="end-logo" id="s7-logo" data-cube="solid"></div>
+        <div class="end-mark" id="s7-mark">Sandbox Studio</div>
+        <div class="end-line" id="s7-line">Free inside. Your rules outside.</div>
+        <div class="end-facts">
+          <span class="pill" id="s7-f1"><span data-icon="check"></span>Free and open source</span>
+          <span class="pill" id="s7-f2"><span data-icon="check"></span>Linux, macOS and Windows</span>
+        </div>
+        <div class="end-url" id="s7-url">lukaskoebe.github.io/sandbox-studio</div>
+      </section>
+
+      <div class="bg-vignette"></div>
+      <svg class="grain" width="1920" height="1080"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" /></filter><rect width="100%" height="100%" filter="url(#n)" /></svg>
+    </div>
+
+    <script src="icons.js"></script>
+    <script src="engine.js"></script>
+    <script src="kit.js"></script>
+    <script>
+      const { p, set, reveal, scene, ease, lerp, aim, byId, mood, exit, glide, ripple, press, shoot, pop } = M
+
+      // Two cuts of one story: by default it gets to the point soon, for visitors who only
+      // watch the start, and ?cut=slow gives each step more time to sink in. B holds when each
+      // step starts and ends; everything else is timed from those.
+      const front = new URLSearchParams(location.search).get("cut") !== "slow"
+      const B = front
+        ? { loose: [0.2, 3.2], risk: [3.6, 7.8], own: [8.2, 13.2], inside: [13.6, 18.0], outside: [18.4, 25.6], many: [26.0, 30.8], harness: [31.2, 35.8], review: [36.2, 42.6] }
+        : { loose: [0.3, 5.9], risk: [6.4, 12.1], own: [12.6, 19.1], inside: [19.6, 25.7], outside: [26.2, 33.7], many: [34.2, 39.9], harness: [40.4, 46.0], review: [46.4, 53.6] }
+      const gap = front ? 0.4 : 0.7 // between things that happen one after another
+      const [L, R, O, I, X, N, H, V] = Object.values(B).map((b) => b[0])
+      const last = B.review[1]
+      const looseAt = [0, 1, 2].map((i) => L + 1.5 + i * gap)
+      const riskAt = [0, 1, 2, 3].map((i) => R + 1.8 + i * gap)
+      const blockAt = [0, 1].map((i) => O + (front ? 2.6 : 3.3) + i * gap)
+      const insideAt = [0, 1, 2].map((i) => I + 0.8 + i * (front ? 0.7 : 1.0))
+      const click = X + (front ? 4.3 : 4.85) // Allow
+      const nameAt = [0, 1, 2].map((i) => H + 0.6 + i * 0.6)
+      const approve = V + (front ? 3.6 : 4.4) // the push
+
+      // The microVM, as centre x and y, width and height: one big one, then three in a row.
+      const big = [640, 693, 640, 440]
+      const slots = [[310, 690, 350, 420], [690, 690, 350, 420], [1070, 690, 350, 420]]
+      const home = [640, 625] // the agent, in the big one
+      const edge = [home[0] + 70, home[1]]
+      const mix = (a, b, k) => a.map((v, i) => lerp(v, b[i], k))
+
+      /** Puts a box at g, with its outline drawn by drawn (0 to 1), lit up by glow. */
+      function box(el, g, drawn, glow = 0) {
+        const [x, y, w, h] = g
+        Object.assign(el.style, { left: `${x - w / 2}px`, top: `${y - h / 2}px`, width: `${w}px`, height: `${h}px` })
+        const r = el.querySelector("rect")
+        r.setAttribute("width", w)
+        r.setAttribute("height", h)
+        r.style.strokeDasharray = `${drawn} 1`
+        el.querySelector("svg").style.filter = `drop-shadow(0 0 ${12 + glow * 34}px rgba(var(--accent-rgb), ${0.4 + glow * 0.6}))`
+      }
+      /** Centres an element on x, y, measured each frame since the fonts load late. */
+      function place(el, x, y) {
+        el.style.left = `${x - el.offsetWidth / 2}px`
+        el.style.top = `${y - el.offsetHeight / 2}px`
+      }
+      const hops = (lt, times) => times.reduce((h, at) => h + (lt > at && lt < at + 0.45 ? Math.sin(((lt - at) / 0.45) * Math.PI) * 26 : 0), 0)
+
+      scene(0, last + 0.7, byId("d"), (lt, len) => {
+        Object.values(B).forEach(([a, b], i, all) => reveal(byId(`c${i + 1}`), lt, a, i === all.length - 1 ? undefined : b, 0.05))
+        reveal(byId("c3s"), lt, O + 0.7, B.own[1], 0.04)
+        const gone = p(lt, B.outside[1] - 0.3, B.outside[1] + 0.2) // the network part leaves
+
+        // Your computer appears around the agent, in the middle until the internet needs room.
+        const lp = p(lt, R + 0.2, R + 1.2, ease.outQuart)
+        set(byId("laptop"), { o: lp, s: 1.06 - lp * 0.06 })
+        const away = (a) => p(lt, a, a + 0.9, ease.inOutCubic)
+        set(byId("world"), { x: 160 * (1 - away(X + 0.6) + away(N - 0.4) - away(V)) })
+        const dim = p(lt, X + 1.0, X + 1.5) * (1 - p(lt, N - 0.2, N + 0.4))
+        set(byId("files"), { o: p(lt, R + 0.8, R + 1.4) * (1 - dim * 0.75) * (1 - p(lt, V + 0.3, V + 0.8)), x: (1 - p(lt, R + 0.8, R + 1.6, ease.outQuart)) * 40 })
+
+        // Its own computer: drawn around the agent, then forked.
+        const f1 = byId("f1")
+        const toSlot = p(lt, N + 0.2, N + 1.1, ease.inOutCubic)
+        const g1 = mix(big, slots[0], toSlot)
+        const wall = big[0] + big[2] / 2
+        let glow = 0
+        blockAt.forEach((t, i) => {
+          const y = [560, 700][i]
+          glow += shoot(byId(`b${i + 1}`), byId(`bh${i + 1}`), lt, t, edge, [wall, y])
+          const x = byId(`x${i + 1}`)
+          place(x, wall + 30 + x.offsetWidth / 2, y)
+          pop(x, lt, t + 0.55, t + 1.9)
+        })
+        glow += shoot(byId("b3"), byId("bh3"), lt, X + 0.4, edge, [wall, 640])
+        box(f1, g1, p(lt, O + 0.6, O + 1.8, ease.inOutCubic), Math.min(glow, 1.2))
+        set(f1.querySelector(".fill"), { o: p(lt, O + 1.4, O + 2.2) })
+        set(f1.querySelector(".head"), { o: p(lt, O + 1.7, O + 2.2), y: (1 - p(lt, O + 1.7, O + 2.4, ease.outQuart)) * 14 })
+
+        // Fork, twice: each click makes a copy, agent and all.
+        const fork = byId("fork")
+        place(fork, g1[0], g1[1] + g1[3] / 2 - 70)
+        const fk = p(lt, N + 1.0, N + 1.4, ease.outBack)
+        set(fork, { o: p(lt, N + 1.0, N + 1.2) * (1 - p(lt, N + 4.0, N + 4.3)), s: 0.8 + fk * 0.2 })
+        press(fork, lt, N + 1.8)
+        press(fork, lt, N + 2.8)
+        const fc = M.centre(fork)
+        const cur = p(lt, N + 1.2, N + 1.4) * (1 - p(lt, N + 3.8, N + 4.1))
+        if (lt < N + 2.3) glide(byId("cursor"), lt, N + 1.1, N + 1.7, [1200, 1000], [fc.x - 7, fc.y - 4], N + 1.8, cur)
+        else glide(byId("cursor"), lt, N + 2.3, N + 2.6, [fc.x + 20, fc.y + 30], [fc.x - 7, fc.y - 4], N + 2.8, cur)
+        const g2 = mix(slots[0], slots[1], p(lt, N + 1.9, N + 2.7, ease.outCubic))
+        const g3 = mix(slots[0], slots[2], p(lt, N + 2.9, N + 3.9, ease.outCubic))
+        box(byId("f2"), g2, 1)
+        box(byId("f3"), g3, 1)
+        set(byId("f2"), { o: p(lt, N + 1.9, N + 2.2) })
+        set(byId("f3"), { o: p(lt, N + 2.9, N + 3.2) })
+        // A copy's name shows once it has landed, so two names never overlap on the way.
+        set(byId("f2").querySelector(".head"), { o: p(lt, N + 2.5, N + 2.8) })
+        set(byId("f3").querySelector(".head"), { o: p(lt, N + 3.6, N + 3.9) })
+        // In the smaller boxes the name is enough.
+        ;[1, 2, 3].forEach((i) => set(byId(`f${i}`).querySelector(".tag"), { o: 1 - p(lt, N + 0.2, N + 0.6) }))
+
+        // The agents, one in each. Happy when things work; it looks at your files, at what
+        // stops it, and at the website it waits for.
+        const ag = byId("ag1")
+        const mv = p(lt, R + 0.2, R + 1.0, ease.inOutCubic)
+        const a = p(lt, L + 0.3, L + 1.0, ease.outBack)
+        let at = [lerp(800, home[0], mv), lerp(620, home[1], mv)]
+        if (lt > N - 0.2) at = [g1[0], g1[1] - g1[3] * 0.15]
+        const hop = hops(lt, [...looseAt, ...insideAt, click + 1.55, nameAt[0] + 0.8])
+        ag.style.left = `${at[0]}px`
+        ag.style.top = `${at[1] - hop}px`
+        set(ag, { o: p(lt, L + 0.3, L + 0.5), s: (0.6 + a * 0.4) * lerp(1, 0.75, toSlot) })
+        const happy = Math.max(
+          p(lt, looseAt[0], looseAt[0] + 0.3) * (1 - p(lt, R, R + 0.3)),
+          p(lt, insideAt[0], insideAt[0] + 0.3) * (1 - p(lt, X + 2.4, X + 2.7)),
+          p(lt, click + 1.35, click + 1.65)
+        )
+        const look =
+          p(lt, R + 0.6, R + 1.0) * (1 - p(lt, O, O + 0.6)) +
+          p(lt, blockAt[0] - 0.3, blockAt[0]) * (1 - p(lt, blockAt[1] + 0.8, blockAt[1] + 1.2)) +
+          p(lt, X + 2.2, X + 2.6) * (1 - p(lt, click + 1.75, click + 2.15))
+        mood(ag, lt, happy, look)
+        ;[2, 3].forEach((i) => {
+          const g = i === 2 ? g2 : g3
+          const el = byId(`ag${i}`)
+          const t = i === 2 ? N + 1.9 : N + 2.9
+          el.style.left = `${g[0]}px`
+          el.style.top = `${g[1] - g[3] * 0.15 - hops(lt, i === 3 ? [nameAt[2] + 0.8, approve + 1.55] : [nameAt[1] + 0.8])}px`
+          set(el, { o: p(lt, t, t + 0.3), s: 0.75 })
+          // The third one pushes its work, and waits for your review.
+          const waits = i === 3 ? p(lt, V + 1.3, V + 1.6) * (1 - p(lt, approve + 1.35, approve + 1.65)) : 0
+          mood(el, lt, 1 - waits, waits)
+        })
+
+        // Let loose: things get done.
+        ;[[640, 470], [1280, 470], [960, 830]].forEach(([x, y], i) => {
+          place(byId(`a${i + 1}`), x, y)
+          pop(byId(`a${i + 1}`), lt, looseAt[i], B.loose[1] - 0.1)
+        })
+
+        // On your computer: it reaches your files, and says what happened to each.
+        riskAt.forEach((t, i) => {
+          const tile = byId(`t${i + 1}`)
+          const to = M.centre(tile)
+          shoot(byId(`r${i + 1}`), byId(`rh${i + 1}`), lt, t, edge, [to.x, to.y], 0.6)
+          const hit = p(lt, t + 0.6, t + 0.8) * (1 - p(lt, O, O + 0.6))
+          tile.style.borderColor = hit > 0 ? `rgba(var(--red-rgb), ${hit})` : "var(--line)"
+          set(tile.querySelector(".mark"), { o: hit, s: 0.5 + p(lt, t + 0.6, t + 1.0, ease.outBack) * 0.5 })
+          const k = byId(`k${i + 1}`)
+          place(k, 1290 - 16 - k.offsetWidth / 2, to.y)
+          pop(k, lt, t + 0.65, O)
+        })
+
+        // Inside: everything works, nothing to approve.
+        let ok = 0
+        insideAt.forEach((t, i) => {
+          place(byId(`i${i + 1}`), home[0], 762 + i * 56)
+          pop(byId(`i${i + 1}`), lt, t, B.inside[1] - 0.2)
+          ok += Math.max(0, 1 - Math.abs(lt - t - 0.2) * 2.5)
+        })
+        byId("okglow").style.left = `${home[0]}px`
+        byId("okglow").style.top = `${home[1]}px`
+        set(byId("okglow"), { o: ok })
+
+        // Outside: a new website, beyond your computer, asks first.
+        const gt = p(lt, X + 1.6, X + 2.1, ease.outBack)
+        set(byId("gate"), { o: p(lt, X + 1.6, X + 1.8) * (1 - gone), s: 0.6 + gt * 0.4 })
+        const gl = p(lt, X + 1.8, X + 2.3, ease.outBack)
+        set(byId("globe"), { o: p(lt, X + 1.8, X + 2.0) * (1 - gone), s: 0.6 + gl * 0.4 })
+        set(byId("globe-name"), { o: p(lt, X + 2.0, X + 2.3) * (1 - gone) })
+        const tr = p(lt, X + 1.8, X + 2.5, ease.outQuart)
+        byId("track").style.transformOrigin = "0 50%"
+        set(byId("track"), { o: tr * (1 - gone), sx: tr })
+        const pk = byId("packet")
+        const toGate = p(lt, X + 2.4, X + 3.2, ease.inOutCubic)
+        const onward = p(lt, click + 0.75, click + 1.45, ease.inOutCubic)
+        place(pk, lerp(lerp(home[0] + 70, 813, toGate), 1720, onward), home[1])
+        const waiting = lt >= X + 3.2 && lt < click + 0.75
+        const pulse = waiting ? (Math.sin((lt - X - 3.2) * 7) + 1) / 2 : 0
+        pk.style.borderColor = waiting ? `rgba(var(--amber-rgb), ${0.5 + pulse * 0.5})` : "var(--line-2)"
+        pk.style.color = waiting ? "var(--amber)" : lt >= click + 0.75 ? "var(--ok)" : "var(--fg)"
+        set(pk, { o: p(lt, X + 2.3, X + 2.5) * (1 - p(lt, click + 1.35, click + 1.6)), s: 1 + pulse * 0.04 })
+        const c = p(lt, X + 3.3, X + 3.9, ease.outBack)
+        const cOut = p(lt, click + 0.35, click + 0.75, ease.inCubic)
+        set(byId("card"), { o: p(lt, X + 3.3, X + 3.5) * (1 - cOut), y: (1 - c) * 40 - cOut * 20, s: 0.94 + c * 0.06 - cOut * 0.04 })
+        if (lt >= V) glide(byId("cursor"), lt, approve - 0.95, approve - 0.15, [1820, 1000], aim(byId("approve")), approve, p(lt, approve - 1.15, approve - 0.95) * (1 - p(lt, approve + 0.55, approve + 0.85)))
+        if (lt < N) glide(byId("cursor"), lt, click - 0.95, click - 0.15, [1820, 1000], aim(byId("allow")), click, p(lt, click - 1.15, click - 0.95) * (1 - p(lt, click + 0.55, click + 0.85)))
+        const [rAt, rOn] = lt < N ? [click, byId("allow")] : lt < N + 2.3 ? [N + 1.8, fork] : lt < V ? [N + 2.8, fork] : [approve, byId("approve")]
+        ripple(byId("ripple"), lt, rAt + 0.03, rOn)
+        press(byId("approve"), lt, approve)
+        press(byId("allow"), lt, click)
+        const ch = p(lt, click + 1.45, click + 2.05, ease.outBack)
+        set(byId("chip"), { o: p(lt, click + 1.45, click + 1.65) * (1 - gone), y: (1 - ch) * 20, s: 0.9 + ch * 0.1 })
+
+        // Run any harness: each copy gets its name, and the command that starts it.
+        ;["Claude Code", "Codex", "opencode"].forEach((name, i) => {
+          const t = nameAt[i]
+          const f = byId(`f${i + 1}`)
+          const n = f.querySelector(".name")
+          n.textContent = lt < t ? "Its own computer" : name
+          set(n, { o: 1 - Math.max(0, 1 - Math.abs(lt - t) * 5) })
+          const cmd = f.querySelector(".cmd")
+          cmd.dataset.text ??= cmd.textContent
+          if (i === 2 && lt >= V + 0.6) M.type(cmd, "git push", lt, V + 0.6, 16)
+          else M.type(cmd, cmd.dataset.text, lt, t + 0.1, 16)
+          set(f.querySelector(".cmdline"), { o: p(lt, t - 0.1, t + 0.1) })
+        })
+        // Its work: the push waits at the edge of your computer until you approve it.
+        const at2 = p(lt, V + 1.1, V + 1.6, ease.outBack)
+        set(byId("gate2"), { o: p(lt, V + 1.1, V + 1.3), s: 0.6 + at2 * 0.4 })
+        const rp = p(lt, V + 1.2, V + 1.7, ease.outBack)
+        set(byId("repo"), { o: p(lt, V + 1.2, V + 1.4), s: 0.6 + rp * 0.4 })
+        set(byId("repo-name"), { o: p(lt, V + 1.4, V + 1.7) })
+        const tr2 = p(lt, V + 1.2, V + 1.9, ease.outQuart)
+        byId("track2").style.transformOrigin = "0 50%"
+        set(byId("track2"), { o: tr2, sx: tr2 })
+        const ps = byId("push")
+        const held = p(lt, V + 1.5, V + 2.3, ease.inOutCubic)
+        const shipped = p(lt, approve + 0.75, approve + 1.45, ease.inOutCubic)
+        // It leaves its own computer, and waits at the edge of yours.
+        place(ps, lerp(lerp(1252, 1520 - 62 - ps.offsetWidth / 2, held), 1720, shipped), 627)
+        const holds = lt >= V + 2.3 && lt < approve + 0.75
+        const throb = holds ? (Math.sin((lt - V - 2.3) * 7) + 1) / 2 : 0
+        ps.style.borderColor = holds ? `rgba(var(--amber-rgb), ${0.5 + throb * 0.5})` : "var(--line-2)"
+        ps.style.color = holds ? "var(--amber)" : lt >= approve + 0.75 ? "var(--ok)" : "var(--fg)"
+        set(ps, { o: p(lt, V + 1.4, V + 1.6) * (1 - p(lt, approve + 1.35, approve + 1.6)), s: 0.8 + p(lt, V + 1.4, V + 1.8, ease.outBack) * 0.2 + throb * 0.04 })
+        const rv = p(lt, V + 2.4, V + 3.0, ease.outBack)
+        const rvOut = p(lt, approve + 0.35, approve + 0.75, ease.inCubic)
+        set(byId("review"), { o: p(lt, V + 2.4, V + 2.6) * (1 - rvOut), y: (1 - rv) * 40 - rvOut * 20, s: 0.94 + rv * 0.06 - rvOut * 0.04 })
+        const c2 = p(lt, approve + 1.45, approve + 2.05, ease.outBack)
+        place(byId("chip2"), 1720, 815)
+        set(byId("chip2"), { o: p(lt, approve + 1.45, approve + 1.65), y: (1 - c2) * 20, s: 0.9 + c2 * 0.1 })
+        exit(byId("d"), lt, len)
+      })
+
+      scene(last + 0.1, last + 7, byId("s7"), (lt, len) => {
+        set(byId("s7-halo"), { o: p(lt, 0.2, 1.8) * 0.8, s: 0.7 + p(lt, 0.2, 2.2) * 0.3 })
+        const l = p(lt, 0.2, 1.1, ease.outQuart)
+        set(byId("s7-logo"), { o: p(lt, 0.2, 0.5), s: 0.6 + l * 0.4, y: Math.sin(lt * 1.6) * 5 })
+        reveal(byId("s7-mark"), lt, 0.6, undefined, 0.09)
+        reveal(byId("s7-line"), lt, 1.2, undefined, 0.06)
+        M.rise(byId("s7-f1"), lt, 2.0)
+        M.rise(byId("s7-f2"), lt, 2.2)
+        M.rise(byId("s7-url"), lt, 2.7)
+        set(byId("s7"), { o: 1 - p(lt, len - 0.6, len, ease.inCubic) })
+      })
+
+      M.start(last + 7)
+    </script>
+  </body>
+</html>

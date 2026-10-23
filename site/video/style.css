@@ -42,8 +42,91 @@
   --t-faint: #353a41;
   --t-acc: #58b8c8;
   --t-edge: #2a3035;
+  /* For colours mixed at an alpha, and the few fixed shades the scenes use. */
+  --accent-rgb: 92, 195, 209;
+  --glow-rgb: 70, 140, 255;
+  --amber-rgb: 240, 197, 81;
+  --red-rgb: 250, 104, 99;
+  --ok-rgb: 71, 200, 110;
+  --ink-rgb: 255, 255, 255; /* hairlines and dots on the background */
+  --shadow-rgb: 0, 0, 0;
+  --shadow-k: 1;
+  --vignette: rgba(0, 0, 0, 0.55);
+  --grain: 0.06;
+  --pill: #1b2327;
+  --ok-solid: #15291d;
+  --on-ok: #0b1a10;
+  --strong: #f2f4f5;
+  --diff-file: #1b1e23;
+  --del: #f6a6a3;
+  --add: #9fe0b5;
   --sans: "Instrument Sans", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* The landing page's light look, from the site's light tokens (src/styles/custom.css):
+   render.mjs --theme light. */
+:root[data-theme="light"] {
+  --bg: #eef1f2;
+  --bg-2: #e6ebed;
+  --card: #fbfcfc;
+  --card-2: #f1f4f5;
+  --line: #d3dade;
+  --line-2: #c3ccd1;
+  --fg: #172024;
+  --muted: #56636b;
+  --dim: #8a979e;
+  --accent: #0f7686;
+  --on-accent: #ffffff;
+  --accent-low: rgba(15, 118, 134, 0.09);
+  --accent-line: rgba(15, 118, 134, 0.3);
+  --brand: #0f7686;
+  --ok: #0fa44d;
+  --ok-low: rgba(15, 164, 77, 0.1);
+  --ok-line: rgba(15, 164, 77, 0.38);
+  --amber: #b9850f;
+  --red: #db2c2b;
+  --blue: #2f6fd6;
+  --violet: #795bbf;
+  --avatar: #cfe9ec;
+  --on-avatar: #0a3d45;
+  --t-bg: #fafbfb;
+  --t-fg: #23272c;
+  --t-dim: #80868e;
+  --t-faint: #d3d7dc;
+  --t-acc: #1b8797;
+  --t-edge: #d9dee2;
+  --accent-rgb: 15, 118, 134;
+  --glow-rgb: 47, 111, 214;
+  --amber-rgb: 200, 149, 26;
+  --red-rgb: 219, 44, 43;
+  --ok-rgb: 15, 164, 77;
+  --ink-rgb: 23, 32, 36;
+  --shadow-rgb: 40, 60, 70;
+  --shadow-k: 0.3;
+  --vignette: rgba(120, 140, 150, 0.16);
+  --grain: 0.035;
+  --pill: #ffffff;
+  --ok-solid: #e3f4e9;
+  --on-ok: #ffffff;
+  --strong: #0b1114;
+  --diff-file: #eef0f2;
+  --del: #b42424;
+  --add: #137a3a;
+}
+
+/* The brand mark and avatar are drawn with SVG attributes, which CSS overrides. */
+[stroke="#5cc3d1"] {
+  stroke: var(--brand);
+}
+[fill="#5cc3d1"] {
+  fill: var(--brand);
+}
+[fill="#1d4f57"] {
+  fill: var(--avatar);
+}
+[fill="#d5f3f7"] {
+  fill: var(--on-avatar);
 }
 
 * {
@@ -81,31 +164,31 @@ body {
   width: 1400px;
   height: 1400px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(92, 195, 209, 0.11), rgba(92, 195, 209, 0) 62%);
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.11), rgba(var(--accent-rgb), 0) 62%);
   left: 260px;
   top: -260px;
   will-change: transform;
 }
 .bg-glow.two {
-  background: radial-gradient(circle, rgba(70, 140, 255, 0.07), rgba(70, 140, 255, 0) 60%);
+  background: radial-gradient(circle, rgba(var(--glow-rgb), 0.07), rgba(var(--glow-rgb), 0) 60%);
 }
 .bg-grid {
   position: absolute;
   inset: -40px;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1.2px, transparent 1.3px);
+  background-image: radial-gradient(rgba(var(--ink-rgb), 0.07) 1.2px, transparent 1.3px);
   background-size: 40px 40px;
   mask-image: radial-gradient(ellipse 75% 70% at 50% 50%, #000 30%, transparent 100%);
 }
 .bg-vignette {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, var(--vignette) 100%);
   pointer-events: none;
 }
 .grain {
   position: absolute;
   inset: 0;
-  opacity: 0.06;
+  opacity: var(--grain);
   pointer-events: none;
   mix-blend-mode: overlay;
 }
@@ -170,8 +253,8 @@ body {
   border: 1px solid var(--line-2);
   border-radius: 10px;
   box-shadow:
-    0 40px 80px -20px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(0, 0, 0, 0.4);
+    0 40px 80px -20px rgba(var(--shadow-rgb), calc(0.7 * var(--shadow-k))),
+    0 0 0 1px rgba(var(--shadow-rgb), calc(0.4 * var(--shadow-k)));
   overflow: hidden;
 }
 /* A terminal window, in the TUI's colors. */
@@ -269,7 +352,7 @@ body {
   width: 34px;
   height: 34px;
   z-index: 50;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5));
+  filter: drop-shadow(0 6px 10px rgba(var(--shadow-rgb), calc(0.5 * var(--shadow-k))));
 }
 .cursor .tag {
   position: absolute;
@@ -362,7 +445,7 @@ body {
   border: 1px solid var(--line-2);
   display: grid;
   place-items: center;
-  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 30px 60px -20px rgba(var(--shadow-rgb), calc(0.6 * var(--shadow-k)));
 }
 .node .disc svg {
   width: 74px;
@@ -378,7 +461,7 @@ body {
 .track {
   position: absolute;
   height: 3px;
-  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.22) 50%, transparent 50%);
+  background-image: linear-gradient(90deg, rgba(var(--ink-rgb), 0.22) 50%, transparent 50%);
   background-size: 16px 3px;
 }
 .packet {
@@ -389,7 +472,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #1b2327;
+  background: var(--pill);
   border: 1px solid var(--line-2);
   font-family: var(--mono);
   font-size: 20px;

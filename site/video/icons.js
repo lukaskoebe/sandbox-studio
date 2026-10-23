@@ -15,8 +15,10 @@
     terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     brain: '<path d="M9 4.5a3 3 0 0 0-3 3 3 3 0 0 0-2 5.2A3 3 0 0 0 6.5 18 2.5 2.5 0 0 0 11.5 19V5.5A1.5 1.5 0 0 0 9 4.5zM15 4.5a3 3 0 0 1 3 3 3 3 0 0 1 2 5.2 3 3 0 0 1-2.5 5.3 2.5 2.5 0 0 1-5-1V5.5A1.5 1.5 0 0 1 15 4.5z"/>',
+    laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',
     layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
     browser: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M6.5 6.5h.01M9 6.5h.01"/>',
+    bot: '<rect x="5" y="7.5" width="14" height="11" rx="3"/><path d="M12 4.5v3M9.5 13h.01M14.5 13h.01M2.5 12v2.5M21.5 12v2.5"/>',
     box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
     cursor:
       '<svg viewBox="0 0 24 24" width="34" height="34"><path d="M5 3l14.5 8.2-6.3 1.6-2.9 6.7z" fill="#fff" stroke="#0b0e10" stroke-width="1.6" stroke-linejoin="round"/></svg>',

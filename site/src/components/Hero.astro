@@ -1,7 +1,7 @@
 ---
 // The landing page's hero: the headline and actions from the page's frontmatter, the install
-// command on a terminal panel, and the two videos behind tabs, the technical one first. Only the landing page sets
-// `hero`, so this replaces Starlight's hero there and nowhere else.
+// command on a terminal panel, and the overview video. Only the landing page sets `hero`, so
+// this replaces Starlight's hero there and nowhere else.
 import { LinkButton } from '@astrojs/starlight/components'
 
 const { data } = Astro.locals.starlightRoute.entry
@@ -9,20 +9,12 @@ const { title = data.title, tagline, actions = [] } = data.hero || {}
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
 const install = 'curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/install.sh | sh'
 
-const videos = [
-  {
-    name: 'developers',
-    label: 'Technical tour',
-    length: '0:54',
-    alt: 'Coding agents in their own microVMs, with egress approvals, credentials that never enter the VM, and review before a push reaches the forge',
-  },
-  {
-    name: 'everyone',
-    label: 'Without the jargon',
-    length: '0:50',
-    alt: 'A teammate builds a bakery website in its own sandbox, asks before reaching a new site, keeps passwords on your computer, and asks before placing an order',
-  },
-]
+const video = {
+  name: 'overview',
+  label: 'Overview',
+  length: '0:50',
+  alt: 'A coding agent gets its own microVM on your computer: your files stay out of its reach, a website it has not used before asks you first, copies run Claude Code, Codex and opencode side by side, and its push waits for your review',
+}
 ---
 
 <div class="landing-hero not-content">
@@ -58,24 +50,10 @@ const videos = [
 
   <figure class="hero-player" data-player>
     <div class="player-bar">
-      <div class="player-tabs" role="tablist" aria-label="Videos">
-        {
-          videos.map((v, i) => (
-            <button
-              type="button"
-              role="tab"
-              class="player-tab"
-              aria-selected={i === 0 ? 'true' : 'false'}
-              aria-controls="hero-video"
-              data-video={v.name}
-              data-alt={v.alt}
-            >
-              {v.label}
-              <span class="player-length">{v.length}</span>
-            </button>
-          ))
-        }
-      </div>
+      <span class="player-title">
+        {video.label}
+        <span class="player-length">{video.length}</span>
+      </span>
       <button type="button" class="player-toggle" data-toggle aria-label="Pause the video">
         <svg class="icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
         <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"></path></svg>
@@ -84,18 +62,16 @@ const videos = [
     <div class="player-progress" aria-hidden="true"><span data-progress></span></div>
     <video
       id="hero-video"
-      role="tabpanel"
       autoplay
       muted
       loop
       playsinline
       preload="auto"
-      poster={`${base}video/${videos[0].name}.jpg`}
-      aria-label={videos[0].alt}
-      data-base={`${base}video/`}
+      poster={`${base}video/${video.name}.jpg`}
+      aria-label={video.alt}
     >
-      <source src={`${base}video/${videos[0].name}.webm`} type="video/webm" />
-      <source src={`${base}video/${videos[0].name}.mp4`} type="video/mp4" />
+      <source src={`${base}video/${video.name}.webm`} type="video/webm" />
+      <source src={`${base}video/${video.name}.mp4`} type="video/mp4" />
     </video>
   </figure>
 </div>
@@ -120,8 +96,6 @@ const videos = [
     const video = player.querySelector('video')!
     const toggle = player.querySelector<HTMLButtonElement>('[data-toggle]')!
     const progress = player.querySelector<HTMLElement>('[data-progress]')!
-    const tabs = [...player.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
-    const base = video.dataset.base ?? ''
 
     // Reduced motion: show the first frame and the video's own controls instead of playing.
     if (reduced) {
@@ -143,30 +117,6 @@ const videos = [
     toggle.addEventListener('click', flip)
     video.addEventListener('click', () => !video.controls && flip())
 
-    const select = (tab: HTMLButtonElement) => {
-      if (tab.getAttribute('aria-selected') === 'true') return
-      for (const t of tabs) t.setAttribute('aria-selected', String(t === tab))
-      const name = tab.dataset.video
-      video.poster = `${base}${name}.jpg`
-      video.setAttribute('aria-label', tab.dataset.alt ?? '')
-      video.replaceChildren(
-        Object.assign(document.createElement('source'), { src: `${base}${name}.webm`, type: 'video/webm' }),
-        Object.assign(document.createElement('source'), { src: `${base}${name}.mp4`, type: 'video/mp4' })
-      )
-      progress.style.transform = 'scaleX(0)'
-      video.load()
-      if (!reduced) video.play().catch(() => (video.controls = true))
-    }
-    tabs.forEach((tab, i) => {
-      tab.addEventListener('click', () => select(tab))
-      tab.addEventListener('keydown', (e) => {
-        const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-        if (!step) return
-        const next = tabs[(i + step + tabs.length) % tabs.length]
-        next.focus()
-        select(next)
-      })
-    })
     sync()
   }
 </script>
@@ -297,35 +247,15 @@ const videos = [
     gap: 0.5rem;
     border-bottom: 1px solid var(--ss-line);
   }
-  .player-tabs {
-    display: flex;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .player-tab {
+  .player-title {
     display: inline-flex;
     align-items: baseline;
     gap: 0.6rem;
-    flex: none;
+    min-width: 0;
     padding: 0.7rem 1rem;
-    border: 0;
-    border-inline-end: 1px solid var(--ss-line);
-    background: none;
-    color: var(--ss-muted);
+    color: var(--ss-fg);
     font: 600 0.8rem / 1.2 var(--ss-font-mono);
-    cursor: pointer;
-    box-shadow: inset 0 -2px 0 transparent;
   }
-  .player-tab:hover {
-    color: var(--ss-fg);
-  }
-  .player-tab[aria-selected='true'] {
-    color: var(--ss-fg);
-    background: var(--ss-bg);
-    box-shadow: inset 0 -2px 0 var(--ss-accent);
-  }
-  .player-tab:focus-visible,
   .player-toggle:focus-visible {
     outline: 2px solid var(--ss-accent);
     outline-offset: -2px;
@@ -387,7 +317,7 @@ const videos = [
     .copy-label {
       display: none;
     }
-    .player-tab {
+    .player-title {
       padding-inline: 0.8rem;
     }
   }

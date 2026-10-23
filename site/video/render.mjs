@@ -1,17 +1,19 @@
 // Renders a landing page video frame by frame and encodes it.
 //
-//   node video/render.mjs <name> [--fps 60] [--stills 1,4.5,9 --out dir]
+//   node video/render.mjs <name> [--theme light] [--fps 60] [--stills 1,4.5,9 --out dir]
 //
-// <name> is a page in this folder, such as everyone or developers. Each frame is a screenshot
-// of the page after seek(t), so the result doesn't depend on how fast the machine is. The
-// videos land in public/video/<name>.mp4 and .webm with a poster, <name>.jpg. --stills
-// writes PNGs of the given times instead, for checking a scene. It uses an installed
-// Chromium (CHROMIUM, default /snap/bin/chromium) and ffmpeg with libx264 and libvpx-vp9.
+// <name> is a page in this folder, such as overview. Each frame is a screenshot of the page
+// after seek(t), so the result doesn't depend on how fast the machine is. The videos land in
+// public/video/<name>.mp4 and .webm with a poster, <name>.jpg; --theme light renders the page
+// with its light tokens into <name>-light.mp4, .webm and .jpg. --stills writes PNGs of the
+// given times instead, for checking a scene. It uses an installed Chromium (CHROMIUM, default
+// /snap/bin/chromium) and ffmpeg with libx264 and libvpx-vp9.
 //
-// The lossless master is kept in $TMPDIR/sandbox-studio-video/<name>.mkv until both encodings
+// The lossless master is kept in $TMPDIR/sandbox-studio-video/<output>.mkv until both encodings
 // are done, and a later run encodes from it instead of rendering again; a run that stops
 // while rendering continues from its last complete ten-second segment. Point TMPDIR at a
-// disk: the master is several hundred MB, and /tmp is often memory.
+// disk: the master is several hundred MB, and /tmp is often memory. Snap's Chromium keeps its
+// profile there too and can't write under a hidden directory, such as one in ~/.cache.
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
 import { mkdir, rename, rm, writeFile } from "node:fs/promises"
@@ -27,9 +29,16 @@ const opt = (flag, def) => {
   return i >= 0 ? args[i + 1] : def
 }
 if (!name) {
-  console.error("usage: node video/render.mjs <name> [--fps 60] [--stills 1,4.5 --out dir]")
+  console.error("usage: node video/render.mjs <name> [--theme light] [--fps 60] [--stills 1,4.5 --out dir]")
   process.exit(2)
 }
+const theme = opt("--theme", "dark")
+if (theme !== "dark" && theme !== "light") {
+  console.error(`--theme is dark or light, not ${theme}`)
+  process.exit(2)
+}
+// What the files are named after, the master and its segments too, so the themes don't mix.
+const output = theme === "light" ? `${name}-light` : name
 const fps = Number(opt("--fps", 60))
 const here = fileURLToPath(new URL(".", import.meta.url))
 const publicDir = fileURLToPath(new URL("../public/video/", import.meta.url))
@@ -40,7 +49,7 @@ const browser = await chromium.launch({
   args: ["--force-color-profile=srgb", "--font-render-hinting=none"],
 })
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 })
-await page.goto(`${pathToFileURL(join(here, `${name}.html`))}?render`)
+await page.goto(`${pathToFileURL(join(here, `${name}.html`))}?render&theme=${theme}`)
 await page.evaluate(() => document.fonts.ready)
 const duration = await page.evaluate(() => window.DURATION)
 const stage = page.locator(".stage")
@@ -51,7 +60,7 @@ if (stills) {
   await mkdir(out, { recursive: true })
   for (const t of stills.split(",").map(Number)) {
     await page.evaluate((t) => window.seek(t), t)
-    await stage.screenshot({ path: join(out, `${name}-${t.toFixed(2)}.png`) })
+    await stage.screenshot({ path: join(out, `${output}-${t.toFixed(2)}.png`) })
   }
   console.log(`stills in ${out}`)
   await browser.close()
@@ -73,16 +82,16 @@ function ffmpeg(argv) {
 // so an interrupted run picks up at the first missing segment.
 const work = join(process.env.TMPDIR ?? tmpdir(), "sandbox-studio-video")
 await mkdir(work, { recursive: true })
-const master = join(work, `${name}.mkv`)
+const master = join(work, `${output}.mkv`)
 if (existsSync(master)) {
-  console.log(`${name}: encoding the master from an earlier run, ${master}`)
+  console.log(`${output}: encoding the master from an earlier run, ${master}`)
 } else {
   const frames = Math.round(duration * fps)
   const perSegment = fps * 10
   const segments = []
   const started = Date.now()
   for (let first = 0; first < frames; first += perSegment) {
-    const segment = join(work, `${name}.${String(first / perSegment).padStart(3, "0")}.mkv`)
+    const segment = join(work, `${output}.${String(first / perSegment).padStart(3, "0")}.mkv`)
     segments.push(segment)
     if (existsSync(segment)) continue
     const partial = `${segment}.partial.mkv`
@@ -97,9 +106,9 @@ if (existsSync(master)) {
     await enc.done
     await rename(partial, segment)
     const s = (Date.now() - started) / 1000
-    console.log(`${name}: ${Math.min(frames, first + perSegment)}/${frames} frames, ${s.toFixed(0)} s`)
+    console.log(`${output}: ${Math.min(frames, first + perSegment)}/${frames} frames, ${s.toFixed(0)} s`)
   }
-  const list = join(work, `${name}.txt`)
+  const list = join(work, `${output}.txt`)
   await writeFile(list, segments.map((f) => `file '${f}'`).join("\n"))
   await ffmpeg(["-f", "concat", "-safe", "0", "-i", list, "-c", "copy", `${master}.partial.mkv`]).done
   await rename(`${master}.partial.mkv`, master)
@@ -108,7 +117,7 @@ if (existsSync(master)) {
 await browser.close()
 
 await mkdir(publicDir, { recursive: true })
-const out = (ext) => join(publicDir, `${name}.${ext}`)
+const out = (ext) => join(publicDir, `${output}.${ext}`)
 // H.264 for every browser, VP9 for a smaller file where it plays. Few threads keep the
 // encoders' memory down; each encoding writes to a temporary name first.
 const encode = async (ext, argv) => {
@@ -123,4 +132,4 @@ await encode("webm", ["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "34", "-row-mt"
 const poster = Number(opt("--poster", Math.min(duration - 0.1, 3.5)))
 await ffmpeg(["-ss", String(poster), "-i", master, "-frames:v", "1", "-q:v", "3", out("jpg")]).done
 await rm(master, { force: true })
-console.log(`${name}: ${out("mp4")}, .webm and .jpg`)
+console.log(`${output}: ${out("mp4")}, .webm and .jpg`)

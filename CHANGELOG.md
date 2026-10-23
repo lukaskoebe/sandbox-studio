@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Site:** one overview video on the landing page in place of the two: an agent gets its own
+  microVM on your computer, a new website asks you first, copies run Claude Code, Codex and
+  opencode side by side, and its push waits for your review.
+
 ## v0.6.0 — 2026-10-22
 
 Forks merge back into the sandbox they came from, Windows gets a tray launcher, agents can
