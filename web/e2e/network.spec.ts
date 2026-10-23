@@ -344,26 +344,16 @@ test("an approval shows once: in the teammate's conversation, not also in the st
   await api.dismissApprovals()
 })
 
-test("the sidebar's Network item counts the waiting network approvals and opens the rules", async ({
+test("the network rules live in Settings, with no Network item in the sidebar", async ({
   page,
-  api,
   env,
 }) => {
-  await api.dismissApprovals()
-  const id = await api.createSandbox(sandboxName("netside"))
-  await page.goto(`/e/${env}/chats`)
-  const item = page
-    .locator('[data-sidebar="sidebar"]')
-    .getByRole("link", { name: /^Network/ })
-  await expect(item.locator('[data-status="waiting"]')).toHaveCount(0)
-  await api.connect(
-    id,
-    `side-${Math.random().toString(36).slice(2, 8)}.example.org`
-  )
-  await expect(item.locator('[data-status="waiting"]')).toHaveText("1")
-  await item.click()
-  await expect(page).toHaveURL(/\/settings\/network/)
-  await expect(item).toHaveAttribute("data-active", "")
+  await page.goto(`/e/${env}/settings/network`)
+  const sidebar = page.locator('[data-sidebar="sidebar"]')
+  await expect(sidebar.getByRole("link", { name: /^Network/ })).toHaveCount(0)
+  await expect(
+    sidebar.getByRole("link", { name: /^Settings/ })
+  ).toHaveAttribute("data-active", "")
 })
 
 test("a rule made from an approval keeps the note written on it, or one that says where it came from", async ({

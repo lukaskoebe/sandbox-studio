@@ -10,6 +10,8 @@
   as you like. **Send to chat** posts one screenshot with the numbers drawn on it, and the
   notes as text, to one of the teammate's chats or a new one. The view holds still while you
   write.
+- **Sidebar:** Network leaves the sidebar for now; the rules and the security level stay in
+  Settings → Network, and waiting network approvals still count under Home.
 - **Site:** one overview video on the landing page in place of the two: an agent gets its own
   microVM on your computer, a new website asks you first, copies run Claude Code, Codex and
   opencode side by side, and its push waits for your review.

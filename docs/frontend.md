@@ -104,10 +104,9 @@ Activity with `?kind=network`, `/git` to Settings → Activity with `?kind=git`,
 `/memory`, `/providers` and `/builds` to their sections. `/browser` redirects to the teammate
 browsers above; `/browser?teammate=<id>` opens that teammate's browser.
 
-The sidebar is one tree: the environment switcher, Home and Network (the rules, with the
-count of network approvals waiting), then each teammate with its
-sandbox, then the sandboxes without a teammate, and a footer with All chats, Settings, the version
-and the theme switch. A teammate's row says where it works and what it is doing: waiting on you
+The sidebar is one tree: the environment switcher and Home, then each teammate with its
+sandbox, then the sandboxes without a teammate, and a footer with All chats, Settings, the
+version and the theme switch. Network rules live in Settings → Network. A teammate's row says where it works and what it is doing: waiting on you
 while one of its approvals is pending (a browser action or credential, a memory share, or a
 tool permission in one of its chats), working while one of its chats is running, and idle
 otherwise. Under a sandbox are its chats, its terminals (tmux sessions, a robot for an
