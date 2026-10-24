@@ -155,7 +155,8 @@ func (s *Server) planSession(ctx context.Context, sb store.Sandbox) (sessionPlan
 	if err != nil {
 		return sessionPlan{}, apiError(err)
 	}
-	hp := harness.Provider{Kind: prov.Kind, BaseURL: prov.BaseURL, Model: prov.Model, EnvVar: view.EnvVar, Placeholder: prov.Placeholder}
+	hp := harness.Provider{Kind: prov.Kind, BaseURL: prov.BaseURL, Model: prov.Model, Images: teammates.TakesImages(prov.Kind, prov.Images),
+		EnvVar: view.EnvVar, Placeholder: prov.Placeholder}
 	files, err := harness.Files(h,
 		s.harnessTeammate(ctx, p),
 		harness.Sandbox{Name: sb.Name, GitRewrites: rewrites, Others: s.otherSandboxes(ctx, sb)}, hp)

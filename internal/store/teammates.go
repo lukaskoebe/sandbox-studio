@@ -27,6 +27,7 @@ type Provider struct {
 	Kind          string    `json:"kind" enum:"anthropic_api,openai_api,openai_compatible,claude_subscription,chatgpt_subscription"`
 	BaseURL       string    `json:"baseUrl,omitempty" doc:"openai_compatible only"`
 	Model         string    `json:"model,omitempty" doc:"openai_compatible only: the endpoint's single model"`
+	Images        bool      `json:"images,omitempty" doc:"openai_compatible only: the model takes images. The models of the other kinds all do."`
 	SecretID      string    `json:"secretId,omitempty" doc:"The vault secret holding the key"`
 	SecretName    string    `json:"secretName,omitempty"`
 	Placeholder   string    `json:"placeholder,omitempty" doc:"What guests see instead of the key"`
@@ -35,7 +36,7 @@ type Provider struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
-const providerSelect = `SELECT p.id, p.environment_id, p.name, p.kind, p.base_url, p.model, IFNULL(p.secret_id, ''),
+const providerSelect = `SELECT p.id, p.environment_id, p.name, p.kind, p.base_url, p.model, p.images, IFNULL(p.secret_id, ''),
 	IFNULL(s.name, ''), IFNULL(s.placeholder, ''), IFNULL(s.hosts, ''), p.created_at, p.updated_at
 	FROM providers p LEFT JOIN secrets s ON s.id = p.secret_id`
 
@@ -43,7 +44,7 @@ func scanProvider(row interface{ Scan(...any) error }) (Provider, error) {
 	var p Provider
 	var hosts string
 	var created, updated int64
-	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Kind, &p.BaseURL, &p.Model, &p.SecretID,
+	err := row.Scan(&p.ID, &p.EnvironmentID, &p.Name, &p.Kind, &p.BaseURL, &p.Model, &p.Images, &p.SecretID,
 		&p.SecretName, &p.Placeholder, &hosts, &created, &updated)
 	if hosts != "" {
 		p.Hosts = strings.Split(hosts, ",")
@@ -89,8 +90,8 @@ func insertSecret(ctx context.Context, q execer, envID string, sec Secret, t int
 
 // insertProvider writes a provider row; its key, if any, must already be in the table.
 func insertProvider(ctx context.Context, q execer, p Provider, t int64) error {
-	_, err := q.ExecContext(ctx, "INSERT INTO providers (id, environment_id, name, kind, base_url, model, secret_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		p.ID, p.EnvironmentID, p.Name, p.Kind, p.BaseURL, p.Model, nullable(p.SecretID), t, t)
+	_, err := q.ExecContext(ctx, "INSERT INTO providers (id, environment_id, name, kind, base_url, model, images, secret_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		p.ID, p.EnvironmentID, p.Name, p.Kind, p.BaseURL, p.Model, p.Images, nullable(p.SecretID), t, t)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return fmt.Errorf("a provider named %q: %w", p.Name, ErrExists)
 	}
@@ -133,6 +134,7 @@ func (s *Store) AttachProviderSecret(ctx context.Context, envID, id string, sec 
 type ProviderUpdate struct {
 	BaseURL *string
 	Model   *string
+	Images  *bool
 	Sealed  []byte   // a new sealed key
 	Hosts   []string // new hosts of the key
 }
@@ -158,7 +160,10 @@ func (s *Store) UpdateProvider(ctx context.Context, envID, id string, u Provider
 	if u.Model != nil {
 		p.Model = *u.Model
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE providers SET base_url = ?, model = ?, updated_at = ? WHERE id = ?", p.BaseURL, p.Model, t, id); err != nil {
+	if u.Images != nil {
+		p.Images = *u.Images
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE providers SET base_url = ?, model = ?, images = ?, updated_at = ? WHERE id = ?", p.BaseURL, p.Model, p.Images, t, id); err != nil {
 		return p, err
 	}
 	if p.SecretID != "" && (u.Sealed != nil || u.Hosts != nil) {

@@ -397,8 +397,11 @@ disconnecting clears the local input buffer.
     each is about.
   - An agent that can't take images refuses the screenshot (422 with the error's location
     `body.attachments`, `chat.ErrNoImages`; a queued prompt is checked against the running
-    agent at once, not when its turn comes). The notes then go as text alone, and a toast
-    says the screenshot stayed behind.
+    agent at once, not when its turn comes). So does a model whose provider says it reads
+    text only, though its agent takes images: an OpenAI-compatible endpoint's until the user
+    says otherwise ([teammates](teammates.md)). The notes then go as text alone, with a line
+    that `browser_snapshot` names the elements the same way, and a toast says the screenshot
+    stayed behind.
   - **The lookup.** agent-browser 0.39's allow-listed commands have no hit test, and a
     snapshot would renumber the element refs the agents' calls and the policy checks rely
     on. The host sends the guest `[element-at, x, y]` (`agentproto.BrowserElementAt`), and

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { EyeIcon, EyeSlashIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   Field,
+  FieldContent,
   FieldDescription,
   FieldError,
   FieldLabel,
@@ -102,6 +104,7 @@ function ProviderForm({
   const [showKey, setShowKey] = useState(false)
   const [baseUrl, setBaseUrl] = useState(provider?.baseUrl ?? "")
   const [model, setModel] = useState(provider?.model ?? "")
+  const [images, setImages] = useState(provider?.images ?? false)
   const [serverError, setServerError] = useState<string>()
   const [saving, setSaving] = useState(false)
   // A subscription added in this dialog: its sign-in follows the creation, in the same dialog.
@@ -139,6 +142,7 @@ function ProviderForm({
               apiKey: apiKey || undefined,
               baseUrl: compatible ? baseUrl.trim() : undefined,
               model: compatible ? model.trim() : undefined,
+              images: compatible ? images : undefined,
             },
           })
         : await fetchClient.POST("/api/environments/{env}/providers", {
@@ -149,6 +153,7 @@ function ProviderForm({
               apiKey: subscription ? undefined : apiKey,
               baseUrl: compatible ? baseUrl.trim() : undefined,
               model: compatible ? model.trim() : undefined,
+              images: compatible ? images : undefined,
             },
           })
       if (!result.error) {
@@ -301,6 +306,25 @@ function ProviderForm({
                 <ModelSuggestions id="provider-models" {...suggestions} />
               </Field>
             </div>
+          )}
+          {compatible && (
+            <Field orientation="horizontal">
+              <Checkbox
+                id="provider-images"
+                checked={images}
+                onCheckedChange={setImages}
+              />
+              <FieldContent>
+                <FieldLabel htmlFor="provider-images">
+                  The model can see images
+                </FieldLabel>
+                <FieldDescription>
+                  Screenshots, such as those of browser notes, then go to the
+                  model. Many local models read text only: leave it off for
+                  them, and notes go as text alone.
+                </FieldDescription>
+              </FieldContent>
+            </Field>
           )}
           <Field>
             <FieldLabel htmlFor="provider-key">API key</FieldLabel>

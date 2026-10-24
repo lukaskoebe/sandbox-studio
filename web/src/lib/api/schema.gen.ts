@@ -3260,6 +3260,8 @@ export interface components {
             apiKey?: string;
             /** @description openai_compatible only: the https:// base URL */
             baseUrl?: string;
+            /** @description openai_compatible only: the model takes images. Without it, prompts with images are refused and browser notes go as text. */
+            images?: boolean;
             /** @enum {string} */
             kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
             /** @description openai_compatible only: the endpoint's single model */
@@ -3753,6 +3755,8 @@ export interface components {
         FileProvider: {
             /** @description openai_compatible only */
             baseUrl?: string;
+            /** @description openai_compatible only: the model takes images */
+            images?: boolean;
             /** @enum {string} */
             kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
             /** @description openai_compatible only: the endpoint's single model */
@@ -4527,6 +4531,8 @@ export interface components {
             /** @description Hosts the key is sent to */
             hosts?: string[] | null;
             id: string;
+            /** @description openai_compatible only: the model takes images. The models of the other kinds all do. */
+            images?: boolean;
             /** @enum {string} */
             kind: "anthropic_api" | "openai_api" | "openai_compatible" | "claude_subscription" | "chatgpt_subscription";
             /** @description openai_compatible only: the endpoint's single model */
@@ -5532,6 +5538,8 @@ export interface components {
             apiKey?: string;
             /** @description openai_compatible only */
             baseUrl?: string;
+            /** @description openai_compatible only */
+            images?: boolean;
             /** @description openai_compatible only */
             model?: string;
         };

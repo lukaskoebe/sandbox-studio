@@ -131,6 +131,7 @@ func (s *Server) registerTeammates(api huma.API) {
 			APIKey  string `json:"apiKey,omitempty" writeOnly:"true" doc:"API-key kinds: the key. It is sealed in the vault on arrival and never returned."`
 			BaseURL string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only: the https:// base URL"`
 			Model   string `json:"model,omitempty" maxLength:"128" doc:"openai_compatible only: the endpoint's single model"`
+			Images  bool   `json:"images,omitempty" doc:"openai_compatible only: the model takes images. Without it, prompts with images are refused and browser notes go as text."`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -139,7 +140,7 @@ func (s *Server) registerTeammates(api huma.API) {
 		Description:   "API-key providers store their key as a vault secret bound to the vendor's API host, so guests only ever see a placeholder. A provider added to an environment without teammates also creates the default teammate.",
 	}, func(ctx context.Context, in *createProviderIn) (*struct{ Body ProviderView }, error) {
 		b := in.Body
-		v, err := s.addProvider(ctx, in.Env, newProvider{Name: b.Name, Kind: b.Kind, APIKey: b.APIKey, BaseURL: b.BaseURL, Model: b.Model})
+		v, err := s.addProvider(ctx, in.Env, newProvider{Name: b.Name, Kind: b.Kind, APIKey: b.APIKey, BaseURL: b.BaseURL, Model: b.Model, Images: b.Images})
 		if err != nil {
 			return nil, err
 		}
@@ -153,6 +154,7 @@ func (s *Server) registerTeammates(api huma.API) {
 			APIKey  *string `json:"apiKey,omitempty" writeOnly:"true" doc:"A new key. Omit it to keep the stored one."`
 			BaseURL *string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only"`
 			Model   *string `json:"model,omitempty" maxLength:"128" doc:"openai_compatible only"`
+			Images  *bool   `json:"images,omitempty" doc:"openai_compatible only"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -179,8 +181,11 @@ func (s *Server) registerTeammates(api huma.API) {
 				}
 				u.Model = b.Model
 			}
+			u.Images = b.Images
 		} else if b.BaseURL != nil || b.Model != nil {
 			return nil, huma.Error422UnprocessableEntity("only OpenAI-compatible providers have a base URL and model")
+		} else if b.Images != nil {
+			return nil, huma.Error422UnprocessableEntity(noImagesSetting)
 		}
 		// A provider whose key was never added (an import) gets its first key here; the rest of
 		// the update is applied before it, so the key is bound to the host the update names.
@@ -497,7 +502,13 @@ func (s *Server) publishTeammates(envID string) {
 }
 
 // newProvider is a provider to create: by the API, or from a key imported from the host.
-type newProvider struct{ Name, Kind, APIKey, BaseURL, Model string }
+type newProvider struct {
+	Name, Kind, APIKey, BaseURL, Model string
+	Images                             bool
+}
+
+// noImagesSetting refuses the images setting of a provider kind whose models all take images.
+const noImagesSetting = "only OpenAI-compatible providers say whether their model takes images: the models of the other kinds all do"
 
 // addProvider creates a provider of env. An API key is sealed in the vault, bound to the
 // vendor's host; the first provider of an environment without teammates brings the default
@@ -526,9 +537,11 @@ func (s *Server) addProvider(ctx context.Context, env string, b newProvider) (Pr
 		if err := teammates.CheckModel(b.Model); err != nil {
 			return ProviderView{}, apiError(err)
 		}
-		p.Model = b.Model
+		p.Model, p.Images = b.Model, b.Images
 	} else if b.BaseURL != "" || b.Model != "" {
 		return ProviderView{}, huma.Error422UnprocessableEntity("only OpenAI-compatible providers have a base URL and model")
+	} else if b.Images {
+		return ProviderView{}, huma.Error422UnprocessableEntity(noImagesSetting)
 	}
 	var sec *store.Secret
 	switch {

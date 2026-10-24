@@ -19,6 +19,15 @@ its sandboxes when an agent session starts and when the sandbox's guest connects
   409 for it. Guests see only the placeholder, as with any secret.
 - `openai_compatible` takes an `https://` base URL on a public host (no credentials, query
   or fragment, no private, loopback or link-local address) and the endpoint's single model.
+- `images` says whether an `openai_compatible` provider's model takes images. It is off until
+  the user ticks **The model can see images**: many local models read text only. The models
+  of the other kinds all take images, and those kinds refuse the field (422). Off, a chat's
+  agent is sent no images, whatever its harness says it takes: a prompt with one is refused
+  with `chat.ErrModelNoImages` (an `ErrNoImages`), so browser notes go as text alone. On,
+  OpenCode's config gives the model `"attachment": true` and the input modalities text and
+  image; without them OpenCode takes a model it doesn't know as text only and swaps each image
+  for a note that the model can't read it. The setting takes effect with the next chat agent
+  that starts.
 - The provider form suggests the models the endpoint lists. Once a base URL and a key are
   set, it calls `POST /api/environments/{env}/providers/models` with `{baseUrl, apiKey}`, or
   with `providerId` to use a saved provider's stored key. Studio itself sends `GET

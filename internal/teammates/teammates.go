@@ -79,6 +79,12 @@ var kinds = []Kind{
 	{Kind: KindChatGPTSubscription, Harnesses: []string{HarnessCodex}, Login: true, Host: "chatgpt.com"},
 }
 
+// TakesImages reports whether the model of a provider of kind takes images. The models of the
+// vendor kinds all do; an OpenAI-compatible endpoint's does when its provider says so (images).
+func TakesImages(kind string, images bool) bool {
+	return kind != KindOpenAICompatible || images
+}
+
 // HostOf returns the host a provider kind's key or login is bound to, or "" for a kind without one.
 func HostOf(kind string) string {
 	k, _ := LookupKind(kind)

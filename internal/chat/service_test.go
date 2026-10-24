@@ -697,6 +697,30 @@ func TestImageForAnAgentWithoutImagesIsRefused(t *testing.T) {
 	}
 }
 
+// A model that reads text only is sent no images, even by an agent that takes them: the image
+// is refused as ErrModelNoImages, which says why, and the text alone goes.
+func TestImageForATextOnlyModelIsRefused(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{Turns: []acptest.Turn{{}, {}}})
+	ctx := context.Background()
+	env := f.sb.EnvironmentID
+	launch := f.launch()
+	launch.NoImages = true
+	shot := Prompt{Text: "1. button \"Sign in\" (#sign-in) at [120, 306]: does nothing", Attachments: []File{{Name: "notes.jpg", MimeType: "image/jpeg", Data: []byte("\xff\xd8jpeg")}}}
+	_, err := f.s.Send(ctx, env, f.chat.ID, launch, shot)
+	if !errors.Is(err, ErrModelNoImages) || !errors.Is(err, ErrNoImages) || !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Send with an image for a text-only model = %v; want ErrModelNoImages", err)
+	}
+	turn, err := f.s.Send(ctx, env, f.chat.ID, launch, Prompt{Text: shot.Text})
+	if err != nil {
+		t.Fatalf("Send of the text alone = %v", err)
+	}
+	f.wait(t, turn.ID)
+	prompts, _, _ := f.agent.Snapshot()
+	if len(prompts) != 1 || strings.Contains(string(prompts[0]), `"image"`) {
+		t.Fatalf("the agent got %s; want the text alone", prompts)
+	}
+}
+
 // Prompts queued while a turn runs show in the chat in order, one taken off never goes, and the
 // rest go one turn after another.
 func TestQueuedPromptsShowAndCanBeTakenOff(t *testing.T) {

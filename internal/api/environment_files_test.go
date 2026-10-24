@@ -18,7 +18,7 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 	h, s := newTestServer(t)
 	work := newEnvironment(t, s, "work")
 	anthropic := createProvider(t, h, work, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
-	local := createProvider(t, h, work, `{"name":"Local","kind":"openai_compatible","apiKey":"sk-local-key","baseUrl":"https://llm.example.com/v1","model":"qwen3-coder"}`)
+	local := createProvider(t, h, work, `{"name":"Local","kind":"openai_compatible","apiKey":"sk-local-key","baseUrl":"https://llm.example.com/v1","model":"qwen3-coder","images":true}`)
 	teammateURL := testOrigin + "/api/environments/" + work.ID + "/teammates"
 	ada := decode[store.Teammate](t, do(h, "POST", teammateURL, `{"name":"Ada","role":"Reviewer","avatar":"🦊","approvalScope":"teammate","soul":"# Ada\nCareful.","harness":"claude","providerId":"`+anthropic.ID+`","model":"claude-sonnet-5-5","gitName":"Ada (agent)","gitEmail":"ada@agents.invalid","useHostGitIdentity":true}`))
 	do(h, "POST", teammateURL, `{"name":"Bob","harness":"opencode","providerId":"`+local.ID+`"}`)
@@ -104,7 +104,7 @@ func TestEnvironmentFileRoundTrip(t *testing.T) {
 	if local2.Name != "Local" {
 		local2 = providers[1]
 	}
-	if local2.BaseURL != "https://llm.example.com/v1" || local2.Model != "qwen3-coder" {
+	if local2.BaseURL != "https://llm.example.com/v1" || local2.Model != "qwen3-coder" || !local2.Images {
 		t.Fatalf("compatible provider: %+v", local2)
 	}
 	teammates := decode[[]store.Teammate](t, do(h, "GET", base+"/teammates", ""))
@@ -209,6 +209,7 @@ func TestEnvironmentFileRefusals(t *testing.T) {
 		{"unknown provider kind", file("x", `,"providers":[{"name":"G","kind":"gemini_api"}]`), http.StatusUnprocessableEntity},
 		{"compatible without a model", file("x", `,"providers":[{"name":"L","kind":"openai_compatible","baseUrl":"https://llm.example.com"}]`), http.StatusUnprocessableEntity},
 		{"compatible on a private address", file("x", `,"providers":[{"name":"L","kind":"openai_compatible","baseUrl":"https://10.0.0.1","model":"m"}]`), http.StatusUnprocessableEntity},
+		{"images on a fixed kind", file("x", `,"providers":[{"name":"A","kind":"anthropic_api","images":true}]`), http.StatusUnprocessableEntity},
 		{"base URL on an API provider", file("x", `,"providers":[{"name":"A","kind":"anthropic_api","baseUrl":"https://a.example.com"}]`), http.StatusUnprocessableEntity},
 		{"duplicate provider", file("x", `,"providers":[`+anthropic+`,`+anthropic+`]`), http.StatusUnprocessableEntity},
 		{"teammate of a missing provider", file("x", `,"teammates":[{"name":"Ada","harness":"claude","provider":"Nope","model":"m"}]`), http.StatusUnprocessableEntity},

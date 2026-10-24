@@ -95,6 +95,12 @@ export function composeNotes(notes: BrowserNote[], screenshot = true) {
   )
   if (notes.some((n) => n.element?.field))
     head.push("What form fields hold is left out.")
+  // An agent without the picture finds the elements on its own page: its snapshot names them
+  // the way the notes do.
+  if (!screenshot)
+    head.push(
+      "There's no picture of the page: your browser_snapshot names its elements the same way."
+    )
   const list = notes.map((n, i) => {
     const at = `[${n.x}, ${n.y}]`
     const what = n.element ? `${n.element.description}, at ${at}` : `At ${at}`

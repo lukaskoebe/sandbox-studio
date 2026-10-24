@@ -362,7 +362,7 @@ func (s *Server) chatLaunch(ctx context.Context, sb store.Sandbox) (chat.Launch,
 		return chat.Launch{}, err
 	}
 	return chat.Launch{Harness: plan.harness, Files: plan.files, Command: plan.harness.ACPCommand(plan.provider),
-		Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env}, nil
+		Env: harness.ACPEnvironment(plan.harness, plan.provider), TUIEnv: plan.env, NoImages: !plan.provider.Images}, nil
 }
 
 // chatLaunchFor plans the agent of an existing chat.

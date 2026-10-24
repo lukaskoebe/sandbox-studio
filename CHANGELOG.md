@@ -28,6 +28,11 @@ computer without a teammate gets that screen to itself.
   with **All chats** and **All activity**.
 - **Teammate settings:** closing the settings sheet with unsaved changes asks first, as leaving
   the page does.
+- **Providers:** an OpenAI-compatible endpoint says whether its model can see images, with
+  **The model can see images** in its settings. It is off at first, as many local models read
+  text only: browser notes then go to its teammates as text alone, and an image in a chat is
+  refused with a message that says why, instead of reaching the model as an error it can't
+  read. Ticked, OpenCode passes images on to the model, which it didn't before.
 - **Setup:** **Open sandbox** opens the first computer's screen, with a way back to the setup.
 - Links to the old sandbox workspace, the teammate tabs and chats lead to the matching place
   on the new pages.

@@ -57,6 +57,7 @@ type FileProvider struct {
 	Kind    string `json:"kind" enum:"anthropic_api,openai_api,openai_compatible,claude_subscription,chatgpt_subscription"`
 	BaseURL string `json:"baseUrl,omitempty" maxLength:"2048" doc:"openai_compatible only"`
 	Model   string `json:"model,omitempty" maxLength:"128" doc:"openai_compatible only: the endpoint's single model"`
+	Images  bool   `json:"images,omitempty" doc:"openai_compatible only: the model takes images"`
 }
 
 // FileTeammate is a teammate. Provider names a provider of the file.
@@ -163,7 +164,7 @@ func (s *Server) buildEnvironmentFile(ctx context.Context, envID string) (Enviro
 		if p.SecretID != "" {
 			providerKeys[p.SecretID] = true
 		}
-		f.Providers = append(f.Providers, FileProvider{Name: p.Name, Kind: p.Kind, BaseURL: p.BaseURL, Model: p.Model})
+		f.Providers = append(f.Providers, FileProvider{Name: p.Name, Kind: p.Kind, BaseURL: p.BaseURL, Model: p.Model, Images: p.Images})
 	}
 	teammateName := map[string]string{}
 	for _, t := range list {
@@ -371,9 +372,11 @@ func (s *Server) checkEnvironmentFile(f EnvironmentFile) (importPlan, error) {
 			if err := teammates.CheckModel(fp.Model); err != nil {
 				return plan, apiError(err)
 			}
-			p.Model = fp.Model
+			p.Model, p.Images = fp.Model, fp.Images
 		} else if fp.BaseURL != "" || fp.Model != "" {
 			return plan, bad("only OpenAI-compatible providers have a base URL and model; %q does not", fp.Name)
+		} else if fp.Images {
+			return plan, bad("only OpenAI-compatible providers say whether their model takes images; %q does not", fp.Name)
 		}
 		providers[fp.Name] = p
 		plan.providers = append(plan.providers, p)

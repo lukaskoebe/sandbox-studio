@@ -75,12 +75,21 @@ func TestProvidersCRUD(t *testing.T) {
 
 	compat := createProvider(t, h, env, `{"name":"Local LLM","kind":"openai_compatible","apiKey":"k","baseUrl":"https://llm.example.com/v1/","model":"qwen3-coder"}`)
 	if compat.BaseURL != "https://llm.example.com/v1" || compat.Model != "qwen3-coder" || compat.EnvVar != "OPENAI_API_KEY" ||
-		!slices.Equal(compat.Hosts, []string{"llm.example.com"}) {
+		!slices.Equal(compat.Hosts, []string{"llm.example.com"}) || compat.Images {
 		t.Fatalf("compatible: %+v", compat)
 	}
 	rec = do(h, "PUT", base+"/"+compat.ID, `{"baseUrl":"https://other.example.net/v1"}`)
 	if got := decode[ProviderView](t, rec); rec.Code != http.StatusOK || !slices.Equal(got.Hosts, []string{"other.example.net"}) || got.BaseURL != "https://other.example.net/v1" {
 		t.Fatalf("move compatible: %d %+v", rec.Code, got)
+	}
+	// Its model takes images once the user says so, and an update that doesn't name it keeps it.
+	rec = do(h, "PUT", base+"/"+compat.ID, `{"images":true}`)
+	if got := decode[ProviderView](t, rec); rec.Code != http.StatusOK || !got.Images {
+		t.Fatalf("compatible with images: %d %+v", rec.Code, got)
+	}
+	rec = do(h, "PUT", base+"/"+compat.ID, `{"model":"qwen3-vl"}`)
+	if got := decode[ProviderView](t, rec); rec.Code != http.StatusOK || !got.Images || got.Model != "qwen3-vl" {
+		t.Fatalf("model change: %d %+v", rec.Code, got)
 	}
 
 	sub := createProvider(t, h, env, `{"name":"Claude Max","kind":"claude_subscription"}`)
@@ -135,6 +144,7 @@ func TestProviderValidation(t *testing.T) {
 		{"compatible on localhost", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://llm.localhost","model":"m"}`, http.StatusUnprocessableEntity},
 		{"compatible with credentials", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://u:p@llm.example.com","model":"m"}`, http.StatusUnprocessableEntity},
 		{"bad model", `{"name":"x","kind":"openai_compatible","apiKey":"k","baseUrl":"https://llm.example.com","model":"a b"}`, http.StatusUnprocessableEntity},
+		{"images on fixed kind", `{"name":"x","kind":"anthropic_api","apiKey":"k","images":true}`, http.StatusUnprocessableEntity},
 		{"secret name taken", `{"name":"taken","kind":"openai_api","apiKey":"k"}`, http.StatusConflict},
 	} {
 		if rec := do(h, "POST", base, tc.body); rec.Code != tc.want || strings.Contains(rec.Body.String(), `"k"`) {
@@ -154,6 +164,9 @@ func TestProviderValidation(t *testing.T) {
 	}
 	if rec := do(h, "PUT", base+"/"+p.ID, `{"baseUrl":"https://llm.example.com"}`); rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("base URL on a fixed kind: %d", rec.Code)
+	}
+	if rec := do(h, "PUT", base+"/"+p.ID, `{"images":false}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("images on a fixed kind: %d", rec.Code)
 	}
 	if rec := do(h, "GET", testOrigin+"/api/environments/missing/providers", ""); rec.Code != http.StatusNotFound {
 		t.Errorf("missing environment: %d", rec.Code)
@@ -424,5 +437,48 @@ func TestUniqueName(t *testing.T) {
 		if got != tc.want || len([]rune(got)) > teammates.MaxNameLen {
 			t.Errorf("uniqueName(%q, %v) = %q, want %q", tc.name, tc.taken, got, tc.want)
 		}
+	}
+}
+
+// A chat's agent is sent no images when its model reads text only: an OpenAI-compatible
+// endpoint's until its provider says otherwise, never a vendor's.
+func TestChatLaunchKnowsWhetherTheModelTakesImages(t *testing.T) {
+	h, s := newTestServer(t)
+	ctx := context.Background()
+	env := newEnvironment(t, s, "work")
+	base := testOrigin + "/api/environments/" + env.ID
+	anthropic := createProvider(t, h, env, `{"name":"Anthropic","kind":"anthropic_api","apiKey":"`+providerKey+`"}`)
+	local := createProvider(t, h, env, `{"name":"Local","kind":"openai_compatible","apiKey":"k","baseUrl":"https://llm.example.com/v1","model":"qwen3-coder"}`)
+	sandbox := func(teammate string) store.Sandbox {
+		t.Helper()
+		rec := do(h, "POST", base+"/teammates", teammate)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("teammate: %d %s", rec.Code, rec.Body)
+		}
+		tm := decode[store.Teammate](t, rec)
+		sb, err := s.Store.CreateSandbox(ctx, store.Sandbox{EnvironmentID: env.ID, Name: strings.ToLower(tm.Name) + "-dev", CPUs: 1, TeammateID: tm.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sb
+	}
+	noImages := func(sb store.Sandbox) bool {
+		t.Helper()
+		l, err := s.chatLaunch(ctx, sb)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return l.NoImages
+	}
+	ada := sandbox(`{"name":"Ada","harness":"claude","providerId":"` + anthropic.ID + `","model":"claude-sonnet-5-5"}`)
+	bob := sandbox(`{"name":"Bob","harness":"opencode","providerId":"` + local.ID + `"}`)
+	if noImages(ada) || !noImages(bob) {
+		t.Fatalf("NoImages: Anthropic %v, compatible %v; want false, true", noImages(ada), noImages(bob))
+	}
+	if rec := do(h, "PUT", base+"/providers/"+local.ID, `{"images":true}`); rec.Code != http.StatusOK {
+		t.Fatalf("images: %d %s", rec.Code, rec.Body)
+	}
+	if noImages(bob) {
+		t.Fatal("a compatible model that takes images is sent none")
 	}
 }

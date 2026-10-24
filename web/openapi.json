@@ -1526,6 +1526,10 @@
             "maxLength": 2048,
             "type": "string"
           },
+          "images": {
+            "description": "openai_compatible only: the model takes images. Without it, prompts with images are refused and browser notes go as text.",
+            "type": "boolean"
+          },
           "kind": {
             "enum": [
               "anthropic_api",
@@ -2852,6 +2856,10 @@
             "description": "openai_compatible only",
             "maxLength": 2048,
             "type": "string"
+          },
+          "images": {
+            "description": "openai_compatible only: the model takes images",
+            "type": "boolean"
           },
           "kind": {
             "enum": [
@@ -5418,6 +5426,10 @@
           },
           "id": {
             "type": "string"
+          },
+          "images": {
+            "description": "openai_compatible only: the model takes images. The models of the other kinds all do.",
+            "type": "boolean"
           },
           "kind": {
             "enum": [
@@ -8290,6 +8302,10 @@
             "description": "openai_compatible only",
             "maxLength": 2048,
             "type": "string"
+          },
+          "images": {
+            "description": "openai_compatible only",
+            "type": "boolean"
           },
           "model": {
             "description": "openai_compatible only",

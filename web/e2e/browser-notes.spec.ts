@@ -16,13 +16,25 @@ type FakeBrowser = {
   browser?: { inputs: { type: string; eventType?: string; button?: string }[] }
 }
 
-/** A teammate with a sandbox and a running browser on the login page, on its Browser tab. */
-async function browsing(page: Page, api: Api, env: string) {
+/**
+ * A teammate with a sandbox and a running browser on the login page, on its Browser tab. add
+ * adds the teammate; by default it runs on the environment's first provider.
+ */
+async function browsing(
+  page: Page,
+  api: Api,
+  env: string,
+  add = (name: string) => addTeammate(api, env, name)
+) {
   // The chats sent before ask for permissions, whose cards would cover the screen's corner.
   await api.dismissApprovals()
   const name = `Noa ${Math.random().toString(36).slice(2, 8)}`
-  const tm = await addTeammate(api, env, name)
-  const sb = await api.createSandbox(sandboxName("notes"), tm)
+  const tm = await add(name)
+  const sb = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes`,
+    { name: sandboxName("notes"), teammateId: tm }
+  ))!.id
   await api.guestReady(sb)
   const base = `/api/environments/${env}/teammates/${tm}/browser`
   await api.json("POST", `${base}/start`)
@@ -230,10 +242,72 @@ test("notes go as text alone to an agent that can't take images", async ({
   expect(text).toContain(
     "A note names the element under it where Studio could tell"
   )
+  expect(text).toContain(
+    "your browser_snapshot names its elements the same way"
+  )
   spot(text, String.raw`1\. button "Sign in" \(#sign-in\), at`, "Press this")
   const [x2, y2] = spot(text, String.raw`2\. At`, "Empty here")
   expect(Math.abs(x2 - 500)).toBeLessThanOrEqual(2)
   expect(Math.abs(y2 - 360)).toBeLessThanOrEqual(2)
+})
+
+// A model that its provider says reads text only gets the notes as text alone too, though its
+// agent takes images: Studio holds the screenshot back rather than let the agent swap it for
+// an error the model reads.
+test("notes go as text alone to a model that reads text only", async ({
+  page,
+  api,
+}) => {
+  // An environment of its own: the other tests' teammates run on the first provider there is.
+  const env = (await api.json<{ id: string }>("POST", "/api/environments", {
+    name: `text-only-${Date.now()}`,
+  }))!.id
+  const local = (await api.json<{ id: string; images?: boolean }>(
+    "POST",
+    `/api/environments/${env}/providers`,
+    {
+      name: "Local",
+      kind: "openai_compatible",
+      apiKey: "sk-local-e2e-fake",
+      baseUrl: "https://llm.example.com/v1",
+      model: "qwen3-coder",
+    }
+  ))!
+  expect(local.images ?? false).toBe(false)
+  const { name, sb, base } = await browsing(
+    page,
+    api,
+    env,
+    async (teammate) =>
+      (await api.json<{ id: string }>(
+        "POST",
+        `/api/environments/${env}/teammates`,
+        { name: teammate, harness: "opencode", providerId: local.id }
+      ))!.id
+  )
+  await signInPage(page, api, base)
+  await rightClick(page, 120, 306)
+  await expect(page.getByText("On button “Sign in”")).toBeVisible()
+  await page.getByRole("textbox", { name: "Note 1" }).fill("Press this")
+  await page.keyboard.press("Enter")
+
+  await page.getByRole("button", { name: "Send to chat" }).click()
+  await expect(
+    page.getByText(
+      `${name}'s agent can't take images, so the screenshot stayed behind.`,
+      { exact: false }
+    )
+  ).toBeVisible()
+  const prompts = async () =>
+    (await api.guest(sb)).acp.flatMap((a) => a.prompts) as Block[][]
+  await expect.poll(async () => (await prompts()).length).toBe(1)
+  const blocks = (await prompts())[0]
+  expect(blocks.map((b) => b.type)).toEqual(["text"])
+  spot(
+    blocks[0].text!,
+    String.raw`1\. button "Sign in" \(#sign-in\), at`,
+    "Press this"
+  )
 })
 
 // Remove takes a note away and renumbers the others; Clear takes them all.

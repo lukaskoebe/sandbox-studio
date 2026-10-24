@@ -279,3 +279,43 @@ func TestInstructionsStayShort(t *testing.T) {
 		t.Errorf("the instructions block is %d bytes, more than %d", n, max)
 	}
 }
+
+// OpenCode takes a model it doesn't know as text only, and swaps the images of a prompt for a
+// note to the model. An OpenAI-compatible model that takes images says so in its entry.
+func TestOpenCodeCompatibleModelImages(t *testing.T) {
+	for _, images := range []bool{false, true} {
+		provider := providers[teammates.KindOpenAICompatible]
+		provider.Images = images
+		files, err := OpenCode{}.Render(teammate, Sandbox{Name: "api"}, provider)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.IndexFunc(files, func(f GuestFile) bool { return f.Path == ".config/opencode/opencode.json" })
+		if i < 0 {
+			t.Fatal("no opencode.json")
+		}
+		var cfg struct {
+			Provider map[string]struct {
+				Models map[string]struct {
+					Attachment bool `json:"attachment"`
+					Modalities *struct {
+						Input  []string `json:"input"`
+						Output []string `json:"output"`
+					} `json:"modalities"`
+				} `json:"models"`
+			} `json:"provider"`
+		}
+		if err := json.Unmarshal([]byte(files[i].Content), &cfg); err != nil {
+			t.Fatal(err)
+		}
+		m, ok := cfg.Provider[compatibleID].Models["qwen3-coder:30b"]
+		switch {
+		case !ok:
+			t.Fatalf("images %v: no model entry in %s", images, files[i].Content)
+		case !images && (m.Attachment || m.Modalities != nil):
+			t.Errorf("a text-only model says it takes images: %+v", m)
+		case images && (!m.Attachment || m.Modalities == nil || !slices.Equal(m.Modalities.Input, []string{"text", "image"}) || !slices.Equal(m.Modalities.Output, []string{"text"})):
+			t.Errorf("a model that takes images doesn't say so: %+v", m)
+		}
+	}
+}

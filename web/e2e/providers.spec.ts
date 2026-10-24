@@ -87,8 +87,13 @@ test("an OpenAI-compatible endpoint suggests the models it lists", async ({
     dialog.locator('datalist#provider-models option[value="e2e-coder"]')
   ).toHaveCount(1)
   // Any other model can still be typed.
-  await dialog.getByLabel("Model").fill("my-own-model")
-  await expect(dialog.getByLabel("Model")).toHaveValue("my-own-model")
+  const model = dialog.getByLabel("Model", { exact: true })
+  await model.fill("my-own-model")
+  await expect(model).toHaveValue("my-own-model")
+  // An endpoint's model is taken as text only until the user says it sees images.
+  await expect(
+    dialog.getByRole("checkbox", { name: "The model can see images" })
+  ).not.toBeChecked()
   await page.keyboard.press("Escape")
 })
 

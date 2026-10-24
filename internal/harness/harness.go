@@ -39,6 +39,7 @@ type Provider struct {
 	Kind        string // teammates.Kind*
 	BaseURL     string // openai_compatible only
 	Model       string // the provider's default model
+	Images      bool   // the model takes images (teammates.TakesImages)
 	EnvVar      string // where the harness reads its credential from
 	Placeholder string // the placeholder of the provider's secret
 }

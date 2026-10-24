@@ -62,6 +62,10 @@ var ErrInvalid = errors.New("invalid prompt")
 // that the user can send the text alone.
 var ErrNoImages = fmt.Errorf("%w: this agent can't take images", ErrInvalid)
 
+// ErrModelNoImages is ErrNoImages for an agent that takes images but whose model, its provider
+// says, reads text only.
+var ErrModelNoImages = fmt.Errorf("%w: its provider says the model reads text only", ErrNoImages)
+
 // ErrInvalidAnswer marks a question response that does not match its form.
 var ErrInvalidAnswer = errors.New("invalid chat answer")
 
@@ -82,13 +86,16 @@ type Guest interface {
 
 // Launch is how to start a chat's agent, planned like an agent session: the harness,
 // its config files, its ACP command and environment and, for the terminal, the TUI
-// session's environment (placeholders only).
+// session's environment (placeholders only). NoImages says that the model can't take
+// images, whatever the agent says it takes: an OpenAI-compatible endpoint's model can be text
+// only behind an agent that always takes them.
 type Launch struct {
-	Harness harness.Harness
-	Files   []agentproto.HomeFile
-	Command []string
-	Env     map[string]string
-	TUIEnv  map[string]string
+	Harness  harness.Harness
+	Files    []agentproto.HomeFile
+	Command  []string
+	Env      map[string]string
+	TUIEnv   map[string]string
+	NoImages bool
 }
 
 // Service runs the chats of every environment.
@@ -375,7 +382,7 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 	if err == nil {
 		var blocks []acp.ContentBlock
 		var atts []Attachment
-		if blocks, atts, err = promptBlocks(l.caps, p); err == nil {
+		if blocks, atts, err = l.prompt(p); err == nil {
 			var t store.ChatTurn
 			if t, err = l.start(ctx, c, p.Text, atts, blocks); err == nil {
 				return t, nil
@@ -406,7 +413,7 @@ func (s *Service) Enqueue(ctx context.Context, envID, chatID string, launch Laun
 	}
 	// A prompt the running agent can't take is refused now, not once it is its turn.
 	if l := s.get(chatID); l != nil {
-		if _, _, err := promptBlocks(l.caps, p); err != nil {
+		if _, _, err := l.prompt(p); err != nil {
 			return QueuedPrompt{}, false, err
 		}
 	}
@@ -586,6 +593,7 @@ type live struct {
 	sandboxID string
 	conn      *acp.Conn
 	caps      acp.AgentCapabilities
+	textOnly  bool // the model can't take images, whatever caps says (Launch.NoImages)
 	session   string
 
 	mu     sync.Mutex
@@ -647,7 +655,7 @@ func (s *Service) startAgent(ctx context.Context, c store.Chat, launch Launch, r
 	if err != nil {
 		return nil, nil, fmt.Errorf("starting %s's chat agent: %w", h.Name(), err)
 	}
-	l := &live{s: s, envID: c.EnvironmentID, chatID: c.ID, sandboxID: c.SandboxID, asks: map[string]*ask{}, used: time.Now()}
+	l := &live{s: s, envID: c.EnvironmentID, chatID: c.ID, sandboxID: c.SandboxID, textOnly: launch.NoImages, asks: map[string]*ask{}, used: time.Now()}
 	l.conn = acp.NewConn(rwc, l)
 	replay, err := l.open(ctx, c, h.ACPMCPServers(), reload)
 	if err != nil {
@@ -774,6 +782,20 @@ func (l *live) rest() {
 		l.idle.Stop()
 	}
 	l.idle = time.AfterFunc(idleTimeout, func() { l.s.retire(l) })
+}
+
+// prompt turns p into the agent's content (promptBlocks). A model that reads text only is
+// sent no images, whatever its agent takes.
+func (l *live) prompt(p Prompt) ([]acp.ContentBlock, []Attachment, error) {
+	caps := l.caps
+	if l.textOnly {
+		caps.PromptCapabilities.Image = false
+	}
+	blocks, atts, err := promptBlocks(caps, p)
+	if errors.Is(err, ErrNoImages) && l.caps.PromptCapabilities.Image {
+		err = ErrModelNoImages
+	}
+	return blocks, atts, err
 }
 
 // open initializes the agent and creates or reattaches the chat's session: with

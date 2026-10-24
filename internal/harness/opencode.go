@@ -64,7 +64,7 @@ func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, e
 				"baseURL": provider.BaseURL,
 				"apiKey":  "{env:" + provider.EnvVar + "}",
 			},
-			"models": map[string]any{m: map[string]any{"name": m}},
+			"models": map[string]any{m: compatibleModel(m, provider.Images)},
 		}}
 		cfg["model"] = compatibleID + "/" + m
 	default:
@@ -81,6 +81,18 @@ func (OpenCode) Render(p Teammate, s Sandbox, provider Provider) ([]GuestFile, e
 		{Path: ".config/opencode/plugins/studio-memory.js", Content: opencodePlugin, Mode: 0o644},
 		rules,
 	}, nil
+}
+
+// compatibleModel is the entry of an OpenAI-compatible endpoint's model. OpenCode takes a model
+// it doesn't know for text only; one that takes images says so, so that OpenCode passes them on
+// rather than replace them with an error for the model.
+func compatibleModel(m string, images bool) map[string]any {
+	entry := map[string]any{"name": m}
+	if images {
+		entry["attachment"] = true
+		entry["modalities"] = map[string]any{"input": []string{"text", "image"}, "output": []string{"text"}}
+	}
+	return entry
 }
 
 // ParseHook reads what Studio's plugin writes (opencode-plugin.js).
