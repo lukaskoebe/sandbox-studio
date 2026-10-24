@@ -15,7 +15,7 @@ computer without a teammate gets that screen to itself.
   **Preview** (while previews are on) and **Changes**, a dot on a tab where something waits
   for you, a power button, and a **⋯** menu with the computer's ID, template, size, uptime, CPU
   and memory, checkpoints, fork, merge, connections, resources, rebase, export, suspend and
-  delete. The terminal's chip switches sessions and opens a shell or the teammate's agent. A
+  delete. The terminal's chip switches sessions, opens a shell and closes one. A
   computer that is off shows a dark screen with **Start**; its teammate's browser stays a tab.
   Fold the screen to a strip of tabs; on a narrow window it is that strip, and opens over the
   conversation.

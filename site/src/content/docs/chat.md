@@ -12,7 +12,7 @@ You can work with an agent in two ways:
 - **Chat** (recommended): write to your teammates like in a messenger, see what they do, and approve risky steps with a click.
 - **Terminal**: run each agent's own command-line app in the sandbox, as a developer would.
 
-A teammate's page has both side by side: the conversation with its threads on the left, and its computer's screen, with the terminal, on the right. The terminal's session chip opens the teammate's agent in a terminal or a shell, so both stay one click away.
+A teammate's page has both side by side: the conversation with its threads on the left, and its computer's screen, with the terminal, on the right. A thread's **⋯** continues it in the agent's own interface on the terminal, so both stay one click away.
 
 ## What chats need
 

@@ -2,12 +2,12 @@ import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   CaretDownIcon,
+  CheckIcon,
   PlusIcon,
   RobotIcon,
   TerminalWindowIcon,
   XIcon,
 } from "@phosphor-icons/react"
-import { useStartAgentSession } from "@/components/agent-sessions"
 import { Terminal } from "@/components/terminal"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
-import { $api, type Sandbox, type Teammate } from "@/lib/api/client"
+import { $api, type Sandbox } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 import { useTerminalTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -34,7 +34,6 @@ import { pasteFile } from "@/lib/workspace-upload"
 export function Terminals({
   env,
   sandbox: sb,
-  owner,
   term,
   visible,
   suspended,
@@ -42,7 +41,6 @@ export function Terminals({
 }: {
   env: string
   sandbox: Sandbox
-  owner?: Teammate
   /** The session the URL names; the first visit opens "main". */
   term?: string
   /** Whether the Terminal tab is the one in view. */
@@ -119,7 +117,6 @@ export function Terminals({
     while (names.includes(String(n)) || mounted.includes(String(n))) n++
     return String(n)
   }
-  const agent = useStartAgentSession(env, sb.id, open)
   const dark = useTerminalTheme() === "dark"
 
   if (!current) {
@@ -181,7 +178,7 @@ export function Terminals({
           {all.length > 1 && <span className="opacity-60">{all.length}</span>}
           <CaretDownIcon className="size-2.5" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
             <DropdownMenuLabel>Sessions on {sb.name}</DropdownMenuLabel>
             {all.map((name) => (
@@ -191,9 +188,12 @@ export function Terminals({
                 onClick={() => open(name)}
               >
                 {harnessOf(name) ? <RobotIcon /> : <TerminalWindowIcon />}
-                <span className="font-mono">{name}</span>
-                <span className="ml-auto text-[0.6875rem] text-muted-foreground">
-                  {harnessOf(name) ?? (name === current ? "open" : "")}
+                <span className="min-w-0 truncate font-mono text-[0.6875rem]">
+                  {name}
+                </span>
+                <span className="ml-auto flex shrink-0 items-center gap-2 text-[0.6875rem] text-muted-foreground">
+                  {harnessOf(name)}
+                  <CheckIcon className={cn(name !== current && "invisible")} />
                 </span>
               </DropdownMenuItem>
             ))}
@@ -203,19 +203,8 @@ export function Terminals({
             <PlusIcon />
             New shell
           </DropdownMenuItem>
-          {owner && (
-            <DropdownMenuItem disabled={agent.starting} onClick={agent.start}>
-              {agent.starting ? <Spinner /> : <RobotIcon />}
-              <span className="grid">
-                {owner.name} in a terminal
-                <span className="text-[0.6875rem] text-muted-foreground">
-                  {harnessLabels[owner.harness]}&apos;s own interface
-                </span>
-              </span>
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
           <DropdownMenuItem
+            title="Ends what runs in it"
             onClick={() => {
               drop(current)
               close.mutate({
@@ -224,11 +213,9 @@ export function Terminals({
             }}
           >
             <XIcon />
-            <span className="grid">
-              Close <span className="font-mono">{current}</span>
-              <span className="text-[0.6875rem] text-muted-foreground">
-                Ends what runs in it
-              </span>
+            <span className="min-w-0 truncate">
+              Close{" "}
+              <span className="font-mono text-[0.6875rem]">{current}</span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuContent>

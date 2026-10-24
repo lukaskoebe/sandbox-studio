@@ -150,7 +150,8 @@ Changes, each with a dot while something on it waits for you; power (Stop, Start
 ⋯; and fold. Under it the display:
 
 - Terminal: the computer's tmux sessions behind a chip (a robot for an agent's): switch, a new
-  shell, the teammate's harness in a terminal, close. The URL names the one in view (`term`).
+  shell, close. The URL names the one in view (`term`). The teammate's harness opens in one
+  from a thread's Continue in the terminal.
 - Browser: the teammate's browser window (tabs, toolbar, live view; [browser](browser.md))
   with its Activity and Sites beside it, or over it on a narrow screen, from the toolbar's
   clock or the site info's All sites.

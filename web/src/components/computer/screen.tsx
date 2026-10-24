@@ -280,7 +280,6 @@ export function ComputerScreen({
                   key={sb.id}
                   env={env}
                   sandbox={sb}
-                  owner={owner}
                   term={search.term}
                   visible={tab === "terminal"}
                   suspended={false}

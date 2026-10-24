@@ -58,9 +58,8 @@ If an environment has no teammates when you add a provider, Studio adds a teamma
 1. Add a provider and enter its API key, or sign in with a subscription.
 2. Add a teammate and select a supported harness, provider, and model. A teammate needs a provider for its model: in an environment without one, **New teammate** says so and leads to **Settings → AI providers**.
 3. Give the teammate a computer from its page, or create a sandbox and assign that teammate.
-4. On the computer's **Terminal** tab, open the session chip and choose the teammate's name **in a terminal**. Studio opens the harness in a new terminal session.
-
-To work with the teammate in a chat instead, see [Chat mode](../chat/).
+4. Write to the teammate on its page: that starts a thread, a chat. See [Chat mode](../chat/).
+5. To use the harness's own interface instead, choose **Continue in the terminal** in the thread's **⋯**. Studio opens the harness in a new terminal session on the computer's **Terminal** tab.
 
 The provider key must be bound to the correct API host, and the sandbox must be running. A sandbox without a teammate still has a terminal, but it cannot start an agent session or use teammate memory/browser tools.
 
