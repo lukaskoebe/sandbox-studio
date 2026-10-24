@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { CopyIcon, DotsThreeIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -11,13 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import {
   Select,
@@ -34,54 +26,11 @@ import {
   type Teammate,
 } from "@/lib/api/client"
 
-/** A teammate's options: copying it to another environment. */
-export function TeammateOptionsMenu({
-  env,
-  teammate,
-}: {
-  env: string
-  teammate: Teammate
-}) {
-  const [copying, setCopying] = useState(false)
-  return (
-    <>
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Teammate options"
-              title="Teammate options"
-            />
-          }
-        >
-          <DotsThreeIcon weight="bold" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuGroup>
-            <DropdownMenuItem onClick={() => setCopying(true)}>
-              <CopyIcon />
-              Copy to environment…
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <CopyTeammateDialog
-        env={env}
-        teammate={teammate}
-        open={copying}
-        onOpenChange={setCopying}
-      />
-    </>
-  )
-}
-
 /**
  * Copies a teammate into another environment. The copy keeps its settings, not its sandboxes,
  * chats, memory, secrets or keys; it takes the target's provider of the same kind if there is one.
  */
-function CopyTeammateDialog({
+export function CopyTeammateDialog({
   env,
   teammate,
   open,

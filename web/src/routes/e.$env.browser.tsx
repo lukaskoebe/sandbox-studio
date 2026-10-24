@@ -16,8 +16,9 @@ export const Route = createFileRoute("/e/$env/browser")({
       teammates?.find((p) => p.id === search.teammate) ?? teammates?.at(0)
     if (teammate)
       throw redirect({
-        to: "/e/$env/teammates/$id/browser",
+        to: "/e/$env/teammates/$id",
         params: { env: params.env, id: teammate.id },
+        search: { tab: "browser" },
         replace: true,
       })
     throw redirect({ to: "/e/$env/teammates", params, replace: true })

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { useNavigate } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { BackToSetup, fromSetup } from "@/components/back-to-setup"
+import { BackToSetup } from "@/components/back-to-setup"
 import { BrowserSettings } from "@/components/browser-settings"
 import { SaveBar } from "@/components/save-bar"
 import { DisclosureCard } from "@/components/disclosure-card"
@@ -31,38 +31,31 @@ import { TeammateSecrets } from "@/components/teammate-secrets"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
 import { heartbeatSentence } from "@/lib/tasks"
 
-export const Route = createFileRoute("/e/$env/teammates/$id/settings")({
-  // The section that is open, so a link can open one: ?open=checkins. ?from=setup links back.
-  validateSearch: (
-    s: Record<string, unknown>
-  ): { open?: string; from?: "setup" } => ({
-    ...(typeof s.open === "string" && s.open !== "" ? { open: s.open } : {}),
-    ...fromSetup(s),
-  }),
-  component: TeammateSettings,
-})
-
 /**
  * A teammate's settings as cards, each with a one-line summary, that open one at a time: who
  * it is, which agent it runs, the git identity it commits with, its approvals and soul, its
- * check-ins, network level, browser and secrets.
+ * check-ins, network level, browser and secrets. The open card is in the URL: ?open=checkins.
  */
-
-function TeammateSettings() {
-  const { env, id } = Route.useParams()
+export function TeammateSettings({
+  env,
+  id,
+  open,
+  onOpen: setOpen,
+  fromSetup,
+}: {
+  env: string
+  id: string
+  open?: string
+  onOpen: (section: string | undefined) => void
+  /** Opened from the setup steps, which it links back to. */
+  fromSetup?: boolean
+}) {
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  const { open, from } = Route.useSearch()
-  const navigate = Route.useNavigate()
-  const setOpen = (section: string | undefined) =>
-    navigate({
-      search: (prev) => ({ from: prev.from, open: section }),
-      replace: true,
-    })
   const card = (section: string, title: string, summary: ReactNode) => ({
     id: `teammate-${section}`,
     title,
@@ -75,9 +68,10 @@ function TeammateSettings() {
   if (!teammate || !providers.data) return null
 
   return (
-    <SaveBar>
+    // Closing the sheet leaves the settings as going to another page does.
+    <SaveBar leaves={(search) => search.profile !== "settings"}>
       <div className="grid max-w-3xl grid-cols-1 gap-2.5">
-        {from === "setup" && <BackToSetup step="teammate" />}
+        {fromSetup && <BackToSetup step="teammate" />}
         <TeammateForm
           key={teammate.id}
           env={env}
@@ -146,7 +140,13 @@ function TeammateSettings() {
 }
 
 /** The teammate's security level, or the environment's it follows. */
-function LevelSummary({ env, teammate }: { env: string; teammate: Teammate }) {
+export function LevelSummary({
+  env,
+  teammate,
+}: {
+  env: string
+  teammate: Teammate
+}) {
   const environment = useEnvironmentLevel(env)
   const own = securityLevels.find((l) => l.value === teammate.securityLevel)
   const inherited = securityLevels.find((l) => l.value === environment.level)

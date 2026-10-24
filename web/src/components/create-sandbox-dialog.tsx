@@ -51,7 +51,7 @@ export function CreateSandboxDialog({
       navigate({ to: "/e/$env/sandboxes/$id", params: { env, id: sb.id } })
     },
     onError: (err) =>
-      toast.error("Could not create the sandbox", {
+      toast.error("Could not create the computer", {
         description: errorMessage(err),
       }),
   })
@@ -72,7 +72,7 @@ export function CreateSandboxDialog({
           }}
         >
           <DialogHeader>
-            <DialogTitle>New sandbox</DialogTitle>
+            <DialogTitle>New computer</DialogTitle>
             <DialogDescription>
               A Linux VM with Docker, a persistent /workspace and 2 CPUs, 4 GiB
               memory.
@@ -94,7 +94,7 @@ export function CreateSandboxDialog({
                 Lowercase letters, digits and dashes; up to 40 characters.
               </FieldError>
             ) : (
-              <FieldDescription>Also the sandbox's hostname.</FieldDescription>
+              <FieldDescription>Also the computer's hostname.</FieldDescription>
             )}
           </Field>
           <TeammateField

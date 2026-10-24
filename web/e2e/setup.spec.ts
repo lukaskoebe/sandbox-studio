@@ -46,7 +46,8 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await open("Teammate")
     await expect(page.getByText("Iris", { exact: true })).toBeVisible()
     await page.getByRole("link", { name: "Edit", exact: true }).click()
-    await expect(page).toHaveURL(/\/teammates\/[^/]+\/settings\?from=setup/)
+    await expect(page).toHaveURL(/\/teammates\/[^/?]+\?.*profile=settings/)
+    await expect(page).toHaveURL(/[?&]from=setup/)
     await page.getByRole("link", { name: "Back to setup" }).click()
     await open("Teammate")
     await page.getByRole("button", { name: "Accept", exact: true }).click()
@@ -77,15 +78,19 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     ).toBeChecked()
     await next().click()
 
-    // First sandbox: created by Iris, with its progress shown until the workspace opens.
+    // First sandbox: created by Iris, with its progress shown until it can be opened, on Iris's
+    // page.
     await open("First sandbox")
     await page.getByLabel("Name", { exact: true }).fill("first")
     await page.getByRole("button", { name: "Create sandbox" }).click()
+    await expect(page.getByRole("link", { name: "Open sandbox" })).toBeVisible({
+      timeout: 30_000,
+    })
+    await page.getByRole("link", { name: "Open sandbox" }).click()
+    await expect(page).toHaveURL(/\/teammates\/[^/?]+\?.*computer=/)
     await expect(
-      page.getByRole("link", { name: "Open workspace" })
-    ).toBeVisible({ timeout: 30_000 })
-    await page.getByRole("link", { name: "Open workspace" }).click()
-    await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+\/work(\?|$)/)
+      page.getByRole("region", { name: "first's screen" })
+    ).toBeVisible()
     await page.getByRole("link", { name: "Back to setup" }).click()
     await open("First sandbox")
 
@@ -97,10 +102,12 @@ test("the guided setup walks its steps, with skips, to a first sandbox", async (
     await expect(
       page.getByRole("region", { name: "Finish setup" })
     ).toBeHidden()
-    // The sidebar lists Iris with its sandbox and what it is doing.
-    await expect(
-      page.getByRole("link", { name: "Iris", exact: true })
-    ).toHaveAccessibleDescription(/^first · /)
+    // The sidebar lists Iris, who has a computer now.
+    const iris = page
+      .locator('[data-sidebar="sidebar"]')
+      .getByRole("link", { name: /^Iris/ })
+    await expect(iris).toBeVisible()
+    await expect(iris).not.toContainText("no computer")
   } finally {
     await context.close()
     await studio.stop()

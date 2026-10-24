@@ -8,7 +8,7 @@ import {
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react"
-import { EnvironmentLabel, PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,7 +18,6 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   $api,
@@ -29,19 +28,10 @@ import {
 
 export function NetworkSettings({ env }: { env: string }) {
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Ports and LAN</h1>
-        <EnvironmentLabel env={env} />
-      </PageHeader>
-      <ScrollArea
-        className="min-h-0 flex-1"
-        viewportClassName="space-y-5 p-3 md:p-4"
-      >
-        <HostPortsSection key={`host-${env}`} env={env} />
-        <LocalNetworkSection key={`lan-${env}`} env={env} />
-      </ScrollArea>
-    </>
+    <SettingsPage title="Ports and LAN">
+      <HostPortsSection key={`host-${env}`} env={env} />
+      <LocalNetworkSection key={`lan-${env}`} env={env} />
+    </SettingsPage>
   )
 }
 
@@ -110,7 +100,7 @@ function LocalNetworkSection({ env }: { env: string }) {
   }
 
   return (
-    <section className="grid max-w-3xl gap-3">
+    <section className="grid gap-3">
       <SectionHeader
         title="Local network"
         icon={ShareNetworkIcon}
@@ -319,7 +309,7 @@ function HostPortsSection({ env }: { env: string }) {
   }
 
   return (
-    <section className="grid max-w-3xl gap-3">
+    <section className="grid gap-3">
       <SectionHeader
         title="This computer"
         icon={DesktopIcon}

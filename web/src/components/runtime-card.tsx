@@ -21,7 +21,7 @@ function useDoctor() {
 /** The host checks (doctor) of the runtime settings page, with their fixes. */
 export function RuntimeSection() {
   return (
-    <section className="grid max-w-3xl gap-2 text-xs">
+    <section className="grid gap-2 text-xs">
       <SectionHeader
         title="Runtime"
         icon={CpuIcon}

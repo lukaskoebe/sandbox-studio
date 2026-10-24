@@ -95,7 +95,7 @@ async function driving(page: Page, api: Api, env: string) {
   await expect
     .poll(async () => (await api.json<{ vm: string }>("GET", base))!.vm)
     .toBe("running")
-  await page.goto(`/e/${env}/teammates/${tm}/browser`)
+  await page.goto(`/e/${env}/teammates/${tm}?tab=browser`)
   const address = page.getByLabel("Browser address")
   await address.fill("https://example.com/clicks")
   await address.press("Enter")

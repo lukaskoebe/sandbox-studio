@@ -6,7 +6,7 @@ import { BuildJobSheet } from "@/components/build-job-sheet"
 import { BuildCleanupStatus, BuildStatusBadge } from "@/components/build-status"
 import { CreateTemplateSandboxDialog } from "@/components/create-template-sandbox-dialog"
 import { Ident } from "@/components/ident"
-import { EnvironmentLabel, PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { SectionHeader } from "@/components/section-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -16,7 +16,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -58,24 +57,24 @@ function BuildsWorkspace({ env }: { env: string }) {
 
   return (
     <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Templates</h1>
-        <EnvironmentLabel env={env} />
-        <Button
-          size="sm"
-          className="ml-auto"
-          onClick={() => openSubmission(exampleTemplateSource)}
-        >
-          <PlusIcon />
-          New build
-        </Button>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-5 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          Build reusable sandbox templates from YAML, then start fresh sandboxes
-          from ready templates.
-        </p>
-
+      <SettingsPage
+        title="Templates"
+        actions={
+          <Button
+            size="sm"
+            onClick={() => openSubmission(exampleTemplateSource)}
+          >
+            <PlusIcon />
+            New build
+          </Button>
+        }
+        intro={
+          <>
+            Build reusable sandbox templates from YAML, then start fresh
+            sandboxes from ready templates.
+          </>
+        }
+      >
         {builds.isPending ? (
           <Spinner className="mx-auto block" />
         ) : builds.isError && !builds.data ? (
@@ -208,7 +207,7 @@ function BuildsWorkspace({ env }: { env: string }) {
             )}
           </>
         )}
-      </ScrollArea>
+      </SettingsPage>
       {selectedId && (
         <BuildJobSheet
           env={env}

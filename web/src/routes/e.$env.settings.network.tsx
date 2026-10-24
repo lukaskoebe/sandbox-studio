@@ -1,8 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react"
 import { createFileRoute } from "@tanstack/react-router"
-import { PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { SettingsLink } from "@/components/settings/link"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -82,12 +81,10 @@ export const Route = createFileRoute("/e/$env/settings/network")({
 /** What sandboxes may reach: the environment's security level and its rules. */
 function NetworkSettings() {
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Network</h1>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
+    <SettingsPage
+      title="Network"
+      intro={
+        <>
           Sandboxes reach the internet only through Studio, and connections that
           no rule allows wait for your approval. A teammate can tighten the
           level in its own settings.{" "}
@@ -99,10 +96,11 @@ function NetworkSettings() {
           >
             Learn more
           </a>
-        </p>
-        <RulesTab />
-      </ScrollArea>
-    </>
+        </>
+      }
+    >
+      <RulesTab />
+    </SettingsPage>
   )
 }
 

@@ -1,54 +1,46 @@
 import { expect, sandboxName, terminal, test } from "./fixtures"
 
-test("sandbox lifecycle: create, terminal, stop, start, delete", async ({
+test("computer lifecycle: create, terminal, stop, start, delete", async ({
   page,
   api,
   env,
 }) => {
   const name = sandboxName("life")
   await page.goto(`/e/${env}`)
-  await page.getByRole("button", { name: "More to create" }).click()
-  await page
-    .getByRole("menuitem", { name: /Sandbox without a teammate/ })
-    .click()
-  const create = page.getByRole("dialog", { name: "New sandbox" })
+  await page.getByRole("button", { name: "New computer" }).click()
+  await page.getByRole("menuitem", { name: /^New computer/ }).click()
+  const create = page.getByRole("dialog", { name: "New computer" })
   await create.getByLabel("Name", { exact: true }).fill(name)
   await create.getByRole("button", { name: "Create" }).click()
-  await expect(page.getByRole("heading", { name })).toBeVisible()
-  // A sandbox opens on its workspace.
-  await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+\/work/)
-  const id = page.url().match(/\/sandboxes\/([a-z0-9]+)\//)![1]
+  // A computer without a teammate opens on its screen.
+  const screen = page.getByRole("region", { name: `${name}'s screen` })
+  await expect(screen).toBeVisible()
+  await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+$/)
+  const id = page.url().match(/\/sandboxes\/([a-z0-9]+)$/)![1]
 
   const term = terminal(page)
   await term.run("echo hi")
   await expect(term.line("hi")).toHaveCount(1)
 
-  // Stop and Start are in the details behind the header's status pill.
-  const details = page.getByRole("button", { name: "Sandbox details" })
-  await details.click()
-  await page.getByRole("button", { name: "Stop", exact: true }).click()
+  // The bezel's power button stops it, and the dark screen offers Start.
+  await screen
+    .getByRole("button", { name: `Stop ${name}; its disk is kept` })
+    .click()
   await expect(
-    page
-      .getByRole("main")
-      .getByText("Your workspace, home directory and Docker images are kept.")
+    screen.getByText(
+      "Its workspace, home directory and Docker images are kept."
+    )
   ).toBeVisible()
   expect((await api.guest(id)).connected).toBe(false)
-
-  // The stopped workspace offers Start too, as does the header.
-  await page.keyboard.press("Escape")
   await expect(
-    page.getByRole("main").getByRole("button", { name: "Start", exact: true })
-  ).toHaveCount(2)
-  await page
-    .getByRole("main")
-    .getByRole("button", { name: "Start", exact: true })
-    .last()
-    .click()
+    screen.getByRole("button", { name: `Start ${name}` })
+  ).toBeVisible()
+  await screen.getByRole("button", { name: "Start", exact: true }).click()
   await term.run("echo back")
   await expect(term.line("back")).toHaveCount(1)
 
-  await page.getByRole("button", { name: "Sandbox options" }).click()
-  await page.getByRole("menuitem", { name: "Delete", exact: true }).click()
+  await screen.getByRole("button", { name: `More for ${name}` }).click()
+  await page.getByRole("menuitem", { name: `Delete ${name}` }).click()
   const confirm = page.getByRole("alertdialog", { name: `Delete ${name}?` })
   await confirm.getByRole("button", { name: "Delete" }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${env}$`))
@@ -67,7 +59,7 @@ test("terminal: a tmux copy reaches the clipboard, and right-click opens Copy an
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"])
   const id = await api.createSandbox(sandboxName("copy"))
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  await page.goto(`/e/${env}/sandboxes/${id}`)
   const term = terminal(page)
   // tmux copies a mouse selection with OSC 52 and an empty clipboard name.
   await term.run(`printf '\\e]52;;Y29waWVkIGZyb20gdG11eA==\\a'`)
@@ -103,7 +95,7 @@ test("terminal: follows the light and dark theme, unless it is kept dark", async
   const dark = "rgb(21, 23, 27)"
   const id = await api.createSandbox(sandboxName("theme"))
   await page.emulateMedia({ colorScheme: "light" })
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  await page.goto(`/e/${env}/sandboxes/${id}`)
   const term = terminal(page)
   await expect(term.rows).toContainText("$")
   const viewport = page
@@ -132,7 +124,7 @@ test("terminal: a pasted screenshot goes into the sandbox, and its path into the
   env,
 }) => {
   const id = await api.createSandbox(sandboxName("paste"))
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  await page.goto(`/e/${env}/sandboxes/${id}`)
   const term = terminal(page)
   await expect(term.rows).toContainText("$")
   // A screenshot on the clipboard pastes as a file named image.png, with no text.

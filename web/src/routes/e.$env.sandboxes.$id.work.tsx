@@ -1,61 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router"
-import { BackToSetup, fromSetup } from "@/components/back-to-setup"
-import {
-  SandboxWorkspace,
-  workspacePanels,
-  type WorkspacePanelId,
-} from "@/components/sandbox-workspace"
-
-const text = (value: unknown) => (typeof value === "string" ? value : undefined)
+import { createFileRoute, redirect } from "@tanstack/react-router"
+import { fromSetup } from "@/components/back-to-setup"
+import { screenSearch } from "@/lib/computer"
 
 /**
- * The sandbox's workspace: its chats, terminals and reviews with the side panels. ?session= is the
- * terminal's old name in links, so both open a terminal.
+ * The sandbox's workspace was a page of tabs; its address now opens the computer's screen, on the
+ * tab its link named (?terminal=, ?session=, ?review=, ?panel=).
  */
 export const Route = createFileRoute("/e/$env/sandboxes/$id/work")({
-  validateSearch: (
-    s: Record<string, unknown>
-  ): {
-    terminal?: string
-    chat?: string
-    review?: string
-    panel?: WorkspacePanelId
-    from?: "setup"
-  } => ({
-    terminal: text(s.terminal) ?? text(s.session),
-    chat: text(s.chat),
-    review: text(s.review),
-    panel: workspacePanels.find((p) => p === s.panel),
-    ...fromSetup(s),
-  }),
-  component: WorkspaceRoute,
+  beforeLoad: ({ params, location }) => {
+    const s = location.search as Record<string, unknown>
+    throw redirect({
+      to: "/e/$env/sandboxes/$id",
+      params,
+      search: { ...screenSearch(s), ...fromSetup(s) },
+      replace: true,
+    })
+  },
 })
-
-function WorkspaceRoute() {
-  const search = Route.useSearch()
-  const navigate = Route.useNavigate()
-  return (
-    <>
-      {search.from === "setup" && (
-        <div className="shrink-0 border-b px-3 py-1.5">
-          <BackToSetup step="sandbox" />
-        </div>
-      )}
-      <SandboxWorkspace
-        search={search}
-        onPanel={(panel) =>
-          void navigate({
-            search: (prev) => ({ ...prev, panel }),
-            replace: true,
-          })
-        }
-        onTab={(tab) =>
-          void navigate({
-            search: (prev) => ({ panel: prev.panel, from: prev.from, ...tab }),
-            replace: true,
-          })
-        }
-      />
-    </>
-  )
-}

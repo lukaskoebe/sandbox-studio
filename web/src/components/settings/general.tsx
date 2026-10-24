@@ -21,11 +21,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { SettingsLink } from "@/components/settings/link"
+import { SettingsPage } from "@/components/settings/page"
 import { Spinner } from "@/components/ui/spinner"
 import { Ident } from "@/components/ident"
-import { EnvironmentLabel, PageHeader } from "@/components/page-header"
 import { SettingRow, SettingsGroup } from "@/components/setting-row"
 import {
   Select,
@@ -52,47 +51,28 @@ import { formatAge } from "@/lib/utils"
 // Most settings apply to the whole installation; the environment file is this environment's.
 export function GeneralSettings({ env }: { env: string }) {
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">General</h1>
-      </PageHeader>
-      <ScrollArea
-        className="min-h-0 flex-1"
-        viewportClassName="grid max-w-4xl content-start gap-6 p-3 md:p-4"
-      >
-        <SettingsGroup label="Studio">
-          <AutostartSection />
-          <NotificationsSection />
-          <PreviewsSection />
-          <SetupSection env={env} />
-        </SettingsGroup>
-        <SettingsGroup
-          label="This environment"
-          aside={<EnvironmentLabel env={env} />}
-        >
-          <EnvironmentFilesSection env={env} />
-        </SettingsGroup>
-      </ScrollArea>
-    </>
+    <SettingsPage title="General">
+      <SettingsGroup label="Studio">
+        <AutostartSection />
+        <NotificationsSection />
+        <PreviewsSection />
+        <SetupSection env={env} />
+      </SettingsGroup>
+      <SettingsGroup label="This environment">
+        <EnvironmentFilesSection env={env} />
+      </SettingsGroup>
+    </SettingsPage>
   )
 }
 
 /** Studio's version and how it updates, for the whole installation. */
 export function UpdatesSettings() {
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Updates</h1>
-      </PageHeader>
-      <ScrollArea
-        className="min-h-0 flex-1"
-        viewportClassName="grid max-w-4xl content-start gap-6 p-3 md:p-4"
-      >
-        <SettingsGroup label="Studio">
-          <UpdatesSection />
-        </SettingsGroup>
-      </ScrollArea>
-    </>
+    <SettingsPage title="Updates">
+      <SettingsGroup label="Studio">
+        <UpdatesSection />
+      </SettingsGroup>
+    </SettingsPage>
   )
 }
 

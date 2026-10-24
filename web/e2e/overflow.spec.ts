@@ -155,7 +155,8 @@ for (const width of [390, 1440])
       soul: "You are careful and thorough, ".repeat(40),
     })
 
-    await page.goto(`/e/${env}/teammates/${id}/settings`)
-    await expect(page.getByRole("button", { name: /^Soul/ })).toBeVisible()
-    expect(await overflowing(page.getByRole("main"))).toEqual([])
+    await page.goto(`/e/${env}/teammates/${id}?profile=settings`)
+    const sheet = page.getByRole("dialog", { name: `${name}'s settings` })
+    await expect(sheet.getByRole("button", { name: /^Soul/ })).toBeVisible()
+    expect(await overflowing(sheet)).toEqual([])
   })

@@ -15,7 +15,7 @@ Code:
 - `cmd/studio/browser.go`: the wiring.
 - `images/browser`: the image.
 - The UI: `browser-window.tsx` (the window), `browser-rail.tsx` (activity and sites),
-  `browser-panel.tsx` (the side panel), `browser-browsing.tsx` (the conversation's card),
+  `computer/screen.tsx` (the screen's Browser tab), `browser-browsing.tsx` (the home's card),
   `browser-live.tsx` and `browser-approval.tsx` in `web/src/components`, and
   `web/src/lib/browser-sites.ts`.
 
@@ -262,13 +262,13 @@ The value never enters:
 
 ## Live view and takeover
 
-The browser is one window, in three places: big on the teammate's **Browser** tab, with its
-**Activity** and **Sites** beside it; as a side panel beside a teammate-owned sandbox's
-terminal (**Browser** in the workspace toolbar); and beside the teammate's conversation, from
-**Watch** on the browsing card in the thread or the rail's **Now**. The panel's expand button
-opens the teammate's tab. Drag the panel's divider (or focus it and use the arrow keys) to
-resize it; on phones it fills the screen. Closing it hides the viewer without stopping the
-browser or handing control back.
+The browser is one window, on the **Browser** tab of the teammate's computer screen, beside
+its conversation ([design](design/teammate-computer.md)); **Watch** on the browsing card of the
+teammate's home opens that tab. The tab stays while the computer is off, since the browser has
+a VM of its own. The toolbar's clock shows **Activity** and **Sites** beside the window, or over
+it while the screen is narrower than 46rem; picking a step to replay there closes them, so the
+replay shows. Switching to another tab hides the viewer without stopping the browser or handing
+control back.
 
 The window has, top to bottom:
 
@@ -349,16 +349,15 @@ disconnecting clears the local input buffer.
   status; anything else is 422.
 - **Fit.** The frame keeps its shape and fills the room the browser window has, so the whole
   page shows without scrolling: as wide as the window's body, or as its height less the
-  controls under the frame allows (the body is a CSS size container, `cqw` and `cqh`), and on
-  the teammate's page at most 72rem wide. The controls' height is measured, since they wrap
-  on a narrow window. The body holds the frame alone: the side panel's questions and the
-  "couldn't refresh" notice sit above it, and the page's questions float over it, so nothing
+  controls under the frame allows (the body is a CSS size container, `cqw` and `cqh`). The
+  controls' height is measured, since they wrap on a narrow window. The body holds the frame
+  alone: the questions and the "couldn't refresh" notice sit above it, and the page's questions float over it, so nothing
   takes height the size container doesn't know of. Under the live view the body clips
   (`overflow: clip`) rather than scrolls, so a frame drawn before the controls are measured,
   a pixel of rounding, or a focus that would scroll something into view can't leave the view
-  scrolled; the "take the wheel" offer truncates its label inside a narrow panel.
+  scrolled; the "take the wheel" offer truncates its label inside a narrow screen.
   `e2e/browser-layout.spec.ts` checks that the body never overflows while watching, driving,
-  with the keyboard controls open and after handing back, on the page and in the panel.
+  with the keyboard controls open and after handing back, in four window sizes and on a phone.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata
   (device width, offset and page scale), its shape, and the letterbox of the canvas. The
   page's height comes from the frame's shape, not the metadata: agent-browser 0.39 reports
@@ -501,8 +500,8 @@ on request:
 - **Replay.** The Browser tab's **Activity** groups the log by session (one session per VM
   start, and one per throwaway session), newest first, with a picture of each step that
   changed the page. Clicking a step shows the page as it was after it, in the window, with
-  previous and next steps and **Back to live**. The side panel folds the latest session's
-  steps under the window, and the conversation's browsing card shows its last three.
+  previous and next steps and **Back to live**. The home's browsing card shows the latest
+  session's last three.
 - **Sites.** The Browser tab's **Sites** lists every origin with a rule or a visit. Each has
   a picker for clicks and typing, which sets or removes one rule for every action on the whole
   origin (`action: "*"`), and chips for its narrower rules and hidden fields, each removable.

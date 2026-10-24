@@ -12,7 +12,7 @@ You can work with an agent in two ways:
 - **Chat** (recommended): write to your teammates like in a messenger, see what they do, and approve risky steps with a click.
 - **Terminal**: run each agent's own command-line app in the sandbox, as a developer would.
 
-A sandbox's workspace shows its chats, its terminals and the Git reviews waiting on it as tabs in one strip. It opens on the sandbox's latest chat, or on its terminals while it has no chat. The strip's **+** starts a chat with the teammate, the teammate's agent in a terminal, or a shell, so both stay one click away.
+A teammate's page has both side by side: the conversation with its threads on the left, and its computer's screen, with the terminal, on the right. The terminal's session chip opens the teammate's agent in a terminal or a shell, so both stay one click away.
 
 ## What chats need
 
@@ -26,13 +26,13 @@ A Claude subscription runs chats too: Studio runs Claude Code itself for the tea
 
 ## Start a chat
 
-Open **All chats** in the sidebar and choose **New chat**, or choose **+** in a sandbox's tab strip and **New chat with** its teammate. Pick the sandbox at the top, write what the teammate should do, and send. The chat starts with that first message, so there are no empty chats.
+Open the teammate's page and write in the box at the bottom of its home: what you send starts a thread on the computer its screen shows, and the thread opens. A chat is a thread on its teammate's page. You can also open **All chats** from Home and choose **New chat**, then pick the sandbox at the top. The chat starts with that first message, so there are no empty chats.
 
 - **Enter** sends; **Shift+Enter** starts a new line.
 - Use the paperclip to attach files, up to 10 MiB per message in total.
 - While the teammate works, **Stop** ends the current request. A message you send meanwhile waits above the box and goes as soon as the teammate finishes, so you can steer it without stopping it. Messages wait in the order you sent them; **Edit** takes one back into the box, the **×** removes it. Waiting messages don't survive a restart of Studio.
-- The agent may give the chat a title as it goes. **Chats** lists every chat of the environment; a sandbox lists its own in its workspace.
-- In a sandbox's workspace, the **Chats** menu and the chat tabs mark a chat whose agent is working with a pulsing grey dot, and one with something you haven't seen yet, such as a finished reply or a chat that started while you were away, in green, until you open it. What you have seen is remembered in this browser. The chat tabs you had open come back when you reload the page.
+- The agent may give the chat a title as it goes. **All chats** lists every chat of the environment; the teammate's home lists its own as cards by day.
+- A card says whether its agent is working or waits for you, and is marked **New** while it has something you haven't seen yet, such as a finished reply or a chat that started while you were away, until you open it. What you have seen is remembered in this browser.
 
 The chat shows the agent's replies, what it is thinking, the tools it runs (expand a card to see details such as edits and output), and its plan as a checklist while it works. Under each finished request you see how many files it changed and, if the agent reports it, tokens, cost, and how full its memory is.
 
@@ -68,7 +68,7 @@ Studio keeps undo for the newest 50 requests of a chat; older ones lose their Un
 
 ## Changes, Files, and Preview
 
-The panel next to the chat shows the sandbox at a glance. Use the panel button at the top right of a chat to show or hide it. Drag its left edge to resize it on a desktop; on small screens it fills the screen.
+The screen beside a thread shows the sandbox at a glance: its **Changes** tab has the thread's changes and the sandbox's files, its **Preview** tab what it serves. Fold the screen with the arrow at its top right; on small screens it is a strip of tab icons, and a tab opens over the conversation.
 
 - **Changes:** the files one request created, changed, or deleted, with the lines added and removed. Pick the request at the top, or choose **Changed N files** under a message. Expand a file to see its changes. The changes compare the files before and after that request, so they stay accurate after later edits. Very long changes are cut, and non-text files are only listed. Once a request can no longer be undone, its list of files remains but the line-by-line details are gone.
 - **Files:** a read-only view of `/workspace`. Open folders, view text files, and see PNG, JPEG, GIF, and WebP images. Files over 1 MiB, other file types, and files the agent can't read are listed but not shown. Files changed by the request selected in Changes are marked. Folders show at most 1,000 items. To change a file, ask your teammate, so undo stays accurate.
@@ -76,9 +76,9 @@ The panel next to the chat shows the sandbox at a glance. Use the panel button a
 
 ## Open in the terminal and back
 
-Choose **Open in terminal** at the top of a chat to continue the same conversation in the agent's own terminal app. Studio opens the sandbox workspace on that terminal, and the agent keeps the conversation so far.
+Choose **Continue in the terminal** in a thread's **⋯** menu to continue the same conversation in the agent's own terminal app. Studio opens that terminal on the computer's screen, and the agent keeps the conversation so far.
 
-While the chat is in the terminal, it is read-only and shows **Back to chat**. Choose it to end the terminal app and continue in the chat; what happened in the terminal shows up in the chat, marked "Continued in the terminal". Exiting the terminal app yourself doesn't bring the chat back. Open in terminal is available when the teammate isn't working.
+While the chat is in the terminal, it is read-only and shows **Back to chat**. Choose it to end the terminal app and continue in the chat; what happened in the terminal shows up in the chat, marked "Continued in the terminal". Exiting the terminal app yourself doesn't bring the chat back. Continue in the terminal is available when the teammate isn't working.
 
 Requests made in the terminal have no Undo or Changes of their own. Undoing an earlier chat message still puts back everything after it, including what happened in the terminal.
 

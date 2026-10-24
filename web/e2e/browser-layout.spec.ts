@@ -3,20 +3,21 @@ import { addTeammate, expect, sandboxName, test, type Api } from "./fixtures"
 
 // The browser window's view fits the frame into the room it has, so it never scrolls: not
 // while watching, not with the controls under the frame while driving, and not once the
-// wheel is handed back, on the teammate's page and in a sandbox's side panel alike.
+// wheel is handed back, on the teammate's screen and on a phone's, which opens over the
+// conversation.
 
 /** A teammate with a sandbox and a running browser on the login page. */
 async function running(api: Api, env: string) {
   // A long name makes the "take the wheel" overlay as wide as it gets.
   const name = `Bartholomew ${Math.random().toString(36).slice(2, 8)}`
   const tm = await addTeammate(api, env, name)
-  const sb = await api.createSandbox(sandboxName("layout"), tm)
+  await api.createSandbox(sandboxName("layout"), tm)
   const base = `/api/environments/${env}/teammates/${tm}/browser`
   await api.json("POST", `${base}/start`)
   await expect
     .poll(async () => (await api.json<{ vm: string }>("GET", base))!.vm)
     .toBe("running")
-  return { name, tm, sb }
+  return { name, tm }
 }
 
 /** How far the view's content reaches past its box, across and down. */
@@ -29,9 +30,15 @@ function overflow(view: Locator) {
 
 /**
  * Takes the wheel, opens the keyboard controls and hands back, checking after each step,
- * once the view has settled, that the view can't scroll.
+ * once the view has settled, that the view can't scroll. A phone shows the controls from the
+ * start.
  */
-async function takeAndHandBack(page: Page, within: Locator, name: string) {
+async function takeAndHandBack(
+  page: Page,
+  within: Locator,
+  name: string,
+  phone = false
+) {
   const view = within.getByTestId("browser-view")
   const settled = async (step: string) => {
     // The controls' height is measured after they render, and the frame fits itself to it.
@@ -45,12 +52,13 @@ async function takeAndHandBack(page: Page, within: Locator, name: string) {
   await address.fill("https://example.com/login")
   await address.press("Enter")
   await expect(within.getByText("You're driving.")).toBeVisible()
-  await expect(
-    within.getByRole("button", { name: "Keyboard controls" })
-  ).toBeVisible()
-  await settled("driving")
-
-  await within.getByRole("button", { name: "Keyboard controls" }).click()
+  if (!phone) {
+    await expect(
+      within.getByRole("button", { name: "Keyboard controls" })
+    ).toBeVisible()
+    await settled("driving")
+    await within.getByRole("button", { name: "Keyboard controls" }).click()
+  }
   await expect(
     within.getByRole("group", { name: "Remote browser keyboard controls" })
   ).toBeVisible()
@@ -88,34 +96,28 @@ for (const size of windows) {
   test.describe(`a ${size.width}×${size.height} window`, () => {
     test.use({ viewport: size })
 
-    test("the teammate's browser view never scrolls", async ({
+    test("the screen's browser view never scrolls", async ({
       page,
       api,
       env,
     }) => {
       const { name, tm } = await running(api, env)
-      await page.goto(`/e/${env}/teammates/${tm}/browser`)
+      await page.goto(`/e/${env}/teammates/${tm}?tab=browser`)
       await takeAndHandBack(page, page.locator("main"), name)
     })
-
-    for (const panel of [320, 420]) {
-      test(`the side panel's browser view never scrolls at ${panel}px`, async ({
-        page,
-        api,
-        env,
-      }) => {
-        const { name, sb } = await running(api, env)
-        await page.addInitScript(
-          (w) => localStorage.setItem("studio.panel.sandbox", String(w)),
-          panel
-        )
-        await page.goto(`/e/${env}/sandboxes/${sb}/work`)
-        await page.getByRole("button", { name: "Browser", exact: true }).click()
-        const within = page.getByRole("complementary", {
-          name: "Teammate browser",
-        })
-        await takeAndHandBack(page, within, name)
-      })
-    }
   })
 }
+
+test.describe("a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test("the screen's browser view never scrolls", async ({
+    page,
+    api,
+    env,
+  }) => {
+    const { name, tm } = await running(api, env)
+    await page.goto(`/e/${env}/teammates/${tm}?tab=browser`)
+    await takeAndHandBack(page, page.locator("main"), name, true)
+  })
+})

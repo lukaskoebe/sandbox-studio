@@ -4,9 +4,8 @@ import { toast } from "sonner"
 import { GitOutcome } from "@/components/git-review"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
-import { PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -86,113 +85,112 @@ function ActivitySettings() {
     .slice(0, shownMax)
 
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Activity</h1>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
+    <SettingsPage
+      title="Activity"
+      intro={
+        <>
           Every decision in this environment: yours, the security level's and
           the reviewer's. Requests still waiting are on Home.
+        </>
+      }
+    >
+      <div
+        role="group"
+        aria-label="Kind"
+        className="flex flex-wrap items-center gap-1.5"
+      >
+        {chips.map((c) => (
+          <Link
+            key={c.label}
+            from={Route.fullPath}
+            search={{ kind: c.kind }}
+            replace
+            aria-pressed={kind === c.kind}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground hover:text-foreground",
+              kind === c.kind &&
+                "border-foreground/30 bg-foreground/8 font-medium text-foreground"
+            )}
+          >
+            {c.label}
+          </Link>
+        ))}
+      </div>
+      {approvals.isPending ? (
+        <Spinner className="mx-auto block" />
+      ) : decided.length === 0 ? (
+        <p className="rounded-(--radius) border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+          No decisions yet.
         </p>
-        <div
-          role="group"
-          aria-label="Kind"
-          className="flex flex-wrap items-center gap-1.5"
-        >
-          {chips.map((c) => (
-            <Link
-              key={c.label}
-              from={Route.fullPath}
-              search={{ kind: c.kind }}
-              replace
-              aria-pressed={kind === c.kind}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground hover:text-foreground",
-                kind === c.kind &&
-                  "border-foreground/30 bg-foreground/8 font-medium text-foreground"
-              )}
-            >
-              {c.label}
-            </Link>
-          ))}
-        </div>
-        {approvals.isPending ? (
-          <Spinner className="mx-auto block" />
-        ) : decided.length === 0 ? (
-          <p className="rounded-(--radius) border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
-            No decisions yet.
-          </p>
-        ) : (
-          <div className="rounded-lg ring-1 ring-foreground/10">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Decided</TableHead>
-                  <TableHead>What</TableHead>
-                  <TableHead>From</TableHead>
-                  <TableHead>Decision</TableHead>
-                  <TableHead>Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {decided.map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell className="text-muted-foreground">
-                      <time
-                        dateTime={a.updatedAt}
-                        title={new Date(a.updatedAt).toLocaleString()}
-                      >
-                        {formatAge(a.updatedAt)}
-                      </time>
-                    </TableCell>
-                    <TableCell>
-                      <What approval={a} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {approvalSource(a)}
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        {approvalDecision(a)}
-                        {a.network?.decided === "reviewer" && !a.reverted && (
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            disabled={revert.isPending}
-                            onClick={() =>
-                              revert.mutate({
-                                params: { path: { env, id: a.id } },
-                              })
-                            }
-                          >
-                            Revert
-                          </Button>
-                        )}
-                      </span>
-                    </TableCell>
-                    <TableCell className="max-w-72 text-muted-foreground">
-                      {a.git ? (
-                        <div className="whitespace-normal">
-                          <GitOutcome git={a.git} />
-                        </div>
-                      ) : (
-                        <Details
-                          text={
-                            a.network?.reason ||
-                            (a.ruleId ? notes.get(a.ruleId) : undefined)
+      ) : (
+        <div className="rounded-lg ring-1 ring-foreground/10">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Decided</TableHead>
+                <TableHead>What</TableHead>
+                <TableHead>From</TableHead>
+                <TableHead>Decision</TableHead>
+                <TableHead>Details</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {decided.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="text-muted-foreground">
+                    <time
+                      dateTime={a.updatedAt}
+                      title={new Date(a.updatedAt).toLocaleString()}
+                    >
+                      {formatAge(a.updatedAt)}
+                    </time>
+                  </TableCell>
+                  <TableCell>
+                    <What approval={a} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {approvalSource(a)}
+                  </TableCell>
+                  <TableCell>
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {approvalDecision(a)}
+                      {a.network?.decided === "reviewer" && !a.reverted && (
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          disabled={revert.isPending}
+                          onClick={() =>
+                            revert.mutate({
+                              params: { path: { env, id: a.id } },
+                            })
                           }
-                        />
+                        >
+                          Revert
+                        </Button>
                       )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </ScrollArea>
-    </>
+                    </span>
+                  </TableCell>
+                  <TableCell className="max-w-72 text-muted-foreground">
+                    {a.git ? (
+                      <div className="whitespace-normal">
+                        <GitOutcome git={a.git} />
+                      </div>
+                    ) : (
+                      <Details
+                        text={
+                          a.network?.reason ||
+                          (a.ruleId ? notes.get(a.ruleId) : undefined)
+                        }
+                      />
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </SettingsPage>
   )
 }
 

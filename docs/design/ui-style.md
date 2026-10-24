@@ -133,6 +133,12 @@ Shared pieces for the rollout. Use them instead of local styling.
 
 - **`lib/accents.ts`.** The `Area` type and `ruleClass(area)` / `tileClass(area)`, which give
   the rule and the tile of an area. Without an area they return the neutral look.
+- **`ColumnPage`** (`components/column-page.tsx`). A page that reads top to bottom: its title
+  row with actions, then its intro in muted text and its content in one centred column (56 rem,
+  or 48 rem with `narrow`). No rule under the header, as on the teammate page. Home uses it, and
+  every settings section through `SettingsPage`, which leaves the phone toggle to the nav.
+- **`PageHeader`** (`components/page-header.tsx`). The title row of the other pages: 56 px, no
+  rule, and the sidebar's toggle only on phones; wider screens fold the sidebar with its rail.
 - **`SectionHeader`** (`components/section-header.tsx`). The title row of a section or panel:
   tile, title, count and actions. Pass `area` only where the section belongs to one area. It
   renders an h2; the page title stays the h1.
@@ -181,29 +187,27 @@ teammates shown as people.
 Pages move over one at a time, each behind the e2e suite. A page that has moved uses the
 primitives above and keeps the e2e selectors it had.
 
-- **Done: sidebar.** Compact rows. Sandboxes show their name in mono, their status dot and the
-  approvals waiting on them. Teammates show presence. Nav icons take their area's hue, and the
-  theme toggle sits in the footer.
-- **Done: Home.** Stat strip, sandbox table (stacks below the large breakpoint), activity,
-  family tree once there are forks, approval cards, setup card and teammates.
-  Not shown: egress or host load (no endpoint).
-  The template column shows the template's name (stack@version), or its ID for a template without one.
-- **Done: sandbox dashboard and workspace.** Header with the name and copyable ID in mono
-  (status and owner only on the workspace; the dashboard's band shows them). The dashboard
-  follows Home: a facts band on the grid paper with the lifecycle buttons at its end, the
-  sandbox's own lists in the main column, ports and connections in the 22rem side column.
-  Checkpoints are rows like the others, saved from a dialog in the section header. The
-  workspace's tab strip keeps tabs left and tools right, and has a status line below.
+- **Done: sidebar.** Home, then Teammates and Your computers (sandboxes without a teammate) in
+  compact rows. A teammate shows the approvals waiting on it, or one word for its state
+  (working, stopped, no computer); a computer shows its name in mono and its status dot or
+  waiting count. Settings and the theme toggle sit in the footer.
+- **Done: Home.** A narrow `ColumnPage`: the setup card and notices, what needs you as approval
+  cards, what is working now, and what happened lately (decisions and chats started).
+- **Done: computers.** A teammate's computer is the screen beside the conversation on the
+  teammate's page; a computer without a teammate is the same screen at full width. The bezel
+  holds the name, power and ⋯, and the tabs are Terminal, Browser, Preview and Changes
+  (`docs/design/teammate-computer.md`).
 - **Done: network.** Rules (grouped by domain, filters in the URL), requests and activity tabs.
 - **Done: secrets.** A section per scope (environment, each teammate, each sandbox) with a `SectionHeader` and a table; the columns line up from one section to the next.
 - **Done: memory.** Pages, facts, conflicts, search and sessions tabs; the memory conflict sheet.
-- **Done: teammates.** List; Conversation, Tasks, Chats, Memory, Browser and Settings tabs; the
-  teammate form.
+- **Done: teammates.** The list, and a teammate's page: the conversation beside the computer's
+  screen, threads in the conversation, and tasks, memory and settings in the profile sheet.
+  What waits for the teammate is a compact row each, which opens its card or its review.
 - **Done: chat.** The chat page header and the new chat notice.
 - **Done: git.** Settings (forges, pushes and forge dialogs) and the git review sheet.
 - **Done: settings.** General, providers, git, network, templates and runtime; the build log
-  and template spec sheets; template resources. The side column's title row is as tall as
-  the page header, and its links carry icons. Toggles and one-off actions are `SettingRow`s
+  and template spec sheets; template resources. Each section is a `SettingsPage` in the same
+  56 rem column, and the nav's title row is as tall as the section's. Toggles and one-off actions are `SettingRow`s
   (icon tile, title, description, control on the right) in a `SettingsGroup` card; General
   groups them as Studio and This environment. Empty lists are one dashed row with their
   action, not a centred empty state.

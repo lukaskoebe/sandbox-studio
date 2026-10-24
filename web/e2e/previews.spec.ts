@@ -98,27 +98,22 @@ test("previews: an app's service worker works in a preview framed by Studio", as
   ).toBe(0)
 })
 
-// Previews are off until the user turns them on in Settings → General; the sandbox's
-// workspace offers them only then.
-test("previews: the workspace offers them once Settings turns them on", async ({
+// Previews are off until the user turns them on in Settings → General; a computer's screen
+// has a Preview tab only then.
+test("previews: the screen offers them once Settings turns them on", async ({
   page,
   api,
   env,
 }) => {
   await api.json("PUT", "/api/system/previews", { enabled: false })
   try {
-    const id = await api.createSandbox(sandboxName("previews-off"))
+    const name = sandboxName("previews-off")
+    const id = await api.createSandbox(name)
     await api.guestReady(id)
-    await page.goto(`/e/${env}/sandboxes/${id}/work`)
-    const toolbar = page.getByRole("group", {
-      name: "Workspace tabs and tools",
-    })
-    await expect(
-      toolbar.getByRole("button", { name: "New terminal" })
-    ).toBeVisible()
-    await expect(toolbar.getByRole("button", { name: "Previews" })).toHaveCount(
-      0
-    )
+    await page.goto(`/e/${env}/sandboxes/${id}`)
+    const tabs = page.getByRole("tablist", { name: `${name}'s screen` })
+    await expect(tabs.getByRole("tab", { name: "Terminal" })).toBeVisible()
+    await expect(tabs.getByRole("tab", { name: "Preview" })).toHaveCount(0)
 
     await page.goto(`/e/${env}/settings/general`)
     const toggle = page.getByRole("switch", {
@@ -127,10 +122,8 @@ test("previews: the workspace offers them once Settings turns them on", async ({
     await expect(toggle).not.toBeChecked()
     await toggle.click()
     await expect(toggle).toBeChecked()
-    await page.goto(`/e/${env}/sandboxes/${id}/work`)
-    await expect(
-      toolbar.getByRole("button", { name: "Previews" })
-    ).toBeVisible()
+    await page.goto(`/e/${env}/sandboxes/${id}`)
+    await expect(tabs.getByRole("tab", { name: "Preview" })).toBeVisible()
   } finally {
     await api.json("PUT", "/api/system/previews", { enabled: false })
   }

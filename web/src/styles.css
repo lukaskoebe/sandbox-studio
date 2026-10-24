@@ -136,6 +136,12 @@
   --wb-term-bg: #15171b;
   --wb-term-fg: #d7dade;
   --wb-grid: rgb(23 32 36 / 4%);
+  /* A computer that is off: blank glass on its screen. */
+  --glass: radial-gradient(130% 100% at 25% 0%, #f1f4f5 0%, #e1e7ea 70%);
+  --glass-edge: #d3dbdf;
+  --glass-fg: #172024;
+  --glass-dim: #56636b;
+  --glass-ring: #c3cdd2;
   --font-mono:
     "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas,
     "DejaVu Sans Mono", monospace;
@@ -190,6 +196,11 @@
   --st-stopped: oklch(0.55 0.01 255);
   --wb-term-bg: #15171b;
   --wb-grid: rgb(225 231 234 / 3%);
+  --glass: radial-gradient(130% 100% at 25% 0%, #242c30 0%, #121719 65%);
+  --glass-edge: #0e1315;
+  --glass-fg: #e1e7ea;
+  --glass-dim: #93a1a9;
+  --glass-ring: #364247;
 }
 
 @layer base {

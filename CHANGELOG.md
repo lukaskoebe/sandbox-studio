@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+A teammate's page is now your conversation with it beside the screen of its computer, and a
+computer without a teammate gets that screen to itself.
+
+- **Teammates:** the page opens on the teammate's home: its threads as cards by day, marked
+  **New** while one has something you haven't seen, with what it learned, its tasks and what
+  waits for you between them. One box starts a thread on the computer shown, hands over a task
+  or teaches it a fact. A thread opens in place, with **Back** or Escape to the home. The name
+  at the top opens its profile: open tasks, memory, computers and the main settings, each also
+  a sheet. **Copy to environment…** is at the bottom of the profile.
+- **Computers:** the screen beside the conversation has the tabs **Terminal**, **Browser**,
+  **Preview** (while previews are on) and **Changes**, a dot on a tab where something waits
+  for you, a power button, and a **⋯** menu with the computer's ID, template, size, uptime, CPU
+  and memory, checkpoints, fork, merge, connections, resources, rebase, export, suspend and
+  delete. The terminal's chip switches sessions and opens a shell or the teammate's agent. A
+  computer that is off shows a dark screen with **Start**; its teammate's browser stays a tab.
+  Fold the screen to a strip of tabs; on a narrow window it is that strip, and opens over the
+  conversation.
+- **Browser:** the browser is the screen's **Browser** tab. The clock in its toolbar shows
+  **Activity** and **Sites** beside it, or over it on a narrow screen.
+- **Sidebar:** Home, then Teammates, each with a word for what it is doing or how much waits
+  for you, then Your computers with their state, and Settings, the version and the theme at
+  the bottom. **+** next to Your computers makes a **New computer** or imports one.
+- **Home and Settings:** one centred column each. Home's Earlier links each decision and chat,
+  with **All chats** and **All activity**.
+- **Teammate settings:** closing the settings sheet with unsaved changes asks first, as leaving
+  the page does.
+- **Setup:** **Open sandbox** opens the first computer's screen, with a way back to the setup.
+- Links to the old sandbox workspace, the teammate tabs and chats lead to the matching place
+  on the new pages.
+
 ## v0.6.1 — 2026-10-23
 
 A crashed browser wakes up again, notes you pin on the live browser go to a chat with the

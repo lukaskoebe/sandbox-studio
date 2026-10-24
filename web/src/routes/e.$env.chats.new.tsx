@@ -23,17 +23,11 @@ import { $api, errorMessage, fetchClient, isReady } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/chats/new")({
   component: NewChatPage,
-  // teammate and sandbox preselect; origin=workspace opens the new chat in the sandbox's
-  // workspace instead of the chat page.
+  // teammate and sandbox preselect.
   validateSearch: (s: Record<string, unknown>) => {
-    const search: {
-      sandbox?: string
-      teammate?: string
-      origin?: "workspace"
-    } = {}
+    const search: { sandbox?: string; teammate?: string } = {}
     if (typeof s.sandbox === "string") search.sandbox = s.sandbox
     if (typeof s.teammate === "string") search.teammate = s.teammate
-    if (s.origin === "workspace") search.origin = "workspace"
     return search
   },
 })
@@ -75,7 +69,7 @@ function NewChatPage() {
     if (!sandbox) return false
     setError(undefined)
     setSending(prompt)
-    let created: { id: string }
+    let created: { id: string; teammateId: string }
     try {
       const res = await fetchClient.POST(
         "/api/environments/{env}/sandboxes/{id}/chats",
@@ -94,20 +88,12 @@ function NewChatPage() {
     void queryClient.invalidateQueries({
       queryKey: ["get", "/api/environments/{env}/sandboxes/{id}/chats"],
     })
-    if (search.origin === "workspace") {
-      void navigate({
-        to: "/e/$env/sandboxes/$id/work",
-        params: { env, id: sandbox.id },
-        search: { chat: created.id },
-        replace: true,
-      })
-    } else {
-      void navigate({
-        to: "/e/$env/chats/$chat",
-        params: { env, chat: created.id },
-        replace: true,
-      })
-    }
+    void navigate({
+      to: "/e/$env/teammates/$id",
+      params: { env, id: created.teammateId },
+      search: { thread: created.id },
+      replace: true,
+    })
     return true
   }
 

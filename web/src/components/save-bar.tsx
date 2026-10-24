@@ -66,7 +66,14 @@ export function useSavePart(id: string, part: Part): boolean {
  * them has changes. Save saves each changed form; leaving the page with changes asks first.
  * Switches and selects that save as they change stay as they are.
  */
-export function SaveBar({ children }: { children: ReactNode }) {
+export function SaveBar({
+  children,
+  leaves,
+}: {
+  children: ReactNode
+  /** Whether a change of the search alone leaves the forms too, such as closing their sheet. */
+  leaves?: (search: Record<string, unknown>) => boolean
+}) {
   const [states, setStates] = useState<Record<string, State>>({})
   const parts = useRef(new Map<string, Part>())
   const [saving, setSaving] = useState(false)
@@ -86,7 +93,9 @@ export function SaveBar({ children }: { children: ReactNode }) {
   const blocker = useBlocker({
     // Opening a section changes only the search, which keeps the changes.
     shouldBlockFn: ({ current, next }) =>
-      dirty && current.pathname !== next.pathname,
+      dirty &&
+      (current.pathname !== next.pathname ||
+        !!leaves?.(next.search as Record<string, unknown>)),
     enableBeforeUnload: () => dirty,
     withResolver: true,
   })

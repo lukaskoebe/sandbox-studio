@@ -27,7 +27,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -38,7 +37,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
-import { EnvironmentLabel, PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { HostLoginOffers, type HostOffer } from "@/components/host-logins"
 import { ProviderDialog } from "@/components/provider-dialog"
 import { $api, errorMessage, type Provider } from "@/lib/api/client"
@@ -62,20 +61,19 @@ export function ProvidersSettings({ env }: { env: string }) {
 
   return (
     <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">AI providers</h1>
-        <EnvironmentLabel env={env} />
-        <Button size="sm" className="ml-auto" onClick={() => setDialog({})}>
-          <PlusIcon />
-          Add provider
-        </Button>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          {explanation}
-        </p>
+      <SettingsPage
+        title="AI providers"
+        actions={
+          <Button size="sm" onClick={() => setDialog({})}>
+            <PlusIcon />
+            Add provider
+          </Button>
+        }
+        intro={explanation}
+      >
         {providers.data && (
-          <div className="max-w-2xl">
+          // Empty when no login on this computer is left to offer.
+          <div className="max-w-2xl empty:hidden">
             <HostLoginOffers
               env={env}
               providers={list}
@@ -195,7 +193,7 @@ export function ProvidersSettings({ env }: { env: string }) {
             </EmptyContent>
           </Empty>
         )}
-      </ScrollArea>
+      </SettingsPage>
       <ProviderDialog
         env={env}
         provider={dialog?.provider}

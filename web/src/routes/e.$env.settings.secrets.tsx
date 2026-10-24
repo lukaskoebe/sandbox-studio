@@ -15,7 +15,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -26,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
-import { PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { SecretDialog } from "@/components/secret-dialog"
 import {
   DeleteSecret,
@@ -90,25 +89,28 @@ function SecretsPage() {
 
   return (
     <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Secrets</h1>
-        <Button size="sm" className="ml-auto" onClick={() => setDialog({})}>
-          <PlusIcon />
-          Add secret
-        </Button>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-6 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          {intro}{" "}
-          <a
-            href={docsUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-4"
-          >
-            Learn more
-          </a>
-        </p>
+      <SettingsPage
+        title="Secrets"
+        actions={
+          <Button size="sm" onClick={() => setDialog({})}>
+            <PlusIcon />
+            Add secret
+          </Button>
+        }
+        intro={
+          <>
+            {intro}{" "}
+            <a
+              href={docsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4"
+            >
+              Learn more
+            </a>
+          </>
+        }
+      >
         {secrets.isPending ? (
           <Spinner className="mx-auto block" />
         ) : groups.length ? (
@@ -139,7 +141,7 @@ function SecretsPage() {
             </EmptyContent>
           </Empty>
         )}
-      </ScrollArea>
+      </SettingsPage>
       <SecretDialog
         env={env}
         secret={dialog?.secret}

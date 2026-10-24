@@ -1,17 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router"
 import { MemoryTabs } from "@/components/memory-tabs"
 import { MemoryUsage } from "@/components/memory-sessions"
 import { $api } from "@/lib/api/client"
 
-export const Route = createFileRoute("/e/$env/teammates/$id/memory")({
-  component: TeammateMemory,
-})
-
 const explanation =
   "What this teammate remembers: only this teammate sees its own memory, and your edits here outrank anything inferred."
 
-function TeammateMemory() {
-  const { env, id } = Route.useParams()
+/** A teammate's own memory, in the profile's Memory sheet. */
+export function TeammateMemory({ env, id }: { env: string; id: string }) {
   const scope = `teammate:${id}`
   const scopes = $api.useQuery("get", "/api/environments/{env}/memory/scopes", {
     params: { path: { env } },

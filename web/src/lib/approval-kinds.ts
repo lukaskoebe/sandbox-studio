@@ -30,8 +30,8 @@ export type ApprovalKind = {
   area?: Area
   /** Whether the summary is a host or similar and reads best in monospace. */
   mono?: boolean
-  /** The environment page that lists approvals of this kind. */
-  page: "/e/$env" | "/e/$env/teammates/$id/browser" | "/e/$env/chats"
+  /** The environment page that lists approvals of this kind: a teammate's is its browser. */
+  page: "/e/$env" | "/e/$env/teammates/$id" | "/e/$env/chats"
 }
 
 /**
@@ -144,7 +144,7 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: CursorClickIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id/browser",
+    page: "/e/$env/teammates/$id",
   },
   "browser.credential": {
     title: "Browser credential",
@@ -156,7 +156,7 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: KeyIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id/browser",
+    page: "/e/$env/teammates/$id",
   },
   "browser.control": {
     title: "Browser handback",
@@ -168,7 +168,7 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: HandIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id/browser",
+    page: "/e/$env/teammates/$id",
   },
   "browser.show": {
     title: "Browser",
@@ -180,7 +180,7 @@ const kinds: Record<string, ApprovalKind> = {
     },
     icon: EyeIcon,
     area: "browser",
-    page: "/e/$env/teammates/$id/browser",
+    page: "/e/$env/teammates/$id",
   },
   "chat.permission": {
     title: "Agent permission",

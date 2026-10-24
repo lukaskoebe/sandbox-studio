@@ -252,8 +252,9 @@ export function BrowserShowDecision({ approval }: { approval: Approval }) {
     })
     if (open && show)
       void navigate({
-        to: "/e/$env/teammates/$id/browser",
+        to: "/e/$env/teammates/$id",
         params: { env: approval.environmentId, id: show.teammateId },
+        search: { tab: "browser" },
       })
   }
   return (

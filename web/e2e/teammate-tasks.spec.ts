@@ -1,6 +1,6 @@
 import { addTeammate, expect, sandboxName, test } from "./fixtures"
 
-test("a task is added on the Tasks tab and marked done, and the server keeps it", async ({
+test("a task is added in the profile's tasks and marked done, and the server keeps it", async ({
   page,
   api,
   env,
@@ -9,9 +9,9 @@ test("a task is added on the Tasks tab and marked done, and the server keeps it"
   const id = await addTeammate(api, env, name)
   const title = `Write the release notes ${name}`
 
-  await page.goto(`/e/${env}/teammates/${id}/tasks`)
+  await page.goto(`/e/${env}/teammates/${id}?profile=tasks`)
   await page.getByRole("button", { name: "Add task", exact: true }).click()
-  const dialog = page.getByRole("dialog")
+  const dialog = page.getByRole("dialog", { name: /^(New|Edit) task$/ })
   await dialog.getByLabel("Title").fill(title)
   await dialog.getByLabel("Details").fill("Cover the tasks and the check-ins.")
   await dialog.getByRole("button", { name: "Add task", exact: true }).click()
@@ -42,7 +42,7 @@ test("check-ins start off, then save their schedule on the settings page", async
     (await api.json<{ heartbeat?: { everyHours: number } }>("GET", teammate))
       ?.heartbeat
 
-  await page.goto(`/e/${env}/teammates/${id}/settings?open=checkins`)
+  await page.goto(`/e/${env}/teammates/${id}?profile=settings&open=checkins`)
   const toggle = page.getByRole("switch", { name: "Check in on open tasks" })
   await expect(toggle).not.toBeChecked()
   expect(await schedule()).toBeUndefined()
@@ -93,9 +93,9 @@ test("a task gets a schedule in its dialog, shows it with its next run, and Run 
       )
     )?.find((t) => t.title === title)
 
-  await page.goto(`/e/${env}/teammates/${id}/tasks`)
+  await page.goto(`/e/${env}/teammates/${id}?profile=tasks`)
   await page.getByRole("button", { name: "Add task", exact: true }).click()
-  const dialog = page.getByRole("dialog")
+  const dialog = page.getByRole("dialog", { name: /^(New|Edit) task$/ })
   await dialog.getByLabel("Title").fill(title)
   await dialog.getByLabel("Schedule").click()
   await page.getByRole("option", { name: "Days" }).click()

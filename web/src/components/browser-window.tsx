@@ -12,7 +12,6 @@ import {
   ArrowClockwiseIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
-  ArrowsOutSimpleIcon,
   CaretLeftIcon,
   CaretRightIcon,
   ClockCounterClockwiseIcon,
@@ -119,10 +118,12 @@ export function replayShot(replay: BrowserReplay) {
 type Props = {
   env: string
   teammate: string
-  /** "full" on the teammate's Browser tab; "panel" beside a sandbox's terminal. */
+  /** "full" is a framed window on a page; "panel" fills the computer screen's Browser tab. */
   size: "full" | "panel"
-  /** Opens the browser on the teammate's page, from the panel. */
-  onExpand?: () => void
+  /** Shows or hides the activity and sites beside the window. */
+  onActivity?: () => void
+  /** Whether they show. */
+  activity?: boolean
   /** Shows the list of sites, from the site info's "All sites". */
   onSites?: () => void
   replay?: BrowserReplay | null
@@ -142,14 +143,15 @@ function approvalSession(a: Approval) {
 /**
  * A teammate's browser as a window: tabs for its profile and the throwaway sessions agents
  * opened, a toolbar like any browser's, one line that says who drives, and the live page with
- * the agent's questions on it. The same window sits on the teammate's Browser tab and beside
- * a sandbox's terminal (docs/browser.md).
+ * the agent's questions on it. It is the Browser tab of the teammate's computer screen
+ * (docs/browser.md).
  */
 export function BrowserWindow({
   env,
   teammate,
   size,
-  onExpand,
+  onActivity,
+  activity,
   onSites,
   replay = null,
   onReplay,
@@ -422,6 +424,19 @@ export function BrowserWindow({
             {vmWords(st?.vm)}
           </span>
         )}
+        {onActivity && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Activity and sites"
+            title="Activity and sites"
+            aria-pressed={!!activity}
+            className={cn(activity && "bg-muted")}
+            onClick={onActivity}
+          >
+            <ClockCounterClockwiseIcon />
+          </Button>
+        )}
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger
             render={
@@ -437,12 +452,6 @@ export function BrowserWindow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-60">
             <DropdownMenuGroup>
-              {onExpand && (
-                <DropdownMenuItem onClick={onExpand}>
-                  <ArrowsOutSimpleIcon />
-                  Open on {name}'s page
-                </DropdownMenuItem>
-              )}
               {running ? (
                 <DropdownMenuItem
                   disabled={busy}
@@ -1120,15 +1129,20 @@ function DriverBar({ w }: { w: Win }) {
     )
   }
 
+  const throwaway = (sandbox: string, name: string) =>
+    `An agent in ${sandbox} uses this throwaway session: a temporary profile, so nothing reaches ${name}'s. It ends when closed, with its chat or after a while unused.`
   if (w.session && !w.driving)
     return bar(
       "bg-muted/40",
       <>
         <DetectiveIcon className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1">
+        <span
+          className="min-w-0 flex-1"
+          title={panel ? throwaway(w.session.sandbox, w.name) : undefined}
+        >
           {panel
             ? `Throwaway session from ${w.session.sandbox}.`
-            : `An agent in ${w.session.sandbox} uses this throwaway session: a temporary profile, so nothing reaches ${w.name}'s. It ends when closed, with its chat or after a while unused.`}
+            : throwaway(w.session.sandbox, w.name)}
         </span>
         <Button
           size="xs"

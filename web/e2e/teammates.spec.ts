@@ -1,6 +1,6 @@
 import { addTeammate, expect, sandboxName, test } from "./fixtures"
 
-test("a teammate is copied to another environment from its options menu, and opens there without a provider", async ({
+test("a teammate is copied to another environment from its profile, and opens there without a provider", async ({
   page,
   api,
   env,
@@ -36,16 +36,23 @@ test("a teammate is copied to another environment from its options menu, and ope
   )
 
   await page.goto(`/e/${env}/teammates/${teammate!.id}`)
-  await page.getByRole("button", { name: "Teammate options" }).click()
-  await page.getByRole("menuitem", { name: "Copy to environment…" }).click()
-  const dialog = page.getByRole("dialog")
+  await page.getByRole("button", { name: `${name}'s profile` }).click()
+  await page
+    .getByRole("dialog", { name: `${name}'s profile` })
+    .getByRole("button", { name: "Copy to environment…" })
+    .click()
+  const dialog = page.getByRole("dialog", {
+    name: `Copy ${name} to another environment`,
+  })
   await dialog.getByRole("combobox").click()
   await page.getByRole("option", { name: target!.name, exact: true }).click()
   await dialog.getByRole("button", { name: "Copy teammate" }).click()
 
   await page.getByRole("button", { name: "Open", exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/e/${target!.id}/teammates/[^/]+$`))
-  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible()
+  await expect(
+    page.getByRole("button", { name: `${name}'s profile` })
+  ).toBeVisible()
   await expect(page.getByText("No provider", { exact: true })).toBeVisible()
 })
 
@@ -73,7 +80,7 @@ test("adding a teammate without a provider explains why and leads to the provide
   await expect(dialog).toBeHidden()
 })
 
-test("the rail shows a teammate's computer, and its menu forks it or adds another", async ({
+test("a teammate without a computer is offered one, and the screen's menu forks it or adds another", async ({
   page,
   api,
   env,
@@ -81,31 +88,27 @@ test("the rail shows a teammate's computer, and its menu forks it or adds anothe
   const name = `Rail ${Math.random().toString(36).slice(2, 8)}`
   const id = await addTeammate(api, env, name)
   await page.goto(`/e/${env}/teammates/${id}`)
-  const rail = page.getByRole("complementary")
-  await expect(
-    rail.getByText(`None yet. ${name} works in a sandbox`)
-  ).toBeVisible()
-  await rail.getByRole("button", { name: "Give it a sandbox" }).click()
-  await expect(page.getByRole("dialog", { name: "New sandbox" })).toBeVisible()
+  const none = page.getByRole("region", { name: `${name}'s computer` })
+  await expect(none.getByText(`${name} has no computer yet`)).toBeVisible()
+  await none.getByRole("button", { name: `Give ${name} a computer` }).click()
+  await expect(page.getByRole("dialog", { name: "New computer" })).toBeVisible()
   await page.keyboard.press("Escape")
 
   const sandbox = sandboxName("rail")
   await api.createSandbox(sandbox, id)
-  await expect(rail.getByRole("heading", { name: "Computer" })).toBeVisible()
+  const screen = page.getByRole("region", { name: `${sandbox}'s screen` })
+  await expect(screen).toBeVisible({ timeout: 15_000 })
+  await screen.getByRole("button", { name: `More for ${sandbox}` }).click()
   await expect(
-    rail.getByRole("link", { name: new RegExp(sandbox) })
+    page.getByRole("menuitem", { name: "Fork", exact: true })
   ).toBeVisible()
-  await rail
-    .getByRole("button", { name: `More for ${name}'s sandboxes` })
+  await page
+    .getByRole("menuitem", { name: `Another computer for ${name}` })
     .click()
-  await expect(
-    page.getByRole("menuitem", { name: new RegExp(`^Fork ${sandbox}`) })
-  ).toBeVisible()
-  await page.getByRole("menuitem", { name: /^Add another sandbox/ }).click()
-  await expect(page.getByRole("dialog", { name: "New sandbox" })).toBeVisible()
+  await expect(page.getByRole("dialog", { name: "New computer" })).toBeVisible()
 })
 
-test("a teammate's settings have one save bar for the changes in every section, and leaving with changes asks", async ({
+test("a teammate's settings have one save bar for the changes in every section, and closing them with changes asks", async ({
   page,
   api,
   env,
@@ -117,7 +120,7 @@ test("a teammate's settings have one save bar for the changes in every section, 
       "GET",
       `/api/environments/${env}/teammates/${id}`
     )
-  await page.goto(`/e/${env}/teammates/${id}/settings?open=identity`)
+  await page.goto(`/e/${env}/teammates/${id}?profile=settings&open=identity`)
   const bar = page.getByRole("region", { name: "Unsaved changes" })
   await expect(page.getByLabel("Role")).toBeVisible()
   await expect(bar).toBeHidden()
@@ -142,23 +145,17 @@ test("a teammate's settings have one save bar for the changes in every section, 
     gitName: "Saver Bot",
   })
 
-  // Leaving with a change asks; Stay keeps it, Leave goes.
+  // Closing the sheet with a change asks; Stay keeps it, Leave goes.
   await page.getByLabel("Role").fill("Writer")
-  await page
-    .locator('[data-sidebar="sidebar"]')
-    .getByRole("link", { name: /^Home/ })
-    .click()
+  await page.keyboard.press("Escape")
   const ask = page.getByRole("alertdialog", { name: "Leave without saving?" })
   await ask.getByRole("button", { name: "Stay" }).click()
   await expect(page.getByLabel("Role")).toHaveValue("Writer")
-  await page
-    .locator('[data-sidebar="sidebar"]')
-    .getByRole("link", { name: /^Home/ })
-    .click()
+  await page.keyboard.press("Escape")
   await ask.getByRole("button", { name: "Leave" }).click()
   await expect(
-    page.getByRole("heading", { name: "Home", level: 1 })
-  ).toBeVisible()
+    page.getByRole("dialog", { name: `${name}'s settings` })
+  ).toBeHidden()
   expect((await teammate())?.role).toBe("Reviewer")
 })
 
@@ -175,7 +172,7 @@ test("a teammate's security level is a card, or the environment's default", asyn
         `/api/environments/${env}/teammates/${id}`
       )
       .then((t) => t!.securityLevel)
-  await page.goto(`/e/${env}/teammates/${id}/settings?open=network`)
+  await page.goto(`/e/${env}/teammates/${id}?profile=settings&open=network`)
   const picker = page.getByRole("group", { name: "Security level" })
   await expect(
     picker.getByRole("radio", { name: /^Environment default/ })

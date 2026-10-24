@@ -108,12 +108,13 @@ test("a pending push review opens as a page and is decided there", async ({
   })
   expect(pushed.error, pushed.output).toBeUndefined()
 
-  // The sidebar lists the push under its sandbox while it waits.
+  // The sidebar counts the push on its computer's row while it waits.
   await page.goto(`/e/${env}`)
   await expect(
     page
-      .getByRole("list", { name: `Sessions of ${name}` })
-      .getByRole("link", { name: /review$/ })
+      .locator('[data-sidebar="sidebar"]')
+      .getByRole("link", { name: new RegExp(`^${name}`) })
+      .getByTitle("1 waiting for you")
   ).toBeVisible()
 
   // The sheet's "Open as page" leads to the review's own address.
@@ -234,7 +235,9 @@ test("review comments are sent to the agent's chat, terminal or a new chat", asy
   await expect(page.getByText("Feedback sent to the agent")).toBeVisible()
   await expect(sheet.getByRole("button", { name: "Reject" })).toBeVisible()
 
-  await page.goto(`/e/${env}/sandboxes/${id}/work?terminal=${session.name}`)
+  await page.goto(
+    `/e/${env}/teammates/${teammate}?computer=${id}&tab=terminal&term=${session.name}`
+  )
   const rows = terminal(page).rows
   await expect(rows).toContainText("is still waiting for my review")
   await expect(rows).toContainText("Use markdown for the notes")

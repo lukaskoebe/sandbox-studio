@@ -23,11 +23,10 @@ Every port the sandbox listens on is available, and a server started later is th
 
 ## Watch and take the wheel
 
-The browser is one window that looks like any browser: tabs, Back, Forward, Reload, an address bar and Downloads. It is in three places:
+The browser is one window that looks like any browser: tabs, Back, Forward, Reload, an address bar and Downloads. It is on the teammate's page:
 
-- the teammate's **Browser** tab, with **Activity** and **Sites** beside it;
-- beside a teammate's sandbox, from **Browser** in the workspace toolbar;
-- beside the teammate's conversation, from **Watch** on the browsing card the thread shows while the teammate browses.
+- the **Browser** tab of the teammate's computer screen, beside its conversation, with **Activity** and **Sites** from the clock in its toolbar; the tab stays while the computer is off;
+- from **Watch** on the browsing card the teammate's home shows while it browses, which opens that tab.
 
 The line under the toolbar always says who drives. To use the page yourself, type an address and press Enter, press Back or Reload, or choose **Take the wheel**: the teammate's browser calls wait until you choose **Hand back**. Its next browser step then tells the teammate that you drove, which pages you were on, any downloads you sent and where the page is now. What you clicked or typed is not passed on. When the teammate asks to click or fill something, the question shows on the page with its answers.
 

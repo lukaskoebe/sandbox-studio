@@ -88,30 +88,43 @@ function useSandboxNames(env: string) {
     (id && sandboxes.data?.find((s) => s.id === id)?.name) || id
 }
 
-/** Beside the full browser: what happened, step by step, and what the teammate may do where. */
+/**
+ * Beside the browser on the screen's Browser tab: what happened, step by step, and what the
+ * teammate may do where.
+ */
 export function BrowserRail({
   env,
   teammate,
   name,
   tab,
   onTab,
+  onClose,
   replay,
   onReplay,
+  className,
 }: {
   env: string
   teammate: string
   name: string
   tab: RailTab
   onTab: (t: RailTab) => void
+  onClose: () => void
   replay: BrowserReplay | null
   onReplay: (r: BrowserReplay | null) => void
+  className?: string
 }) {
   return (
-    <aside className="flex min-h-0 w-80 shrink-0 flex-col border-l max-xl:h-96 max-xl:w-auto max-xl:border-t max-xl:border-l-0">
+    <aside
+      aria-label="Activity and sites"
+      className={cn(
+        "flex min-h-0 w-72 shrink-0 flex-col border-l bg-background",
+        className
+      )}
+    >
       <div
         role="tablist"
         aria-label="Browser activity and sites"
-        className="flex shrink-0 gap-4 border-b px-4 text-xs"
+        className="flex shrink-0 items-center gap-4 border-b pr-1 pl-4 text-xs"
       >
         {(
           [
@@ -135,6 +148,16 @@ export function BrowserRail({
             {label}
           </button>
         ))}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close activity and sites"
+          title="Close"
+          className="ml-auto text-muted-foreground"
+          onClick={onClose}
+        >
+          <XIcon />
+        </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "activity" ? (

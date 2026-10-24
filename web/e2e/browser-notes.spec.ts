@@ -18,6 +18,8 @@ type FakeBrowser = {
 
 /** A teammate with a sandbox and a running browser on the login page, on its Browser tab. */
 async function browsing(page: Page, api: Api, env: string) {
+  // The chats sent before ask for permissions, whose cards would cover the screen's corner.
+  await api.dismissApprovals()
   const name = `Noa ${Math.random().toString(36).slice(2, 8)}`
   const tm = await addTeammate(api, env, name)
   const sb = await api.createSandbox(sandboxName("notes"), tm)
@@ -27,7 +29,7 @@ async function browsing(page: Page, api: Api, env: string) {
   await expect
     .poll(async () => (await api.json<Status>("GET", base))!.vm)
     .toBe("running")
-  await page.goto(`/e/${env}/teammates/${tm}/browser`)
+  await page.goto(`/e/${env}/teammates/${tm}?tab=browser`)
   return { name, tm, sb, base }
 }
 

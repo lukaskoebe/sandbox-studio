@@ -253,7 +253,6 @@ function OpenPage({ url }: { url?: string }) {
     <div className="flex flex-wrap items-center gap-1.5">
       <Button
         size="sm"
-        nativeButton={false}
         render={<a href={url} target="_blank" rel="noreferrer" />}
       >
         Open the sign-in page

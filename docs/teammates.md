@@ -115,7 +115,9 @@ What is built and what is verified is in [harnesses](harnesses.md#subscription-l
 
 ## The conversation
 
-A teammate's page opens on one conversation with it (`teammate-conversation.tsx`), built from
+A teammate's page is its conversation beside its computer's screen
+([design](design/teammate-computer.md), [frontend](frontend.md#a-teammate-and-its-computer)).
+The conversation opens on the teammate's home (`components/teammate/home.tsx`), built from
 `GET teammates/{id}/timeline` (`internal/api/timeline.go`): the last 14 days, oldest first, of
 
 - its chat turns (at most 80): the prompt, the agent's text, and the tool calls by title (the
@@ -127,14 +129,16 @@ A teammate's page opens on one conversation with it (`teammate-conversation.tsx`
 - its terminal sessions with a memory summary (docs/memory.md, "Session summaries"); chat
   sessions are already there as turns.
 
-The page marks each change of sandbox, since each is its own machine. The turn underway
-comes from the chat's own stream, so it updates live; the pending approvals for the teammate
-close the thread, and the floating approval stack leaves them out on this page. The composer
-has three modes: **Message** continues the teammate's latest idle or running chat in the
-chosen sandbox, or starts one ("New chat" forces that); **Task** adds a task (the first line is
-the title) and starts a chat that asks the teammate to work on it; **Teach** writes a fact to
-its memory as the user, without a chat. A rail beside the thread shows what it does now, what
-it knows, its check-ins, its sandboxes and its profile.
+The home groups them by day: each chat is a thread card (its title, a chip for a computer other
+than the one on the screen, the last answer, its requests and its state), and the rest are
+small events between them. Threads untouched for a while wait behind "Earlier threads". The
+pending approvals for the teammate close the home, a row each, and the floating approval stack
+leaves them out on this page. Opening a card opens the thread (`?thread=`), whose turn underway
+comes from the chat's own stream, so it updates live. The composer has three modes:
+**Thread** starts a chat on the computer the screen shows; **Task** adds a task (the first line
+is the title) and starts a chat that asks the teammate to work on it; **Teach** writes a fact to
+its memory as the user, without a chat. The name at the top opens its profile: its open tasks,
+what it knows, its computers and its settings, each also a sheet (`?profile=`).
 
 ## Tasks
 
@@ -143,7 +147,7 @@ A teammate has a task list. A task has a title (one line, at most 200 characters
 (`YYYY-MM-DD`) and its creator: `user`, or `teammate` for a task the teammate added to its own
 list.
 
-- The teammate's Tasks tab lists them, not-done first and oldest first, and adds, edits and
+- The teammate's tasks sheet (`?profile=tasks`) lists them, not-done first and oldest first, and adds, edits and
   finishes them: `GET` and `POST /api/environments/{env}/teammates/{id}/tasks`, and `PUT
   .../tasks/{task}`, which replaces the title, details, due day, status, schedule and sandbox.
 - A teammate's own sandboxes get four tools on the `studio` MCP server: `tasks_list` (the
@@ -196,7 +200,7 @@ A one-off task goes `in_progress` when its run starts. A repeating task keeps it
 teammate's `task_update_status done` logs the current run done and leaves the task waiting
 for its next time. The user marking a repeating task done ends its schedule.
 
-`POST .../tasks/{task}/run` starts a run now (Run now on the Tasks tab). It makes the same
+`POST .../tasks/{task}/run` starts a run now (Run now in the tasks sheet). It makes the same
 checks but doesn't wait: a run that can't start is a 409 that says why, and isn't logged.
 `GET .../tasks/{task}/runs` lists a task's runs, newest first, at most 100, and `GET
 .../teammates/{id}/task-runs` the latest 20 of all its tasks, which the Activity list merges
@@ -229,7 +233,7 @@ teammate's last check-in of any outcome. A due check-in:
   time) or a turn is running in the sandbox, so a check-in never runs during a user's turn.
 
 Every due check-in moves the schedule, whatever its outcome. The log of started and skipped
-check-ins is listed under Activity on the teammate's Tasks tab. A check-in with nothing to do is
+check-ins is listed under Activity in the teammate's tasks sheet. A check-in with nothing to do is
 not logged. Tests use fakes for the sandbox, the chat and the harness, so no model is called.
 
 ## Copying a teammate

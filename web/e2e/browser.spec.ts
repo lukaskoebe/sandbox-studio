@@ -3,15 +3,16 @@ import { addTeammate, expect, sandboxName, test, type Api } from "./fixtures"
 
 type Pattern = { id: string; origin: string; action: string; verdict: string }
 
-// Without a browser VM the window says so and offers to open a page; the rail beside it has the
+// Without a browser VM the window says so and offers to open a page; the rail it opens has the
 // activity and the sites, whose rules are set in plain words.
-test("a teammate's browser tab shows the sleeping window, its activity and its sites", async ({
+test("the screen's browser tab shows the sleeping window, its activity and its sites", async ({
   page,
   api,
   env,
 }) => {
   const name = `Browse ${Math.random().toString(36).slice(2, 8)}`
   const id = await addTeammate(api, env, name)
+  await api.createSandbox(sandboxName("sites"), id)
   const patterns = `/api/environments/${env}/teammates/${id}/browser/patterns`
   await api.json("POST", patterns, {
     origin: "https://shop.example.com",
@@ -19,9 +20,10 @@ test("a teammate's browser tab shows the sleeping window, its activity and its s
     verdict: "allow",
   })
 
-  await page.goto(`/e/${env}/teammates/${id}/browser`)
+  await page.goto(`/e/${env}/teammates/${id}?tab=browser`)
   await expect(page.getByText(`${name} has no browser yet`)).toBeVisible()
   await expect(page.getByLabel("Open a page")).toBeVisible()
+  await page.getByRole("button", { name: "Activity and sites" }).click()
   await expect(page.getByText(/Nothing yet\. Every step/)).toBeVisible()
 
   await page.getByRole("tab", { name: "Sites" }).click()
@@ -58,8 +60,9 @@ test("a teammate's browser tab shows the sleeping window, its activity and its s
   expect(list).toEqual([])
 })
 
-// The same window sits beside a sandbox's terminal, and opens on the teammate's page.
-test("a teammate's sandbox opens the browser as a side panel", async ({
+// A teammate's computer, at its own address or its old workspace's, is the screen on the
+// teammate's page; the workspace's Browser panel is the screen's Browser tab.
+test("a teammate's computer opens on the teammate's page, on the tab its link names", async ({
   page,
   api,
   env,
@@ -67,14 +70,15 @@ test("a teammate's sandbox opens the browser as a side panel", async ({
   const name = `Panel ${Math.random().toString(36).slice(2, 8)}`
   const tm = await addTeammate(api, env, name)
   const id = await api.createSandbox(sandboxName("browse"), tm)
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
-  await page.getByRole("button", { name: "Browser", exact: true }).click()
-  const panel = page.getByRole("complementary", { name: "Teammate browser" })
-  await expect(panel.getByText(`${name}'s browser`)).toBeVisible()
-  await expect(panel.getByText(`${name} has no browser yet`)).toBeVisible()
-  await panel.getByRole("link", { name: `Open on ${name}'s page` }).click()
-  await expect(page).toHaveURL(new RegExp(`/teammates/${tm}/browser$`))
-  await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible()
+  await page.goto(`/e/${env}/sandboxes/${id}/work?panel=browser`)
+  await expect(page).toHaveURL(new RegExp(`/teammates/${tm}\\?`))
+  expect(new URL(page.url()).searchParams.get("computer")).toBe(id)
+  expect(new URL(page.url()).searchParams.get("tab")).toBe("browser")
+  await expect(page.getByRole("tab", { name: /^Browser/ })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  await expect(page.getByText(`${name} has no browser yet`)).toBeVisible()
 })
 
 type Status = {
@@ -108,7 +112,7 @@ async function browsing(page: Page, api: Api, env: string) {
       params,
       wait,
     })
-  await page.goto(`/e/${env}/teammates/${tm}/browser`)
+  await page.goto(`/e/${env}/teammates/${tm}?tab=browser`)
   return { name, tm, sb, base, call }
 }
 
@@ -192,7 +196,7 @@ test("an agent asks for the browser back while the user drives", async ({
   )
 })
 
-// browser_show posts a card and returns at once: Watch opens the teammate's Browser page and
+// browser_show posts a card and returns at once: Watch opens the teammate's Browser tab and
 // clears the card, Take the wheel also hands the user control.
 test("an agent shows the user a page, to watch or to take the wheel", async ({
   page,
@@ -215,14 +219,19 @@ test("an agent shows the user a page, to watch or to take the wheel", async ({
     .filter({ hasText: `${name} wants to show you: Login page` })
   await expect(card.getByText("Try a wrong password")).toBeVisible()
   await card.getByRole("button", { name: "Watch" }).click()
-  await expect(page).toHaveURL(new RegExp(`/teammates/${tm}/browser$`))
+  await expect(page).toHaveURL(new RegExp(`/teammates/${tm}\\?tab=browser$`))
   await expect(card).toHaveCount(0)
   await expect(page.getByLabel("Browser address")).toHaveValue(
     "example.com/login"
   )
   expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
 
+  // On the teammate's page the request waits on its home, and Answer opens its card there.
   await call("browser_show", { url: "https://example.com/a" })
+  await page
+    .getByRole("region", { name: "Waiting for you" })
+    .getByRole("button", { name: "Answer" })
+    .click()
   await page
     .getByTestId("approval-card")
     .filter({ hasText: `${name} wants to show you: https://example.com/a` })
@@ -309,8 +318,9 @@ test("an agent's question shows on the page, and its step replays from the activ
   expect(JSON.stringify(done.result)).toContain("/welcome")
 
   // The click that ran, not the one that asked.
+  await page.getByRole("button", { name: "Activity and sites" }).click()
   const step = page
-    .getByRole("complementary")
+    .getByRole("complementary", { name: "Activity and sites" })
     .getByRole("button", { name: /click button "Sign in"$/ })
   await expect(step).toBeVisible()
   await step.click()
@@ -337,7 +347,12 @@ test("a throwaway session is a tab, and closing the tab ends it", async ({
   const tab = page.getByRole("tab", { name: "example.org" })
   await expect(tab).toBeVisible()
   await tab.click()
-  await expect(page.getByText(/uses this throwaway session/)).toBeVisible()
+  // The screen says it in short; the whole of it is the sentence's title.
+  await expect(
+    page
+      .getByTitle(/uses this throwaway session/)
+      .getByText(/^Throwaway session from/)
+  ).toBeVisible()
   await page.getByRole("button", { name: "End the throwaway session" }).click()
   await expect(tab).toBeHidden()
   await expect
@@ -377,7 +392,7 @@ test("stealth mode is switched in the settings and reaches the browser", async (
   await call("browser_snapshot", {})
   expect((await fake())!.browser!.stealth).toBe(false)
 
-  await page.goto(`/e/${env}/teammates/${tm}/settings?open=browser`)
+  await page.goto(`/e/${env}/teammates/${tm}?profile=settings&open=browser`)
   const stealth = page.getByRole("switch", { name: "Stealth mode" })
   await expect(stealth).not.toBeChecked()
   await stealth.click()

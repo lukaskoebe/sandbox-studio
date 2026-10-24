@@ -337,7 +337,10 @@ test("an approval shows once: in the teammate's conversation, not also in the st
   await page.goto(`/e/${env}/teammates/${teammate}`)
   await api.connect(id, host)
   const cards = page.getByTestId("approval-card").filter({ hasText: host })
-  await expect(cards).toHaveCount(1)
+  await expect(
+    page.getByTestId("waiting-row").filter({ hasText: host })
+  ).toHaveCount(1)
+  await expect(cards).toHaveCount(0)
   // Elsewhere the stack shows it.
   await page.goto(`/e/${env}/settings/secrets`)
   await expect(cards).toHaveCount(1)

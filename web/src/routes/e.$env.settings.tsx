@@ -6,7 +6,7 @@ import {
   useLocation,
   useMatchRoute,
 } from "@tanstack/react-router"
-import { EnvironmentLabel, InSettings } from "@/components/page-header"
+import { EnvironmentLabel } from "@/components/page-header"
 import { settingsGroups, settingsPaths } from "@/components/settings/link"
 import { Input } from "@/components/ui/input"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -50,11 +50,14 @@ function SettingsLayout() {
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
       <div className="flex shrink-0 flex-col border-b md:w-56 md:border-r md:border-b-0">
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+        <header
+          data-slot="page-header"
+          className="flex h-14 shrink-0 items-center gap-2 px-3 md:px-4"
+        >
           <SidebarTrigger className="md:hidden" />
-          <h1 className="text-sm font-medium">Settings</h1>
+          <h1 className="text-sm">Settings</h1>
           <EnvironmentLabel env={env} />
-        </div>
+        </header>
         <div className="p-2 pb-0 max-md:hidden">
           <Input
             type="search"
@@ -109,9 +112,7 @@ function SettingsLayout() {
         </nav>
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <InSettings.Provider value={true}>
-          <Outlet />
-        </InSettings.Provider>
+        <Outlet />
       </div>
     </div>
   )

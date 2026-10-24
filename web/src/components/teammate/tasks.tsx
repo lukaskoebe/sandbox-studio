@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, createFileRoute } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -31,12 +31,20 @@ import {
 } from "@/lib/tasks"
 import { formatAge } from "@/lib/utils"
 
-export const Route = createFileRoute("/e/$env/teammates/$id/tasks")({
-  component: TeammateTasks,
-})
-
-function TeammateTasks() {
-  const { env, id } = Route.useParams()
+/**
+ * A teammate's tasks and what ran them: check-ins that started a chat or were skipped, and the
+ * runs of scheduled tasks. Shown in the profile's Tasks sheet.
+ */
+export function TeammateTasks({
+  env,
+  id,
+  onCheckins,
+}: {
+  env: string
+  id: string
+  /** Opens the check-in settings. */
+  onCheckins: () => void
+}) {
   const queryClient = useQueryClient()
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
@@ -259,13 +267,13 @@ function TeammateTasks() {
           ) : (
             <>
               Check-ins are off. Turn them on in{" "}
-              <Link
-                to="/e/$env/teammates/$id/settings"
-                params={{ env, id }}
+              <button
+                type="button"
+                onClick={onCheckins}
                 className="underline underline-offset-4"
               >
                 Settings
-              </Link>
+              </button>
               .
             </>
           )}{" "}
@@ -287,11 +295,12 @@ function TeammateTasks() {
                 <span className="flex items-center gap-3 text-muted-foreground">
                   {b.chatId && (
                     <Link
-                      to="/e/$env/chats/$chat"
-                      params={{ env, chat: b.chatId }}
+                      to="/e/$env/teammates/$id"
+                      params={{ env, id }}
+                      search={{ thread: b.chatId }}
                       className="underline underline-offset-4"
                     >
-                      Open chat
+                      Open thread
                     </Link>
                   )}
                   {formatAge(b.at)}

@@ -52,8 +52,8 @@ export function requestLabel(items: ChatItem[], t: ChatTurn) {
 }
 
 /**
- * A chat's messages and composer, from the log of useChat. The chat page and the sandbox
- * workspace show the same thread.
+ * A chat's messages and composer, from the log of useChat: a thread on the teammate's page, or
+ * the chat page of one the list doesn't know.
  */
 export function ChatThread({
   env,
@@ -388,8 +388,9 @@ function InTerminal({ env, chat }: { env: string; chat: Chat }) {
           variant="outline"
           render={
             <Link
-              to="/e/$env/sandboxes/$id/work"
-              params={{ env, id: chat.sandboxId }}
+              to="/e/$env/teammates/$id"
+              params={{ env, id: chat.teammateId }}
+              search={{ thread: chat.id, tab: "terminal" }}
             />
           }
         >

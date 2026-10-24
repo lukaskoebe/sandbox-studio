@@ -1,4 +1,5 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
+import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 
@@ -41,15 +42,36 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  render,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+  const classes = cn(buttonVariants({ variant, size, className }))
+  // A Button rendered as something else is a link here. Base UI's button would give it a
+  // button's role, so it keeps its own.
+  if (render)
+    return <LinkButton render={render} className={classes} {...props} />
+  return <ButtonPrimitive data-slot="button" className={classes} {...props} />
+}
+
+function LinkButton({
+  render,
+  disabled,
+  nativeButton: _native,
+  focusableWhenDisabled: _focusable,
+  ...props
+}: Omit<ButtonPrimitive.Props, "className"> & { className: string }) {
+  return useRender({
+    render: render as useRender.RenderProp,
+    props: {
+      "data-slot": "button",
+      "aria-disabled": disabled || undefined,
+      ...props,
+      className: cn(
+        props.className,
+        disabled && "pointer-events-none opacity-50"
+      ),
+    },
+  })
 }
 
 export { Button, buttonVariants }

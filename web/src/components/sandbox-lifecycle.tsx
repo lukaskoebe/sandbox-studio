@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { PlayIcon, StopIcon } from "@phosphor-icons/react"
+import { PlayIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { phase, phaseDot } from "@/components/status-badge"
@@ -52,44 +52,6 @@ export function useSandboxLifecycle(env: string, sb: Sandbox) {
     { onSettled: invalidate, onError: onError("resume") }
   )
   return { path, start, stop, suspend, resume, phase: phase(sb) }
-}
-
-/** Starts a stopped or failed sandbox. */
-export function StartButton({
-  env,
-  sandbox,
-}: {
-  env: string
-  sandbox: Sandbox
-}) {
-  const { path, start } = useSandboxLifecycle(env, sandbox)
-  return (
-    <Button disabled={start.isPending} onClick={() => start.mutate(path)}>
-      {start.isPending ? <Spinner /> : <PlayIcon />}
-      Start
-    </Button>
-  )
-}
-
-/** Stops a running, booting or suspended sandbox; its disk is kept. */
-export function StopButton({
-  env,
-  sandbox,
-}: {
-  env: string
-  sandbox: Sandbox
-}) {
-  const { path, stop } = useSandboxLifecycle(env, sandbox)
-  return (
-    <Button
-      variant="outline"
-      disabled={stop.isPending}
-      onClick={() => stop.mutate(path)}
-    >
-      {stop.isPending ? <Spinner /> : <StopIcon />}
-      Stop
-    </Button>
-  )
 }
 
 /**

@@ -94,7 +94,9 @@ test("a message sent while the agent works waits for its turn to end", async ({
   await box.press("Enter")
   // The turn waits for a permission, so it keeps running.
   await expect(main).toContainText(`${name} asks before going on`)
-  await expect(main.getByRole("button", { name: "Stop" })).toBeVisible()
+  await expect(
+    main.getByRole("button", { name: "Stop", exact: true })
+  ).toBeVisible()
 
   await box.fill("Then fix the lint")
   await box.press("Enter")
@@ -130,18 +132,15 @@ test("a message sent while the agent works waits for its turn to end", async ({
   expect(JSON.stringify(agents[0].prompts)).not.toContain("changelog")
 })
 
-// The workspace's Chats menu is quiet until a chat has something this browser hasn't seen:
-// then its count turns green and the chat says New, until it is opened.
-test("the workspace marks only the chats with something new", async ({
+// The teammate's home is quiet until a thread has something this browser hasn't seen: then its
+// card says New, until it is opened.
+test("the teammate's home marks only the threads with something new", async ({
   page,
   api,
   env,
 }) => {
-  const teammate = await addTeammate(
-    api,
-    env,
-    `Marked ${Math.random().toString(36).slice(2, 6)}`
-  )
+  const name = `Marked ${Math.random().toString(36).slice(2, 6)}`
+  const teammate = await addTeammate(api, env, name)
   const id = await api.createSandbox(sandboxName("marks"), teammate)
   await api.guestReady(id)
   const chats = `/api/environments/${env}/sandboxes/${id}/chats`
@@ -151,24 +150,24 @@ test("the workspace marks only the chats with something new", async ({
   const next = Date.parse(first.createdAt) + 1000 - Date.now()
   if (next > 0) await page.waitForTimeout(next)
 
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
-  const menu = page.getByRole("button", { name: /^Chats/ })
-  await expect(menu.getByTitle("1 chat")).toBeVisible()
+  await page.goto(`/e/${env}/teammates/${teammate}`)
+  const cards = page.getByRole("button", { name: /^New chat/ })
+  const news = page.getByTitle("New since you last looked")
+  await expect(cards).toHaveCount(1)
+  await expect(news).toHaveCount(0)
 
-  // A chat that starts while the page is open is new.
+  // A thread that starts while the page is open is new.
   const fresh = (await api.json<{ id: string }>("POST", chats))!
-  await expect(menu.getByTitle("1 new since you last looked")).toBeVisible()
-  await menu.click()
-  const item = page
-    .getByRole("menuitem")
-    .filter({ has: page.getByLabel("New", { exact: true }) })
-  await expect(item).toHaveCount(1)
-  await item.click()
-  await expect(page).toHaveURL(new RegExp(`chat=${fresh.id}`))
-  await expect(menu.getByTitle("2 chats")).toBeVisible()
+  await expect(cards).toHaveCount(2, { timeout: 15_000 })
+  await expect(news).toHaveCount(1)
+  await cards.filter({ has: news }).click()
+  await expect(page).toHaveURL(new RegExp(`thread=${fresh.id}`))
+  await page.getByTitle(`Back to ${name} (Esc)`).click()
+  await expect(cards).toHaveCount(2)
+  await expect(news).toHaveCount(0)
 })
 
-test("a chat started from the workspace opens in the workspace", async ({
+test("a message on the teammate's home starts a thread and opens it", async ({
   page,
   api,
   env,
@@ -178,28 +177,24 @@ test("a chat started from the workspace opens in the workspace", async ({
     env,
     `Opened ${Math.random().toString(36).slice(2, 6)}`
   )
-  const id = await api.createSandbox(sandboxName("opened"), teammate)
-  await api.guestReady(id)
+  const sbName = sandboxName("opened")
+  await api.guestReady(await api.createSandbox(sbName, teammate))
 
-  // The workspace has loaded its list of chats, which the new chat isn't on yet.
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
-  await expect(
-    page.getByRole("button", { name: "main", exact: true })
-  ).toBeVisible()
-  await page.getByRole("button", { name: "New session" }).click()
-  await page.getByRole("menuitem", { name: /^New chat with / }).click()
-  const box = page.getByRole("main").getByRole("textbox", { name: "Message" })
+  await page.goto(`/e/${env}/teammates/${teammate}`)
+  const main = page.getByRole("main")
+  await expect(main.getByText(`Starts a new thread on ${sbName}`)).toBeVisible()
+  const box = main.getByRole("textbox", { name: "Message" })
   await box.fill("Please run the tests")
   await box.press("Enter")
 
-  await expect(page).toHaveURL(/\/work\?chat=/)
-  await expect(page.getByRole("main")).toContainText(greeting)
+  await expect(page).toHaveURL(/[?&]thread=/)
+  await expect(main).toContainText(greeting)
   await page.waitForTimeout(1500)
-  await expect(page).toHaveURL(/\/work\?chat=/)
+  await expect(page).toHaveURL(/[?&]thread=/)
 })
 
 // A chat whose sandbox is down says so above the composer, and its button brings it back; the
-// teammate's header and computer card start it too.
+// screen of the computer that is off starts it too.
 test("a chat says when its sandbox is suspended or stopped, and starts it", async ({
   page,
   api,
@@ -231,16 +226,17 @@ test("a chat says when its sandbox is suspended or stopped, and starts it", asyn
   await lifecycle("stop")
   await expect(banner).toContainText(`${sbName} is stopped.`)
 
-  // The teammate is offline, and its header starts its one sandbox.
+  // The teammate is offline, and its computer's screen starts it.
   await page.goto(`/e/${env}/teammates/${teammate}`)
-  const header = page.locator('[data-slot="page-header"]')
+  const header = main.locator("header").first()
   await expect(header).toContainText("Offline")
-  await expect(
-    main.getByRole("status").filter({ hasText: sbName })
-  ).toContainText("is stopped.")
-  await header.getByRole("button", { name: "Start", exact: true }).click()
+  const screen = main.getByRole("region", { name: `${sbName}'s screen` })
+  await expect(screen).toContainText(`${sbName} is off`)
+  // The teammate's browser has a VM of its own, so its tab stays.
+  await expect(screen.getByRole("tab", { name: "Browser" })).toBeVisible()
+  await screen.getByRole("button", { name: "Start", exact: true }).click()
   await expect(header).not.toContainText("Offline", { timeout: 20_000 })
   await expect(
-    header.getByRole("button", { name: "Start", exact: true })
+    screen.getByRole("button", { name: "Start", exact: true })
   ).toHaveCount(0)
 })

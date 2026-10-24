@@ -1,5 +1,10 @@
 import { useState } from "react"
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -42,7 +47,30 @@ import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 import { chatTitle, useChat, type Chat, type ChatTurn } from "@/lib/chats"
 
+/**
+ * A chat is a thread on its teammate's page; this page is left for a chat the list does not
+ * know, such as one just deleted.
+ */
 export const Route = createFileRoute("/e/$env/chats/$chat")({
+  beforeLoad: async ({ context, params }) => {
+    const list = $api.queryOptions("get", "/api/environments/{env}/chats", {
+      params: { path: { env: params.env } },
+    })
+    const find = (l?: Chat[] | null) => l?.find((c) => c.id === params.chat)
+    // A chat started a moment ago is not in the cached list yet.
+    const chat =
+      find(
+        await context.queryClient.ensureQueryData(list).catch(() => undefined)
+      ) ??
+      find(await context.queryClient.fetchQuery(list).catch(() => undefined))
+    if (!chat) return
+    throw redirect({
+      to: "/e/$env/teammates/$id",
+      params: { env: params.env, id: chat.teammateId },
+      search: { thread: chat.id },
+      replace: true,
+    })
+  },
   component: ChatPage,
 })
 
@@ -200,9 +228,9 @@ function OpenInTerminal({ env, chat }: { env: string; chat: Chat }) {
       if (error) throw error
       const name = data.session
       void navigate({
-        to: "/e/$env/sandboxes/$id/work",
+        to: "/e/$env/sandboxes/$id",
         params: { env, id: chat.sandboxId },
-        search: { terminal: name },
+        search: { tab: "terminal", term: name },
       })
     } catch (err) {
       toast.error(errorMessage(err))

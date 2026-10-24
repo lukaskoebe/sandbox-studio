@@ -1,122 +1,128 @@
+import type { Page } from "@playwright/test"
 import { expect, sandboxName, terminal, test } from "./fixtures"
 
-test("a sandbox opens on its workspace, with its details behind the status pill", async ({
+/** The session the URL names; the router quotes a name that reads as a number. */
+function termOf(page: Page) {
+  const term = new URL(page.url()).searchParams.get("term") ?? ""
+  return term.replace(/^"(.*)"$/, "$1")
+}
+
+/** A computer without a teammate, on its screen once it is up. */
+async function screenOf(page: Page, env: string, id: string, name: string) {
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  const screen = page.getByRole("region", { name: `${name}'s screen` })
+  // Creation runs in the background; the tabs show once the computer is up.
+  await expect(screen.getByRole("tablist")).toBeVisible()
+  return screen
+}
+
+test("a computer opens on its screen, with its facts in its menu", async ({
   page,
   api,
   env,
 }) => {
   const name = sandboxName("pages")
   const id = await api.createSandbox(name)
-  await page.goto(`/e/${env}/sandboxes/${id}`)
-  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible()
-  // The URL names the terminal in view.
-  await expect(page).toHaveURL(
-    new RegExp(`/sandboxes/${id}/work\\?terminal=main$`)
+  const screen = await screenOf(page, env, id, name)
+  await expect(page).toHaveURL(new RegExp(`/sandboxes/${id}$`))
+  await expect(screen.getByRole("tab", { name: "Terminal" })).toHaveAttribute(
+    "aria-selected",
+    "true"
   )
   const term = terminal(page)
   await term.run("echo workspace")
   await expect(term.line("workspace")).toHaveCount(1)
 
-  await page.getByRole("button", { name: "Sandbox details" }).click()
-  const details = page.getByRole("dialog")
-  for (const fact of ["Template", "Resources", "Created", "ID", "Ports"])
-    await expect(
-      details.getByRole("term").filter({ hasText: new RegExp(`^${fact}$`) })
-    ).toBeVisible()
-  await expect(details.getByText(id)).toBeVisible()
+  await screen.getByRole("button", { name: `More for ${name}` }).click()
+  const menu = page.getByRole("menu")
+  await expect(menu).toContainText(/\d+ CPU · [\d.]+ GiB/)
+  await expect(menu.getByText("Memory", { exact: true })).toBeVisible()
+  await page.keyboard.press("Escape")
 })
 
-// The sidebar lists a running sandbox's terminals under it; one opens its tab in the workspace.
-test("the sidebar lists a sandbox's terminals and opens one", async ({
+// The chip on the terminal lists its sessions, opens a new shell, and the URL names the one in
+// view.
+test("the terminal's chip opens a new shell and switches between sessions", async ({
   page,
   api,
   env,
 }) => {
   const name = sandboxName("terms")
   const id = await api.createSandbox(name)
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  const screen = await screenOf(page, env, id, name)
   await terminal(page).run("echo first")
-  await page.getByRole("button", { name: "New terminal" }).click()
-  await expect(page).toHaveURL(/terminal=(2|%222%22)$/)
+  await screen.getByRole("button", { name: "Terminal session main" }).click()
+  await page.getByRole("menuitem", { name: "New shell" }).click()
+  await expect.poll(() => termOf(page)).toBe("2")
   await terminal(page).run("echo second")
 
-  const list = page.getByRole("list", { name: `Sessions of ${name}` })
-  await expect(list.getByRole("link")).toHaveText(["main", "2"])
-  await expect(list.getByRole("link", { name: "2" })).toHaveAttribute(
-    "data-active",
-    ""
+  const chip = screen.getByRole("button", { name: "Terminal session 2" })
+  await chip.click()
+  await expect(page.getByRole("menuitem", { name: /^main/ })).toBeVisible()
+  await expect(page.getByRole("menuitem", { name: /^2/ })).toHaveAttribute(
+    "aria-current",
+    "true"
   )
-  await list.getByRole("link", { name: "main" }).click()
-  await expect(page).toHaveURL(/terminal=main$/)
+  await page.getByRole("menuitem", { name: /^main/ }).click()
+  await expect.poll(() => termOf(page)).toBe("main")
   await expect(
-    page.getByRole("button", { name: "main", pressed: true })
+    screen.getByRole("button", { name: "Terminal session main" })
   ).toBeVisible()
-
-  // From another page, too.
-  await page.goto(`/e/${env}/network`)
-  await list.getByRole("link", { name: "2" }).click()
-  await expect(
-    page.getByRole("button", { name: "2", exact: true, pressed: true })
-  ).toBeVisible()
+  await expect(terminal(page).line("first")).toHaveCount(1)
 })
 
-test("a side panel opens and closes from the workspace toolbar", async ({
+test("Connections opens from the computer's menu as a sheet", async ({
   page,
   api,
   env,
 }) => {
-  const id = await api.createSandbox(sandboxName("panel"))
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
-  const panel = page.getByRole("complementary", { name: "Connections" })
-  await expect(panel).toBeHidden()
-  await page.getByRole("button", { name: "Connections", exact: true }).click()
-  await expect(panel).toBeVisible()
-  await expect(page).toHaveURL(/panel=connections/)
-  await panel.getByRole("button", { name: "Close panel" }).click()
-  await expect(panel).toBeHidden()
-  await expect(page).not.toHaveURL(/panel=/)
+  const name = sandboxName("conns")
+  const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
+  await screen.getByRole("button", { name: `More for ${name}` }).click()
+  await page.getByRole("menuitem", { name: "Connections" }).click()
+  const sheet = page.getByRole("dialog", { name: "Connections" })
+  await expect(sheet).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(sheet).toBeHidden()
 })
 
-test("the options menu lists the sandbox's actions", async ({
-  page,
-  api,
-  env,
-}) => {
-  const id = await api.createSandbox(sandboxName("menu"))
-  await page.goto(`/e/${env}/sandboxes/${id}`)
-  // Creation runs in the background; a sandbox that is still creating offers only Delete.
-  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
-    "Running"
-  )
-  await page.getByRole("button", { name: "Sandbox options" }).click()
+test("the computer's menu lists its actions", async ({ page, api, env }) => {
+  const name = sandboxName("menu")
+  const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
+  await screen.getByRole("button", { name: `More for ${name}` }).click()
   for (const action of [
+    "Checkpoint now",
     "Fork",
+    "Connections",
     "Rebase",
     "Export",
     "Suspend",
-    "Stop",
-    "Delete",
+    `Delete ${name}`,
   ])
     await expect(
       page.getByRole("menuitem", { name: action, exact: true })
     ).toBeVisible()
+  await expect(
+    page.getByRole("menuitem", { name: /^Checkpoints/ })
+  ).toBeVisible()
+  await expect(page.getByRole("menuitem", { name: /^Resources/ })).toBeVisible()
   await page.keyboard.press("Escape")
 })
 
-test("the options menu opens fork and rebase, and links the export", async ({
+test("the computer's menu opens fork and rebase, and links the export", async ({
   page,
   api,
   env,
 }) => {
   const name = sandboxName("menu-dialogs")
   const id = await api.createSandbox(name)
-  await page.goto(`/e/${env}/sandboxes/${id}`)
-  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
-    "Running"
-  )
+  const screen = await screenOf(page, env, id, name)
+  const more = screen.getByRole("button", { name: `More for ${name}` })
   // The fake runtime doesn't copy disks, so a fork or rebase is only checked to open its dialog.
   for (const action of ["Fork", "Rebase"]) {
-    await page.getByRole("button", { name: "Sandbox options" }).click()
+    await more.click()
     await page.getByRole("menuitem", { name: action, exact: true }).click()
     const dialog = page.getByRole("dialog", { name: `${action} ${name}` })
     await expect(dialog).toBeVisible()
@@ -124,7 +130,7 @@ test("the options menu opens fork and rebase, and links the export", async ({
     await expect(dialog).toBeHidden()
   }
 
-  await page.getByRole("button", { name: "Sandbox options" }).click()
+  await more.click()
   const exported = page.getByRole("menuitem", { name: "Export", exact: true })
   await expect(exported).toHaveAttribute(
     "href",
@@ -134,81 +140,81 @@ test("the options menu opens fork and rebase, and links the export", async ({
   await page.keyboard.press("Escape")
 })
 
-test("the options menu suspends, resumes and stops a sandbox", async ({
+// Suspend and Resume are in the menu; the bezel's power button stops the computer.
+test("the screen suspends, resumes and stops a computer", async ({
   page,
   api,
   env,
 }) => {
-  const id = await api.createSandbox(sandboxName("menu-state"))
-  await page.goto(`/e/${env}/sandboxes/${id}`)
-  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
-    "Running"
-  )
+  const name = sandboxName("menu-state")
+  const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
   const choose = async (action: string) => {
-    await page.getByRole("button", { name: "Sandbox options" }).click()
+    await screen.getByRole("button", { name: `More for ${name}` }).click()
     await page.getByRole("menuitem", { name: action, exact: true }).click()
   }
 
   await choose("Suspend")
-  await expect(page.getByTitle("microsandbox status: suspended")).toHaveText(
-    "Suspended"
-  )
+  await expect(screen.getByText(`${name} is suspended`)).toBeVisible()
+  await expect(
+    screen.getByRole("button", { name: `Resume ${name}` })
+  ).toBeVisible()
   await choose("Resume")
-  await expect(page.getByTitle("microsandbox status: running")).toHaveText(
-    "Running"
-  )
-  await choose("Stop")
-  await expect(page.getByTitle("microsandbox status: stopped")).toHaveText(
-    "Stopped"
-  )
+  await expect(screen.getByRole("tablist")).toBeVisible()
+  await screen
+    .getByRole("button", { name: `Stop ${name}; its disk is kept` })
+    .click()
+  await expect(screen.getByText(`${name} is off`)).toBeVisible()
+  await expect(
+    screen.getByRole("button", { name: `Start ${name}` })
+  ).toBeVisible()
   expect((await api.guest(id)).connected).toBe(false)
 })
 
-test("an old terminal link opens the workspace with the same parameters", async ({
+test("an old workspace link opens the screen on the terminal it named", async ({
   page,
   api,
   env,
 }) => {
-  const id = await api.createSandbox(sandboxName("old"))
-  await page.goto(`/e/${env}/sandboxes/${id}?terminal=main`)
-  await expect(page).toHaveURL(
-    new RegExp(`/sandboxes/${id}/work\\?terminal=main$`)
-  )
+  const name = sandboxName("old")
+  const id = await api.createSandbox(name)
+  await page.goto(`/e/${env}/sandboxes/${id}/work?terminal=logs`)
+  await expect(page).toHaveURL(new RegExp(`/sandboxes/${id}\\?`))
+  expect(new URL(page.url()).searchParams.get("tab")).toBe("terminal")
+  expect(termOf(page)).toBe("logs")
+  await expect(
+    page
+      .getByRole("region", { name: `${name}'s screen` })
+      .getByRole("button", { name: "Terminal session logs" })
+  ).toBeVisible()
 })
 
-test("the workspace fits a 390px screen, and a panel covers it", async ({
-  page,
-  api,
-  env,
-}) => {
+test("the screen fits a 390px screen", async ({ page, api, env }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  const id = await api.createSandbox(sandboxName("narrow"))
+  const name = sandboxName("narrow")
+  const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
   const fits = () =>
     page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth
     )
-
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
-  await expect(
-    page.getByRole("button", { name: "Files", exact: true })
-  ).toBeVisible()
+  await expect(screen.getByRole("tab", { name: "Changes" })).toBeVisible()
   expect(await fits()).toBe(true)
-
-  await page.getByRole("button", { name: "Files", exact: true }).click()
-  const panel = page.getByRole("complementary", { name: "Files and changes" })
-  await expect(panel).toBeVisible()
-  const box = await panel.boundingBox()
-  expect(box?.width).toBe(390)
-  await panel.getByRole("button", { name: "Close panel" }).click()
-  await expect(panel).toBeHidden()
+  await screen.getByRole("tab", { name: "Changes" }).click()
+  await expect(screen.getByRole("tab", { name: "Changes" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  expect(await fits()).toBe(true)
 })
 
-test("the workspace status line shows CPU and memory use while the sandbox runs", async ({
+test("the computer's menu shows CPU and memory use while it runs", async ({
   page,
   api,
   env,
 }) => {
-  const id = await api.createSandbox(sandboxName("usage"))
+  const name = sandboxName("usage")
+  const id = await api.createSandbox(name)
   const use = await api.json<{
     cpuPercent: number
     cpus: number
@@ -219,16 +225,23 @@ test("the workspace status line shows CPU and memory use while the sandbox runs"
   expect(use!.cpuPercent).toBeCloseTo(50 / use!.cpus)
   expect(use!.memoryBytes).toBe(768 << 20)
 
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
-  const usage = page.getByText(/^cpu \d+% · mem [\d.]+\/[\d.]+ (GiB|MiB)$/)
-  await expect(usage).toHaveText(
-    new RegExp(`^cpu ${Math.round(use!.cpuPercent)}% · mem `)
-  )
+  const screen = await screenOf(page, env, id, name)
+  const more = screen.getByRole("button", { name: `More for ${name}` })
+  await more.click()
+  const menu = page.getByRole("menu")
+  await expect(
+    menu.getByText(`${Math.round(use!.cpuPercent)}%`, { exact: true })
+  ).toBeVisible()
+  await expect(menu.getByText(/^0\.8 \/ [\d.]+ GiB$/)).toBeVisible()
+  await page.keyboard.press("Escape")
 
-  await page.getByRole("button", { name: "Sandbox options" }).click()
-  await page.getByRole("menuitem", { name: "Stop", exact: true }).click()
-  await expect(usage).toBeHidden()
+  await screen
+    .getByRole("button", { name: `Stop ${name}; its disk is kept` })
+    .click()
+  await expect(screen.getByText(`${name} is off`)).toBeVisible()
+  await more.click()
+  await expect(menu.getByText("Memory", { exact: true })).toHaveCount(0)
+  await page.keyboard.press("Escape")
   const stopped = await api.request.get(
     `/api/environments/${env}/sandboxes/${id}/usage`
   )
@@ -237,14 +250,16 @@ test("the workspace status line shows CPU and memory use while the sandbox runs"
 
 // A schedule takes its first checkpoint as soon as it is turned on, and marks it as its own.
 test("a checkpoint schedule takes a checkpoint", async ({ page, api, env }) => {
-  const id = await api.createSandbox(sandboxName("sched"))
+  const name = sandboxName("sched")
+  const id = await api.createSandbox(name)
   const openHistory = async () => {
-    await page.getByRole("button", { name: "Sandbox options" }).click()
     await page
-      .getByRole("menuitem", { name: "History and checkpoints" })
+      .getByRole("region", { name: `${name}'s screen` })
+      .getByRole("button", { name: `More for ${name}` })
       .click()
+    await page.getByRole("menuitem", { name: /^Checkpoints/ }).click()
   }
-  await page.goto(`/e/${env}/sandboxes/${id}/work`)
+  await screenOf(page, env, id, name)
   await openHistory()
   const section = page.getByRole("region", { name: "Checkpoints" })
   await section.getByRole("combobox", { name: "Take checkpoints" }).click()

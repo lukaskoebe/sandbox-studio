@@ -167,8 +167,8 @@ use from msb's metrics (`SandboxHandle.Metrics`, which msb samples every few sec
 - `memoryBytes`: the memory the guest uses, against `memoryTotalBytes`, the catalogued memory
   size (msb's limit when the catalog has none).
 
-A sandbox that doesn't run answers 409, and a runtime without metrics 501. The workspace's
-status line polls it every 5 seconds while the sandbox runs. The e2e runtime reports half a
+A sandbox that doesn't run answers 409, and a runtime without metrics 501. The computer's
+menu polls it every 5 seconds while the sandbox runs. The e2e runtime reports half a
 vCPU and 768 MiB for every running VM.
 
 Verified vs. pending: the scaling and the API are covered by fake-runtime tests. On 2026-10-17
@@ -363,7 +363,7 @@ Studio neither starts nor stops them: you run them yourself, for example for an 
 connects over SSH, such as VS Code Remote-SSH.
 
 1. **Find the VM.** Studio names a sandbox's VM `ss-<id>-g<generation>`, where `<id>` is the
-   sandbox ID shown in its workspace status line and the generation is 1 until the sandbox is
+   sandbox ID shown at the top of its computer's ⋯ menu and the generation is 1 until the sandbox is
    rebased. `msb list` shows the names (every VM Studio owns starts with `ss-`). Studio shows
    the name nowhere yet, so it is not in the API or the UI.
 2. **Quick shell.** `msb ssh connect ss-<id>-g1` opens a root shell in the VM. It needs no

@@ -240,9 +240,9 @@ await step("setup", async () => {
 })
 await step("new-sandbox", async () => {
   await go("")
-  await page.getByLabel("More to create").click()
-  await page.getByRole("menuitem", { name: /Sandbox without a teammate/ }).click()
-  await page.getByLabel("Name").fill("my-project")
+  await page.getByRole("button", { name: "New computer", exact: true }).click()
+  await page.getByRole("menuitem", { name: /^New computer/ }).click()
+  await page.getByLabel("Name", { exact: true }).fill("my-project")
   await shot("new-sandbox")
   await closeDialog()
 })
@@ -253,10 +253,11 @@ await step("environments", async () => {
   await closeDialog()
 })
 
-// A terminal with a shell, then a request to an unknown host that waits for approval.
+// Ada's computer beside her conversation: a terminal with a shell, then a request to an
+// unknown host that waits for approval.
 await step("sandbox-terminal", async () => {
   await running(webshop)
-  await go(`/sandboxes/${webshop.id}/work`)
+  await go(`/sandboxes/${webshop.id}`)
   await page.locator(".xterm").first().click()
   await page.keyboard.type("clear\n")
   await page.waitForTimeout(500)
@@ -271,11 +272,15 @@ await step("approval", async () => {
   for (const r of await list(`${E}/rules`))
     if (r.host === "example.com") await api("DELETE", `${E}/rules/${r.id}`)
   await running(webshop)
-  await go(`/sandboxes/${webshop.id}/work`)
+  await go(`/sandboxes/${webshop.id}`)
   await page.locator(".xterm").first().click()
   await page.keyboard.type("clear\n")
   await page.keyboard.type("curl -sI https://example.com | head -1\n", { delay: 15 })
-  await page.getByTestId("approval-card").first().waitFor({ timeout: 30000 })
+  // Her page lists it under Waiting for you; Answer opens its card in place.
+  const row = page.getByTestId("waiting-row").filter({ hasText: "example.com" })
+  await row.waitFor({ timeout: 30000 })
+  await row.getByRole("button", { name: "Answer", exact: true }).click()
+  await page.getByTestId("approval-card").first().waitFor()
   await page.waitForTimeout(1500)
   await shot("approval")
   await page.getByTestId("approval-card").first().getByRole("button", { name: "Deny", exact: true }).click()
@@ -288,10 +293,10 @@ await step("checkpoints", async () => {
   const checkpoints = await list(`${E}/sandboxes/${storefront.id}/checkpoints`)
   if (!checkpoints.some?.((c) => c.name === "before-upgrade"))
     await api("POST", `${E}/sandboxes/${storefront.id}/checkpoints`, { name: "before-upgrade" })
-  // A sandbox's checkpoints are in the sheet its header's ⋯ menu opens.
+  // A computer's checkpoints are in the sheet its screen's ⋯ menu opens.
   await go(`/sandboxes/${storefront.id}`)
-  await page.getByLabel("Sandbox options").click()
-  await page.getByRole("menuitem", { name: /History and checkpoints/ }).click()
+  await page.getByRole("button", { name: `More for ${storefront.name}` }).click()
+  await page.getByRole("menuitem", { name: /^Checkpoints/ }).click()
   await page.getByRole("region", { name: "Checkpoints" }).waitFor()
   await shot("checkpoints")
 })
@@ -335,12 +340,13 @@ await step("build-dialog", async () => {
 })
 
 // Ada's browser on a real page, which you drive from the address bar, with her sites beside
-// it. It comes last: the sandboxes stop first, to leave memory for the browser VM.
+// it, on her computer's screen. It comes last: the sandboxes stop first, to leave memory for
+// the browser VM; the Browser tab stays on a computer that is off.
 await step("browser", async () => {
   for (const sb of [webshop, storefront]) await api("POST", `${E}/sandboxes/${sb.id}/stop`).catch(() => {})
   for (const host of ["*.wikipedia.org", "*.wikimedia.org"])
     await ensure(`${E}/rules`, (r) => r.host === host, { host, action: "allow", ports: [443], teammateId: ada.id })
-  await go(`/teammates/${ada.id}/browser`)
+  await go(`/teammates/${ada.id}?tab=browser`)
   // A sleeping browser has one field to open a page; a running one has the address bar.
   const address = page.getByLabel("Open a page").or(page.getByLabel("Browser address"))
   await address.fill("en.wikipedia.org/wiki/Sandbox_(computer_security)")
@@ -349,6 +355,7 @@ await step("browser", async () => {
   await page.getByLabel("Browser address").and(page.locator('[value="en.wikipedia.org/wiki/Sandbox_(computer_security)"]')).waitFor({ timeout: 60000 })
   await page.waitForTimeout(5000)
   await clearApprovals()
+  await button("Activity and sites").click()
   await page.getByRole("tab", { name: "Sites" }).click()
   await shot("browser")
   await button(/Hand back/).click().catch(() => {})

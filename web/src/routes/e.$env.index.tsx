@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from "react"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   BellIcon,
   BroadcastIcon,
@@ -16,7 +15,7 @@ import {
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { Ident } from "@/components/ident"
 import { SetupCard } from "@/components/setup-card"
-import { PageHeader } from "@/components/page-header"
+import { ColumnPage } from "@/components/column-page"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
@@ -67,34 +66,28 @@ function Home() {
   const empty = teammates.data?.length === 0 && sandboxes.data?.length === 0
 
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Home</h1>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="mx-auto grid max-w-3xl content-start gap-7 px-4 py-6 md:px-8 md:py-8">
-          <p className="text-muted-foreground">
-            {summary(waiting.length, running.length)}
-          </p>
-          <SetupCard env={env} />
-          <NotificationsBanner />
-          <PreviewsNotice env={env} />
-          {empty ? (
-            <GetStarted env={env} />
-          ) : (
-            <>
-              <NeedsYou env={env} approvals={waiting} />
-              <WorkingNow
-                env={env}
-                chats={running}
-                waiting={new Set(waiting.map((a) => a.sandboxId))}
-              />
-            </>
-          )}
-          <Earlier env={env} />
-        </div>
-      </ScrollArea>
-    </>
+    <ColumnPage
+      title="Home"
+      intro={summary(waiting.length, running.length)}
+      narrow
+    >
+      <SetupCard env={env} />
+      <NotificationsBanner />
+      <PreviewsNotice env={env} />
+      {empty ? (
+        <GetStarted env={env} />
+      ) : (
+        <>
+          <NeedsYou env={env} approvals={waiting} />
+          <WorkingNow
+            env={env}
+            chats={running}
+            waiting={new Set(waiting.map((a) => a.sandboxId))}
+          />
+        </>
+      )}
+      <Earlier env={env} />
+    </ColumnPage>
   )
 }
 
@@ -336,9 +329,9 @@ function WorkingNow({
             return (
               <li key={c.id} className="border-b last:border-b-0">
                 <Link
-                  to="/e/$env/sandboxes/$id/work"
-                  params={{ env, id: c.sandboxId }}
-                  search={{ chat: c.id }}
+                  to="/e/$env/teammates/$id"
+                  params={{ env, id: c.teammateId }}
+                  search={{ thread: c.id }}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40"
                 >
                   <TeammateAvatar
@@ -466,7 +459,12 @@ function Earlier({ env }: { env: string }) {
       key: c.id,
       at: c.createdAt,
       text: (
-        <>
+        <Link
+          to="/e/$env/teammates/$id"
+          params={{ env, id: c.teammateId }}
+          search={{ thread: c.id }}
+          className="underline-offset-4 hover:underline"
+        >
           <span className="text-muted-foreground">
             {c.heartbeat
               ? "Heartbeat"
@@ -475,7 +473,7 @@ function Earlier({ env }: { env: string }) {
                 : "Started chat"}
           </span>{" "}
           {c.title ? `“${c.title}”` : "New chat"}
-        </>
+        </Link>
       ),
       who: c.teammateId ? names.get(c.teammateId) : undefined,
     })),
@@ -491,9 +489,16 @@ function Earlier({ env }: { env: string }) {
       <div className="flex items-baseline gap-2">
         <Label id="earlier">Earlier</Label>
         <Link
-          to="/e/$env/settings/activity"
+          to="/e/$env/chats"
           params={{ env }}
           className="ml-auto text-xs text-primary underline-offset-4 hover:underline"
+        >
+          All chats
+        </Link>
+        <Link
+          to="/e/$env/settings/activity"
+          params={{ env }}
+          className="text-xs text-primary underline-offset-4 hover:underline"
         >
           All activity
         </Link>

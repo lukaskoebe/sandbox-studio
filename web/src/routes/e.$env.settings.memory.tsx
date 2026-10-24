@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { MemoryTabs, sharedScope } from "@/components/memory-tabs"
 import { MemoryUsage } from "@/components/memory-sessions"
 import { MemoryQuality } from "@/components/memory-quality"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { $api } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/settings/memory")({
@@ -22,12 +21,10 @@ function MemoryPage() {
   const current = scopes.data?.find((s) => s.scope === sharedScope)
 
   return (
-    <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Shared memory</h1>
-      </PageHeader>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="space-y-4 p-4">
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
+    <SettingsPage
+      title="Shared memory"
+      intro={
+        <>
           {explanation}{" "}
           <a
             href="https://lukaskoebe.github.io/sandbox-studio/memory/"
@@ -37,7 +34,10 @@ function MemoryPage() {
           >
             Learn more
           </a>
-        </p>
+        </>
+      }
+    >
+      <div className="grid gap-1">
         {current && (
           <p className="text-xs text-muted-foreground">
             {current.facts} facts, {current.pages} pages; core pages use{" "}
@@ -45,9 +45,9 @@ function MemoryPage() {
           </p>
         )}
         <MemoryUsage env={env} shared />
-        <MemoryQuality env={env} />
-        <MemoryTabs env={env} scope={sharedScope} />
-      </ScrollArea>
-    </>
+      </div>
+      <MemoryQuality env={env} />
+      <MemoryTabs env={env} scope={sharedScope} />
+    </SettingsPage>
   )
 }

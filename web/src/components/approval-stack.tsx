@@ -251,6 +251,11 @@ function MoreLink({ approval, count }: { approval: Approval; count: number }) {
         env: approval.environmentId,
         id: approvalTeammateId(approval) ?? "",
       }}
+      search={
+        approvalKind(approval).page === "/e/$env/teammates/$id"
+          ? { tab: "browser" }
+          : {}
+      }
       className="px-1 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
     >
       +{count} more

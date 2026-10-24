@@ -34,7 +34,6 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -51,7 +50,7 @@ import {
   PublicKeyNotice,
   type Scanned,
 } from "@/components/forge-dialog"
-import { EnvironmentLabel, PageHeader } from "@/components/page-header"
+import { SettingsPage } from "@/components/settings/page"
 import { SectionHeader } from "@/components/section-header"
 import {
   $api,
@@ -87,31 +86,29 @@ export function GitSettings({
 
   return (
     <>
-      <PageHeader>
-        <h1 className="text-sm font-medium">Git forges</h1>
-        <EnvironmentLabel env={env} />
-        <Button size="sm" className="ml-auto" onClick={() => setAdding(true)}>
-          <PlusIcon />
-          Add forge
-        </Button>
-      </PageHeader>
-      <ScrollArea
-        className="min-h-0 flex-1"
-        viewportClassName="space-y-6 p-3 md:p-4"
+      <SettingsPage
+        title="Git forges"
+        actions={
+          <Button size="sm" onClick={() => setAdding(true)}>
+            <PlusIcon />
+            Add forge
+          </Button>
+        }
+        intro={
+          <>
+            Sandboxes reach your forges through Studio, which keeps their
+            credentials and holds their pushes for your review.{" "}
+            <a
+              href="https://lukaskoebe.github.io/sandbox-studio/git-review/"
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Learn more
+            </a>
+          </>
+        }
       >
-        <p className="max-w-2xl text-xs/relaxed text-muted-foreground">
-          Sandboxes reach your forges through Studio, which keeps their
-          credentials and holds their pushes for your review.{" "}
-          <a
-            href="https://lukaskoebe.github.io/sandbox-studio/git-review/"
-            target="_blank"
-            rel="noreferrer"
-            className="underline"
-          >
-            Learn more
-          </a>
-        </p>
-
         <section className="space-y-2">
           <SectionHeader
             title="Forges"
@@ -177,7 +174,7 @@ export function GitSettings({
           </Link>
           .
         </p>
-      </ScrollArea>
+      </SettingsPage>
       <ForgeDialog
         env={env}
         open={adding || addURL !== undefined}
