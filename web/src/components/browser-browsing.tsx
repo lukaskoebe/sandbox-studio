@@ -59,7 +59,7 @@ export function BrowsingCard({
     <div
       role="group"
       aria-label={`${name}'s browser`}
-      className="ml-8 grid gap-3 rounded-lg border p-3 text-xs"
+      className="@container ml-8 grid gap-3 rounded-lg border p-3 text-xs"
     >
       <div className="flex items-center gap-2">
         <span
@@ -84,7 +84,7 @@ export function BrowsingCard({
           </Button>
         )}
       </div>
-      <div className="flex gap-3 max-sm:flex-col">
+      <div className="flex gap-3 @max-[24rem]:flex-col">
         {shot && (
           <button
             type="button"
@@ -95,7 +95,7 @@ export function BrowsingCard({
             <img
               alt=""
               src={screenshotURL(env, teammate, shot)}
-              className="w-48 rounded border"
+              className="w-36 rounded border"
             />
             <LiveTag waiting={waiting} />
           </button>

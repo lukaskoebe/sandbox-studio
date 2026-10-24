@@ -99,7 +99,7 @@ async function driving(page: Page, api: Api, env: string) {
   const address = page.getByLabel("Browser address")
   await address.fill("https://example.com/clicks")
   await address.press("Enter")
-  await expect(page.getByText("You're driving.")).toBeVisible()
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
 }
 
 const viewers = [

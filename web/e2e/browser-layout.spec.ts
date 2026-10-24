@@ -2,13 +2,13 @@ import type { Locator, Page } from "@playwright/test"
 import { addTeammate, expect, sandboxName, test, type Api } from "./fixtures"
 
 // The browser window's view fits the frame into the room it has, so it never scrolls: not
-// while watching, not with the controls under the frame while driving, and not once the
-// wheel is handed back, on the teammate's screen and on a phone's, which opens over the
+// while watching, not with the keyboard controls under the frame while driving, and not once
+// the wheel is handed back, on the teammate's screen and on a phone's, which opens over the
 // conversation.
 
 /** A teammate with a sandbox and a running browser on the login page. */
 async function running(api: Api, env: string) {
-  // A long name makes the "take the wheel" overlay as wide as it gets.
+  // A long name makes the toolbar's words as wide as they get.
   const name = `Bartholomew ${Math.random().toString(36).slice(2, 8)}`
   const tm = await addTeammate(api, env, name)
   await api.createSandbox(sandboxName("layout"), tm)
@@ -51,7 +51,7 @@ async function takeAndHandBack(
   const address = within.getByLabel("Browser address")
   await address.fill("https://example.com/login")
   await address.press("Enter")
-  await expect(within.getByText("You're driving.")).toBeVisible()
+  await expect(within.getByTitle(/^You're driving/)).toBeVisible()
   if (!phone) {
     await expect(
       within.getByRole("button", { name: "Keyboard controls" })
@@ -66,21 +66,24 @@ async function takeAndHandBack(
 
   await within.getByRole("button", { name: `Hand back to ${name}` }).click()
   await expect(
-    within.getByText(`${name} isn't using the browser.`)
+    within.getByTitle(`${name} isn't using the browser`)
   ).toBeVisible()
   await expect(
     within.getByRole("button", { name: /Keyboard controls/ })
   ).toHaveCount(0)
   await settled("handed back")
 
-  // The overlay that offers the wheel shows on hover; the canvas itself takes no pointer
-  // while watching.
+  // The hint about notes shows on hover; the canvas itself takes no pointer while watching,
+  // and the toolbar offers the wheel.
   const box = (await within
     .getByLabel("Live view of the browser")
     .boundingBox())!
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await expect(
-    within.getByRole("button", { name: `Watching ${name} · take the wheel` })
+    within.getByText(`Right-click to add a note for ${name}`)
+  ).toBeVisible()
+  await expect(
+    within.getByRole("button", { name: "Take the wheel" })
   ).toBeVisible()
   await settled("hovered after handing back")
 }

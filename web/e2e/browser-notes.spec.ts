@@ -71,7 +71,7 @@ async function signInPage(page: Page, api: Api, base: string) {
   const address = page.getByLabel("Browser address")
   await address.fill("https://example.com/login")
   await address.press("Enter")
-  await expect(page.getByText("You're driving.")).toBeVisible()
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
   await expect
     .poll(async () => (await api.json<Status>("GET", base))!.url)
     .toBe("https://example.com/login")

@@ -272,28 +272,37 @@ control back.
 
 The window has, top to bottom:
 
-- **Tabs.** The teammate's own profile, then each open throwaway session with its sandbox,
-  each named by its page's site. A dot marks a tab with a question waiting. A throwaway tab's
-  X ends the session (`DELETE …/browser/sessions/{session}`).
-- **Toolbar.** Back, Forward and Reload (`POST …/browser/go {to, session}`), the address bar,
-  Downloads and the options menu (Put to sleep / Wake up, Network rules, Reset profile…). The
-  shield in the address bar opens the site's info: what the teammate may do there (Ask
-  first, Allowed, Blocked), its hidden fields and other rules.
-- **Driver line.** Who drives and what now: the teammate drives, is waiting for you, isn't
-  using the browser, you drive (with **Hand back**), or a throwaway session's sandbox.
-- **Page.** The live view. The teammate's questions (`browser.action`,
-  `browser.credential`) show on the page as cards with their answers, and leave the approval
-  stack while they do. A sleeping browser shows its last page faded, with a field to open a
-  page, which wakes it.
+- **Tabs**, while an agent has a throwaway session open: the teammate's own profile (with its
+  face), then each throwaway session (with its sandbox in the tooltip), each named by its
+  page's site. A dot marks a tab with a question waiting. A throwaway tab's X ends the session
+  (`DELETE …/browser/sessions/{session}`). The profile alone has no tab strip.
+- **Toolbar**, one line like any browser's: Back, Forward and Reload
+  (`POST …/browser/go {to, session}`), the address bar, who drives, the keyboard controls,
+  Downloads (once there are any), Activity and the options menu (Put to sleep / Wake up,
+  Network rules, Reset profile…). The shield in the address bar opens the site's info: what
+  the teammate may do there (Ask first, Allowed, Blocked), its hidden fields and other rules.
+  Who drives is a chip with a face and a few words: the teammate is using the browser, is
+  waiting for you, or isn't using it, each with **Take the wheel**; you're driving, with
+  **Hand back**; a throwaway session is from its sandbox; or a replay's time, with **Back to
+  live**. Its title has the whole sentence. On a narrow window the chip keeps the face and
+  the button, and Forward goes; on a phone **Take the wheel** is a hand.
+- **Page.** The live view, filling the rest of the window, with a ring inside it while you
+  drive. The teammate's questions (`browser.action`, `browser.credential`) show on the page as
+  cards with their answers, and leave the approval stack while they do. A sleeping browser
+  shows its last page faded, with a field to open a page, which wakes it. A replay shows the
+  step's screenshot with a caption of what happened, in words: "Ada clicked “Sign in”",
+  "Ada typed 12 hidden characters into “Password”". Activity lists the steps in the same words.
 
 Browsing yourself takes the wheel: typing an address and pressing Enter, or Back, Forward and
-Reload, take over first and then act. **Take the wheel** on the driver line, or on the page
-while hovering it, takes over without navigating.
+Reload, take over first and then act. **Take the wheel** on the toolbar takes over without
+navigating.
 
-During takeover, tap the remote page to focus the mobile keyboard. The controls below
-the page provide Ctrl, Esc, Tab, arrows, Backspace and Enter. Ctrl applies to the next key.
-Composed text and paste go through the same filtered input channel; handing back or
-disconnecting clears the local input buffer.
+During takeover, tap the remote page to focus the mobile keyboard. The controls below the page
+provide Ctrl, Esc, Tab, arrows, Backspace and Enter. Ctrl applies to the next key. A phone or a
+touch screen always has them; on a computer the keyboard button on the toolbar shows them, for
+keys the page can't get from the computer's keyboard, and they close when the wheel goes. Composed
+text and paste go through the same filtered input channel; handing back or disconnecting
+clears the local input buffer.
 
 - **Live view.** `GET .../browser/live` is a WebSocket that Studio relays to agent-browser's
   stream server on guest port 9223, through the agent channel, like terminals.
@@ -355,7 +364,7 @@ disconnecting clears the local input buffer.
   takes height the size container doesn't know of. Under the live view the body clips
   (`overflow: clip`) rather than scrolls, so a frame drawn before the controls are measured,
   a pixel of rounding, or a focus that would scroll something into view can't leave the view
-  scrolled; the "take the wheel" offer truncates its label inside a narrow screen.
+  scrolled.
   `e2e/browser-layout.spec.ts` checks that the body never overflows while watching, driving,
   with the keyboard controls open and after handing back, in four window sizes and on a phone.
 - **Pointer input.** A click maps through the frame it was drawn from: that frame's metadata

@@ -358,7 +358,6 @@ function BrowserTab({
       <BrowserWindow
         env={env}
         teammate={owner.id}
-        size="panel"
         activity={!!rail}
         onActivity={() => onRail(rail ? undefined : "activity")}
         onSites={() => onRail("sites")}

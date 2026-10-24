@@ -21,6 +21,7 @@ import {
   DownloadSimpleIcon,
   EyeSlashIcon,
   HandIcon,
+  KeyboardIcon,
   KeyIcon,
   MoonIcon,
   PowerIcon,
@@ -43,6 +44,7 @@ import {
   useBrowserNotes,
 } from "@/components/browser-notes"
 import { KindChip } from "@/components/kind-chip"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -107,6 +109,16 @@ export function screenshotURL(env: string, teammate: string, a: BrowserAction) {
   return `/api/environments/${encodeURIComponent(env)}/teammates/${encodeURIComponent(teammate)}/browser/actions/${a.id}/screenshot`
 }
 
+/** The page of a step: its own, or the last one before it, as taking the wheel has none. */
+function replayURL(replay: BrowserReplay) {
+  return (
+    replay.steps
+      .slice(0, replay.at + 1)
+      .reverse()
+      .find((a) => a.url)?.url ?? ""
+  )
+}
+
 /** The newest step at or before `at` that kept a screenshot: not every step has one. */
 export function replayShot(replay: BrowserReplay) {
   return replay.steps
@@ -118,8 +130,6 @@ export function replayShot(replay: BrowserReplay) {
 type Props = {
   env: string
   teammate: string
-  /** "full" is a framed window on a page; "panel" fills the computer screen's Browser tab. */
-  size: "full" | "panel"
   /** Shows or hides the activity and sites beside the window. */
   onActivity?: () => void
   /** Whether they show. */
@@ -141,15 +151,14 @@ function approvalSession(a: Approval) {
 }
 
 /**
- * A teammate's browser as a window: tabs for its profile and the throwaway sessions agents
- * opened, a toolbar like any browser's, one line that says who drives, and the live page with
- * the agent's questions on it. It is the Browser tab of the teammate's computer screen
+ * A teammate's browser as a window: a toolbar like any browser's that also says who drives,
+ * the live page with the agent's questions over it, and tabs for the throwaway sessions agents
+ * opened, when there are any. It is the Browser tab of the teammate's computer screen
  * (docs/browser.md).
  */
 export function BrowserWindow({
   env,
   teammate,
-  size,
   onActivity,
   activity,
   onSites,
@@ -191,6 +200,8 @@ export function BrowserWindow({
   const noting = notes.notes.length > 0 && running && !replay
   const clearNotes = notes.clear
   useEffect(() => clearNotes(), [sessionID, running, clearNotes])
+  // The keys the page can't get from a keyboard, under the frame while you drive.
+  const [keys, setKeys] = useState(false)
 
   const pending = usePendingApprovals()
   const asks = (pending.data ?? []).filter(
@@ -325,7 +336,6 @@ export function BrowserWindow({
   const w: Win = {
     env,
     teammate,
-    size,
     name,
     avatar,
     st,
@@ -355,40 +365,36 @@ export function BrowserWindow({
   const live = `${window.location.origin}/api/environments/${encodeURIComponent(env)}/teammates/${encodeURIComponent(teammate)}/browser/live${sessionID ? `?session=${encodeURIComponent(sessionID)}` : ""}`
 
   return (
-    <div
-      className={cn(
-        "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background",
-        size === "full" && "rounded-lg border shadow-xs"
-      )}
-    >
-      {running && <TabStrip w={w} />}
-      <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5">
-        {running ? (
+    <div className="@container/bw relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+      {running && sessions.length > 0 && <TabStrip w={w} />}
+      <div className="flex h-10 shrink-0 items-center gap-0.5 border-b px-1.5">
+        {replay ? (
+          <ReplaySteps w={w} replay={replay} />
+        ) : (
           <>
             <Button
               size="icon-sm"
               variant="ghost"
               aria-label="Back"
               title={driving ? "Back" : `Back: takes the wheel from ${name}`}
-              disabled={!!replay || busy}
+              disabled={!running || busy}
               onClick={() => go("back")}
             >
               <ArrowLeftIcon />
             </Button>
-            {size === "full" && (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Forward"
-                title={
-                  driving ? "Forward" : `Forward: takes the wheel from ${name}`
-                }
-                disabled={!!replay || busy}
-                onClick={() => go("forward")}
-              >
-                <ArrowRightIcon />
-              </Button>
-            )}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Forward"
+              title={
+                driving ? "Forward" : `Forward: takes the wheel from ${name}`
+              }
+              disabled={!running || busy}
+              className="@max-[34rem]/bw:hidden"
+              onClick={() => go("forward")}
+            >
+              <ArrowRightIcon />
+            </Button>
             <Button
               size="icon-sm"
               variant="ghost"
@@ -396,7 +402,7 @@ export function BrowserWindow({
               title={
                 driving ? "Reload" : `Reload: takes the wheel from ${name}`
               }
-              disabled={!!replay || busy}
+              disabled={!running || busy}
               onClick={() => go("reload")}
             >
               {navigate.isPending || move.isPending ? (
@@ -405,25 +411,45 @@ export function BrowserWindow({
                 <ArrowClockwiseIcon />
               )}
             </Button>
-            <Address
-              key={`${sessionID}:${replay?.steps[replay.at]?.id ?? "live"}`}
-              w={w}
-              url={
-                replay
-                  ? (replay.steps[replay.at]?.url ?? "")
-                  : pageURL === "about:blank"
-                    ? ""
-                    : (pageURL ?? "")
-              }
-              onSites={onSites}
-            />
-            <DownloadsButton env={env} teammate={teammate} />
           </>
+        )}
+        {running ? (
+          <Address
+            key={`${sessionID}:${replay?.steps[replay.at]?.id ?? "live"}`}
+            w={w}
+            url={
+              replay
+                ? replayURL(replay)
+                : pageURL === "about:blank"
+                  ? ""
+                  : (pageURL ?? "")
+            }
+            onSites={onSites}
+          />
         ) : (
-          <span className="flex-1 truncate px-1 text-xs text-muted-foreground">
-            {vmWords(st?.vm)}
+          <span className="mx-1 flex h-7 min-w-0 flex-1 items-center rounded-full bg-muted px-3 text-xs text-muted-foreground">
+            <span className="truncate">{vmWords(st?.vm)}</span>
           </span>
         )}
+        {running && <Driver w={w} />}
+        {liveView && driving && !noting && (
+          // A phone or a touch screen always has the keys (BrowserLive).
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={keys ? "Hide keyboard controls" : "Keyboard controls"}
+            aria-expanded={keys}
+            title="Keys the page can't get from your keyboard: Ctrl, Esc, Tab, arrows"
+            className={cn(
+              "max-md:hidden any-pointer-coarse:hidden",
+              keys && "bg-muted"
+            )}
+            onClick={() => setKeys(!keys)}
+          >
+            <KeyboardIcon />
+          </Button>
+        )}
+        {running && <DownloadsButton env={env} teammate={teammate} />}
         {onActivity && (
           <Button
             variant="ghost"
@@ -503,7 +529,6 @@ export function BrowserWindow({
           {addressError}
         </p>
       )}
-      {running && <DriverBar w={w} />}
       {noting && (
         <NotesBar
           env={env}
@@ -512,7 +537,6 @@ export function BrowserWindow({
           driver={session ? session.sandbox : st.driver}
           notes={notes}
           canvas={frame}
-          panel={size === "panel"}
         />
       )}
       {status.isRefetchError && !statusMissing && (
@@ -524,9 +548,9 @@ export function BrowserWindow({
           Couldn't refresh the browser's state. Retrying…
         </p>
       )}
-      {/* In the side panel the questions sit above the view, which then has less room, rather
-          than in it, where they would push the frame out of its box. */}
-      {liveView && size === "panel" && asksHere.length > 0 && (
+      {/* The questions sit above the view, which then has less room, rather than in it, where
+          they would push the frame out of its box. */}
+      {liveView && asksHere.length > 0 && (
         <div className="grid max-h-[50%] shrink-0 gap-2 overflow-y-auto border-b p-2">
           {asksHere.map((a) => (
             <AskCard key={a.id} approval={a} name={name} />
@@ -537,8 +561,7 @@ export function BrowserWindow({
         data-testid="browser-view"
         className={cn(
           // A size container: the live view fits its frame into the room it has (cqw, cqh).
-          "[container-type:size] relative flex min-h-0 flex-1 flex-col bg-muted/50",
-          size === "full" ? "p-4" : "p-0",
+          "[container-type:size] relative flex min-h-0 flex-1 flex-col bg-muted/40",
           // The live view fits by construction, so it never scrolls: clip rather than hidden,
           // which would still let focus or a scrollIntoView scroll it with no way back, takes
           // a sub-pixel of rounding or the frame before the controls under it are measured.
@@ -578,58 +601,27 @@ export function BrowserWindow({
         ) : replay ? (
           <Replayed w={w} replay={replay} />
         ) : (
-          <>
-            {size === "full" && asksHere.length > 0 && (
-              <div className="absolute top-6 left-6 z-20 grid max-h-[calc(100%-3rem)] w-80 max-w-[calc(100%-3rem)] gap-2 overflow-y-auto">
-                {asksHere.map((a) => (
-                  <AskCard key={a.id} approval={a} name={name} />
-                ))}
-              </div>
+          <div className="group relative mx-auto w-fit max-w-full">
+            <BrowserLive
+              key={sessionID}
+              url={live}
+              driving={driving}
+              inputEnabled={!busy}
+              pageURL={pageURL}
+              onPageURL={setStreamURL}
+              frozen={noting}
+              onNote={notes.add}
+              overlay={<NoteMarkers notes={notes} name={name} />}
+              canvasRef={frame}
+              controlsOpen={keys}
+              onControlsOpen={setKeys}
+            />
+            {!noting && (
+              <span className="pointer-events-none absolute top-2 right-2 rounded-full bg-foreground/75 px-2.5 py-1 text-[0.6875rem] text-background opacity-0 shadow-sm transition group-hover:opacity-100">
+                Right-click to add a note for {name}
+              </span>
             )}
-            <div
-              className={cn(
-                "group relative mx-auto w-fit max-w-full",
-                size === "full" &&
-                  "overflow-hidden rounded-md shadow-sm ring-1 ring-border [--live-max:72rem]"
-              )}
-            >
-              <BrowserLive
-                key={sessionID}
-                url={live}
-                driving={driving}
-                inputEnabled={!busy}
-                pageURL={pageURL}
-                onPageURL={setStreamURL}
-                frozen={noting}
-                onNote={notes.add}
-                overlay={<NoteMarkers notes={notes} name={name} />}
-                canvasRef={frame}
-              />
-              {!noting && (
-                <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-background/95 px-2 py-1 text-[0.6875rem] text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition group-hover:opacity-100">
-                  Right-click to add a note for {name}
-                </span>
-              )}
-              {!driving && !noting && (
-                // The offer stays inside the frame however narrow it is: a wider one made the
-                // view scroll sideways in a narrow side panel once the wheel was handed back.
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-2 pb-4 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="pointer-events-auto max-w-full min-w-0 bg-background/95 shadow-md"
-                    disabled={busy}
-                    onClick={() => void setWheel(true)}
-                  >
-                    <HandIcon />
-                    <span className="truncate">
-                      Watching {name} · take the wheel to use the page
-                    </span>
-                  </Button>
-                </div>
-              )}
-            </div>
-          </>
+          </div>
         )}
       </div>
       <AlertDialog open={resetting} onOpenChange={setResetting}>
@@ -663,7 +655,6 @@ export function BrowserWindow({
 type Win = {
   env: string
   teammate: string
-  size: Props["size"]
   name: string
   avatar?: string
   st?: BrowserStatus
@@ -713,7 +704,8 @@ function tabLabel(url?: string) {
 
 /**
  * The profile and the throwaway sessions agents opened, as tabs: the page's site in each, the
- * teammate's face or a throwaway's mask in front of it, like any browser's tabs.
+ * teammate's face or a throwaway's mask in front of it, like any browser's tabs. The profile
+ * alone needs none.
  */
 function TabStrip({ w }: { w: Win }) {
   const waiting = (id: string) => w.asks.some((a) => approvalSession(a) === id)
@@ -721,16 +713,14 @@ function TabStrip({ w }: { w: Win }) {
     id: string,
     icon: ReactNode,
     url: string | undefined,
-    title: string,
-    extra?: ReactNode
+    title: string
   ) => {
     const active = w.sessionID === id
     return (
       <div
         key={id || "profile"}
         className={cn(
-          "group relative flex h-8 min-w-0 items-center gap-1.5 rounded-t-lg border border-transparent px-2.5 text-xs",
-          w.size === "full" ? "w-56" : "max-w-44 flex-1",
+          "group relative flex h-7 max-w-44 min-w-0 flex-1 items-center gap-1.5 rounded-t-md border border-transparent px-2 text-xs",
           active
             ? "-mb-px border-border border-b-background bg-background text-foreground"
             : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
@@ -742,13 +732,12 @@ function TabStrip({ w }: { w: Win }) {
           aria-selected={active}
           title={title}
           onClick={() => w.pick(id)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left outline-none after:absolute after:inset-0 focus-visible:underline"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none after:absolute after:inset-0 focus-visible:underline"
         >
           <span className="flex size-4 shrink-0 items-center justify-center">
             {icon}
           </span>
           <span className="min-w-0 truncate">{tabLabel(url)}</span>
-          {extra}
           {!active && waiting(id) && (
             <span
               className="ml-auto size-1.5 shrink-0 rounded-full bg-(--st-waiting)"
@@ -774,15 +763,15 @@ function TabStrip({ w }: { w: Win }) {
     <div
       role="tablist"
       aria-label="Browser tabs"
-      className="flex h-10 shrink-0 items-end gap-1 overflow-x-auto border-b bg-muted/50 px-2"
+      className="flex h-9 shrink-0 items-end gap-1 overflow-x-auto border-b bg-muted/50 px-2"
     >
       {tab(
         "",
-        w.avatar ? (
-          <span className="text-[0.8125rem] leading-none">{w.avatar}</span>
-        ) : (
-          <ShieldCheckIcon className="size-3.5" />
-        ),
+        <TeammateAvatar
+          name={w.name}
+          avatar={w.avatar}
+          className="size-4 text-[0.4375rem]"
+        />,
         w.sessionID ? w.st?.url : w.pageURL,
         `${w.name}'s own profile: logins and cookies stay between sessions`
       )}
@@ -791,27 +780,9 @@ function TabStrip({ w }: { w: Win }) {
           s.id,
           <DetectiveIcon className="size-3.5" />,
           w.sessionID === s.id ? w.pageURL : s.url,
-          `A throwaway session an agent in ${s.sandbox} opened: a temporary profile that is gone when it closes`,
-          w.size === "full" && (
-            <span className="ml-auto max-w-[45%] min-w-0 shrink-0 truncate font-mono text-[0.625rem] text-muted-foreground">
-              {s.sandbox}
-            </span>
-          )
+          `A throwaway session an agent in ${s.sandbox} opened: a temporary profile that is gone when it closes`
         )
       )}
-      <span className="mb-3 ml-auto inline-flex shrink-0 items-center gap-1 pl-2 font-mono text-[0.625rem] text-muted-foreground">
-        {w.replay ? (
-          <>
-            <ClockCounterClockwiseIcon className="size-3" />
-            REPLAY
-          </>
-        ) : (
-          <>
-            <span className="size-1.5 animate-pulse rounded-full bg-(--st-running)" />
-            LIVE
-          </>
-        )}
-      </span>
     </div>
   )
 }
@@ -850,7 +821,7 @@ function Address({
     <form
       onSubmit={submit}
       className={cn(
-        "relative flex h-8 min-w-0 flex-1 items-center rounded-md border bg-muted/40 pr-1 focus-within:border-ring focus-within:bg-background focus-within:ring-2 focus-within:ring-ring/30",
+        "relative mx-1 flex h-7 min-w-0 flex-1 items-center rounded-full border border-transparent bg-muted pr-1 focus-within:border-ring focus-within:bg-background focus-within:ring-2 focus-within:ring-ring/30",
         !editable && "opacity-80"
       )}
     >
@@ -874,7 +845,7 @@ function Address({
           setDraft(null)
         }}
         onChange={(e) => setDraft(e.target.value)}
-        className="h-full min-w-0 flex-1 bg-transparent font-mono text-xs outline-none placeholder:font-sans"
+        className="h-full min-w-0 flex-1 bg-transparent font-mono text-xs text-ellipsis outline-none placeholder:font-sans"
       />
       {focused && editable && !w.driving && (
         <span className="ml-1 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] whitespace-nowrap text-muted-foreground max-sm:hidden">
@@ -915,7 +886,7 @@ function SiteInfo({
             type="button"
             aria-label={origin ? `Site info for ${hostOf(url)}` : "Site info"}
             className={cn(
-              "ml-0.5 inline-flex h-6 shrink-0 items-center gap-1 rounded px-1.5 hover:bg-muted",
+              "ml-0.5 inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-1.5 hover:bg-background",
               asking ? "text-(--st-waiting)" : "text-muted-foreground"
             )}
           />
@@ -1034,7 +1005,7 @@ export function PolicyPicker({
   )
 }
 
-/** The files the browser saved, each sendable to one of the teammate's sandboxes. */
+/** The files the browser saved, each sendable to one of the teammate's sandboxes, once any are. */
 function DownloadsButton({ env, teammate }: { env: string; teammate: string }) {
   const downloads = $api.useQuery(
     "get",
@@ -1043,6 +1014,7 @@ function DownloadsButton({ env, teammate }: { env: string; teammate: string }) {
     { refetchInterval: 10000 }
   )
   const count = downloads.data?.length ?? 0
+  if (count === 0) return null
   return (
     <Popover>
       <PopoverTrigger
@@ -1057,11 +1029,9 @@ function DownloadsButton({ env, teammate }: { env: string; teammate: string }) {
         }
       >
         <DownloadSimpleIcon />
-        {count > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 inline-flex size-3.5 items-center justify-center rounded-full bg-primary font-mono text-[0.5625rem] text-primary-foreground">
-            {count}
-          </span>
-        )}
+        <span className="absolute -top-0.5 -right-0.5 inline-flex size-3.5 items-center justify-center rounded-full bg-primary font-mono text-[0.5625rem] text-primary-foreground">
+          {count}
+        </span>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[34rem]">
         <PopoverTitle className="mb-2">Downloads</PopoverTitle>
@@ -1071,169 +1041,233 @@ function DownloadsButton({ env, teammate }: { env: string; teammate: string }) {
   )
 }
 
-/** One line under the toolbar that always answers "who is driving, and what now?". */
-function DriverBar({ w }: { w: Win }) {
-  const panel = w.size === "panel"
-  const bar = (className: string, children: ReactNode) => (
-    <div
-      className={cn(
-        "flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b px-3 py-1.5 text-xs",
-        className
-      )}
-    >
+/**
+ * Who drives, after the address, with the one thing to do about it: take the wheel, or hand
+ * it back. A narrow screen keeps the face and the button; the words go to the title.
+ */
+function Driver({ w }: { w: Win }) {
+  const words = (children: ReactNode, className?: string) => (
+    <span className={cn("min-w-0 truncate @max-[30rem]/bw:hidden", className)}>
       {children}
-    </div>
+    </span>
   )
-
-  if (w.replay) {
-    const { steps, at } = w.replay
-    const step = steps[at]
-    return bar(
-      "bg-muted/60",
-      <>
-        <ClockCounterClockwiseIcon className="size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 truncate">
-          <span className="font-medium">Replay</span>{" "}
-          <span className="font-mono text-muted-foreground">
-            {new Date(step.at).toLocaleTimeString()}
-          </span>{" "}
-          {stepWords(step, w.name)}
-        </span>
-        <span className="flex items-center gap-0.5">
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Previous step"
-            disabled={at === 0}
-            onClick={() => w.onReplay?.({ steps, at: at - 1 })}
-          >
-            <CaretLeftIcon />
-          </Button>
-          <span className="font-mono text-muted-foreground">
-            {at + 1}/{steps.length}
-          </span>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Next step"
-            disabled={at + 1 >= steps.length}
-            onClick={() => w.onReplay?.({ steps, at: at + 1 })}
-          >
-            <CaretRightIcon />
-          </Button>
-        </span>
-        <Button size="xs" onClick={() => w.onReplay?.(null)}>
+  if (w.replay)
+    return (
+      <span className="ml-1 flex min-w-0 shrink-0 items-center gap-1.5 rounded-full bg-muted py-0.5 pr-0.5 pl-2 text-xs">
+        <ClockCounterClockwiseIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        {words(
+          stepTime(w.replay.steps[w.replay.at]),
+          "font-mono text-muted-foreground"
+        )}
+        <Button
+          size="xs"
+          className="rounded-full"
+          onClick={() => w.onReplay?.(null)}
+        >
           Back to live
         </Button>
-      </>
+      </span>
     )
-  }
-
-  const throwaway = (sandbox: string, name: string) =>
-    `An agent in ${sandbox} uses this throwaway session: a temporary profile, so nothing reaches ${name}'s. It ends when closed, with its chat or after a while unused.`
-  if (w.session && !w.driving)
-    return bar(
-      "bg-muted/40",
-      <>
-        <DetectiveIcon className="size-3.5 shrink-0" />
-        <span
-          className="min-w-0 flex-1"
-          title={panel ? throwaway(w.session.sandbox, w.name) : undefined}
-        >
-          {panel
-            ? `Throwaway session from ${w.session.sandbox}.`
-            : throwaway(w.session.sandbox, w.name)}
-        </span>
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={() => void w.setWheel(true)}
-        >
-          <HandIcon />
-          Take the wheel
-        </Button>
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={() => w.endSession(w.sessionID)}
-        >
-          End session
-        </Button>
-      </>
-    )
-
   if (w.driving)
-    return bar(
-      "border-b-primary/30 bg-primary/8",
-      <>
+    return (
+      <span
+        title={`You're driving: ${w.name}'s browser calls wait until you hand back.`}
+        className="ml-1 flex min-w-0 shrink-0 items-center gap-1.5 rounded-full bg-primary/10 py-0.5 pr-0.5 pl-2 text-xs"
+      >
         <HandIcon className="size-3.5 shrink-0 text-primary" weight="fill" />
-        <span className="min-w-0 flex-1">
-          <span className="font-medium">You're driving.</span>{" "}
-          {!panel && `${w.name}'s browser calls wait until you hand back.`}
-        </span>
+        {words("You're driving", "font-medium")}
         <Button
           size="xs"
+          aria-label={`Hand back to ${w.name}`}
+          className="rounded-full"
           disabled={w.busy}
           onClick={() => void w.setWheel(false)}
         >
-          Hand back to {w.name}
+          Hand back
         </Button>
-      </>
+      </span>
     )
 
   const waiting = w.asksHere.length > 0
-  return bar(
-    waiting ? "bg-(--st-waiting)/10" : "",
-    <>
-      <span className="relative inline-flex size-4 shrink-0 items-center justify-center text-[0.75rem] leading-none">
-        {w.avatar}
-        {waiting && (
-          <span className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-(--st-waiting) ring-1 ring-background" />
-        )}
-      </span>
-      <span className="min-w-0 flex-1 truncate">
-        {waiting ? (
-          <>
-            <span className="font-medium">{w.name} is waiting for you</span>
-            {!panel && (
-              <span className="text-muted-foreground">
-                {" "}
-                · answer on the page
-              </span>
-            )}
-          </>
-        ) : w.st?.driver ? (
-          <>
-            <span className="font-medium">{w.name} drives</span>
-            <span className="text-muted-foreground">
-              {" "}
-              · last from <span className="font-mono">{w.st.driver}</span>
-            </span>
-          </>
-        ) : (
-          <span className="text-muted-foreground">
-            {w.name} isn't using the browser.
-            {!panel && " It sleeps after a while unused."}
-          </span>
-        )}
-      </span>
+  const face = w.session ? (
+    <DetectiveIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  ) : (
+    <span className="relative shrink-0">
+      <TeammateAvatar
+        name={w.name}
+        avatar={w.avatar}
+        className="size-4 text-[0.4375rem]"
+      />
+      {waiting && (
+        <span className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-(--st-waiting) ring-1 ring-background" />
+      )}
+    </span>
+  )
+  const [said, title] = w.session
+    ? [
+        words(`From ${w.session.sandbox}`, "text-muted-foreground"),
+        `An agent in ${w.session.sandbox} uses this throwaway session: a temporary profile, so nothing reaches ${w.name}'s. It ends when closed, with its chat or after a while unused.`,
+      ]
+    : waiting
+      ? [
+          words(`${w.name} is waiting for you`, "font-medium"),
+          `${w.name} is waiting for you: answer on the page.`,
+        ]
+      : w.st?.driver
+        ? [
+            words(`${w.name} is using it`),
+            `${w.name} is using the browser, last from ${w.st.driver}.`,
+          ]
+        : [
+            words(`${w.name} isn't using it`, "text-muted-foreground"),
+            `${w.name} isn't using the browser. It sleeps after a while unused.`,
+          ]
+  return (
+    <span
+      title={title}
+      className={cn(
+        "ml-1 flex min-w-0 shrink-0 items-center gap-1.5 rounded-full py-0.5 pr-0.5 pl-2 text-xs",
+        waiting && "bg-(--st-waiting)/10"
+      )}
+    >
+      {face}
+      {said}
       <Button
         size="xs"
-        variant="outline"
+        variant="ghost"
+        aria-label="Take the wheel"
+        title="Take the wheel"
+        className="rounded-full text-primary hover:text-primary"
         disabled={w.busy}
         onClick={() => void w.setWheel(true)}
       >
         <HandIcon />
-        Take the wheel
+        {/* On a phone the address needs the room more than the words. */}
+        <span className="@max-[24rem]/bw:hidden">Take the wheel</span>
       </Button>
-    </>
+    </span>
   )
 }
 
-/** A step of the log in words: `Ada clicked “Send”`. */
+/** In place of back and forward while a step of the log shows: the steps around it. */
+function ReplaySteps({ w, replay }: { w: Win; replay: BrowserReplay }) {
+  const { steps, at } = replay
+  return (
+    <span className="flex shrink-0 items-center">
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Previous step"
+        disabled={at === 0}
+        onClick={() => w.onReplay?.({ steps, at: at - 1 })}
+      >
+        <CaretLeftIcon />
+      </Button>
+      <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums">
+        {at + 1}/{steps.length}
+      </span>
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Next step"
+        disabled={at + 1 >= steps.length}
+        onClick={() => w.onReplay?.({ steps, at: at + 1 })}
+      >
+        <CaretRightIcon />
+      </Button>
+    </span>
+  )
+}
+
+/** What each action of the log did, and what it would do, before its object. */
+const stepVerbs: Partial<Record<string, [done: string, asked: string]>> = {
+  open: ["opened", "open"],
+  back: ["went back", "go back"],
+  forward: ["went forward", "go forward"],
+  reload: ["reloaded the page", "reload the page"],
+  click: ["clicked", "click"],
+  fill: ["typed", "type"],
+  type: ["typed", "type"],
+  select: ["picked", "pick"],
+  press: ["pressed", "press"],
+  scroll: ["scrolled", "scroll"],
+  get_text: ["read", "read"],
+  screenshot: ["took a screenshot", "take a screenshot"],
+  wait: ["waited for the page", "wait for the page"],
+  fill_credential: ["filled a login into", "fill a login into"],
+  "request control": ["asked you for the wheel", "ask you for the wheel"],
+  close: ["closed the session", "close the session"],
+  takeover: ["took the wheel", "take the wheel"],
+  handback: ["handed the wheel back", "hand the wheel back"],
+  "send download": ["sent the download", "send the download"],
+}
+
+/** An element of the log, `button "Sign in"`, as its name: “Sign in”; or its role alone. */
+function elementName(target?: string) {
+  const m = target?.match(/^[^"]*? "(.*)"$/)
+  return m ? `“${m[1]}”` : (target ?? "")
+}
+
+/** A page's address without its scheme: shop.example.com/login. */
+function pageWords(url?: string) {
+  if (!url) return ""
+  try {
+    const u = new URL(url)
+    return u.host + (u.pathname === "/" ? "" : u.pathname)
+  } catch {
+    return url
+  }
+}
+
+/**
+ * A step of the log in words: `Ada clicked “Send”`, `You opened shop.example.com/login`. A
+ * step that waits for you or didn't happen says what was asked or tried.
+ */
 export function stepWords(a: BrowserAction, name: string) {
   const who = a.actor === "user" ? "You" : name
-  return [who, a.action, a.target].filter(Boolean).join(" ")
+  const verbs = stepVerbs[a.action]
+  if (!verbs) return [who, a.action, a.target].filter(Boolean).join(" ")
+  const el = elementName(a.target)
+  // Typed text and picked options are quoted in the detail; a hidden field's is a count.
+  const typed = a.detail?.match(/^(\d+) characters into a sensitive field$/)
+  const object =
+    a.action === "open"
+      ? pageWords(a.url)
+      : a.action === "fill" || a.action === "type"
+        ? `${typed ? `${typed[1]} hidden characters` : (a.detail ?? "")} into ${el}`
+        : a.action === "select"
+          ? `${a.detail ?? ""} in ${el}`
+          : a.action === "press" || a.action === "scroll"
+            ? (a.detail ?? "")
+            : a.action === "send download"
+              ? (a.target ?? "")
+              : el
+  const verb =
+    a.outcome === "pending"
+      ? `asked to ${verbs[1]}`
+      : a.outcome === "ok"
+        ? verbs[0]
+        : `tried to ${verbs[1]}`
+  return [who, verb, object.trim()].filter(Boolean).join(" ")
+}
+
+/**
+ * What a step's words leave out: why it was denied or failed, the reason an agent asked for
+ * the wheel, why a session closed.
+ */
+export function stepDetail(a: BrowserAction) {
+  if (a.action === "request control" || a.action === "close") return a.detail
+  if (a.outcome === "denied" || a.outcome === "failed") return a.detail
+  return undefined
+}
+
+/** When a step was, to the second. */
+function stepTime(a: BrowserAction) {
+  return new Date(a.at).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
 }
 
 /** The question an agent asks, on the page it is about. */
@@ -1299,22 +1333,33 @@ function AskCard({ approval, name }: { approval: Approval; name: string }) {
   )
 }
 
-/** A step of the log, as the page looked then. */
+/** A step of the log, as the page looked then, with the step in words over it. */
 function Replayed({ w, replay }: { w: Win; replay: BrowserReplay }) {
   const shot = replayShot(replay)
-  return shot ? (
-    <img
-      src={screenshotURL(w.env, w.teammate, shot)}
-      alt={`The page after ${shot.action}`}
+  const step = replay.steps[replay.at]
+  return (
+    <div
       className={cn(
-        "mx-auto w-full max-w-6xl grayscale-[.35]",
-        w.size === "full" && "rounded-md shadow-sm ring-1 ring-border"
+        "relative mx-auto flex w-full max-w-6xl flex-col",
+        !shot && "flex-1"
       )}
-    />
-  ) : (
-    <Notice title="No picture of this step">
-      Steps keep a screenshot when they change the page.
-    </Notice>
+    >
+      {shot ? (
+        <img
+          src={screenshotURL(w.env, w.teammate, shot)}
+          alt={`The page after ${shot.action}`}
+          className="w-full grayscale-[.35]"
+        />
+      ) : (
+        <Notice title="No picture of this step">
+          Steps keep a screenshot when they change the page.
+        </Notice>
+      )}
+      <p className="absolute inset-x-3 bottom-3 mx-auto w-fit max-w-[calc(100%-1.5rem)] rounded-full bg-foreground/80 px-3 py-1 text-xs text-background shadow-sm">
+        <span className="font-mono opacity-70">{stepTime(step)}</span>{" "}
+        {stepWords(step, w.name)}
+      </p>
+    </div>
   )
 }
 
@@ -1355,16 +1400,16 @@ function Asleep({
   const vm = w.st?.vm
   const starting = waking || vm === "starting"
   return (
-    <div className="relative flex min-h-80 flex-1 items-center justify-center">
+    <div className="relative flex min-h-80 flex-1 items-center justify-center overflow-hidden">
       {last && (
         <img
           aria-hidden
           alt=""
           src={screenshotURL(w.env, w.teammate, last)}
-          className="pointer-events-none absolute inset-x-0 top-0 mx-auto w-full max-w-6xl rounded-md opacity-25 blur-[1px] grayscale"
+          className="pointer-events-none absolute inset-x-0 top-0 mx-auto w-full max-w-6xl opacity-15 blur-[2px] grayscale"
         />
       )}
-      <div className="relative m-4 grid w-full max-w-sm gap-3 rounded-xl border bg-background/95 p-5 text-center shadow-lg">
+      <div className="relative m-4 grid w-full max-w-sm justify-items-center gap-3 rounded-2xl bg-background/80 p-5 text-center backdrop-blur-sm">
         {starting || vm === "draining" ? (
           <>
             <Spinner className="mx-auto" />
@@ -1383,7 +1428,7 @@ function Asleep({
           <>
             <span
               className={cn(
-                "mx-auto inline-flex size-9 items-center justify-center rounded-lg",
+                "inline-flex size-10 items-center justify-center rounded-full",
                 tileClass("browser")
               )}
             >
@@ -1408,7 +1453,7 @@ function Asleep({
               </p>
             </div>
             <form
-              className="flex gap-1.5"
+              className="flex w-full gap-1.5"
               onSubmit={(e) => {
                 e.preventDefault()
                 void onWake(url)
@@ -1419,9 +1464,9 @@ function Asleep({
                 placeholder="Open a page…"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 font-mono text-xs outline-none placeholder:font-sans focus:border-ring focus:ring-2 focus:ring-ring/30"
+                className="h-8 min-w-0 flex-1 rounded-full border bg-background px-3 font-mono text-xs outline-none placeholder:font-sans focus:border-ring focus:ring-2 focus:ring-ring/30"
               />
-              <Button size="sm" type="submit">
+              <Button size="sm" type="submit" className="rounded-full">
                 {url.trim() ? "Open" : error ? "Try again" : "Wake up"}
               </Button>
             </form>

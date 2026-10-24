@@ -33,7 +33,6 @@ import {
   type NoteSpot,
 } from "@/lib/browser-notes"
 import { chatTitle, readBase64 } from "@/lib/chats"
-import { cn } from "@/lib/utils"
 
 /** How long the page may take to say what is under a note; then the note keeps its point. */
 const lookupTimeout = 3000
@@ -285,7 +284,6 @@ export function NotesBar({
   driver,
   notes,
   canvas,
-  panel,
 }: {
   env: string
   teammate: string
@@ -295,7 +293,6 @@ export function NotesBar({
   notes: BrowserNotes
   /** The live view's canvas, with the frame the notes are on. */
   canvas: RefObject<HTMLCanvasElement | null>
-  panel: boolean
 }) {
   const queryClient = useQueryClient()
   const chats = $api.useQuery("get", "/api/environments/{env}/chats", {
@@ -393,13 +390,6 @@ export function NotesBar({
         <span className="font-medium">
           {count === 0 ? "New note" : count === 1 ? "1 note" : `${count} notes`}
         </span>
-        {/* A side panel has no room to say why the view stopped moving: the title says it. */}
-        {!panel && (
-          <span className="text-muted-foreground">
-            {" "}
-            · the view holds still until you send or clear
-          </span>
-        )}
       </span>
       {targets.length > 0 ? (
         <Select
@@ -410,7 +400,7 @@ export function NotesBar({
           <SelectTrigger
             size="sm"
             aria-label="Send the notes to"
-            className={cn("min-w-0", panel ? "max-w-40" : "max-w-64")}
+            className="max-w-40 min-w-0"
           >
             <SelectValue />
           </SelectTrigger>

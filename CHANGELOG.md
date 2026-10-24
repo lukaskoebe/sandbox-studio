@@ -19,8 +19,13 @@ computer without a teammate gets that screen to itself.
   computer that is off shows a dark screen with **Start**; its teammate's browser stays a tab.
   Fold the screen to a strip of tabs; on a narrow window it is that strip, and opens over the
   conversation.
-- **Browser:** the browser is the screen's **Browser** tab. The clock in its toolbar shows
-  **Activity** and **Sites** beside it, or over it on a narrow screen.
+- **Browser:** the browser is the screen's **Browser** tab, with one toolbar like any
+  browser's: Back, Forward, Reload, the address, and a chip that says who drives, with **Take
+  the wheel** or **Hand back**. The page fills the rest. Tabs show only while an agent has a
+  throwaway session open. On a computer, the keyboard button in the toolbar shows the keys the
+  page can't get from your keyboard. The clock in its toolbar shows **Activity** and **Sites**
+  beside it, or over it on a narrow screen, with each step in words ("Ada clicked “Sign in”"),
+  and a replayed step says the same under its screenshot.
 - **Sidebar:** Home, then Teammates, each with a word for what it is doing or how much waits
   for you, then Your computers with their state, and Settings, the version and the theme at
   the bottom. **+** next to Your computers makes a **New computer** or imports one.

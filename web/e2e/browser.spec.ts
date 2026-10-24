@@ -124,13 +124,13 @@ test("the address bar takes the wheel, Back goes back, and Hand back returns it"
   env,
 }) => {
   const { name, base } = await browsing(page, api, env)
-  await expect(page.getByText(`${name} isn't using the browser.`)).toBeVisible()
+  await expect(page.getByTitle(`${name} isn't using the browser`)).toBeVisible()
 
   const address = page.getByLabel("Browser address")
   await address.fill("example.com/a")
   await expect(page.getByText(`↵ takes the wheel from ${name}`)).toBeVisible()
   await address.press("Enter")
-  await expect(page.getByText("You're driving.")).toBeVisible()
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
   await expect
     .poll(async () => (await api.json<Status>("GET", base))!.url)
     .toBe("https://example.com/a")
@@ -150,10 +150,10 @@ test("the address bar takes the wheel, Back goes back, and Hand back returns it"
   await address.fill("example.com/c")
   await expect(address).toHaveValue("example.com/c")
   await address.blur()
-  await expect(page.getByRole("tab", { name: /example\.com/ })).toBeVisible()
+  await expect(address).toHaveValue("example.com/a")
 
   await page.getByRole("button", { name: `Hand back to ${name}` }).click()
-  await expect(page.getByText(`${name} isn't using the browser.`)).toBeVisible()
+  await expect(page.getByTitle(`${name} isn't using the browser`)).toBeVisible()
   expect((await api.json<Status>("GET", base))!.takeover).toBeFalsy()
 })
 
@@ -169,7 +169,7 @@ test("an agent asks for the browser back while the user drives", async ({
   const address = page.getByLabel("Browser address")
   await address.fill("example.com/a")
   await address.press("Enter")
-  await expect(page.getByText("You're driving.")).toBeVisible()
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
 
   const state = (id: number) =>
     api.json<Call>("GET", `/api/e2e/sandboxes/${sb}/calls/${id}`)
@@ -189,7 +189,7 @@ test("an agent asks for the browser back while the user drives", async ({
 
   req = (await request())!
   await ask.getByRole("button", { name: "Hand back" }).click()
-  await expect(page.getByText(`${name} isn't using the browser.`)).toBeVisible()
+  await expect(page.getByTitle(`${name} isn't using the browser`)).toBeVisible()
   await expect.poll(async () => (await state(req.id))!.done).toBe(true)
   expect(JSON.stringify((await state(req.id))!.result)).toContain(
     "handed the browser back"
@@ -237,7 +237,7 @@ test("an agent shows the user a page, to watch or to take the wheel", async ({
     .filter({ hasText: `${name} wants to show you: https://example.com/a` })
     .getByRole("button", { name: "Take the wheel" })
     .click()
-  await expect(page.getByText("You're driving.")).toBeVisible()
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
   expect((await api.json<Status>("GET", base))!.takeover).toBe(true)
 })
 
@@ -252,7 +252,7 @@ test("a click on the live view lands on the right page coordinates", async ({
   const address = page.getByLabel("Browser address")
   await address.fill("https://example.com/login")
   await address.press("Enter")
-  await expect(page.getByText("You're driving.")).toBeVisible()
+  await expect(page.getByTitle(/^You're driving/)).toBeVisible()
 
   const canvas = page.getByLabel("Live view of the browser")
   await expect(canvas).toBeVisible()
@@ -297,7 +297,7 @@ test("an agent's question shows on the page, and its step replays from the activ
   const ask = page.getByRole("alertdialog", { name: `${name} is asking` })
   await expect(ask).toBeVisible()
   await expect(ask.getByText(/wants to click/)).toBeVisible()
-  await expect(page.getByText(`${name} is waiting for you`)).toBeVisible()
+  await expect(page.getByTitle(`${name} is waiting for you`)).toBeVisible()
   await expect(page.getByTestId("approval-card")).toHaveCount(0)
   await ask.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(ask).toBeHidden()
@@ -321,7 +321,7 @@ test("an agent's question shows on the page, and its step replays from the activ
   await page.getByRole("button", { name: "Activity and sites" }).click()
   const step = page
     .getByRole("complementary", { name: "Activity and sites" })
-    .getByRole("button", { name: /click button "Sign in"$/ })
+    .getByRole("button", { name: /clicked “Sign in”$/ })
   await expect(step).toBeVisible()
   await step.click()
   await expect(page.getByText("Replay", { exact: true }).first()).toBeVisible()
@@ -347,12 +347,8 @@ test("a throwaway session is a tab, and closing the tab ends it", async ({
   const tab = page.getByRole("tab", { name: "example.org" })
   await expect(tab).toBeVisible()
   await tab.click()
-  // The screen says it in short; the whole of it is the sentence's title.
-  await expect(
-    page
-      .getByTitle(/uses this throwaway session/)
-      .getByText(/^Throwaway session from/)
-  ).toBeVisible()
+  // The toolbar says whose it is in short; the whole of it is the title.
+  await expect(page.getByTitle(/uses this throwaway session/)).toBeVisible()
   await page.getByRole("button", { name: "End the throwaway session" }).click()
   await expect(tab).toBeHidden()
   await expect

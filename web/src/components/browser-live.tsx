@@ -7,6 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react"
+import { GlobeSimpleIcon } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
 import {
   pointerToPage,
@@ -104,6 +105,8 @@ export function BrowserLive({
   onNote,
   overlay,
   canvasRef,
+  controlsOpen = false,
+  onControlsOpen,
   className,
 }: {
   url: string
@@ -119,6 +122,13 @@ export function BrowserLive({
   overlay?: ReactNode
   /** Is given the canvas, for a screenshot of the frame it shows. */
   canvasRef?: RefObject<HTMLCanvasElement | null>
+  /**
+   * Shows the keys the page can't get from a keyboard under the frame, on a computer: a phone
+   * or a touch screen always has them. Their toggle is the window's.
+   */
+  controlsOpen?: boolean
+  /** Closes them when the wheel goes or the view disconnects. */
+  onControlsOpen?: (open: boolean) => void
   className?: string
 }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -135,6 +145,7 @@ export function BrowserLive({
   // The button a press holds: a move while it is held is a drag, and its release names it.
   const heldButton = useRef<string | undefined>(undefined)
   const onPageURLRef = useRef(onPageURL)
+  const onControlsOpenRef = useRef(onControlsOpen)
   const activePageURLRef = useRef(pageURL)
   const composing = useRef(false)
   const compositionEcho = useRef("")
@@ -170,7 +181,6 @@ export function BrowserLive({
   const [controlPressed, setControlPressed] = useState(false)
   const [automaticKeyboardControls, setAutomaticKeyboardControls] =
     useState(false)
-  const [desktopControlsOpen, setDesktopControlsOpen] = useState(false)
   // The height of the controls under the frame, which wrap on a narrow window.
   const [controlsHeight, setControlsHeight] = useState(0)
   const canDrive = driving && inputEnabled && !frozen
@@ -265,6 +275,10 @@ export function BrowserLive({
   useEffect(() => {
     onPageURLRef.current = onPageURL
   }, [onPageURL])
+
+  useEffect(() => {
+    onControlsOpenRef.current = onControlsOpen
+  }, [onControlsOpen])
 
   useEffect(() => {
     if (pageURL === activePageURLRef.current) return
@@ -396,7 +410,7 @@ export function BrowserLive({
         heldButton.current = undefined
         setKeyboardShown(false)
         setControlPressed(false)
-        setDesktopControlsOpen(false)
+        onControlsOpenRef.current?.(false)
         setState("closed")
         setNotice(ev.reason || "The live view disconnected")
         if (!stopped) retry = setTimeout(connect, 3000)
@@ -428,8 +442,16 @@ export function BrowserLive({
     heldButton.current = undefined
     setKeyboardShown(false)
     setControlPressed(false)
-    setDesktopControlsOpen(false)
+    onControlsOpenRef.current?.(false)
   }, [canDrive, state, clearMobileBuffer])
+
+  // Closing the controls hides the phone keyboard they opened.
+  useEffect(() => {
+    if (controlsOpen || automaticKeyboardControls) return
+    clearMobileBuffer()
+    mobileInput.current?.blur()
+    setKeyboardShown(false)
+  }, [controlsOpen, automaticKeyboardControls, clearMobileBuffer])
 
   const send = (msg: object) => {
     const ws = socket.current
@@ -896,9 +918,7 @@ export function BrowserLive({
           }
           className={cn(
             "block h-auto touch-none outline-none",
-            canDrive
-              ? "cursor-default ring-2 ring-primary"
-              : "pointer-events-none",
+            canDrive ? "cursor-default" : "pointer-events-none",
             state !== "live" && "opacity-40"
           )}
           onPointerDown={(e) => {
@@ -934,6 +954,13 @@ export function BrowserLive({
           onKeyDown={(e) => key("keyDown", e)}
           onKeyUp={(e) => key("keyUp", e)}
         />
+        {/* Inside the frame, which fills the view: a ring around it would be clipped. */}
+        {canDrive && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 ring-2 ring-primary/50 ring-inset"
+          />
+        )}
         {overlay}
       </div>
       <textarea
@@ -965,31 +992,13 @@ export function BrowserLive({
         }}
         onCompositionEnd={mobileCompositionEnd}
       />
-      {canDrive && state === "live" && (
-        <div
-          ref={measureControls}
-          className="flex flex-wrap items-center gap-2 border-t bg-background p-2"
-        >
-          {!automaticKeyboardControls && (
-            <button
-              type="button"
-              aria-expanded={desktopControlsOpen}
-              className="min-h-9 rounded-md border border-input px-2 text-xs font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => {
-                if (desktopControlsOpen && keyboardShown) {
-                  mobileInput.current?.blur()
-                  clearMobileBuffer()
-                  setKeyboardShown(false)
-                }
-                setDesktopControlsOpen((open) => !open)
-              }}
-            >
-              {desktopControlsOpen
-                ? "Hide keyboard controls"
-                : "Keyboard controls"}
-            </button>
-          )}
-          {(automaticKeyboardControls || desktopControlsOpen) && (
+      {canDrive &&
+        state === "live" &&
+        (automaticKeyboardControls || controlsOpen) && (
+          <div
+            ref={measureControls}
+            className="flex flex-wrap items-center gap-2 border-t bg-background p-2"
+          >
             <div
               aria-label="Remote browser keyboard controls"
               className="flex flex-wrap items-center gap-1"
@@ -1039,9 +1048,8 @@ export function BrowserLive({
                 </button>
               ))}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
       {state !== "live" && (
         <p className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-muted-foreground">
           {state === "connecting" ? "Connecting…" : notice}
@@ -1051,13 +1059,14 @@ export function BrowserLive({
         hasRenderedFrame &&
         activePageURL === "about:blank" &&
         renderedPageURL === "about:blank" && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/85 p-4 text-center">
-            <div className="max-w-sm space-y-1">
-              <p className="text-sm font-medium">
-                This browser is on a blank page.
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {`Enter a website in the address bar above${driving ? "" : " to take the wheel"}.`}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background p-4 text-center">
+            <div className="grid max-w-sm justify-items-center gap-1.5">
+              <GlobeSimpleIcon className="size-5 text-muted-foreground" />
+              <p className="text-sm font-medium">A blank page</p>
+              <p className="text-xs text-muted-foreground">
+                {driving
+                  ? "Type an address above to open a site."
+                  : "Type an address above to take the wheel and open a site."}
               </p>
             </div>
           </div>

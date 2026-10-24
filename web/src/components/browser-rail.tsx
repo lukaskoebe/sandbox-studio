@@ -13,6 +13,7 @@ import {
   PolicyPicker,
   replayShot,
   screenshotURL,
+  stepDetail,
   stepWords,
   type BrowserAction,
   type BrowserReplay,
@@ -343,8 +344,11 @@ export function BrowserSteps({
                     <HandIcon className="mr-1 inline size-3 text-primary" />
                   )}
                   {stepWords(a, name)}
-                  {a.detail && a.outcome !== "pending" && (
-                    <span className="text-muted-foreground"> {a.detail}</span>
+                  {stepDetail(a) && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {stepDetail(a)}
+                    </span>
                   )}
                 </span>
               </span>
