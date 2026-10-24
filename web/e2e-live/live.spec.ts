@@ -1,6 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test"
 
-// One pass through Studio on a real VM: create a sandbox, run a container in it, approve a
+// One pass through Studio on a real VM: create a computer, run a container in it, approve a
 // host it asks for, and open a preview of a server it runs. See playwright.config.ts.
 
 const test = base.extend({
@@ -58,21 +58,19 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
   ).json()) as { enabled: boolean }
   await page.request.put("/api/system/previews", { data: { enabled: true } })
 
-  // Create the sandbox the way a user does.
+  // Create the computer the way a user does, from the sidebar.
   const name = `live-${Math.random().toString(36).slice(2, 8)}`
   await page.goto(`/e/${env}`)
-  await page.getByRole("button", { name: "More to create" }).click()
-  await page
-    .getByRole("menuitem", { name: /Sandbox without a teammate/ })
-    .click()
-  const create = page.getByRole("dialog", { name: "New sandbox" })
+  await page.getByRole("button", { name: "New computer" }).click()
+  await page.getByRole("menuitem", { name: /^New computer/ }).click()
+  const create = page.getByRole("dialog", { name: "New computer" })
   await create.getByLabel("Name", { exact: true }).fill(name)
   await create.getByRole("button", { name: "Create" }).click()
-  await expect(page.getByRole("heading", { name })).toBeVisible({
-    timeout: 10 * 60_000,
-  })
-  // A sandbox opens on its workspace, at /e/<env>/sandboxes/<id>/work.
-  const id = page.url().match(/\/sandboxes\/([a-z0-9]+)/)![1]
+  // A computer without a teammate opens on its screen, at /e/<env>/sandboxes/<id>.
+  const screen = page.getByRole("region", { name: `${name}'s screen` })
+  await expect(screen).toBeVisible({ timeout: 10 * 60_000 })
+  await expect(page).toHaveURL(/\/sandboxes\/[a-z0-9]+$/)
+  const id = page.url().match(/\/sandboxes\/([a-z0-9]+)$/)![1]
 
   try {
     const term = terminal(page)
@@ -124,14 +122,18 @@ test("a real sandbox runs a container, asks for a host and previews a server", a
     )
     await expect(term.rows).toContainText("ready in", { timeout: 5 * 60_000 })
 
-    // The workspace's Previews menu lists the listening ports.
-    await expect(page.getByText("ports :5173")).toBeVisible({
-      timeout: 60_000,
-    })
-    await page.getByRole("button", { name: "Previews" }).click()
+    // The screen's Preview tab lists the listening ports; Open in new tab opens one.
+    await page
+      .getByRole("tablist", { name: `${name}'s screen` })
+      .getByRole("tab", { name: "Preview" })
+      .click()
+    const port = screen.getByRole("combobox", { name: "Port" })
+    await expect(port).toBeVisible({ timeout: 60_000 })
+    await port.click()
+    await page.getByRole("option", { name: "Port 5173", exact: true }).click()
     const [preview] = await Promise.all([
       page.context().waitForEvent("page"),
-      page.getByRole("menuitem", { name: ":5173", exact: true }).click(),
+      screen.getByRole("button", { name: "Open in new tab" }).click(),
     ])
     await expect(
       preview.getByRole("heading", { name: "Live preview works" })
