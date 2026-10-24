@@ -2,6 +2,8 @@ import { useRef, useState, type ReactNode } from "react"
 import {
   ArrowLineLeftIcon,
   ArrowLineRightIcon,
+  ArrowsInSimpleIcon,
+  ArrowsOutSimpleIcon,
   BrowserIcon,
   CaretDownIcon,
   GitDiffIcon,
@@ -50,7 +52,7 @@ import { usePreviewSetting } from "@/lib/preview-setting"
 import { useTerminalTheme } from "@/lib/theme"
 import { cn, formatAge } from "@/lib/utils"
 
-/** What a screen change asks of the page: another tab, session, review, fold or computer. */
+/** What a screen change asks of the page: another tab, session, review, size or computer. */
 export type ScreenChange = Partial<ScreenSearch> & { computer?: string }
 
 const tabMeta: Record<ScreenTab, { label: string; icon: Icon }> = {
@@ -63,9 +65,9 @@ const tabMeta: Record<ScreenTab, { label: string; icon: Icon }> = {
 /**
  * A computer drawn as one screen (docs/design/teammate-computer.md): a bezel with the computer's
  * name, which switches between the owner's computers, the tabs Terminal, Browser (a teammate's
- * own), Preview and Changes, power, ⋯ and fold; under it the display. A computer that is off
- * shows a dark glass with Start; its teammate's browser, which runs in a VM of its own, stays a
- * tab beside it. Folded, the screen is a strip of tab icons.
+ * own), Preview and Changes, power, ⋯, enlarge and fold; under it the display. A computer that
+ * is off shows a dark glass with Start; its teammate's browser, which runs in a VM of its own,
+ * stays a tab beside it. Folded, the screen is a strip of tab icons.
  */
 export function ComputerScreen({
   env,
@@ -75,6 +77,7 @@ export function ComputerScreen({
   search,
   onChange,
   solo,
+  enlargeable,
   lead,
   thread,
 }: {
@@ -87,6 +90,8 @@ export function ComputerScreen({
   onChange: (change: ScreenChange) => void
   /** The screen fills the page: a plain computer, with nothing beside it to fold for. */
   solo?: boolean
+  /** The screen can take the page, with the conversation a strip beside it. */
+  enlargeable?: boolean
   /** Shown first on the bezel, such as the sidebar's toggle on a phone. */
   lead?: ReactNode
   /** The open thread, whose changes Changes shows. */
@@ -241,6 +246,20 @@ export function ComputerScreen({
           <div className="flex items-center gap-px">
             <Power env={env} sandbox={sb} />
             <ComputerMenu env={env} sandbox={sb} owner={owner} />
+            {enlargeable && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={
+                  search.full ? "Shrink the screen" : "Enlarge the screen"
+                }
+                title={search.full ? "Shrink the screen" : "Enlarge the screen"}
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => onChange({ full: !search.full })}
+              >
+                {search.full ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+              </Button>
+            )}
             {!solo && (
               <Button
                 variant="ghost"

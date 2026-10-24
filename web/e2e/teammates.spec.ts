@@ -108,6 +108,52 @@ test("a teammate without a computer is offered one, and the screen's menu forks 
   await expect(page.getByRole("dialog", { name: "New computer" })).toBeVisible()
 })
 
+// Enlarged, the screen takes the page and the conversation is a strip beside it; the strip, the
+// bezel and folding each give the conversation back.
+test("the screen enlarges to take the page, and the conversation comes back", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Wide ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const sandbox = sandboxName("wide")
+  await api.createSandbox(sandbox, id)
+  await page.goto(`/e/${env}/teammates/${id}`)
+  const screen = page.getByRole("region", { name: `${sandbox}'s screen` })
+  await expect(screen).toBeVisible({ timeout: 15_000 })
+  const composer = page.getByPlaceholder(`Message ${name}…`)
+  await composer.fill("a draft")
+  const split = (await screen.boundingBox())!.width
+
+  const strip = page.getByRole("region", {
+    name: `${name}'s conversation, folded`,
+  })
+  await screen.getByRole("button", { name: "Enlarge the screen" }).click()
+  await expect(strip).toBeVisible()
+  await expect(composer).toBeHidden()
+  await expect(page).toHaveURL(/full=/)
+  expect((await screen.boundingBox())!.width).toBeGreaterThan(split * 1.5)
+
+  await strip.getByRole("button", { name: "Show the conversation" }).click()
+  await expect(strip).toBeHidden()
+  await expect(composer).toHaveValue("a draft")
+  await expect(page).not.toHaveURL(/full=/)
+
+  await screen.getByRole("button", { name: "Enlarge the screen" }).click()
+  await screen.getByRole("button", { name: "Shrink the screen" }).click()
+  await expect(strip).toBeHidden()
+  await expect(composer).toBeVisible()
+
+  await screen.getByRole("button", { name: "Enlarge the screen" }).click()
+  await screen.getByRole("button", { name: "Fold the screen" }).click()
+  await expect(
+    page.getByRole("region", { name: `${sandbox}, folded` })
+  ).toBeVisible()
+  await expect(strip).toBeHidden()
+  await expect(composer).toBeVisible()
+})
+
 test("a teammate's settings have one save bar for the changes in every section, and closing them with changes asks", async ({
   page,
   api,

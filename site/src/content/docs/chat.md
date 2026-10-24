@@ -68,7 +68,7 @@ Studio keeps undo for the newest 50 requests of a chat; older ones lose their Un
 
 ## Changes, Files, and Preview
 
-The screen beside a thread shows the sandbox at a glance: its **Changes** tab has the thread's changes and the sandbox's files, its **Preview** tab what it serves. Fold the screen with the arrow at its top right; on small screens it is a strip of tab icons, and a tab opens over the conversation.
+The screen beside a thread shows the sandbox at a glance: its **Changes** tab has the thread's changes and the sandbox's files, its **Preview** tab what it serves. Enlarge the screen with the arrows at its top right to give it the page, with the conversation as a strip beside it, or fold it with the arrow next to them; on small screens it is a strip of tab icons, and a tab opens over the conversation.
 
 - **Changes:** the files one request created, changed, or deleted, with the lines added and removed. Pick the request at the top, or choose **Changed N files** under a message. Expand a file to see its changes. The changes compare the files before and after that request, so they stay accurate after later edits. Very long changes are cut, and non-text files are only listed. Once a request can no longer be undone, its list of files remains but the line-by-line details are gone.
 - **Files:** a read-only view of `/workspace`. Open folders, view text files, and see PNG, JPEG, GIF, and WebP images. Files over 1 MiB, other file types, and files the agent can't read are listed but not shown. Files changed by the request selected in Changes are marked. Folders show at most 1,000 items. To change a file, ask your teammate, so undo stays accurate.

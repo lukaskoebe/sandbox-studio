@@ -26,6 +26,7 @@ page, kept in the URL as search params so Back, Forward and links work:
 | `tab` | `terminal`, `browser`, `preview`, `changes` | `terminal` (`browser` while the teammate drives it and nothing else was picked) |
 | `term` | a terminal session name | `main` |
 | `fold` | `1` | the screen is shown |
+| `full` | `1`: the screen takes the page, the conversation is a strip | side by side |
 | `profile` | `card`, `tasks`, `memory`, `settings` (`open=` a settings card) | closed |
 | `review` | an approval ID, on `changes` | the oldest waiting push of the computer |
 
@@ -46,7 +47,7 @@ redirects to the teammate's page with `computer=`, and the old workspace address
 | Rail: Now, Computer card(s), Earlier chats, Knows, Check-ins | Now is the presence word and the working card. The computer *is* the screen. Earlier chats are the cards. Knows and Check-ins are in the profile. |
 | Composer modes Message / Task / Teach, New chat, sandbox picker | One composer. At home it starts a new thread on the computer shown; in a thread it replies (or queues while a turn runs). Teach and New task live in the profile. |
 | Waiting for you (approval cards) | A compact row each at the end of home: the kind's tile, what is asked, where and how long ago. Answer opens the card in place; Review opens a push on Changes and a memory conflict in its sheet. Inline in the thread that asked, too. |
-| Sandbox page header: owner / name, state pill, Wake, Checkpoint, ⋯ | Bezel: the computer switcher with a status dot (forks indented under their source), the tabs, power, ⋯ and fold. |
+| Sandbox page header: owner / name, state pill, Wake, Checkpoint, ⋯ | Bezel: the computer switcher with a status dot (forks indented under their source), the tabs, power, ⋯, enlarge and fold. |
 | Sandbox ⋯ menu, details pill, Checkpoint button, status bar | The computer menu (⋯): name, template, size and uptime; CPU and memory meters; Checkpoint now; History and checkpoints; Fork; Merge into …; Rebase; Resources; Connections; Export; Another computer; Suspend or Resume; Delete. Ports are a chip on Preview; the ID and generation are in History. |
 | Workspace tab strip (chat, terminal and review tabs) | Chats are threads. Terminal sessions sit behind a `main ▾` chip on the Terminal tab (new shell, close); a thread's Continue in the terminal opens the teammate's harness in one. Reviews are on Changes. |
 | Side panels Browser / Connections / Files | Browser is a tab. Files and changes are on Changes, under any waiting push. Connections opens from ⋯ as a side sheet. |
@@ -78,7 +79,8 @@ A computer that is creating shows its progress on the screen.
 
 ## Risks
 
-- The terminal and the live browser sit in a column about 55 % wide that can fold: both must
+- The terminal and the live browser sit in a column about 55 % wide that can fold or take the
+  page: both must
   refit on resize (xterm's fit addon runs on a ResizeObserver; the browser view scales).
 - Terminals stay mounted while another tab is shown, so switching keeps scrollback and the
   connection; switching computers remounts them.

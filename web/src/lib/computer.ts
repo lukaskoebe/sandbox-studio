@@ -1,7 +1,7 @@
 /**
  * The computer screen's state in the URL (docs/design/teammate-computer.md): which tab it shows,
- * which terminal session, which push review, and whether it is folded. The teammate's page and a
- * plain sandbox's page read the same params.
+ * which terminal session, which push review, and whether it is folded or takes the page. The
+ * teammate's page and a plain sandbox's page read the same params.
  */
 export const screenTabs = ["terminal", "browser", "preview", "changes"] as const
 export type ScreenTab = (typeof screenTabs)[number]
@@ -11,6 +11,8 @@ export type ScreenSearch = {
   term?: string
   review?: string
   fold?: boolean
+  /** The screen takes the page, and the conversation is a strip beside it. */
+  full?: boolean
 }
 
 const text = (value: unknown) =>
@@ -39,6 +41,9 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
     ...(review ? { review } : {}),
     ...(s.fold === true || s.fold === "1" || s.fold === 1
       ? { fold: true }
+      : {}),
+    ...(s.full === true || s.full === "1" || s.full === 1
+      ? { full: true }
       : {}),
   }
 }

@@ -119,7 +119,7 @@ row and the page in one centred column, without a rule under the header.
 The teammate's page (`components/teammate/`) has the conversation on the left and the screen of
 the computer it works on to the right ([design](design/teammate-computer.md)). Everything it
 shows is in the URL's search, so Back, Forward and links work: `thread`, `computer`, `tab`,
-`term`, `review`, `fold`, `profile` (`card`, `tasks`, `memory`, `settings`), `open` (the open
+`term`, `review`, `fold`, `full`, `profile` (`card`, `tasks`, `memory`, `settings`), `open` (the open
 settings card) and `from=setup`. Esc closes the profile or a menu first, then leaves the thread.
 
 - Home: the header (avatar, name, role and harness, what keeps it from working, its presence
@@ -147,7 +147,7 @@ without a teammate, which has it at full width. Its bezel has the computer's nam
 between the owner's computers with forks under the one they came from and Another computer;
 the tabs Terminal, Browser (a teammate's own browser), Preview (while previews are on) and
 Changes, each with a dot while something on it waits for you; power (Stop, Start or Resume);
-⋯; and fold. Under it the display:
+⋯; enlarge (a teammate's page on a wide screen) and fold. Under it the display:
 
 - Terminal: the computer's tmux sessions behind a chip (a robot for an agent's): switch, a new
   shell, close. The URL names the one in view (`term`). The teammate's harness opens in one
@@ -164,7 +164,10 @@ Checkpoints (lineage and checkpoints in a sheet), Fork, Merge into its source fo
 Connections (a sheet), Resources, Rebase, Export, Another computer, Suspend or Resume, and
 Delete. A computer that is off shows dark glass with Start and the checkpoint it keeps, and a
 teammate's keeps its Browser tab, as the browser has a VM of its own; one being created shows
-its progress. Folded, the screen is a strip of tab icons. Below 1024px it
+its progress. Folded, the screen is a strip of tab icons. Enlarged, it takes the page, and the
+conversation is a strip with the teammate's face, a dot while something waits for you, and the
+way back; the conversation stays mounted behind it, so a draft and the scroll are kept, and Esc
+or the bezel's Shrink gives it back. Folding and enlarging undo each other. Below 1024px it
 is that strip, and opens over the conversation.
 
 Sheets remain for detail opened from outside its context: the git push review (from the

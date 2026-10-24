@@ -17,8 +17,8 @@ computer without a teammate gets that screen to itself.
   and memory, checkpoints, fork, merge, connections, resources, rebase, export, suspend and
   delete. The terminal's chip switches sessions, opens a shell and closes one. A
   computer that is off shows a dark screen with **Start**; its teammate's browser stays a tab.
-  Fold the screen to a strip of tabs; on a narrow window it is that strip, and opens over the
-  conversation.
+  Enlarge the screen to give it the page, with the conversation a strip beside it, or fold it
+  to a strip of tabs; on a narrow window it is that strip, and opens over the conversation.
 - **Browser:** the browser is the screen's **Browser** tab, with one toolbar like any
   browser's: Back, Forward, Reload, the address, and a chip that says who drives, with **Take
   the wheel** or **Hand back**. The page fills the rest. Tabs show only while an agent has a

@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react"
-import { MonitorIcon, PlusIcon } from "@phosphor-icons/react"
+import {
+  ArrowLineRightIcon,
+  MonitorIcon,
+  PlusIcon,
+} from "@phosphor-icons/react"
 import { ComputerScreen, type ScreenChange } from "@/components/computer/screen"
 import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { useWideScreen } from "@/components/side-panel"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateHome, teammateApprovals } from "@/components/teammate/home"
 import { ProfileCard, ProfileSheet } from "@/components/teammate/profile"
 import { TeammateThread } from "@/components/teammate/thread"
@@ -18,7 +23,8 @@ export type SearchChange = Partial<Record<keyof TeammateSearch, unknown>>
 /**
  * A teammate and its computer side by side (docs/design/teammate-computer.md): the conversation
  * on the left, its threads or the one open, and the screen of the computer it works on to the
- * right. The profile opens over the conversation. Esc closes what is on top, then the thread.
+ * right. The screen can fold, or take the page with the conversation a strip beside it. The
+ * profile opens over the conversation. Esc closes what is on top, then the thread.
  */
 export function TeammatePage({
   env,
@@ -83,12 +89,16 @@ export function TeammatePage({
     if (!wide && search.tab) setOverlay(true)
   }
   const folded = wide ? !!search.fold : !overlay
+  // On narrow screens the open screen covers the conversation anyway.
+  const full = wide && !folded && !!search.full
 
   const screen = (change: ScreenChange) => {
-    const { fold, ...rest } = change
-    if (fold !== undefined) {
-      if (wide) onSearch({ fold: fold || undefined })
-      else setOverlay(!fold)
+    const { fold, full: enlarge, ...rest } = change
+    // Folding and enlarging undo each other.
+    if (fold !== undefined || enlarge !== undefined) {
+      if (wide)
+        onSearch({ fold: fold || undefined, full: enlarge || undefined })
+      else if (fold !== undefined) setOverlay(!fold)
     }
     if (Object.keys(rest).length === 0) return
     if (!wide && rest.tab) setOverlay(true)
@@ -133,6 +143,7 @@ export function TeammatePage({
         return
       if (search.profile) profile(undefined)
       else if (!wide && overlay) setOverlay(false)
+      else if (full) screen({ full: false })
       else if (search.thread) leaveThread()
       else return
       e.preventDefault()
@@ -143,6 +154,14 @@ export function TeammatePage({
 
   return (
     <div className="relative flex min-h-0 flex-1">
+      {full && (
+        <ConversationStrip
+          teammate={teammate}
+          waiting={waiting.length}
+          onShow={() => screen({ full: false })}
+        />
+      )}
+      {/* Kept while the screen takes the page, so a draft and the scroll stay. */}
       <div
         className={cn(
           "relative flex min-h-0 min-w-0 flex-col",
@@ -150,7 +169,8 @@ export function TeammatePage({
             ? "flex-[1.25]"
             : folded
               ? "flex-1"
-              : "flex-1 lg:min-w-[25rem]"
+              : "flex-1 lg:min-w-[25rem]",
+          full && "hidden"
         )}
       >
         {search.thread ? (
@@ -207,7 +227,7 @@ export function TeammatePage({
         <div
           className={cn(
             "flex min-h-0",
-            folded ? "shrink-0" : "flex-[1.25]",
+            folded ? "shrink-0" : full ? "flex-1" : "flex-[1.25]",
             !wide && !folded && "absolute inset-0 z-20 bg-background shadow-lg"
           )}
         >
@@ -217,7 +237,8 @@ export function TeammatePage({
             sandbox={computer}
             computers={owned}
             owner={teammate}
-            search={{ ...search, fold: folded }}
+            search={{ ...search, fold: folded, full }}
+            enlargeable={wide}
             onChange={screen}
             thread={
               thread && log.chat && thread.sandboxId === computer.id
@@ -246,6 +267,53 @@ export function TeammatePage({
         onOpen={profile}
       />
     </div>
+  )
+}
+
+/** The conversation while the screen takes the page: the teammate, and the way back. */
+function ConversationStrip({
+  teammate,
+  waiting,
+  onShow,
+}: {
+  teammate: Teammate
+  waiting: number
+  onShow: () => void
+}) {
+  return (
+    <section
+      aria-label={`${teammate.name}'s conversation, folded`}
+      className="flex w-12 shrink-0 flex-col items-center gap-1 pt-4.5 pb-2.5"
+    >
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Show the conversation"
+        title="Show the conversation"
+        className="text-muted-foreground hover:text-foreground"
+        onClick={onShow}
+      >
+        <ArrowLineRightIcon />
+      </Button>
+      <span className="my-1 h-px w-6 bg-border" />
+      <span
+        className="relative"
+        title={
+          waiting
+            ? `${teammate.name}: ${waiting} waiting for you`
+            : teammate.name
+        }
+      >
+        <TeammateAvatar
+          name={teammate.name}
+          avatar={teammate.avatar}
+          className="size-7 text-[0.625rem]"
+        />
+        {waiting > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-(--st-waiting) ring-2 ring-background" />
+        )}
+      </span>
+    </section>
   )
 }
 
