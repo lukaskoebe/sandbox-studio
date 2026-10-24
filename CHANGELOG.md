@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 — 2026-10-25
 
 A teammate's page is now your conversation with it beside the screen of its computer, and a
 computer without a teammate gets that screen to itself.
