@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test"
 import { expect, sandboxName, test, type Api } from "./fixtures"
 
-/** The group row of a domain: its name, then how many rules sit under it. */
+/** The heading row of a domain with several rules: its name, then how many sit under it. */
 function groupRow(page: Page, domain: string, count: number) {
   const name = new RegExp(`^${domain.replace(/\./g, "\\.")}\\s*${count}$`)
   return page.getByRole("cell", { name })
@@ -96,7 +96,8 @@ test("rules group by registrable domain, and the filters live in the URL", async
   await expect(host(rules.cdn)).toBeVisible()
   await expect(host(rules.www)).toBeVisible()
   await expect(groupRow(page, rules.domain, 2)).toBeVisible()
-  await expect(groupRow(page, rules.other, 1)).toBeVisible()
+  // A domain with one rule needs no heading: the host names it.
+  await expect(groupRow(page, rules.other, 1)).toHaveCount(0)
 
   const search = page.getByRole("searchbox", { name: "Search hosts" })
   await search.fill("cdn.")

@@ -20,7 +20,7 @@ Studio holds the original connection for up to 60 seconds. If you allow it befor
 
 ![A network request waiting for an Allow or Deny decision](../../assets/screenshots/approval.jpg)
 
-**Settings → Network** sets the security level, lists your rules, grouped by domain, with search and filters for scope and action, and lists the curated hosts. Connections waiting for your decision are on **Home** and in the approval inbox, and **Settings → Activity** lists the ones already decided; its **Network** filter shows only them. To see which hosts one sandbox reached, choose **Connections** in its computer's **⋯** menu.
+**Settings → Network** sets the security level, lists your rules, sorted by domain, with search and filters for scope, action and origin, and lists the curated hosts. Connections waiting for your decision are on **Home** and in the approval inbox, and **Settings → Activity** lists the ones already decided; its **Network** filter shows only them. To see which hosts one sandbox reached, choose **Connections** in its computer's **⋯** menu.
 
 ## Security levels
 

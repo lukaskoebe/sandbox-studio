@@ -100,19 +100,21 @@ function LocalNetworkSection({ env }: { env: string }) {
   }
 
   return (
-    <section className="grid gap-3">
+    <section className="grid gap-2">
       <SectionHeader
         title="Local network"
         icon={ShareNetworkIcon}
         area="network"
         count={hosts.length || undefined}
       />
-      <TrustNote anchor="local-network">
+      <TrustNote
+        anchor="local-network"
+        warning="Only list hosts you trust: approvals, rules and imported environment files never add them here."
+      >
         Sandboxes reach public addresses only. List the devices on your local
         network or behind this computer's VPN that they may reach too, such as a
         NAS at 192.168.178.20 or git.company.local. Each connection still needs
-        a rule or an approval. Only list hosts you trust: approvals, rules and
-        imported environment files never add them here.
+        a rule or an approval.
       </TrustNote>
 
       {/* One card: the hosts as rows, then the form to add one as its last row. */}
@@ -227,21 +229,22 @@ function LocalNetworkSection({ env }: { env: string }) {
   )
 }
 
-/** The warning every opt-in of this page carries, with a link to its docs. */
+/**
+ * What a section opens up, with a link to its docs, then the warning every opt-in of this page
+ * carries.
+ */
 function TrustNote({
   anchor,
+  warning,
   children,
 }: {
   anchor: string
+  warning: string
   children: ReactNode
 }) {
   return (
-    <div
-      role="note"
-      className="flex gap-2 rounded-(--radius) border border-amber-500/40 bg-amber-500/10 p-3 text-xs/relaxed"
-    >
-      <WarningIcon className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-      <p>
+    <div className="grid gap-1.5 text-xs/relaxed">
+      <p className="max-w-3xl text-muted-foreground">
         {children}{" "}
         <a
           href={`https://lukaskoebe.github.io/sandbox-studio/network/#${anchor}`}
@@ -251,6 +254,13 @@ function TrustNote({
         >
           Learn more
         </a>
+      </p>
+      <p role="note" className="flex gap-1.5">
+        <WarningIcon
+          className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+          aria-hidden
+        />
+        {warning}
       </p>
     </div>
   )
@@ -309,14 +319,17 @@ function HostPortsSection({ env }: { env: string }) {
   }
 
   return (
-    <section className="grid gap-3">
+    <section className="grid gap-2">
       <SectionHeader
         title="This computer"
         icon={DesktopIcon}
         area="network"
         count={ports.length || undefined}
       />
-      <TrustNote anchor="this-computer">
+      <TrustNote
+        anchor="this-computer"
+        warning="Only open the ports of services you trust sandboxes with."
+      >
         Sandboxes never reach the computer Studio runs on. Open a port to let
         them connect to a service here, such as SSH on 22 or a database, at{" "}
         <span className="font-mono">host.studio.internal</span>. Each connection

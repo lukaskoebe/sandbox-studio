@@ -186,10 +186,16 @@ private hosts list and this computer's ports are edited under Settings → Ports
   rules, the [curated list](#curated-list) with a switch for each entry, and the tracker list with
   its switch. The rules' search and scope, action, origin and unused
   filters are URL search params (`q`, `scope`, `action`, `origin`, `unused=1`), so a filtered
-  view can be shared. Each rule shows its origin as a chip, and an unused rule an "unused"
-  chip. Delete unused removes the unused rules the filters show, after a confirmation. Rules are grouped
-  by registrable domain: the last two labels, or three under a short list of two-label
-  suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used.
+  view can be shared. The filters sit on top of the rules' card. Each rule shows its action as
+  a word with a mark, its scope with the computer's, teammate's or environment's mark, and its
+  age, followed by how it came to be unless it was written by hand ("approved", "by the
+  reviewer"); an unused rule has an "unused" chip, and a rule without a note offers Add note on
+  hover. Delete unused removes the unused rules the filters show, after a confirmation. Rules are
+  sorted by registrable domain: the last two labels, or three under a short list of two-label
+  suffixes such as `co.uk` (`web/src/lib/network-rules.ts`). No public suffix list is used. A
+  domain with several rules gets a heading row, with its rules indented under it. The curated
+  list shows its entries in columns by group, each with its switch and its host count, which
+  opens the hosts.
 - **Settings → Activity** (`web/src/routes/e.$env.settings.activity.tsx`) lists every decided
   approval of the environment, newest first; its Network chip (`?kind=network`) shows the network
   ones: the ones you decided, and the ones a level, the curated list or the
@@ -265,11 +271,12 @@ Each environment has one level, which decides what happens when no rule matches.
 always win, in either direction, and so do the tracker list and the sites and hosts a browser
 session was approved for, which come before the level. Each teammate can override the level for its own
 sandboxes; "Environment default" follows the environment. The level is set on Settings → Network,
-in the teammate's settings, and in the setup's network step, with one card per level
-(`SecurityLevelPicker` in `web/src/components/security-level.tsx`): what connects without asking,
-with examples and a link to the curated list, what asks, and at `assisted` the reviewer's model or
-that there is none. Guarded is marked recommended, and a line beneath says what no level lets
-through (below).
+in the teammate's settings, and in the setup's network step, with one radio row per level in one
+card (`SecurityLevelPicker` in `web/src/components/security-level.tsx`): what connects without
+asking, with examples and a link to the curated list, what asks, and at `assisted` the reviewer's
+model or that there is none. Where the card is wide, those sit in two columns under one head
+each, so the levels compare at a glance; where it is narrow, each row labels them. Guarded is
+marked recommended, and a line beneath says what no level lets through (below).
 
 | Level | No rule matches → | For whom |
 | --- | --- | --- |

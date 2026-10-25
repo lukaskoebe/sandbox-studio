@@ -6,6 +6,7 @@ import { ShieldCheckIcon } from "@phosphor-icons/react"
 import { SectionHeader } from "@/components/section-header"
 import { Badge } from "@/components/ui/badge"
 import { $api, errorMessage, type Teammate } from "@/lib/api/client"
+import { cn } from "@/lib/utils"
 
 /** The four security levels, from the most closed to the most open (docs/network.md). */
 export const securityLevels = [
@@ -45,7 +46,10 @@ export function useEnvironmentLevel(env: string) {
 }
 
 /** What a level lets through and what it asks about, with examples. */
-function LevelExamples({ env, level }: { env: string; level: SecurityLevel }) {
+function levelExamples(
+  env: string,
+  level: SecurityLevel
+): [ReactNode, ReactNode] {
   const curated = (
     <Link
       to="/e/$env/settings/network"
@@ -56,39 +60,27 @@ function LevelExamples({ env, level }: { env: string; level: SecurityLevel }) {
       curated list
     </Link>
   )
-  const examples = {
+  return {
     locked: [
       "Only hosts your rules allow.",
       "Every other host: even npm install asks.",
-    ],
+    ] as [ReactNode, ReactNode],
     guarded: [
       <>
         npm, PyPI, Go, crates, Docker Hub, GitHub reads and the rest of the{" "}
         {curated}.
       </>,
       "Every other host.",
-    ],
+    ] as [ReactNode, ReactNode],
     assisted: [
       <>The {curated}, and the hosts an AI reviewer allows.</>,
       "The hosts the reviewer is unsure about.",
-    ],
+    ] as [ReactNode, ReactNode],
     open: [
       "Any public host, logged in Activity.",
       "No public host. Your deny rules and the tracker list still apply.",
-    ],
+    ] as [ReactNode, ReactNode],
   }[level]
-  return (
-    <dl className="grid gap-1">
-      <div>
-        <dt className="text-muted-foreground">Connects without asking</dt>
-        <dd>{examples[0]}</dd>
-      </div>
-      <div>
-        <dt className="text-muted-foreground">Asks you</dt>
-        <dd>{examples[1]}</dd>
-      </div>
-    </dl>
-  )
 }
 
 /** Who reviews at Assisted: the environment's utility model, or nobody, so it asks like Guarded. */
@@ -98,7 +90,7 @@ function ReviewerLine({ env }: { env: string }) {
   })
   if (!reviewer.data) return null
   return (
-    <p className="text-muted-foreground">
+    <p className="text-muted-foreground @xl:col-span-2">
       {reviewer.data.available
         ? `Reviewer: ${reviewer.data.model} on ${reviewer.data.provider}. Its decisions show in Activity, where you can revert them.`
         : "No provider has a utility model yet, so it asks like Guarded."}
@@ -106,7 +98,15 @@ function ReviewerLine({ env }: { env: string }) {
   )
 }
 
-function LevelCard({
+/** The grid every row of the picker shares, so the columns line up under their heads. */
+const levelColumns = "@xl:grid-cols-[11rem_minmax(0,1fr)_minmax(0,1fr)]"
+
+/**
+ * One level as a row of the picker: the radio and the level's name, then what it lets through
+ * and what it asks about. Where the picker is wide these sit in columns under one head each;
+ * where it is narrow they stack, each with its own label.
+ */
+function LevelRow({
   name,
   value,
   checked,
@@ -125,8 +125,13 @@ function LevelCard({
 }) {
   const id = `${name}-${value || "default"}`
   return (
-    <label className="grid cursor-pointer content-start gap-2 rounded-lg p-3 text-xs/relaxed ring-1 ring-foreground/10 transition-colors hover:bg-muted/40 has-checked:bg-primary/5 has-checked:ring-2 has-checked:ring-primary has-focus-visible:outline-2 has-focus-visible:outline-ring has-disabled:cursor-default">
-      <span className="flex items-center gap-2">
+    <label
+      className={cn(
+        "grid cursor-pointer gap-x-4 gap-y-1.5 px-3 py-2.5 text-xs/relaxed transition-colors hover:bg-muted/40 has-checked:bg-primary/5 has-checked:shadow-[inset_2px_0_0_var(--color-primary)] has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-ring has-disabled:cursor-default",
+        levelColumns
+      )}
+    >
+      <span className="flex items-start gap-2 self-start">
         <input
           type="radio"
           name={name}
@@ -135,23 +140,49 @@ function LevelCard({
           onChange={onSelect}
           aria-labelledby={id}
           aria-describedby={`${id}-text`}
-          className="size-3.5 accent-primary outline-none"
+          className="mt-[0.1875rem] size-3.5 shrink-0 accent-primary outline-none"
         />
-        <span id={id} className="text-sm font-medium">
-          {title}
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span id={id} className="text-[0.8125rem] font-semibold">
+            {title}
+          </span>
+          {badge && <Badge variant="secondary">{badge}</Badge>}
         </span>
-        {badge && <Badge variant="secondary">{badge}</Badge>}
       </span>
-      <div id={`${id}-text`} className="grid gap-2 pl-5.5">
+      <div
+        id={`${id}-text`}
+        className="grid gap-x-4 gap-y-1.5 @max-xl:pl-5.5 @xl:col-span-2 @xl:grid-cols-subgrid"
+      >
         {children}
       </div>
     </label>
   )
 }
 
+/** A level's two cells; the labels show where there are no column heads to say them. */
+function LevelCells({ allows, asks }: { allows: ReactNode; asks: ReactNode }) {
+  return (
+    <>
+      <p>
+        <span className="block text-muted-foreground @xl:sr-only">
+          Connects without asking
+        </span>
+        {allows}
+      </p>
+      <p>
+        <span className="block text-muted-foreground @xl:sr-only">
+          Asks you
+        </span>
+        {asks}
+      </p>
+    </>
+  )
+}
+
 /**
- * The four levels as radio cards, two by two where there is room, each saying what connects
- * without asking and what asks. A teammate's picker adds the environment's default before them.
+ * The four levels as radio rows in one card, from the most closed to the most open. Each says
+ * what connects without asking and what asks, in two columns where there is room, so the levels
+ * compare at a glance. A teammate's picker adds the environment's default before them.
  */
 export function SecurityLevelPicker({
   env,
@@ -178,38 +209,52 @@ export function SecurityLevelPicker({
       className="@container grid min-w-0 gap-2"
     >
       <legend className="sr-only">Security level</legend>
-      {environmentDefault && (
-        <LevelCard
-          name={name}
-          value=""
-          checked={value === ""}
-          onSelect={() => onChange("")}
-          title={
-            inherited
-              ? `Environment default (${inherited.label})`
-              : "Environment default"
-          }
+      <div className="divide-y overflow-hidden rounded-(--radius) border bg-card">
+        <div
+          aria-hidden
+          className={cn(
+            "hidden gap-x-4 bg-muted/30 px-3 py-1.5 text-[0.6875rem] font-medium text-muted-foreground @xl:grid",
+            levelColumns
+          )}
         >
-          <p className="text-muted-foreground">
-            Follows the environment's level, set in Settings → Network.
-          </p>
-        </LevelCard>
-      )}
-      <div className="grid gap-2 @lg:grid-cols-2">
-        {securityLevels.map((l) => (
-          <LevelCard
-            key={l.value}
+          <span>Level</span>
+          <span>Connects without asking</span>
+          <span>Asks you</span>
+        </div>
+        {environmentDefault && (
+          <LevelRow
             name={name}
-            value={l.value}
-            checked={value === l.value}
-            onSelect={() => onChange(l.value)}
-            title={l.label}
-            badge={l.value === "guarded" ? "Recommended" : undefined}
+            value=""
+            checked={value === ""}
+            onSelect={() => onChange("")}
+            title={
+              inherited
+                ? `Environment default (${inherited.label})`
+                : "Environment default"
+            }
           >
-            <LevelExamples env={env} level={l.value} />
-            {l.value === "assisted" && <ReviewerLine env={env} />}
-          </LevelCard>
-        ))}
+            <p className="text-muted-foreground @xl:col-span-2">
+              Follows the environment's level, set in Settings → Network.
+            </p>
+          </LevelRow>
+        )}
+        {securityLevels.map((l) => {
+          const [allows, asks] = levelExamples(env, l.value)
+          return (
+            <LevelRow
+              key={l.value}
+              name={name}
+              value={l.value}
+              checked={value === l.value}
+              onSelect={() => onChange(l.value)}
+              title={l.label}
+              badge={l.value === "guarded" ? "Recommended" : undefined}
+            >
+              <LevelCells allows={allows} asks={asks} />
+              {l.value === "assisted" && <ReviewerLine env={env} />}
+            </LevelRow>
+          )
+        })}
       </div>
       <p className="text-xs text-muted-foreground">
         At every level your rules come first, and no level lets through the
@@ -224,7 +269,7 @@ export function SecurityLevelPicker({
 export function LevelSection({ env }: { env: string }) {
   const { level, saving, setLevel } = useEnvironmentLevel(env)
   return (
-    <section className="space-y-2 rounded-lg p-3 ring-1 ring-foreground/10">
+    <section className="grid gap-2">
       <SectionHeader
         title="Security level"
         icon={ShieldCheckIcon}

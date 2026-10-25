@@ -217,10 +217,9 @@ function ScopeSection({
         <Table className="min-w-[40rem] table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[28%]">Name</TableHead>
+              <TableHead className="w-[34%]">Name</TableHead>
               <TableHead className="w-[22%]">Hosts</TableHead>
-              <TableHead className="w-[20%]">Placeholder</TableHead>
-              <TableHead>Note</TableHead>
+              <TableHead>Placeholder</TableHead>
               <TableHead className="w-24">Updated</TableHead>
               <TableHead className="sticky right-0 w-24 bg-background">
                 <span className="sr-only">Actions</span>
@@ -232,15 +231,21 @@ function ScopeSection({
               <TableRow key={s.id}>
                 <TableCell className="wrap-anywhere whitespace-normal">
                   <SecretName secret={s} managed={managed} />
+                  {/* The note under the name, where it has the room to be read. */}
+                  {s.note && (
+                    <p
+                      className="mt-0.5 line-clamp-2 text-muted-foreground"
+                      title={s.note}
+                    >
+                      {s.note}
+                    </p>
+                  )}
                 </TableCell>
                 <TableCell className="whitespace-normal">
                   <SecretHosts secret={s} />
                 </TableCell>
                 <TableCell>
                   <SecretPlaceholder secret={s} />
-                </TableCell>
-                <TableCell className="truncate text-muted-foreground">
-                  {s.note}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {formatAge(s.updatedAt)}

@@ -5,11 +5,18 @@ import { SettingsLink } from "@/components/settings/link"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  ArrowsLeftRightIcon,
+  CheckIcon,
+  CubeIcon,
+  FileCodeIcon,
+  GlobeHemisphereWestIcon,
+  ListChecksIcon,
   PencilSimpleIcon,
   PlusIcon,
-  ShieldCheckIcon,
+  ProhibitIcon,
   TrashIcon,
   WarningIcon,
+  type Icon,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,12 +30,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import {
@@ -48,6 +49,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Ident } from "@/components/ident"
+import { TeammateAvatar } from "@/components/teammate-avatar"
 import { RuleDialog } from "@/components/rule-dialog"
 import { TrackerBlocking } from "@/components/tracker-blocking"
 import { CuratedList } from "@/components/curated-list"
@@ -63,8 +65,9 @@ import {
   ruleOrigins,
   ruleScopes,
   type RuleFilter,
+  type RuleOrigin,
 } from "@/lib/network-rules"
-import { formatAge } from "@/lib/utils"
+import { cn, formatAge } from "@/lib/utils"
 
 export const Route = createFileRoute("/e/$env/settings/network")({
   component: NetworkSettings,
@@ -104,7 +107,10 @@ function NetworkSettings() {
   )
 }
 
-/** Rules grouped by the domain they belong to, with search and scope and action filters. */
+/**
+ * The rules in one card: the filters on top, then the table, sorted by the domain a host belongs
+ * to. A domain with several rules gets a row of its own, with its rules indented under it.
+ */
 function RulesTab() {
   const { env } = Route.useParams()
   const filter = Route.useSearch()
@@ -122,9 +128,7 @@ function RulesTab() {
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
   })
-  const teammateNames = new Map(
-    (teammates.data ?? []).map((p) => [p.id, p.name])
-  )
+  const teammateList = new Map((teammates.data ?? []).map((p) => [p.id, p]))
   const now = useNow()
   const shown = filterRules(rules.data ?? [], filter, now)
   const groups = groupRules(shown)
@@ -148,224 +152,253 @@ function RulesTab() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-6">
       <LevelSection env={env} />
-      <SectionHeader
-        title="Rules"
-        icon={ShieldCheckIcon}
-        area="network"
-        count={rules.data ? shown.length : undefined}
-        actions={
-          <Button size="sm" onClick={() => setDialog({})}>
-            <PlusIcon />
-            Add rule
-          </Button>
-        }
-      />
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          type="search"
-          aria-label="Search hosts"
-          placeholder="Search hosts"
-          autoComplete="off"
-          className="h-6 sm:w-56"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setFilter({ q: e.target.value || undefined })
-          }}
-        />
-        <FilterSelect
-          label="Scope"
-          value={filter.scope ?? "any"}
-          options={{
-            any: "Any scope",
-            environment: "Environment",
-            teammate: "Teammate",
-            sandbox: "Sandbox",
-          }}
-          onChange={(v) =>
-            setFilter({ scope: ruleScopes.find((s) => s === v) })
+      <section aria-labelledby="rules-heading" className="grid gap-2">
+        <SectionHeader
+          title={<span id="rules-heading">Rules</span>}
+          icon={ListChecksIcon}
+          area="network"
+          count={rules.data ? shown.length : undefined}
+          actions={
+            <Button size="sm" onClick={() => setDialog({})}>
+              <PlusIcon />
+              Add rule
+            </Button>
           }
         />
-        <FilterSelect
-          label="Action"
-          value={filter.action ?? "any"}
-          options={{
-            any: "Any action",
-            allow: "Allow",
-            proxy: "Proxy",
-            caddy: "Caddy",
-            deny: "Deny",
-          }}
-          onChange={(v) =>
-            setFilter({ action: ruleActions.find((a) => a === v) })
-          }
-        />
-        <FilterSelect
-          label="Origin"
-          value={filter.origin ?? "any"}
-          options={{
-            any: "Any origin",
-            manual: "Manual",
-            approval: "Approval",
-            curated: "Curated",
-            reviewer: "Reviewer",
-          }}
-          onChange={(v) =>
-            setFilter({ origin: ruleOrigins.find((o) => o === v) })
-          }
-        />
-        <label className="flex items-center gap-2 text-xs">
-          <Checkbox
-            checked={filter.unused === 1}
-            onCheckedChange={(on) => setFilter({ unused: on ? 1 : undefined })}
-          />
-          Unused
-        </label>
-        {filter.unused === 1 && unused.length > 0 && (
-          <DeleteUnused env={env} rules={unused} />
-        )}
-      </div>
-
-      {rules.isPending ? (
-        <Spinner className="mx-auto block" />
-      ) : !rules.data?.length ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyTitle>No rules yet</EmptyTitle>
-            <EmptyDescription>
-              Approved connections become rules, so the same host is not asked
-              about again. You can also add one here.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : !groups.length ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          No rules match these filters.
-          <Button variant="link" size="xs" onClick={clearFilters}>
-            Clear filters
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-lg ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Host</TableHead>
-                <TableHead>Ports</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Origin</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead>Note</TableHead>
-                <TableHead>Added</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {groups.map((group) => (
-                <Fragment key={group.domain}>
-                  <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={8}>
-                      <span className="inline-flex items-center gap-2">
-                        <Ident className="font-medium">{group.domain}</Ident>
-                        <span className="font-mono text-muted-foreground">
-                          {group.rules.length}
-                        </span>
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                  {group.rules.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>
-                        <span className="inline-flex max-w-full items-center gap-1.5">
-                          <Ident>{r.host}</Ident>
-                          {(r.method || r.pathPrefix) && (
-                            <RuleChip>
-                              {`${r.method || "any method"} ${r.pathPrefix || "any path"}`}
-                            </RuleChip>
-                          )}
-                          {isUnused(r, now) && <RuleChip>unused</RuleChip>}
-                        </span>
-                        {r.unreachable && (
-                          <Unreachable reason={r.unreachable} />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {r.ports?.length ? (
-                          <Ident>{r.ports.join(", ")}</Ident>
-                        ) : (
-                          <span className="text-muted-foreground">any</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <RuleAction rule={r} />
-                      </TableCell>
-                      <TableCell>
-                        <RuleChip>{r.origin}</RuleChip>
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center gap-1.5">
-                          {r.sandboxId
-                            ? (names.get(r.sandboxId) ?? "Other sandbox")
-                            : r.teammateId
-                              ? `Teammate ${teammateNames.get(r.teammateId) ?? ""}`
-                              : "Environment"}
-                          {r.browserOnly && (
-                            <RuleChip title="Covers what the browsers load, not the sandboxes' own connections">
-                              browser only
-                            </RuleChip>
-                          )}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {r.note ? (
-                          <span
-                            className="block max-w-48 truncate"
-                            title={r.note}
-                          >
-                            {r.note}
-                          </span>
-                        ) : (
-                          // Why a rule is there is easy to forget; a note says it later.
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            className="text-muted-foreground"
-                            onClick={() => setDialog({ rule: r })}
-                          >
-                            <PencilSimpleIcon />
-                            Add note
-                          </Button>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatAge(r.createdAt)}
-                        <ExpiryNote rule={r} now={now} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-end gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Edit rule"
-                            onClick={() => setDialog({ rule: r })}
-                          >
-                            <PencilSimpleIcon />
-                          </Button>
-                          <DeleteRule env={env} rule={r} />
-                        </div>
-                      </TableCell>
+        <p className="text-xs/relaxed text-muted-foreground">
+          Rules come before the level: each allows, proxies or denies a host for
+          the environment, a teammate or one computer. Approving a connection
+          adds one.
+        </p>
+        <div className="overflow-hidden rounded-(--radius) border bg-card text-xs">
+          {rules.isPending ? (
+            <div className="grid h-(--wb-row) place-items-center">
+              <Spinner />
+            </div>
+          ) : !rules.data?.length ? (
+            <p className="px-3 py-2.5 text-muted-foreground">
+              No rules yet. Approved connections become rules, so the same host
+              is not asked about again.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-2 py-1.5">
+                <Input
+                  type="search"
+                  aria-label="Search hosts"
+                  placeholder="Search hosts"
+                  autoComplete="off"
+                  className="h-6 basis-full bg-background sm:w-56 sm:basis-auto"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value)
+                    setFilter({ q: e.target.value || undefined })
+                  }}
+                />
+                <FilterSelect
+                  label="Scope"
+                  value={filter.scope ?? "any"}
+                  options={{
+                    any: "Any scope",
+                    environment: "Environment",
+                    teammate: "Teammate",
+                    sandbox: "Sandbox",
+                  }}
+                  onChange={(v) =>
+                    setFilter({ scope: ruleScopes.find((s) => s === v) })
+                  }
+                />
+                <FilterSelect
+                  label="Action"
+                  value={filter.action ?? "any"}
+                  options={{
+                    any: "Any action",
+                    allow: "Allow",
+                    proxy: "Proxy",
+                    caddy: "Caddy",
+                    deny: "Deny",
+                  }}
+                  onChange={(v) =>
+                    setFilter({ action: ruleActions.find((a) => a === v) })
+                  }
+                />
+                <FilterSelect
+                  label="Origin"
+                  value={filter.origin ?? "any"}
+                  options={{
+                    any: "Any origin",
+                    manual: "Manual",
+                    approval: "Approval",
+                    curated: "Curated",
+                    reviewer: "Reviewer",
+                  }}
+                  onChange={(v) =>
+                    setFilter({ origin: ruleOrigins.find((o) => o === v) })
+                  }
+                />
+                <label className="flex items-center gap-2 px-1">
+                  <Checkbox
+                    checked={filter.unused === 1}
+                    onCheckedChange={(on) =>
+                      setFilter({ unused: on ? 1 : undefined })
+                    }
+                  />
+                  Unused
+                </label>
+                {filter.unused === 1 && unused.length > 0 && (
+                  <DeleteUnused env={env} rules={unused} />
+                )}
+              </div>
+              {!groups.length ? (
+                <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-muted-foreground">
+                  No rules match these filters.
+                  <Button variant="link" size="xs" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Host</TableHead>
+                      <TableHead>Ports</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Scope</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead>Added</TableHead>
+                      <TableHead>
+                        <span className="sr-only">Actions</span>
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </Fragment>
-              ))}
-            </TableBody>
-          </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {groups.map((group) => {
+                      // One rule needs no heading: its host already names the domain.
+                      const nested = group.rules.length > 1
+                      return (
+                        <Fragment key={group.domain}>
+                          {nested && (
+                            <TableRow className="hover:bg-transparent">
+                              <TableCell colSpan={7} className="pt-2.5 pb-1">
+                                <span className="inline-flex items-center gap-2 text-muted-foreground">
+                                  <Ident>{group.domain}</Ident>
+                                  <span className="font-mono">
+                                    {group.rules.length}
+                                  </span>
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {group.rules.map((r) => (
+                            <TableRow key={r.id} className="group/row">
+                              <TableCell className={cn(nested && "pl-6")}>
+                                <span className="inline-flex max-w-full items-center gap-1.5">
+                                  <Ident>{r.host}</Ident>
+                                  {(r.method || r.pathPrefix) && (
+                                    <RuleChip>
+                                      {`${r.method || "any method"} ${r.pathPrefix || "any path"}`}
+                                    </RuleChip>
+                                  )}
+                                  {isUnused(r, now) && (
+                                    <RuleChip>unused</RuleChip>
+                                  )}
+                                </span>
+                                {r.unreachable && (
+                                  <Unreachable reason={r.unreachable} />
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {r.ports?.length ? (
+                                  <Ident>{r.ports.join(", ")}</Ident>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    any
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <RuleAction rule={r} />
+                              </TableCell>
+                              <TableCell>
+                                <span className="flex items-center gap-1.5">
+                                  <RuleScope
+                                    rule={r}
+                                    sandbox={
+                                      r.sandboxId
+                                        ? names.get(r.sandboxId)
+                                        : undefined
+                                    }
+                                    teammate={
+                                      r.teammateId
+                                        ? teammateList.get(r.teammateId)
+                                        : undefined
+                                    }
+                                  />
+                                  {r.browserOnly && (
+                                    <RuleChip title="Covers what the browsers load, not the sandboxes' own connections">
+                                      browser only
+                                    </RuleChip>
+                                  )}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {r.note ? (
+                                  <span
+                                    className="block max-w-48 truncate"
+                                    title={r.note}
+                                  >
+                                    {r.note}
+                                  </span>
+                                ) : (
+                                  // Why a rule is there is easy to forget; a note says it
+                                  // later. The button shows on the row's hover, or always
+                                  // where there is no hover.
+                                  <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    className="text-muted-foreground opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 any-pointer-coarse:opacity-100"
+                                    onClick={() => setDialog({ rule: r })}
+                                  >
+                                    <PencilSimpleIcon />
+                                    Add note
+                                  </Button>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                <span title={originTitles[r.origin]}>
+                                  {formatAge(r.createdAt)}
+                                  {originWords[r.origin] &&
+                                    `, ${originWords[r.origin]}`}
+                                </span>
+                                <ExpiryNote rule={r} now={now} />
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex justify-end gap-0.5">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    title="Edit rule"
+                                    onClick={() => setDialog({ rule: r })}
+                                  >
+                                    <PencilSimpleIcon />
+                                  </Button>
+                                  <DeleteRule env={env} rule={r} />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </>
+          )}
         </div>
-      )}
+      </section>
       <CuratedList env={env} />
       <TrackerBlocking env={env} />
       <RuleDialog
@@ -422,7 +455,7 @@ function FilterSelect({
       <SelectTrigger
         size="sm"
         aria-label={label}
-        className="min-w-0 flex-1 sm:w-36 sm:flex-none"
+        className="min-w-28 flex-1 sm:w-36 sm:flex-none"
       >
         <SelectValue />
       </SelectTrigger>
@@ -453,7 +486,7 @@ function ExpiryNote({ rule, now }: { rule: Rule; now: number }) {
   return text ? <span className="block">{text}</span> : null
 }
 
-/** A small monospace label on a rule: its action, origin or a flag. */
+/** A small monospace label on a rule: its method and path, or a flag. */
 function RuleChip({
   children,
   title,
@@ -471,6 +504,17 @@ function RuleChip({
   )
 }
 
+/** Each action's mark and word: the word carries it, the mark helps a long list scan. */
+const actionLabels: Record<
+  Rule["action"],
+  { icon: Icon; word: string; className?: string }
+> = {
+  allow: { icon: CheckIcon, word: "Allow" },
+  proxy: { icon: ArrowsLeftRightIcon, word: "Proxy" },
+  caddy: { icon: FileCodeIcon, word: "Caddy" },
+  deny: { icon: ProhibitIcon, word: "Deny", className: "text-destructive" },
+}
+
 /** A rule's action, then its proxy headers or Caddyfile summary; secret values stay hidden. */
 function RuleAction({ rule }: { rule: Rule }) {
   const names =
@@ -483,9 +527,18 @@ function RuleAction({ rule }: { rule: Rule }) {
     .map((line) => line.trim())
     .find((line) => line && !line.startsWith("#"))
   const caddyLineCount = caddyfile ? caddyfile.split(/\r?\n/).length : 0
+  const label = actionLabels[rule.action]
+  const ActionIcon = label.icon
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <RuleChip>{rule.action}</RuleChip>
+      <span className="inline-flex shrink-0 items-center gap-1">
+        <ActionIcon
+          weight="bold"
+          className={cn("size-3 text-muted-foreground", label.className)}
+          aria-hidden
+        />
+        {label.word}
+      </span>
       {names && (
         <span className="block max-w-40 truncate" title={names}>
           <Ident>{names}</Ident>
@@ -503,6 +556,69 @@ function RuleAction({ rule }: { rule: Rule }) {
       )}
     </div>
   )
+}
+
+/** Where a rule applies: the whole environment, a teammate's computers, or one computer. */
+function RuleScope({
+  rule,
+  sandbox,
+  teammate,
+}: {
+  rule: Rule
+  sandbox?: string
+  teammate?: { name: string; avatar?: string }
+}) {
+  if (rule.sandboxId)
+    return (
+      <span
+        className="inline-flex min-w-0 items-center gap-1.5"
+        title="One computer"
+      >
+        <CubeIcon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+        <span className="truncate">{sandbox ?? "Other sandbox"}</span>
+      </span>
+    )
+  if (rule.teammateId)
+    return (
+      <span
+        className="inline-flex min-w-0 items-center gap-1.5"
+        title="A teammate's computers"
+      >
+        <TeammateAvatar
+          name={teammate?.name ?? "?"}
+          avatar={teammate?.avatar}
+          className="size-4 text-[0.5rem]"
+        />
+        <span className="truncate">{teammate?.name ?? "Other teammate"}</span>
+      </span>
+    )
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <GlobeHemisphereWestIcon
+        className="size-3.5 shrink-0 text-muted-foreground"
+        aria-hidden
+      />
+      Environment
+    </span>
+  )
+}
+
+/** How a rule came to be, after its age; a rule written by hand says nothing more. */
+const originWords: Record<RuleOrigin, string | undefined> = {
+  manual: undefined,
+  approval: "approved",
+  curated: "curated",
+  reviewer: "by the reviewer",
+}
+
+const originTitles: Record<RuleOrigin, string> = {
+  manual: "Added by hand",
+  approval: "Added by approving a connection",
+  curated: "Added from the curated list",
+  reviewer: "Added by the AI reviewer",
 }
 
 /** Deletes the unused rules shown by the filters, after a confirmation. */

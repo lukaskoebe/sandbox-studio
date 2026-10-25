@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Settings → Network:** the security levels are rows of one card, with what connects without
+  asking and what asks in two columns, so they compare at a glance. The rules' filters sit on
+  top of their card; each rule shows its action and scope with a mark, its age with how it came
+  to be, and **Add note** on hover. A domain gets a heading only when it has several rules. The
+  curated list shows its entries in columns by group, with each entry's hosts behind its count,
+  and says when the environment is Locked and the list isn't used. Trackers is one switch with
+  its list beneath.
+- **Settings → Ports and LAN:** what each section opens up reads as text, with one warning line
+  instead of a box.
+- **Settings → Secrets:** a secret's note sits under its name, which leaves its hosts and
+  placeholder room.
+- **Switches** that are on show their color in dark mode too.
+
 ## v0.7.0 — 2026-10-25
 
 A teammate's page is now your conversation with it beside the screen of its computer, and a

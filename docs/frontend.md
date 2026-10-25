@@ -63,7 +63,7 @@ sideways. Its sections:
 | Group | Section | Shows |
 |---|---|---|
 | This environment | General (`general`) | start at login, "Open setup" (`/setup`) once Home's setup card is gone, and the environment file (export and import) |
-| | Network (`network`) | an intro, the security level, the network rules (filters in the URL: `q`, `scope`, `action`, `origin`, `unused`; grouped by registrable domain) and the curated list ([network](network.md)) |
+| | Network (`network`) | an intro, the security level, the network rules (filters in the URL: `q`, `scope`, `action`, `origin`, `unused`; sorted by registrable domain, with a heading for a domain with several rules), the curated list and the tracker list ([network](network.md)) |
 | | Secrets (`secrets`) | secrets, in a section per scope: the environment's, then each teammate's, then each sandbox's, each with an add button that preselects its scope |
 | | Shared memory (`memory`) | shared memory: pages, facts, conflicts, search, sessions |
 | | Activity (`activity`) | every decided approval of the environment (network requests, git pushes and pull requests, chat tool permissions, browser actions, memory), newest first, with chips for All, Network, Git, Chats, Browser and Memory kept in `?kind=`. Its columns: Decided, What (the kind and the host or a summary; a push links to its review page), From, Decision (with Revert for a reviewer's network decision) and Details (the reason, or a push's outcome) |
