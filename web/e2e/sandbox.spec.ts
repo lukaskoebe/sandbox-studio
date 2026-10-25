@@ -82,6 +82,8 @@ test("terminal: a tmux copy reaches the clipboard, and right-click opens Copy an
   await expect(page.getByRole("menuitem", { name: /Copy/ })).toBeDisabled()
   await page.evaluate(() => navigator.clipboard.writeText("echo pasted"))
   await page.getByRole("menuitem", { name: /Paste/ }).click()
+  // The paste reads the clipboard first: Enter goes after it, or it runs an empty line.
+  await expect(term.rows).toContainText("$ echo pasted")
   await page.keyboard.press("Enter")
   await expect(term.line("pasted")).toHaveCount(1)
 })

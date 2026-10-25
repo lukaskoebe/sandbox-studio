@@ -56,7 +56,8 @@ test("a chat's agent answers, asks for a permission and goes on once allowed", a
     .getByRole("button", { name: "http://localhost:5173/login" })
     .click()
   await opened
-  await (await popup).close()
+  // Closing the popup while it loads can hang in CI; it closes with the context.
+  await popup
   await expect(
     main.getByRole("button", { name: "Allow", exact: true })
   ).toHaveCount(0)
