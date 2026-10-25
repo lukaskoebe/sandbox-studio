@@ -19,6 +19,8 @@ type previewOpenPath struct {
 	// Embed is for the chat's preview panel, which frames the preview.
 	Embed bool `query:"embed" doc:"Log in for an iframe: the preview cookie becomes SameSite=None; Secure; Partitioned"`
 	Fresh bool `query:"fresh" doc:"Clear the preview's caches and storage, its service workers among them, as it logs in"`
+	// Renew is for the preview panel's hidden frame, which keeps a shown preview's login.
+	Renew bool `query:"renew" doc:"Only renew the preview's cookies: the login answers with an empty page instead of the preview"`
 	// Path is for a link the agent wrote, such as localhost:5173/login.
 	Path string `query:"path" maxLength:"2000" doc:"The page to land on after the login, a path on the preview's host such as /login; the root when empty"`
 }
@@ -77,6 +79,9 @@ func (s *Server) registerPreviews(api huma.API) {
 		}
 		if in.Fresh {
 			query.Set("fresh", "1")
+		}
+		if in.Renew {
+			query.Set("renew", "1")
 		}
 		if in.Path != "" && in.Path != "/" {
 			// The login checks it again; this only refuses what could never land.

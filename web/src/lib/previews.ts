@@ -9,16 +9,22 @@ export const onStudioMachine = ["localhost", "127.0.0.1", "[::1]"].includes(
 /**
  * How a preview opens. embed makes the preview cookie work inside an iframe. fresh clears the
  * preview's caches and storage first, service workers among them: a worker can keep serving
- * an app that no longer runs on the port. path is the page to land on, such as /login.
+ * an app that no longer runs on the port. path is the page to land on, such as /login. renew
+ * only sets the cookies again, for a preview that is already open: the login shows an empty page.
  */
-export type PreviewOpen = { embed?: boolean; fresh?: boolean; path?: string }
+export type PreviewOpen = {
+  embed?: boolean
+  fresh?: boolean
+  path?: string
+  renew?: boolean
+}
 
 /** The one-time login URL of a sandbox port's preview; every load needs a new one. */
 export async function previewLoginURL(
   env: string,
   id: string,
   port: number,
-  { embed = false, fresh = false, path }: PreviewOpen = {}
+  { embed = false, fresh = false, path, renew = false }: PreviewOpen = {}
 ): Promise<string> {
   const { data, error, response } = await fetchClient.POST(
     "/api/environments/{env}/sandboxes/{id}/previews/{port}/open",
@@ -26,11 +32,12 @@ export async function previewLoginURL(
       params: {
         path: { env, id, port },
         query:
-          embed || fresh || path
+          embed || fresh || path || renew
             ? {
                 ...(embed && { embed }),
                 ...(fresh && { fresh }),
                 ...(path && { path }),
+                ...(renew && { renew }),
               }
             : undefined,
       },

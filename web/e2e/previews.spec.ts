@@ -98,6 +98,46 @@ test("previews: an app's service worker works in a preview framed by Studio", as
   ).toBe(0)
 })
 
+// A preview the screen shows logs in again while it stays open, so the app keeps working past
+// its cookies' eight hours without a reload. Clearing them stands in for their expiry.
+test("previews: a shown preview renews its login", async ({
+  page,
+  api,
+  env,
+}) => {
+  const previews = await api.json<{ enabled: boolean }>(
+    "GET",
+    "/api/system/previews"
+  )
+  await api.json("PUT", "/api/system/previews", { enabled: true })
+  try {
+    const id = await api.createSandbox(sandboxName("renew"))
+    await api.guestReady(id)
+    await page.clock.install()
+    await page.goto(`/e/${env}/sandboxes/${id}?tab=preview`)
+    const element = page.locator('iframe[title="Preview of port 3000"]')
+    await expect(
+      element.contentFrame().getByText(/Preview of sandbox/)
+    ).toBeVisible()
+    const frame = (await (await element.elementHandle()).contentFrame())!
+    const status = () =>
+      frame.evaluate(async () => (await fetch("/api/items")).status)
+    expect(await status()).toBe(200)
+
+    await page.context().clearCookies({ domain: new URL(frame.url()).hostname })
+    expect(await status()).toBe(403)
+    await page.clock.fastForward("01:01:00")
+    await expect.poll(status).toBe(200)
+    await expect(
+      page.locator('iframe[title="Renewing the preview of port 3000"]')
+    ).toHaveCount(0)
+  } finally {
+    await api.json("PUT", "/api/system/previews", {
+      enabled: previews!.enabled,
+    })
+  }
+})
+
 // Previews are off until the user turns them on in Settings → General; a computer's screen
 // has a Preview tab only then.
 test("previews: the screen offers them once Settings turns them on", async ({

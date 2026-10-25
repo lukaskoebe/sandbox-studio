@@ -60,8 +60,6 @@ says.
   [browser](docs/browser.md#verified-vs-pending-live)
 - The teammate browser keeps one profile, so a service worker an app registered on
   `localhost:PORT` stays and can answer for another app on that port later → [browser](docs/browser.md)
-- An embedded preview's frame cookie lasts 8 hours like the session; after that an app shell its
-  service worker cached loads, but its fetches get 403 until the page is reloaded through Studio
 - Safari's handling of `*.localhost` previews as secure contexts is unverified
 - Stealth mode in a browser VM: Debian Chromium's version in the user agent, and a switch
   restarting the browser under a connected live view → [browser](docs/browser.md#stealth-mode)

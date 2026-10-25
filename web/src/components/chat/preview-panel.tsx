@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ArrowClockwiseIcon,
   BroomIcon,
@@ -143,6 +143,9 @@ export function PreviewPanel({
   )
 }
 
+/** How old a shown preview's login gets before it is renewed; its cookies last eight hours. */
+const renewAfter = 60 * 60_000
+
 function PreviewFrame({
   env,
   sandboxId,
@@ -156,6 +159,9 @@ function PreviewFrame({
 }) {
   const [src, setSrc] = useState<string>()
   const [error, setError] = useState<string>()
+  // When the frame last logged in, and the hidden frame of a renewal while it loads.
+  const loggedIn = useRef(0)
+  const [renewal, setRenewal] = useState<string>()
 
   // Every load needs a new one-time login URL.
   useEffect(() => {
@@ -166,6 +172,7 @@ function PreviewFrame({
     }).then(
       (url) => {
         if (cancelled) return
+        loggedIn.current = Date.now()
         setError(undefined)
         setSrc(url)
       },
@@ -177,6 +184,37 @@ function PreviewFrame({
       cancelled = true
     }
   }, [env, sandboxId, port, reloadKey])
+
+  // The preview's cookies last eight hours from its login (docs/api.md). Once the login is an
+  // hour old, a hidden frame logs in again, so an app left open keeps working, its service
+  // worker's fetches included, without being reloaded. The check runs every minute, which
+  // also catches up after the computer slept, and when the tab shows again.
+  useEffect(() => {
+    if (!src) return
+    let busy = false
+    let stopped = false
+    const check = () => {
+      if (busy || Date.now() - loggedIn.current < renewAfter) return
+      busy = true
+      previewLoginURL(env, sandboxId, port, { embed: true, renew: true })
+        .then((url) => {
+          if (stopped) return
+          loggedIn.current = Date.now()
+          setRenewal(url)
+        })
+        // Studio may be down for a moment; the next check tries again.
+        .catch(() => undefined)
+        .finally(() => (busy = false))
+    }
+    const timer = setInterval(check, 60_000)
+    const shown = () => document.visibilityState === "visible" && check()
+    document.addEventListener("visibilitychange", shown)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+      document.removeEventListener("visibilitychange", shown)
+    }
+  }, [env, sandboxId, port, src])
 
   if (error) {
     return (
@@ -193,6 +231,15 @@ function PreviewFrame({
         referrerPolicy="no-referrer"
         className="min-h-80 w-full flex-1 rounded-md bg-white ring-1 ring-foreground/10"
       />
+      {renewal && (
+        <iframe
+          hidden
+          src={renewal}
+          title={`Renewing the preview of port ${port}`}
+          referrerPolicy="no-referrer"
+          onLoad={() => setRenewal(undefined)}
+        />
+      )}
       <p className="text-[0.6875rem] text-muted-foreground">
         Blank, or says it refused to connect? Some apps can't be shown inside
         Studio: use Open in new tab.

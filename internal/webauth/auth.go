@@ -392,6 +392,13 @@ func (a *Auth) servePreviewLogin(w http.ResponseWriter, r *http.Request, host st
 		http.SetCookie(w, frame)
 	}
 	http.SetCookie(w, cookie)
+	if r.URL.Query().Get("renew") == "1" {
+		// The preview panel renews the cookies of a preview it shows from a hidden frame, so
+		// an app left open keeps working past their eight hours; the app's page stays as it is.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, `<!doctype html><meta charset="utf-8"><title>Preview renewed</title>`)
+		return
+	}
 	if r.URL.Query().Get("fresh") == "1" {
 		// Starts the preview over: its caches and storage go, service workers among them,
 		// which may serve an app that no longer runs on the port. Cookies stay, so the one

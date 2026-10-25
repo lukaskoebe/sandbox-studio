@@ -518,6 +518,21 @@ func TestPreviewTicketTargetBindingCookieIsolationAndRedirect(t *testing.T) {
 		t.Fatalf("fresh preview login = %d %v %q", fresh.Code, fresh.Header(), fresh.Body.String())
 	}
 
+	// The panel's renewal sets both cookies again and leaves the app's page where it is.
+	renewToken, err := a.IssuePreview(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	renew := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+renewToken+"&embed=1&renew=1&next=/app", host, nil, "", downstream())
+	renewed := map[string]bool{}
+	for _, c := range renew.Result().Cookies() {
+		renewed[c.Name] = c.MaxAge == int(previewSessionLife.Seconds())
+	}
+	if renew.Code != http.StatusOK || renew.Header().Get("Location") != "" || renew.Header().Get("Cache-Control") != "no-store" ||
+		!strings.Contains(renew.Body.String(), "Preview renewed") || len(renewed) != 2 || !renewed[PreviewCookie] || !renewed[PreviewFrameCookie] {
+		t.Fatalf("preview renewal = %d %v %q", renew.Code, renew.Header(), renew.Body.String())
+	}
+
 	// The same one-time ticket cannot be redeemed again.
 	again := request(a, http.MethodGet, "http://"+host+"/__studio/preview-login?token="+token, host, nil, "", downstream())
 	if again.Code != http.StatusForbidden {

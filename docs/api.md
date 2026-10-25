@@ -52,6 +52,11 @@ from other local users and from web pages:
   with `Sec-Fetch-Site: same-origin` or `Sec-Fetch-Mode: navigate`, which the preview's own
   pages and worker send and another site's requests can't (browsers set those headers);
   its signature is of its own kind, so it can't stand in for `studio_preview`.
+- While the panel shows a preview, it logs in again once the login is an hour old, from a
+  hidden frame and with a new ticket (`renew=1`): the login sets both cookies and answers with
+  an empty page instead of the preview. An app left open keeps working past the eight hours,
+  its service worker's fetches included, without being reloaded. The panel checks every
+  minute, which catches up after the computer slept, and when its tab shows again.
 - The Vite dev server (`pnpm dev`, `pnpm dev:lan`) proxies `/api` with Studio's origin and
   goes through the same login exchange; it gets no key or bypass.
 

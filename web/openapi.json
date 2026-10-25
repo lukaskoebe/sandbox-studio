@@ -15668,6 +15668,16 @@
             }
           },
           {
+            "description": "Only renew the preview's cookies: the login answers with an empty page instead of the preview",
+            "explode": false,
+            "in": "query",
+            "name": "renew",
+            "schema": {
+              "description": "Only renew the preview's cookies: the login answers with an empty page instead of the preview",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "The page to land on after the login, a path on the preview's host such as /login; the root when empty",
             "explode": false,
             "in": "query",

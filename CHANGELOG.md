@@ -14,6 +14,8 @@
 - **Settings → Secrets:** a secret's note sits under its name, which leaves its hosts and
   placeholder room.
 - **Switches** that are on show their color in dark mode too.
+- **Previews** on a computer's screen stay logged in while they are shown: an app left open
+  for more than eight hours no longer gets refused until it is reloaded.
 
 ## v0.7.0 — 2026-10-25
 
