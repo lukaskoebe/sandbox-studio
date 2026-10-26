@@ -24,6 +24,10 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   and its CPUs plus as many again, at most 4 more. The Resources dialog says per resource
   whether a value applies now or needs a restart, and has **Save and restart** for the rest;
   until then the menu shows both, such as `2 CPU · 4 GiB · 12 GiB after restart`.
+- **Git review:** an agent can rebase a branch and force-push it. The review says it rewrites
+  history, lists the commits it drops with the new ones that replace them, and only
+  **Force-push** (`F` in the terminal app) approves it; Studio pushes with a lease on the
+  commit you reviewed. The default branch still takes only fast-forward pushes.
 - **Long chats** open on their last 40 turns, and load the earlier ones from a row above them,
   which also loads when you scroll up to it. They open faster and scroll lighter.
 - **Chats:** sending a message no longer jumps a long chat back to its first message. The

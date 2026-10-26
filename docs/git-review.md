@@ -255,7 +255,10 @@ body is limited to 16 MiB.
    - only `refs/heads/*`, no deletes, at most 32 updates;
    - the old value must match the mirrored ref ("stale info" otherwise);
    - the new commit and everything it reaches must be present;
-   - the new commit must descend from the old one: non-fast-forward pushes are refused.
+   - the new commit descends from the old one (a fast-forward), or the push is *forced*: it
+     rewrites the branch, such as `git push --force-with-lease` after a rebase. A forced push
+     of the repository's default branch is refused ("non-fast-forward"); while the forge
+     doesn't say which that is (no API, or the API failed), `main` and `master` are.
 3. An accepted update is kept under `refs/studio/push/<id>`, a `git.push` approval is
    raised (subject `<forge>/<path>:<branch>`, deduplicated; a newer push to the
    same branch supersedes a pending one), and git prints
@@ -266,10 +269,23 @@ The approval shows teammate, sandbox, repository, branch, old and new commit, up
 commits, and a unified diff bounded at 512 KiB. Binary files, submodules and files over
 1 MiB are summarized instead of diffed.
 
+A forced push's review (`forced: true`) also lists the commits it drops (`dropped`: on the
+forge's branch, not in the push; up to 50), each with `replacedBy`, the pushed commit with
+the same subject and author where a rebase kept one, and `tipFiles`, the files whose content
+differs between the old and the new tip (up to 20): none for a rebase that only moved the
+commits, what changed for one that also edited them. Its diff starts where the new history
+forks from the forge's, as a new branch's does (`base`, and `baseBranch` when that is a
+branch's tip), so it shows the rewritten commits rather than whatever the rebase took in.
+The review page shows it under **Rewrites history**, and approving it takes **Force-push**:
+`decide` with `allow` needs `"force": true` for a forced push and is refused (400) without
+it, so a client that doesn't know about rewrites can't approve one by accident.
+
 ## Decisions
 
 - **Approve:** Studio pushes the staged commit upstream with the token or key, provided the
-  upstream branch is still at the reviewed old commit (or already at the new one). The
+  upstream branch is still at the reviewed old commit (or already at the new one). The push
+  names that old commit, so the forge updates the branch only from it: a lease, which keeps
+  a forced push from dropping commits that reached the forge after the review. The
   push state becomes `pushed` or `failed` with the forge's message.
 - **Reject** (optionally with a note) or **ignore:** the push becomes `rejected`.
 - A rejected or failed push is delivered to the sandbox on its next fetch of that

@@ -38,6 +38,8 @@ type Decision struct {
 	// PullRequest, for an approved git.push the review offers a pull request with, says
 	// whether to open it along with the push. Nil leaves it to a git.pr approval.
 	PullRequest *PullRequestChoice
+	// Force approves a git.push that rewrites its branch, which allow alone doesn't.
+	Force bool
 }
 
 // PullRequestChoice is whether a push opens its pull request, and under what title.

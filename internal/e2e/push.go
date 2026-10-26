@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -24,10 +25,14 @@ import (
 )
 
 // Push is what the guest pushes: one commit that writes File on top of Branch of the
-// repository at URL, usually https://git.studio.internal/<forge>/<path>.git.
+// repository at URL, usually https://git.studio.internal/<forge>/<path>.git. From starts a
+// new branch from another one, and Amend replaces the branch's last commit instead, which
+// makes the push a forced one.
 type Push struct {
 	URL     string `json:"url"`
 	Branch  string `json:"branch"`
+	From    string `json:"from"`
+	Amend   bool   `json:"amend"`
 	File    string `json:"file"`
 	Content string `json:"content"`
 	Message string `json:"message"`
@@ -57,9 +62,10 @@ func (g *Guest) Push(ctx context.Context, p Push) Pushed {
 	if p.Branch == "" {
 		p.Branch = "main"
 	}
+	from := cmp.Or(p.From, p.Branch)
 	var progress bytes.Buffer
 	repo, err := git.CloneContext(ctx, memory.NewStorage(), memfs.New(), &git.CloneOptions{
-		URL: p.URL, ReferenceName: plumbing.NewBranchReferenceName(p.Branch), SingleBranch: true,
+		URL: p.URL, ReferenceName: plumbing.NewBranchReferenceName(from), SingleBranch: true,
 		CABundle: ca, ProxyOptions: proxy, Progress: &progress,
 	})
 	if err != nil {
@@ -68,6 +74,23 @@ func (g *Guest) Push(ctx context.Context, p Push) Pushed {
 	wt, err := repo.Worktree()
 	if err != nil {
 		return fail(err)
+	}
+	if p.Amend {
+		head, err := repo.Head()
+		if err != nil {
+			return fail(err)
+		}
+		tip, err := repo.CommitObject(head.Hash())
+		if err != nil {
+			return fail(err)
+		}
+		parent, err := tip.Parent(0)
+		if err != nil {
+			return fail(err)
+		}
+		if err := wt.Reset(&git.ResetOptions{Commit: parent.Hash, Mode: git.HardReset}); err != nil {
+			return fail(err)
+		}
 	}
 	f, err := wt.Filesystem.Create(p.File)
 	if err != nil {
@@ -90,8 +113,11 @@ func (g *Guest) Push(ctx context.Context, p Push) Pushed {
 	}
 	out.Commit = commit.String()
 	progress.Reset()
-	ref := config.RefSpec("refs/heads/" + p.Branch + ":refs/heads/" + p.Branch)
-	err = repo.PushContext(ctx, &git.PushOptions{RefSpecs: []config.RefSpec{ref}, CABundle: ca, ProxyOptions: proxy, Progress: &progress})
+	ref := config.RefSpec("refs/heads/" + from + ":refs/heads/" + p.Branch)
+	if p.Amend {
+		ref = "+" + ref
+	}
+	err = repo.PushContext(ctx, &git.PushOptions{RefSpecs: []config.RefSpec{ref}, Force: p.Amend, CABundle: ca, ProxyOptions: proxy, Progress: &progress})
 	out.Output = progress.String()
 	if err != nil {
 		return fail(err)

@@ -9,6 +9,7 @@ import {
   EyeSlashIcon,
   GitPullRequestIcon,
   PaperPlaneRightIcon,
+  WarningIcon,
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -230,12 +231,14 @@ export function GitReview({ approval }: { approval: Approval }) {
             proposal && action === "allow"
               ? { open: openPR, title: openPR ? prTitle.trim() : undefined }
               : undefined,
+          force: forced && action === "allow" ? true : undefined,
         },
       },
       { onSuccess: () => sends() && send() }
     )
   const rv = git.review
   const pr = git.pullRequest
+  const forced = !pr && !!rv?.forced
   const branch = pr ? `${pr.head} → ${pr.base}` : rv?.branch
   const lineId = (i: number) => `${ids}-line-${i}`
   const where = (i: number) => `${lines[i]?.file}:${lines[i]?.line}`
@@ -305,7 +308,21 @@ export function GitReview({ approval }: { approval: Approval }) {
               new branch
             </Badge>
           )}
+          {forced && (
+            <Badge variant="destructive" className="ml-1.5 font-sans">
+              rewrites history
+            </Badge>
+          )}
         </dd>
+        {rv?.base && (forced || !rv.old) && (
+          <>
+            <dt className="text-muted-foreground">Builds on</dt>
+            <dd>
+              {rv.baseBranch && <>{rv.baseBranch}&rsquo;s tip </>}
+              <Ident>{short(rv.base)}</Ident>
+            </dd>
+          </>
+        )}
         {rv && (
           <>
             <dt className="text-muted-foreground">Change</dt>
@@ -376,6 +393,8 @@ export function GitReview({ approval }: { approval: Approval }) {
           </Button>
         </div>
       )}
+
+      {rv?.forced && !pr && <Rewrite review={rv} />}
 
       {rv && (
         <Tabs
@@ -587,6 +606,7 @@ export function GitReview({ approval }: { approval: Approval }) {
               </Button>
               <Button
                 size="sm"
+                variant={forced ? "destructive" : "default"}
                 disabled={
                   decide.isPending || (!!proposal && openPR && !prTitle.trim())
                 }
@@ -595,9 +615,13 @@ export function GitReview({ approval }: { approval: Approval }) {
                 {busy("allow") && <Spinner />}
                 {pr
                   ? "Open pull request"
-                  : proposal && openPR
-                    ? "Push and open pull request"
-                    : "Approve and push"}
+                  : forced
+                    ? proposal && openPR
+                      ? "Force-push and open pull request"
+                      : "Force-push"
+                    : proposal && openPR
+                      ? "Push and open pull request"
+                      : "Approve and push"}
               </Button>
             </div>
           </div>
@@ -607,12 +631,88 @@ export function GitReview({ approval }: { approval: Approval }) {
   )
 }
 
+/** What a forced push drops from the forge's branch, and the lease it is pushed with. */
+function Rewrite({ review: rv }: { review: NonNullable<GitDetail["review"]> }) {
+  const dropped = (rv.dropped ?? []).length + (rv.moreDropped ?? 0)
+  const files = rv.tipFiles ?? []
+  return (
+    <section
+      aria-label="Rewrites history"
+      className="grid gap-2 rounded-md p-2 text-xs ring-1 ring-destructive/30"
+    >
+      <p className="flex items-center gap-1.5 font-medium text-destructive">
+        <WarningIcon className="size-3.5" />
+        Rewrites history · drops {dropped}{" "}
+        {dropped === 1 ? "commit" : "commits"} now on the forge
+      </p>
+      <ul className="min-w-0 divide-y rounded-md ring-1 ring-foreground/10">
+        {(rv.dropped ?? []).map((c) => (
+          <li
+            key={c.sha}
+            className="flex min-w-0 items-baseline gap-2 px-2 py-1.5"
+          >
+            <span aria-hidden className="text-destructive">
+              −
+            </span>
+            <Ident copy value={c.sha} className="text-muted-foreground">
+              {short(c.sha)}
+            </Ident>
+            <span className="truncate text-muted-foreground line-through decoration-muted-foreground/40">
+              {c.subject}
+            </span>
+            {c.replacedBy && (
+              <span className="shrink-0 text-muted-foreground">
+                → <Ident>{short(c.replacedBy)}</Ident>
+              </span>
+            )}
+            <span className="ml-auto shrink-0 text-muted-foreground">
+              {c.author} · {formatAge(c.when)}
+            </span>
+          </li>
+        ))}
+        {(rv.moreDropped ?? 0) > 0 && (
+          <li className="px-2 py-1.5 text-muted-foreground">
+            and {rv.moreDropped} more
+          </li>
+        )}
+      </ul>
+      <p className="text-muted-foreground">
+        {files.length === 0 ? (
+          "The new tip has the same files as the one it replaces: the rewrite only moves or regroups the changes."
+        ) : (
+          <>
+            The old and the new tip differ in{" "}
+            {files.map((f, i) => (
+              <span key={f}>
+                {i > 0 && ", "}
+                <Ident>{f}</Ident>
+              </span>
+            ))}
+            {(rv.moreTipFiles ?? 0) > 0 && <> and {rv.moreTipFiles} more</>}.
+          </>
+        )}
+      </p>
+      <p className="text-muted-foreground">
+        Studio pushes with a lease on <Ident>{short(rv.old)}</Ident>: if the
+        branch moved on the forge since, the push is refused and nothing is
+        lost. The default branch takes only fast-forward pushes.
+      </p>
+    </section>
+  )
+}
+
 /** What reviewing a git approval decides, under its title. */
 export function gitReviewDescription(approval: Approval) {
   const git = approval.git
   if (git?.pullRequest)
     return "The push was approved and is on the forge. Approving opens this pull request."
   const upstream = git?.review?.upstream
+  if (git?.review?.forced)
+    return (
+      `The sandbox rewrote ${git.review.branch} and pushed it to Studio's git remote. Nothing reaches the forge until you force-push it, which drops the commits listed under Rewrites history` +
+      (upstream ? `; Studio pushes it ${upstream}` : "") +
+      "."
+    )
   return (
     "The sandbox pushed to Studio's git remote. Nothing reaches the forge until you approve; a rejection is shown to the agent on its next fetch." +
     (upstream ? ` Approving pushes it ${upstream}` : " Approving pushes it") +

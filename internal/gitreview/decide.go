@@ -87,6 +87,12 @@ func (s *Service) decidePush(ctx context.Context, a store.Approval, d integratio
 	if err != nil {
 		return err
 	}
+	if st == store.StatusApproved && !d.Force {
+		var rv PushReview
+		if json.Unmarshal(a.Payload, &rv) == nil && rv.Forced {
+			return fmt.Errorf("%w: the push rewrites %s and drops %d commits; approve it with force", integrations.ErrAction, rv.Branch, len(rv.Dropped)+rv.MoreDropped)
+		}
+	}
 	if err := s.Store.DecideApproval(ctx, a.EnvironmentID, a.ID, st, ""); err != nil {
 		return err
 	}
@@ -149,11 +155,9 @@ func (s *Service) pushApproved(ctx context.Context, p store.GitPush) (string, er
 	return result, nil
 }
 
-// pullRequestFor fills in the pull request a push to rv.Branch comes with: the open one
-// from the branch, which the push updates, or else a proposal, unless the branch is the
-// repository's default. It returns the default branch, or "" when the forge has no API
-// or did not say.
-func (s *Service) pullRequestFor(ctx context.Context, f store.Forge, rv *PushReview) string {
+// defaultBranch is the repository's default branch, or "" when the forge has no API or
+// did not say.
+func (s *Service) defaultBranch(ctx context.Context, f store.Forge, owner, repo string) string {
 	if !hasAPI(f.Kind) {
 		return ""
 	}
@@ -167,14 +171,31 @@ func (s *Service) pullRequestFor(ctx context.Context, f store.Forge, rv *PushRev
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	base, err := ad.DefaultBranch(ctx, token, rv.Owner, rv.Repo)
+	base, err := ad.DefaultBranch(ctx, token, owner, repo)
 	if err != nil {
 		s.Log.Info("git remote: default branch", "forge", f.Name, "err", err)
 		return ""
 	}
+	return base
+}
+
+// pullRequestFor fills in the pull request a push to rv.Branch comes with: the open one
+// from the branch, which the push updates, or else a proposal, unless the branch is base,
+// the repository's default branch. It does nothing while base is unknown.
+func (s *Service) pullRequestFor(ctx context.Context, f store.Forge, rv *PushReview, base string) {
 	if base == "" || base == rv.Branch {
-		return base
+		return
 	}
+	ad, err := adapter(f, s.httpClient())
+	if err != nil {
+		return
+	}
+	token, err := s.token(ctx, f)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
 	open, err := ad.OpenPullRequestOf(ctx, token, rv.Owner, rv.Repo, rv.Branch)
 	if err != nil {
 		// Proposing one anyway: if one is open after all, opening it says so.
@@ -182,11 +203,10 @@ func (s *Service) pullRequestFor(ctx context.Context, f store.Forge, rv *PushRev
 	}
 	if open != "" {
 		rv.OpenPullRequest = open
-		return base
+		return
 	}
 	pr := prProposal(*rv, base)
 	rv.PullRequest = &pr
-	return base
 }
 
 // pushReview is the review a git.push approval was raised with. A push recorded before
@@ -198,7 +218,7 @@ func (s *Service) pushReview(ctx context.Context, p store.GitPush, a store.Appro
 	}
 	if rv.PullRequest == nil && rv.OpenPullRequest == "" && p.DefaultBranch == "" {
 		if f, err := s.Store.Forge(ctx, p.EnvironmentID, p.ForgeID); err == nil {
-			s.pullRequestFor(ctx, f, &rv)
+			s.pullRequestFor(ctx, f, &rv, s.defaultBranch(ctx, f, rv.Owner, rv.Repo))
 		}
 	}
 	return rv, nil

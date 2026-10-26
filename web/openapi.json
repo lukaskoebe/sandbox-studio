@@ -1094,6 +1094,10 @@
           "email": {
             "type": "string"
           },
+          "replacedBy": {
+            "description": "For a dropped commit, the pushed commit with the same subject and author, as a rebase leaves it",
+            "type": "string"
+          },
           "sha": {
             "type": "string"
           },
@@ -1922,6 +1926,10 @@
             "description": "For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires",
             "format": "date-time",
             "type": "string"
+          },
+          "force": {
+            "description": "For git.push approved with allow: approve a push whose review is forced, which rewrites the branch and drops commits. allow without it is refused for such a push",
+            "type": "boolean"
           },
           "host": {
             "description": "Host pattern the rule covers; empty means the requested host",
@@ -5800,6 +5808,14 @@
             "format": "int64",
             "type": "integer"
           },
+          "base": {
+            "description": "For a new or rewritten branch, the forge's commit the diff starts from",
+            "type": "string"
+          },
+          "baseBranch": {
+            "description": "The forge's branch whose tip Base is, if any",
+            "type": "string"
+          },
           "branch": {
             "type": "string"
           },
@@ -5818,22 +5834,46 @@
             "type": "integer"
           },
           "diff": {
-            "description": "Unified diff from the branch's previous state (or where a new branch forked) to the push",
+            "description": "Unified diff from the branch's previous state (or where a new or rewritten branch forked) to the push",
             "type": "string"
           },
           "diffTruncated": {
             "type": "boolean"
+          },
+          "dropped": {
+            "description": "For a forced push, the commits on the branch that New doesn't contain, newest first",
+            "items": {
+              "$ref": "#/components/schemas/Commit"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "files": {
             "description": "Files changed",
             "format": "int64",
             "type": "integer"
           },
+          "forced": {
+            "description": "The push rewrites the branch: Old is not an ancestor of New. Approving it takes force",
+            "type": "boolean"
+          },
           "forge": {
             "type": "string"
           },
           "moreCommits": {
             "description": "New commits not listed",
+            "format": "int64",
+            "type": "integer"
+          },
+          "moreDropped": {
+            "description": "Dropped commits not listed",
+            "format": "int64",
+            "type": "integer"
+          },
+          "moreTipFiles": {
+            "description": "Files that differ between Old and New, not listed",
             "format": "int64",
             "type": "integer"
           },
@@ -5866,6 +5906,16 @@
           "teammate": {
             "description": "The teammate owning the sandbox; empty for unowned sandboxes",
             "type": "string"
+          },
+          "tipFiles": {
+            "description": "For a forced push, the files whose content differs between Old and New",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "upstream": {
             "description": "How Studio pushes once approved, such as over SSH to ssh://git@host/repo with the pinned host key",

@@ -248,6 +248,8 @@ type Decision struct {
 	Note        string     `json:"note,omitempty"`
 	// PullRequest, for a push whose review offers one, opens it with the push or not.
 	PullRequest *PullRequestChoice `json:"pullRequest,omitempty"`
+	// Force approves a push that rewrites its branch.
+	Force bool `json:"force,omitempty"`
 }
 
 // PullRequestChoice is whether approving a push opens its pull request too.

@@ -237,6 +237,13 @@ What users want is the rebase-and-force-push of a feature branch:
 
 M.
 
+**Built** on `feedback-v0.8` ([git review](../git-review.md)). The review also says which
+files differ between the old and the new tip, and pairs each dropped commit with the pushed
+commit of the same subject and author, so a plain rebase reads as one. The diff starts where
+the new history forks from the forge's, as a new branch's does. `decide` needs `"force": true`
+for a forced push, so the TUI got **F** for it too. While the forge doesn't name its default
+branch, `main` and `master` stay fast-forward only.
+
 ## zsh
 
 **No mockup.** bash is the login shell (`images/base/Dockerfile`), and the guest starts

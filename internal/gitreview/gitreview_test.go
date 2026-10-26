@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -968,6 +969,78 @@ func TestNonFastForwardAndDeletesAreRefused(t *testing.T) {
 	}
 	if n := len(h.approvals(t, KindPush, "")); n != 0 {
 		t.Fatalf("refused pushes raised %d approvals", n)
+	}
+}
+
+func TestRewrittenBranchIsReviewedAndNeedsForce(t *testing.T) {
+	h := newHarness(t)
+	g := h.guest(t, h.env.ID, "one")
+	repo := g.clone(t)
+	a1 := commitFile(t, repo, "coupon.txt", "field\n", "Add coupon field")
+	a2 := commitFile(t, repo, "mobile.txt", "mobile\n", "fixup: coupon on mobile")
+	if err := push(repo, "refs/heads/main:refs/heads/topic", false); err != nil {
+		t.Fatal(err)
+	}
+	h.decide(t, h.approvals(t, KindPush, store.StatusPending)[0], integrations.Allow, "")
+	if h.forge.head(t, "topic") != a2 {
+		t.Fatal("the first push did not reach the forge")
+	}
+
+	// main moves on the forge, and the agent rebases the branch onto it, squashing the fixup.
+	m1 := commitFile(t, h.forge.repo, "up.txt", "up\n", "Upstream moved")
+	if err := repo.Fetch(&git.FetchOptions{}); err != nil && !errors.Is(err, git.NoErrAlreadyUpToDate) {
+		t.Fatalf("fetch: %v", err)
+	}
+	wt, _ := repo.Worktree()
+	if err := wt.Reset(&git.ResetOptions{Commit: m1, Mode: git.HardReset}); err != nil {
+		t.Fatal(err)
+	}
+	b1 := commitFile(t, repo, "coupon.txt", "field v2\n", "Add coupon field")
+	if err := push(repo, "+refs/heads/main:refs/heads/topic", true); err != nil {
+		t.Fatalf("forced push: %v", err)
+	}
+	a := h.approvals(t, KindPush, store.StatusPending)[0]
+	d, err := h.svc.GitDetail(h.ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rv := d.Review
+	if !rv.Forced || rv.Old != a2.String() || rv.New != b1.String() || len(rv.Commits) != 1 {
+		t.Fatalf("review = %+v", rv)
+	}
+	if len(rv.Dropped) != 2 || rv.Dropped[0].SHA != a2.String() || rv.Dropped[0].ReplacedBy != "" ||
+		rv.Dropped[1].SHA != a1.String() || rv.Dropped[1].ReplacedBy != b1.String() {
+		t.Fatalf("dropped = %+v", rv.Dropped)
+	}
+	// The diff shows the rewritten commit on main's tip, not main's own change.
+	if rv.Base != m1.String() || rv.BaseBranch != "main" || !strings.Contains(rv.Diff, "+field v2") || strings.Contains(rv.Diff, "up.txt") {
+		t.Fatalf("base %s (%s), diff = %q", rv.Base, rv.BaseBranch, rv.Diff)
+	}
+	if !slices.Equal(rv.TipFiles, []string{"coupon.txt", "mobile.txt", "up.txt"}) {
+		t.Fatalf("tip files = %v", rv.TipFiles)
+	}
+
+	k, _ := integrations.Set{h.svc}.Kind(KindPush)
+	if err := k.Decide(h.ctx, a, integrations.Decision{Action: integrations.Allow}); !errors.Is(err, integrations.ErrAction) {
+		t.Fatalf("allow without force: %v", err)
+	}
+	if h.forge.head(t, "topic") != a2 {
+		t.Fatal("allow without force changed the forge")
+	}
+	if err := k.Decide(h.ctx, a, integrations.Decision{Action: integrations.Allow, Force: true}); err != nil {
+		t.Fatal(err)
+	}
+	if h.forge.head(t, "topic") != b1 {
+		t.Fatal("the force-push did not reach the forge")
+	}
+}
+
+func TestDefaultBranchStaysFastForwardOnly(t *testing.T) {
+	if !fastForwardOnly("main", "") || !fastForwardOnly("master", "") || fastForwardOnly("topic", "") {
+		t.Fatal("without a known default, main and master are fast-forward only")
+	}
+	if !fastForwardOnly("trunk", "trunk") || fastForwardOnly("main", "trunk") {
+		t.Fatal("a known default branch is fast-forward only, and only it")
 	}
 }
 

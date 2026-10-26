@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
@@ -114,6 +115,30 @@ func TestPagerDecides(t *testing.T) {
 		if cmd == nil || m.screen != screenApprovals {
 			t.Fatalf("%s: cmd %v, screen %v", k, cmd != nil, m.screen)
 		}
+	}
+}
+
+func TestPagerForcePushesARewrite(t *testing.T) {
+	m := sampleApp()
+	a := samplePush(m)
+	rv := a.Git.Review
+	rv.Old, rv.Forced, rv.Base, rv.BaseBranch = "e4f5a6b7c8", true, "7f3e2101aa", "main"
+	rv.Dropped = []gitreview.Commit{{SHA: "e4f5a6b7c8", Author: "Finn", When: m.now.Add(-time.Hour), Subject: "Submit the login form on enter", ReplacedBy: "77d0b2c4aa"}}
+	rv.TipFiles = []string{"src/login.tsx"}
+	m = press(m, "a", "enter")
+	view := ansi.Strip(m.View().Content)
+	for _, want := range []string{"Rewrites history · drops 1 commit", "→ 77d0b2c", "The tips differ in src/login.tsx.", "on main's tip 7f3e210", "F force-push"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("the pager lacks %q:\n%s", want, view)
+		}
+	}
+	m = press(m, "y")
+	if m.screen != screenPager || !strings.Contains(m.notice.text, "F force-pushes it") {
+		t.Fatalf("y on a rewrite: screen %v, notice %q", m.screen, m.notice.text)
+	}
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'F', Text: "F"})
+	if m = next.(*app); cmd == nil || m.screen != screenApprovals {
+		t.Fatalf("F: cmd %v, screen %v", cmd != nil, m.screen)
 	}
 }
 

@@ -3211,6 +3211,8 @@ export interface components {
             author: string;
             body?: string;
             email: string;
+            /** @description For a dropped commit, the pushed commit with the same subject and author, as a rebase leaves it */
+            replacedBy?: string;
             sha: string;
             subject: string;
             /** Format: date-time */
@@ -3479,6 +3481,8 @@ export interface components {
              * @description For network requests: when the rule created by allow or deny stops matching, which must be in the future. Empty means it never expires
              */
             expiresAt?: string;
+            /** @description For git.push approved with allow: approve a push whose review is forced, which rewrites the branch and drops commits. allow without it is refused for such a push */
+            force?: boolean;
             /** @description Host pattern the rule covers; empty means the requested host */
             host?: string;
             /** @description For network requests allowed or denied with a rule: the request method the rule covers; empty covers any */
@@ -4756,25 +4760,43 @@ export interface components {
         PushReview: {
             /** Format: int64 */
             additions: number;
+            /** @description For a new or rewritten branch, the forge's commit the diff starts from */
+            base?: string;
+            /** @description The forge's branch whose tip Base is, if any */
+            baseBranch?: string;
             branch: string;
             /** @description New commits, newest first */
             commits: components["schemas"]["Commit"][] | null;
             /** Format: int64 */
             deletions: number;
-            /** @description Unified diff from the branch's previous state (or where a new branch forked) to the push */
+            /** @description Unified diff from the branch's previous state (or where a new or rewritten branch forked) to the push */
             diff: string;
             diffTruncated: boolean;
+            /** @description For a forced push, the commits on the branch that New doesn't contain, newest first */
+            dropped?: components["schemas"]["Commit"][] | null;
             /**
              * Format: int64
              * @description Files changed
              */
             files: number;
+            /** @description The push rewrites the branch: Old is not an ancestor of New. Approving it takes force */
+            forced?: boolean;
             forge: string;
             /**
              * Format: int64
              * @description New commits not listed
              */
             moreCommits: number;
+            /**
+             * Format: int64
+             * @description Dropped commits not listed
+             */
+            moreDropped?: number;
+            /**
+             * Format: int64
+             * @description Files that differ between Old and New, not listed
+             */
+            moreTipFiles?: number;
             new: string;
             /** @description The branch on the forge before the push; empty for a new branch */
             old: string;
@@ -4789,6 +4811,8 @@ export interface components {
             sandbox: string;
             /** @description The teammate owning the sandbox; empty for unowned sandboxes */
             teammate?: string;
+            /** @description For a forced push, the files whose content differs between Old and New */
+            tipFiles?: string[] | null;
             /** @description How Studio pushes once approved, such as over SSH to ssh://git@host/repo with the pinned host key */
             upstream?: string;
         };

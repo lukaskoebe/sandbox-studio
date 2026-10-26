@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -321,6 +322,15 @@ type refusal string
 
 func (r refusal) Error() string { return string(r) }
 
+// fastForwardOnly says whether branch takes only fast-forward pushes: the repository's
+// default branch, or main and master while the default is unknown.
+func fastForwardOnly(branch, defaultBranch string) bool {
+	if defaultBranch != "" {
+		return branch == defaultBranch
+	}
+	return branch == "main" || branch == "master"
+}
+
 // stageCommand checks one ref update and stages it. Anything the sandbox sent is untrusted:
 // names, hashes and objects are all checked against what the host has.
 func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Repository, upstream map[plumbing.ReferenceName]plumbing.Hash, cmd *packp.Command) (string, error) {
@@ -342,19 +352,48 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 	if err != nil {
 		return "", refusal("missing objects: the push is incomplete")
 	}
+	forced := false
 	if !current.IsZero() {
 		oldCommit, err := repo.CommitObject(current)
 		if err != nil {
 			return "", refusal("internal error: the forge's commit is missing")
 		}
-		if ok, err := oldCommit.IsAncestor(newCommit); err != nil || !ok {
-			return "", refusal("non-fast-forward: Sandbox Studio only stages fast-forward pushes; fetch, rebase and push again, or push the new history to a new branch")
+		ok, err := oldCommit.IsAncestor(newCommit)
+		if err != nil {
+			return "", refusal("internal error: Sandbox Studio could not compare the push with the forge's branch")
 		}
+		forced = !ok
 	}
-	rv, err := s.review(ctx, repo, current, cmd.New, objs)
+	base := s.defaultBranch(ctx, t.forge, t.owner, t.repo)
+	if forced && fastForwardOnly(cmd.Name.Short(), base) {
+		return "", refusal("non-fast-forward: the default branch takes only fast-forward pushes through Sandbox Studio; fetch, rebase and push again, or push the new history to another branch")
+	}
+	// A rewritten branch's diff starts where its new history forks from the forge's, as a
+	// new branch's does.
+	diffFrom := current
+	if forced {
+		diffFrom = plumbing.ZeroHash
+	}
+	rv, err := s.review(ctx, repo, diffFrom, cmd.New, objs)
+	if err == nil && forced {
+		err = s.rewrite(ctx, repo, &rv, current, cmd.New, objs)
+	}
 	if err != nil {
 		s.Log.Error("git remote: review", "sandbox", t.sb.ID, "err", err)
 		return "", refusal("internal error: Sandbox Studio could not describe the push")
+	}
+	// Name the branch the new history builds on: the default branch if it's its tip.
+	var tips []string
+	for name, h := range upstream {
+		if name.IsBranch() && rv.Base != "" && h.String() == rv.Base {
+			tips = append(tips, name.Short())
+		}
+	}
+	slices.Sort(tips)
+	if slices.Contains(tips, base) {
+		rv.BaseBranch = base
+	} else if len(tips) > 0 {
+		rv.BaseBranch = tips[0]
 	}
 	rv.Sandbox, rv.Forge, rv.Owner, rv.Repo, rv.Branch = t.sb.Name, t.forge.Name, t.owner, t.repo, cmd.Name.Short()
 	rv.Upstream = upstreamDescription(t.forge, t.path())
@@ -367,7 +406,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 			rv.Teammate = p.Name
 		}
 	}
-	base := s.pullRequestFor(ctx, t.forge, &rv)
+	s.pullRequestFor(ctx, t.forge, &rv, base)
 
 	// A newer push to the same branch replaces any still waiting.
 	pending, err := s.Store.PendingGitPushes(ctx, t.sb.EnvironmentID, t.sb.ID, t.forge.ID, t.owner, t.repo, cmd.Name.String())

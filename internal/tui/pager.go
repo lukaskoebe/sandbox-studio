@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/api"
+	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
 )
 
 // pagerState is the review of one git approval: the push's facts, its commits and its diff, or
@@ -43,6 +44,7 @@ type diffFile struct {
 // the pull request), reject, ignore.
 var (
 	keyPush      = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "approve and push"))
+	keyForcePush = key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "force-push"))
 	keyOpenPR    = key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "open pull request"))
 	keyReject    = key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "reject"))
 	keyChanges   = key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "request changes"))
@@ -185,9 +187,30 @@ func (m *app) reviewLines(a api.ApprovalView, w int, side bool) ([]string, []dif
 			lines = append(lines, "    "+l)
 		}
 	}
+	if rv != nil && rv.Forced {
+		n := len(rv.Dropped) + rv.MoreDropped
+		lines = append(lines, "", styleFailed.Render("Rewrites history")+styleBold.Render(fmt.Sprintf(" · drops %d %s now on the forge", n, plural(n, "commit", "commits"))))
+		for _, c := range rv.Dropped {
+			right := styleDim.Render(c.Author + " · " + age(m.now.Sub(c.When)))
+			subject := c.Subject
+			if c.ReplacedBy != "" {
+				subject += styleDim.Render(" → " + shortSHA(c.ReplacedBy))
+			}
+			lines = append(lines, spread("  "+styleFailed.Render("−")+" "+styleDim.Render(shortSHA(c.SHA))+" "+subject, right, w))
+		}
+		if rv.MoreDropped > 0 {
+			lines = append(lines, "  "+styleDim.Render(fmt.Sprintf("and %d more", rv.MoreDropped)))
+		}
+		lines = append(lines, "  "+styleDim.Render(tipFilesLine(rv)))
+		lines = append(lines, "  "+styleDim.Render("Studio pushes with a lease on "+shortSHA(rv.Old)+": if the branch moved on the forge since, the push is refused."))
+	}
 	if rv != nil {
 		n := len(rv.Commits) + rv.MoreCommits
-		lines = append(lines, "", styleBold.Render(fmt.Sprintf("Commits (%d)", n)))
+		commits := styleBold.Render(fmt.Sprintf("Commits (%d)", n))
+		if rv.BaseBranch != "" && rv.Base != "" && (rv.Forced || rv.Old == "") {
+			commits += styleDim.Render(" on " + rv.BaseBranch + "'s tip " + shortSHA(rv.Base))
+		}
+		lines = append(lines, "", commits)
 		for _, c := range rv.Commits {
 			right := styleDim.Render(c.Author + " · " + age(m.now.Sub(c.When)))
 			lines = append(lines, spread("  "+styleDim.Render(shortSHA(c.SHA))+" "+c.Subject, right, w))
@@ -437,7 +460,7 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keyBack):
 		m.screen = p.back
-	case key.Matches(msg, keyPush, keyReject, keyIgnore, keyChanges) && !gitPending(a):
+	case key.Matches(msg, keyPush, keyForcePush, keyReject, keyIgnore, keyChanges) && !gitPending(a):
 		m.setNotice(gitDecidedText(a), false)
 	case key.Matches(msg, keyHelp):
 		m.openHelp()
@@ -476,12 +499,14 @@ func (m *app) pagerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keyOpenLater) && canOpenLater(a):
 		m.screen = p.back
 		return m, m.openPullRequest(a)
-	case key.Matches(msg, keyPush):
+	case key.Matches(msg, keyPush) && forced(a):
+		m.setNotice("The push rewrites "+gitBranch(a)+": F force-pushes it.", false)
+	case key.Matches(msg, keyPush, keyForcePush) && (forced(a) == key.Matches(msg, keyForcePush)):
 		m.screen = p.back
 		if a.Git.PullRequest != nil {
 			return m, m.decide(card{approvals: []api.ApprovalView{a}}, Decision{Action: "allow", Scope: "sandbox"}, "Opening", "the pull request")
 		}
-		d := Decision{Action: "allow", Scope: "sandbox"}
+		d := Decision{Action: "allow", Scope: "sandbox", Force: forced(a)}
 		what := "the push of " + gitBranch(a)
 		if a.Git.Review != nil && a.Git.Review.PullRequest != nil {
 			d.PullRequest = &PullRequestChoice{Open: p.openPR}
@@ -552,6 +577,11 @@ func gitBranch(a api.ApprovalView) string {
 	return strings.TrimPrefix(a.Git.Push.Ref, "refs/heads/")
 }
 
+// forced says whether a git approval is a push that rewrites its branch.
+func forced(a api.ApprovalView) bool {
+	return a.Git.PullRequest == nil && a.Git.Review != nil && a.Git.Review.Forced
+}
+
 // gitWhat names a git approval in a notice.
 func gitWhat(a api.ApprovalView) string {
 	if a.Git.PullRequest != nil {
@@ -565,6 +595,8 @@ func (m *app) pagerBindings() []key.Binding {
 	approve := keyPush
 	if m.pager.approval.Git.PullRequest != nil {
 		approve = keyOpenPR
+	} else if forced(m.pager.approval) {
+		approve = keyForcePush
 	}
 	a := m.pager.approval
 	bindings := []key.Binding{approve, keyChanges, keyReject, keyIgnore, keyScrollBar}
@@ -651,4 +683,16 @@ func (m *app) openPullRequest(a api.ApprovalView) tea.Cmd {
 		}
 		return actionDone{done: "Opened the pull request of " + gitBranch(a) + "."}
 	}
+}
+
+// tipFilesLine says how a rewritten branch's new tip differs from the one it replaces.
+func tipFilesLine(rv *gitreview.PushReview) string {
+	if len(rv.TipFiles) == 0 {
+		return "The new tip has the same files as the one it replaces."
+	}
+	files := strings.Join(rv.TipFiles, ", ")
+	if rv.MoreTipFiles > 0 {
+		files += fmt.Sprintf(" and %d more", rv.MoreTipFiles)
+	}
+	return "The tips differ in " + files + "."
 }

@@ -90,6 +90,75 @@ test("a push to the virtual remote waits for review, and approving it pushes ups
   ).toHaveCount(0)
 })
 
+test("a rewritten branch is reviewed with what it drops and takes a force-push", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  const forge = await forgeWithRepo(api, env)
+  const id = await api.createSandbox(sandboxName("force"))
+  await api.guestReady(id)
+  const first = await api.push(id, {
+    url: forge.url,
+    branch: "topic",
+    from: "main",
+    file: "coupon.txt",
+    content: "field\n",
+    message: "Add the coupon field",
+  })
+  expect(first.error, first.output).toBeUndefined()
+  const approval = /approval (\S+)\)/.exec(first.output)![1]
+  await api.json(
+    "POST",
+    `/api/environments/${env}/approvals/${approval}/decide`,
+    { action: "allow" }
+  )
+  await expect
+    .poll(async () =>
+      (await api.upstream(forge.repo)).find((b) => b.name === "topic")
+    )
+    .toMatchObject({ sha: first.commit })
+
+  // The agent amends the commit and force-pushes the branch.
+  const amended = await api.push(id, {
+    url: forge.url,
+    branch: "topic",
+    amend: true,
+    file: "coupon.txt",
+    content: "field v2\n",
+    message: "Add the coupon field",
+  })
+  expect(amended.error, amended.output).toBeUndefined()
+
+  await page.goto(`/e/${env}`)
+  const card = approvals(page)
+    .getByTestId("approval-card")
+    .filter({ hasText: "Force-push 1 commit to topic" })
+  await card.getByRole("button", { name: "Review" }).click()
+  const sheet = page.getByRole("dialog")
+  await expect(
+    sheet.getByText("rewrites history", { exact: true })
+  ).toBeVisible()
+  const rewrite = sheet.getByRole("region", { name: "Rewrites history" })
+  await expect(rewrite).toContainText("drops 1 commit now on the forge")
+  await expect(rewrite).toContainText(
+    `${first.commit!.slice(0, 10)}Add the coupon field→ ${amended.commit!.slice(0, 10)}`
+  )
+  await expect(rewrite).toContainText("differ in coupon.txt")
+  await expect(sheet).toContainText("+field v2")
+  await expect(
+    sheet.getByRole("button", { name: "Approve and push" })
+  ).toHaveCount(0)
+  await sheet.getByRole("button", { name: "Force-push" }).click()
+  await expect(sheet).toBeHidden()
+  await expect
+    .poll(async () =>
+      (await api.upstream(forge.repo)).find((b) => b.name === "topic")
+    )
+    .toMatchObject({ sha: amended.commit })
+})
+
 test("a pending push review opens as a page and is decided there", async ({
   page,
   api,

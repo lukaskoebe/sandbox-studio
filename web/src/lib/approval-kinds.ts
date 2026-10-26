@@ -56,7 +56,8 @@ export function gitSummary(a: Approval): string {
     (git.review?.commits?.length ?? 0) + (git.review?.moreCommits ?? 0)
   const branch =
     git.review?.branch ?? git.push.ref.replace(/^refs\/heads\//, "")
-  return `Push ${commits} ${commits === 1 ? "commit" : "commits"} to ${branch} on ${where}`
+  const pushed = `${commits} ${commits === 1 ? "commit" : "commits"} to ${branch} on ${where}`
+  return git.review?.forced ? `Force-push ${pushed}` : `Push ${pushed}`
 }
 
 const conflictVerdicts: Record<string, string> = {

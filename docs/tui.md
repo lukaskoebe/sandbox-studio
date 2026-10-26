@@ -271,7 +271,9 @@ branches, title and body instead. The review is a pager: `↑/↓` `j/k` scroll 
 `[` and `]` jump to the previous or next file. From 120 columns a file list sits beside the
 review, and from 160 columns the diff is side by side, which `v` toggles.
 
-`y` approves and pushes (or opens the pull request), `n` rejects, `i` ignores. Each decides with
+`y` approves and pushes (or opens the pull request), `n` rejects, `i` ignores. A forced push
+shows **Rewrites history** with the commits it drops, and `F` (force-push) approves it instead
+of `y`, which only says so. Each decides with
 `{action, scope: "sandbox"}`, as the web does, and returns to where the review was opened. On a
 push to a branch other than the default one, `p` says whether approving opens a pull request
 too, and `o` opens it after a push without one. `r` requests changes: it asks for a note,

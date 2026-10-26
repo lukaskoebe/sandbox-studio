@@ -143,6 +143,10 @@ export class Api {
     push: {
       url: string
       branch?: string
+      /** Starts branch from this one. */
+      from?: string
+      /** Replaces the branch's last commit, which makes the push a forced one. */
+      amend?: boolean
       file: string
       content: string
       message: string
