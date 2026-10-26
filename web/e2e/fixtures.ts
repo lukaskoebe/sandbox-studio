@@ -13,6 +13,8 @@ export type GuestState = {
   configs: number
   env: Record<string, string>
   ca: boolean
+  /** Its terminal sessions, as tmux would list them. */
+  sessions: { name: string; title?: string }[]
   ports: number[]
   connections: {
     host: string
@@ -70,6 +72,27 @@ export class Api {
     return this.json<GuestState>("GET", `/api/e2e/sandboxes/${id}`).then(
       (s) => s!
     )
+  }
+
+  /**
+   * Sets what runs in a terminal session of the fake guest, which it creates if needed:
+   * tmux's name of the program, its command line, and how many seconds ago it printed.
+   */
+  async setTerminal(
+    id: string,
+    name: string,
+    work: {
+      command: string
+      foreground?: string[]
+      path?: string
+      idle?: number
+    }
+  ) {
+    await this.guestReady(id)
+    return this.json("PUT", `/api/e2e/sandboxes/${id}/terminals/${name}`, {
+      idle: 0,
+      ...work,
+    })
   }
 
   /**

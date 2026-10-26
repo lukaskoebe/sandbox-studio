@@ -108,6 +108,54 @@ test("a teammate without a computer is offered one, and the screen's menu forks 
   await expect(page.getByRole("dialog", { name: "New computer" })).toBeVisible()
 })
 
+// A harness printing in a terminal counts as work, in the header and the sidebar; another
+// program there leaves the teammate idle, with the program beside it.
+test("a teammate's status counts what runs in its terminals", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = `Term ${Math.random().toString(36).slice(2, 8)}`
+  const id = await addTeammate(api, env, name)
+  const sandbox = sandboxName("status")
+  const sb = await api.createSandbox(sandbox, id)
+  await api.setTerminal(sb, "2", {
+    command: "node",
+    foreground: ["node", "/usr/local/bin/opencode"],
+  })
+  await page.goto(`/e/${env}/teammates/${id}`)
+  const header = page.locator("header").filter({ hasText: name })
+  const row = page
+    .locator('[data-sidebar="sidebar"]')
+    .getByRole("link", { name: new RegExp(name) })
+  await expect(header).toContainText("Working · opencode in a terminal", {
+    timeout: 15_000,
+  })
+  await expect(row).toContainText("working")
+
+  await header.getByRole("link", { name: "opencode in a terminal" }).click()
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("term"))
+    .toMatch(/^"?2"?$/)
+  const sessions = page.getByRole("tablist", { name: "Terminal sessions" })
+  await expect(sessions.getByRole("tab", { name: "opencode" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  await expect(sessions.getByLabel("working")).toBeVisible()
+
+  // A dev server that printed long ago isn't work.
+  await api.setTerminal(sb, "2", {
+    command: "npm",
+    foreground: ["npm run dev"],
+    idle: 120,
+  })
+  await expect(header).toContainText("Idle · npm run dev running", {
+    timeout: 15_000,
+  })
+  await expect(row).toContainText("npm")
+})
+
 // Enlarged, the screen takes the page and the conversation is a strip beside it; the strip, the
 // bezel and folding each give the conversation back.
 test("the screen enlarges to take the page, and the conversation comes back", async ({

@@ -88,12 +88,17 @@ const presenceDots: Record<Presence, string> = {
   offline: "ring-1 ring-(--st-stopped) ring-inset",
 }
 
-/** A teammate's presence as a dot. The words go in the title and beside it where there is room. */
+/**
+ * A teammate's presence as a dot. The words go in the title and beside it where there is room.
+ * Busy is an idle teammate with a program running, such as a dev server: a ring, not a dot.
+ */
 export function PresenceDot({
   presence,
+  busy,
   className,
 }: {
   presence: Presence
+  busy?: boolean
   className?: string
 }) {
   return (
@@ -102,7 +107,9 @@ export function PresenceDot({
       title={presenceLabels[presence]}
       className={cn(
         "size-2 shrink-0 rounded-full",
-        presenceDots[presence],
+        busy && presence === "idle"
+          ? "ring-[1.5px] ring-muted-foreground ring-inset"
+          : presenceDots[presence],
         className
       )}
     />

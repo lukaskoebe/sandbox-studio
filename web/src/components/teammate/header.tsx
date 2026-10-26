@@ -1,7 +1,12 @@
+import { Link } from "@tanstack/react-router"
 import { PresenceDot, TeammateAvatar } from "@/components/teammate-avatar"
 import { Readiness } from "@/components/teammate-readiness"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { presenceLabels, usePresence } from "@/hooks/use-teammate-presence"
+import {
+  activityDetail,
+  presenceLabels,
+  useActivity,
+} from "@/hooks/use-teammate-presence"
 import { $api, type Teammate } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
 
@@ -21,7 +26,10 @@ export function TeammateHeader({
   const providers = $api.useQuery("get", "/api/environments/{env}/providers", {
     params: { path: { env } },
   })
-  const state = usePresence(env)(teammate.id)
+  const activity = useActivity(env)(teammate.id)
+  const state = activity.presence
+  const detail = activityDetail(activity)
+  const terminal = activity.terminal
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 px-3 md:px-4">
       <SidebarTrigger className="md:hidden" />
@@ -47,15 +55,35 @@ export function TeammateHeader({
           </span>
         </span>
       </button>
-      <div className="ml-auto flex shrink-0 items-center gap-3">
+      <div className="ml-auto flex min-w-0 items-center gap-3">
         <Readiness
           teammate={teammate}
           provider={providers.data?.find((p) => p.id === teammate.providerId)}
           problemsOnly
         />
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <PresenceDot presence={state} />
-          {presenceLabels[state]}
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <PresenceDot presence={state} busy={terminal?.state === "busy"} />
+          <span className="max-w-80 truncate">
+            {presenceLabels[state]}
+            {detail && " · "}
+            {detail && terminal ? (
+              <Link
+                to="/e/$env/teammates/$id"
+                params={{ env, id: teammate.id }}
+                search={(prev) => ({
+                  ...prev,
+                  tab: "terminal" as const,
+                  term: terminal.name,
+                  computer: terminal.sandboxId,
+                })}
+                className="text-foreground underline-offset-2 hover:underline"
+              >
+                {detail}
+              </Link>
+            ) : (
+              detail
+            )}
+          </span>
         </span>
       </div>
     </header>

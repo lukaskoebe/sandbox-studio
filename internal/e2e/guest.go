@@ -209,6 +209,16 @@ func (g *Guest) handle(st net.Conn) {
 	case agentproto.KindKill:
 		g.kill(h.Session)
 		err = agentproto.WriteJSONLine(st, struct{}{})
+	case agentproto.KindTitle:
+		var req agentproto.SessionTitle
+		if err = agentproto.ReadJSONLine(br, &req); err == nil {
+			g.mu.Lock()
+			if s, ok := g.sessions[h.Session]; ok {
+				s.Title = req.Title
+			}
+			g.mu.Unlock()
+			err = agentproto.WriteJSONLine(st, struct{}{})
+		}
 	case agentproto.KindPorts:
 		g.mu.Lock()
 		ports := make([]agentproto.Port, 0, len(g.ports))
@@ -297,7 +307,7 @@ func (g *Guest) runTmux(req agentproto.RunRequest) agentproto.RunResult {
 func (g *Guest) sessionLocked(name string) *session {
 	s, ok := g.sessions[name]
 	if !ok {
-		s = &session{Session: agentproto.Session{Name: name, Windows: 1, Created: time.Now().Unix()}, ptys: map[*ptyStream]struct{}{}}
+		s = &session{Session: agentproto.Session{Name: name, Windows: 1, Created: time.Now().Unix(), Command: "bash", Path: "/workspace"}, ptys: map[*ptyStream]struct{}{}}
 		g.sessions[name] = s
 	}
 	return s
@@ -308,9 +318,12 @@ func (g *Guest) Sessions() []agentproto.Session {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	out := make([]agentproto.Session, 0, len(g.sessions))
+	now := time.Now().Unix()
 	for _, s := range g.sessions {
 		v := s.Session
 		v.Attached = len(s.ptys)
+		v.Foreground = slices.Clone(v.Foreground)
+		v.Clock = now
 		out = append(out, v)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -512,6 +525,32 @@ func (g *Guest) SetImages(on bool) {
 }
 
 // SetPorts replaces the ports the guest reports as listening.
+// TerminalWork is what runs in a fake terminal session, as the control API sets it.
+type TerminalWork struct {
+	Command    string   `json:"command"`              // the program tmux names, such as npm
+	Foreground []string `json:"foreground,omitempty"` // its command line; none at a shell prompt
+	Path       string   `json:"path,omitempty"`
+	Harness    string   `json:"harness,omitempty"`
+	Idle       int64    `json:"idle"` // seconds since the session last printed
+}
+
+// SetTerminal creates or changes session name to run w: started now, and last printing
+// w.Idle seconds ago.
+func (g *Guest) SetTerminal(name string, w TerminalWork) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	s := g.sessionLocked(name)
+	now := time.Now().Unix()
+	s.Command, s.Foreground, s.Harness, s.Activity = w.Command, slices.Clone(w.Foreground), w.Harness, now-w.Idle
+	if w.Path != "" {
+		s.Path = w.Path
+	}
+	s.Started = 0
+	if len(w.Foreground) > 0 {
+		s.Started = now
+	}
+}
+
 func (g *Guest) SetPorts(ports []int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

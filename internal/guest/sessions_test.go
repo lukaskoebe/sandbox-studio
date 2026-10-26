@@ -4,28 +4,124 @@ package guest
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 )
 
 func TestParseSessions(t *testing.T) {
-	out := "main|1|2|1791627258|||1791627290\nclaude-2|0|1|1791627300|claude|\nchat-x|0|1|1791627301|codex|abc7\nold|0|1|1|opencode\nodd name|0|1|1||\nshort|0\n"
+	out := "main|1|2|1791627258|||1791627290\nclaude-2|0|1|1791627300|claude|\nchat-x|0|1|1791627301|codex|abc7\nold|0|1|1|opencode\nodd name|0|1|1||\nshort|0\n" +
+		"web|0|1|1791627302|||1791627310|npm|412|dev server|/workspace/my|app\n" +
+		"two|0|1|1791627303|||1791627311|a|b|bad|||/x\n"
+	now := time.Unix(1791627400, 0)
+	fg := func(pid int) ([]string, int64) {
+		if pid != 412 {
+			t.Errorf("foreground of %d", pid)
+		}
+		return []string{"npm run dev"}, 1791627350
+	}
 	want := []agentproto.Session{
 		{Name: "main", Attached: 1, Windows: 2, Created: 1791627258, Activity: 1791627290},
 		{Name: "claude-2", Windows: 1, Created: 1791627300, Harness: "claude"},
 		{Name: "chat-x", Windows: 1, Created: 1791627301, Harness: "codex", Chat: "abc7"},
 		{Name: "old", Windows: 1, Created: 1, Harness: "opencode"},
+		{Name: "web", Windows: 1, Created: 1791627302, Activity: 1791627310, Command: "npm", Foreground: []string{"npm run dev"},
+			Started: 1791627350, Path: "/workspace/my|app", Title: "dev server", Clock: 1791627400},
+		// A "|" in the program's name shifts the fields: the session keeps its basics.
+		{Name: "two", Windows: 1, Created: 1791627303, Activity: 1791627311},
 	}
-	if got := parseSessions(out); !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %+v, want %+v", got, want)
+	if got := parseSessions(out, now, fg); !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
-	if got := parseSessions(""); len(got) != 0 {
+	if got := parseSessions("", now, fg); len(got) != 0 {
 		t.Fatalf("empty output: %+v", got)
+	}
+}
+
+// fakeProc writes a /proc with the processes in procs: pid → its stat fields after the
+// name (state, ppid, pgrp, session, tty, tpgid, …, starttime as the 20th) and its cmdline.
+func fakeProc(t *testing.T, uptime string, procs map[int][2]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "uptime"), []byte(uptime), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for pid, p := range procs {
+		d := filepath.Join(dir, strconv.Itoa(pid))
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		stat := strconv.Itoa(pid) + " (a (b) c) " + p[0] + "\n"
+		if err := os.WriteFile(filepath.Join(d, "stat"), []byte(stat), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "cmdline"), []byte(p[1]), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// stat is the stat fields after the name of a process with tpgid and starttime.
+func stat(tpgid, starttime int) string {
+	return "S 1 10 10 34816 " + strconv.Itoa(tpgid) + " 0 0 0 0 0 0 0 0 0 20 0 1 0 " + strconv.Itoa(starttime) + " 1000 100"
+}
+
+func TestForeground(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	// Booted 1000 s before now; npm started 400 s after boot, its title rewritten as node does.
+	proc := fakeProc(t, "1000.42 3000.10\n", map[int][2]string{
+		10: {stat(20, 100), "-bash\x00"},
+		20: {stat(20, 40000), "npm run dev\x00\x00\x00"},
+		30: {stat(30, 200), "/bin/bash\x00-l\x00"},
+		40: {stat(41, 300), "zsh\x00"},
+		41: {stat(41, 500), "bash\x00./build.sh\x00"},
+		50: {stat(0, 600), "bash\x00"},
+	})
+	for _, c := range []struct {
+		pid     int
+		args    []string
+		started int64
+	}{
+		{10, []string{"npm run dev"}, now.Unix() - 1000 + 400},
+		{30, nil, 0}, // the shell at its prompt
+		{40, []string{"bash", "./build.sh"}, now.Unix() - 1000 + 5}, // a script is a program
+		{50, nil, 0}, // no terminal
+		{60, nil, 0}, // gone
+	} {
+		args, started := foreground(proc, c.pid, now)
+		if !slices.Equal(args, c.args) || started != c.started {
+			t.Errorf("foreground(%d) = %q, %d; want %q, %d", c.pid, args, started, c.args, c.started)
+		}
+	}
+}
+
+func TestSplitCmdline(t *testing.T) {
+	many := strings.Repeat("a\x00", 20)
+	got := splitCmdline([]byte(many))
+	if len(got) != maxForegroundArgs || got[len(got)-1] != "a …" {
+		t.Fatalf("20 arguments: %q", got)
+	}
+	long := splitCmdline([]byte("vim\x00" + strings.Repeat("é", 200)))
+	if len(long[1]) > maxForegroundArgSize+len("…") || !strings.HasSuffix(long[1], "…") || !utf8.ValidString(long[1]) {
+		t.Fatalf("long argument: %q", long[1])
+	}
+}
+
+func TestCheckTitle(t *testing.T) {
+	for title, ok := range map[string]bool{"": true, "dev server": true, "-x": true, "a|b": false, "a\nb": false,
+		"run;": false, strings.Repeat("x", agentproto.MaxTitle): true, strings.Repeat("é", agentproto.MaxTitle+1): false} {
+		if err := agentproto.CheckTitle(title); (err == nil) != ok {
+			t.Errorf("CheckTitle(%q) = %v", title, err)
+		}
 	}
 }
 

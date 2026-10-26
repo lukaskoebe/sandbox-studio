@@ -127,6 +127,16 @@ export function ComputerScreen({
       ? ["terminal", "browser"]
       : []
   const tab = shown.find((t) => t === search.tab) ?? "terminal"
+  // The Terminals tab's own query: the Terminal tab counts its sessions.
+  const terminals = $api.useQuery(
+    "get",
+    "/api/environments/{env}/sandboxes/{id}/terminals",
+    { params: { path: { env, id: sb.id } } },
+    { refetchInterval: 5000, enabled: on }
+  )
+  const counts: Partial<Record<ScreenTab, number>> = {
+    terminal: on ? (terminals.data?.length ?? 0) : 0,
+  }
   const dots: Partial<Record<ScreenTab, boolean>> = {
     changes: reviews.length > 0,
     browser: browserAsks > 0,
@@ -230,6 +240,14 @@ export function ComputerScreen({
                     >
                       {M.label}
                     </span>
+                    {(counts[t] ?? 0) > 1 && (
+                      <span
+                        aria-label={`${counts[t]} sessions`}
+                        className="rounded-sm border px-1 font-mono text-[0.625rem] leading-3.5 font-normal text-muted-foreground"
+                      >
+                        {counts[t]}
+                      </span>
+                    )}
                     {dots[t] && (
                       <span
                         aria-label="waiting for you"

@@ -4,13 +4,18 @@ package guest
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -231,4 +236,138 @@ func exitError(harness, status, pane string) error {
 		return harnessError(fmt.Sprintf("%s %s without output", harness, what))
 	}
 	return harnessError(fmt.Sprintf("%s %s:\n%s", harness, what, text))
+}
+
+// setTitle names the session name, or removes its name for an empty title. The name is a
+// user option, so the session keeps its tmux name, which links and the API use.
+func (a *Agent) setTitle(st net.Conn, br *bufio.Reader, name string) error {
+	var req agentproto.SessionTitle
+	if err := readBody(br, 4<<10, &req); err != nil {
+		return replyError(st, err)
+	}
+	if !validSessionName(name) {
+		return replyError(st, errors.New("invalid session name"))
+	}
+	if err := agentproto.CheckTitle(req.Title); err != nil {
+		return replyError(st, err)
+	}
+	// "=name:" as in startCommand; "--" ends the flags, so a title can start with "-".
+	args := []string{"set-option", "-t", "=" + name + ":", "--", agentproto.TitleOption, req.Title}
+	if req.Title == "" {
+		args = []string{"set-option", "-u", "-t", "=" + name + ":", agentproto.TitleOption}
+	}
+	if out, err := a.command("tmux", args...).CombinedOutput(); err != nil {
+		return replyError(st, errors.New(strings.TrimSpace(string(out))))
+	}
+	return replyError(st, nil)
+}
+
+// The shells a terminal starts in, by the base name of their argv[0].
+var shells = map[string]bool{"bash": true, "sh": true, "zsh": true, "fish": true, "dash": true,
+	"ash": true, "ksh": true, "mksh": true, "tcsh": true, "csh": true, "nu": true}
+
+// clockTicks is USER_HZ, the unit of the start times in /proc/<pid>/stat, on every Linux
+// architecture Studio runs on.
+const clockTicks = 100
+
+// Limits of the foreground command line a session reports.
+const (
+	maxForegroundArgs    = 16
+	maxForegroundArgSize = 256
+)
+
+// foreground reads from the /proc at proc what runs in the foreground of the terminal the
+// process pid has, such as a pane's shell: the command line of the terminal's foreground
+// process group's leader and when it started, in Unix seconds by the clock at now. It
+// answers nothing while that is a shell without a script, such as the pane's own shell at
+// its prompt.
+func foreground(proc string, pid int, now time.Time) ([]string, int64) {
+	f, ok := procStat(proc, pid)
+	if !ok {
+		return nil, 0
+	}
+	tpgid, err := strconv.Atoi(f[5])
+	if err != nil || tpgid <= 0 {
+		return nil, 0
+	}
+	raw, err := os.ReadFile(filepath.Join(proc, strconv.Itoa(tpgid), "cmdline"))
+	if err != nil {
+		return nil, 0
+	}
+	args := splitCmdline(raw)
+	if len(args) == 0 || isShell(args) {
+		return nil, 0
+	}
+	var started int64
+	if f, ok := procStat(proc, tpgid); ok {
+		ticks, err := strconv.ParseInt(f[19], 10, 64)
+		if up, ok := uptime(proc); ok && err == nil {
+			started = now.Unix() - up + ticks/clockTicks // boot time plus the start time
+		}
+	}
+	return args, started
+}
+
+// uptime reads the seconds since boot from the /proc at proc.
+func uptime(proc string) (int64, bool) {
+	raw, err := os.ReadFile(filepath.Join(proc, "uptime"))
+	if err != nil {
+		return 0, false
+	}
+	f := strings.Fields(string(raw))
+	if len(f) == 0 {
+		return 0, false
+	}
+	secs, err := strconv.ParseFloat(f[0], 64)
+	return int64(secs), err == nil
+}
+
+// procStat returns the fields of /proc/<pid>/stat after the command name, which is in
+// parentheses and may hold spaces: f[0] is the state, f[5] the terminal's foreground
+// process group and f[19] the start time.
+func procStat(proc string, pid int) ([]string, bool) {
+	raw, err := os.ReadFile(filepath.Join(proc, strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return nil, false
+	}
+	i := bytes.LastIndexByte(raw, ')')
+	if i < 0 {
+		return nil, false
+	}
+	f := strings.Fields(string(raw[i+1:]))
+	return f, len(f) >= 20
+}
+
+// splitCmdline reads a /proc cmdline: arguments ended by NUL. A program that set its title,
+// as node does, may leave one argument with spaces and NULs after it.
+func splitCmdline(raw []byte) []string {
+	var args []string
+	for _, arg := range strings.Split(string(raw), "\x00") {
+		if arg == "" {
+			continue
+		}
+		if len(args) == maxForegroundArgs {
+			args[len(args)-1] += " …"
+			break
+		}
+		if len(arg) > maxForegroundArgSize {
+			arg = strings.ToValidUTF8(arg[:maxForegroundArgSize], "") + "…"
+		}
+		args = append(args, arg)
+	}
+	return args
+}
+
+// isShell reports whether args run a shell interactively: a shell's name, with a leading
+// "-" for a login shell, and nothing but options. A shell running a script is a program.
+func isShell(args []string) bool {
+	if !shells[path.Base(strings.TrimPrefix(args[0], "-"))] {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if !strings.HasPrefix(arg, "-") {
+			return false
+		}
+	}
+	return true
 }

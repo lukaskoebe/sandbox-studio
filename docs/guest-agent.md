@@ -26,7 +26,7 @@ Stream kinds:
 | `hello` | guest → host | version, arch, hostname |
 | `pty` | host → guest | a terminal attached to a tmux session |
 | `tcp` | host → guest | raw bytes to a guest loopback port (previews) |
-| `sessions`, `kill` | host → guest | list or end tmux sessions |
+| `sessions`, `kill`, `title` | host → guest | list, end or name tmux sessions; a listing has each session's foreground command line from `/proc`, its directory and the guest's clock |
 | `ports` | host → guest | listening TCP ports |
 | `config` | host → guest | CA and placeholders; acknowledged when applied |
 | `home-files` | host → guest | harness config files into `/home/agent` (at most 16 files, 256 KiB each, no symlinks) |

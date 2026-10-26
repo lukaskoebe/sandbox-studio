@@ -2,9 +2,19 @@
 
 ## Unreleased
 
-Fixes from the first days with v0.8.0: chats keep their place, the collapsed sidebar opens
-every teammate, and an update started from a terminal comes back up.
+Fixes from the first days with v0.8.0, and what its users asked for: terminal sessions as
+tabs, and a teammate's status that counts what runs in them.
 
+- **Teammates** count what runs in their terminals. One works while an agent such as
+  opencode prints in one of its terminals, and is idle with a ring instead of a dot while a
+  program such as `npm run dev` runs, so a dev server doesn't look like work. The header says
+  which terminal and links to it, and the sidebar names the program.
+- **Terminal:** sessions are tabs over the terminal instead of a menu, named by what runs in
+  them or by their directory instead of `2` and `3`, with a dot while an agent works and a
+  ring while a program runs. Double-click renames one; the tooltip has the command, its
+  directory and when it started. Alt+Shift+T, Alt+Shift+W and Alt+Shift+[ and ] open, close
+  and switch sessions from the keyboard, and closing one a program runs in asks first. The
+  Terminal tab counts the sessions.
 - **Chats:** sending a message no longer jumps a long chat back to its first message. The
   scroller went to every message from when the page opened that it hadn't gone to yet, and an
   agent's first words, taking the place of its starting, set it off. The composer now ends on

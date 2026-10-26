@@ -17,25 +17,30 @@ count. So Ada shows Idle while opencode works in one of her terminals, or while 
 runs there.
 
 The guest lists terminal sessions with tmux's `list-sessions`. Each session reports its name,
-the agent harness Studio started in it, and when it last printed. The proposal:
+the agent harness Studio started in it, and when it last printed.
 
-- The guest adds `#{pane_current_command}` to the session format. Each session then reports
-  the program in its active pane: `bash`, `opencode`, `npm`, `make`.
-- The sandbox view carries `terminals: {name, command, activity}[]`, kept fresh by the
-  guest's existing sessions call. The host asks every 10 s while a browser has the UI open,
-  and a session's change in command publishes a sandboxes event.
-- Presence gains two answers, below *waiting* and *working* in priority:
-  - **Working in a terminal:** a harness runs in a session (`claude`, `codex`, `opencode`,
-    `cursor-agent` by command name, or the session's harness mark) and printed in the last
-    20 s. It is the same green dot as a chat, and the label says "Working · opencode in
-    terminal 2".
-  - **Busy:** a program other than a shell runs, such as a dev server or a test run. It is a
-    quieter ring, not a dot, and the label says "Idle · npm running in main". A server that
-    runs for hours shouldn't look like work.
+**Built** on `feedback-v0.8`:
+
+- The guest adds `#{pane_current_command}`, `#{pane_pid}` and `#{pane_current_path}` to the
+  session format, and reads the foreground command line and its start from `/proc` (see the
+  next item). It also sends its own clock with the answer, and the host shifts the times by
+  the difference, so a guest whose clock is off doesn't look idle or working when it isn't.
+- The host labels each session and says what it does (`internal/sandboxes/terminals.go`):
+  *working* while a harness runs and printed in the last 20 s, *busy* while another program
+  than the shell runs, *idle* otherwise. A harness is `claude`, `codex`, `opencode`,
+  `cursor-agent`, `gemini` or `aider` by program name, the script an interpreter such as
+  `node` runs, or the session's harness mark.
+- `GET /api/environments/{env}/terminals` lists the terminals of the running sandboxes. While
+  a UI tab has the event stream open, the host asks every guest every 10 s, gives each 5 s to
+  answer, and publishes a `terminals` event when a label, program, state or directory
+  changes. The list answers from what it saw in the last 15 s.
+- Presence, below *waiting* and *working* in priority:
+  - **Working in a terminal:** the same green dot as a chat; the header says "Working ·
+    opencode in a terminal", or "opencode in api" when the session has a name of its own, and
+    links to that session.
+  - **Busy:** a quieter ring, not a dot; the header says "Idle · npm run dev running" and the
+    sidebar row names the program. A server that runs for hours doesn't look like work.
 - The terminal's session tabs show the same marks on each session (see below).
-
-S–M. The tmux format and the presence rule are small. Keeping the view fresh without a
-browser-driven poll per tab is most of the work.
 
 ## Terminal sessions as tabs
 
@@ -65,12 +70,15 @@ nothing on the Terminal tab says there is more than one session.
   above needs only the program's name from `#{pane_current_command}`; a label needs its
   arguments too.
 - Double-click renames a session: it sets the `@studio_title` option, not the tmux name.
-- Keyboard: Ctrl+Shift+T opens a shell; Ctrl+PgUp and Ctrl+PgDn switch sessions while the
-  terminal has focus (xterm.js passes them through). Ctrl+Shift+W closes one, after a
-  confirmation if a program other than the shell runs.
+- Keyboard: Alt+Shift+T opens a shell, Alt+Shift+[ and Alt+Shift+] switch sessions while
+  the terminal has focus, and Alt+Shift+W closes one, after a confirmation if a program other
+  than the shell runs. The mockup had Ctrl+Shift+T, Ctrl+Shift+W and Ctrl+PgUp/PgDn, but
+  Chrome keeps those for its own tabs and a page never sees them outside an installed app.
 - On a phone the strip scrolls sideways.
 
-S, on top of the status item's guest change.
+**Built** on `feedback-v0.8`, with the status item. The rename is `PUT
+/api/environments/{env}/sandboxes/{id}/terminals/{name}/title`, at most 40 characters; an empty
+title goes back to the label Studio picks.
 
 ## One memory panel
 

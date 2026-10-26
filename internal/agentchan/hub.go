@@ -339,6 +339,17 @@ func (h *Hub) Connected(id string) (agentproto.Hello, bool) {
 	return c.hello, true
 }
 
+// ConnectedIDs returns the sandboxes whose guest agents are connected, in no order.
+func (h *Hub) ConnectedIDs() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	ids := make([]string, 0, len(h.sessions))
+	for id := range h.sessions {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
 // WaitConnected blocks until the guest agent of id connects or ctx ends.
 func (h *Hub) WaitConnected(ctx context.Context, id string) error {
 	h.mu.Lock()
@@ -443,10 +454,14 @@ func (h *Hub) requestLimit(ctx context.Context, id string, hdr agentproto.Header
 	return json.Unmarshal(line, v)
 }
 
-// Sessions lists the guest's tmux sessions.
+// Sessions lists the guest's tmux sessions, with their times in the host's clock.
 func (h *Hub) Sessions(ctx context.Context, id string) ([]agentproto.Session, error) {
 	var out []agentproto.Session
 	err := h.request(ctx, id, agentproto.Header{Kind: agentproto.KindSessions}, nil, &out)
+	now := time.Now().Unix()
+	for i := range out {
+		out[i] = out[i].InHostClock(now)
+	}
 	return out, err
 }
 
@@ -454,6 +469,12 @@ func (h *Hub) Sessions(ctx context.Context, id string) ([]agentproto.Session, er
 func (h *Hub) KillSession(ctx context.Context, id, name string) error {
 	var ok struct{}
 	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindKill, Session: name}, nil, &ok)
+}
+
+// SetSessionTitle names a tmux session in the guest, or removes its name for "".
+func (h *Hub) SetSessionTitle(ctx context.Context, id, name, title string) error {
+	var ok struct{}
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindTitle, Session: name}, agentproto.SessionTitle{Title: title}, &ok)
 }
 
 // Snapshot takes, compares, restores or collects turn snapshots of the guest's workspace.

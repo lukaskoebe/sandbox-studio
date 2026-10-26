@@ -1930,6 +1930,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/terminals/{name}/title": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Names a terminal in the UI. Its tmux name, which links use, stays. */
+        put: operations["renameTerminal"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/usage": {
         parameters: {
             query?: never;
@@ -2483,6 +2500,26 @@ export interface paths {
         put?: never;
         /** @description Creates a sandbox from a template like createSandbox: it returns at once in state creating, and a failed create stays as a failed sandbox until it is deleted. */
         post: operations["createTemplateSandbox"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/terminals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What runs in the terminals of an environment's running sandboxes
+         * @description For teammates' status. Studio asks the guests every 10 s while a UI tab is open, and the terminals topic of /api/events announces each change.
+         */
+        get: operations["listEnvironmentTerminals"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4710,6 +4747,10 @@ export interface components {
             /** @description Human-readable checkpoint name */
             name: string;
         };
+        RenameTerminalInBody: {
+            /** @description The terminal's name in the UI; empty goes back to the one Studio picks */
+            title: string;
+        };
         Repo: {
             description?: string;
             /** @description The repository's path on the forge, such as owner/repo; the remote URL is https://git.studio.internal/<forge>/<path>.git */
@@ -4949,6 +4990,10 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        SandboxTerminals: {
+            sandboxId: string;
+            terminals: components["schemas"]["Terminal"][] | null;
+        };
         Scope: {
             /** Format: int64 */
             coreBudget: number;
@@ -4994,11 +5039,29 @@ export interface components {
             attached: number;
             /** @description The chat this session continues, when a chat was opened in the terminal */
             chat?: string;
+            /**
+             * Format: int64
+             * @description Unset in Studio's answers
+             */
+            clock?: number;
+            /** @description The program in the foreground of the session's pane as tmux names it, such as bash, npm or opencode */
+            command?: string;
             /** Format: int64 */
             created: number;
+            /** @description The command line of the program in the foreground, when it isn't a shell at its prompt */
+            foreground?: string[] | null;
             /** @description The agent harness running in the session; empty for plain terminals */
             harness?: string;
             name: string;
+            /** @description The pane's working directory */
+            path?: string;
+            /**
+             * Format: int64
+             * @description Unix seconds when the foreground program started
+             */
+            started?: number;
+            /** @description The name the user gave the session */
+            title?: string;
             /** Format: int64 */
             windows: number;
         };
@@ -5397,6 +5460,51 @@ export interface components {
             name: string;
             platform: string;
             resources: components["schemas"]["Resources"];
+        };
+        Terminal: {
+            /**
+             * Format: int64
+             * @description Unix seconds of the session window's latest output
+             */
+            activity?: number;
+            /** Format: int64 */
+            attached: number;
+            /** @description The chat this session continues, when a chat was opened in the terminal */
+            chat?: string;
+            /**
+             * Format: int64
+             * @description Unset in Studio's answers
+             */
+            clock?: number;
+            /** @description The program in the foreground of the session's pane as tmux names it, such as bash, npm or opencode */
+            command?: string;
+            /** Format: int64 */
+            created: number;
+            /** @description The command line of the program in the foreground, when it isn't a shell at its prompt */
+            foreground?: string[] | null;
+            /** @description The agent harness running in the session; empty for plain terminals */
+            harness?: string;
+            /** @description The session's name in the UI: the name the user gave it, the harness that runs, the program in the foreground or the base name of its directory, made unique with " 2" */
+            label: string;
+            name: string;
+            /** @description The pane's working directory */
+            path?: string;
+            /** @description The harness or the foreground program, cut to 24 characters; empty at a shell prompt */
+            program?: string;
+            /**
+             * Format: int64
+             * @description Unix seconds when the foreground program started
+             */
+            started?: number;
+            /**
+             * @description working: an agent harness runs and printed in the last 20 s; busy: another program than the shell runs; idle otherwise
+             * @enum {string}
+             */
+            state: "working" | "busy" | "idle";
+            /** @description The name the user gave the session */
+            title?: string;
+            /** Format: int64 */
+            windows: number;
         };
         TextBody: {
             text: string;
@@ -10451,7 +10559,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Session"][] | null;
+                    "application/json": components["schemas"]["Terminal"][] | null;
                 };
             };
             /** @description Error */
@@ -10479,6 +10587,43 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    renameTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenameTerminalInBody"];
+            };
+        };
         responses: {
             /** @description No Content */
             204: {
@@ -11984,6 +12129,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["View"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    listEnvironmentTerminals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SandboxTerminals"][] | null;
                 };
             };
             /** @description Error */

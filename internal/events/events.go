@@ -19,6 +19,8 @@ const (
 	TopicTasks = "tasks"
 	// TopicBrowser: a teammate's browser action log has a new entry; TeammateID names it.
 	TopicBrowser = "browser"
+	// TopicTerminals: what runs in a sandbox's terminals changed; SandboxID names it.
+	TopicTerminals = "terminals"
 )
 
 // Event is one change notification.
@@ -35,8 +37,32 @@ type Event struct {
 
 // Bus is an in-memory publish/subscribe hub. The zero value is ready to use.
 type Bus struct {
-	mu   sync.Mutex
-	subs map[chan Event]struct{}
+	mu       sync.Mutex
+	subs     map[chan Event]struct{}
+	watchers int
+}
+
+// Watch counts an open UI tab until the returned function is called. Work done only for
+// someone looking, such as asking guests what their terminals run, checks Watched first.
+func (b *Bus) Watch() func() {
+	b.mu.Lock()
+	b.watchers++
+	b.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			b.mu.Lock()
+			b.watchers--
+			b.mu.Unlock()
+		})
+	}
+}
+
+// Watched reports whether a UI tab is open.
+func (b *Bus) Watched() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.watchers > 0
 }
 
 // Publish sends e to every subscriber. A subscriber that falls too far behind is

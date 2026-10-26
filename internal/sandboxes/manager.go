@@ -80,6 +80,7 @@ type Manager struct {
 	// the Manager's lifetime so a deleted sandbox's lock can't be swapped under a holder.
 	mutating sync.Map
 
+	terminals  terminalWatch // see WatchTerminals
 	imports    importState
 	importPoll time.Duration                // build status poll interval; 0 means 1s
 	diskFree   func(string) (uint64, error) // overrides the free-disk probe in tests
@@ -663,11 +664,28 @@ func (m *Manager) WaitReady(ctx context.Context, id string, timeout time.Duratio
 }
 
 // Terminals lists the tmux sessions of a sandbox.
-func (m *Manager) Terminals(ctx context.Context, envID, id string) ([]agentproto.Session, error) {
+func (m *Manager) Terminals(ctx context.Context, envID, id string) ([]Terminal, error) {
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return nil, err
 	}
-	return m.Hub.Sessions(ctx, id)
+	return m.sessions(ctx, envID, id)
+}
+
+// RenameTerminal names the tmux session name for the UI, or removes its name for "". Its
+// tmux name stays, so links to it keep working.
+func (m *Manager) RenameTerminal(ctx context.Context, envID, id, name, title string) error {
+	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
+		return err
+	}
+	title = strings.TrimSpace(title)
+	if err := agentproto.CheckTitle(title); err != nil {
+		return fmt.Errorf("%w: %v", ErrTerminalTitle, err)
+	}
+	if err := m.Hub.SetSessionTitle(ctx, id, name, title); err != nil {
+		return err
+	}
+	_, _ = m.sessions(ctx, envID, id) // announces the new label
+	return nil
 }
 
 // OpenTerminal attaches to the tmux session name, creating it if needed.

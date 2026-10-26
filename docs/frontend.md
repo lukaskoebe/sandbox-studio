@@ -123,7 +123,8 @@ shows is in the URL's search, so Back, Forward and links work: `thread`, `comput
 settings card) and `from=setup`. Esc closes the profile or a menu first, then leaves the thread.
 
 - Home: the header (avatar, name, role and harness, what keeps it from working, its presence
-  word), the threads as cards grouped by day (title, a chip for another computer, the last
+  word and what it is busy with: a thread, or a harness or program in a terminal, which links
+  to it; `hooks/use-teammate-presence.ts`), the threads as cards grouped by day (title, a chip for another computer, the last
   answer, the number of requests, its state, and New while it has changes this browser hasn't
   seen: `lib/chat-seen.ts`, revs in localStorage), the small events between them (facts it
   learned, with Forget; tasks; terminal work; check-ins), what it browses now, and what waits
@@ -149,9 +150,14 @@ the tabs Terminal, Browser (a teammate's own browser), Preview (while previews a
 Changes, each with a dot while something on it waits for you; power (Stop, Start or Resume);
 ⋯; enlarge (a teammate's page on a wide screen) and fold. Under it the display:
 
-- Terminal: the computer's tmux sessions behind a chip (a robot for an agent's): switch, a new
-  shell, close. The URL names the one in view (`term`). The teammate's harness opens in one
-  from a thread's Continue in the terminal.
+- Terminal: the computer's tmux sessions as a strip of tabs (`components/computer/terminals.tsx`),
+  with + for a new shell and the Terminal tab counting them when there is more than one. A tab
+  is named by the name it was given (double-click), the harness or program in the foreground,
+  or its directory, and has a robot for a harness, a green dot while one works and a ring
+  while another program runs. Alt+Shift+T, Alt+Shift+W and Alt+Shift+[ and ] open, close and
+  switch sessions from the terminal; closing one a program runs in asks first. The URL names
+  the one in view (`term`). The teammate's harness opens in one from a thread's Continue in
+  the terminal.
 - Browser: the teammate's browser window (tabs, toolbar, live view; [browser](browser.md))
   with its Activity and Sites beside it, or over it on a narrow screen, from the toolbar's
   clock or the site info's All sites.

@@ -10,8 +10,8 @@
 //   - KindSessions, KindPorts, KindKill (host → guest): one JSON reply line.
 //   - KindConfig (host → guest): the host writes a Config line; the guest applies it and
 //     replies like KindKill: {} or an Error.
-//   - KindHomeFiles, KindStartSession (host → guest): the host writes a HomeFiles or
-//     StartSession line; the guest replies like KindKill.
+//   - KindHomeFiles, KindStartSession, KindTitle (host → guest): the host writes a HomeFiles,
+//     StartSession or SessionTitle line; the guest replies like KindKill.
 //   - KindCall (guest → host): the guest writes a Call line; the host replies with one
 //     CallReply line. Hooks and the MCP tools use it. The host knows the sandbox from the
 //     channel, so a Call never names a sandbox, teammate or environment.
@@ -30,6 +30,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // VsockPort is the guest-side vsock port routed to the host agent socket.
@@ -50,12 +53,14 @@ const (
 	KindStartSession = "start-session"
 	// KindCall is a request from the guest to Studio (hooks, memory tools).
 	KindCall = "call"
+	// KindTitle names the tmux session in Header.Session (a SessionTitle line).
+	KindTitle = "title"
 )
 
 // Header opens every stream.
 type Header struct {
 	Kind    string `json:"kind"`
-	Session string `json:"session,omitempty"` // KindPTY, KindKill: tmux session name
+	Session string `json:"session,omitempty"` // KindPTY, KindKill, KindTitle: tmux session name
 	Cols    uint16 `json:"cols,omitempty"`
 	Rows    uint16 `json:"rows,omitempty"`
 	Port    int    `json:"port,omitempty"` // KindTCP, KindForward: loopback port
@@ -87,10 +92,60 @@ type Session struct {
 	Chat string `json:"chat,omitempty" doc:"The chat this session continues, when a chat was opened in the terminal"`
 	// Activity is when the session's window last printed; guests before it send none.
 	Activity int64 `json:"activity,omitempty" doc:"Unix seconds of the session window's latest output"`
+	// The rest describe the active pane of the session's window; guests before v0.8.1 send none.
+	Command string `json:"command,omitempty" doc:"The program in the foreground of the session's pane as tmux names it, such as bash, npm or opencode"`
+	// Foreground is empty while the pane's shell waits at its prompt.
+	Foreground []string `json:"foreground,omitempty" doc:"The command line of the program in the foreground, when it isn't a shell at its prompt"`
+	Started    int64    `json:"started,omitempty" doc:"Unix seconds when the foreground program started"`
+	Path       string   `json:"path,omitempty" doc:"The pane's working directory"`
+	Title      string   `json:"title,omitempty" doc:"The name the user gave the session"`
+	// Clock is the guest's time of the reply. Studio moves the times into its own clock
+	// (InHostClock) and clears it.
+	Clock int64 `json:"clock,omitempty" doc:"Unset in Studio's answers"`
+}
+
+// InHostClock moves the session's times from the guest's clock into the host's, which reads
+// now: a guest's clock can be off, after the host slept for one.
+func (s Session) InHostClock(now int64) Session {
+	if s.Clock == 0 { // a guest before Clock
+		return s
+	}
+	d := now - s.Clock
+	if s.Activity > 0 {
+		s.Activity += d
+	}
+	if s.Started > 0 {
+		s.Started += d
+	}
+	s.Clock = 0
+	return s
+}
+
+// SessionTitle is the body of a KindTitle stream. An empty Title removes the name.
+type SessionTitle struct {
+	Title string `json:"title"`
+}
+
+// MaxTitle is the longest session title, in characters.
+const MaxTitle = 40
+
+// CheckTitle reports why title can't name a session. tmux would read a trailing ";" as a
+// command separator, and the guest's session list separates fields with "|".
+func CheckTitle(title string) error {
+	if !utf8.ValidString(title) || utf8.RuneCountInString(title) > MaxTitle {
+		return fmt.Errorf("a terminal's name has at most %d characters", MaxTitle)
+	}
+	if strings.ContainsFunc(title, unicode.IsControl) || strings.Contains(title, "|") || strings.HasSuffix(title, ";") {
+		return errors.New("a terminal's name can't contain control characters or |, or end in ;")
+	}
+	return nil
 }
 
 // HarnessOption is the tmux user option that marks a session as an agent session.
 const HarnessOption = "@studio_harness"
+
+// TitleOption is the tmux user option that holds the name the user gave a session.
+const TitleOption = "@studio_title"
 
 // ChatOption is the tmux user option that marks the session of a chat opened in the
 // terminal (docs/design/chat-mode.md section 4).

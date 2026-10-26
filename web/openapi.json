@@ -5898,6 +5898,20 @@
         ],
         "type": "object"
       },
+      "RenameTerminalInBody": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "description": "The terminal's name in the UI; empty goes back to the one Studio picks",
+            "maxLength": 40,
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
       "Repo": {
         "additionalProperties": false,
         "properties": {
@@ -6551,6 +6565,28 @@
         ],
         "type": "object"
       },
+      "SandboxTerminals": {
+        "additionalProperties": false,
+        "properties": {
+          "sandboxId": {
+            "type": "string"
+          },
+          "terminals": {
+            "items": {
+              "$ref": "#/components/schemas/Terminal"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "sandboxId",
+          "terminals"
+        ],
+        "type": "object"
+      },
       "Scope": {
         "additionalProperties": false,
         "properties": {
@@ -6675,15 +6711,47 @@
             "description": "The chat this session continues, when a chat was opened in the terminal",
             "type": "string"
           },
+          "clock": {
+            "description": "Unset in Studio's answers",
+            "format": "int64",
+            "type": "integer"
+          },
+          "command": {
+            "description": "The program in the foreground of the session's pane as tmux names it, such as bash, npm or opencode",
+            "type": "string"
+          },
           "created": {
             "format": "int64",
             "type": "integer"
+          },
+          "foreground": {
+            "description": "The command line of the program in the foreground, when it isn't a shell at its prompt",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "harness": {
             "description": "The agent harness running in the session; empty for plain terminals",
             "type": "string"
           },
           "name": {
+            "type": "string"
+          },
+          "path": {
+            "description": "The pane's working directory",
+            "type": "string"
+          },
+          "started": {
+            "description": "Unix seconds when the foreground program started",
+            "format": "int64",
+            "type": "integer"
+          },
+          "title": {
+            "description": "The name the user gave the session",
             "type": "string"
           },
           "windows": {
@@ -7871,6 +7939,97 @@
           "platform",
           "resources",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "Terminal": {
+        "additionalProperties": false,
+        "properties": {
+          "activity": {
+            "description": "Unix seconds of the session window's latest output",
+            "format": "int64",
+            "type": "integer"
+          },
+          "attached": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "chat": {
+            "description": "The chat this session continues, when a chat was opened in the terminal",
+            "type": "string"
+          },
+          "clock": {
+            "description": "Unset in Studio's answers",
+            "format": "int64",
+            "type": "integer"
+          },
+          "command": {
+            "description": "The program in the foreground of the session's pane as tmux names it, such as bash, npm or opencode",
+            "type": "string"
+          },
+          "created": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "foreground": {
+            "description": "The command line of the program in the foreground, when it isn't a shell at its prompt",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "harness": {
+            "description": "The agent harness running in the session; empty for plain terminals",
+            "type": "string"
+          },
+          "label": {
+            "description": "The session's name in the UI: the name the user gave it, the harness that runs, the program in the foreground or the base name of its directory, made unique with \" 2\"",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "description": "The pane's working directory",
+            "type": "string"
+          },
+          "program": {
+            "description": "The harness or the foreground program, cut to 24 characters; empty at a shell prompt",
+            "type": "string"
+          },
+          "started": {
+            "description": "Unix seconds when the foreground program started",
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "description": "working: an agent harness runs and printed in the last 20 s; busy: another program than the shell runs; idle otherwise",
+            "enum": [
+              "working",
+              "busy",
+              "idle"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "description": "The name the user gave the session",
+            "type": "string"
+          },
+          "windows": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "label",
+          "state",
+          "name",
+          "attached",
+          "windows",
+          "created"
         ],
         "type": "object"
       },
@@ -16310,7 +16469,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/Session"
+                    "$ref": "#/components/schemas/Terminal"
                   },
                   "type": [
                     "array",
@@ -16371,6 +16530,71 @@
             }
           }
         ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "terminals"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/terminals/{name}/title": {
+      "put": {
+        "description": "Names a terminal in the UI. Its tmux name, which links use, stays.",
+        "operationId": "renameTerminal",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameTerminalInBody"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "204": {
             "description": "No Content"
@@ -18854,6 +19078,56 @@
         "tags": [
           "templates",
           "sandboxes"
+        ]
+      }
+    },
+    "/api/environments/{env}/terminals": {
+      "get": {
+        "description": "For teammates' status. Studio asks the guests every 10 s while a UI tab is open, and the terminals topic of /api/events announces each change.",
+        "operationId": "listEnvironmentTerminals",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SandboxTerminals"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "What runs in the terminals of an environment's running sandboxes",
+        "tags": [
+          "terminals"
         ]
       }
     },

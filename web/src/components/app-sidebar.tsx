@@ -57,6 +57,7 @@ import { phase, phaseDot } from "@/components/status-badge"
 import { StatusDot } from "@/components/status-dot"
 import { WaitingCount } from "@/components/waiting-count"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
+import { useActivity } from "@/hooks/use-teammate-presence"
 import {
   $api,
   errorMessage,
@@ -65,6 +66,7 @@ import {
   type Teammate,
 } from "@/lib/api/client"
 import type { Chat } from "@/lib/chats"
+import { programName } from "@/lib/terminals"
 
 /** The section labels, in the style's label type; the size replaces SidebarGroupLabel's text-xs. */
 const groupLabel = "h-6 section-label text-(length:--label-size)"
@@ -330,16 +332,21 @@ function TeammateRow({
     teammate.id,
     new Set(computers.map((sb) => sb.id))
   ).length
-  const working = chats.some(
-    (c) => c.teammateId === teammate.id && c.state === "running"
-  )
+  // A harness printing in one of its terminals is work too; another program there isn't.
+  const terminal = useActivity(env)(teammate.id).terminal
+  const working =
+    chats.some((c) => c.teammateId === teammate.id && c.state === "running") ||
+    terminal?.state === "working"
+  const busy = !working && terminal?.state === "busy"
   const up = computers.find((sb) => phase(sb) === "ready")
   const status = working
     ? "working"
     : computers.length === 0
       ? "no computer"
       : up
-        ? undefined
+        ? busy
+          ? programName(terminal.program)
+          : undefined
         : phaseDot(phase(computers[0])).label.toLowerCase()
   return (
     <SidebarMenuItem>
@@ -367,16 +374,20 @@ function TeammateRow({
         ) : (
           status && (
             <span
+              title={busy ? `${terminal.program} running` : undefined}
               className={
-                working
-                  ? "flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground"
+                working || busy
+                  ? "flex max-w-24 items-center gap-1.5 text-[0.6875rem] text-muted-foreground"
                   : "text-[0.6875rem] text-muted-foreground"
               }
             >
               {working && (
                 <span className="size-1.5 animate-pulse rounded-full bg-(--st-running)" />
               )}
-              {status}
+              {busy && (
+                <span className="size-1.5 shrink-0 rounded-full ring-1 ring-current ring-inset" />
+              )}
+              <span className="truncate">{status}</span>
             </span>
           )
         )}

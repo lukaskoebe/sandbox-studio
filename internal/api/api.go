@@ -16,7 +16,6 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentchan"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentmem"
-	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
 	"github.com/lukaskoebe/sandbox-studio/internal/browser"
 	"github.com/lukaskoebe/sandbox-studio/internal/caddyrule"
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
@@ -292,9 +291,18 @@ func (s *Server) registerSandboxes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "listTerminals", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/terminals", Tags: []string{"terminals"},
 		Description: "Terminals are tmux sessions; attach over a websocket at .../terminals/{name}/attach.",
-	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body []agentproto.Session }, error) {
+	}, func(ctx context.Context, in *sandboxPath) (*struct{ Body []sandboxes.Terminal }, error) {
 		list, err := s.Sandboxes.Terminals(ctx, in.Env, in.ID)
-		return &struct{ Body []agentproto.Session }{list}, apiError(err)
+		return &struct{ Body []sandboxes.Terminal }{list}, apiError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "listEnvironmentTerminals", Method: http.MethodGet, Path: "/api/environments/{env}/terminals", Tags: []string{"terminals"},
+		Summary:     "What runs in the terminals of an environment's running sandboxes",
+		Description: "For teammates' status. Studio asks the guests every 10 s while a UI tab is open, and the terminals topic of /api/events announces each change.",
+	}, func(ctx context.Context, in *envPath) (*struct{ Body []sandboxes.SandboxTerminals }, error) {
+		list, err := s.Sandboxes.EnvironmentTerminals(ctx, in.Env)
+		return &struct{ Body []sandboxes.SandboxTerminals }{list}, apiError(err)
 	})
 
 	type terminalPath struct {
@@ -302,6 +310,21 @@ func (s *Server) registerSandboxes(api huma.API) {
 		ID   string `path:"id" doc:"Sandbox ID"`
 		Name string `path:"name" pattern:"^[A-Za-z0-9_-]{1,64}$"`
 	}
+	type renameTerminalIn struct {
+		Env  string `path:"env" doc:"Environment ID"`
+		ID   string `path:"id" doc:"Sandbox ID"`
+		Name string `path:"name" pattern:"^[A-Za-z0-9_-]{1,64}$"`
+		Body struct {
+			Title string `json:"title" maxLength:"40" doc:"The terminal's name in the UI; empty goes back to the one Studio picks"`
+		}
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "renameTerminal", Method: http.MethodPut, Path: "/api/environments/{env}/sandboxes/{id}/terminals/{name}/title", Tags: []string{"terminals"},
+		DefaultStatus: http.StatusNoContent,
+		Description:   "Names a terminal in the UI. Its tmux name, which links use, stays.",
+	}, func(ctx context.Context, in *renameTerminalIn) (*struct{}, error) {
+		return nil, apiError(s.Sandboxes.RenameTerminal(ctx, in.Env, in.ID, in.Name, in.Body.Title))
+	})
 	huma.Register(api, huma.Operation{
 		OperationID: "closeTerminal", Method: http.MethodDelete, Path: "/api/environments/{env}/sandboxes/{id}/terminals/{name}", Tags: []string{"terminals"},
 		DefaultStatus: http.StatusNoContent,
@@ -371,7 +394,7 @@ func apiError(err error) error {
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, templatespec.ErrInvalid):
 		return huma.Error422UnprocessableEntity(err.Error())
-	case errors.Is(err, sandboxes.ErrCheckpointName), errors.Is(err, sandboxes.ErrCheckpointSchedule):
+	case errors.Is(err, sandboxes.ErrCheckpointName), errors.Is(err, sandboxes.ErrCheckpointSchedule), errors.Is(err, sandboxes.ErrTerminalTitle):
 		return huma.Error422UnprocessableEntity(err.Error())
 	case errors.Is(err, gitreview.ErrNoPullRequest), errors.Is(err, gitreview.ErrPullRequestSet), errors.Is(err, gitreview.ErrNotPushed):
 		return huma.Error409Conflict(err.Error())

@@ -12,7 +12,9 @@ async function screenOf(page: Page, env: string, id: string, name: string) {
   await page.goto(`/e/${env}/sandboxes/${id}`)
   const screen = page.getByRole("region", { name: `${name}'s screen` })
   // Creation runs in the background; the tabs show once the computer is up.
-  await expect(screen.getByRole("tablist")).toBeVisible()
+  await expect(
+    screen.getByRole("tablist", { name: `${name}'s screen` })
+  ).toBeVisible()
   return screen
 }
 
@@ -40,9 +42,9 @@ test("a computer opens on its screen, with its facts in its menu", async ({
   await page.keyboard.press("Escape")
 })
 
-// The chip on the terminal lists its sessions, opens a new shell, and the URL names the one in
-// view.
-test("the terminal's chip opens a new shell and switches between sessions", async ({
+// The strip over the terminal lists its sessions by what runs in them, opens a new shell,
+// switches, renames and closes them, and the URL names the one in view.
+test("the terminal's tabs open, switch, rename and close sessions", async ({
   page,
   api,
   env,
@@ -50,25 +52,51 @@ test("the terminal's chip opens a new shell and switches between sessions", asyn
   const name = sandboxName("terms")
   const id = await api.createSandbox(name)
   const screen = await screenOf(page, env, id, name)
+  const sessions = screen.getByRole("tablist", { name: "Terminal sessions" })
   await terminal(page).run("echo first")
-  await screen.getByRole("button", { name: "Terminal session main" }).click()
-  await page.getByRole("menuitem", { name: "New shell" }).click()
+  // A shell is named for its directory, the fake guest's /workspace.
+  await expect(
+    sessions.getByRole("tab", { name: "workspace" })
+  ).toHaveAttribute("aria-selected", "true")
+  await sessions.getByRole("button", { name: "New shell" }).click()
   await expect.poll(() => termOf(page)).toBe("2")
   await terminal(page).run("echo second")
-
-  const chip = screen.getByRole("button", { name: "Terminal session 2" })
-  await chip.click()
-  await expect(page.getByRole("menuitem", { name: /^main/ })).toBeVisible()
-  await expect(page.getByRole("menuitem", { name: /^2/ })).toHaveAttribute(
-    "aria-current",
-    "true"
-  )
-  await page.getByRole("menuitem", { name: /^main/ }).click()
-  await expect.poll(() => termOf(page)).toBe("main")
+  const second = sessions.getByRole("tab", { name: "workspace 2" })
+  await expect(second).toHaveAttribute("aria-selected", "true")
   await expect(
-    screen.getByRole("button", { name: "Terminal session main" })
+    screen.getByRole("tab", { name: /^Terminal/ }).getByLabel("2 sessions")
   ).toBeVisible()
+
+  await sessions.getByRole("tab", { name: "workspace", exact: true }).click()
+  await expect.poll(() => termOf(page)).toBe("main")
   await expect(terminal(page).line("first")).toHaveCount(1)
+  await page.keyboard.press("Alt+Shift+BracketRight")
+  await expect.poll(() => termOf(page)).toBe("2")
+
+  // A program in the foreground names the tab, until the user names it.
+  await api.setTerminal(id, "2", {
+    command: "npm",
+    foreground: ["npm run dev"],
+  })
+  const dev = sessions.getByRole("tab", { name: "npm run dev" })
+  await expect(dev).toBeVisible({ timeout: 10_000 })
+  await expect(dev.getByLabel("a program runs")).toBeVisible()
+  await dev.dblclick()
+  const field = sessions.getByRole("textbox", { name: "Name of npm run dev" })
+  await field.fill("dev server")
+  await field.press("Enter")
+  await expect(sessions.getByRole("tab", { name: "dev server" })).toBeVisible()
+  expect(termOf(page)).toBe("2")
+
+  // Closing a session a program runs in asks first.
+  await sessions.getByRole("tab", { name: "dev server" }).hover()
+  await sessions.getByRole("button", { name: "Close dev server" }).click()
+  const ask = page.getByRole("alertdialog", { name: "Close dev server?" })
+  await expect(ask).toContainText("npm run dev runs in it")
+  await ask.getByRole("button", { name: "Close" }).click()
+  await expect(sessions.getByRole("tab")).toHaveCount(1)
+  await expect.poll(() => termOf(page)).toBe("main")
+  await expect(screen.getByLabel("2 sessions")).toHaveCount(0)
 })
 
 test("Connections opens from the computer's menu as a sheet", async ({
@@ -160,7 +188,9 @@ test("the screen suspends, resumes and stops a computer", async ({
     screen.getByRole("button", { name: `Resume ${name}` })
   ).toBeVisible()
   await choose("Resume")
-  await expect(screen.getByRole("tablist")).toBeVisible()
+  await expect(
+    screen.getByRole("tablist", { name: `${name}'s screen` })
+  ).toBeVisible()
   await screen
     .getByRole("button", { name: `Stop ${name}; its disk is kept` })
     .click()
@@ -185,8 +215,12 @@ test("an old workspace link opens the screen on the terminal it named", async ({
   await expect(
     page
       .getByRole("region", { name: `${name}'s screen` })
-      .getByRole("button", { name: "Terminal session logs" })
+      .getByRole("tablist", { name: "Terminal sessions" })
+      .getByRole("tab", { selected: true })
   ).toBeVisible()
+  await expect
+    .poll(async () => (await api.guest(id)).sessions.map((s) => s.name))
+    .toContain("logs")
 })
 
 test("the screen fits a 390px screen", async ({ page, api, env }) => {

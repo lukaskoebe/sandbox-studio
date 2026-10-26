@@ -844,6 +844,7 @@ func (s *Server) streamEvents(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Accel-Buffering", "no")
 	ch, unsubscribe := s.Bus.Subscribe()
 	defer unsubscribe()
+	defer s.Bus.Watch()()
 	rc := http.NewResponseController(w)
 	fmt.Fprint(w, "retry: 2000\n\n")
 	if rc.Flush() != nil {
