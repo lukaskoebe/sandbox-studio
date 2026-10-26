@@ -19,6 +19,11 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   terminals start it, with the CA, secrets and mise as in bash, history and completion set
   up, and a `~/.zshrc` of your own that runs after Studio's defaults. Agents run bash either
   way, and a sandbox on an older image keeps starting bash until it is rebased.
+- **Resources:** a running computer takes a change of CPUs or memory right away, up or down,
+  while it fits the room it started with, which Studio now gives every VM: twice its memory
+  and its CPUs plus as many again, at most 4 more. The Resources dialog says per resource
+  whether a value applies now or needs a restart, and has **Save and restart** for the rest;
+  until then the menu shows both, such as `2 CPU · 4 GiB · 12 GiB after restart`.
 - **Long chats** open on their last 40 turns, and load the earlier ones from a row above them,
   which also loads when you scroll up to it. They open faster and scroll lighter.
 - **Chats:** sending a message no longer jumps a long chat back to its first message. The

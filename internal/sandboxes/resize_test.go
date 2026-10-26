@@ -14,7 +14,7 @@ import (
 func resizeFixture(t *testing.T, status runtime.Status, liveResize bool) *checkpointFixture {
 	t.Helper()
 	f := newCheckpointFixture(t)
-	if err := f.store.SetSandboxResources(f.ctx, f.env.ID, f.sandbox.ID, 1, 512, 2048); err != nil {
+	if err := f.store.SetSandboxResources(f.ctx, f.env.ID, f.sandbox.ID, store.SandboxSize{CPUs: 1, MemoryMiB: 512, MaxMemoryMiB: 2048}); err != nil {
 		t.Fatal(err)
 	}
 	vm := VMName(f.sandbox)
@@ -146,5 +146,85 @@ func TestResizeWaitsForTheSandboxLock(t *testing.T) {
 	defer unlock()
 	if _, err := f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 2, MemoryMiB: 1024}); !errors.Is(err, ErrBusy) {
 		t.Fatalf("resize of a busy sandbox error = %v, want ErrBusy", err)
+	}
+}
+
+// A change that waits for the next start leaves what the running VM has in the catalog, for
+// "after restart"; a live change and a start clear it.
+func TestResizeRecordsWhatTheRunningVMHas(t *testing.T) {
+	f := resizeFixture(t, runtime.StatusRunning, false)
+	got, err := f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 2, MemoryMiB: 1024})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CPUs != 2 || got.MemoryMiB != 1024 || got.LiveCPUs != 1 || got.LiveMemoryMiB != 512 {
+		t.Fatalf("view = cpus %d memory %d, live %d %d", got.CPUs, got.MemoryMiB, got.LiveCPUs, got.LiveMemoryMiB)
+	}
+	// A second change before the restart keeps what the VM has.
+	if got, err = f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 3, MemoryMiB: 1024}); err != nil {
+		t.Fatal(err)
+	}
+	if sb := sandboxSizes(t, f); sb.CPUs != 3 || sb.LiveCPUs != 1 || sb.LiveMemoryMiB != 512 {
+		t.Fatalf("catalog = cpus %d, live %d %d", sb.CPUs, sb.LiveCPUs, sb.LiveMemoryMiB)
+	}
+	// Setting it back to what the VM has leaves nothing waiting.
+	if got, err = f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 1, MemoryMiB: 512}); err != nil {
+		t.Fatal(err)
+	}
+	if got.LiveCPUs != 0 || got.LiveMemoryMiB != 0 {
+		t.Fatalf("live after setting back = %d %d", got.LiveCPUs, got.LiveMemoryMiB)
+	}
+
+	if _, err := f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 2, MemoryMiB: 512}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.manager.Stop(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
+		t.Fatal(err)
+	}
+	v, err := f.manager.Start(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.LiveCPUs != 0 || sandboxSizes(t, f).LiveCPUs != 0 {
+		t.Fatalf("live after a start = %d", v.LiveCPUs)
+	}
+}
+
+func TestResizeAndRestart(t *testing.T) {
+	f := resizeFixture(t, runtime.StatusRunning, false)
+	vm := VMName(f.sandbox)
+	got, err := f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 2, MemoryMiB: 1024, Restart: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.runtime.countCall("stop:"+vm) != 1 || f.runtime.countCall("start:"+vm) != 1 {
+		t.Fatalf("calls %v", f.runtime.calls)
+	}
+	if got.LiveCPUs != 0 || got.LiveMemoryMiB != 0 || got.CPUs != 2 || got.StartedAt == nil {
+		t.Fatalf("view after restart = %+v", got.Sandbox)
+	}
+
+	// Nothing waits, so nothing restarts.
+	f = resizeFixture(t, runtime.StatusRunning, true)
+	vm = VMName(f.sandbox)
+	if _, err := f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 2, MemoryMiB: 1024, Restart: true}); err != nil {
+		t.Fatal(err)
+	}
+	if f.runtime.countCall("stop:"+vm) != 0 {
+		t.Fatal("a live resize restarted the sandbox")
+	}
+}
+
+func TestResizeDryRunChangesNothing(t *testing.T) {
+	f := resizeFixture(t, runtime.StatusRunning, false)
+	got, err := f.manager.Resize(f.ctx, f.env.ID, f.sandbox.ID, ResizeRequest{CPUs: 2, MemoryMiB: 512, DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Applied.CPUs != runtime.AppliedNextStart || got.Applied.MemoryMiB != runtime.AppliedUnchanged {
+		t.Fatalf("plan = %+v", got.Applied)
+	}
+	if sb := sandboxSizes(t, f); sb.CPUs != 1 || sb.LiveCPUs != 0 || f.runtime.countCall("resize:"+VMName(f.sandbox)) != 0 {
+		t.Fatalf("a dry run changed the sandbox: %+v", sb)
 	}
 }

@@ -184,6 +184,13 @@ new value fits under the ceiling. It uses virtio-mem for memory, and there is no
   next start, and offers **Save and restart** beside Save. The sandbox's details then show
   "8 GiB · 12 GiB after restart". The meters keep dividing by what the VM has now.
 
+**Built** on `feedback-v0.8`. The spike (`spikes/live-resize`) showed msb 0.7.8 resizing live
+both ways within the boot-time room, and that the room costs: the memory ceiling nothing, but
+every spare vCPU about 1.1% of a host core while idle. So the CPU room is the CPUs plus as many
+again, at most 4 more, instead of the host's cores ([sandboxes](../sandboxes.md#resources)).
+The catalog keeps what the running VM has in `live_cpus` and `live_memory_mib`; the dialog
+forecasts with `dryRun` and restarts with `restart`.
+
 ## Base images go out of date
 
 **Mockup C.** Each sandbox keeps the base image it was created from. Only `/opt/studio` (the

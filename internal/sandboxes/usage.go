@@ -1,6 +1,7 @@
 package sandboxes
 
 import (
+	"cmp"
 	"context"
 	"errors"
 
@@ -46,7 +47,8 @@ func (m *Manager) Usage(ctx context.Context, envID, id string) (ResourceUse, err
 	if err != nil {
 		return ResourceUse{}, err
 	}
-	return usageOf(u, rec.CPUs, rec.MemoryMiB), nil
+	// What the VM has now, while a resize waits for its next start.
+	return usageOf(u, cmp.Or(rec.LiveCPUs, rec.CPUs), cmp.Or(rec.LiveMemoryMiB, rec.MemoryMiB)), nil
 }
 
 // usageOf scales a VM's use to the sandbox: CPU as a share of all its CPUs, and memory

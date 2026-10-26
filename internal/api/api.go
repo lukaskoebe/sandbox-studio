@@ -275,9 +275,12 @@ func (s *Server) registerSandboxes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "resizeSandbox", Method: http.MethodPut, Path: "/api/environments/{env}/sandboxes/{id}/resources", Tags: []string{"sandboxes"},
 		Summary:     "Set a sandbox's CPUs and memory",
-		Description: "A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource.",
+		Description: "A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource, and liveCpus and liveMemoryMiB what the running VM has meanwhile. restart restarts a running sandbox so a waiting change applies now; dryRun only answers applied.",
 	}, func(ctx context.Context, in *resizeSandboxIn) (*struct{ Body sandboxes.Resized }, error) {
 		v, err := s.Sandboxes.Resize(context.WithoutCancel(ctx), in.Env, in.ID, in.Body)
+		if errors.Is(err, sandboxes.ErrPlanUnavailable) {
+			return nil, huma.Error501NotImplemented(err.Error())
+		}
 		return &struct{ Body sandboxes.Resized }{v}, apiError(err)
 	})
 

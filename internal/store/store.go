@@ -241,16 +241,20 @@ func (s *Store) Environment(ctx context.Context, id string) (Environment, error)
 
 // Sandbox is the catalog record of a sandbox; runtime state lives in microsandbox.
 type Sandbox struct {
-	ID            string    `json:"id"`
-	EnvironmentID string    `json:"environmentId"`
-	BuildJobID    string    `json:"-"`
-	TemplateID    string    `json:"templateId,omitempty"`
-	TeammateID    string    `json:"teammateId,omitempty" doc:"The teammate that owns the sandbox; empty for unowned sandboxes"`
-	Name          string    `json:"name"`
-	Generation    int       `json:"generation"`
-	CPUs          int       `json:"cpus"`
-	MemoryMiB     int       `json:"memoryMiB"`
-	MaxMemoryMiB  int       `json:"maxMemoryMiB"`
+	ID            string `json:"id"`
+	EnvironmentID string `json:"environmentId"`
+	BuildJobID    string `json:"-"`
+	TemplateID    string `json:"templateId,omitempty"`
+	TeammateID    string `json:"teammateId,omitempty" doc:"The teammate that owns the sandbox; empty for unowned sandboxes"`
+	Name          string `json:"name"`
+	Generation    int    `json:"generation"`
+	CPUs          int    `json:"cpus"`
+	MemoryMiB     int    `json:"memoryMiB"`
+	MaxMemoryMiB  int    `json:"maxMemoryMiB"`
+	// LiveCPUs and LiveMemoryMiB are what the running VM has while a resize waits for its next
+	// start, which CPUs and MemoryMiB are; 0 when the VM has those.
+	LiveCPUs      int       `json:"liveCpus,omitempty" doc:"The CPUs the running VM has while a change waits for its next start; absent when it has cpus"`
+	LiveMemoryMiB int       `json:"liveMemoryMiB,omitempty" doc:"The memory the running VM has while a change waits for its next start; absent when it has memoryMiB"`
 	WorkspaceMiB  int       `json:"workspaceMiB"`
 	DockerMiB     int       `json:"dockerMiB"`
 	CreatedAt     time.Time `json:"createdAt"`
@@ -273,7 +277,7 @@ type Sandbox struct {
 // SandboxKindBrowser marks a teammate's browser VM (internal/browser).
 const SandboxKindBrowser = "browser"
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0)"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0), live_cpus, live_memory_mib"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest port no
 // other sandbox has and nothing on the host listens on.
@@ -283,7 +287,7 @@ func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created, forkedAt, startedAt int64
 	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind,
-		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt)
+		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt, &sb.LiveCPUs, &sb.LiveMemoryMiB)
 	sb.CreatedAt = time.Unix(created, 0)
 	if forkedAt != 0 {
 		sb.ForkedAt = time.Unix(forkedAt, 0)
@@ -469,9 +473,10 @@ func (s *Store) Sandbox(ctx context.Context, envID, id string) (Sandbox, error) 
 	return sb, err
 }
 
-// MarkSandboxStarted records when a sandbox's VM last started.
+// MarkSandboxStarted records when a sandbox's VM last started. The VM has the CPUs and memory
+// it was configured with, so a resize that waited for the start is done.
 func (s *Store) MarkSandboxStarted(ctx context.Context, envID, id string, at time.Time) error {
-	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET started_at = ? WHERE environment_id = ? AND id = ?", at.Unix(), envID, id)
+	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET started_at = ?, live_cpus = 0, live_memory_mib = 0 WHERE environment_id = ? AND id = ?", at.Unix(), envID, id)
 	if err != nil {
 		return err
 	}
@@ -485,10 +490,18 @@ func (s *Store) MarkSandboxStarted(ctx context.Context, envID, id string, at tim
 	return nil
 }
 
-// SetSandboxResources records a sandbox's CPUs and memory, and its memory ceiling.
-func (s *Store) SetSandboxResources(ctx context.Context, envID, id string, cpus, memoryMiB, maxMemoryMiB int) error {
-	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET cpus = ?, memory_mib = ?, max_memory_mib = ? WHERE environment_id = ? AND id = ?",
-		cpus, memoryMiB, maxMemoryMiB, envID, id)
+// SandboxSize is what a resize records: the CPUs and memory a sandbox's VM starts with, its
+// memory ceiling, and what the running VM has while the change waits for its next start (0
+// when it has the former).
+type SandboxSize struct {
+	CPUs, MemoryMiB, MaxMemoryMiB int
+	LiveCPUs, LiveMemoryMiB       int
+}
+
+// SetSandboxResources records a sandbox's size.
+func (s *Store) SetSandboxResources(ctx context.Context, envID, id string, size SandboxSize) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET cpus = ?, memory_mib = ?, max_memory_mib = ?, live_cpus = ?, live_memory_mib = ? WHERE environment_id = ? AND id = ?",
+		size.CPUs, size.MemoryMiB, size.MaxMemoryMiB, size.LiveCPUs, size.LiveMemoryMiB, envID, id)
 	if err != nil {
 		return err
 	}

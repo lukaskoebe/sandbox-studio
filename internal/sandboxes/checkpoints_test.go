@@ -608,6 +608,23 @@ func (f *fakeSandboxRuntime) Resume(_ context.Context, name string) error {
 	return nil
 }
 
+// PlanResize answers what Resize would do, without doing it.
+func (f *fakeSandboxRuntime) PlanResize(_ context.Context, name string, size runtime.Size) (runtime.Resized, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	cur, live := f.sizes[name], f.liveResize && f.statuses[name] == runtime.StatusRunning
+	plan := func(changed bool) runtime.Applied {
+		switch {
+		case !changed:
+			return runtime.AppliedUnchanged
+		case live:
+			return runtime.AppliedLive
+		}
+		return runtime.AppliedNextStart
+	}
+	return runtime.Resized{CPUs: plan(size.CPUs != cur.CPUs), MemoryMiB: plan(size.MemoryMiB != cur.MemoryMiB)}, nil
+}
+
 // Resize models msb's dry run: a running VM takes a changed CPU count or memory size live
 // when liveResize is set, and any other change is saved for the next start. Each step has a
 // failure name (resize-cpus-live, resize-memory-live, resize-next-start), so a test can fail

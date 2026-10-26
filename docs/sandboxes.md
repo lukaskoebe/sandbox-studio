@@ -119,42 +119,75 @@ Every change publishes the `sandboxes` topic on `/api/events`, so open views ref
 ## Resources
 
 Defaults: 2 CPUs, 4 GiB memory, 20 GiB workspace, 20 GiB Docker disk. The 4 GiB home disk is
-fixed. `max_memory` defaults to the initial memory and is passed as the VM's memory ceiling.
-A template's spec fixes the resources of sandboxes created from it, and a rebase builds the
-new generation from the template, so it resets the CPUs and memory as well.
+fixed. A template's spec fixes the resources of sandboxes created from it, and a rebase builds
+the new generation from the template, so it resets the CPUs and memory as well.
+
+**Boot-time room.** msb 0.7.8 resizes a running VM live, but only up to the CPU maximum and
+the memory ceiling it booted with. So Studio boots every VM with room to grow
+(`internal/runtime/capacity.go`):
+
+- the memory ceiling is twice the memory, at most the host's memory, and never below the
+  memory or a `max_memory` asked for;
+- the CPU maximum is the CPUs plus as many again, at most 4 more and at most the host's
+  cores: 1 CPU boots with room for 2, 2 for 4, 4 for 8 and 8 for 12.
+
+The memory ceiling is free. The spare vCPUs are not: each one's thread keeps polling while the
+vCPU is offline, which is why the CPU room is capped. Measured with `spikes/live-resize` on
+2026-10-26 (msb 0.7.8, idle 1-CPU VMs, host CPU over 20 s):
+
+| VM booted with | Host CPU idle |
+| --- | --- |
+| 1 CPU, 512 MiB | 0.8% of a core |
+| 1 CPU, 512 MiB, ceiling 8 GiB | 0.8% |
+| 1 CPU, max 4 CPUs | 4.2% |
+| 1 CPU, max 16 CPUs | 17.8% |
+
+The host RSS stayed the same with the larger ceiling, since the guest doesn't touch the memory
+it doesn't use.
+
+msb's `CPUPercent` metric counts that polling too, so an idle sandbox with spare vCPUs shows
+a little CPU use.
 
 `PUT /api/environments/{env}/sandboxes/{id}/resources` with `{"cpus", "memoryMiB"}` sets the
-CPUs (1–64) and the memory size (at least 512 MiB). The Resources dialog in the
-sandbox's details calls it. Studio asks msb's `modify` for a dry run and applies each
-changed resource as the plan says:
+CPUs (1–64) and the memory size (at least 512 MiB). The Resources dialog in the computer's
+menu calls it. Studio asks msb's `modify` for a dry run and applies each changed resource as
+the plan says:
 
-- **live**: a running sandbox's VM takes the change now, where msb offers it (msb 0.7.7
-  doesn't, see below), up to the VM's boot-time capacity: its memory ceiling, and its CPU
-  maximum, which Studio sets to the CPU count the VM boots with.
+- **live**: a running sandbox's VM takes the change now, up or down, within its boot-time
+  room. It takes about 3 seconds, and the guest keeps its boot ID: programs keep running.
 - **nextStart**: the change is saved in the sandbox's config and used at its next start, and
   the running VM is left alone. Stopped and suspended sandboxes always get this, and so does a
-  running sandbox's change above its boot-time capacity.
+  running sandbox's change past its boot-time room, which msb can't raise live. The next
+  start boots with room for the new size.
 
 The response's `applied` says how each resource changed: `live`, `nextStart` or `unchanged`.
 Live changes are made one resource per call, and the rest in one call with msb's next-start
-policy, so a resize never restarts a running VM. A memory size above the ceiling raises the
-ceiling to match, as msb requires, and a CPU count above the maximum raises the maximum. If a
-step fails, the steps before it stay in effect, and the catalog records what took effect.
+policy, so a resize alone never restarts a running VM. If a step fails, the steps before it
+stay in effect, and the catalog records what took effect.
 
-**msb 0.7.7 has no live resize.** Its dry run marks every CPU or memory change to a running
-VM "requires restart", with the reason "live CPU and memory resize are not available in this
-runtime yet". So with msb 0.7.7 every change to a running sandbox is `nextStart`,
-decreases included. `live` shows only when the running VM already has the new value (for
-example after a change saved for the next start is set back). The live path is kept for an msb
-that offers it.
+The catalog's `cpus` and `memory_mib` are what the VM starts with. While a change waits for
+the next start of a running or suspended sandbox, `live_cpus` and `live_memory_mib` (migration
+049; `liveCpus` and `liveMemoryMiB` in the API) say what the VM has now; 0 means it has the
+former, and a start clears them. The computer's menu shows both, such as `2 CPU · 4 GiB ·
+12 GiB after restart`, and the usage below is measured against what the VM has.
 
-Verified on 2026-10-17 with msb 0.7.7 and base images v0.3.2 and v0.3.4, on a running sandbox
-created with 2 CPUs and 2 GiB: a decrease to 1 CPU and 1 GiB answered `nextStart` for both;
-the guest kept 2 CPUs, 2 GiB and its boot ID, and after a stop and start it had 1 CPU and
-1 GiB. A growth to 3 CPUs and 2.5 GiB, above the boot-time maximum of 2 CPUs and 2 GiB, also
-answered `nextStart`, raised both maximums, and took effect at the next start. A resize of a
-stopped and of a suspended sandbox answered `nextStart`, and the same request again
-`unchanged`. The Studio side is also covered by fake-runtime and API tests.
+Two more fields:
+
+- `"dryRun": true` answers the plan, what `applied` would be, without changing anything. The
+  dialog asks for one a moment after a value changes and says per resource whether it applies
+  now or needs a restart. A runtime without a dry run answers 501.
+- `"restart": true` applies the change and then, if the running VM still waits for anything,
+  stops and starts it, so all of it takes effect now. The dialog's **Save and restart** sends
+  it, also with unchanged values to apply a change saved earlier. Running programs and
+  terminal sessions end; the disks stay.
+
+Verified on 2026-10-26 with msb 0.7.8 in a scratch `MSB_HOME`, on a VM booted with 1 CPU
+(max 4) and 512 MiB (ceiling 1.5 GiB): 3 CPUs and 1 GiB, then 2 CPUs and 768 MiB, then
+4 CPUs and 1.5 GiB applied live, each within about 3 seconds as the guest's `nproc` and
+`MemTotal` showed, with the same boot ID; 6 CPUs and 2 GiB answered "requires restart" for
+both and took effect at the next start. Under msb 0.7.7 every change to a running VM was
+`nextStart`. The Studio side is also covered by fake-runtime, API and e2e tests (the e2e
+runtime boots with room for twice its size).
 
 ### Live use
 
@@ -162,10 +195,10 @@ stopped and of a suspended sandbox answered `nextStart`, and the same request ag
 use from msb's metrics (`SandboxHandle.Metrics`, which msb samples every few seconds):
 
 - `cpuPercent`: the share of all the sandbox's CPUs in use over the last sample window, 0 to
-  100. msb reports vCPU time where 100 is one vCPU busy; Studio divides by the catalogued CPU
-  count and caps at 100, since a live CPU decrease can leave the boot-time vCPUs higher.
-- `memoryBytes`: the memory the guest uses, against `memoryTotalBytes`, the catalogued memory
-  size (msb's limit when the catalog has none).
+  100. msb reports vCPU time where 100 is one vCPU busy; Studio divides by the CPUs the VM has
+  now (`liveCpus`, else `cpus`) and caps at 100.
+- `memoryBytes`: the memory the guest uses, against `memoryTotalBytes`, the memory the VM has
+  now (msb's limit when the catalog has none).
 
 A sandbox that doesn't run answers 409, and a runtime without metrics 501. The computer's
 menu polls it every 5 seconds while the sandbox runs. The e2e runtime reports half a

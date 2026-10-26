@@ -1822,7 +1822,7 @@ export interface paths {
         get?: never;
         /**
          * Set a sandbox's CPUs and memory
-         * @description A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource.
+         * @description A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource, and liveCpus and liveMemoryMiB what the running VM has meanwhile. restart restarts a running sandbox so a waiting change applies now; dryRun only answers applied.
          */
         put: operations["resizeSandbox"];
         post?: never;
@@ -4936,11 +4936,15 @@ export interface components {
              * @description The CPU count
              */
             cpus: number;
+            /** @description Only say how each resource would change, in applied, and change nothing */
+            dryRun?: boolean;
             /**
              * Format: int64
              * @description The memory size in MiB
              */
             memoryMiB: number;
+            /** @description Restart a running sandbox when part of the change waits for its next start, so it takes effect now. Running processes and terminal sessions end */
+            restart?: boolean;
         };
         Resized: {
             agent?: components["schemas"]["AgentInfo"];
@@ -4958,6 +4962,16 @@ export interface components {
             /** Format: int64 */
             generation: number;
             id: string;
+            /**
+             * Format: int64
+             * @description The CPUs the running VM has while a change waits for its next start; absent when it has cpus
+             */
+            liveCpus?: number;
+            /**
+             * Format: int64
+             * @description The memory the running VM has while a change waits for its next start; absent when it has memoryMiB
+             */
+            liveMemoryMiB?: number;
             /** Format: int64 */
             maxMemoryMiB: number;
             /** Format: int64 */
@@ -5903,6 +5917,16 @@ export interface components {
             /** Format: int64 */
             generation: number;
             id: string;
+            /**
+             * Format: int64
+             * @description The CPUs the running VM has while a change waits for its next start; absent when it has cpus
+             */
+            liveCpus?: number;
+            /**
+             * Format: int64
+             * @description The memory the running VM has while a change waits for its next start; absent when it has memoryMiB
+             */
+            liveMemoryMiB?: number;
             /** Format: int64 */
             maxMemoryMiB: number;
             /** Format: int64 */

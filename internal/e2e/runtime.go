@@ -42,7 +42,8 @@ type vm struct {
 	status    runtime.Status
 	socket    string
 	egress    runtime.Egress
-	size      runtime.Size
+	size      runtime.Size // what the VM starts with
+	room      runtime.Size // what it booted with room for: twice the size it booted with
 }
 
 // NewRuntime returns a runtime without VMs.
@@ -99,6 +100,7 @@ func (r *Runtime) Start(_ context.Context, name string) error {
 // bootLocked starts a fresh guest, as a reboot would: terminals and sessions are gone, the
 // recorded configuration and connections stay for the tests to read.
 func (r *Runtime) bootLocked(v *vm) {
+	v.room = runtime.Size{CPUs: 2 * v.size.CPUs, MemoryMiB: 2 * v.size.MemoryMiB}
 	v.status = runtime.StatusRunning
 	g, ok := r.guests[v.sandboxID]
 	if !ok {
@@ -139,8 +141,8 @@ func (r *Runtime) setStatus(name string, from, to runtime.Status) error {
 	return nil
 }
 
-// Resize models msb's dry run: a running VM takes every change live, and any other VM saves
-// its changes for the next start.
+// Resize models msb with boot headroom: a running VM takes a change live up to twice what it
+// booted with, and saves anything else for the next start, as a VM that doesn't run does.
 func (r *Runtime) Resize(_ context.Context, name string, size runtime.Size) (runtime.Resized, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -148,19 +150,37 @@ func (r *Runtime) Resize(_ context.Context, name string, size runtime.Size) (run
 	if !ok {
 		return runtime.Resized{}, errors.New("no VM named " + name)
 	}
-	applied := runtime.AppliedNextStart
-	if v.status == runtime.StatusRunning {
-		applied = runtime.AppliedLive
-	}
-	out := runtime.Resized{CPUs: runtime.AppliedUnchanged, MemoryMiB: runtime.AppliedUnchanged}
-	if v.size.CPUs != size.CPUs {
-		out.CPUs = applied
-	}
-	if v.size.MemoryMiB != size.MemoryMiB {
-		out.MemoryMiB = applied
-	}
+	out := r.planLocked(v, size)
 	v.size = size
 	return out, nil
+}
+
+// PlanResize answers what Resize would do.
+func (r *Runtime) PlanResize(_ context.Context, name string, size runtime.Size) (runtime.Resized, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.vms[name]
+	if !ok {
+		return runtime.Resized{}, errors.New("no VM named " + name)
+	}
+	return r.planLocked(v, size), nil
+}
+
+func (r *Runtime) planLocked(v *vm, size runtime.Size) runtime.Resized {
+	running := v.status == runtime.StatusRunning
+	plan := func(changed, fits bool) runtime.Applied {
+		switch {
+		case !changed:
+			return runtime.AppliedUnchanged
+		case running && fits:
+			return runtime.AppliedLive
+		}
+		return runtime.AppliedNextStart
+	}
+	return runtime.Resized{
+		CPUs:      plan(v.size.CPUs != size.CPUs, size.CPUs <= v.room.CPUs),
+		MemoryMiB: plan(v.size.MemoryMiB != size.MemoryMiB, size.MemoryMiB <= v.room.MemoryMiB),
+	}
 }
 
 func (r *Runtime) Remove(_ context.Context, name string) error {

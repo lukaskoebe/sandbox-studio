@@ -550,16 +550,26 @@ func (m *Manager) Start(ctx context.Context, envID, id string) (View, error) {
 	} else if status == runtime.StatusAbsent {
 		return View{}, lifecycleError(LostVM)
 	}
-	if _, err := m.Egress.Attach(rec); err != nil {
+	rec, err = m.startVM(ctx, rec)
+	if err != nil {
 		return View{}, err
+	}
+	return m.view(ctx, rec)
+}
+
+// startVM starts the VM of rec, which doesn't run, with its egress and its agent's socket.
+// The caller holds the sandbox's mutation lock.
+func (m *Manager) startVM(ctx context.Context, rec store.Sandbox) (store.Sandbox, error) {
+	if _, err := m.Egress.Attach(rec); err != nil {
+		return rec, err
 	}
 	if err := m.Hub.Listen(rec.ID, m.Paths.AgentSocket(rec.ID)); err != nil {
-		return View{}, err
+		return rec, err
 	}
 	if err := m.Runtime.Start(ctx, VMName(rec)); err != nil {
-		return View{}, err
+		return rec, err
 	}
-	return m.view(ctx, m.markStarted(ctx, rec))
+	return m.markStarted(ctx, rec), nil
 }
 
 // Stop shuts a sandbox down. Its disks and catalog record are kept.
@@ -769,6 +779,7 @@ func (m *Manager) markStarted(ctx context.Context, rec store.Sandbox) store.Sand
 		m.Log.Warn("record sandbox start", "sandbox", rec.ID, "err", err)
 	}
 	rec.StartedAt = &now
+	rec.LiveCPUs, rec.LiveMemoryMiB = 0, 0
 	return rec
 }
 

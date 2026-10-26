@@ -6301,11 +6301,19 @@
             "minimum": 1,
             "type": "integer"
           },
+          "dryRun": {
+            "description": "Only say how each resource would change, in applied, and change nothing",
+            "type": "boolean"
+          },
           "memoryMiB": {
             "description": "The memory size in MiB",
             "format": "int64",
             "minimum": 512,
             "type": "integer"
+          },
+          "restart": {
+            "description": "Restart a running sandbox when part of the change waits for its next start, so it takes effect now. Running processes and terminal sessions end",
+            "type": "boolean"
           }
         },
         "required": [
@@ -6351,6 +6359,16 @@
           },
           "id": {
             "type": "string"
+          },
+          "liveCpus": {
+            "description": "The CPUs the running VM has while a change waits for its next start; absent when it has cpus",
+            "format": "int64",
+            "type": "integer"
+          },
+          "liveMemoryMiB": {
+            "description": "The memory the running VM has while a change waits for its next start; absent when it has memoryMiB",
+            "format": "int64",
+            "type": "integer"
           },
           "maxMemoryMiB": {
             "format": "int64",
@@ -9021,6 +9039,16 @@
           },
           "id": {
             "type": "string"
+          },
+          "liveCpus": {
+            "description": "The CPUs the running VM has while a change waits for its next start; absent when it has cpus",
+            "format": "int64",
+            "type": "integer"
+          },
+          "liveMemoryMiB": {
+            "description": "The memory the running VM has while a change waits for its next start; absent when it has memoryMiB",
+            "format": "int64",
+            "type": "integer"
           },
           "maxMemoryMiB": {
             "format": "int64",
@@ -16410,7 +16438,7 @@
     },
     "/api/environments/{env}/sandboxes/{id}/resources": {
       "put": {
-        "description": "A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource.",
+        "description": "A running sandbox takes each change live where its VM's boot-time capacity allows. The rest, and every change to a stopped or suspended sandbox, applies on its next start; applied says which, per resource, and liveCpus and liveMemoryMiB what the running VM has meanwhile. restart restarts a running sandbox so a waiting change applies now; dryRun only answers applied.",
         "operationId": "resizeSandbox",
         "parameters": [
           {

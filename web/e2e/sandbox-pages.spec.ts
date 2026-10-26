@@ -139,6 +139,54 @@ test("the computer's menu lists its actions", async ({ page, api, env }) => {
   await page.keyboard.press("Escape")
 })
 
+// The fake runtime boots with room for twice its size, as Studio asks msb to.
+test("a running computer takes what fits now and the rest on a restart", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("resize")
+  const id = await api.createSandbox(name)
+  const screen = await screenOf(page, env, id, name)
+  const more = screen.getByRole("button", { name: `More for ${name}` })
+  await more.click()
+  await page.getByRole("menuitem", { name: /^Resources/ }).click()
+  const dialog = page.getByRole("dialog", { name: `Resources of ${name}` })
+  await dialog.getByLabel("CPUs").fill("3")
+  await dialog.getByLabel("Memory (MiB)").fill("12288")
+  await expect(dialog.getByText("Has 2 now. 3 CPUs applies now.")).toBeVisible()
+  await expect(
+    dialog.getByText("Has 4 GiB now. 12 GiB needs a restart", { exact: false })
+  ).toBeVisible()
+  await expect(
+    dialog.getByRole("button", { name: "Save and restart" })
+  ).toBeVisible()
+  await dialog.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(
+    page.getByText(
+      "The CPUs changed live. The memory applies on the next start."
+    )
+  ).toBeVisible()
+
+  await more.click()
+  await expect(
+    page.getByRole("menuitem", {
+      name: /^Resources\s*3 CPU · 4 GiB · 12 GiB after restart$/,
+    })
+  ).toBeVisible()
+  await page.getByRole("menuitem", { name: /^Resources/ }).click()
+  await expect(
+    dialog.getByText("Has 4 GiB now, 12 GiB after a restart.")
+  ).toBeVisible()
+  await dialog.getByRole("button", { name: "Save and restart" }).click()
+  await expect(page.getByText("Restarted with 3 CPU · 12 GiB.")).toBeVisible()
+  await more.click()
+  await expect(
+    page.getByRole("menuitem", { name: /^Resources\s*3 CPU · 12 GiB$/ })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+})
+
 test("the computer's menu opens fork and rebase, and links the export", async ({
   page,
   api,

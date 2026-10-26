@@ -55,6 +55,42 @@ func readResizePlan(changes []msb.PlannedChange) (cpus, memory resizeChange) {
 	return cpus, memory
 }
 
+// PlanResize says how Resize would change each resource, from msb's dry run, and changes
+// nothing.
+func (r *Runtime) PlanResize(ctx context.Context, name string, size Size) (Resized, error) {
+	h, err := msb.GetSandbox(ctx, name)
+	if err != nil {
+		return Resized{}, err
+	}
+	cpus, memory, err := planResize(ctx, h, size)
+	if err != nil {
+		return Resized{}, err
+	}
+	return Resized{CPUs: cpus.applied(), MemoryMiB: memory.applied()}, nil
+}
+
+func (c resizeChange) applied() Applied {
+	switch {
+	case !c.changed:
+		return AppliedUnchanged
+	case c.live:
+		return AppliedLive
+	}
+	return AppliedNextStart
+}
+
+func planResize(ctx context.Context, h *msb.SandboxHandle, size Size) (cpus, memory resizeChange, err error) {
+	plan, err := h.Modify(ctx, msb.ModifyOptions{CPUs: size.CPUs, MemoryMiB: size.MemoryMiB, DryRun: true})
+	if err != nil {
+		return cpus, memory, fmt.Errorf("plan resize: %w", err)
+	}
+	if len(plan.Conflicts) > 0 {
+		return cpus, memory, fmt.Errorf("plan resize: %s", plan.Conflicts[0].Message)
+	}
+	cpus, memory = readResizePlan(plan.Changes)
+	return cpus, memory, nil
+}
+
 // Resize sets a sandbox's CPU count and memory size. msb's dry run decides which changes the
 // running VM takes now (its boot-time capacity allows them) and which are saved for the next
 // start. Live changes are applied first, one call per resource, and the rest in one call that
@@ -65,14 +101,10 @@ func (r *Runtime) Resize(ctx context.Context, name string, size Size) (Resized, 
 	if err != nil {
 		return Resized{}, err
 	}
-	plan, err := h.Modify(ctx, msb.ModifyOptions{CPUs: size.CPUs, MemoryMiB: size.MemoryMiB, DryRun: true})
+	cpus, memory, err := planResize(ctx, h, size)
 	if err != nil {
-		return Resized{}, fmt.Errorf("plan resize: %w", err)
+		return Resized{}, err
 	}
-	if len(plan.Conflicts) > 0 {
-		return Resized{}, fmt.Errorf("plan resize: %s", plan.Conflicts[0].Message)
-	}
-	cpus, memory := readResizePlan(plan.Changes)
 	var out Resized
 	if !cpus.changed {
 		out.CPUs = AppliedUnchanged
@@ -102,6 +134,17 @@ func (r *Runtime) Resize(ctx context.Context, name string, size Size) (Resized, 
 		next.MemoryMiB = size.MemoryMiB
 	}
 	if next.CPUs != 0 || next.MemoryMiB != 0 {
+		// The next start also gets the headroom of the new size, so that a VM created before
+		// Studio booted VMs with headroom, or one that outgrew it, resizes live afterwards.
+		if cfg, err := h.Config(); err == nil {
+			maxCPUs, ceiling := bootCapacity(size.CPUs, size.MemoryMiB, cfg.MaxMemoryMiB)
+			if maxCPUs > cfg.MaxCPUs {
+				next.MaxCPUs = maxCPUs
+			}
+			if ceiling > cfg.MaxMemoryMiB {
+				next.MaxMemoryMiB = ceiling
+			}
+		}
 		if _, err := h.Modify(ctx, next); err != nil {
 			return out, fmt.Errorf("save resources for the next start: %w", err)
 		}

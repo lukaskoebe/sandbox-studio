@@ -144,10 +144,7 @@ func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocke
 	if err != nil {
 		return fmt.Errorf("create sandbox: %w", err)
 	}
-	maxMemoryMiB := spec.MaxMemoryMiB
-	if maxMemoryMiB == 0 {
-		maxMemoryMiB = spec.MemoryMiB
-	}
+	maxCPUs, maxMemoryMiB := bootCapacity(spec.CPUs, spec.MemoryMiB, spec.MaxMemoryMiB)
 	// Only DNS to the host and TCP to public addresses leave the guest, and the TCP goes
 	// through the gateway. UDP and ICMP would bypass it; QUIC falls back to TCP.
 	network := &msb.NetworkConfig{
@@ -175,6 +172,7 @@ func (r *Runtime) create(ctx context.Context, name string, spec Spec, agentSocke
 	options := []msb.SandboxOption{
 		msb.WithImage(image),
 		msb.WithCPUs(spec.CPUs),
+		msb.WithMaxCPUs(maxCPUs),
 		msb.WithMemory(spec.MemoryMiB),
 		msb.WithMaxMemory(maxMemoryMiB),
 		msb.WithHostname(hostname(labels["studio.sandbox-name"])),

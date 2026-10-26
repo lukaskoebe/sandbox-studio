@@ -20,7 +20,11 @@ import { CreateSandboxDialog } from "@/components/create-sandbox-dialog"
 import { ForkSandboxDialog } from "@/components/fork-sandbox-dialog"
 import { MergeForkDialog } from "@/components/merge-fork"
 import { RebaseSandboxDialog } from "@/components/rebase-sandbox-dialog"
-import { ResizeSandboxDialog } from "@/components/resize-sandbox-dialog"
+import {
+  ResizeSandboxDialog,
+  sandboxSize,
+  sizeLabel,
+} from "@/components/resize-sandbox-dialog"
 import { formatMiB, HistorySheet } from "@/components/sandbox-details"
 import { useSandboxLifecycle } from "@/components/sandbox-lifecycle"
 import { DeleteSandboxDialog } from "@/components/sandbox-options-menu"
@@ -108,8 +112,8 @@ export function ComputerMenu({
   const close = (open: boolean) => !open && setDialog(undefined)
   const facts = [
     shortTemplate(sb.templateId, sb.templateName),
-    `${sb.cpus} CPU`,
-    formatMiB(sb.memoryMiB),
+    `${sandboxSize(sb).now.cpus} CPU`,
+    formatMiB(sandboxSize(sb).now.memoryMiB),
     running && sb.startedAt
       ? formatUptime(sb.startedAt).replace(/^Up /, "up ")
       : undefined,
@@ -215,7 +219,7 @@ export function ComputerMenu({
                   <CpuIcon />
                   Resources
                   <span className="ml-auto text-[0.6875rem] text-muted-foreground">
-                    {sb.cpus} CPU · {formatMiB(sb.memoryMiB)}
+                    {sizeLabel(sb)}
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
