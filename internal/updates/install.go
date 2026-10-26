@@ -459,7 +459,7 @@ func checkVersion(ctx context.Context, exe, tag string) error {
 	defer cancel()
 	out, err := exec.CommandContext(ctx, exe, "version").Output()
 	if err != nil {
-		return fmt.Errorf("the new binary doesn't run: %w", err)
+		return fmt.Errorf("the new binary doesn't run: %w%s", err, nixLdHint(err))
 	}
 	if first, _, _ := strings.Cut(string(out), "\n"); strings.TrimSpace(first) != "studio "+tag {
 		return fmt.Errorf("the new binary says %q, not studio %s", strings.TrimSpace(first), tag)

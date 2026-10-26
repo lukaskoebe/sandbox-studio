@@ -8355,6 +8355,10 @@
             "description": "This Studio can install releases itself",
             "type": "boolean"
           },
+          "cannotInstall": {
+            "description": "Why this Studio can't install releases itself, where it isn't a development build",
+            "type": "string"
+          },
           "checkedAt": {
             "format": "date-time",
             "type": "string"

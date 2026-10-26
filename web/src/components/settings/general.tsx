@@ -463,8 +463,8 @@ function UpdatesSection() {
       )}
       {st && !st.canInstall && (
         <p className="text-muted-foreground">
-          This Studio can't install releases itself, like a development build.
-          Install them with install.sh or from the release page.
+          {st.cannotInstall ??
+            "This Studio can't install releases itself, like a development build. Install them with install.sh or from the release page."}
         </p>
       )}
       {st?.enabled && st.error && (

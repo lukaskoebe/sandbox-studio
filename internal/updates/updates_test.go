@@ -2,6 +2,7 @@ package updates
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -57,6 +58,13 @@ func TestTellsByDefault(t *testing.T) {
 	}
 	if _, err := c.SetMode(context.Background(), ModeInstall); err != ErrCannotInstall {
 		t.Errorf("install without an installer: %v", err)
+	}
+	c.CannotInstall = "This Studio runs from the Nix store"
+	if _, err := c.SetMode(context.Background(), ModeInstall); !errors.Is(err, ErrCannotInstall) || err.Error() != c.CannotInstall {
+		t.Errorf("install from the Nix store: %v", err)
+	}
+	if st, _ := c.State(context.Background()); st.CanInstall || st.CannotInstall != c.CannotInstall {
+		t.Errorf("state %+v", st)
 	}
 	if _, err := c.SetMode(context.Background(), "sometimes"); err == nil {
 		t.Error("an unknown mode was accepted")

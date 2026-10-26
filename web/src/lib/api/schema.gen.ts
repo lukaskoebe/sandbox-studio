@@ -5555,6 +5555,8 @@ export interface components {
             available: boolean;
             /** @description This Studio can install releases itself */
             canInstall: boolean;
+            /** @description Why this Studio can't install releases itself, where it isn't a development build */
+            cannotInstall?: string;
             /** Format: date-time */
             checkedAt?: string;
             /** @description The running Studio version */

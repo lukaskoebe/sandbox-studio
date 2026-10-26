@@ -19,9 +19,11 @@ every teammate, and an update started from a terminal comes back up.
 - **Switches** have a soft shadow that no longer looks broken in dark mode.
 - **Updates:** a Studio started in a terminal that a systemd service runs, as on GNOME or in a
   UWSM session, took itself for a service: it exited for the update and nothing started it
-  again. Only the process systemd starts counts as one now. A Studio started in a terminal
-  starts the new version in the background, gives the terminal its prompt back and says so;
-  `studio quit` stops it.
+  again. Only the process systemd starts counts as one now. On Linux and macOS a Studio
+  started in a terminal becomes the new version in the same process, so it keeps the terminal
+  and Ctrl-C, and goes back to the old version by itself if the new one fails to start. On
+  NixOS the error of a new version that can't run names `programs.nix-ld`, and a Studio from
+  the Nix store says to update it through Nix instead of offering to install.
 - **Agents** know they are the user `agent` with passwordless sudo, and take a path root made,
   with sudo or a Docker bind mount, with `sudo chown`. They know the rules of a push through
   Studio's review: branches only, no deletes, a branch the forge has only takes commits that

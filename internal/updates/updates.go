@@ -54,6 +54,8 @@ type State struct {
 	Install   *InstallProgress `json:"install,omitempty" doc:"The automatic install of a release: under way, or how the last one ended"`
 	// CanInstall is false where Studio can't replace its own binary, like a development build.
 	CanInstall bool `json:"canInstall" doc:"This Studio can install releases itself"`
+	// CannotInstall says why, where that isn't a development build.
+	CannotInstall string `json:"cannotInstall,omitempty" doc:"Why this Studio can't install releases itself, where it isn't a development build"`
 }
 
 // saved is the persisted part of State. Mode is empty in a row written before the modes, where
@@ -91,6 +93,8 @@ type Checker struct {
 	// Installer installs releases in the "install" mode; nil means this Studio can't, and the
 	// mode then only tells.
 	Installer *Installer
+	// CannotInstall says why Installer is nil, where that isn't a development build.
+	CannotInstall string
 
 	mu sync.Mutex // serializes checks and settings writes
 }
@@ -110,6 +114,9 @@ func (c *Checker) SetMode(ctx context.Context, mode string) (State, error) {
 		return State{}, fmt.Errorf("unknown update mode %q", mode)
 	}
 	if mode == ModeInstall && c.Installer == nil {
+		if c.CannotInstall != "" {
+			return State{}, cannotInstallError(c.CannotInstall)
+		}
 		return State{}, ErrCannotInstall
 	}
 	c.mu.Lock()
@@ -133,6 +140,12 @@ func (c *Checker) SetMode(ctx context.Context, mode string) (State, error) {
 
 // ErrCannotInstall is the "install" mode on a Studio that can't replace its own binary.
 var ErrCannotInstall = errors.New("this Studio can't install releases itself; install them with install.sh or from the release page")
+
+// cannotInstallError is ErrCannotInstall with the reason of this Studio.
+type cannotInstallError string
+
+func (e cannotInstallError) Error() string      { return string(e) }
+func (cannotInstallError) Is(target error) bool { return target == ErrCannotInstall }
 
 // CheckIfDue checks GitHub if the mode checks and the last check is a day old. In the
 // "install" mode it then starts installing a newer release, unless an install is under way.
@@ -255,6 +268,9 @@ func (c *Checker) fetch(ctx context.Context) (Release, error) {
 func (c *Checker) view(s saved) State {
 	st := State{Mode: s.Mode, Enabled: s.Mode != ModeOff, Current: c.Current, Latest: s.Latest, URL: s.URL, CheckedAt: s.CheckedAt,
 		Error: s.Error, CanInstall: c.Installer != nil}
+	if c.Installer == nil {
+		st.CannotInstall = c.CannotInstall
+	}
 	st.Available = st.Enabled && Newer(s.Latest, c.Current)
 	if c.Installer != nil {
 		st.Install = c.Installer.Progress()

@@ -255,13 +255,14 @@ has two possible causes, and both are fixed:
 - **A silent restart.** Studio restarted itself detached and gave the terminal its prompt
   back, which looks the same. It now logs where it went and that `studio quit` stops it.
 
-Left to do:
+Then, on branch `feedback-v0.8`:
 
-- **S:** on Unix, exec the new binary in place. It keeps the PID, the terminal and Ctrl-C.
-- **S:** report "can't install" for a binary under `/nix/store`, and say to update through Nix.
-- **S:** when the new binary fails to start with ENOENT on NixOS (`/etc/NIXOS` exists), name
-  nix-ld, as `internal/memory/llama.go` does for llama.cpp. Studio links dynamically, through
-  cgo and msb's library.
+- On Linux and macOS, Studio becomes the new binary in place (`updates.Restart`). It keeps the
+  PID, the terminal and Ctrl-C, and rolls itself back if it can't run, stops before serving
+  or doesn't serve in two minutes.
+- A binary under `/nix/store` says to update through Nix (`cannotInstall`).
+- A new binary that doesn't run with ENOENT on NixOS names `programs.nix-ld`, as
+  `internal/memory/llama.go` does for llama.cpp.
 
 ## Smaller
 

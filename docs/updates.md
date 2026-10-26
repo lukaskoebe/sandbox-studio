@@ -12,7 +12,12 @@ The setting is under **Settings → General → Updates** (`PUT /api/system/upda
 A row saved before the modes keeps its choice: `{"enabled":false}` is off, `{"enabled":true}`
 tells. Development builds (`git describe` versions, `-dirty`) never check, since no release
 is newer than them for `updates.Newer`, and can't choose `install` (`canInstall` is false), nor
-can a Studio that can't find its own binary.
+can a Studio that can't find its own binary or runs from `/nix/store`, which only Nix
+changes. Those say why in `cannotInstall`, and Settings shows it.
+
+A new binary that doesn't run because the system can't find its loader (ENOENT) fails its
+`studio version` check; on NixOS (`/etc/NIXOS`) the error says that prebuilt binaries need
+`programs.nix-ld`.
 
 ## Installing
 
@@ -40,10 +45,11 @@ can a Studio that can't find its own binary.
    systemd when `INVOCATION_ID` is set and Studio is the process systemd started:
    `SYSTEMD_EXEC_PID` is its PID, or, before systemd 248, systemd is its parent. A shell in a
    terminal that a systemd service started inherits `INVOCATION_ID`, and nothing would start
-   Studio again there. Otherwise the old process starts the new binary detached, with
-   `-no-browser` (`Setsid` on Linux and macOS, a detached process outside the job on Windows),
-   and waits; once the new one serves, the old one exits and logs the new one's PID. The
-   terminal gets its prompt back, and `studio quit` stops the Studio that runs on.
+   Studio again there. Otherwise, on Linux and macOS, the process becomes the new binary
+   (`execve`, `Restart`) with `-no-browser`: it keeps its PID, its terminal and Ctrl-C, and the
+   record notes `inPlace`. On Windows the old process starts the new binary detached, outside
+   the job, and waits; once the new one serves, the old one exits and logs the new one's PID.
+   The console gets its prompt back, and `studio quit` stops the Studio that runs on.
 
 ## Health and rollback
 
@@ -55,7 +61,10 @@ It is rolled back, meaning the old binary moves back, the new one stays as `stud
 the backup replaces the database and its WAL is dropped, when:
 
 - it exits before serving, or doesn't serve within two minutes, while the old process watches
-  it (`RestartUnsupervised`); the old process then starts the old binary;
+  it (`RestartUnsupervised`, Windows); the old process then starts the old binary;
+- it took the old process's place and can't run, stops with an error before serving
+  (`StoppedBeforeServing`), doesn't serve within two minutes (`Watchdog`) or starts a fourth
+  time without having served; the process becomes the old binary again;
 - under systemd, it hasn't served two minutes after starting (`Watchdog`), or starts a fourth
   time without having served; it exits with 75 and systemd starts the old binary;
 - the old binary starts while the record still says the new one hasn't served.

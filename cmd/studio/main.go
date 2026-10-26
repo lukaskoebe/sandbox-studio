@@ -229,7 +229,7 @@ func defaultImage() string {
 // `git describe` output such as v1.2.3-4-gabc1234 or a bare commit hash.
 var releaseTag = regexp.MustCompile(`^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$`)
 
-func run(addr, image string, open bool, logPath string, log *slog.Logger) error {
+func run(addr, image string, open bool, logPath string, log *slog.Logger) (err error) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return err
@@ -271,6 +271,16 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	if resume.Exit {
 		return &updateRestart{resume}
 	}
+	// A new binary that took the old one's place in this process and stops before serving
+	// rolls back, and the old binary takes its place again.
+	defer func() {
+		var restart *updateRestart
+		if err != nil && !errors.As(err, &restart) {
+			if back, ok := resume.StoppedBeforeServing(err, log); ok {
+				err = &updateRestart{back}
+			}
+		}
+	}()
 	served := make(chan struct{})
 	resume.Watchdog(served, log)
 	repairMSBDB(ctx, log)
@@ -493,7 +503,7 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) error 
 	go logins.Run(ctx)
 	// Automatic updates restart Studio: run ends, and main starts the new binary.
 	var restarting atomic.Bool
-	if checker.Installer = newInstaller(ctx, p, st, logins, func() { restarting.Store(true); stop() }, log); checker.Installer != nil {
+	if checker.Installer, checker.CannotInstall = newInstaller(ctx, p, st, logins, func() { restarting.Store(true); stop() }, log); checker.Installer != nil {
 		checker.Installer.SetProgress(resume.Progress)
 	}
 	go checker.Run(ctx)

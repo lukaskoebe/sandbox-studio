@@ -32,18 +32,21 @@ const pendingFile = "install.json"
 // serves, and whichever binary sees the new one fail puts the old binary and the database
 // back.
 type Pending struct {
-	Dir        string    `json:"dir"` // the updates directory, which holds the record
-	From       string    `json:"from"`
-	To         string    `json:"to"`
-	Exe        string    `json:"exe"`
-	Old        string    `json:"old"`
-	Backup     string    `json:"backup"`
-	DB         string    `json:"db"`
-	Supervised bool      `json:"supervised"`
-	State      string    `json:"state"`
-	Attempts   int       `json:"attempts"`
-	At         time.Time `json:"at"`
-	Error      string    `json:"error,omitempty"`
+	Dir        string `json:"dir"` // the updates directory, which holds the record
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Exe        string `json:"exe"`
+	Old        string `json:"old"`
+	Backup     string `json:"backup"`
+	DB         string `json:"db"`
+	Supervised bool   `json:"supervised"`
+	// InPlace is set when the old process replaced itself with the new binary (Unix): no
+	// process watches the new one, so it rolls itself back if it doesn't serve.
+	InPlace  bool      `json:"inPlace,omitempty"`
+	State    string    `json:"state"`
+	Attempts int       `json:"attempts"`
+	At       time.Time `json:"at"`
+	Error    string    `json:"error,omitempty"`
 }
 
 // Supervised reports whether a service manager restarts Studio when it exits. systemd sets
@@ -142,7 +145,7 @@ func ResumeInstall(dir, version string, log *slog.Logger) (Resume, error) {
 	case p.State != StateSwapped:
 	case version == p.To:
 		p.Attempts++
-		if p.Supervised && p.Attempts > maxAttempts {
+		if (p.Supervised || p.InPlace) && p.Attempts > maxAttempts {
 			p = rollback(p, fmt.Sprintf("Studio %s started %d times without serving", p.To, maxAttempts), log)
 			r.Exit, r.Exe = true, p.Exe
 			break
@@ -187,11 +190,12 @@ func (r Resume) Served(log *slog.Logger) *InstallProgress {
 	return p.progress()
 }
 
-// Watchdog rolls back a supervised new binary that doesn't serve within healthWait: it puts
-// the old binary and the database back and exits with ExitRestart. The database stays open
-// in this process, which on Linux, the only supervised host, doesn't stop the restore.
+// Watchdog rolls back a new binary that doesn't serve within healthWait, when nothing else
+// watches it: it puts the old binary and the database back, then exits with ExitRestart for
+// the service manager, or becomes the old binary where it replaced it in place. The database
+// stays open in this process, which on Unix doesn't stop the restore.
 func (r Resume) Watchdog(served <-chan struct{}, log *slog.Logger) {
-	if r.waiting == nil || !r.waiting.Supervised {
+	if r.waiting == nil || !r.waiting.Supervised && !r.waiting.InPlace {
 		return
 	}
 	p := *r.waiting
@@ -199,10 +203,29 @@ func (r Resume) Watchdog(served <-chan struct{}, log *slog.Logger) {
 		select {
 		case <-served:
 		case <-time.After(healthWait):
-			rollback(p, fmt.Sprintf("Studio %s didn't serve within %s", p.To, healthWait), log)
+			p = rollback(p, fmt.Sprintf("Studio %s didn't serve within %s", p.To, healthWait), log)
+			if p.InPlace {
+				startOldInPlace(p, os.Args[1:], log)
+			}
 			os.Exit(ExitRestart)
 		}
 	}()
+}
+
+// StoppedBeforeServing rolls back a new binary that replaced the old one in place and stopped
+// with an error before it served, such as a failed migration: the old binary and the
+// database come back, and the returned Resume has Studio start the old binary (Exit).
+// Elsewhere the watcher or the service manager does this, and ok is false.
+func (r Resume) StoppedBeforeServing(cause error, log *slog.Logger) (Resume, bool) {
+	if r.waiting == nil || !r.waiting.InPlace {
+		return r, false
+	}
+	p, ok, err := readPending(r.dir)
+	if err != nil || !ok || p.State != StateSwapped || p.To != r.waiting.To {
+		return r, false
+	}
+	p = rollback(p, fmt.Sprintf("Studio %s stopped before serving: %v", p.To, cause), log)
+	return Resume{Progress: p.progress(), Exit: true, Exe: p.Exe, dir: r.dir}, true
 }
 
 // rollback puts the old binary and the database backup back and records why.
@@ -292,9 +315,55 @@ func RestartUnsupervised(dir string, args []string, log *slog.Logger) error {
 	}
 }
 
-// StartAgain starts Studio's binary detached, for a rollback at start when nothing
-// supervises Studio.
+// Restart starts the new binary after Studio shut down for an update, when no service
+// manager supervises it. On Unix this process becomes the new binary: it keeps the PID, the
+// terminal and Ctrl-C, and the new binary rolls itself back if it doesn't serve (Watchdog,
+// StoppedBeforeServing). On Windows it starts the new binary and watches it
+// (RestartUnsupervised). args are Studio's own arguments.
+func Restart(dir string, args []string, log *slog.Logger) error {
+	if !inPlace {
+		return RestartUnsupervised(dir, args, log)
+	}
+	p, ok, err := readPending(dir)
+	if err != nil || !ok {
+		return fmt.Errorf("read the install record: %v", err)
+	}
+	p.InPlace = true
+	if err := writePending(dir, p); err != nil {
+		return fmt.Errorf("record the install: %w", err)
+	}
+	log.Info("restarting into Studio " + p.To + " in this terminal")
+	err = execInPlace(p.Exe, args)
+	p = rollback(p, "starting the new binary failed: "+err.Error()+nixLdHint(err), log)
+	return startOldInPlace(p, args, log)
+}
+
+// startOldInPlace makes this process the old binary again after a rollback. It returns only
+// if that failed.
+func startOldInPlace(p Pending, args []string, log *slog.Logger) error {
+	log.Warn("the Studio update was rolled back; the old version runs again", "version", p.From, "reason", p.Error)
+	err := execInPlace(p.Exe, args)
+	return fmt.Errorf("%s, and starting the old binary failed: %w", p.Error, err)
+}
+
+// nixLdHint explains a binary that is there but "not found" when it runs: its loader is
+// missing, which on NixOS comes only with nix-ld.
+func nixLdHint(err error) string {
+	if !errors.Is(err, os.ErrNotExist) {
+		return ""
+	}
+	if _, statErr := os.Stat("/etc/NIXOS"); statErr != nil {
+		return ""
+	}
+	return ". On NixOS, prebuilt binaries such as Studio's run only with programs.nix-ld enabled"
+}
+
+// StartAgain starts Studio's binary again for a rollback at start when nothing supervises
+// Studio: on Unix this process becomes it, elsewhere it starts detached.
 func StartAgain(exe string, args []string) error {
+	if inPlace {
+		return execInPlace(exe, args)
+	}
 	cmd, err := startDetached(exe, args)
 	if err != nil {
 		return err

@@ -52,8 +52,6 @@ says.
 - zsh as the terminal shell → [feedback plan](docs/design/feedback-v0.8.md#zsh)
 - A native app with Wails 3 (v3.0.0, out 2026-10-26), starting with a spike →
   [feedback plan](docs/design/feedback-v0.8.md#a-native-app-with-wails-3)
-- The updater's follow-ups: exec in place on Unix, Nix-installed binaries, nix-ld →
-  [feedback plan](docs/design/feedback-v0.8.md#the-updater)
 
 **Agents and providers**
 - Subscription logins and CLI-based utility calls (spike S8): the Claude sign-in works; a
