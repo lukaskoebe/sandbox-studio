@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react"
+import { useCallback, useEffect, useReducer, useRef } from "react"
 import { errorMessage, fetchClient } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
 import { markChatSeen } from "@/lib/chat-seen"
@@ -9,6 +9,9 @@ export type ChatTurn = components["schemas"]["Turn"]
 export type ToolBody = components["schemas"]["ToolBody"]
 export type PermissionOption = components["schemas"]["PermissionOption"]
 export type QueuedPrompt = components["schemas"]["QueuedPrompt"]
+
+/** How many turns a chat loads at a time, from its last; the server also stops at 500 items. */
+const pageTurns = 40
 
 /** At most this many bytes of attachments per prompt, as the server enforces. */
 export const maxAttachmentBytes = 10 << 20
@@ -40,6 +43,13 @@ type State = {
   queued: QueuedPrompt[]
   /** The last rev seen, where a reconnect resumes. */
   rev: number
+  /**
+   * The seq of the first turn whose items are loaded; the turns before it have only their
+   * header. Undefined once every item is.
+   */
+  from?: number
+  /** Whether earlier turns are loading. */
+  loadingEarlier: boolean
 }
 
 type Action =
@@ -50,6 +60,15 @@ type Action =
       turns: ChatTurn[]
       items: ChatItem[]
       queued: QueuedPrompt[]
+      from?: number
+    }
+  | { type: "loadingEarlier"; loading: boolean }
+  | {
+      type: "earlier"
+      chatId: string
+      turns: ChatTurn[]
+      items: ChatItem[]
+      from?: number
     }
   | { type: "failed"; error: string; gone: boolean }
   | { type: "live"; live: boolean }
@@ -66,6 +85,7 @@ const initial: State = {
   items: new Map(),
   queued: [],
   rev: 0,
+  loadingEarlier: false,
 }
 
 /** Keeps the newer of two versions of a row: rows only move forward in rev. */
@@ -78,6 +98,12 @@ function upsert<T extends { id: string; rev: number }>(
   const next = new Map(m)
   next.set(row.id, row)
   return next
+}
+
+/** A turn's newer version, which keeps its message when it comes from the stream without. */
+function upsertTurn(m: Map<string, ChatTurn>, turn: ChatTurn) {
+  const prompt = m.get(turn.id)?.prompt
+  return upsert(m, turn.prompt || !prompt ? turn : { ...turn, prompt })
 }
 
 function reduce(s: State, a: Action): State {
@@ -94,7 +120,18 @@ function reduce(s: State, a: Action): State {
         items: new Map(a.items.map((i) => [i.id, i])),
         queued: a.queued,
         rev: a.chat.rev,
+        from: a.from,
       }
+    case "loadingEarlier":
+      return { ...s, loadingEarlier: a.loading }
+    case "earlier": {
+      if (s.chat?.id !== a.chatId) return s
+      let turns = s.turns
+      for (const t of a.turns) turns = upsertTurn(turns, t)
+      let items = s.items
+      for (const i of a.items) items = upsert(items, i)
+      return { ...s, turns, items, from: a.from, loadingEarlier: false }
+    }
     case "failed":
       return { ...s, status: "error", error: a.error, gone: a.gone }
     case "live":
@@ -107,7 +144,7 @@ function reduce(s: State, a: Action): State {
     case "turn":
       return {
         ...s,
-        turns: upsert(s.turns, a.turn),
+        turns: upsertTurn(s.turns, a.turn),
         rev: Math.max(s.rev, a.rev),
       }
     case "item":
@@ -185,7 +222,7 @@ export function useChat(env: string, chatId: string | undefined) {
     const load = async () => {
       const { data, error, response } = await fetchClient.GET(
         "/api/environments/{env}/chats/{chat}",
-        { params: { path: { env, chat: chatId } } }
+        { params: { path: { env, chat: chatId }, query: { last: pageTurns } } }
       )
       if (done.closed) return
       if (!data) {
@@ -206,6 +243,7 @@ export function useChat(env: string, chatId: string | undefined) {
           turns: data.turns ?? [],
           items: data.items ?? [],
           queued: data.queued ?? [],
+          from: data.from || undefined,
         })
       }
       connect()
@@ -256,9 +294,51 @@ export function useChat(env: string, chatId: string | undefined) {
     return () => document.removeEventListener("visibilitychange", mark)
   }, [chatId, seenRev])
 
-  const items = [...state.items.values()].sort((a, b) => a.seq - b.seq)
+  // Loads the turns before the first loaded one, once at a time.
+  const from = state.from
+  const loading = useRef(false)
+  const loadEarlier = useCallback(async () => {
+    if (!chatId || from === undefined || loading.current) return
+    loading.current = true
+    dispatch({ type: "loadingEarlier", loading: true })
+    try {
+      const { data, error } = await fetchClient.GET(
+        "/api/environments/{env}/chats/{chat}",
+        {
+          params: {
+            path: { env, chat: chatId },
+            query: { last: pageTurns, before: from },
+          },
+        }
+      )
+      if (!data) throw new Error(errorMessage(error))
+      dispatch({
+        type: "earlier",
+        chatId,
+        turns: data.turns ?? [],
+        items: data.items ?? [],
+        from: data.from || undefined,
+      })
+    } catch (err) {
+      dispatch({ type: "loadingEarlier", loading: false })
+      throw err
+    } finally {
+      loading.current = false
+    }
+  }, [env, chatId, from])
+
   const turns = [...state.turns.values()].sort((a, b) => a.seq - b.seq)
-  return { ...state, items, turns }
+  // Items the stream brings for a turn not loaded yet wait for it, so the thread doesn't show
+  // them out of their place.
+  const turnSeq = new Map(turns.map((t) => [t.id, t.seq]))
+  const items = [...state.items.values()]
+    .filter(
+      (i) => from === undefined || (turnSeq.get(i.turnId) ?? from) >= from
+    )
+    .sort((a, b) => a.seq - b.seq)
+  /** The turns whose items aren't loaded, first to last. */
+  const earlier = from === undefined ? [] : turns.filter((t) => t.seq < from)
+  return { ...state, items, turns, earlier, loadEarlier }
 }
 
 /** Reads a file as base64 for a prompt attachment. */

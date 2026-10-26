@@ -126,7 +126,12 @@ Long chats are slow to open and heavy to scroll.
 - The turn list (the Changes tab's turn picker) uses the headers, so it lists every turn
   without loading them.
 
-S–M.
+**Built** on `feedback-v0.8`. A page also stops at 500 items, unless its last turn alone has
+more, since one agent turn can have hundreds of tool calls. Each turn's header carries the
+start of its message (`prompt`), which names it in the turn picker and the footers. The row
+sits above the scroller's content rather than in it: the scroller takes every child of its
+content for a message and keeps the reading place only when the first one moves down. It
+loads by itself once the reader scrolls, not while the thread opens at its end.
 
 ## Copy-on-write forks
 

@@ -4436,6 +4436,11 @@
           "chat": {
             "$ref": "#/components/schemas/Chat"
           },
+          "from": {
+            "description": "A page's first turn: the items are those of the turns from this seq on, up to before. Unset when the log has every item",
+            "format": "int64",
+            "type": "integer"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/Item"
@@ -8349,6 +8354,10 @@
             ],
             "type": "string"
           },
+          "prompt": {
+            "description": "The start of the turn's message, at most 200 characters; in a chat's log, not on its stream",
+            "type": "string"
+          },
           "rev": {
             "format": "int64",
             "type": "integer"
@@ -9900,7 +9909,7 @@
         ]
       },
       "get": {
-        "description": "The chat with its turns and items. Follow it with the chat's stream from chat.rev.",
+        "description": "The chat with its turns and items, or with last a page of them. Follow it with the chat's stream from chat.rev.",
         "operationId": "getChat",
         "parameters": [
           {
@@ -9921,6 +9930,31 @@
             "schema": {
               "description": "Chat ID",
               "type": "string"
+            }
+          },
+          {
+            "description": "Only the items of the last this many turns, and no more than 500 items unless the first of them alone has more; every turn's header comes either way. 0 for every item",
+            "explode": false,
+            "in": "query",
+            "name": "last",
+            "schema": {
+              "description": "Only the items of the last this many turns, and no more than 500 items unless the first of them alone has more; every turn's header comes either way. 0 for every item",
+              "format": "int64",
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "With last: the turns before this turn seq, to page back from a log's from",
+            "explode": false,
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "description": "With last: the turns before this turn seq, to page back from a log's from",
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
             }
           }
         ],

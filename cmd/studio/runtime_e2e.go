@@ -4,6 +4,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -85,6 +87,24 @@ func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine,
 		}
 		return engine.Decide(ctx, policy.Request{EnvironmentID: sb.EnvironmentID, SandboxID: sb.ID, SandboxName: sb.Name,
 			Host: host, Port: port, Browser: true, Deferred: true, HTTP: &req})
+	}
+	e2e.SeedChat = func(ctx context.Context, chatID string, count int) error {
+		for i := 1; i <= count; i++ {
+			turn, err := st.StartChatTurn(ctx, chatID, store.OriginChat, "")
+			if err != nil {
+				return err
+			}
+			for _, it := range [][2]string{{"user", fmt.Sprintf("Request %d", i)}, {"agent", fmt.Sprintf("Answer %d", i)}} {
+				body, _ := json.Marshal(map[string]string{"text": it[1]})
+				if _, err := st.AddChatItem(ctx, store.ChatItem{ChatID: chatID, TurnID: turn.ID, Kind: it[0], Body: body}); err != nil {
+					return err
+				}
+			}
+			if _, err := st.EndChatTurn(ctx, chatID, turn.ID, "end_turn", nil); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	fakeRuntime.Upstream = fakeUpstream
 	mux.Handle(e2e.ControlPrefix, fakeRuntime.Control())

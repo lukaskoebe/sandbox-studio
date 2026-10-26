@@ -378,7 +378,7 @@ Paths under `/api/environments/{env}`:
 | `GET /chats` | `listChats` | All chats of the environment, newest first |
 | `GET /sandboxes/{id}/chats` | `listSandboxChats` | |
 | `POST /sandboxes/{id}/chats` | `createChat` | Body `{prompt?}`. 409 for the same reasons as `startSession` |
-| `GET /chats/{chat}` | `getChat` | The chat, its turns and items |
+| `GET /chats/{chat}` | `getChat` | The chat, its turns and items; with `?last=40`, every turn's header and the items of the last 40 turns (500 items at most, unless one turn has more), and `?before=<seq>` pages back from the log's `from` |
 | `DELETE /chats/{chat}` | `deleteChat` | Also `session/delete` when live |
 | `POST /chats/{chat}/prompt` | `sendPrompt` | Body `{text, attachments[]}` (base64, at most 10 MiB in total). 202 with the turn. 409 while running |
 | `POST /chats/{chat}/queue` | `queuePrompt` | Body as `sendPrompt`. 202 `{queued, prompt?}`: sent at once, or waiting for the running turn. The UI sends with this |

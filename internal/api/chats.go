@@ -105,15 +105,21 @@ func (s *Server) registerChats(api huma.API) {
 		return &struct{ Body store.Chat }{c}, apiError(err)
 	})
 
+	type getChatIn struct {
+		Env    string `path:"env" doc:"Environment ID"`
+		Chat   string `path:"chat" doc:"Chat ID"`
+		Last   int    `query:"last" minimum:"0" maximum:"1000" doc:"Only the items of the last this many turns, and no more than 500 items unless the first of them alone has more; every turn's header comes either way. 0 for every item"`
+		Before int    `query:"before" minimum:"0" doc:"With last: the turns before this turn seq, to page back from a log's from"`
+	}
 	huma.Register(api, huma.Operation{
 		OperationID: "getChat", Method: http.MethodGet, Path: "/api/environments/{env}/chats/{chat}", Tags: []string{"chats"},
-		Description: "The chat with its turns and items. Follow it with the chat's stream from chat.rev.",
-	}, func(ctx context.Context, in *chatPath) (*struct{ Body chat.Log }, error) {
+		Description: "The chat with its turns and items, or with last a page of them. Follow it with the chat's stream from chat.rev.",
+	}, func(ctx context.Context, in *getChatIn) (*struct{ Body chat.Log }, error) {
 		chats, err := s.chats()
 		if err != nil {
 			return nil, err
 		}
-		log, err := chats.Get(ctx, in.Env, in.Chat)
+		log, err := chats.Page(ctx, in.Env, in.Chat, in.Last, in.Before)
 		return &struct{ Body chat.Log }{log}, apiError(err)
 	})
 

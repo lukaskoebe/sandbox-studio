@@ -175,6 +175,61 @@ test("a reply in a long chat keeps the chat at its end", async ({
 
 // The teammate's home is quiet until a thread has something this browser hasn't seen: then its
 // card says New, until it is opened.
+test("a long chat opens on its last turns and loads the earlier ones", async ({
+  page,
+  api,
+  env,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 640 })
+  const teammate = await addTeammate(
+    api,
+    env,
+    `Paged ${Math.random().toString(36).slice(2, 6)}`
+  )
+  const id = await api.createSandbox(sandboxName("paged"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+  await api.json("POST", `/api/e2e/chats/${chat.id}/turns`, { count: 45 })
+
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  const messages = page
+    .getByRole("main")
+    .getByRole("region", { name: "Messages" })
+  await expect(messages.getByText("Answer 45", { exact: true })).toBeVisible()
+  // The last 40 turns are loaded, the 5 before them only counted.
+  await expect(messages.getByText("Request 6", { exact: true })).toHaveCount(1)
+  await expect(messages.getByText("Request 5", { exact: true })).toHaveCount(0)
+  const earlier = messages.getByRole("button", {
+    name: "Load earlier · 5 more turns",
+  })
+  await expect(earlier).toHaveCount(1)
+  await expect(messages).toContainText(
+    "Scrolling up to this line loads them too"
+  )
+
+  // Scrolling up to the row loads them.
+  await messages.hover()
+  await page.mouse.wheel(0, -100_000)
+  await expect(messages.getByText("Request 1", { exact: true })).toHaveCount(1)
+  await expect(earlier).toHaveCount(0)
+
+  // So does the button, after a reload, and the reading place stays.
+  await page.reload()
+  await expect(messages.getByText("Answer 45", { exact: true })).toBeVisible()
+  await earlier.click()
+  await expect(messages.getByText("Request 1", { exact: true })).toHaveCount(1)
+  await expect(earlier).toHaveCount(0)
+  await expect(
+    messages.getByText("Request 6", { exact: true })
+  ).toBeInViewport()
+  await expect(
+    messages.getByText("Request 1", { exact: true })
+  ).not.toBeInViewport()
+})
+
 test("the teammate's home marks only the threads with something new", async ({
   page,
   api,

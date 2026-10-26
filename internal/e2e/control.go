@@ -28,6 +28,10 @@ var Requests func(ctx context.Context, sandboxID, host string, port int, req pol
 // the gateway does (POST /api/e2e/rejected). Studio sets it.
 var Rejected func(ctx context.Context, sandboxID, host string, names []string) error
 
+// SeedChat adds count ended turns to a chat, each a request and its answer, as a long chat
+// has (POST /api/e2e/chats/{id}/turns). Studio sets it.
+var SeedChat func(ctx context.Context, chatID string, count int) error
+
 // Control returns the control API, which Studio mounts under ControlPrefix on its API mux:
 // it gets the same login and Host and Origin checks as the rest of the API. It exists only
 // in the e2e build.
@@ -59,8 +63,24 @@ var Rejected func(ctx context.Context, sandboxID, host string, names []string) e
 //	PUT  /api/e2e/upstream/{repo...}      (re)creates the upstream bare repository <host>/<path> with
 //	                                    one commit on main, and lists its branches
 //	GET  /api/e2e/upstream/{repo...}      the upstream repository's branches
+//	POST /api/e2e/chats/{id}/turns        {"count": 45}: ended turns "Request n" and "Answer n"
+//	                                    added to the chat, straight into the store
 func (r *Runtime) Control() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/e2e/chats/{id}/turns", func(w http.ResponseWriter, req *http.Request) {
+		var body struct {
+			Count int `json:"count"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil || body.Count < 1 || body.Count > 500 {
+			http.Error(w, "want {count}, 1 to 500", http.StatusBadRequest)
+			return
+		}
+		if err := SeedChat(req.Context(), req.PathValue("id"), body.Count); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("POST /api/e2e/sandboxes/{id}/push", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))
 		if !ok {

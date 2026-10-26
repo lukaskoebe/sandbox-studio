@@ -267,7 +267,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The chat with its turns and items. Follow it with the chat's stream from chat.rev. */
+        /** @description The chat with its turns and items, or with last a page of them. Follow it with the chat's stream from chat.rev. */
         get: operations["getChat"];
         put?: never;
         post?: never;
@@ -4302,6 +4302,11 @@ export interface components {
         };
         Log: {
             chat: components["schemas"]["Chat"];
+            /**
+             * Format: int64
+             * @description A page's first turn: the items are those of the turns from this seq on, up to before. Unset when the log has every item
+             */
+            from?: number;
             items: components["schemas"]["Item"][] | null;
             /** @description Prompts that go once the running turn ends, in order */
             queued: components["schemas"]["QueuedPrompt"][] | null;
@@ -5600,6 +5605,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             origin: "chat" | "terminal";
+            /** @description The start of the turn's message, at most 200 characters; in a chat's log, not on its stream */
+            prompt?: string;
             /** Format: int64 */
             rev: number;
             /** Format: int64 */
@@ -6407,7 +6414,12 @@ export interface operations {
     };
     getChat: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only the items of the last this many turns, and no more than 500 items unless the first of them alone has more; every turn's header comes either way. 0 for every item */
+                last?: number;
+                /** @description With last: the turns before this turn seq, to page back from a log's from */
+                before?: number;
+            };
             header?: never;
             path: {
                 /** @description Environment ID */

@@ -641,3 +641,123 @@ func (s *Store) TeammateTurns(ctx context.Context, envID, teammateID string, sin
 	}
 	return out, items.Err()
 }
+
+// ChatPage is a chat with every turn and the items of some of them; see ChatPage.
+type ChatPage struct {
+	Chat  Chat
+	Turns []ChatTurn
+	// Items are those of the turns from seq From up to, not including, the page's before.
+	Items []ChatItem
+	// Prompts are the text of each turn's first user message, by turn ID.
+	Prompts map[string]string
+	// From is the seq of the first turn whose items the page has: before when it has none.
+	From int
+}
+
+// ChatPage returns a chat with every turn, the first message of each, and the items of the
+// last turns before turn seq before (0: of the last turns). It takes at most last turns and,
+// past the first, no turn that would bring the page past maxItems items, read together so the
+// chat's rev covers all of it.
+func (s *Store) ChatPage(ctx context.Context, envID, chatID string, last, before, maxItems int) (ChatPage, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return ChatPage{}, err
+	}
+	defer tx.Rollback()
+	var p ChatPage
+	if p.Chat, err = scanChat(tx.QueryRowContext(ctx, "SELECT "+chatCols+" FROM chats WHERE environment_id = ? AND id = ?", envID, chatID)); err != nil {
+		return p, err
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT "+chatTurnCols+" FROM chat_turns WHERE chat_id = ? ORDER BY seq", chatID)
+	if err != nil {
+		return p, err
+	}
+	p.Turns = []ChatTurn{}
+	for rows.Next() {
+		t, err := scanChatTurn(rows)
+		if err != nil {
+			rows.Close()
+			return p, err
+		}
+		p.Turns = append(p.Turns, t)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return p, err
+	}
+	counts := map[string]int{}
+	p.Prompts = map[string]string{}
+	rows, err = tx.QueryContext(ctx, `SELECT turn_id, COUNT(*) FROM chat_items WHERE chat_id = ? GROUP BY turn_id`, chatID)
+	if err != nil {
+		return p, err
+	}
+	for rows.Next() {
+		var turn string
+		var n int
+		if err := rows.Scan(&turn, &n); err != nil {
+			rows.Close()
+			return p, err
+		}
+		counts[turn] = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return p, err
+	}
+	p.From = pageFrom(p.Turns, counts, last, before, maxItems)
+	rows, err = tx.QueryContext(ctx, `SELECT turn_id, IFNULL(json_extract(CAST(body AS TEXT), '$.text'), '') FROM chat_items
+		WHERE chat_id = ? AND kind = 'user' ORDER BY seq`, chatID)
+	if err != nil {
+		return p, err
+	}
+	for rows.Next() {
+		var turn, text string
+		if err := rows.Scan(&turn, &text); err != nil {
+			rows.Close()
+			return p, err
+		}
+		if _, ok := p.Prompts[turn]; !ok {
+			p.Prompts[turn] = text
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return p, err
+	}
+	p.Items = []ChatItem{}
+	if p.From == before && before > 0 {
+		return p, nil
+	}
+	rows, err = tx.QueryContext(ctx, "SELECT "+chatItemCols+` FROM chat_items WHERE chat_id = ? AND turn_id IN
+		(SELECT id FROM chat_turns WHERE chat_id = ? AND seq >= ? AND (? = 0 OR seq < ?)) ORDER BY seq`, chatID, chatID, p.From, before, before)
+	if err != nil {
+		return p, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		it, err := scanChatItem(rows)
+		if err != nil {
+			return p, err
+		}
+		p.Items = append(p.Items, it)
+	}
+	return p, rows.Err()
+}
+
+// pageFrom picks the first turn of a page: going back from the last turn before before (0:
+// the last turn), at most last turns, and past the first no turn that would bring the page's
+// items, by turn ID in counts, past maxItems. It returns before, or 0, when no turn is before.
+func pageFrom(turns []ChatTurn, counts map[string]int, last, before, maxItems int) int {
+	from, n, items := before, 0, 0
+	for i := len(turns) - 1; i >= 0; i-- {
+		t := turns[i]
+		if before > 0 && t.Seq >= before {
+			continue
+		}
+		if n == last || (n > 0 && items+counts[t.ID] > maxItems) {
+			break
+		}
+		from, n, items = t.Seq, n+1, items+counts[t.ID]
+	}
+	return from
+}

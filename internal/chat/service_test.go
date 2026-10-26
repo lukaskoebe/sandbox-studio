@@ -405,6 +405,23 @@ func TestChatTurn(t *testing.T) {
 	if strings.Count(calls, "session/new") != 1 || strings.Count(calls, "session/resume") != 1 || len(f.g.opens) != 2 {
 		t.Fatalf("calls %s", calls)
 	}
+
+	// A page of the log has every turn's header with its message, and the items of the last.
+	page, err := f.s.Page(context.Background(), f.chat.EnvironmentID, f.chat.ID, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Turns) != 3 || page.From != 3 || page.Turns[0].Prompt != "List the files\nplease" || page.Turns[2].Prompt != "third" {
+		t.Fatalf("page: from %d, turns %+v", page.From, page.Turns)
+	}
+	for _, it := range page.Items {
+		if it.TurnID != page.Turns[2].ID {
+			t.Fatalf("an item of another turn: %+v", it)
+		}
+	}
+	if full, err := f.s.Page(context.Background(), f.chat.EnvironmentID, f.chat.ID, 0, 0); err != nil || full.From != 0 || len(full.Items) <= len(page.Items) || full.Turns[1].Prompt != "again" {
+		t.Fatalf("every item: from %d, %d items (%v)", full.From, len(full.Items), err)
+	}
 }
 
 func TestChatBusyAndEmpty(t *testing.T) {

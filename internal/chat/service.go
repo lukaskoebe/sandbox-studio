@@ -218,6 +218,7 @@ type Log struct {
 	Turns  []Turn         `json:"turns"`
 	Items  []Item         `json:"items"`
 	Queued []QueuedPrompt `json:"queued" doc:"Prompts that go once the running turn ends, in order"`
+	From   int            `json:"from,omitempty" doc:"A page's first turn: the items are those of the turns from this seq on, up to before. Unset when the log has every item"`
 }
 
 // Turn is a chat turn with its usage and changed files decoded.
@@ -226,7 +227,25 @@ type Turn struct {
 	Usage    *TurnUsage   `json:"usage,omitempty"`
 	Changes  *TurnChanges `json:"changes,omitempty" doc:"The files the turn changed, once it ended"`
 	Undoable bool         `json:"undoable" doc:"The workspace can be put back as it was before this turn"`
+	Prompt   string       `json:"prompt,omitempty" doc:"The start of the turn's message, at most 200 characters; in a chat's log, not on its stream"`
 }
+
+// promptLength is the most characters of a turn's message its header carries.
+const promptLength = 200
+
+// turnPrompt is the start of a turn's message for its header: trimmed and cut at
+// promptLength characters.
+func turnPrompt(text string) string {
+	text = strings.TrimSpace(text)
+	if r := []rune(text); len(r) > promptLength {
+		text = strings.TrimRight(string(r[:promptLength-1]), " ") + "…"
+	}
+	return text
+}
+
+// PageItems is the most items a page of a chat's log carries, unless its last turn alone has
+// more.
+const PageItems = 500
 
 // TurnView decodes a stored turn.
 func TurnView(t store.ChatTurn) Turn {
@@ -254,14 +273,45 @@ func (s *Service) Get(ctx context.Context, envID, chatID string) (Log, error) {
 		return Log{}, err
 	}
 	out := Log{Chat: c, Turns: make([]Turn, 0, len(turns)), Items: make([]Item, 0, len(items)), Queued: s.Queued(chatID)}
-	for _, t := range turns {
-		out.Turns = append(out.Turns, TurnView(t))
-	}
 	for _, it := range items {
 		out.Items = append(out.Items, ItemView(it))
 	}
-	slices.SortFunc(out.Turns, func(a, b Turn) int { return a.Seq - b.Seq })
 	slices.SortFunc(out.Items, func(a, b Item) int { return a.Seq - b.Seq })
+	prompts := map[string]string{}
+	for _, it := range out.Items {
+		if _, ok := prompts[it.TurnID]; !ok && it.User != nil {
+			prompts[it.TurnID] = it.User.Text
+		}
+	}
+	for _, t := range turns {
+		v := TurnView(t)
+		v.Prompt = turnPrompt(prompts[t.ID])
+		out.Turns = append(out.Turns, v)
+	}
+	slices.SortFunc(out.Turns, func(a, b Turn) int { return a.Seq - b.Seq })
+	return out, nil
+}
+
+// Page returns a chat with every turn's header and the items of its last turns before turn
+// seq before (0: of its last turns): at most last turns, and no more than PageItems items
+// unless the first turn alone has more. last 0 returns every item, as Get does.
+func (s *Service) Page(ctx context.Context, envID, chatID string, last, before int) (Log, error) {
+	if last <= 0 {
+		return s.Get(ctx, envID, chatID)
+	}
+	p, err := s.Store.ChatPage(ctx, envID, chatID, last, before, PageItems)
+	if err != nil {
+		return Log{}, err
+	}
+	out := Log{Chat: p.Chat, Turns: make([]Turn, 0, len(p.Turns)), Items: make([]Item, 0, len(p.Items)), Queued: s.Queued(chatID), From: p.From}
+	for _, t := range p.Turns {
+		v := TurnView(t)
+		v.Prompt = turnPrompt(p.Prompts[t.ID])
+		out.Turns = append(out.Turns, v)
+	}
+	for _, it := range p.Items {
+		out.Items = append(out.Items, ItemView(it))
+	}
 	return out, nil
 }
 

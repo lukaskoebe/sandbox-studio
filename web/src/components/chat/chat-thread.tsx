@@ -1,7 +1,18 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react"
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { ChatCircleDotsIcon, TerminalWindowIcon } from "@phosphor-icons/react"
+import {
+  ArrowUpIcon,
+  ChatCircleDotsIcon,
+  TerminalWindowIcon,
+} from "@phosphor-icons/react"
 import {
   ChatItemView,
   SendingMessage,
@@ -42,11 +53,15 @@ import {
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { cn } from "@/lib/utils"
 
-/** A request's name in lists and dialogs: the start of its message. */
+/**
+ * A request's name in lists and dialogs: the start of its message, from its header or, for a
+ * turn the stream brought, its items.
+ */
 export function requestLabel(items: ChatItem[], t: ChatTurn) {
-  const text = items
-    .find((i) => i.turnId === t.id && i.kind === "user")
-    ?.user?.text.trim()
+  const text = (
+    t.prompt ??
+    items.find((i) => i.turnId === t.id && i.kind === "user")?.user?.text
+  )?.trim()
   if (!text) return t.origin === "terminal" ? "In the terminal" : "A message"
   return text.length > 60 ? `${text.slice(0, 60)}…` : text
 }
@@ -81,6 +96,9 @@ export function ChatThread({
       teammateName={teammateName}
       label={(t) => requestLabel(log.items, t)}
       onShowChanges={onShowChanges}
+      earlier={log.earlier}
+      loadingEarlier={log.loadingEarlier}
+      onLoadEarlier={log.loadEarlier}
     />
   )
 }
@@ -94,6 +112,9 @@ function ChatLog({
   teammateName,
   label,
   onShowChanges,
+  earlier,
+  loadingEarlier,
+  onLoadEarlier,
 }: {
   env: string
   chat: Chat
@@ -103,6 +124,10 @@ function ChatLog({
   teammateName: string
   label: (t: ChatTurn) => string
   onShowChanges: (turnId: string) => void
+  /** The turns whose items aren't loaded yet. */
+  earlier: ChatTurn[]
+  loadingEarlier: boolean
+  onLoadEarlier: () => Promise<void>
 }) {
   const turnById = new Map(turns.map((t) => [t.id, t]))
   const running = chat.state === "running"
@@ -151,9 +176,23 @@ function ChatLog({
       <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <MessageScroller className="min-h-0 flex-1">
-            <MessageScrollerViewport aria-label="Messages">
+            <MessageScrollerViewport
+              aria-label="Messages"
+              preserveScrollOnPrepend
+            >
+              {/* Outside the content: the scroller takes every child of it for a message, and
+                  keeps the reading place only when its first one moves down. */}
+              {earlier.length > 0 && (
+                <div className="mx-auto w-full max-w-3xl px-4 pt-4">
+                  <LoadEarlier
+                    turns={earlier}
+                    loading={loadingEarlier}
+                    onLoad={onLoadEarlier}
+                  />
+                </div>
+              )}
               <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
-                {items.length === 0 && !sending && (
+                {items.length === 0 && earlier.length === 0 && !sending && (
                   <MessageScrollerItem className="m-auto">
                     <Empty>
                       <EmptyHeader>
@@ -250,6 +289,90 @@ function ChatLog({
         </div>
       </MessageScrollerProvider>
     </PreviewSandbox.Provider>
+  )
+}
+
+const day = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+})
+
+/**
+ * The row above a long chat's first loaded turn. It loads the turns before it when clicked, and
+ * when it scrolls into view after the thread opened at its end.
+ */
+function LoadEarlier({
+  turns,
+  loading,
+  onLoad,
+}: {
+  turns: ChatTurn[]
+  loading: boolean
+  onLoad: () => Promise<void>
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const load = () =>
+    onLoad().catch((err: unknown) => toast.error(errorMessage(err)))
+  const loadRef = useRef(load)
+  loadRef.current = load
+  useEffect(() => {
+    const el = ref.current
+    const viewport = el?.closest<HTMLElement>('[aria-label="Messages"]')
+    if (!el || !viewport) return
+    // The thread opens at its end; until the reader scrolls, the row only passes by.
+    let scrolled = false
+    const onScroll = () => {
+      scrolled = true
+    }
+    viewport.addEventListener("wheel", onScroll, { passive: true })
+    viewport.addEventListener("touchmove", onScroll, { passive: true })
+    viewport.addEventListener("keydown", onScroll)
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (scrolled && entries.some((e) => e.isIntersecting))
+          void loadRef.current()
+      },
+      { root: viewport, rootMargin: "200px 0px 0px 0px" }
+    )
+    seen.observe(el)
+    return () => {
+      seen.disconnect()
+      viewport.removeEventListener("wheel", onScroll)
+      viewport.removeEventListener("touchmove", onScroll)
+      viewport.removeEventListener("keydown", onScroll)
+    }
+  }, [])
+  const first = turns.at(0)
+  const last = turns.at(-1)
+  const range =
+    first && last
+      ? [
+          ...new Set([
+            day.format(new Date(first.startedAt)),
+            day.format(new Date(last.startedAt)),
+          ]),
+        ].join(" – ")
+      : ""
+  return (
+    <div ref={ref} className="grid justify-items-center gap-1.5 py-1">
+      <div className="flex w-full items-center gap-3">
+        <span className="h-px flex-1 bg-border" />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={loading}
+          onClick={() => void load()}
+        >
+          {loading ? <Spinner /> : <ArrowUpIcon />}
+          Load earlier · {turns.length} more{" "}
+          {turns.length === 1 ? "turn" : "turns"}
+        </Button>
+        <span className="h-px flex-1 bg-border" />
+      </div>
+      <p className="font-mono text-xs text-muted-foreground">
+        Scrolling up to this line loads them too · {range}
+      </p>
+    </div>
   )
 }
 

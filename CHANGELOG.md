@@ -3,7 +3,7 @@
 ## Unreleased
 
 Fixes from the first days with v0.8.0, and what its users asked for: terminal sessions as
-tabs, and a teammate's status that counts what runs in them.
+tabs, a teammate's status that counts what runs in them, and long chats that load in pages.
 
 - **Teammates** count what runs in their terminals. One works while an agent such as
   opencode prints in one of its terminals, and is idle with a ring instead of a dot while a
@@ -15,6 +15,8 @@ tabs, and a teammate's status that counts what runs in them.
   directory and when it started. Alt+Shift+T, Alt+Shift+W and Alt+Shift+[ and ] open, close
   and switch sessions from the keyboard, and closing one a program runs in asks first. The
   Terminal tab counts the sessions.
+- **Long chats** open on their last 40 turns, and load the earlier ones from a row above them,
+  which also loads when you scroll up to it. They open faster and scroll lighter.
 - **Chats:** sending a message no longer jumps a long chat back to its first message. The
   scroller went to every message from when the page opened that it hadn't gone to yet, and an
   agent's first words, taking the place of its starting, set it off. The composer now ends on
