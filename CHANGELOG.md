@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 — 2026-10-26
 
 Studio's pages share one style now: square, with titles, buttons and labels in mono. A softer
 style is a switch away.
