@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/yamux"
 
@@ -189,6 +190,32 @@ func TestFailedCreateKeepsItsRecordUntilDeleted(t *testing.T) {
 	}
 	if len(saved) != 0 {
 		t.Fatalf("progress of a deleted sandbox is still saved: %v", saved)
+	}
+}
+
+// A failed create shows as failed a moment before it lets go of the sandbox. A Delete in
+// that moment waits for it instead of finding the sandbox busy.
+func TestDeleteWaitsForAFailedCreateToLetGo(t *testing.T) {
+	f := newCheckpointFixture(t)
+	unlock, err := f.manager.tryMutation(f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.manager.begin(f.ctx, f.sandbox, OperationCreate, createSteps); err != nil {
+		t.Fatal(err)
+	}
+	op := f.manager.settle(f.sandbox, errors.New("no hypervisor"))
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		unlock()
+		close(op.done)
+	}()
+
+	if err := f.manager.Delete(f.ctx, f.env.ID, f.sandbox.ID); err != nil {
+		t.Fatalf("Delete of a failed sandbox that is letting go: %v", err)
+	}
+	if _, err := f.store.Sandbox(f.ctx, f.env.ID, f.sandbox.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("deleted sandbox lookup = %v; want not found", err)
 	}
 }
 

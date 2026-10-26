@@ -595,6 +595,12 @@ func (m *Manager) Delete(ctx context.Context, envID, id string) error {
 		return err
 	}
 	unlock, err := m.tryMutation(id)
+	if errors.Is(err, ErrBusy) && m.failedCreation(id) {
+		// A failed create or fork shows as failed a moment before it lets go of the sandbox.
+		// Its error is the sandbox's, not the delete's.
+		_ = m.Wait(ctx, id)
+		unlock, err = m.tryMutation(id)
+	}
 	if err != nil {
 		return err
 	}
