@@ -355,6 +355,30 @@ func TestRestartUnsupervisedRollsBack(t *testing.T) {
 	}
 }
 
+// Only the process systemd started counts as supervised: a Studio started in a terminal that
+// a systemd service runs inherits INVOCATION_ID, and nothing would start it again.
+func TestUnderSystemd(t *testing.T) {
+	systemd := func() string { return "systemd" }
+	shell := func() string { return "bash" }
+	for _, c := range []struct {
+		name       string
+		invocation string
+		execPID    string
+		parent     func() string
+		want       bool
+	}{
+		{"no service", "", "", systemd, false},
+		{"the service's process", "abc", "42", shell, true},
+		{"a terminal a service started", "abc", "7", systemd, false},
+		{"systemd before 248 started it", "abc", "", systemd, true},
+		{"a shell before 248", "abc", "", shell, false},
+	} {
+		if got := underSystemd(c.invocation, c.execPID, 42, c.parent); got != c.want {
+			t.Errorf("%s: underSystemd = %v; want %v", c.name, got, c.want)
+		}
+	}
+}
+
 // The release workflow's attestation of v0.5.1's Linux archive verifies against Sigstore's
 // trusted root for that tag and digest only.
 func TestVerifyBundlesOfARealRelease(t *testing.T) {

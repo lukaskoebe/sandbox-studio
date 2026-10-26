@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { ChatCircleDotsIcon, TerminalWindowIcon } from "@phosphor-icons/react"
@@ -117,6 +117,9 @@ function ChatLog({
 
   // The message being sent shows until the log has it as a message or a queued prompt.
   const users = items.filter((i) => i.kind === "user").length
+  // A new message scrolls to the top. Only the latest is an anchor: the scroller goes to
+  // anchors it hasn't gone to yet, and would jump back to one from when the page opened.
+  const lastUser = [...items].reverse().find((i) => i.kind === "user")?.id
   const [sending, setSending] = useState<Sending>()
   if (sending && (users > sending.users || queued.length > sending.queued))
     setSending(undefined)
@@ -184,7 +187,7 @@ function ChatLog({
                     <Fragment key={item.id}>
                       <MessageScrollerItem
                         messageId={item.id}
-                        scrollAnchor={item.kind === "user"}
+                        scrollAnchor={item.id === lastUser}
                         className={cn(dim && "opacity-50")}
                         title={turn?.undoneAt ? "Undone" : undefined}
                       >
@@ -231,7 +234,7 @@ function ChatLog({
             </MessageScrollerViewport>
             <MessageScrollerButton />
           </MessageScroller>
-          <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-4 pb-4">
+          <ComposerDock className="grid max-w-3xl gap-2">
             {pinned?.plan && (
               <PlanCard entries={pinned.plan.entries ?? []} live />
             )}
@@ -243,10 +246,30 @@ function ChatLog({
               onSending={onSending}
               onSent={() => setSending((s) => s && { ...s, sent: true })}
             />
-          </div>
+          </ComposerDock>
         </div>
       </MessageScrollerProvider>
     </PreviewSandbox.Provider>
+  )
+}
+
+/**
+ * The composer's place under a message list. It keeps the list's scrollbar gutter, so the two
+ * line up on the right, and ends where the computer's screen does.
+ */
+export function ComposerDock({
+  className,
+  children,
+}: {
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <div className="shrink-0 scrollbar-thin scrollbar-gutter-stable overflow-hidden">
+      <div className={cn("mx-auto w-full px-4 pb-2.5", className)}>
+        {children}
+      </div>
+    </div>
   )
 }
 

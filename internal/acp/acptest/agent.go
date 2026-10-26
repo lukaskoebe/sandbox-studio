@@ -10,6 +10,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"time"
 )
 
 // Step is one thing the agent does during a turn. Exactly one field is set.
@@ -26,6 +27,8 @@ type Step struct {
 	WaitCancel bool
 	// Hang blocks the turn forever, ignoring cancellation.
 	Hang bool
+	// Pause waits that long before the next step, as an agent thinking before it answers.
+	Pause time.Duration
 }
 
 // Turn is the script of one prompt.
@@ -279,6 +282,8 @@ func (a *Agent) call(id json.RawMessage, method string, params json.RawMessage) 
 				stop = "cancelled"
 			case s.Hang:
 				select {}
+			case s.Pause > 0:
+				time.Sleep(s.Pause)
 			}
 			if stop == "cancelled" {
 				break

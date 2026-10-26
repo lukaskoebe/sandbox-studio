@@ -121,7 +121,11 @@ function ForkForm({
           <dt className="text-muted-foreground">Copied</dt>
           <dd>/workspace and /home/agent</dd>
           <dt className="text-muted-foreground">Not copied</dt>
-          <dd>Docker images, containers and volumes</dd>
+          <dd>
+            Docker images, containers and volumes; software installed elsewhere,
+            such as apt packages and tools from{" "}
+            <code className="font-mono">mise use -g</code>
+          </dd>
           <dt className="text-muted-foreground">Identity</dt>
           <dd>The fork gets its own identity and its own network approvals.</dd>
         </dl>

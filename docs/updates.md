@@ -35,15 +35,20 @@ can a Studio that can't find its own binary.
 5. **Swap.** The running binary moves to `studio.old` (`studio.old.exe`) and the new one takes
    its name. Renaming first works on Windows too, where a running executable can't be
    replaced. The install record `<data>/updates/install.json` (`Pending`) is written.
-6. **Restart.** Studio shuts down as on Ctrl-C. Under systemd (`INVOCATION_ID` is set) it exits
-   with status 75 and the unit (`Restart=on-failure`, see `internal/autostart`) starts the new
-   binary. Otherwise the old process starts the new binary detached, with `-no-browser`
-   (`Setsid` on Linux and macOS, a detached process outside the job on Windows), and waits.
+6. **Restart.** Studio shuts down as on Ctrl-C. Under systemd it exits with status 75 and the
+   unit (`Restart=on-failure`, see `internal/autostart`) starts the new binary. Studio is under
+   systemd when `INVOCATION_ID` is set and Studio is the process systemd started:
+   `SYSTEMD_EXEC_PID` is its PID, or, before systemd 248, systemd is its parent. A shell in a
+   terminal that a systemd service started inherits `INVOCATION_ID`, and nothing would start
+   Studio again there. Otherwise the old process starts the new binary detached, with
+   `-no-browser` (`Setsid` on Linux and macOS, a detached process outside the job on Windows),
+   and waits; once the new one serves, the old one exits and logs the new one's PID. The
+   terminal gets its prompt back, and `studio quit` stops the Studio that runs on.
 
 ## Health and rollback
 
 The new binary reads the record before it opens the database (`ResumeInstall`) and counts
-its start. Once its own `/api/health` answers, it marks the record installed, removes the old
+its start. Once its own `/api/auth/status` answers, it marks the record installed, removes the old
 binary and the downloads of earlier installs; the backup of this install stays.
 
 It is rolled back, meaning the old binary moves back, the new one stays as `studio.failed`,

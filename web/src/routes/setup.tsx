@@ -24,7 +24,7 @@ function SetupPage() {
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-2xl flex-col gap-6 p-4 sm:p-8">
       <header className="flex items-center gap-3">
-        <h1 className="text-base font-semibold tracking-tight">
+        <h1 className="font-heading text-base font-semibold tracking-tight">
           Set up Studio
         </h1>
         {env && (

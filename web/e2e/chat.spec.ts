@@ -133,6 +133,46 @@ test("a message sent while the agent works waits for its turn to end", async ({
   expect(JSON.stringify(agents[0].prompts)).not.toContain("changelog")
 })
 
+test("a reply in a long chat keeps the chat at its end", async ({
+  page,
+  api,
+  env,
+}) => {
+  await api.dismissApprovals()
+  await page.setViewportSize({ width: 1280, height: 640 })
+  const name = `Long ${Math.random().toString(36).slice(2, 6)}`
+  const teammate = await addTeammate(api, env, name)
+  const id = await api.createSandbox(sandboxName("long"), teammate)
+  await api.guestReady(id)
+  const chat = (await api.json<{ id: string }>(
+    "POST",
+    `/api/environments/${env}/sandboxes/${id}/chats`
+  ))!
+
+  await page.goto(`/e/${env}/chats/${chat.id}`)
+  const main = page.getByRole("main")
+  const box = main.getByRole("textbox", { name: "Message" })
+  const allow = main.getByRole("button", { name: "Allow", exact: true })
+  for (const [i, text] of ["First request", "Second request"].entries()) {
+    await box.fill(text)
+    await box.press("Enter")
+    await expect(allow).toHaveCount(1)
+    await allow.click()
+    await expect(main.getByText(done)).toHaveCount(i + 1)
+  }
+
+  // A reply scrolls to itself, not back to a message from when the page opened.
+  await page.reload()
+  const messages = main.getByRole("region", { name: "Messages" })
+  await expect(messages.getByText(done)).toHaveCount(2)
+  await box.fill("Third request")
+  await box.press("Enter")
+  // The agent thinks a moment before it answers, as real ones do.
+  await expect(allow).toHaveCount(1)
+  await expect(messages.getByText("Third request")).toBeInViewport()
+  await expect(messages.getByText("First request")).not.toBeInViewport()
+})
+
 // The teammate's home is quiet until a thread has something this browser hasn't seen: then its
 // card says New, until it is opened.
 test("the teammate's home marks only the threads with something new", async ({

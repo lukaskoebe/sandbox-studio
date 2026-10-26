@@ -143,7 +143,9 @@ export function AuthGate({
     <main className="flex min-h-svh items-center justify-center bg-background p-6 text-foreground">
       <section className="w-full max-w-sm space-y-5 rounded-lg border bg-card p-6 shadow-sm">
         <div className="space-y-2">
-          <h1 className="text-lg font-semibold">Connect to Studio</h1>
+          <h1 className="font-heading text-lg font-semibold">
+            Connect to Studio
+          </h1>
           <p className="text-sm text-muted-foreground">
             Open the launch link printed by Studio, or run{" "}
             <code>studio login-url</code> on the host to get a fresh link. For

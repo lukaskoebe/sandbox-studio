@@ -72,8 +72,12 @@ export class Api {
     )
   }
 
-  /** Makes the fake guest request http://host:port/ through the gateway. */
-  connect(id: string, host: string, port = 80) {
+  /**
+   * Makes the fake guest request http://host:port/ through the gateway. A create answers before
+   * the VM boots, and a guest learns its gateway at boot, so this waits for the guest first.
+   */
+  async connect(id: string, host: string, port = 80) {
+    await this.guestReady(id)
     return this.json("POST", `/api/e2e/sandboxes/${id}/connect`, { host, port })
   }
 

@@ -158,7 +158,9 @@ export function ProfileCard({
                   weight="fill"
                   className="mt-0.5 size-3 shrink-0 self-start text-(--acc-memory)"
                 />
-                <span className="line-clamp-2 min-w-0 flex-1">{f.text}</span>
+                <span className="line-clamp-2 min-w-0 flex-1 wrap-anywhere">
+                  {f.text}
+                </span>
               </Item>
             ))}
             {facts.data && known.length === 0 && (
@@ -347,7 +349,7 @@ function Item({
     <button
       type="button"
       onClick={onClick}
-      className="mx-1.5 flex min-h-8 items-center gap-2.5 rounded-md px-2.5 py-1 text-left text-[0.8125rem] outline-none hover:bg-muted focus-visible:bg-muted"
+      className="mx-1.5 flex min-h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1 text-left text-[0.8125rem] outline-none hover:bg-muted focus-visible:bg-muted"
     >
       {children}
     </button>

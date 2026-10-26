@@ -27,11 +27,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          // The close button sits on the top right corner, where a dialog's is.
+          "--toast-close-button-start": "unset",
+          "--toast-close-button-end": "0",
+          "--toast-close-button-transform": "translate(35%, -35%)",
         } as React.CSSProperties
       }
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          closeButton: "rounded-full!",
         },
       }}
       {...props}

@@ -206,6 +206,12 @@ func Supervise(ctx context.Context, log *slog.Logger, self string, lock *os.File
 	if err := prepareDisks(); err != nil {
 		return err
 	}
+	// Every user writes to the temporary directories, and only removes its own files there.
+	for _, dir := range []string{"/tmp", "/var/tmp"} {
+		if err := os.Chmod(dir, 0o777|os.ModeSticky); err != nil {
+			log.Warn("opening a temporary directory to everyone", "dir", dir, "err", err)
+		}
+	}
 	// A home that can't be seeded still works, without some of the image's dotfiles.
 	if err := prepareHome(); err != nil {
 		log.Warn("seeding the home disk", "err", err)

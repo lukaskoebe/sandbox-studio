@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp/acptest"
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -24,8 +25,8 @@ const (
 	ACPPreview = "\nThe app runs at http://localhost:5173/login."
 )
 
-// acpTurns is the script of every prompt: the agent answers, asks to run a command, runs it
-// once it gets an answer, and says so. Each turn has its own tool call ID.
+// acpTurns is the script of every prompt: the agent thinks a moment, answers, asks to run a
+// command, runs it once it gets an answer, and says so. Each turn has its own tool call ID.
 func acpTurns(n int) []acptest.Turn {
 	raw := func(v any) json.RawMessage {
 		b, err := json.Marshal(v)
@@ -41,6 +42,8 @@ func acpTurns(n int) []acptest.Turn {
 	for i := range turns {
 		id := fmt.Sprintf("e2e-call-%d", i+1)
 		turns[i] = acptest.Turn{Steps: []acptest.Step{
+			// Long enough for the chat to show the agent starting.
+			{Pause: 300 * time.Millisecond},
 			{Update: text(ACPGreeting)},
 			{Update: raw(map[string]any{"sessionUpdate": "tool_call", "toolCallId": id, "title": ACPTool, "kind": "execute", "status": "pending"})},
 			{Permission: raw(map[string]any{

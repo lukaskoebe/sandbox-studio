@@ -246,10 +246,10 @@ func whereInstructions(s Sandbox) string {
 const machineInstructions = `
 ## This machine
 
-- **Tools:** you have passwordless sudo and Docker. Install a language or CLI with ` + "`mise use -g <tool>@<version>`" + `, or ` + "`mise use <tool>@<version>`" + ` in the project, which writes its ` + "`mise.toml`" + `. Prefer mise to apt or ` + "`curl | sh`" + `.
+- **Tools:** you are the user ` + "`agent`" + `, with passwordless sudo and Docker. A path you can't write is probably root's, from sudo or a Docker bind mount: ` + "`sudo chown -R agent: <path>`" + `. Install a language or CLI with ` + "`mise use -g <tool>@<version>`" + `, or ` + "`mise use <tool>@<version>`" + ` in the project, which writes its ` + "`mise.toml`" + `. Prefer mise to apt or ` + "`curl | sh`" + `.
 - **Network:** a connection to a host Studio hasn't been told about waits up to a minute while the user decides; a download through mise may too. Wait for it, and don't retry in a loop. A 403 with the header ` + "`X-Sandbox-Studio: refused`" + ` is Studio's network policy: tell the user which host you need instead of working around it.
 - **Servers you start** are not reachable at localhost for the user. Give them the link ` + "`http://localhost:<port>/`" + `: Studio's chat turns it into a button that opens the port. ` + "`sandbox_info`" + ` in the ` + "`studio`" + ` MCP server lists the listening ports, and the network level and rules that apply here.
-- **` + "`git push`" + `** goes to Studio's review first: the user approves it before it reaches the forge, and you hear the outcome on your next fetch or in a message.
+- **` + "`git push`" + `** goes to Studio's review first: the user approves it before it reaches the forge, and you hear the outcome on your next fetch or in a message. Only branches can be pushed, no tags or deletes. A branch on the forge only takes commits built on its tip there: fetch, rebase and push again; to replace its history, push to a new branch. A new push of a branch replaces one still waiting for review. Until you fetch, ` + "`origin/<branch>`" + ` shows your push, approved or not.
 `
 
 // tasksInstructions tells the agent about its task list, which the user sees in the Tasks tab.

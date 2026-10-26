@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -44,9 +46,32 @@ type Pending struct {
 	Error      string    `json:"error,omitempty"`
 }
 
-// Supervised reports whether a service manager restarts Studio when it exits: systemd sets
-// INVOCATION_ID. launchd's agent doesn't restart it (internal/autostart).
-func Supervised() bool { return os.Getenv("INVOCATION_ID") != "" }
+// Supervised reports whether a service manager restarts Studio when it exits. systemd sets
+// INVOCATION_ID for a service, but a shell in a terminal that a service started
+// (gnome-terminal-server, a UWSM session) inherits it, and nothing restarts a Studio started
+// there. So Studio must be the process systemd started, too: SYSTEMD_EXEC_PID names it
+// (systemd 248 and later), and before that systemd is its parent. launchd's agent doesn't
+// restart Studio (internal/autostart).
+func Supervised() bool {
+	return underSystemd(os.Getenv("INVOCATION_ID"), os.Getenv("SYSTEMD_EXEC_PID"), os.Getpid(), parentCommand)
+}
+
+func underSystemd(invocation, execPID string, pid int, parent func() string) bool {
+	switch {
+	case invocation == "":
+		return false
+	case execPID != "":
+		return execPID == strconv.Itoa(pid)
+	default:
+		return parent() == "systemd"
+	}
+}
+
+// parentCommand is the name of the process that started this one, where /proc has it.
+func parentCommand() string {
+	b, _ := os.ReadFile(fmt.Sprintf("/proc/%d/comm", os.Getppid()))
+	return strings.TrimSpace(string(b))
+}
 
 // progress is how the UI shows a record.
 func (p Pending) progress() *InstallProgress {
@@ -258,6 +283,8 @@ func RestartUnsupervised(dir string, args []string, log *slog.Logger) error {
 			return restartOld(p, args, log)
 		case <-tick.C:
 			if q, ok, err := readPending(dir); err == nil && ok && q.State == StateInstalled {
+				// The terminal gets its prompt back while Studio goes on, so say where it went.
+				log.Info("Studio "+p.To+" runs on in the background; `studio quit` stops it", "pid", cmd.Process.Pid)
 				_ = cmd.Process.Release()
 				return nil
 			}

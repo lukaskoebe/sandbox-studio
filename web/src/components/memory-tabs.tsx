@@ -427,7 +427,9 @@ function FactsTab({ env, scope }: { env: string; scope: string }) {
               {list.map((f) => (
                 <TableRow key={f.id}>
                   <TableCell className="max-w-md">
-                    <span className="block whitespace-pre-wrap">{f.text}</span>
+                    <span className="block wrap-anywhere whitespace-pre-wrap">
+                      {f.text}
+                    </span>
                     {(f.attribute || f.authorTeammate) && (
                       <span className="block text-[0.625rem] text-muted-foreground">
                         {f.attribute && <Ident>{f.attribute}</Ident>}
@@ -614,7 +616,9 @@ function ConflictsTab({ env, scope }: { env: string; scope: string }) {
                   <span className="text-[0.625rem] text-muted-foreground">
                     <Ident>{fact.scope}</Ident>
                   </span>
-                  <p className="whitespace-pre-wrap">{fact.text}</p>
+                  <p className="wrap-anywhere whitespace-pre-wrap">
+                    {fact.text}
+                  </p>
                   <div className="mt-1 flex gap-1">
                     <TierBadge tier={fact.tier} />
                     <StatusBadge status={fact.status} />

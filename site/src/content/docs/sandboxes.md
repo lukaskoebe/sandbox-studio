@@ -36,7 +36,7 @@ The power button stops a running computer and starts one that is off; a computer
 | **Checkpoints** | Shows where the sandbox came from and its checkpoints. |
 | **Stop** (the power button) | Powers off the VM. Files on its disks stay, but running processes and terminal sessions end. Use **Start** to boot it again. |
 | **Suspend** | Pauses a running VM with its memory and processes. **Resume** continues it, including terminal sessions. Suspended memory does not survive a host reboot. |
-| **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are copied; Docker images, containers and volumes are not. The fork gets its own network approvals. |
+| **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are copied; Docker images, containers and volumes are not, nor is what was installed elsewhere, such as apt packages and tools from `mise use -g`. The fork gets its own network approvals. |
 | **Connections** | Lists where the sandbox connects. |
 | **Resources** | Changes its CPUs and memory (see below). |
 | **Rebase** | Moves the sandbox onto another template (see below). |

@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+Fixes from the first days with v0.8.0: chats keep their place, the collapsed sidebar opens
+every teammate, and an update started from a terminal comes back up.
+
+- **Chats:** sending a message no longer jumps a long chat back to its first message. The
+  scroller went to every message from when the page opened that it hadn't gone to yet, and an
+  agent's first words, taking the place of its starting, set it off. The composer now ends on
+  the right where the messages and tool calls do, and at the bottom where the computer's
+  screen does.
+- **Sidebar:** collapsed, it opens every teammate and Home again. The hidden section labels
+  sat over the rows next to them and took their clicks.
+- **Memory:** long facts, such as a path, wrap instead of running past the edge, in the
+  profile card, the memory table and the teammate's home. The memory sheet says who sees the
+  memory once instead of twice.
+- **Notifications** have their close button on the top right corner, as dialogs do.
+- **Switches** have a soft shadow that no longer looks broken in dark mode.
+- **Updates:** a Studio started in a terminal that a systemd service runs, as on GNOME or in a
+  UWSM session, took itself for a service: it exited for the update and nothing started it
+  again. Only the process systemd starts counts as one now. A Studio started in a terminal
+  starts the new version in the background, gives the terminal its prompt back and says so;
+  `studio quit` stops it.
+- **Agents** know they are the user `agent` with passwordless sudo, and take a path root made,
+  with sudo or a Docker bind mount, with `sudo chown`. They know the rules of a push through
+  Studio's review: branches only, no deletes, a branch the forge has only takes commits that
+  build on it, and new history goes to a new branch. Refused pushes say so too. `/tmp` and
+  `/var/tmp` are open to every user at each start of a sandbox.
+- **Sandboxes:** deleting a sandbox right after its create or fork failed waits a moment for
+  the create to let go, instead of failing because the sandbox is busy. The fork dialog and
+  the docs say that a fork, and a rebase, leave behind software installed outside
+  `/workspace` and the home, such as apt packages and tools from `mise use -g`.
+- **Setup:** its title, and the one of the page that connects a browser, are in the style's
+  heading font.
+
 ## v0.8.0 — 2026-10-26
 
 Studio's pages share one style now: square, with titles, buttons and labels in mono. A softer

@@ -316,7 +316,8 @@ Studio therefore keeps suspend in place.
 ## Fork, rebase, export and import
 
 - [Fork and rebase](rebase.md): the workspace is copied as a gzip tar over msb exec between
-  two VMs, and the home too where there is a home disk. Docker data is not copied.
+  two VMs, and the home too where there is a home disk. Docker data is not copied, nor is the
+  root disk: apt packages, `/etc` changes and tools from `mise use -g` (in `/opt/mise`).
 - [Export and import](export-import.md): a `.studio-sandbox` file (manifest, home tar and
   workspace tar), recreated through a template build and the same copies.
 

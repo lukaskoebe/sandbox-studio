@@ -71,7 +71,9 @@ startup, a leftover record is resolved by generation: before the commit the targ
 removed and the source stays stopped, after it the source is removed. Lifecycle actions on
 that sandbox are refused until this succeeds.
 
-Docker images, containers and volumes are lost. Tmux sessions end. Checkpoints stay with
+Docker images, containers and volumes are lost, and so is what was installed outside
+`/workspace` and `/home/agent`: apt packages, `/etc` changes and tools from `mise use -g`
+(in `/opt/mise`). Tmux sessions end. Checkpoints stay with
 their generation. The catalog's switch to the new generation records a `rebase` event in the
 sandbox's history, see [lineage](sandboxes.md#lineage). With a home disk on the new generation, harness sessions and logins
 survive, and a chat resumes its agent session in the new generation

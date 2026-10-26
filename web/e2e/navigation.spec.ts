@@ -1,4 +1,4 @@
-import { addTeammate, expect, test } from "./fixtures"
+import { addTeammate, expect, sandboxName, test } from "./fixtures"
 
 test("the sidebar opens a teammate, whose profile opens its tasks, memory and settings", async ({
   page,
@@ -55,6 +55,28 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
   await page.keyboard.press("Escape")
   await expect(settings).toBeHidden()
   await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/${id}$`))
+})
+
+test("a collapsed sidebar opens Home and every teammate", async ({
+  page,
+  api,
+  env,
+}) => {
+  await addTeammate(api, env, `Nav ${Math.random().toString(36).slice(2, 8)}`)
+  // A sandbox without a teammate is open.
+  const id = await api.createSandbox(sandboxName("plain"))
+  await page.goto(`/e/${env}/sandboxes/${id}`)
+  const sidebar = page.locator('[data-slot="sidebar"]')
+  await expect(sidebar).toHaveAttribute("data-state", "expanded")
+  await page.keyboard.press("Control+b")
+  await expect(sidebar).toHaveAttribute("data-state", "collapsed")
+
+  // The groups' hidden labels sit over the rows above them, and must not take their clicks.
+  const rows = page.locator('[data-slot="sidebar-menu-button"]')
+  await rows.and(page.locator('[href*="/teammates/"]')).last().click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}/teammates/[^/?]+`))
+  await rows.filter({ hasText: "Home" }).click()
+  await expect(page).toHaveURL(new RegExp(`/e/${env}$`))
 })
 
 test("teaching a teammate puts the fact on its home, where it can be forgotten", async ({

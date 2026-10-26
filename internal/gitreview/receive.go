@@ -348,7 +348,7 @@ func (s *Service) stageCommand(ctx context.Context, t target, repo *git.Reposito
 			return "", refusal("internal error: the forge's commit is missing")
 		}
 		if ok, err := oldCommit.IsAncestor(newCommit); err != nil || !ok {
-			return "", refusal("non-fast-forward: Sandbox Studio only stages fast-forward pushes; fetch, rebase and push again")
+			return "", refusal("non-fast-forward: Sandbox Studio only stages fast-forward pushes; fetch, rebase and push again, or push the new history to a new branch")
 		}
 	}
 	rv, err := s.review(ctx, repo, current, cmd.New, objs)

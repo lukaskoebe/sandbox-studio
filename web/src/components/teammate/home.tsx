@@ -19,6 +19,7 @@ import {
 } from "@/components/approval-stack"
 import { BrowsingCard, useBrowsing } from "@/components/browser-browsing"
 import { isGitApproval } from "@/components/git-review"
+import { ComposerDock } from "@/components/chat/chat-thread"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { TeammateHeader } from "@/components/teammate/header"
 import { TeammateAvatar } from "@/components/teammate-avatar"
@@ -576,7 +577,7 @@ function Row({
       )}
     >
       <I className={cn("mt-[3px] size-3.5 shrink-0", iconClassName)} />
-      <span className="min-w-0 flex-1">{children}</span>
+      <span className="min-w-0 flex-1 wrap-anywhere">{children}</span>
       {action}
       <span className="shrink-0 pt-px font-mono text-[0.625rem]">
         {time(at)}
@@ -879,7 +880,7 @@ function NewThread({
         : `${teammate.name} needs a computer first`
 
   return (
-    <div className="mx-auto w-full max-w-2xl shrink-0 px-4 pb-4">
+    <ComposerDock className="max-w-2xl">
       <Composer
         onSend={send}
         error={problem}
@@ -928,6 +929,6 @@ function NewThread({
           </span>
         }
       />
-    </div>
+    </ComposerDock>
   )
 }
