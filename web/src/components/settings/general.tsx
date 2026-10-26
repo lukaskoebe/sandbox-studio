@@ -10,6 +10,7 @@ import {
   ListChecksIcon,
   PaletteIcon,
   PowerIcon,
+  TerminalWindowIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
 import { Badge } from "@/components/ui/badge"
@@ -59,6 +60,7 @@ export function GeneralSettings({ env }: { env: string }) {
         <AutostartSection />
         <NotificationsSection />
         <PreviewsSection />
+        <TerminalShellSection />
         <SetupSection env={env} />
       </SettingsGroup>
       <SettingsGroup label="This environment">
@@ -317,6 +319,53 @@ function StyleSection() {
           }}
         >
           {styles.map((s) => (
+            <ToggleGroupItem key={s.value} value={s.value}>
+              {s.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      }
+    />
+  )
+}
+
+const shells = [
+  { value: "bash", label: "bash" },
+  { value: "zsh", label: "zsh" },
+] as const
+
+/** The shell sandboxes' new terminals start; agents' sessions run bash either way. */
+function TerminalShellSection() {
+  const queryClient = useQueryClient()
+  const setting = $api.useQuery("get", "/api/system/terminal")
+  const set = $api.useMutation("put", "/api/system/terminal", {
+    onSuccess: (data) =>
+      queryClient.setQueryData(["get", "/api/system/terminal"], data),
+    onError: (err) =>
+      toast.error("Could not change the terminal shell", {
+        description: errorMessage(err),
+      }),
+  })
+  const shell = set.isPending ? set.variables.body.shell : setting.data?.shell
+  return (
+    <SettingRow
+      icon={TerminalWindowIcon}
+      title="Terminal shell"
+      description="The shell a new terminal starts in every sandbox. Terminals that are open keep theirs, agents run bash either way, and a sandbox whose image has no zsh starts bash."
+      control={
+        <ToggleGroup
+          aria-label="Terminal shell"
+          variant="outline"
+          size="sm"
+          value={shell ? [shell] : []}
+          disabled={!setting.data || set.isPending}
+          onValueChange={(v) => {
+            const next = shells.find((s) => s.value === v[0])
+            if (next && next.value !== shell)
+              set.mutate({ body: { shell: next.value } })
+          }}
+        >
+          {shells.map((s) => (
             <ToggleGroupItem key={s.value} value={s.value}>
               {s.label}
             </ToggleGroupItem>

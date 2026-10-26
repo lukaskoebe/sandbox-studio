@@ -26,6 +26,8 @@ Terminals run inside the sandbox at `/workspace`. The chip at the top of the ter
 
 To copy from a terminal, drag across the text: it is copied when you let go. Right-click opens **Copy** and **Paste**. With the keyboard, Ctrl+Shift+C copies a selection made with Shift-drag (⌘C on a Mac, with Option-drag), and Ctrl+V or ⌘V pastes. Programs in the sandbox can put text on your clipboard but can't read it.
 
+Terminals start bash. To use zsh, set **Settings → General → Terminal shell** to zsh: new terminals in every sandbox start it, and the ones that are open keep their shell. zsh gets the same environment as bash, with history and completion set up; put your own settings in `~/.zshrc`. Agents run bash either way. A sandbox created from an older image has no zsh and keeps starting bash until you rebase it onto the current one.
+
 ## Stop, suspend, and resume
 
 The power button stops a running computer and starts one that is off; a computer that is off shows a dark screen with **Start** (or **Resume**) and what it keeps. The **⋯** menu has these actions:

@@ -2796,6 +2796,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getTerminalSetting"];
+        /** Choose the shell sandboxes' new terminals start */
+        put: operations["setTerminalSetting"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/updates": {
         parameters: {
             query?: never;
@@ -5630,6 +5647,13 @@ export interface components {
             title?: string;
             /** Format: int64 */
             windows: number;
+        };
+        TerminalSetting: {
+            /**
+             * @description The shell new terminals start. Agents' sessions run bash either way, and a sandbox whose image lacks zsh starts bash
+             * @enum {string}
+             */
+            shell: "bash" | "zsh";
         };
         TextBody: {
             text: string;
@@ -12899,6 +12923,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getTerminalSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalSetting"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    setTerminalSetting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TerminalSetting"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalSetting"];
                 };
             };
             /** @description Error */

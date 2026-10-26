@@ -74,6 +74,9 @@ type Header struct {
 type Config struct {
 	CA  string            `json:"ca"`  // PEM certificate of the environment's CA, to trust
 	Env map[string]string `json:"env"` // secret names and their placeholders, for new shells
+	// Shell is the shell new terminals start, "bash" or "zsh"; empty means bash. A guest
+	// without zsh starts bash.
+	Shell string `json:"shell,omitempty"`
 }
 
 // Hello is sent by the guest when its session starts.

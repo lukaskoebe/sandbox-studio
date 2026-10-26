@@ -237,3 +237,34 @@ test("Studio is Pixel unless this browser picks Quiet", async ({
     await page.evaluate(() => localStorage.getItem("studio.style"))
   ).toBeNull()
 })
+
+test("the terminal shell is bash until zsh is picked, for every browser", async ({
+  page,
+  env,
+  api,
+}) => {
+  await page.goto(`/e/${env}/settings/general`)
+  const shell = page.getByRole("group", { name: "Terminal shell" })
+  await expect(shell.getByRole("button", { name: "bash" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  await shell.getByRole("button", { name: "zsh" }).click()
+  await expect(shell.getByRole("button", { name: "zsh" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  expect(
+    await api.json<{ shell: string }>("GET", "/api/system/terminal")
+  ).toMatchObject({ shell: "zsh" })
+  await page.reload()
+  await expect(shell.getByRole("button", { name: "zsh" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  await shell.getByRole("button", { name: "bash" }).click()
+  await expect(shell.getByRole("button", { name: "bash" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+})

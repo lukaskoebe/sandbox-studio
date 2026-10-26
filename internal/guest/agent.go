@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -48,6 +49,7 @@ type Agent struct {
 	log      *slog.Logger
 	user     *account
 	configMu sync.Mutex
+	shell    atomic.Pointer[string] // what Config.Shell last asked for
 	// browserTrust serializes and caches Chromium NSS CA preparation per browser agent.
 	browserTrust browserTrustState
 
@@ -244,6 +246,7 @@ func (a *Agent) configure(st net.Conn, br *bufio.Reader) error {
 		a.log.Warn("applying the environment's configuration failed", "err", err)
 		return agentproto.WriteJSONLine(st, agentproto.Error{Error: err.Error()})
 	}
+	a.shell.Store(&cfg.Shell)
 	return agentproto.WriteJSONLine(st, struct{}{})
 }
 
@@ -254,7 +257,9 @@ func (a *Agent) servePTY(st net.Conn, br *bufio.Reader, h agentproto.Header) err
 	if !validSessionName(name) {
 		return agentproto.WriteFrame(st, agentproto.FrameExit, []byte("invalid session name"))
 	}
-	cmd := a.command("tmux", "-f", tmuxConfPath, "new-session", "-A", "-s", name)
+	shell := a.terminalShell()
+	cmd := a.command("tmux", terminalCommand(name, shell)...)
+	cmd.Env = append(cmd.Env, "SHELL="+shell) // the later of two values wins
 	cmd.Dir = Workdir
 	size := &pty.Winsize{Cols: max(h.Cols, 20), Rows: max(h.Rows, 5)}
 	f, err := pty.StartWithSize(cmd, size)

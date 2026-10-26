@@ -8271,6 +8271,23 @@
         ],
         "type": "object"
       },
+      "TerminalSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "shell": {
+            "description": "The shell new terminals start. Agents' sessions run bash either way, and a sandbox whose image lacks zsh starts bash",
+            "enum": [
+              "bash",
+              "zsh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "shell"
+        ],
+        "type": "object"
+      },
       "TextBody": {
         "additionalProperties": false,
         "properties": {
@@ -20164,6 +20181,75 @@
         "summary": "Check the host's SSH agent",
         "tags": [
           "git"
+        ]
+      }
+    },
+    "/api/system/terminal": {
+      "get": {
+        "operationId": "getTerminalSetting",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalSetting"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "system"
+        ]
+      },
+      "put": {
+        "operationId": "setTerminalSetting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminalSetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalSetting"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Choose the shell sandboxes' new terminals start",
+        "tags": [
+          "system"
         ]
       }
     },

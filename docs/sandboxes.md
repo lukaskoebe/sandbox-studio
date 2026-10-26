@@ -409,7 +409,7 @@ Remote-SSH itself was not tried.
 ## Base image
 
 `images/base`: Debian trixie with Docker CE (containerd, buildx, compose), git, tmux, bash
-completion (git's too, in the login shells tmux starts), Node, build tools and Python, plus pinned mise, OpenCode, Claude Code, Codex and their ACP
+completion (git's too, in the login shells tmux starts), zsh, Node, build tools and Python, plus pinned mise, OpenCode, Claude Code, Codex and their ACP
 adapters (versions in the Dockerfile and [harnesses](harnesses.md#versions)). User `agent`
 (uid 1000, sudo, docker). It creates `/opt/mise` for template toolchains and keeps the
 agent's home as the skeleton that home disks are seeded from. No init system. Releases
@@ -425,3 +425,22 @@ says to `docker logout` it. `studio doctor` warns about a saved Docker login for
 registry while the image isn't cached, reading only the hosts of Docker's config, never the
 credentials. Pulling anonymously by default needs an anonymous option in microsandbox's Go
 binding, which it doesn't have yet.
+
+### Terminal shell
+
+Terminals start bash unless **Settings → General → Terminal shell** says zsh. Studio sends
+the choice in the guest's configuration (`agentproto.Config.Shell`) to every connected
+sandbox; the guest sets tmux's `default-shell` each time a terminal attaches
+(`internal/guest/shell.go`), since an agent session may have started the tmux server with
+bash, so the setting also replaces a `default-shell` in `~/.tmux.conf`. Terminals that are
+open keep their shell. Agents' sessions run their command directly, in `bash -lc`, either
+way, and a guest without `/usr/bin/zsh`, such as a sandbox on an image from before v0.9,
+starts bash.
+
+zsh's login shell reads `/etc/profile` through `emulate sh` (a line the image appends to
+`/etc/zsh/zprofile`), so it gets the CA variables, the secrets and mise's shims as bash
+does; `/etc/zsh/studio.zsh`, sourced at the end of `/etc/zsh/zshrc`, sets up history,
+completion, a prompt like bash's and `mise activate zsh`. Before starting zsh the guest
+writes a short `~/.zshrc` into a home without zsh startup files, so zsh's first-run wizard
+doesn't ask.
+

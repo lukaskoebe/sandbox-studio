@@ -11,6 +11,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
 	"github.com/lukaskoebe/sandbox-studio/internal/doctor"
+	"github.com/lukaskoebe/sandbox-studio/internal/sandboxes"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 	"github.com/lukaskoebe/sandbox-studio/internal/updates"
 )
@@ -122,6 +123,20 @@ func (s *Server) registerSystem(api huma.API) {
 		return &struct{ Body UpdateState }{UpdateState(st)}, apiError(err)
 	})
 	s.registerPreviewSetting(api)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "getTerminalSetting", Method: http.MethodGet, Path: "/api/system/terminal", Tags: []string{"system"},
+	}, func(ctx context.Context, _ *struct{}) (*struct{ Body sandboxes.TerminalSetting }, error) {
+		ts, err := s.Sandboxes.TerminalSetting(ctx)
+		return &struct{ Body sandboxes.TerminalSetting }{ts}, apiError(err)
+	})
+	huma.Register(api, huma.Operation{
+		OperationID: "setTerminalSetting", Method: http.MethodPut, Path: "/api/system/terminal", Tags: []string{"system"},
+		Summary: "Choose the shell sandboxes' new terminals start",
+	}, func(ctx context.Context, in *struct{ Body sandboxes.TerminalSetting }) (*struct{ Body sandboxes.TerminalSetting }, error) {
+		err := s.Sandboxes.SetTerminalSetting(ctx, in.Body)
+		return &struct{ Body sandboxes.TerminalSetting }{in.Body}, apiError(err)
+	})
 }
 
 // settingPreviews stores whether the web and the TUI offer previews of sandbox ports. Absent

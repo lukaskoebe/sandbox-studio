@@ -2,6 +2,8 @@ package sandboxes
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"maps"
 	"sync/atomic"
 	"time"
@@ -162,5 +164,52 @@ func (m *Manager) config(ctx context.Context, sb store.Sandbox) (agentproto.Conf
 			maps.Copy(env, henv)
 		}
 	}
-	return agentproto.Config{CA: string(ca), Env: env}, nil
+	ts, err := m.TerminalSetting(ctx)
+	if err != nil {
+		return agentproto.Config{}, err
+	}
+	return agentproto.Config{CA: string(ca), Env: env, Shell: ts.Shell}, nil
+}
+
+// settingTerminal stores the shell sandboxes' terminals start; absent means bash.
+const settingTerminal = "terminal.v1"
+
+// TerminalSetting is how the terminals of every sandbox start (Settings → General).
+type TerminalSetting struct {
+	Shell string `json:"shell" enum:"bash,zsh" doc:"The shell new terminals start. Agents' sessions run bash either way, and a sandbox whose image lacks zsh starts bash"`
+}
+
+// TerminalSetting reads the stored setting.
+func (m *Manager) TerminalSetting(ctx context.Context) (TerminalSetting, error) {
+	raw, err := m.Store.Setting(ctx, settingTerminal)
+	if errors.Is(err, store.ErrNotFound) {
+		return TerminalSetting{Shell: "bash"}, nil
+	}
+	if err != nil {
+		return TerminalSetting{}, err
+	}
+	var ts TerminalSetting
+	if err := json.Unmarshal(raw, &ts); err != nil {
+		return TerminalSetting{}, err
+	}
+	if ts.Shell != "zsh" {
+		ts.Shell = "bash"
+	}
+	return ts, nil
+}
+
+// SetTerminalSetting stores ts and sends it to the connected sandboxes, whose next new
+// terminal starts the shell.
+func (m *Manager) SetTerminalSetting(ctx context.Context, ts TerminalSetting) error {
+	if ts.Shell != "bash" && ts.Shell != "zsh" {
+		return errors.New("the shell is bash or zsh")
+	}
+	raw, err := json.Marshal(ts)
+	if err == nil {
+		err = m.Store.SetSetting(ctx, settingTerminal, raw)
+	}
+	if err == nil {
+		m.configureAll(ctx, events.Event{})
+	}
+	return err
 }

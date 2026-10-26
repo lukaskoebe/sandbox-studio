@@ -46,6 +46,35 @@ func TestConfigureGuestWaitsForACKAndReturnsGuestError(t *testing.T) {
 	}
 }
 
+// The terminal shell setting travels with the configuration; it starts as bash and is
+// pushed to the connected sandboxes when it changes.
+func TestConfigureSendsTheTerminalShell(t *testing.T) {
+	f := newCheckpointFixture(t)
+	guest, ctx := setupConfigTest(t, f, f.sandbox.ID, newConfigTestSecrets(nil, nil))
+
+	result := configureGuestAsync(f, ctx)
+	call := receive(t, ctx, guest.calls, configTestTimeout, "guest configuration")
+	if call.cfg.Shell != "bash" {
+		t.Fatalf("default shell %q", call.cfg.Shell)
+	}
+	call.reply <- configTestReply{}
+	if err := receive(t, ctx, result, configTestTimeout, "ConfigureGuest result"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.manager.SetTerminalSetting(ctx, TerminalSetting{Shell: "fish"}); err == nil {
+		t.Fatal("fish was accepted")
+	}
+	if err := f.manager.SetTerminalSetting(ctx, TerminalSetting{Shell: "zsh"}); err != nil {
+		t.Fatal(err)
+	}
+	call = receive(t, ctx, guest.calls, configTestTimeout, "configuration after the change")
+	if call.cfg.Shell != "zsh" {
+		t.Fatalf("pushed shell %q", call.cfg.Shell)
+	}
+	call.reply <- configTestReply{}
+}
+
 func TestConfigureGuestRejectsInvalidEnvironmentOrSandboxWithoutDelivery(t *testing.T) {
 	for _, name := range []string{"empty environment", "wrong environment", "missing sandbox"} {
 		t.Run(name, func(t *testing.T) {

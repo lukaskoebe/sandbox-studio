@@ -10,11 +10,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # bash-completion gives terminals tab completion, git's included (the git package ships its
 # script): its /etc/profile.d/bash_completion.sh loads it in the login shells tmux starts,
-# and the skeleton's ~/.bashrc in other interactive shells.
+# and the skeleton's ~/.bashrc in other interactive shells. zsh is the other shell a
+# terminal can run (Settings → General → Terminal shell); agents' sessions stay in bash.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
-        curl wget git tmux sudo jq ripgrep fd-find less vim-tiny openssh-client bash-completion \
+        curl wget git tmux sudo jq ripgrep fd-find less vim-tiny openssh-client bash-completion zsh \
         gnupg procps iproute2 iputils-ping dnsutils unzip xz-utils zstd file \
         build-essential pkg-config python3 python3-venv locales \
     && install -m 0755 -d /etc/apt/keyrings \
@@ -93,6 +94,12 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash --groups sudo,docker agen
     && chown agent:agent /workspace /opt/mise
 
 COPY rootfs/ /
+
+# zsh login shells read /etc/profile as bash's do, for the CA, the secrets and mise, then
+# rootfs/etc/zsh/studio.zsh. The guest agent writes a ~/.zshrc into a home without one, so
+# zsh's first-run wizard never asks.
+RUN printf '\n# Sandbox Studio: what bash login shells read.\nemulate sh -c ". /etc/profile"\n' >> /etc/zsh/zprofile \
+    && printf '\n# Sandbox Studio defaults.\nsource /etc/zsh/studio.zsh\n' >> /etc/zsh/zshrc
 
 # The agent's home as the image leaves it. A new sandbox's home disk is seeded from this
 # copy on its first boot, and template builds replace it with their own (docs/template-builds.md).

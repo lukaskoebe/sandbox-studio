@@ -247,6 +247,15 @@ terminals with `SHELL=/bin/bash`. zsh would miss three things:
 - **Today, by hand:** `sudo apt install zsh`, `set -g default-shell /usr/bin/zsh` in
   `~/.tmux.conf`, and the zprofile and zshrc lines above.
 
+**Built** (S and M). The zshrc lines live in `/etc/zsh/studio.zsh`, which `/etc/zsh/zshrc`
+sources, rather than in a `~/.zshrc` skeleton: existing homes were seeded without one. The
+guest writes a short `~/.zshrc` into a home without zsh startup files instead, so the
+first-run wizard never asks, and sets `default-shell` on every attach, since an agent
+session may have started the tmux server with bash. The setting is Studio-wide
+(`GET/PUT /api/system/terminal`). Checked in a trixie container with tmux 3.5a: a login
+zsh after a bash-started server, `/etc/profile` read, the wizard only without `~/.zshrc`.
+See [sandboxes](../sandboxes.md#terminal-shell).
+
 ## A native app with Wails 3
 
 **No mockup.** Studio runs as a local server, and the browser is its window. Wails v3.0.0

@@ -15,6 +15,10 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   directory and when it started. Alt+Shift+T, Alt+Shift+W and Alt+Shift+[ and ] open, close
   and switch sessions from the keyboard, and closing one a program runs in asks first. The
   Terminal tab counts the sessions.
+- **zsh:** the base image has zsh, and **Settings → General → Terminal shell** makes new
+  terminals start it, with the CA, secrets and mise as in bash, history and completion set
+  up, and a `~/.zshrc` of your own that runs after Studio's defaults. Agents run bash either
+  way, and a sandbox on an older image keeps starting bash until it is rebased.
 - **Long chats** open on their last 40 turns, and load the earlier ones from a row above them,
   which also loads when you scroll up to it. They open faster and scroll lighter.
 - **Chats:** sending a message no longer jumps a long chat back to its first message. The
