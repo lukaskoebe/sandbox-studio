@@ -135,7 +135,7 @@ function TreeRow({
     <Link
       to="/e/$env/sandboxes/$id"
       params={{ env: environmentId, id: node.id }}
-      className="flex items-center gap-2 rounded-[4px] px-2 py-1.5 transition-colors hover:bg-muted"
+      className="flex items-center gap-2 rounded-sm px-2 py-1.5 transition-colors hover:bg-muted"
     >
       {content}
     </Link>

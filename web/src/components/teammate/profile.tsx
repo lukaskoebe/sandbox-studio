@@ -127,7 +127,7 @@ export function ProfileCard({
           >
             {open.slice(0, 3).map((t) => (
               <Item key={t.id} onClick={() => onOpen("tasks")}>
-                <span className="size-3 shrink-0 rounded-[3px] border border-foreground/30" />
+                <span className="size-3 shrink-0 rounded-sm border border-foreground/30" />
                 <span className="min-w-0 flex-1 truncate">{t.title}</span>
                 {t.due && (
                   <span className="shrink-0 text-muted-foreground">
@@ -303,14 +303,12 @@ function Section({
           <button
             type="button"
             onClick={onTitle}
-            className="font-mono text-[0.625rem] tracking-[0.12em] text-muted-foreground uppercase hover:text-foreground"
+            className="section-label text-muted-foreground hover:text-foreground"
           >
             {label}
           </button>
         ) : (
-          <span className="font-mono text-[0.625rem] tracking-[0.12em] text-muted-foreground uppercase">
-            {label}
-          </span>
+          <span className="section-label text-muted-foreground">{label}</span>
         )}
         <span className="ml-auto">{action}</span>
       </div>

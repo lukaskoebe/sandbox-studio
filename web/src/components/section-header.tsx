@@ -43,7 +43,7 @@ export function SectionHeader({
       {IconComp && (
         <span
           className={cn(
-            "inline-flex size-5 shrink-0 items-center justify-center rounded-[4px]",
+            "inline-flex size-5 shrink-0 items-center justify-center rounded-sm",
             tileClass(area)
           )}
         >

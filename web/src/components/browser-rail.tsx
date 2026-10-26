@@ -227,7 +227,7 @@ function Activity({
                 <CaretRightIcon className="mt-0.5 size-3 shrink-0" />
               )}
               <span className="grid min-w-0 gap-0.5">
-                <span className="font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase">
+                <span className="section-label text-muted-foreground">
                   {formatAge(first.at)}
                 </span>
                 <span className="flex items-center gap-1 truncate">

@@ -334,7 +334,7 @@ function NoComputer({
       aria-label={`${teammate.name}'s computer`}
       className="flex min-h-0 flex-1 py-2.5 pr-3 pl-0.5"
     >
-      <div className="m-0 grid flex-1 place-content-center justify-items-center gap-2 rounded-[0.875rem] border border-dashed px-6 text-center">
+      <div className="m-0 grid flex-1 place-content-center justify-items-center gap-2 rounded-3xl border border-dashed px-6 text-center">
         <span className="mb-1 grid size-11 place-items-center rounded-xl border bg-card text-muted-foreground shadow-xs">
           <MonitorIcon className="size-5" />
         </span>

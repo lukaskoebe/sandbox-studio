@@ -21,9 +21,7 @@ export function SettingsGroup({
   return (
     <section aria-label={label} className={cn("grid gap-2", className)}>
       <div className="flex h-5 items-center gap-2">
-        <h2 className="font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase">
-          {label}
-        </h2>
+        <h2 className="section-label text-muted-foreground">{label}</h2>
         {aside}
       </div>
       <div className="divide-y overflow-hidden rounded-(--radius) border bg-card">
@@ -63,7 +61,7 @@ export function SettingRow({
         {IconComp && (
           <span
             className={cn(
-              "mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-[4px]",
+              "mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-sm",
               tileClass(area)
             )}
           >

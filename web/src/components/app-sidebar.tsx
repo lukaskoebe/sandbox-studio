@@ -66,8 +66,8 @@ import {
 } from "@/lib/api/client"
 import type { Chat } from "@/lib/chats"
 
-/** The section labels: small, mono and uppercase, as the Workbench's lists title theirs. */
-const groupLabel = "h-6 font-mono text-[0.625rem] tracking-wider uppercase"
+/** The section labels, in the style's label type; the size replaces SidebarGroupLabel's text-xs. */
+const groupLabel = "h-6 section-label text-(length:--label-size)"
 
 /**
  * The environment's places (docs/design/teammate-computer.md): Home, with what waits for you;
@@ -466,7 +466,7 @@ function EnvironmentSwitcher({ env }: { env: string }) {
               />
             }
           >
-            <span className="flex size-5 shrink-0 items-center justify-center rounded-[4px] bg-primary font-mono text-[0.625rem] font-bold text-primary-foreground">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded-sm bg-primary font-mono text-[0.625rem] font-bold text-primary-foreground">
               {initials}
             </span>
             <span className="min-w-0 flex-1 truncate font-medium">

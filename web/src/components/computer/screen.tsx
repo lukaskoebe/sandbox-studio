@@ -186,7 +186,7 @@ export function ComputerScreen({
         solo ? "flex-1 p-3 md:p-4" : "flex-[1.25] py-2.5 pr-3 pl-0.5"
       )}
     >
-      <div className="@container flex min-h-0 flex-1 flex-col rounded-[0.875rem] border bg-sidebar px-1.5 pb-1.5 dark:bg-[#0b0f11]">
+      <div className="@container flex min-h-0 flex-1 flex-col rounded-3xl border bg-sidebar px-1.5 pb-1.5 dark:bg-[#0b0f11]">
         <div className="flex h-11 shrink-0 items-center gap-2 pl-0.5">
           {lead}
           <Switcher
@@ -200,7 +200,7 @@ export function ComputerScreen({
             <div
               role="tablist"
               aria-label={`${sb.name}'s screen`}
-              className="mx-auto flex items-center gap-0.5 rounded-[0.5625rem] bg-foreground/5 p-[3px]"
+              className="mx-auto flex items-center gap-0.5 rounded-xl bg-foreground/5 p-[3px]"
             >
               {shown.map((t) => {
                 const M = tabMeta[t]
@@ -413,7 +413,7 @@ function Display({
   return (
     <div
       className={cn(
-        "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[0.5625rem] border",
+        "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border",
         off
           ? "border-(--glass-edge) bg-(image:--glass)"
           : terminal

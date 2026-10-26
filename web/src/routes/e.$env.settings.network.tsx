@@ -497,7 +497,7 @@ function RuleChip({
   return (
     <span
       title={title}
-      className="inline-flex h-[1.125rem] shrink-0 items-center rounded-[3px] bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset"
+      className="inline-flex h-[1.125rem] shrink-0 items-center rounded-sm bg-muted px-1 font-mono text-[0.6875rem] text-foreground/80 ring-1 ring-border ring-inset"
     >
       {children}
     </span>

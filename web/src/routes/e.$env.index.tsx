@@ -204,13 +204,10 @@ function summary(waiting: number, working: number) {
   return `${needs} ${busy}`
 }
 
-/** A section's label, in the quiet uppercase the page uses for its three parts. */
+/** A section's label for the page's three parts, in the style's label type. */
 function Label({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <h2
-      id={id}
-      className="font-mono text-xs font-medium tracking-wider text-muted-foreground uppercase"
-    >
+    <h2 id={id} className="section-label text-muted-foreground">
       {children}
     </h2>
   )

@@ -77,7 +77,7 @@ function SettingsLayout() {
             (g) =>
               g.sections.length > 0 && (
                 <div key={g.title} className="contents md:block md:pb-3">
-                  <p className="px-2 pt-1 pb-1.5 font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase max-md:hidden">
+                  <p className="px-2 pt-1 pb-1.5 section-label text-muted-foreground max-md:hidden">
                     {g.title}
                   </p>
                   {g.sections.map((s) => {
@@ -92,7 +92,7 @@ function SettingsLayout() {
                         params={{ env }}
                         aria-current={active ? "page" : undefined}
                         className={cn(
-                          "flex h-7 shrink-0 items-center rounded-md px-2 text-[0.8125rem] whitespace-nowrap text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+                          "flex h-7 shrink-0 items-center rounded-md px-2 font-control text-[0.8125rem] whitespace-nowrap text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
                           active &&
                             "bg-foreground/8 font-medium text-foreground"
                         )}

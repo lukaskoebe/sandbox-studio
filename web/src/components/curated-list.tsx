@@ -107,7 +107,7 @@ export function CuratedList({ env }: { env: string }) {
               key={g.group}
               className="grid gap-x-4 gap-y-1 px-3 py-2 @2xl:grid-cols-[9rem_minmax(0,1fr)]"
             >
-              <h3 className="pt-1 font-mono text-[0.625rem] tracking-wider text-muted-foreground uppercase">
+              <h3 className="pt-1 section-label text-muted-foreground">
                 {g.group}
               </h3>
               <ul className="grid gap-x-6 @lg:grid-cols-2 @4xl:grid-cols-3">

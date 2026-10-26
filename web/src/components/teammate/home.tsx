@@ -338,7 +338,7 @@ export function TeammateHome({
 
 function DayDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 pt-3 pb-0.5 font-mono text-[0.625rem] tracking-[0.12em] text-muted-foreground uppercase">
+    <div className="flex items-center gap-3 pt-3 pb-0.5 section-label text-muted-foreground">
       <span className="h-px flex-1 bg-border" />
       {label}
       <span className="h-px flex-1 bg-border" />
@@ -366,7 +366,7 @@ function Preview({ text }: { text: string }) {
         i % 2 === 1 ? (
           <code
             key={i}
-            className="rounded-[4px] border bg-muted px-1 font-mono text-[0.75rem]"
+            className="rounded-sm border bg-muted px-1 font-mono text-[0.75rem]"
           >
             {part}
           </code>
@@ -674,7 +674,7 @@ function Waiting({
     })
   return (
     <section aria-label="Waiting for you" className="grid gap-2 pt-3">
-      <span className="flex items-center gap-2 font-mono text-[0.625rem] tracking-[0.12em] text-(--st-waiting) uppercase">
+      <span className="flex items-center gap-2 section-label text-(--st-waiting)">
         <span className="size-1.5 rounded-full bg-(--st-waiting)" />
         Waiting for you
       </span>
@@ -744,7 +744,7 @@ function WaitingRow({
   return (
     <div
       data-testid="waiting-row"
-      className="flex items-center gap-3 rounded-[0.625rem] border bg-card py-2.5 pr-2.5 pl-3"
+      className="flex items-center gap-3 rounded-2xl border bg-card py-2.5 pr-2.5 pl-3"
     >
       <span
         className={cn(

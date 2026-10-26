@@ -3,7 +3,7 @@
 @import "shadcn/tailwind.css";
 
 /* The fonts of the TUI's look, as on the landing page: Instrument Sans for text, JetBrains
-   Mono for identifiers and terminals, and for headings and labels in the pixel style. Both are
+   Mono for identifiers and terminals, and for headings, controls and labels in the pixel style. Both are
    OFL (fonts/OFL.txt). */
 @font-face {
   font-family: "Instrument Sans";
@@ -22,12 +22,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* The style's tokens (radius, shadows, the heading font) point at variables set per style on
-   <html data-style>, so one class reads right in both. Tailwind would otherwise write the
-   shadows' values into each class. */
+/* The style's tokens (radius, pills, shadows, the heading and control fonts) point at variables
+   set per style on <html data-style>, so one class reads right in both. Tailwind would otherwise
+   write the shadows' values into each class, and rounded-full is a constant. */
 @theme inline {
   --font-heading: var(--heading-font);
+  --font-control: var(--control-font);
   --font-sans: var(--sans);
+  --radius-full: var(--pill-radius);
   --shadow-2xs: var(--raise-2xs);
   --shadow-xs: var(--raise-xs);
   --shadow-sm: var(--raise-sm);
@@ -156,8 +158,16 @@
     "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas,
     "DejaVu Sans Mono", monospace;
   --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  /* The quiet style (the default): headings in sans, Tailwind's soft shadows. */
+  /* The quiet style (the default): headings, controls and labels in sans, round pills,
+     Tailwind's soft shadows. */
   --heading-font: var(--sans);
+  --control-font: var(--sans);
+  --label-font: var(--sans);
+  --label-size: 0.75rem;
+  --label-weight: 500;
+  --label-case: none;
+  --label-tracking: 0;
+  --pill-radius: 9999px;
   --raise-2xs: 0 1px rgb(0 0 0 / 0.05);
   --raise-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --raise-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
@@ -226,12 +236,20 @@
 }
 
 /*
- * The pixel style: the week's vocabulary on every page. Square corners, borders a step darker,
- * mono headings, and a hard offset shadow, without blur, on whatever is raised.
+ * The pixel style: the week's vocabulary on every page. Square corners and pills, borders a step
+ * darker, headings, controls and labels in mono, labels in small capitals, and a hard offset
+ * shadow, without blur, on whatever is raised.
  */
 [data-style="pixel"] {
   --radius: 0;
+  --pill-radius: 0;
   --heading-font: var(--font-mono);
+  --control-font: var(--font-mono);
+  --label-font: var(--font-mono);
+  --label-size: 0.65625rem;
+  --label-weight: 600;
+  --label-case: uppercase;
+  --label-tracking: 0.1em;
   --border: #bfc8cc;
   --input: #aab4b9;
   --sidebar-border: #c8d0d3;
@@ -249,6 +267,16 @@
   --input: #3d4b53;
   --sidebar-border: #2a353b;
   --raise-color: rgb(0 0 0 / 55%);
+}
+
+/* A section's label (Settings groups, the sidebar's lists, Home's parts, day dividers), in the
+   style's label type. The color stays with each label. */
+@utility section-label {
+  font-family: var(--label-font);
+  font-size: var(--label-size);
+  font-weight: var(--label-weight);
+  text-transform: var(--label-case);
+  letter-spacing: var(--label-tracking);
 }
 
 @layer base {
@@ -297,7 +325,7 @@
   }
   ::-webkit-scrollbar-thumb {
     border: 2px solid transparent;
-    border-radius: 9999px;
+    border-radius: var(--pill-radius);
     background: var(--border) padding-box;
   }
 }
