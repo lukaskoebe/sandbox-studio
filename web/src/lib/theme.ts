@@ -44,6 +44,50 @@ export function useThemeMode(): ThemeMode {
   )
 }
 
+/**
+ * How Studio looks, apart from light or dark: "quiet" is soft and rounded, "pixel" is square
+ * with hard edges, like the week on Home. styles.css keys its tokens on `data-style`.
+ */
+export type StyleName = "quiet" | "pixel"
+
+const styleKey = "studio.style"
+
+/** The style picked in this browser; "quiet" unless pixel was picked. */
+export function styleName(): StyleName {
+  try {
+    if (localStorage.getItem(styleKey) === "pixel") return "pixel"
+  } catch {
+    // Without storage the default style applies.
+  }
+  return "quiet"
+}
+
+/** Stores the style in this browser and applies it at once. */
+export function setStyleName(style: StyleName) {
+  try {
+    if (style === "quiet") localStorage.removeItem(styleKey)
+    else localStorage.setItem(styleKey, style)
+  } catch {
+    // Without storage the default style stays.
+  }
+  apply()
+  listeners.forEach((listen) => listen())
+}
+
+/** The style picked in this browser, re-rendering when it changes. */
+export function useStyleName(): StyleName {
+  return useSyncExternalStore(
+    (listen) => {
+      listeners.add(listen)
+      return () => {
+        listeners.delete(listen)
+      }
+    },
+    styleName,
+    () => "quiet"
+  )
+}
+
 /** Applies the stored mode and keeps following the OS preference. Call once at startup. */
 export function initTheme() {
   apply()
@@ -134,4 +178,5 @@ function apply() {
     mode === "dark" ||
     (mode === "system" && window.matchMedia(systemDark).matches)
   document.documentElement.classList.toggle("dark", dark)
+  document.documentElement.dataset.style = styleName()
 }

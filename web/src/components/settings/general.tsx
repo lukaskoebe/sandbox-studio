@@ -8,6 +8,7 @@ import {
   BroadcastIcon,
   DownloadSimpleIcon,
   ListChecksIcon,
+  PaletteIcon,
   PowerIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
@@ -34,9 +35,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useNotificationPermission } from "@/lib/notifications"
 import { usePreviewSetting } from "@/lib/preview-setting"
 import { setupOver, useSetup } from "@/lib/setup"
+import { setStyleName, useStyleName, type StyleName } from "@/lib/theme"
 import {
   $api,
   errorMessage,
@@ -60,6 +63,9 @@ export function GeneralSettings({ env }: { env: string }) {
       </SettingsGroup>
       <SettingsGroup label="This environment">
         <EnvironmentFilesSection env={env} />
+      </SettingsGroup>
+      <SettingsGroup label="This browser">
+        <StyleSection />
       </SettingsGroup>
     </SettingsPage>
   )
@@ -283,6 +289,41 @@ function NotificationsSection() {
         </p>
       )}
     </SettingRow>
+  )
+}
+
+const styles: { value: StyleName; label: string }[] = [
+  { value: "quiet", label: "Quiet" },
+  { value: "pixel", label: "Pixel" },
+]
+
+/** How Studio looks in this browser; lib/theme.ts stores it beside light and dark. */
+function StyleSection() {
+  const style = useStyleName()
+  return (
+    <SettingRow
+      icon={PaletteIcon}
+      title="Style"
+      description="Quiet is soft and rounded. Pixel is square, with hard edges and shadows, like the week on Home. Light and dark are at the bottom of the sidebar."
+      control={
+        <ToggleGroup
+          aria-label="Style"
+          variant="outline"
+          size="sm"
+          value={[style]}
+          onValueChange={(v) => {
+            const next = styles.find((s) => s.value === v[0])
+            if (next) setStyleName(next.value)
+          }}
+        >
+          {styles.map((s) => (
+            <ToggleGroupItem key={s.value} value={s.value}>
+              {s.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      }
+    />
   )
 }
 
