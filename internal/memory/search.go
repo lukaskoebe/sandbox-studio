@@ -67,19 +67,21 @@ type Hit struct {
 	Why          Why     `json:"why"`
 }
 
-// Why explains a hit's score: score = rrf × tierBoost × recencyBoost.
+// Why explains a hit's score: score = rrf × tierBoost × recencyBoost × backlinkBoost.
 type Why struct {
-	BM25Rank     int     `json:"bm25Rank,omitempty" doc:"1-based rank among keyword matches; absent when it did not match"`
-	VectorRank   int     `json:"vectorRank,omitempty" doc:"1-based rank among vector matches; absent when it did not match"`
-	Similarity   float64 `json:"similarity,omitempty"`
-	Vector       string  `json:"vector" enum:"used,not_ready,not_embedded" doc:"not_ready: the embedding model is not loaded yet; not_embedded: this item has no vector yet. Both fall back to BM25 alone."`
-	RRF          float64 `json:"rrf"`
-	Tier         string  `json:"tier"`
-	TierBoost    float64 `json:"tierBoost"`
-	AgeDays      float64 `json:"ageDays"`
-	HalfLifeDays float64 `json:"halfLifeDays"`
-	RecencyBoost float64 `json:"recencyBoost"`
-	Summary      string  `json:"summary"`
+	BM25Rank      int     `json:"bm25Rank,omitempty" doc:"1-based rank among keyword matches; absent when it did not match"`
+	VectorRank    int     `json:"vectorRank,omitempty" doc:"1-based rank among vector matches; absent when it did not match"`
+	Similarity    float64 `json:"similarity,omitempty"`
+	Vector        string  `json:"vector" enum:"used,not_ready,not_embedded" doc:"not_ready: the embedding model is not loaded yet; not_embedded: this item has no vector yet. Both fall back to BM25 alone."`
+	RRF           float64 `json:"rrf"`
+	Tier          string  `json:"tier"`
+	TierBoost     float64 `json:"tierBoost"`
+	AgeDays       float64 `json:"ageDays"`
+	HalfLifeDays  float64 `json:"halfLifeDays"`
+	RecencyBoost  float64 `json:"recencyBoost"`
+	Backlinks     int     `json:"backlinks,omitempty" doc:"Pages only: the pages and facts that link to it"`
+	BacklinkBoost float64 `json:"backlinkBoost,omitempty" doc:"Pages only: 1 + 0.1 × log2(1 + backlinks)"`
+	Summary       string  `json:"summary"`
 }
 
 type candidate struct {
@@ -223,6 +225,18 @@ func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) (
 		}
 	})
 
+	var backlinks map[string]int
+	for _, c := range cands {
+		if c != nil && c.hit.Type == "page" {
+			g, err := s.graph(ctx, envID, graphScopes(scopes[len(scopes)-1]))
+			if err != nil {
+				return nil, err
+			}
+			backlinks = g.backlinkCounts()
+			break
+		}
+	}
+
 	out := make([]Hit, 0, len(cands))
 	for _, key := range order {
 		c := cands[key]
@@ -248,7 +262,13 @@ func (s *Service) Search(ctx context.Context, envID string, req SearchRequest) (
 		w.RecencyBoost = recencyBoost(c.age, c.half)
 		w.AgeDays = round(c.age.Hours()/24, 1)
 		w.HalfLifeDays = c.half.Hours() / 24
-		c.hit.Score = round(w.RRF*w.TierBoost*w.RecencyBoost, 6)
+		boost := 1.0
+		if c.hit.Type == "page" {
+			w.Backlinks = backlinks[c.hit.ID]
+			boost = BacklinkBoost(w.Backlinks)
+			w.BacklinkBoost = round(boost, 4)
+		}
+		c.hit.Score = round(w.RRF*w.TierBoost*w.RecencyBoost*boost, 6)
 		w.RRF = round(w.RRF, 6)
 		w.RecencyBoost = round(w.RecencyBoost, 4)
 		w.Summary = summarize(c.hit)
@@ -445,6 +465,9 @@ func summarize(h Hit) string {
 	}
 	parts = append(parts, fmt.Sprintf("tier %s ×%.2f", h.Why.Tier, h.Why.TierBoost),
 		fmt.Sprintf("%.0f days old ×%.2f", h.Why.AgeDays, h.Why.RecencyBoost))
+	if h.Why.Backlinks > 0 {
+		parts = append(parts, fmt.Sprintf("linked from %d ×%.2f", h.Why.Backlinks, h.Why.BacklinkBoost))
+	}
 	if h.Disputed {
 		parts = append(parts, "disputed: an open conflict involves this fact")
 	}

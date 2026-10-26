@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,17 +15,22 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// The browsable memory (docs/memory.md, Browsable memory): read-only markdown copies of the
-// scopes a teammate reads, in ~/memory of its sandboxes. They are a view, never a source:
-// Studio writes them at session start and again whenever they change, with the same atomic
-// writes as the harness files.
+// The browsable memory (docs/memory.md, Browsable memory): a read-only markdown copy of the
+// scopes a teammate reads, in ~/memory of its sandboxes. It is a view, never a source: Studio
+// writes it when a sandbox connects, at session start and whenever memory changes. The copy
+// is a folder, one file per page with relative links between them, which the guest swaps in
+// whole (agentproto.HomeDir). A guest of another version gets the two files of before,
+// shared.md and yours.md.
 
 // BrowseDir is the directory in the guest home that holds the copies.
 const BrowseDir = "memory"
 
 const (
-	// browseBytes caps one file, under the guest's limit for a home file.
+	// browseBytes caps one file of the two-file copy, under the guest's limit for a home file.
 	browseBytes = 200 << 10
+	// pageBytes caps one page of the folder, and folderBytes all of it.
+	pageBytes   = 64 << 10
+	folderBytes = agentproto.MaxHomeDirBytes - 64<<10
 	browseTick  = 15 * time.Second
 )
 
@@ -33,6 +39,7 @@ const (
 type Guest interface {
 	Connected(id string) (agentproto.Hello, bool)
 	WriteHomeFiles(ctx context.Context, id string, files []agentproto.HomeFile) error
+	WriteHomeDir(ctx context.Context, id string, dir agentproto.HomeDir) error
 }
 
 // browser renders scopes once per environment and sync, however many sandboxes need them.
@@ -40,6 +47,12 @@ type browser struct {
 	s      *Service
 	env    string
 	scopes map[string]string
+	pages  map[string][]memory.Page
+	facts  map[string][]memory.Fact
+}
+
+func newBrowser(s *Service, env string) *browser {
+	return &browser{s: s, env: env, scopes: map[string]string{}, pages: map[string][]memory.Page{}, facts: map[string][]memory.Fact{}}
 }
 
 func (b *browser) scope(ctx context.Context, scope string) (string, error) {
@@ -73,7 +86,7 @@ func (b *browser) files(ctx context.Context, teammate string) ([]agentproto.Home
 
 // BrowseFiles renders the copies of memory for a teammate's sandbox.
 func (s *Service) BrowseFiles(ctx context.Context, env, teammate string) ([]agentproto.HomeFile, error) {
-	return (&browser{s: s, env: env, scopes: map[string]string{}}).files(ctx, teammate)
+	return newBrowser(s, env).files(ctx, teammate)
 }
 
 // renderScope is the markdown of one scope: its pages with their compiled truth (core pages
@@ -165,8 +178,23 @@ func (s *Service) RunBrowse(ctx context.Context, g Guest) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-s.browseNow():
 		}
 	}
+}
+
+// BrowseSoon has RunBrowse bring the copies up to date now rather than at its next tick, as
+// when a session starts.
+func (s *Service) BrowseSoon() {
+	select {
+	case s.browseNow() <- struct{}{}:
+	default:
+	}
+}
+
+func (s *Service) browseNow() chan struct{} {
+	s.browseOnce.Do(func() { s.browseWake = make(chan struct{}, 1) })
+	return s.browseWake
 }
 
 func (s *Service) syncBrowse(ctx context.Context, g Guest, written map[string]string) {
@@ -181,7 +209,7 @@ func (s *Service) syncBrowse(ctx context.Context, g Guest, written map[string]st
 			s.Log.Warn("listing sandboxes for the memory copies failed", "env", e.ID, "err", err)
 			continue
 		}
-		b := &browser{s: s, env: e.ID, scopes: map[string]string{}}
+		b := newBrowser(s, e.ID)
 		for _, sb := range sandboxes {
 			if sb.TeammateID == "" || sb.Kind == store.SandboxKindBrowser {
 				continue
@@ -190,16 +218,23 @@ func (s *Service) syncBrowse(ctx context.Context, g Guest, written map[string]st
 				delete(written, sb.ID)
 				continue
 			}
-			files, err := b.files(ctx, sb.TeammateID)
+			dir, err := b.folder(ctx, sb.TeammateID)
 			if err != nil {
 				s.Log.Warn("rendering the memory copies failed", "env", e.ID, "err", err)
 				continue
 			}
-			sum := digest(files)
+			sum := digest(dir.Files)
 			if written[sb.ID] == sum {
 				continue
 			}
-			if err := g.WriteHomeFiles(ctx, sb.ID, files); err != nil {
+			err = g.WriteHomeDir(ctx, sb.ID, dir)
+			if errors.Is(err, agentproto.ErrGuestOutdated) {
+				var files []agentproto.HomeFile
+				if files, err = b.files(ctx, sb.TeammateID); err == nil {
+					err = g.WriteHomeFiles(ctx, sb.ID, files)
+				}
+			}
+			if err != nil {
 				s.Log.Info("writing the memory copies failed", "sandbox", sb.ID, "err", err)
 				continue
 			}

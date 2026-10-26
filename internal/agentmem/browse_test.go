@@ -14,8 +14,34 @@ import (
 type fakeGuest struct {
 	mu        sync.Mutex
 	connected map[string]bool
+	outdated  bool // a guest of another version, which knows no HomeDir
 	writes    int
 	files     map[string][]agentproto.HomeFile
+}
+
+func (g *fakeGuest) WriteHomeDir(_ context.Context, id string, dir agentproto.HomeDir) error {
+	if g.outdated {
+		return agentproto.ErrGuestOutdated
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.writes++
+	g.files[id] = nil
+	for _, f := range dir.Files {
+		f.Path = dir.Dir + "/" + f.Path
+		g.files[id] = append(g.files[id], f)
+	}
+	return nil
+}
+
+// file is the content of the file at p that sandbox id got, "" if none.
+func (g *fakeGuest) file(id, p string) string {
+	for _, f := range g.files[id] {
+		if f.Path == p {
+			return f.Content
+		}
+	}
+	return ""
 }
 
 func (g *fakeGuest) Connected(id string) (agentproto.Hello, bool) {
@@ -82,7 +108,7 @@ func TestMemoryCopiesAreSyncedToConnectedSandboxes(t *testing.T) {
 	written := map[string]string{}
 
 	f.svc.syncBrowse(f.ctx, g, written)
-	if g.writes != 1 || len(g.files[f.sbAda.ID]) != 2 || g.files[f.sbBob.ID] != nil || g.files[f.sbPlain.ID] != nil {
+	if g.writes != 1 || g.file(f.sbAda.ID, "memory/index.md") == "" || g.files[f.sbBob.ID] != nil || g.files[f.sbPlain.ID] != nil {
 		t.Fatalf("first sync wrote %d, files %v", g.writes, g.files)
 	}
 	f.svc.syncBrowse(f.ctx, g, written)
@@ -92,7 +118,7 @@ func TestMemoryCopiesAreSyncedToConnectedSandboxes(t *testing.T) {
 
 	f.mk(memory.SharedScope, "Lint with make lint", memory.TierUser, "", "", "", day(1))
 	f.svc.syncBrowse(f.ctx, g, written)
-	if g.writes != 2 || !strings.Contains(g.files[f.sbAda.ID][0].Content, "Lint with make lint") {
+	if g.writes != 2 || !strings.Contains(g.file(f.sbAda.ID, "memory/shared/facts.md"), "Lint with make lint") {
 		t.Fatalf("a change was not written: %d writes", g.writes)
 	}
 
@@ -105,8 +131,71 @@ func TestMemoryCopiesAreSyncedToConnectedSandboxes(t *testing.T) {
 	}
 	g.connected[f.sbAda.ID] = true
 	f.svc.syncBrowse(f.ctx, g, written)
-	if g.writes != 3 || !strings.Contains(g.files[f.sbAda.ID][0].Content, "Test with make test") {
+	if g.writes != 3 || !strings.Contains(g.file(f.sbAda.ID, "memory/shared/facts.md"), "Test with make test") {
 		t.Fatalf("reconnected sandbox not brought up to date: %d writes", g.writes)
+	}
+
+	// A guest of another version gets the two files of before.
+	g.outdated = true
+	f.mk(memory.SharedScope, "Format with make fmt", memory.TierUser, "", "", "", day(3))
+	f.svc.syncBrowse(f.ctx, g, written)
+	if g.writes != 4 || !strings.Contains(g.file(f.sbAda.ID, "memory/shared.md"), "Format with make fmt") {
+		t.Fatalf("an outdated guest got %v", g.files[f.sbAda.ID])
+	}
+}
+
+// The folder has a page per file, with [[links]] as relative links, the page's facts, its
+// timeline and what links to it, from this teammate's memory and shared memory only.
+func TestMemoryFolder(t *testing.T) {
+	f := newFixture(t)
+	ctx := f.ctx
+	page := func(scope, slug, compiled string) memory.Page {
+		t.Helper()
+		p, err := f.mem.CreatePage(ctx, f.env, memory.PageInput{Scope: scope, Slug: slug, Title: slug, Kind: "project", Compiled: compiled}, memory.UserOrigin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	ada, bob := memory.TeammateScope(f.ada.ID), memory.TeammateScope(f.bob.ID)
+	shop := page(ada, "project/webshop", "The shop. Deploys follow [[project/ci|the CI page]]; see [[project/missing]].")
+	page(memory.SharedScope, "project/ci", "CI runs on every push.")
+	page(bob, "project/bobs", "Bob's notes on [[project/ci]].")
+	f.mk(ada, "The shop uses Stripe", memory.TierUser, f.ada.ID, "project/webshop", "", day(1))
+	f.mk(ada, "Tabs, not spaces", memory.TierUser, f.ada.ID, "", "", day(2))
+	if _, err := f.mem.AppendTimeline(ctx, f.env, shop.ID, memory.TimelineInput{Text: "Moved checkout to [[project/ci]]"}, memory.UserOrigin); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := newBrowser(f.svc, f.env).folder(ctx, f.ada.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{}
+	for _, file := range dir.Files {
+		files[file.Path] = file.Content
+		if file.Mode != 0o444 {
+			t.Errorf("%s has mode %o", file.Path, file.Mode)
+		}
+	}
+	shopFile := files["pages/project/webshop.md"]
+	for _, want := range []string{"[the CI page](../../shared/pages/project/ci.md)", "project/missing (no page yet)", "## Facts\n\n- The shop uses Stripe",
+		"## Timeline", "Moved checkout to [project/ci](../../shared/pages/project/ci.md)"} {
+		if !strings.Contains(shopFile, want) {
+			t.Errorf("the shop page lacks %q:\n%s", want, shopFile)
+		}
+	}
+	ci := files["shared/pages/project/ci.md"]
+	if !strings.Contains(ci, "## Linked from\n\n- [project/webshop](../../../pages/project/webshop.md)") || strings.Contains(ci, "bobs") {
+		t.Errorf("the CI page's backlinks:\n%s", ci)
+	}
+	if !strings.Contains(files["index.md"], "[project/webshop](pages/project/webshop.md)") || !strings.Contains(files["index.md"], "[project/ci](shared/pages/project/ci.md)") {
+		t.Errorf("index:\n%s", files["index.md"])
+	}
+	if !strings.Contains(files["facts.md"], "Tabs, not spaces") || strings.Contains(files["facts.md"], "Stripe") {
+		t.Errorf("facts:\n%s", files["facts.md"])
+	}
+	if _, ok := files["pages/project/bobs.md"]; ok {
+		t.Error("bob's page is in ada's copy")
 	}
 }
 

@@ -59,6 +59,12 @@ type Service struct {
 	chatTimers map[string]*time.Timer
 	chatsDue   chan chatDue
 
+	browseOnce sync.Once
+	browseWake chan struct{}
+
+	pageMu     sync.Mutex
+	pageWrites map[string]int // memory_page writes per session
+
 	dreamMu  sync.Mutex
 	dreaming map[string]bool // env|scope being consolidated
 	bg       context.Context // lives as long as RunDreams

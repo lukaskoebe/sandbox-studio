@@ -17,6 +17,7 @@ import (
 const (
 	PackBudget      = 12000 // a whole session-start pack
 	projectBudget   = 3000
+	indexBudget     = 1500 // the pages index: titles only, so it stays this size as memory grows
 	maxChanges      = 10
 	maxConflicts    = 5
 	maxPastSessions = 3
@@ -95,15 +96,18 @@ func (s *Service) pack(ctx context.Context, c caller, se session, remote, source
 	b.add(openTag+"\n# Memory from Sandbox Studio\n\n", 200)
 
 	// Core pages: the teammate's first, then shared.
-	var core []memory.Page
+	var core, listed []memory.Page
 	for _, scope := range []string{c.scope, memory.SharedScope} {
 		pages, err := s.Memory.Pages(ctx, c.env, scope)
 		if err != nil {
 			return "", err
 		}
 		for _, p := range pages {
-			if p.AlwaysLoad {
+			switch {
+			case p.AlwaysLoad:
 				core = append(core, p)
+			case p.Kind != "teammate-self":
+				listed = append(listed, p)
 			}
 		}
 	}
@@ -114,6 +118,10 @@ func (s *Service) pack(ctx context.Context, c caller, se session, remote, source
 				logged = append(logged, entry{kind: LogContext, itemType: "page", itemID: p.ID, summary: "core page " + p.Scope + "/" + p.Slug})
 			}
 		}
+	}
+
+	if len(listed) > 0 && b.add(indexSection(listed), indexBudget) {
+		logged = append(logged, entry{kind: LogContext, summary: fmt.Sprintf("pages index: %d pages", len(listed))})
 	}
 
 	if p, ok, err := s.projectPage(ctx, c, remote); err != nil {
@@ -189,6 +197,29 @@ func (s *Service) pack(ctx context.Context, c caller, se session, remote, source
 	}
 	s.log(ctx, c, se.id, logged...)
 	return b.b.String(), nil
+}
+
+// indexSection lists the pages that aren't core by slug and title, so the teammate knows
+// what exists and opens one with memory_get. Pages past the budget are counted.
+func indexSection(pages []memory.Page) string {
+	head := "## Pages in memory\n\nOpen one with memory_get(slug). Pages link each other with [[slug]].\n\n"
+	var b strings.Builder
+	b.WriteString(head)
+	left := indexBudget - len(head) - 40
+	for i, p := range pages {
+		line := fmt.Sprintf("- %s: %s", p.Slug, p.Title)
+		if p.Scope == memory.SharedScope {
+			line += " (shared)"
+		}
+		line += "\n"
+		if len(line) > left {
+			fmt.Fprintf(&b, "- and %d more; memory_search finds them\n", len(pages)-i)
+			break
+		}
+		b.WriteString(line)
+		left -= len(line)
+	}
+	return b.String() + "\n"
 }
 
 // projectPage is the page of the repository at remote: by its full slug

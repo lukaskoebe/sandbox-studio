@@ -20,7 +20,8 @@ test("a memory scope exports to a markdown file, and the file imports into anoth
 
   await page.goto(`/e/${id}/settings/memory`)
   const downloaded = page.waitForEvent("download")
-  await page.getByRole("button", { name: "Export", exact: true }).click()
+  await page.getByRole("button", { name: "More memory actions" }).click()
+  await page.getByRole("menuitem", { name: "Export", exact: true }).click()
   const file = await downloaded
   expect(file.suggestedFilename()).toMatch(
     /^memory-shared-\d{4}-\d{2}-\d{2}\.md$/
@@ -35,7 +36,8 @@ test("a memory scope exports to a markdown file, and the file imports into anoth
   })
   await page.goto(`/e/${copy!.id}/settings/memory`)
   const chooser = page.waitForEvent("filechooser")
-  await page.getByRole("button", { name: "Import", exact: true }).click()
+  await page.getByRole("button", { name: "More memory actions" }).click()
+  await page.getByRole("menuitem", { name: "Import", exact: true }).click()
   await (await chooser).setFiles(path)
   await expect(page.getByText("Memory imported")).toBeVisible()
   const facts = await api.json<{ text: string; tier: string }[]>(

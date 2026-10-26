@@ -202,6 +202,8 @@ func (a *Agent) handle(st net.Conn) {
 		err = a.configure(st, br)
 	case agentproto.KindHomeFiles:
 		err = a.homeFiles(st, br)
+	case agentproto.KindHomeDir:
+		err = a.homeDir(st, br)
 	case agentproto.KindStartSession:
 		err = a.startSession(st, br)
 	case agentproto.KindBrowser:

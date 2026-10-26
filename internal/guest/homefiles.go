@@ -276,3 +276,69 @@ func mergeObject(dst, src map[string]any) {
 		dst[k] = v
 	}
 }
+
+// writeHomeDir replaces the directory dir of home with one holding exactly files: it writes
+// them into a new directory beside it, owned by uid and gid, and swaps the two with
+// RENAME_EXCHANGE, so a reader sees either the old copy or the new one. The old copy is
+// removed afterwards.
+func writeHomeDir(home string, uid, gid int, req agentproto.HomeDir) error {
+	if req.Dir == "" || strings.ContainsAny(req.Dir, "/\x00") || req.Dir == "." || req.Dir == ".." || strings.HasPrefix(req.Dir, ".") {
+		return fmt.Errorf("invalid directory %q", req.Dir)
+	}
+	if len(req.Files) > agentproto.MaxHomeDirFiles {
+		return fmt.Errorf("at most %d files", agentproto.MaxHomeDirFiles)
+	}
+	total := 0
+	for _, f := range req.Files {
+		if _, err := cleanName(f.Path); err != nil || f.Path != strings.TrimSuffix(f.Path, "/") {
+			return fmt.Errorf("invalid path %q", f.Path)
+		}
+		if f.Mode&^0o755 != 0 || f.Block || f.Keys {
+			return fmt.Errorf("%s: only plain files with a mode of at most 0755", f.Path)
+		}
+		total += len(f.Content)
+	}
+	if total > agentproto.MaxHomeDirBytes {
+		return fmt.Errorf("the files are larger than %d MiB together", agentproto.MaxHomeDirBytes>>20)
+	}
+	root, err := unix.Open(home, unix.O_DIRECTORY|unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return fmt.Errorf("open home: %w", err)
+	}
+	defer unix.Close(root)
+	var suffix [6]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return err
+	}
+	tmp := "." + req.Dir + ".studio-" + hex.EncodeToString(suffix[:])
+	if err := unix.Mkdirat(root, tmp, 0o755); err != nil {
+		return err
+	}
+	cleanup := tmp
+	defer func() {
+		if cleanup != "" {
+			os.RemoveAll(home + "/" + cleanup)
+		}
+	}()
+	if err := unix.Fchownat(root, tmp, uid, gid, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return err
+	}
+	dir, err := unix.Openat2(root, tmp, resolveHome)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(dir)
+	for _, f := range req.Files {
+		if err := writeHomeFile(dir, uid, gid, f); err != nil {
+			return fmt.Errorf("%s: %w", f.Path, err)
+		}
+	}
+	err = unix.Renameat2(root, tmp, root, req.Dir, unix.RENAME_EXCHANGE)
+	if errors.Is(err, unix.ENOENT) {
+		// No copy yet: the new one takes its name.
+		if err = unix.Renameat2(root, tmp, root, req.Dir, unix.RENAME_NOREPLACE); err == nil {
+			cleanup = ""
+		}
+	}
+	return err // on an exchange, cleanup removes the old copy, now at tmp
+}

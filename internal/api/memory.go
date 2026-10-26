@@ -129,13 +129,51 @@ func (s *Server) registerMemory(api huma.API) {
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "listMemoryPages", Method: http.MethodGet, Path: base + "/pages", Tags: tags,
-		Description: "Pages without their timelines; core (always-load) pages first.",
+		Description: "Pages without their timelines, with how many facts each records and how many pages and facts link to it; core (always-load) pages first.",
 	}, func(ctx context.Context, in *listPagesIn) (*struct{ Body []memory.Page }, error) {
 		if err := s.checkEnvironment(ctx, in.Env); err != nil {
 			return nil, err
 		}
 		list, err := s.Memory.Pages(ctx, in.Env, in.Scope)
+		if err == nil {
+			err = s.Memory.AddCounts(ctx, in.Env, in.Scope, list)
+		}
 		return &struct{ Body []memory.Page }{list}, memoryError(err)
+	})
+
+	type scopeIn struct {
+		Env   string `path:"env" doc:"Environment ID"`
+		Scope string `query:"scope" required:"true" doc:"shared or teammate:<id>"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "getMemoryIndex", Method: http.MethodGet, Path: base + "/index", Tags: tags,
+		Description: "The catalog of a scope's pages as markdown, grouped by kind: one line per page with its [[slug]], title and first sentence. Generated, never stored.",
+	}, func(ctx context.Context, in *scopeIn) (*struct {
+		Body struct {
+			Markdown string `json:"markdown"`
+		}
+	}, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		out := &struct {
+			Body struct {
+				Markdown string `json:"markdown"`
+			}
+		}{}
+		var err error
+		out.Body.Markdown, err = s.Memory.Index(ctx, in.Env, in.Scope)
+		return out, memoryError(err)
+	})
+	huma.Register(api, huma.Operation{
+		OperationID: "lintMemory", Method: http.MethodGet, Path: base + "/lint", Tags: tags,
+		Description: "What in a scope wants tidying: links to pages that don't exist, pages nothing links to that are untouched for 30 days, and entities with 3 or more active facts and no page. Changes nothing.",
+	}, func(ctx context.Context, in *scopeIn) (*struct{ Body []memory.LintFinding }, error) {
+		if err := s.checkEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		list, err := s.Memory.Lint(ctx, in.Env, in.Scope)
+		return &struct{ Body []memory.LintFinding }{list}, memoryError(err)
 	})
 
 	type pageIn struct {

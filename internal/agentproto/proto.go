@@ -10,8 +10,8 @@
 //   - KindSessions, KindPorts, KindKill (host → guest): one JSON reply line.
 //   - KindConfig (host → guest): the host writes a Config line; the guest applies it and
 //     replies like KindKill: {} or an Error.
-//   - KindHomeFiles, KindStartSession, KindTitle (host → guest): the host writes a HomeFiles,
-//     StartSession or SessionTitle line; the guest replies like KindKill.
+//   - KindHomeFiles, KindHomeDir, KindStartSession, KindTitle (host → guest): the host writes
+//     a HomeFiles, HomeDir, StartSession or SessionTitle line; the guest replies like KindKill.
 //   - KindCall (guest → host): the guest writes a Call line; the host replies with one
 //     CallReply line. Hooks and the MCP tools use it. The host knows the sandbox from the
 //     channel, so a Call never names a sandbox, teammate or environment.
@@ -49,6 +49,9 @@ const (
 	KindConfig   = "config"
 	// KindHomeFiles writes harness config files into the terminal user's home.
 	KindHomeFiles = "home-files"
+	// KindHomeDir replaces a directory in the terminal user's home as a whole (a HomeDir
+	// line): the copy of memory in ~/memory.
+	KindHomeDir = "home-dir"
 	// KindStartSession starts a detached tmux session running an agent harness.
 	KindStartSession = "start-session"
 	// KindCall is a request from the guest to Studio (hooks, memory tools).
@@ -188,6 +191,26 @@ type HomeFile struct {
 	Defaults string `json:"defaults,omitempty"`
 }
 
+// HomeDir is the body of a KindHomeDir stream: Dir, one name in the home, becomes a directory
+// holding exactly Files, whose paths are relative to it. The guest writes them to a new
+// directory beside it and swaps that in, so a reader never sees half of it, and files Files
+// no longer has are gone.
+type HomeDir struct {
+	Dir   string     `json:"dir"`
+	Files []HomeFile `json:"files"`
+}
+
+// ErrGuestOutdated is a request that a guest of another version may not know, such as
+// KindHomeDir; the host falls back to what that guest knows.
+var ErrGuestOutdated = errors.New("the sandbox's agent is from another Studio version")
+
+// Limits of a HomeDir request.
+const (
+	MaxHomeDirFiles = 4000
+	MaxHomeDirBytes = 4 << 20 // all files together
+	MaxHomeDirLine  = 6 << 20 // the JSON line, escapes included
+)
+
 // HomeFiles is the body of a KindHomeFiles stream.
 type HomeFiles struct {
 	Files []HomeFile `json:"files"`
@@ -214,6 +237,7 @@ const (
 	MethodShare        = "share"
 	MethodCorrect      = "correct"
 	MethodForget       = "forget"
+	MethodMemoryPage   = "memory_page"
 	// MethodGitPushStatus and MethodGitPullRequestStatus are the git tools (docs/git-review.md).
 	MethodGitPushStatus        = "git_push_status"
 	MethodGitPullRequestStatus = "git_pull_request_status"

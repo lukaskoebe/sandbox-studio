@@ -137,7 +137,7 @@ var homeSkipped = []string{
 	".claude.json", ".claude/settings.json", ".claude/.credentials.json",
 	".codex/auth.json", ".codex/config.toml", ".codex/hooks.json",
 	".config/opencode/opencode.json", ".config/opencode/plugins/studio-memory.js",
-	".config/git/config", "memory/shared.md", "memory/yours.md",
+	".config/git/config", "memory",
 }
 
 // installRoots hold tool installs, each the directory (or file) depth levels below its root.

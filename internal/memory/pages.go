@@ -25,6 +25,9 @@ type Page struct {
 	CreatedAt      time.Time       `json:"createdAt"`
 	UpdatedAt      time.Time       `json:"updatedAt"`
 	Timeline       []TimelineEntry `json:"timeline,omitempty" doc:"Oldest first; only returned for a single page"`
+	Links          []PageLink      `json:"links,omitempty" doc:"The pages its compiled truth and timeline link to, in order; only returned for a single page"`
+	LinkedFrom     []Backlink      `json:"linkedFrom,omitempty" doc:"The pages and facts that link to it, newest first; only returned for a single page"`
+	Counts         *PageCounts     `json:"counts,omitempty" doc:"Only returned by the pages list"`
 }
 
 // TimelineEntry is one dated line under a page. Entries are never edited.
@@ -123,6 +126,11 @@ func checkCoreBudget(ctx context.Context, tx execer, envID, scope, pageID, compi
 
 // CreatePage writes a page. Core pages are checked against the scope's budget.
 func (s *Service) CreatePage(ctx context.Context, envID string, in PageInput, o Origin) (Page, error) {
+	return s.CreatePageWith(ctx, envID, in, o, nil)
+}
+
+// CreatePageWith is CreatePage that also runs also, when set, in the same transaction.
+func (s *Service) CreatePageWith(ctx context.Context, envID string, in PageInput, o Origin, also func(tx *sql.Tx) error) (Page, error) {
 	if err := ValidateScope(in.Scope); err != nil {
 		return Page{}, err
 	}
@@ -161,6 +169,11 @@ func (s *Service) CreatePage(ctx context.Context, envID string, in PageInput, o 
 	if err != nil {
 		return Page{}, err
 	}
+	if also != nil {
+		if err := also(tx); err != nil {
+			return Page{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return Page{}, err
 	}
@@ -170,6 +183,11 @@ func (s *Service) CreatePage(ctx context.Context, envID string, in PageInput, o 
 
 // UpdatePage replaces a page's title, kind, compiled truth and core flag.
 func (s *Service) UpdatePage(ctx context.Context, envID, id string, in PageInput, o Origin) (Page, error) {
+	return s.UpdatePageWith(ctx, envID, id, in, o, nil)
+}
+
+// UpdatePageWith is UpdatePage that also runs also, when set, in the same transaction.
+func (s *Service) UpdatePageWith(ctx context.Context, envID, id string, in PageInput, o Origin, also func(tx *sql.Tx) error) (Page, error) {
 	if err := in.validate(); err != nil {
 		return Page{}, err
 	}
@@ -203,6 +221,11 @@ func (s *Service) UpdatePage(ctx context.Context, envID, id string, in PageInput
 			return Page{}, err
 		}
 		if chunks, err = s.chunkPage(ctx, tx, envID, id, old.Scope, in.Title, in.Compiled); err != nil {
+			return Page{}, err
+		}
+	}
+	if also != nil {
+		if err := also(tx); err != nil {
 			return Page{}, err
 		}
 	}
@@ -240,7 +263,10 @@ func (s *Service) Page(ctx context.Context, envID, id string) (Page, error) {
 		e.At, e.CreatedAt = time.Unix(at, 0).UTC(), time.Unix(created, 0).UTC()
 		p.Timeline = append(p.Timeline, e)
 	}
-	return p, rows.Err()
+	if err := rows.Err(); err != nil {
+		return p, err
+	}
+	return p, s.addLinks(ctx, envID, &p)
 }
 
 // Pages lists the pages of a scope (all scopes when scope is ""), without timelines. Core

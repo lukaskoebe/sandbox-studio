@@ -120,7 +120,9 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 |---|---|
 | `GET scopes` | shared plus teammate scopes with data, with counts and core usage |
 | `GET/POST facts`, `GET/PUT/DELETE facts/{id}`, `POST facts/{id}/retract` | facts; list filters `scope`, `status` |
-| `GET/POST pages`, `GET/PUT/DELETE pages/{id}`, `POST pages/{id}/timeline` | pages; `GET pages/{id}` includes the timeline |
+| `GET/POST pages`, `GET/PUT/DELETE pages/{id}`, `POST pages/{id}/timeline` | pages, the list with `counts` (facts, linked from); `GET pages/{id}` adds the timeline, `links` and `linkedFrom` ([Links](#links)) |
+| `GET index?scope=` | the scope's pages as one markdown catalog, generated on each call |
+| `GET lint?scope=` | wanted pages, orphans and entities without a page ([Links](#links)) |
 | `GET search` | hybrid search with `why` |
 | `GET conflicts`, `GET conflicts/{id}`, `POST conflicts/{id}/resolve` | conflicts, open first; the detail adds both facts' sources and timeline |
 | `POST dream`, `GET dreams?scope=` | start consolidating a scope (202, 409 while one runs); runs with stats |
@@ -131,31 +133,80 @@ All under `/api/environments/{env}/memory`, behind the usual guard:
 | `GET quality` | the quality numbers of the environment ([Quality](#quality)) |
 | `GET export?scope=`, `POST import` | a scope as one markdown file, and a file read back into a scope ([Export and import](#export-and-import)) |
 
-Settings → Shared memory shows shared memory: the extraction budget line,
-the [quality](#quality) numbers, and tabs for pages, facts, conflicts (with "Dream now", recent
-runs and a sheet that shows both facts side by side with sources, tiers and timeline, and
-resolves; each conflict also has its own page, `/e/$env/memory/conflicts/$id`), search and
-sessions. Above the tabs are the Export and Import buttons
-([Export and import](#export-and-import)) and the open [suggestions](#suggestions), each with
-Promote or Accept, and Dismiss. A facts' context shows as a badge, and the fact form takes one.
-A teammate's private memory has the same tabs on its teammate page, where its facts can be
-proposed for shared memory ("promote to shared"). `memory.conflict` approvals show in the
-approval stack with the same sheet.
+Settings → Shared memory shows the [quality](#quality) numbers and the memory panel
+(`web/src/components/memory-panel.tsx`); a teammate's profile shows the same panel for its own
+scope in its Memory sheet. The panel is one page of rows that all look alike: an icon, the
+text, a meta line and actions.
+
+- The header has the scope's counts and core usage, **Dream now**, and a menu with Export and
+  Import ([Export and import](#export-and-import)), the dream history, the extraction cost and
+  a link to these docs.
+- One search box on top (`/` focuses it) filters the pages and facts as you type; Enter runs
+  the ranked search and shows each hit with its `why`.
+- **Needs you**: open conflicts (Resolve… opens the sheet with both facts side by side,
+  sources, tiers and timeline; each conflict also has its own page,
+  `/e/$env/memory/conflicts/$id`) and open [suggestions](#suggestions), with Promote or Make
+  core, and Dismiss.
+- **Loose ends**: the scope's [lint](#links) findings, three at first; a wanted page or an
+  entity without a page has Create page, with the slug filled in.
+- **Core**, **Pages** (the first sentence of the compiled truth, slug, kind, facts, linked
+  from, author, age) and **Facts** (kind, source, age, the page that records it, a tag when
+  not active; retracted and replaced facts behind a toggle). A row's ⋯ menu edits, promotes
+  a teammate fact to shared, retracts and deletes.
+- **Sessions** opens the sessions and what memory did in each.
+
+A page opens in the panel: its compiled truth as markdown, where `[[slug]]` opens the linked
+page and a wanted page reads "(no page yet)" and creates it; the facts it records; Linked from;
+the timeline with a field to add an entry; and the page's path in the sandboxes' folder.
+`memory.conflict` approvals show in the approval stack with the same sheet.
+
+## Links
+
+Pages, timeline entries and facts link a page with `[[slug]]` or `[[slug|text]]`
+(`internal/memory/links.go`). There is no links table: links are read from the text when a
+page, a list or the lint is asked for, so editing the text is all it takes.
+
+- A link resolves in the linking item's scope first, then in shared; a slug without `/` also
+  tries `topic/<slug>`. A teammate scope's links can reach its own and shared pages, so a
+  shared page is linked from every teammate.
+- A fact whose entity is a page also links it ("its entity is …"). A fact the page records
+  itself (its first entity, else its attribute's first part, names the page) counts among
+  the page's facts, not its backlinks.
+- `GET pages/{id}` returns `links` (in order, each `exists` or wanted, with the target's
+  title and first sentence) and `linkedFrom` (pages and facts, newest first). The pages list
+  returns `counts`.
+- Search multiplies a page hit's score by `1 + 0.1 · log2(1 + backlinks)`; `why` says
+  "linked from N".
+- Lint (`GET lint`): **wanted**, a slug linked but without a page, with up to three of the
+  items that link it; **orphan**, a page that isn't core, has no backlinks and wasn't
+  touched in 30 days; **unpaged**, an entity with at least 3 active facts and no page.
 
 ## Browsable memory
 
-Each sandbox of a teammate has read-only markdown copies of what the teammate can read, in
-`~/memory`: `shared.md` (shared memory) and `yours.md` (the teammate's own). A copy holds the
-pages with their compiled truth, core pages first, then the facts no page holds. It leaves out
-what a query would not surface: superseded and retracted facts, facts that hold in a context
-only, and text that looks like a credential, which is redacted. A copy is capped at 200 KiB.
+Each sandbox of a teammate has a read-only folder of what the teammate can read, in
+`~/memory` (`internal/agentmem/folder.go`):
 
-Studio writes the copies through the guest's home-file path, the one the harness files use
-(mode 0444). It writes them when a session starts, and every 15 seconds it rewrites the copies
-of each connected sandbox whose memory changed. A sandbox that is not connected gets nothing
-until it is. Each scope is one file rather than one file per page, because that path cannot
-delete files: a per-page copy of a deleted page would stay behind. The managed instructions
-tell the agent the copies exist.
+    ~/memory/
+      index.md              the catalog: the teammate's pages by kind, then the shared ones
+      pages/<slug>.md       a page: compiled truth, its facts, timeline, Linked from
+      facts.md              the teammate's facts that no page holds, newest first
+      shared/index.md, shared/pages/<slug>.md, shared/facts.md
+
+`[[slug]]` becomes a relative markdown link, so `grep -r`, `cat` and an editor follow them; a
+wanted page reads "slug (no page yet)". Linked from lists only the teammate's own and shared
+items. The folder leaves out what a query would not surface: superseded and retracted facts,
+facts that hold in a context only, and text that looks like a credential, which is redacted.
+Limits: 64 KiB a page (cut with a note), 4 MiB and 4000 files in all; pages that don't fit are
+counted in `index.md`, and `memory_get` reads them.
+
+Studio sends the folder as one `home-dir` stream (`agentproto.HomeDir`). The guest writes it
+into `~/.memory.studio-<random>` and swaps it in with `renameat2(RENAME_EXCHANGE)`
+(`RENAME_NOREPLACE` the first time), then removes the old copy, so a deleted page disappears
+and a reader never sees half a folder. Studio writes it when a session starts (`BrowseSoon`
+wakes the loop) and every 15 seconds for each connected sandbox whose memory changed. A
+sandbox that is not connected gets nothing until it is. A guest of another version answers
+`ErrGuestOutdated`, and gets the two files of before, `shared.md` and `yours.md`, through the
+home-file path. The managed instructions describe the folder.
 
 ## Suggestions
 
@@ -251,7 +302,8 @@ stdin, answers within 5 s (2.5 s at session end) and on any failure prints the n
 answer (`{}`) and exits 0.
 
 - *Session start* (also resume and compact) injects a context pack of at most 12 000
-  characters inside `<studio-memory>` tags: core pages (teammate, then shared), the project
+  characters inside `<studio-memory>` tags: core pages (teammate, then shared), "Pages in
+  memory" (the other pages' slugs and titles, at most 1500 characters, then "and N more"), the project
   page for the repository's normalized git remote (`project/<host/owner/repo>`, then
   `project/<repo>`, teammate scope first), the summaries of the teammate's 3 latest other
   sessions with their date and sandbox, shared facts
@@ -312,8 +364,17 @@ where.
 
 **Tools** (`studio-agent mcp`, a stdio MCP server): `memory_search`, `memory_get` (id or
 slug), `remember(text, kind, entity?, scope, source?)`, `share(fact_id | text)`,
-`correct(fact_id, text)` (a new fact supersedes the old) and `forget(fact_id)` (retracts).
-The last two take only the teammate's own facts. `share`, and `remember` with scope
+`correct(fact_id, text)` (a new fact supersedes the old), `forget(fact_id)` (retracts) and
+`memory_page(slug, title?, kind?, compiled?, timeline?, scope?)`. The `correct` and `forget`
+take only the teammate's own facts. `memory_get` adds a page's links and up to 20 backlinks
+the teammate can read; a search hit names its entity's page when there is one.
+
+`memory_page` writes a page of the teammate's own scope directly, as tier `inferred` with the
+teammate as author, and appends `timeline` as an entry. A shared page, or new compiled truth
+for a page the user wrote, becomes a `memory.share` approval with the proposal (`page`: the
+new and the previous compiled truth, and the entry), written when approved. Limits: 20
+writes per session, compiled truth 8000 characters, an entry 2000; anything like a credential
+is refused. `share`, and `remember` with scope
 `shared`, create a pending `memory.share` approval with the author; approving it in the
 inbox writes the fact to shared memory with that teammate as author, or reinforces a
 duplicate. The approval is marked approved in the same transaction as the write: if the

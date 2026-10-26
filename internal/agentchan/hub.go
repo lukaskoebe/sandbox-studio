@@ -585,6 +585,17 @@ func (h *Hub) WriteHomeFiles(ctx context.Context, id string, files []agentproto.
 	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeFiles}, agentproto.HomeFiles{Files: files}, &ok)
 }
 
+// WriteHomeDir replaces a directory in the terminal user's home as a whole; see
+// agentproto.HomeDir. A guest of another version may not know the request, so it gets
+// agentproto.ErrGuestOutdated and the caller writes files instead.
+func (h *Hub) WriteHomeDir(ctx context.Context, id string, dir agentproto.HomeDir) error {
+	if hello, _ := h.Connected(id); hello.Version != version.Version {
+		return agentproto.ErrGuestOutdated
+	}
+	var ok struct{}
+	return h.request(ctx, id, agentproto.Header{Kind: agentproto.KindHomeDir}, dir, &ok)
+}
+
 // HarnessError is a session start the guest refused because of the harness itself: it is
 // not installed or exits right away. The message is meant for the user.
 type HarnessError string

@@ -154,3 +154,23 @@ Mockups H and I in the "Studio feedback mockups" artifact show both.
 Each phase adds cases to the retrieval eval ([memory](../memory.md#retrieval-eval)). Phase 1
 adds cases where the answer is on a page linked from the hit. Phase 3 adds a scripted session
 that should update two pages and link them.
+
+**Built** on `feedback-v0.8`, all five phases ([memory](../memory.md#links)), with these
+changes from the plan:
+
+- **No links table.** Links are read from the text whenever a page, a list, the lint or a
+  search with page hits needs them (`internal/memory/links.go`). Pages, timeline rows with
+  `[[` and facts with entities or `[[` are loaded once per call; at the sizes memory has
+  (hundreds of pages) that is cheaper than keeping a table in step with every edit, and an
+  import, a dream or a hand edit can't leave it stale.
+- **The index is generated, not stored.** `GET index` and the folder's `index.md` build it on
+  each call, and the session pack gets a 1500-character "Pages in memory" list instead of a
+  core index page, so it takes nothing from the core budget.
+- **Page proposals are approvals, not suggestions.** A shared page, or new compiled truth for
+  a page the user wrote, becomes a `memory.share` approval with the proposal, like a shared
+  fact: it shows in the inbox, and approving it writes the page in the same transaction.
+- **No lint for events that should be on a page.** It needs a model call per scope; the
+  dream already files facts with entities onto their pages.
+- **Eval cases** for linked pages and a scripted page-writing session are still to be added.
+  The keyword side still scores 0.909: the corpus has no links, so the backlink boost
+  changes nothing in it.

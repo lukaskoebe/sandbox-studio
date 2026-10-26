@@ -1,23 +1,17 @@
 import { useRef, type ChangeEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { DownloadSimpleIcon, UploadSimpleIcon } from "@phosphor-icons/react"
-import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
 import { invalidateMemory } from "@/components/memory-dialogs"
 import { $api, errorMessage, fetchClient } from "@/lib/api/client"
 
 /** The largest memory file an import takes; the server checks it again. */
 const maxImportBytes = 2 << 20
 
-/** Exports a scope's memory as one markdown file, and imports such a file back into the scope. */
-export function MemoryFileActions({
-  env,
-  scope,
-}: {
-  env: string
-  scope: string
-}) {
+/**
+ * Exports a scope's memory as one markdown file, and imports such a file back into the scope.
+ * input is the hidden file picker that pickImport opens; render it once.
+ */
+export function useMemoryFile(env: string, scope: string) {
   const queryClient = useQueryClient()
   const picker = useRef<HTMLInputElement>(null)
   const importMemory = $api.useMutation(
@@ -71,21 +65,11 @@ export function MemoryFileActions({
     })
   }
 
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" onClick={() => void exportMemory()}>
-        <DownloadSimpleIcon />
-        Export
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={importMemory.isPending}
-        onClick={() => picker.current?.click()}
-      >
-        {importMemory.isPending ? <Spinner /> : <UploadSimpleIcon />}
-        Import
-      </Button>
+  return {
+    exportMemory: () => void exportMemory(),
+    pickImport: () => picker.current?.click(),
+    importing: importMemory.isPending,
+    input: (
       <input
         ref={picker}
         type="file"
@@ -94,8 +78,8 @@ export function MemoryFileActions({
         aria-label="Memory file"
         onChange={(e) => void onFile(e)}
       />
-    </div>
-  )
+    ),
+  }
 }
 
 function downloadMarkdown(filename: string, markdown: string) {

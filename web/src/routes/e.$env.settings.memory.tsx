@@ -1,9 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { SettingsPage } from "@/components/settings/page"
-import { MemoryTabs, sharedScope } from "@/components/memory-tabs"
-import { MemoryUsage } from "@/components/memory-sessions"
+import { MemoryPanel, sharedScope } from "@/components/memory-panel"
 import { MemoryQuality } from "@/components/memory-quality"
-import { $api } from "@/lib/api/client"
 
 export const Route = createFileRoute("/e/$env/settings/memory")({
   component: MemoryPage,
@@ -15,10 +13,6 @@ const explanation =
 /** Shared memory of the environment; each teammate's private memory is on its own page. */
 function MemoryPage() {
   const { env } = Route.useParams()
-  const scopes = $api.useQuery("get", "/api/environments/{env}/memory/scopes", {
-    params: { path: { env } },
-  })
-  const current = scopes.data?.find((s) => s.scope === sharedScope)
 
   return (
     <SettingsPage
@@ -37,17 +31,8 @@ function MemoryPage() {
         </>
       }
     >
-      <div className="grid gap-1">
-        {current && (
-          <p className="text-xs text-muted-foreground">
-            {current.facts} facts, {current.pages} pages; core pages use{" "}
-            {current.coreChars} of {current.coreBudget} characters.
-          </p>
-        )}
-        <MemoryUsage env={env} shared />
-      </div>
       <MemoryQuality env={env} />
-      <MemoryTabs env={env} scope={sharedScope} />
+      <MemoryPanel env={env} scope={sharedScope} />
     </SettingsPage>
   )
 }

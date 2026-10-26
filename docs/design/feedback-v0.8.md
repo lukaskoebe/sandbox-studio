@@ -112,6 +112,14 @@ The proposal is one layout and one row:
 
 M. It reuses the queries the panel has; it is mostly layout.
 
+**Built** on `feedback-v0.8` (`web/src/components/memory-panel.tsx`, replacing
+`memory-tabs.tsx` and `memory-suggestions.tsx`), with mockup I for a page. Changes from the
+mockup: the search box filters as you type and runs the ranked search on Enter, with the
+`why` as the hit's meta line rather than a hover card; lint findings have a section of their
+own, **Loose ends**, under Needs you, three at first, since an older memory can have many;
+retracted and replaced facts hide behind a toggle; a page also lists the facts it records.
+The ⋯ menus are always visible, since a hover-only menu can't be reached on a phone.
+
 ## Long chats load in pages
 
 **Mockup B.** A chat loads its whole log (`getChat`), and the thread renders every item.

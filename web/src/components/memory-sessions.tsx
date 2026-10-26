@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { ChatCircleDotsIcon } from "@phosphor-icons/react"
 import { Ident } from "@/components/ident"
+import { Markdown } from "@/components/chat/markdown"
+import { invalidateMemory } from "@/components/memory-dialogs"
 import { SectionHeader } from "@/components/section-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -230,9 +232,7 @@ export function MemoryShareDecision({ approval }: { approval: Approval }) {
     {
       onSettled: () => {
         queryClient.invalidateQueries({ queryKey: ["get", "/api/approvals"] })
-        queryClient.invalidateQueries({
-          queryKey: ["get", "/api/environments/{env}/memory/facts"],
-        })
+        invalidateMemory(queryClient)
       },
       onError: (err) => {
         if (errorStatus(err) === 409) return
@@ -250,12 +250,21 @@ export function MemoryShareDecision({ approval }: { approval: Approval }) {
   const busy = (action: "allow" | "deny" | "dismiss") =>
     decide.isPending && decide.variables.body.action === action
   const share = approval.memoryShare
+  const page = share?.page
   return (
     <div className="grid gap-2">
-      <p className="whitespace-pre-wrap">{share?.text ?? approval.subject}</p>
+      {page ? (
+        <PageProposal page={page} />
+      ) : (
+        <p className="whitespace-pre-wrap">{share?.text ?? approval.subject}</p>
+      )}
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-muted-foreground">
-          {share ? `${share.kind} · ${share.tier}` : ""}
+          {page
+            ? `${page.kind} page · ${page.scope === "shared" ? "shared" : "yours"}`
+            : share
+              ? `${share.kind} · ${share.tier}`
+              : ""}
         </span>
         <Button
           variant="ghost"
@@ -282,9 +291,46 @@ export function MemoryShareDecision({ approval }: { approval: Approval }) {
           onClick={() => act("allow")}
         >
           {busy("allow") && <Spinner />}
-          Share
+          {page ? "Write page" : "Share"}
         </Button>
       </div>
+    </div>
+  )
+}
+
+/** A page a teammate proposes: the new compiled truth, what it replaces, and its entry. */
+function PageProposal({
+  page,
+}: {
+  page: components["schemas"]["PageProposal"]
+}) {
+  const changed = page.previous !== undefined && page.previous !== page.compiled
+  return (
+    <div className="grid gap-1.5">
+      <p>
+        {page.pageId ? (changed ? "Rewrite" : "Add to") : "New page"}{" "}
+        <span className="font-medium">{page.title}</span>{" "}
+        <Ident>{page.slug}</Ident>
+      </p>
+      {(!page.pageId || changed) && page.compiled && (
+        <div className="max-h-48 overflow-y-auto rounded-md bg-muted/50 p-2">
+          <Markdown text={page.compiled} />
+        </div>
+      )}
+      {changed && page.previous && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">What it replaces</summary>
+          <div className="mt-1 max-h-48 overflow-y-auto rounded-md bg-muted/30 p-2">
+            <Markdown text={page.previous} />
+          </div>
+        </details>
+      )}
+      {page.timeline && (
+        <p className="text-xs">
+          <span className="text-muted-foreground">Timeline entry: </span>
+          {page.timeline}
+        </p>
+      )}
     </div>
   )
 }

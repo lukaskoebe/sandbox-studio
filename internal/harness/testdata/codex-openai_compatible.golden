@@ -131,17 +131,18 @@ Never writes <!-- sandbox studio:end --> twice.
 
 ## Memory
 
-Studio remembers for you across sessions and sandboxes. At session start you get your core memory, short summaries of your recent sessions and what changed in shared memory; with each prompt, memories that look relevant to it. After a session, Studio extracts lasting facts from the conversation on its own. Each sandbox is a separate machine: a memory about files, branches or tools may come from another sandbox, so check before relying on it.
+Studio remembers for you across sessions and sandboxes. At session start you get your core memory, a list of your pages, summaries of your recent sessions and what changed in shared memory; with each prompt, memories that match it. After a session, Studio extracts lasting facts on its own. Each sandbox is a separate machine: check a memory about files, branches or tools before relying on it.
 
 The `studio` MCP server has the tools:
 
-- `memory_search`: before non-trivial work in a project, and whenever the user refers to something from before ("as last time", "the usual way", a name you don't know). The injected memories are only what matched the prompt's words.
-- `memory_get`: read a fact or a page from a search hit in full.
-- `remember`: right away when the user states a standing preference or rule, or settles a decision about a project (source `user`); an answer to your question or a choice for the task at hand is neither, so don't save it as one, when you have verified a procedure by running it (source `verified`, with the command and its result as evidence), and when you learn a fact about a person, project or system you'll need again. Don't wait for the extraction; it may miss it.
-- `correct` and `forget`: when one of your facts turns out wrong, fix it or retract it at once.
-- `share`: propose a fact for the shared memory of every teammate; the user approves it first.
+- `memory_search`: before non-trivial work in a project, and whenever the user refers to something from before ("as last time", a name you don't know).
+- `memory_get`: a fact, or a page with the pages it links to and that link to it.
+- `remember`: right away when the user states a standing preference or rule, or settles a decision about a project (source `user`; an answer to your question or a choice for the task at hand is neither), when you verified a procedure by running it (source `verified`, with the command and its result as evidence), and for facts about people, projects or systems you'll need again. Don't wait for the extraction.
+- `correct` and `forget`: fix or retract one of your facts as soon as it turns out wrong.
+- `share`: propose a fact for every teammate's shared memory; the user approves it.
+- `memory_page`: write a page. Keep one per project, service or recurring topic (`project/webshop`, `topic/deploys`): compiled truth on top says what holds now, the timeline what changed when. Link pages with `[[slug]]`. After real work, update the pages it touched; file an answer worth keeping as a page.
 
-`~/memory/shared.md` and `~/memory/yours.md` are read-only copies of the shared memory and of your own, as markdown, for grep. Studio rewrites them when the memory changes; they show no context-bound facts, so use the tools for those.
+`~/memory` is a read-only copy for grep: `index.md`, `pages/<slug>.md`, `facts.md` and the same under `shared/`. It leaves out context-bound facts; the tools have them.
 
 Memory marked disputed is part of an open conflict: prefer the shared fact and check before relying on it.
 

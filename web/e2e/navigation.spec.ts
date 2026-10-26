@@ -31,7 +31,7 @@ test("the sidebar opens a teammate, whose profile opens its tasks, memory and se
   await card.getByRole("button", { name: /^Memory/ }).click()
   await expect(page).toHaveURL(/[?&]profile=memory/)
   const memory = page.getByRole("dialog", { name: `What ${name} remembers` })
-  await expect(memory.getByRole("tab", { name: "Facts" })).toBeVisible()
+  await expect(memory.getByRole("heading", { name: "Facts" })).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(memory).toBeHidden()
 

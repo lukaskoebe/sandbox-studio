@@ -58,6 +58,20 @@ export function invalidateMemory(queryClient: QueryClient) {
   })
 }
 
+/** The page kind a slug's first part names, topic otherwise, as memory infers it. */
+export function kindOfSlug(slug: string): MemoryPage["kind"] {
+  const head = slug.split("/")[0]
+  return head === "project" || head === "person" || head === "procedure"
+    ? head
+    : "topic"
+}
+
+/** A title for a new page from its slug's last part: project/coupon-codes is Coupon codes. */
+function titleOfSlug(slug: string) {
+  const last = (slug.split("/").at(-1) ?? "").replaceAll("-", " ")
+  return last.charAt(0).toUpperCase() + last.slice(1)
+}
+
 export const textareaClass =
   "w-full min-w-0 resize-y rounded-md border border-input bg-input/20 px-2 py-1 font-mono text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 md:text-xs/relaxed dark:bg-input/30"
 
@@ -250,6 +264,7 @@ export function PageDialog({
   env,
   scope,
   page,
+  slug,
   open,
   onOpenChange,
   onSaved,
@@ -257,6 +272,8 @@ export function PageDialog({
   env: string
   scope: string
   page?: MemoryPage
+  /** The slug a new page starts with, such as a wanted page's */
+  slug?: string
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved?: (page: MemoryPage) => void
@@ -265,10 +282,11 @@ export function PageDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <PageForm
-          key={page?.id ?? "new"}
+          key={page?.id ?? `new ${slug ?? ""}`}
           env={env}
           scope={scope}
           page={page}
+          slug={slug}
           onDone={(saved) => {
             if (saved) onSaved?.(saved)
             onOpenChange(false)
@@ -283,17 +301,21 @@ function PageForm({
   env,
   scope,
   page,
+  slug: initialSlug = "",
   onDone,
 }: {
   env: string
   scope: string
   page?: MemoryPage
+  slug?: string
   onDone: (saved?: MemoryPage) => void
 }) {
   const queryClient = useQueryClient()
-  const [slug, setSlug] = useState(page?.slug ?? "")
-  const [title, setTitle] = useState(page?.title ?? "")
-  const [kind, setKind] = useState<MemoryPage["kind"]>(page?.kind ?? "topic")
+  const [slug, setSlug] = useState(page?.slug ?? initialSlug)
+  const [title, setTitle] = useState(page?.title ?? titleOfSlug(initialSlug))
+  const [kind, setKind] = useState<MemoryPage["kind"]>(
+    page?.kind ?? kindOfSlug(initialSlug)
+  )
   const [compiled, setCompiled] = useState(page?.compiled ?? "")
   const [alwaysLoad, setAlwaysLoad] = useState(page?.alwaysLoad ?? false)
   const [error, setError] = useState<string>()

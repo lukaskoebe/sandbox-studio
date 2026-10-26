@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/agentproto"
@@ -24,6 +25,7 @@ var tools = map[string]tool{
 	agentproto.MethodShare:        (*Service).toolShare,
 	agentproto.MethodCorrect:      (*Service).toolCorrect,
 	agentproto.MethodForget:       (*Service).toolForget,
+	agentproto.MethodMemoryPage:   (*Service).toolPage,
 }
 
 // decode reads tool arguments strictly: unknown fields, such as a teammate or scope the
@@ -52,6 +54,7 @@ type hitView struct {
 	Disputed bool    `json:"disputed,omitempty"`
 	Score    float64 `json:"score"`
 	Why      string  `json:"why"`
+	Page     string  `json:"page,omitempty"` // a fact's: the page of its entity, when there is one
 }
 
 func (s *Service) toolSearch(ctx context.Context, c caller, params json.RawMessage) (any, error) {
@@ -80,6 +83,14 @@ func (s *Service) toolSearch(ctx context.Context, c caller, params json.RawMessa
 		v := hitView{Type: h.Type, ID: h.ID, Scope: scopeLabel(h.Scope), Text: h.Snippet, Tier: h.Why.Tier, Disputed: h.Disputed, Score: h.Score, Why: h.Why.Summary}
 		if h.Fact != nil {
 			v.Text, v.Kind = h.Fact.Text, h.Fact.Kind
+			if slug := memory.FactPageSlug(*h.Fact); slug != "" {
+				for _, scope := range []string{h.Fact.Scope, memory.SharedScope} {
+					if _, err := s.Memory.PageBySlug(ctx, c.env, scope, slug); err == nil {
+						v.Page = slug
+						break
+					}
+				}
+			}
 		}
 		if h.Page != nil {
 			v.Slug = h.Page.Slug
@@ -120,7 +131,7 @@ func (s *Service) toolGet(ctx context.Context, c caller, params json.RawMessage)
 			return nil, err
 		}
 		s.log(ctx, c, se.id, entry{kind: LogTool, itemType: "page", itemID: p.ID, summary: "memory_get page " + p.Slug})
-		return p, nil
+		return c.pageView(p), nil
 	case in.Slug != "":
 		for _, scope := range []string{c.scope, memory.SharedScope} {
 			p, err := s.Memory.PageBySlug(ctx, c.env, scope, in.Slug)
@@ -135,11 +146,24 @@ func (s *Service) toolGet(ctx context.Context, c caller, params json.RawMessage)
 				return nil, err
 			}
 			s.log(ctx, c, se.id, entry{kind: LogTool, itemType: "page", itemID: p.ID, summary: "memory_get page " + p.Slug})
-			return full, nil
+			return c.pageView(full), nil
 		}
 		return nil, notFound
 	}
 	return nil, userErrorf("give id or slug")
+}
+
+// pageView is a page as memory_get returns it: one hop out, the pages it links to and the
+// pages and facts that link to it, each with a line of its text, so the teammate can follow a
+// link with one more memory_get. A shared page's links from another teammate's memory are
+// left out.
+func (c caller) pageView(p memory.Page) memory.Page {
+	p.LinkedFrom = slices.DeleteFunc(p.LinkedFrom, func(b memory.Backlink) bool { return !c.readable(b.Scope) })
+	p.Links = slices.DeleteFunc(p.Links, func(l memory.PageLink) bool { return l.Exists && !c.readable(l.Scope) })
+	if len(p.LinkedFrom) > 20 {
+		p.LinkedFrom = p.LinkedFrom[:20]
+	}
+	return p
 }
 
 // candidate is a fact to write, from a tool or from extraction.
@@ -332,6 +356,8 @@ type SharePayload struct {
 	Tier         string   `json:"tier"`
 	Evidence     string   `json:"evidence,omitempty"`
 	SessionRef   string   `json:"sessionRef,omitempty"`
+	// Page is set for a page instead of a fact; Text then summarizes it and Kind is "page".
+	Page *PageProposal `json:"page,omitempty"`
 }
 
 type shareRequest struct {
@@ -456,6 +482,9 @@ func (s *Service) DecideShare(ctx context.Context, a store.Approval, status stri
 		}
 		s.log(ctx, c, "", entry{kind: LogWrite, itemType: "approval", itemID: a.ID, summary: "share declined: " + p.Text})
 		return nil, nil
+	}
+	if p.Page != nil {
+		return nil, s.decidePage(ctx, a, p, c)
 	}
 	author := p.TeammateID
 	if _, err := s.Store.Teammate(ctx, a.EnvironmentID, author); err != nil {

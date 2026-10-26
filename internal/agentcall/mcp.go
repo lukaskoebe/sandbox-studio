@@ -110,6 +110,15 @@ var Tools = []Tool{
 		obj([]string{"fact_id"}, map[string]any{
 			"fact_id": str("The fact to retract"),
 		})},
+	{agentproto.MethodMemoryPage, "Write a page in your memory: one page per project, service or recurring topic, its compiled truth on top (what holds now, as markdown) and a dated timeline below. Link other pages with [[slug]]. After real work, update the pages it touched; file a worked-out answer as a page. Your own pages are written at once; a shared page, or new compiled truth for a page the user wrote, waits for the user's approval.",
+		obj([]string{"slug"}, map[string]any{
+			"slug":     str("Lowercase words joined by - and /, e.g. project/webshop, topic/deploys, procedure/release", "maxLength", 128),
+			"title":    str("Default: the slug's last part; kept on an existing page", "maxLength", 200),
+			"kind":     str("Default: the slug's first part, else topic", "enum", []string{"project", "topic", "person", "procedure"}),
+			"compiled": str("The whole new compiled truth; it replaces the old one, so carry over what still holds", "maxLength", 8000),
+			"timeline": str("A dated entry to append, e.g. what changed today", "maxLength", 2000),
+			"scope":    str("teammate (default) for your own memory; shared proposes the page for everyone and needs the user's approval", "enum", []string{"teammate", "shared"}),
+		})},
 	{agentproto.MethodTasksList, "List your tasks: the ones not done, or all of them with include_done. A task the user scheduled shows its schedule and its next run.",
 		obj(nil, map[string]any{
 			"include_done": map[string]any{"type": "boolean", "description": "Include the done tasks too; default false"},

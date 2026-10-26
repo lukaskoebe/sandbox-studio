@@ -24,6 +24,23 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   screen does.
 - **Sidebar:** collapsed, it opens every teammate and Home again. The hidden section labels
   sat over the rows next to them and took their clicks.
+- **Memory is one panel** instead of five tabs that each looked different. One search box on
+  top filters as you type and searches on Enter; under it come what needs you (conflicts,
+  suggestions), loose ends, core pages, pages, facts and sessions, every row alike. Dream now
+  sits in the header, and Export, Import, the dream history and the extraction cost in its ⋯
+  menu. A page opens in the panel as formatted text.
+- **Memory pages link each other** with `[[slug]]`. An open page shows the pages and facts
+  that link to it, and a link to a page that doesn't exist yet creates it. Loose ends lists
+  such wanted pages, pages nothing links to, and topics with several facts but no page.
+  Search ranks a page that much is linked from a little higher.
+- **Teammates write memory pages** with a new `memory_page` tool: their own directly, and a
+  shared page, or a change to one you wrote, after you approve it in the inbox. A session
+  starts with a list of the pages in memory, and `memory_get` shows a page's links and what
+  links to it.
+- **`~/memory` is a folder** in each sandbox: `index.md`, a file per page with its facts,
+  timeline and backlinks, and the facts no page holds, for the teammate and for shared memory.
+  Links between pages are relative, so `grep -r` and an editor follow them. A deleted page
+  disappears from it. Sandboxes on an older guest keep the two files of before.
 - **Memory:** long facts, such as a path, wrap instead of running past the edge, in the
   profile card, the memory table and the teammate's home. The memory sheet says who sees the
   memory once instead of twice.

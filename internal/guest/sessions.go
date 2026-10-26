@@ -50,6 +50,14 @@ func (a *Agent) homeFiles(st net.Conn, br *bufio.Reader) error {
 	return replyError(st, writeHomeFiles(a.user.home, int(a.user.uid), int(a.user.gid), req.Files))
 }
 
+func (a *Agent) homeDir(st net.Conn, br *bufio.Reader) error {
+	var req agentproto.HomeDir
+	if err := readBody(br, agentproto.MaxHomeDirLine, &req); err != nil {
+		return replyError(st, err)
+	}
+	return replyError(st, writeHomeDir(a.user.home, int(a.user.uid), int(a.user.gid), req))
+}
+
 var harnessName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // checkStartSession validates a session request. The host is trusted, but the request

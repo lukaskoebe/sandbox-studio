@@ -14,6 +14,14 @@ export const PreviewSandbox = createContext<{
 } | null>(null)
 
 /**
+ * Renders [[slug]] and [[slug|text]] links, as memory pages write them. Without it they stay
+ * as written.
+ */
+export const WikiLinks = createContext<
+  ((target: string, label: string) => ReactNode) | null
+>(null)
+
+/**
  * A small markdown renderer for agent messages: headings, paragraphs, lists, quotes, code
  * blocks, tables, rules, and inline code, bold, italics and links. It builds React elements and
  * never HTML, so agent text can't inject markup. Anything it doesn't know stays plain text.
@@ -308,7 +316,7 @@ export function CodeBlock({
 // Inline code first, so markup inside backticks stays literal. A link to localhost comes before
 // other URLs, so http://localhost:5173 is one.
 const inlinePattern =
-  /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|(?<![\w*])\*(?!\s)([\s\S]+?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]+?)(?<!\s)_(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w./@:-])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/(?:[^\s<>()]*[^\s<>().,;:!?'"])?)?)(?![\w:])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])/
+  /(`+)([\s\S]*?[^`])\1(?!`)|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|(?<![\w*])\*(?!\s)([\s\S]+?)(?<!\s)\*(?!\w)|(?<!\w)_(?!\s)([\s\S]+?)(?<!\s)_(?!\w)|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w./@:-])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{1,5}(?:\/(?:[^\s<>()]*[^\s<>().,;:!?'"])?)?)(?![\w:])|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|\[\[([^[\]|\n]{1,128})(?:\|([^[\]\n]{1,200}))?\]\]/
 
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = []
@@ -369,16 +377,38 @@ function inline(text: string): ReactNode[] {
           m[9]
         )
       )
-    } else {
+    } else if (m[10] !== undefined) {
       out.push(
-        <SafeLink key={k} href={m[10] ?? ""}>
+        <SafeLink key={k} href={m[10]}>
           {m[10]}
         </SafeLink>
+      )
+    } else {
+      out.push(
+        <WikiLink
+          key={k}
+          target={(m[11] ?? "").trim()}
+          label={(m[12] ?? m[11] ?? "").trim()}
+          raw={m[0] ?? ""}
+        />
       )
     }
     rest = rest.slice(m.index + (m[0] ?? "").length)
   }
   return out
+}
+
+function WikiLink({
+  target,
+  label,
+  raw,
+}: {
+  target: string
+  label: string
+  raw: string
+}) {
+  const render = useContext(WikiLinks)
+  return <>{render ? render(target.toLowerCase(), label) : raw}</>
 }
 
 /** Links open in a new tab; anything but http(s) and mailto stays text. */

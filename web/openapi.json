@@ -314,6 +314,58 @@
         ],
         "type": "object"
       },
+      "Backlink": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "description": "The page or fact",
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "slug": {
+            "description": "Pages only",
+            "type": "string"
+          },
+          "text": {
+            "description": "The line with the link, or the fact",
+            "type": "string"
+          },
+          "title": {
+            "description": "Pages only",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "page",
+              "fact"
+            ],
+            "type": "string"
+          },
+          "via": {
+            "description": "A [[link]] in the text, or the fact's entity",
+            "enum": [
+              "link",
+              "entity"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "scope",
+          "text",
+          "via",
+          "at"
+        ],
+        "type": "object"
+      },
       "Beat": {
         "additionalProperties": false,
         "properties": {
@@ -3394,6 +3446,18 @@
         ],
         "type": "object"
       },
+      "GetMemoryIndexResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "markdown": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "markdown"
+        ],
+        "type": "object"
+      },
       "GitCredentialPayload": {
         "additionalProperties": false,
         "properties": {
@@ -4407,6 +4471,52 @@
         ],
         "type": "object"
       },
+      "LintFinding": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "description": "Wanted: the pages and facts that link to it; unpaged: its active facts",
+            "format": "int64",
+            "type": "integer"
+          },
+          "from": {
+            "description": "Wanted: up to three of the pages and facts that link to it",
+            "items": {
+              "$ref": "#/components/schemas/Backlink"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "wanted",
+              "orphan",
+              "unpaged"
+            ],
+            "type": "string"
+          },
+          "pageId": {
+            "description": "The orphan",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The wanted page, the orphan or the entity's page",
+            "type": "string"
+          },
+          "title": {
+            "description": "The orphan's title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "slug",
+          "count"
+        ],
+        "type": "object"
+      },
       "ListModelsInBody": {
         "additionalProperties": false,
         "properties": {
@@ -4806,6 +4916,10 @@
             "description": "The compiled truth: a regenerated synthesis, as markdown",
             "type": "string"
           },
+          "counts": {
+            "$ref": "#/components/schemas/PageCounts",
+            "description": "Only returned by the pages list"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -4822,6 +4936,26 @@
               "teammate-self"
             ],
             "type": "string"
+          },
+          "linkedFrom": {
+            "description": "The pages and facts that link to it, newest first; only returned for a single page",
+            "items": {
+              "$ref": "#/components/schemas/Backlink"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "links": {
+            "description": "The pages its compiled truth and timeline link to, in order; only returned for a single page",
+            "items": {
+              "$ref": "#/components/schemas/PageLink"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "scope": {
             "type": "string"
@@ -4870,6 +5004,26 @@
         ],
         "type": "object"
       },
+      "PageCounts": {
+        "additionalProperties": false,
+        "properties": {
+          "facts": {
+            "description": "Active facts the page records: those whose entity is the page",
+            "format": "int64",
+            "type": "integer"
+          },
+          "linkedFrom": {
+            "description": "Pages and facts that link to the page",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "facts",
+          "linkedFrom"
+        ],
+        "type": "object"
+      },
       "PageInput": {
         "additionalProperties": false,
         "properties": {
@@ -4907,6 +5061,82 @@
         "required": [
           "title",
           "kind"
+        ],
+        "type": "object"
+      },
+      "PageLink": {
+        "additionalProperties": false,
+        "properties": {
+          "exists": {
+            "description": "False for a wanted page: a link to a page that doesn't exist",
+            "type": "boolean"
+          },
+          "pageId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "summary": {
+            "description": "The first sentence of the page's compiled truth",
+            "type": "string"
+          },
+          "target": {
+            "description": "The slug as the link names it",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "exists"
+        ],
+        "type": "object"
+      },
+      "PageProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "compiled": {
+            "description": "The proposed compiled truth",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "pageId": {
+            "description": "The page it changes; empty for a new page",
+            "type": "string"
+          },
+          "previous": {
+            "description": "The compiled truth it replaces",
+            "type": "string"
+          },
+          "scope": {
+            "description": "shared, or the teammate's own scope for a page the user wrote",
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "timeline": {
+            "description": "An entry to append to the page's timeline",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "slug",
+          "title",
+          "kind",
+          "compiled"
         ],
         "type": "object"
       },
@@ -7095,6 +7325,9 @@
           "kind": {
             "type": "string"
           },
+          "page": {
+            "$ref": "#/components/schemas/PageProposal"
+          },
           "sessionRef": {
             "type": "string"
           },
@@ -8893,6 +9126,16 @@
           "ageDays": {
             "format": "double",
             "type": "number"
+          },
+          "backlinkBoost": {
+            "description": "Pages only: 1 + 0.1 × log2(1 + backlinks)",
+            "format": "double",
+            "type": "number"
+          },
+          "backlinks": {
+            "description": "Pages only: the pages and facts that link to it",
+            "format": "int64",
+            "type": "integer"
           },
           "bm25Rank": {
             "description": "1-based rank among keyword matches; absent when it did not match",
@@ -12166,9 +12409,123 @@
         ]
       }
     },
+    "/api/environments/{env}/memory/index": {
+      "get": {
+        "description": "The catalog of a scope's pages as markdown, grouped by kind: one line per page with its [[slug]], title and first sentence. Generated, never stored.",
+        "operationId": "getMemoryIndex",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "shared or teammate:\u003cid\u003e",
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "required": true,
+            "schema": {
+              "description": "shared or teammate:\u003cid\u003e",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMemoryIndexResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/environments/{env}/memory/lint": {
+      "get": {
+        "description": "What in a scope wants tidying: links to pages that don't exist, pages nothing links to that are untouched for 30 days, and entities with 3 or more active facts and no page. Changes nothing.",
+        "operationId": "lintMemory",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "shared or teammate:\u003cid\u003e",
+            "explode": false,
+            "in": "query",
+            "name": "scope",
+            "required": true,
+            "schema": {
+              "description": "shared or teammate:\u003cid\u003e",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LintFinding"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "memory"
+        ]
+      }
+    },
     "/api/environments/{env}/memory/pages": {
       "get": {
-        "description": "Pages without their timelines; core (always-load) pages first.",
+        "description": "Pages without their timelines, with how many facts each records and how many pages and facts link to it; core (always-load) pages first.",
         "operationId": "listMemoryPages",
         "parameters": [
           {

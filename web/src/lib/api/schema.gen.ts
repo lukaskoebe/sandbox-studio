@@ -862,6 +862,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/memory/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The catalog of a scope's pages as markdown, grouped by kind: one line per page with its [[slug]], title and first sentence. Generated, never stored. */
+        get: operations["getMemoryIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/memory/lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description What in a scope wants tidying: links to pages that don't exist, pages nothing links to that are untouched for 30 days, and entities with 3 or more active facts and no page. Changes nothing. */
+        get: operations["lintMemory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/memory/pages": {
         parameters: {
             query?: never;
@@ -869,7 +903,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Pages without their timelines; core (always-load) pages first. */
+        /** @description Pages without their timelines, with how many facts each records and how many pages and facts link to it; core (always-load) pages first. */
         get: operations["listMemoryPages"];
         put?: never;
         /** @description Always-load pages of one scope share a budget of 4000 characters; exceeding it is a 422. */
@@ -2909,6 +2943,26 @@ export interface components {
             stale: boolean;
             supported: boolean;
         };
+        Backlink: {
+            /** Format: date-time */
+            at: string;
+            /** @description The page or fact */
+            id: string;
+            scope: string;
+            /** @description Pages only */
+            slug?: string;
+            /** @description The line with the link, or the fact */
+            text: string;
+            /** @description Pages only */
+            title?: string;
+            /** @enum {string} */
+            type: "page" | "fact";
+            /**
+             * @description A [[link]] in the text, or the fact's entity
+             * @enum {string}
+             */
+            via: "link" | "entity";
+        };
         Beat: {
             /** Format: date-time */
             at: string;
@@ -3959,6 +4013,9 @@ export interface components {
             /** @description Name of the new sandbox */
             name: string;
         };
+        GetMemoryIndexResponse: {
+            markdown: string;
+        };
         GitCredentialPayload: {
             /** @description The host git asked credentials for, with its port when git named one */
             host: string;
@@ -4292,6 +4349,23 @@ export interface components {
             /** @description The display name of that template; empty for none, or once the template is gone */
             templateName?: string;
         };
+        LintFinding: {
+            /**
+             * Format: int64
+             * @description Wanted: the pages and facts that link to it; unpaged: its active facts
+             */
+            count: number;
+            /** @description Wanted: up to three of the pages and facts that link to it */
+            from?: components["schemas"]["Backlink"][] | null;
+            /** @enum {string} */
+            kind: "wanted" | "orphan" | "unpaged";
+            /** @description The orphan */
+            pageId?: string;
+            /** @description The wanted page, the orphan or the entity's page */
+            slug: string;
+            /** @description The orphan's title */
+            title?: string;
+        };
         ListModelsInBody: {
             /** @description The key to list with. It is only sent to the base URL and never stored or returned. */
             apiKey?: string;
@@ -4416,11 +4490,17 @@ export interface components {
             authorTeammate?: string;
             /** @description The compiled truth: a regenerated synthesis, as markdown */
             compiled: string;
+            /** @description Only returned by the pages list */
+            counts?: components["schemas"]["PageCounts"];
             /** Format: date-time */
             createdAt: string;
             id: string;
             /** @enum {string} */
             kind: "person" | "project" | "topic" | "procedure" | "teammate-self";
+            /** @description The pages and facts that link to it, newest first; only returned for a single page */
+            linkedFrom?: components["schemas"]["Backlink"][] | null;
+            /** @description The pages its compiled truth and timeline link to, in order; only returned for a single page */
+            links?: components["schemas"]["PageLink"][] | null;
             scope: string;
             slug: string;
             /** @enum {string} */
@@ -4431,6 +4511,18 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        PageCounts: {
+            /**
+             * Format: int64
+             * @description Active facts the page records: those whose entity is the page
+             */
+            facts: number;
+            /**
+             * Format: int64
+             * @description Pages and facts that link to the page
+             */
+            linkedFrom: number;
+        };
         PageInput: {
             alwaysLoad?: boolean;
             compiled?: string;
@@ -4440,6 +4532,33 @@ export interface components {
             scope?: string;
             /** @description Required on create; lowercase words joined by - or /, e.g. project/sandbox-studio */
             slug?: string;
+            title: string;
+        };
+        PageLink: {
+            /** @description False for a wanted page: a link to a page that doesn't exist */
+            exists: boolean;
+            pageId?: string;
+            scope?: string;
+            slug?: string;
+            /** @description The first sentence of the page's compiled truth */
+            summary?: string;
+            /** @description The slug as the link names it */
+            target: string;
+            title?: string;
+        };
+        PageProposal: {
+            /** @description The proposed compiled truth */
+            compiled: string;
+            kind: string;
+            /** @description The page it changes; empty for a new page */
+            pageId?: string;
+            /** @description The compiled truth it replaces */
+            previous?: string;
+            /** @description shared, or the teammate's own scope for a page the user wrote */
+            scope: string;
+            slug: string;
+            /** @description An entry to append to the page's timeline */
+            timeline?: string;
             title: string;
         };
         ParseForgeURLRequest: {
@@ -5188,6 +5307,7 @@ export interface components {
             /** @description The teammate's own fact, when it shared one */
             factId?: string;
             kind: string;
+            page?: components["schemas"]["PageProposal"];
             sessionRef?: string;
             teammateId: string;
             teammateName: string;
@@ -5790,6 +5910,16 @@ export interface components {
         Why: {
             /** Format: double */
             ageDays: number;
+            /**
+             * Format: double
+             * @description Pages only: 1 + 0.1 × log2(1 + backlinks)
+             */
+            backlinkBoost?: number;
+            /**
+             * Format: int64
+             * @description Pages only: the pages and facts that link to it
+             */
+            backlinks?: number;
             /**
              * Format: int64
              * @description 1-based rank among keyword matches; absent when it did not match
@@ -7866,6 +7996,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getMemoryIndex: {
+        parameters: {
+            query: {
+                /** @description shared or teammate:<id> */
+                scope: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GetMemoryIndexResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    lintMemory: {
+        parameters: {
+            query: {
+                /** @description shared or teammate:<id> */
+                scope: string;
+            };
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LintFinding"][] | null;
                 };
             };
             /** @description Error */

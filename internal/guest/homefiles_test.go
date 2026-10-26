@@ -245,3 +245,42 @@ func TestStartSessionCommand(t *testing.T) {
 		}
 	}
 }
+
+// A home directory is replaced whole: files the new copy lacks are gone, and nothing is left
+// beside it.
+func TestHomeDirReplaced(t *testing.T) {
+	home := t.TempDir()
+	write := func(files ...agentproto.HomeFile) error {
+		return writeHomeDir(home, os.Getuid(), os.Getgid(), agentproto.HomeDir{Dir: "memory", Files: files})
+	}
+	must(t, os.MkdirAll(filepath.Join(home, "memory"), 0o755))
+	must(t, os.WriteFile(filepath.Join(home, "memory/yours.md"), []byte("old"), 0o444))
+	must(t, write(agentproto.HomeFile{Path: "index.md", Content: "# Index\n", Mode: 0o444},
+		agentproto.HomeFile{Path: "pages/project/webshop.md", Content: "# Webshop\n", Mode: 0o444}))
+	if _, err := os.Stat(filepath.Join(home, "memory/yours.md")); !os.IsNotExist(err) {
+		t.Fatalf("the old file is still there: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(home, "memory/pages/project/webshop.md"))
+	if err != nil || string(b) != "# Webshop\n" {
+		t.Fatalf("page: %q %v", b, err)
+	}
+	must(t, write(agentproto.HomeFile{Path: "index.md", Content: "# Index 2\n", Mode: 0o444}))
+	if _, err := os.Stat(filepath.Join(home, "memory/pages")); !os.IsNotExist(err) {
+		t.Fatalf("the old pages are still there: %v", err)
+	}
+	entries, _ := os.ReadDir(home)
+	if len(entries) != 1 || entries[0].Name() != "memory" {
+		t.Fatalf("home has %v", entries)
+	}
+	// A first copy, where there was none.
+	must(t, os.RemoveAll(filepath.Join(home, "memory")))
+	must(t, write(agentproto.HomeFile{Path: "index.md", Content: "x", Mode: 0o444}))
+	if b, err := os.ReadFile(filepath.Join(home, "memory/index.md")); err != nil || string(b) != "x" {
+		t.Fatalf("first copy: %q %v", b, err)
+	}
+	for _, bad := range []agentproto.HomeDir{{Dir: "../x"}, {Dir: ".memory"}, {Dir: "a/b"}, {Dir: "memory", Files: []agentproto.HomeFile{{Path: "../x"}}}} {
+		if err := writeHomeDir(home, os.Getuid(), os.Getgid(), bad); err == nil {
+			t.Errorf("%+v was written", bad)
+		}
+	}
+}
