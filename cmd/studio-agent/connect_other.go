@@ -38,7 +38,7 @@ func captureWatchdog(string) error {
 	return errors.New("studio-agent capture watchdog only runs inside Linux sandboxes")
 }
 
-func workspaceExport(io.Writer, io.Writer) error {
+func workspaceExport(io.Writer, io.Writer, bool) error {
 	return errors.New("studio-agent workspace-export only runs inside Linux sandboxes")
 }
 
@@ -46,7 +46,7 @@ func workspaceImport(io.Reader) error {
 	return errors.New("studio-agent workspace-import only runs inside Linux sandboxes")
 }
 
-func homeExport(io.Writer, io.Writer) error {
+func homeExport(io.Writer, io.Writer, bool) error {
 	return errors.New("studio-agent home-export only runs inside Linux sandboxes")
 }
 

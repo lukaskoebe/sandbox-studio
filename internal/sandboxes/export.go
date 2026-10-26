@@ -275,14 +275,14 @@ func (m *Manager) Export(ctx context.Context, envID, id string, open func(Export
 	}
 	home := chunkWriter{w: w}
 	if homeMiB > 0 {
-		if err := rt.ExportTree(ctx, ownedVM(sb), runtime.TreeHome, &limitWriter{w: home, left: manifest.HomeLimit(), err: ErrHomeTooLarge}); err != nil {
+		if err := rt.ExportTree(ctx, ownedVM(sb), runtime.TreeHome, false, &limitWriter{w: home, left: manifest.HomeLimit(), err: ErrHomeTooLarge}); err != nil {
 			return err
 		}
 	}
 	if err := home.end(); err != nil {
 		return err
 	}
-	return rt.ExportTree(ctx, ownedVM(sb), runtime.TreeWorkspace, &limitWriter{w: w, left: manifest.WorkspaceLimit(), err: ErrWorkspaceTooLarge})
+	return rt.ExportTree(ctx, ownedVM(sb), runtime.TreeWorkspace, false, &limitWriter{w: w, left: manifest.WorkspaceLimit(), err: ErrWorkspaceTooLarge})
 }
 
 // templateSourceYAML returns YAML for a template's spec. Templates keep only the

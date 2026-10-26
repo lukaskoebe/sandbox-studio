@@ -19,13 +19,19 @@ const (
 	TreeHome      Tree = "home"
 )
 
-// ExportTree streams the archive of a tree of a running VM to w. It runs
-// `studio-agent <tree>-export` as root.
-func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, w io.Writer) error {
+// ExportTree streams the archive of a tree of a running VM to w, compressed with zstd when
+// fast is set and with gzip otherwise. It runs `studio-agent <tree>-export` as root. The
+// guest agent comes from the host, so both sides of a fork read zstd; an export file stays
+// gzip, which older Studios import.
+func (r *Runtime) ExportTree(ctx context.Context, owned OwnedVM, tree Tree, fast bool, w io.Writer) error {
 	if tree != TreeWorkspace && tree != TreeHome {
 		return fmt.Errorf("unknown tree %q", tree)
 	}
-	return r.runAgent(ctx, owned, string(tree)+"-export", RunCommand{Stdout: w})
+	args := []string{string(tree) + "-export"}
+	if fast {
+		args = append(args, "--zstd")
+	}
+	return r.runAgentAs(ctx, owned, args, RunCommand{User: "root", Cwd: "/", Stdout: w})
 }
 
 // ImportTree extracts an archive from rd into the empty tree of a running VM. It runs

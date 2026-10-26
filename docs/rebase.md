@@ -8,10 +8,15 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
 
 ## Workspace and home copy
 
-- `studio-agent workspace-export` writes `/workspace` as a gzip PAX tar to stdout, and
+- `studio-agent workspace-export` writes `/workspace` as a PAX tar to stdout, and
   `home-export` does the same for `/home/agent`. They keep modes, owners, mtimes, symlinks
-  and hardlinks. They skip `lost+found` and special files, with a warning on stderr.
-- `studio-agent workspace-import` and `home-import` read that tar from stdin. Each refuses a
+  and hardlinks. They skip `lost+found` and special files, with a warning on stderr. Fork
+  and rebase pass `--zstd`: the guest agent comes from the host, so both VMs read it, and it
+  compresses on every CPU. On a 24 MB `node_modules` package it exported in 0.18 s instead
+  of gzip's 0.31 s, unpacked in 0.06 s instead of 0.15 s, and came out smaller. An export file
+  stays gzip, which older Studios import.
+- `studio-agent workspace-import` and `home-import` read either from stdin, as the first
+  bytes say. Each refuses a
   non-empty target. They reject absolute paths, `..`, duplicates, entries whose parent is
   not a directory from the archive, and hardlinks to anything but an earlier regular file.
   Symlinks are created but never followed. Parents are opened with `openat2` and
@@ -28,7 +33,8 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
   home disk can't move to a legacy template: rebase is refused with a conflict, before
   anything changes, since its home would have nowhere to go.
 - All run as root through msb exec. The host joins them with an `io.Pipe`. Nothing is
-  staged on the host.
+  staged on the host. The workspace and the home are copied at the same time, since they
+  are separate disks; the first to fail stops the other, and its error is the one reported.
 - The workspace stream is limited to the target's workspace size, and the home stream to
   the 4 GiB home disk. A home that doesn't fit fails with a message that says to delete
   caches and try again. If either side fails, the copy fails.

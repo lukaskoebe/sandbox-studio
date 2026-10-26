@@ -85,7 +85,7 @@ func (f *transferFake) trees(tree runtime.Tree) (map[string][]byte, string) {
 	return f.workspaces, ""
 }
 
-func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, w io.Writer) error {
+func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, _ bool, w io.Writer) error {
 	trees, suffix := f.trees(tree)
 	f.record("export" + suffix + ":" + owned.Name)
 	if err := f.running(ctx, owned.Name); err != nil {

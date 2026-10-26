@@ -49,9 +49,17 @@ func exportLayer(ctx context.Context, dst io.Writer, maxFreeze time.Duration) er
 
 func captureWatchdog(maxFreeze string) error { return guestcapture.RunWatchdog(maxFreeze) }
 
-func workspaceExport(dst, warn io.Writer) error {
+// compression is zstd for a fork or a rebase (--zstd), gzip for an export file.
+func compression(zstd bool) guest.Compression {
+	if zstd {
+		return guest.Zstd
+	}
+	return guest.Gzip
+}
+
+func workspaceExport(dst, warn io.Writer, zstd bool) error {
 	w := bufio.NewWriterSize(dst, 1<<20)
-	if err := guest.ExportWorkspace(guest.Workdir, w, warn); err != nil {
+	if err := guest.ExportWorkspaceAs(guest.Workdir, w, warn, compression(zstd)); err != nil {
 		return err
 	}
 	return w.Flush()
@@ -61,9 +69,9 @@ func workspaceImport(src io.Reader) error {
 	return guest.ImportWorkspace(guest.Workdir, bufio.NewReaderSize(src, 1<<20))
 }
 
-func homeExport(dst, warn io.Writer) error {
+func homeExport(dst, warn io.Writer, zstd bool) error {
 	w := bufio.NewWriterSize(dst, 1<<20)
-	if err := guest.ExportHome(guest.Home, w, warn); err != nil {
+	if err := guest.ExportHomeAs(guest.Home, w, warn, compression(zstd)); err != nil {
 		return err
 	}
 	return w.Flush()

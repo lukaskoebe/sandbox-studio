@@ -24,6 +24,9 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   screen does.
 - **Sidebar:** collapsed, it opens every teammate and Home again. The hidden section labels
   sat over the rows next to them and took their clicks.
+- **Forks and rebases** copy faster: the workspace and the home are compressed with zstd
+  instead of gzip, which packs about 1.7 times and unpacks about 2.5 times as fast, and are
+  copied at the same time instead of one after the other. Export files stay as they were.
 - **Memory is one panel** instead of five tabs that each looked different. One search box on
   top filters as you type and searches on Enter; under it come what needs you (conflicts,
   suggestions), loose ends, core pages, pages, facts and sessions, every row alike. Dream now

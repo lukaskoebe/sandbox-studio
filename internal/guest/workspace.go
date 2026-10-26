@@ -4,6 +4,8 @@ package guest
 
 import (
 	"archive/tar"
+	"bufio"
+	"bytes"
 	"compress/gzip"
 	"errors"
 	"fmt"
@@ -17,11 +19,25 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sys/unix"
 )
 
-// Workspace archives are a gzip PAX tar of the workspace with relative names. The first
-// entry, "./", carries the metadata of the workspace root itself.
+// Workspace archives are a PAX tar of the workspace with relative names, compressed with
+// gzip or zstd. The first entry, "./", carries the metadata of the workspace root itself.
+
+// Compression is how an export compresses its archive. An import reads either.
+type Compression int
+
+const (
+	// Gzip is for export files, which a Studio from before zstd reads too.
+	Gzip Compression = iota
+	// Zstd is for forks and rebases, where this guest agent runs on both sides. It compresses
+	// on every CPU and decompresses several times faster than gzip.
+	Zstd
+)
+
+var zstdMagic = []byte{0x28, 0xb5, 0x2f, 0xfd}
 
 const lostFound = "lost+found"
 
@@ -30,13 +46,25 @@ const lostFound = "lost+found"
 // devices are skipped with a warning on warn. A file that changes while it is read is
 // copied as far as it can be, with a warning; the archive stays well-formed.
 func ExportWorkspace(root string, w io.Writer, warn io.Writer) error {
-	return exportTree(root, w, warn, nil)
+	return ExportWorkspaceAs(root, w, warn, Gzip)
 }
 
-// exportTree is ExportWorkspace, leaving out what skip, if set, reports for a relative
+// ExportWorkspaceAs is ExportWorkspace with the archive compressed as c.
+func ExportWorkspaceAs(root string, w io.Writer, warn io.Writer, c Compression) error {
+	return exportTree(root, w, warn, nil, c)
+}
+
+func compressor(w io.Writer, c Compression) (io.WriteCloser, error) {
+	if c == Zstd {
+		return zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	}
+	return gzip.NewWriterLevel(w, gzip.BestSpeed)
+}
+
+// exportTree is ExportWorkspaceAs, leaving out what skip, if set, reports for a relative
 // name.
-func exportTree(root string, w io.Writer, warn io.Writer, skip func(rel string) bool) error {
-	gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+func exportTree(root string, w io.Writer, warn io.Writer, skip func(rel string) bool, c Compression) error {
+	gz, err := compressor(w, c)
 	if err != nil {
 		return err
 	}
@@ -168,10 +196,11 @@ func ImportWorkspace(root string, r io.Reader) error {
 	if err := checkEmpty(root); err != nil {
 		return err
 	}
-	gz, err := gzip.NewReader(r)
+	gz, err := decompressor(r)
 	if err != nil {
 		return fmt.Errorf("read archive: %w", err)
 	}
+	defer gz.Close()
 	im := &importer{root: rootFD, seen: map[string]byte{}}
 	tr := tar.NewReader(gz)
 	for {
@@ -186,11 +215,28 @@ func ImportWorkspace(root string, r io.Reader) error {
 			return fmt.Errorf("%q: %w", h.Name, err)
 		}
 	}
-	// Reading to the end verifies the gzip checksum and length.
+	// Reading to the end verifies the checksum, and gzip's length.
 	if _, err := io.Copy(io.Discard, gz); err != nil {
 		return fmt.Errorf("read archive: %w", err)
 	}
 	return im.finishDirs()
+}
+
+// decompressor reads a gzip or a zstd archive, as its first bytes say.
+func decompressor(r io.Reader) (io.ReadCloser, error) {
+	br, ok := r.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReader(r)
+	}
+	magic, err := br.Peek(len(zstdMagic))
+	if err == nil && bytes.Equal(magic, zstdMagic) {
+		zr, err := zstd.NewReader(br, zstd.WithDecoderLowmem(true))
+		if err != nil {
+			return nil, err
+		}
+		return zr.IOReadCloser(), nil
+	}
+	return gzip.NewReader(br)
 }
 
 func checkEmpty(root string) error {

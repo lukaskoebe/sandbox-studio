@@ -99,7 +99,7 @@ func copyTree(src, dst string, warn io.Writer) error {
 	pr, pw := io.Pipe()
 	exported := make(chan error, 1)
 	go func() {
-		err := ExportWorkspace(src, pw, warn)
+		err := ExportWorkspaceAs(src, pw, warn, Zstd)
 		pw.CloseWithError(err)
 		exported <- err
 	}()
@@ -112,6 +112,11 @@ func copyTree(src, dst string, warn io.Writer) error {
 // before the home disk) leaves out the toolchains its template put there: templates now
 // keep them in /opt/mise.
 func ExportHome(home string, w io.Writer, warn io.Writer) error {
+	return ExportHomeAs(home, w, warn, Gzip)
+}
+
+// ExportHomeAs is ExportHome with the archive compressed as c.
+func ExportHomeAs(home string, w io.Writer, warn io.Writer, c Compression) error {
 	mounted, err := isMountpoint(home)
 	if err != nil {
 		return err
@@ -120,7 +125,7 @@ func ExportHome(home string, w io.Writer, warn io.Writer) error {
 	if !mounted {
 		skip = func(rel string) bool { return rel == legacyMiseDir }
 	}
-	return exportTree(home, w, warn, skip)
+	return exportTree(home, w, warn, skip, c)
 }
 
 // ImportHome extracts a home archive into the empty home disk, drops the mise login

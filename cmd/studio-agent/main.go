@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 
@@ -45,7 +46,7 @@ func main() {
 		}
 	case "workspace-export":
 		// Studio runs these as root to copy a workspace between sandboxes.
-		if err := workspaceExport(os.Stdout, os.Stderr); err != nil {
+		if err := workspaceExport(os.Stdout, os.Stderr, slices.Contains(os.Args[2:], "--zstd")); err != nil {
 			fmt.Fprintf(os.Stderr, "studio-agent: workspace-export: %v\n", err)
 			os.Exit(1)
 		}
@@ -56,7 +57,7 @@ func main() {
 		}
 	case "home-export":
 		// The same for the agent user's home.
-		if err := homeExport(os.Stdout, os.Stderr); err != nil {
+		if err := homeExport(os.Stdout, os.Stderr, slices.Contains(os.Args[2:], "--zstd")); err != nil {
 			fmt.Fprintf(os.Stderr, "studio-agent: home-export: %v\n", err)
 			os.Exit(1)
 		}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -32,7 +33,7 @@ type transferRuntime interface {
 	CreateForTransfer(context.Context, string, runtime.Spec, string, map[string]string) error
 	StartForTransfer(context.Context, string) error
 	Boot(context.Context, string) error
-	ExportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Writer) error
+	ExportTree(context.Context, runtime.OwnedVM, runtime.Tree, bool, io.Writer) error
 	ImportTree(context.Context, runtime.OwnedVM, runtime.Tree, io.Reader) error
 }
 
@@ -46,17 +47,32 @@ func (m *Manager) transfer() (transferRuntime, error) {
 	return rt, nil
 }
 
-// copyTrees copies the workspace of src into dst, and then its home when dst has a home
-// disk (copyHome). A source without a home disk gives its root disk's home, which is what
-// a sandbox from a legacy template keeps there.
+// copyTrees copies the workspace of src into dst, and at the same time its home when dst
+// has a home disk (copyHome). A source without a home disk gives its root disk's home, which
+// is what a sandbox from a legacy template keeps there. The two disks are separate, so the
+// copies don't wait for each other; either one failing stops the other.
 func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB int, copyHome bool) error {
-	if err := copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}); err != nil {
-		return err
-	}
 	if !copyHome {
-		return nil
+		return copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge})
 	}
-	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: HomeMiB << 20, err: ErrHomeTooLarge})
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	// The copy that fails first is the cause; the other one then only sees the cancel.
+	var once sync.Once
+	var first error
+	fail := func(err error) {
+		if err != nil {
+			once.Do(func() { first = err; cancel() })
+		}
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fail(copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: HomeMiB << 20, err: ErrHomeTooLarge}))
+	}()
+	fail(copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}))
+	<-done
+	return first
 }
 
 // copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The
@@ -69,7 +85,7 @@ func copyTree(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM,
 	limit.w = pw
 	exported := make(chan error, 1)
 	go func() {
-		err := rt.ExportTree(ctx, src, tree, limit)
+		err := rt.ExportTree(ctx, src, tree, true, limit)
 		if err != nil {
 			err = fmt.Errorf("export %s: %w", tree, err)
 			cancel()

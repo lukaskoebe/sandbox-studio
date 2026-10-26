@@ -157,6 +157,10 @@ gap that blocks checkpoint restore.
 
 - **S, now:** zstd instead of gzip, and the workspace and home copied at once. A large
   workspace forks in roughly half the time.
+
+  **Built** on `feedback-v0.8` ([rebase](../rebase.md#workspace-and-home-copy)). On a 24 MB
+  package, zstd exported 1.7 times as fast as gzip and unpacked 2.5 times as fast; the home
+  no longer waits for the workspace. Export files stay gzip.
 - **M, once #1736 ships:** fork through `Snapshot.Create` and a restore with the child's own
   egress settings, keeping `checkEgress` (`internal/runtime/checkpoints.go`). It copies the
   root disk and Docker disk too, at copy-on-write cost.

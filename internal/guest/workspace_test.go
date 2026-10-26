@@ -6,6 +6,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,12 @@ import (
 )
 
 func TestWorkspaceExportImportRoundTrip(t *testing.T) {
+	for _, c := range []Compression{Gzip, Zstd} {
+		t.Run(fmt.Sprint(c), func(t *testing.T) { roundTrip(t, c) })
+	}
+}
+
+func roundTrip(t *testing.T, c Compression) {
 	src := t.TempDir()
 	mtime := time.Date(2024, 5, 6, 7, 8, 9, 123456789, time.UTC)
 	must(t, os.Mkdir(filepath.Join(src, "sub"), 0o750))
@@ -33,7 +40,7 @@ func TestWorkspaceExportImportRoundTrip(t *testing.T) {
 	must(t, os.Chmod(filepath.Join(src, "sub"), 0o550)) // read-only directories still get their files
 
 	var archive, warn bytes.Buffer
-	must(t, ExportWorkspace(src, &archive, &warn))
+	must(t, ExportWorkspaceAs(src, &archive, &warn, c))
 	if !strings.Contains(warn.String(), "fifo") {
 		t.Fatalf("missing FIFO warning: %q", warn.String())
 	}
@@ -73,6 +80,18 @@ func TestWorkspaceExportImportRoundTrip(t *testing.T) {
 		if _, err := os.Lstat(filepath.Join(dst, name)); !os.IsNotExist(err) {
 			t.Errorf("%s was copied", name)
 		}
+	}
+}
+
+// A zstd archive cut short fails its import, as a gzip one does.
+func TestWorkspaceImportRefusesTruncatedZstd(t *testing.T) {
+	src := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(src, "data"), bytes.Repeat([]byte("zstd"), 100000), 0o644))
+	var archive bytes.Buffer
+	must(t, ExportWorkspaceAs(src, &archive, &bytes.Buffer{}, Zstd))
+	cut := archive.Bytes()[:archive.Len()-8]
+	if err := ImportWorkspace(t.TempDir(), bytes.NewReader(cut)); err == nil {
+		t.Fatal("a truncated archive imported")
 	}
 }
 
