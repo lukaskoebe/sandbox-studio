@@ -45,27 +45,28 @@ export function useThemeMode(): ThemeMode {
 }
 
 /**
- * How Studio looks, apart from light or dark: "quiet" is soft and rounded, "pixel" is square
- * with hard edges, like the week on Home. styles.css keys its tokens on `data-style`.
+ * How Studio looks, apart from light or dark: "pixel" (the default) is square with hard edges
+ * and mono titles, "quiet" is soft and rounded in sans. styles.css sets pixel's tokens on :root
+ * and quiet's on `data-style="quiet"`.
  */
-export type StyleName = "quiet" | "pixel"
+export type StyleName = "pixel" | "quiet"
 
 const styleKey = "studio.style"
 
-/** The style picked in this browser; "quiet" unless pixel was picked. */
+/** The style picked in this browser; "pixel" unless quiet was picked. */
 export function styleName(): StyleName {
   try {
-    if (localStorage.getItem(styleKey) === "pixel") return "pixel"
+    if (localStorage.getItem(styleKey) === "quiet") return "quiet"
   } catch {
     // Without storage the default style applies.
   }
-  return "quiet"
+  return "pixel"
 }
 
 /** Stores the style in this browser and applies it at once. */
 export function setStyleName(style: StyleName) {
   try {
-    if (style === "quiet") localStorage.removeItem(styleKey)
+    if (style === "pixel") localStorage.removeItem(styleKey)
     else localStorage.setItem(styleKey, style)
   } catch {
     // Without storage the default style stays.
@@ -84,7 +85,7 @@ export function useStyleName(): StyleName {
       }
     },
     styleName,
-    () => "quiet"
+    () => "pixel"
   )
 }
 

@@ -23,8 +23,9 @@
 @custom-variant dark (&:is(.dark *));
 
 /* The style's tokens (radius, pills, shadows, the heading and control fonts) point at variables
-   set per style on <html data-style>, so one class reads right in both. Tailwind would otherwise
-   write the shadows' values into each class, and rounded-full is a constant. */
+   that :root sets for the pixel style and <html data-style="quiet"> for the quiet one, so one
+   class reads right in both. Tailwind would otherwise write the shadows' values into each
+   class, and rounded-full would be a constant. */
 @theme inline {
   --font-heading: var(--heading-font);
   --font-control: var(--control-font);
@@ -78,9 +79,9 @@
 }
 
 /*
- * The app theme is the Workbench direction (docs/design/ui-style.md): cool graphite neutrals,
- * a tight radius and dense rows, with identifiers in mono. Accents and status colors are the
- * same on every page.
+ * The app theme is the Workbench direction (docs/design/ui-style.md): cool graphite neutrals
+ * and dense rows, with identifiers in mono. Accents and status colors are the same on every
+ * page and in both styles.
  */
 :root {
   --background: #f8fafa;
@@ -98,8 +99,8 @@
   --accent: #e8edef;
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: #dbe1e4;
-  --input: #cfd7db;
+  --border: #bfc8cc;
+  --input: #aab4b9;
   --ring: #1b8797;
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
@@ -111,14 +112,14 @@
   --code-string: oklch(0.55 0.13 60);
   --code-variable: oklch(0.52 0.2 260);
   --code-operator: oklch(0.55 0.18 25);
-  --radius: 0.375rem;
+  --radius: 0;
   --sidebar: #eef1f2;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: #e1e7e9;
   --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: #dbe1e4;
+  --sidebar-border: #c8d0d3;
   --sidebar-ring: var(--ring);
   /* Accents: one hue per area, toned down from the first design mockups. */
   --acc-network: oklch(0.6 0.1 235);
@@ -158,25 +159,25 @@
     "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas,
     "DejaVu Sans Mono", monospace;
   --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  /* The quiet style (the default): headings, controls and labels in sans, round pills,
-     Tailwind's soft shadows. */
-  --heading-font: var(--sans);
-  --control-font: var(--sans);
-  --label-font: var(--sans);
-  --label-size: 0.75rem;
-  --label-weight: 500;
-  --label-case: none;
-  --label-tracking: 0;
-  --pill-radius: 9999px;
-  --raise-2xs: 0 1px rgb(0 0 0 / 0.05);
-  --raise-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --raise-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --raise-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --raise-lg:
-    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --raise-xl:
-    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --raise-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  /* The pixel style (the default): square corners and pills, borders a step darker, titles,
+     controls and labels in mono, labels in small capitals, and a hard offset shadow, without
+     blur, on whatever is raised. */
+  --heading-font: var(--font-mono);
+  --control-font: var(--font-mono);
+  --label-font: var(--font-mono);
+  --label-size: 0.65625rem;
+  --label-weight: 600;
+  --label-case: uppercase;
+  --label-tracking: 0.1em;
+  --pill-radius: 0;
+  --raise-color: rgb(23 32 36 / 16%);
+  --raise-2xs: none;
+  --raise-xs: 1px 1px 0 var(--raise-color);
+  --raise-sm: 2px 2px 0 var(--raise-color);
+  --raise-md: 3px 3px 0 var(--raise-color);
+  --raise-lg: 4px 4px 0 var(--raise-color);
+  --raise-xl: 4px 4px 0 var(--raise-color);
+  --raise-2xl: 6px 6px 0 var(--raise-color);
 }
 
 .dark {
@@ -195,8 +196,8 @@
   --accent: #1d272b;
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: #263035;
-  --input: #303c42;
+  --border: #34414a;
+  --input: #3d4b53;
   --ring: #58b8c8;
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
@@ -214,8 +215,9 @@
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-accent: #1a2226;
   --sidebar-accent-foreground: var(--foreground);
-  --sidebar-border: #1f282c;
+  --sidebar-border: #2a353b;
   --sidebar-ring: var(--ring);
+  --raise-color: rgb(0 0 0 / 55%);
   --acc-network: oklch(0.75 0.09 230);
   --acc-git: oklch(0.74 0.11 295);
   --acc-browser: oklch(0.78 0.11 55);
@@ -236,37 +238,37 @@
 }
 
 /*
- * The pixel style: the week's vocabulary on every page. Square corners and pills, borders a step
- * darker, headings, controls and labels in mono, labels in small capitals, and a hard offset
- * shadow, without blur, on whatever is raised.
+ * The quiet style, picked in Settings → General: soft and rounded. Titles, controls and labels
+ * in sans, round pills, lighter borders and Tailwind's soft shadows. `.dark[data-style="quiet"]`
+ * outranks `.dark`, so its borders win in dark mode.
  */
-[data-style="pixel"] {
-  --radius: 0;
-  --pill-radius: 0;
-  --heading-font: var(--font-mono);
-  --control-font: var(--font-mono);
-  --label-font: var(--font-mono);
-  --label-size: 0.65625rem;
-  --label-weight: 600;
-  --label-case: uppercase;
-  --label-tracking: 0.1em;
-  --border: #bfc8cc;
-  --input: #aab4b9;
-  --sidebar-border: #c8d0d3;
-  --raise-color: rgb(23 32 36 / 16%);
-  --raise-2xs: none;
-  --raise-xs: 1px 1px 0 var(--raise-color);
-  --raise-sm: 2px 2px 0 var(--raise-color);
-  --raise-md: 3px 3px 0 var(--raise-color);
-  --raise-lg: 4px 4px 0 var(--raise-color);
-  --raise-xl: 4px 4px 0 var(--raise-color);
-  --raise-2xl: 6px 6px 0 var(--raise-color);
+[data-style="quiet"] {
+  --radius: 0.375rem;
+  --pill-radius: 9999px;
+  --heading-font: var(--sans);
+  --control-font: var(--sans);
+  --label-font: var(--sans);
+  --label-size: 0.75rem;
+  --label-weight: 500;
+  --label-case: none;
+  --label-tracking: 0;
+  --border: #dbe1e4;
+  --input: #cfd7db;
+  --sidebar-border: #dbe1e4;
+  --raise-2xs: 0 1px rgb(0 0 0 / 0.05);
+  --raise-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --raise-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --raise-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --raise-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --raise-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --raise-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
 }
-.dark[data-style="pixel"] {
-  --border: #34414a;
-  --input: #3d4b53;
-  --sidebar-border: #2a353b;
-  --raise-color: rgb(0 0 0 / 55%);
+.dark[data-style="quiet"] {
+  --border: #263035;
+  --input: #303c42;
+  --sidebar-border: #1f282c;
 }
 
 /* A section's label (Settings groups, the sidebar's lists, Home's parts, day dividers), in the
@@ -293,7 +295,7 @@
   html {
     @apply font-sans;
   }
-  /* A page's title is set in the style's heading font: sans when quiet, mono when pixel. */
+  /* A page's title is set in the style's heading font: mono when pixel, sans when quiet. */
   [data-slot="page-header"] h1 {
     font-family: var(--font-heading);
     font-weight: 600;

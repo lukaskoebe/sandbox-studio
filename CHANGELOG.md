@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+Studio's pages share one style now: square, with titles, buttons and labels in mono. A softer
+style is a switch away.
+
+- **Style:** every page draws its corners, borders, shadows, buttons and section labels the
+  same way. The default, **Pixel**, has square corners, status dots, switches and radio
+  buttons, borders a step darker, a hard shadow on what is raised, and titles, buttons and
+  labels in mono, labels in small capitals. **Settings → General → Style** switches a browser
+  to **Quiet**: rounded, with soft shadows and titles and labels in sans.
+- **Home:** the notification banner, the empty states and the getting-started card are set at
+  the size of the rest of the page, the banner wraps on a phone, and Earlier keeps each time on
+  one line.
 - **Settings → Network:** the security levels are rows of one card, with what connects without
   asking and what asks in two columns, so they compare at a glance. The rules' filters sit on
   top of their card; each rule shows its action and scope with a mark, its age with how it came

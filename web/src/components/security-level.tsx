@@ -140,7 +140,7 @@ function LevelRow({
           onChange={onSelect}
           aria-labelledby={id}
           aria-describedby={`${id}-text`}
-          className="mt-[0.1875rem] size-3.5 shrink-0 accent-primary outline-none"
+          className="mt-[0.1875rem] size-3.5 shrink-0 appearance-none rounded-full border border-input bg-card outline-none checked:border-primary checked:bg-primary checked:shadow-[inset_0_0_0_3px_var(--color-card)] disabled:opacity-50"
         />
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span id={id} className="text-[0.8125rem] font-semibold">

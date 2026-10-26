@@ -202,3 +202,38 @@ test("the origin and unused filters live in the URL", async ({
   await expect(page).not.toHaveURL(/[?&](origin|unused)=/)
   await expect(host(rules.api)).toBeVisible()
 })
+
+test("Studio is Pixel unless this browser picks Quiet", async ({
+  page,
+  env,
+}) => {
+  const html = page.locator("html")
+  // In rem; the built CSS can drop the leading zero.
+  const radius = () =>
+    page.evaluate(() =>
+      parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--radius")
+      )
+    )
+  await page.goto(`/e/${env}/settings/general`)
+  const style = page.getByRole("group", { name: "Style" })
+  await expect(html).toHaveAttribute("data-style", "pixel")
+  await expect(style.getByRole("button", { name: "Pixel" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  expect(await radius()).toBe(0)
+
+  await style.getByRole("button", { name: "Quiet" }).click()
+  await expect(html).toHaveAttribute("data-style", "quiet")
+  expect(await radius()).toBe(0.375)
+  await page.reload()
+  await expect(html).toHaveAttribute("data-style", "quiet")
+
+  // Pixel is the default, so picking it again stores nothing.
+  await style.getByRole("button", { name: "Pixel" }).click()
+  await expect(html).toHaveAttribute("data-style", "pixel")
+  expect(
+    await page.evaluate(() => localStorage.getItem("studio.style"))
+  ).toBeNull()
+})

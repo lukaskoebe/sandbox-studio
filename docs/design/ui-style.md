@@ -58,23 +58,27 @@ and 2.7:1). The word carries those states, so the dots stay as they are.
 ## Shared rules
 
 - **Type.** Instrument Sans for UI text, with 0.01 em tracking, since it sets tight at 12 to
-  13 px. JetBrains Mono (`--font-mono`) for identifiers, keys and terminals, and for titles,
-  controls and section labels in the pixel style (see Styles). Both are variable fonts bundled
-  with the app (`web/src/fonts`, SIL OFL); the docs and the videos bundle the same files.
+  13 px. JetBrains Mono (`--font-mono`) for identifiers, keys and terminals, and in the Pixel
+  style (the default, see Styles) for titles, controls and section labels. Both are variable
+  fonts bundled with the app (`web/src/fonts`, SIL OFL); the docs and the videos bundle the same
+  files.
 - **Keys.** A `kbd` is a keycap: mono, a 1 px border with a 2 px bottom edge, on the muted
   background, as the TUI draws its keys.
 - **Dark mode.** A three-way control (system, light, dark) for the sidebar footer, see
   `ThemeToggle` below. The choice is stored in the browser as `studio.theme`; "system" follows
   the OS preference. Dark neutrals are tinted, never pure black. Accent and status hues keep
   their roles and get lighter.
-- **Styles.** Settings → General → Style picks Quiet (the default) or Pixel for this browser,
-  stored as `studio.style` and set as `data-style` on `<html>`. A style is only CSS variables in
-  `styles.css`: `--radius`, `--pill-radius` (what `rounded-full` reads), the `--raise-*` shadows
-  behind `shadow-*`, `--heading-font`, `--control-font` (`font-control` on buttons, toggles,
-  tabs, badges, counts and nav items) and the `--label-*` type of `section-label`. Quiet is
-  today's theme with titles and labels in sans. Pixel is square, with borders a step darker, a
-  hard offset shadow, and titles, controls and labels in mono, labels in small capitals. A
-  component never picks a radius in pixels or a label font of its own, so both styles reach it.
+- **Styles.** Pixel is the default; Settings → General → Style switches a browser to Quiet,
+  stored as `studio.style` and set as `data-style="quiet"` on `<html>`. A style is only CSS
+  variables in `styles.css`: `:root` and `.dark` hold Pixel's, `[data-style="quiet"]` and
+  `.dark[data-style="quiet"]` override them. They are `--radius`, `--pill-radius` (what
+  `rounded-full` reads), the `--raise-*` shadows behind `shadow-*`, `--heading-font`,
+  `--control-font` (`font-control` on buttons, toggles, tabs, badges, counts and nav items),
+  the `--label-*` type of `section-label`, and the border colors. Pixel is square, with borders
+  a step darker, a hard offset shadow on what is raised, and titles, controls and labels in
+  mono, labels in small capitals. Quiet is rounded, with soft shadows and titles and labels in
+  sans. A component never picks a radius in pixels or a label font of its own, so both styles
+  reach it.
 - **Panels, not sheets, for watching.** Connections, Browser (only with a teammate) and Files
   (files and changes) sit beside the terminal or chat as side panels, toggled from the
   workspace toolbar and remembered per page. On phones a panel takes the full screen. Sheets remain only for short detail opened

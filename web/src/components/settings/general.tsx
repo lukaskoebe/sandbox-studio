@@ -293,8 +293,8 @@ function NotificationsSection() {
 }
 
 const styles: { value: StyleName; label: string }[] = [
-  { value: "quiet", label: "Quiet" },
   { value: "pixel", label: "Pixel" },
+  { value: "quiet", label: "Quiet" },
 ]
 
 /** How Studio looks in this browser; lib/theme.ts stores it beside light and dark. */
@@ -304,7 +304,7 @@ function StyleSection() {
     <SettingRow
       icon={PaletteIcon}
       title="Style"
-      description="Quiet is soft and rounded. Pixel is square, with hard edges and shadows, like the week on Home. Light and dark are at the bottom of the sidebar."
+      description="Pixel is square, with hard edges and titles and labels in mono. Quiet is soft and rounded, in sans. Light and dark are at the bottom of the sidebar."
       control={
         <ToggleGroup
           aria-label="Style"

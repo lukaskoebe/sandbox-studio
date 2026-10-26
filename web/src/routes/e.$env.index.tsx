@@ -118,10 +118,10 @@ function NotificationsBanner() {
   return (
     <section
       aria-label="Notifications"
-      className="flex items-center gap-3 rounded-(--radius) border bg-card px-4 py-3"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius) border bg-card px-4 py-3"
     >
       <BellIcon className="size-4 shrink-0 text-muted-foreground" />
-      <p className="min-w-0 flex-1 text-muted-foreground">
+      <p className="min-w-48 flex-1 text-[0.8125rem] text-muted-foreground">
         Get a notification when an approval waits while Studio isn&apos;t in
         front.
       </p>
@@ -226,7 +226,7 @@ function GetStarted({ env }: { env: string }) {
       className="grid gap-3 rounded-(--radius) border bg-card p-5"
     >
       <h2 className="font-medium">Start with a teammate</h2>
-      <p className="text-muted-foreground">
+      <p className="text-[0.8125rem] text-muted-foreground">
         A teammate is an agent with its own computer: a sandbox, a Linux VM with
         Docker and a persistent workspace. Chat with it, and it asks you here
         before it reaches the network or pushes code.
@@ -317,7 +317,9 @@ function WorkingNow({
     >
       <Label id="working-now">Working now</Label>
       {chats.length === 0 ? (
-        <p className="text-muted-foreground">No chat is running.</p>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          No chat is running.
+        </p>
       ) : (
         <ul className="overflow-hidden rounded-(--radius) border bg-card">
           {chats.map((c) => {
@@ -501,7 +503,7 @@ function Earlier({ env }: { env: string }) {
         </Link>
       </div>
       {entries.length === 0 ? (
-        <p className="text-muted-foreground">
+        <p className="text-[0.8125rem] text-muted-foreground">
           {approvals.isPending ? "Loading…" : "Nothing has happened yet."}
         </p>
       ) : (
@@ -509,7 +511,7 @@ function Earlier({ env }: { env: string }) {
           {entries.map((e) => (
             <li key={e.key} className="flex min-w-0 gap-3">
               <span
-                className="w-16 shrink-0 font-mono text-xs leading-5 text-muted-foreground"
+                className="w-24 shrink-0 font-mono text-xs leading-5 whitespace-nowrap text-muted-foreground"
                 title={new Date(e.at).toLocaleString()}
               >
                 {when(e.at)}
