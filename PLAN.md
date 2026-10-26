@@ -25,9 +25,10 @@ says.
   [sandboxes](docs/sandboxes.md#scheduled-checkpoints)
 - Full-snapshot suspend instead of in-place pause (a restored VM can't get Studio's proxy
   and DNS) → [sandboxes](docs/sandboxes.md#suspend-and-resume)
-- Live CPU and memory resize of a running VM, once an msb release offers it: msb 0.7.7 saves
-  every change for the next start, which was verified live on 2026-10-17 →
-  [sandboxes](docs/sandboxes.md#resources)
+- Live CPU and memory resize of a running VM: msb 0.7.7 saved every change for the next
+  start (verified live on 2026-10-17). msb 0.7.8 applies one live when the VM has headroom,
+  which Studio doesn't boot with yet; then a "Restart to apply" for the rest →
+  [feedback plan](docs/design/feedback-v0.8.md#cpu-and-memory-at-runtime)
 - VS Code Remote-SSH through the SSH host config; the `msb ssh` commands themselves were
   verified live on 2026-10-17 → [sandboxes](docs/sandboxes.md#ssh-access)
 - Template build qualifications: release base, cold-cache pulls, live exec export with
@@ -40,8 +41,19 @@ says.
   snapshots) is merged and released, then expose it as a template setting.
 - Local embeddings crashed once on a Windows runner: in the v0.3.5 release's smoke run,
   `TestLlamaEmbeds` died after 6 s with no output, and passed on the re-run and on the
-  runner before. Find the CPU it fails on; llama.cpp's win-cpu-x64 build picks a backend
+  runner before. It happened again in v0.8.0's dry run. Find the CPU it fails on; llama.cpp's win-cpu-x64 build picks a backend
   per CPU → [release](docs/release.md)
+- Copy-on-write forks: today a fork copies `/workspace` and the home as a tar and loses the
+  root disk; a snapshot-based fork waits on microsandbox #1736 →
+  [feedback plan](docs/design/feedback-v0.8.md#copy-on-write-forks)
+- Base images go out of date with no notice, and a sandbox without a template can't rebase
+  onto the current default image →
+  [feedback plan](docs/design/feedback-v0.8.md#base-images-go-out-of-date)
+- zsh as the terminal shell → [feedback plan](docs/design/feedback-v0.8.md#zsh)
+- A native app with Wails 3 (v3.0.0, out 2026-10-26), starting with a spike →
+  [feedback plan](docs/design/feedback-v0.8.md#a-native-app-with-wails-3)
+- The updater's follow-ups: exec in place on Unix, Nix-installed binaries, nix-ld →
+  [feedback plan](docs/design/feedback-v0.8.md#the-updater)
 
 **Agents and providers**
 - Subscription logins and CLI-based utility calls (spike S8): the Claude sign-in works; a
@@ -54,6 +66,16 @@ says.
   [harnesses](docs/harnesses.md#verified-vs-pending)
 - An OpenCode session started before a rebase resumes after it (the home disk's acceptance
   check, not yet run live)
+- A teammate's status counts its terminals: a harness or a program running there →
+  [feedback plan](docs/design/feedback-v0.8.md#teammate-status-shows-terminal-work)
+- Memory that links: `[[links]]`, backlinks, an index page, a `~/memory` folder, page
+  writes by teammates and lint → [memory links](docs/design/memory-links.md)
+
+**Web UI**
+- Terminal sessions as tabs → [feedback plan](docs/design/feedback-v0.8.md#terminal-sessions-as-tabs)
+- One memory panel: one header, search on top, one row style, pages as markdown →
+  [feedback plan](docs/design/feedback-v0.8.md#one-memory-panel)
+- Long chats load in pages → [feedback plan](docs/design/feedback-v0.8.md#long-chats-load-in-pages)
 
 **Browser**
 - The browser items pending a live run, ephemeral sessions included →
@@ -69,3 +91,6 @@ says.
 **Git**
 - The host-agent acceptance check: an agent in a sandbox pushes to `git@github.com:…`
   through review, with the key only in the host agent
+- Pull request reviews by a teammate, Forgejo first → [forge reviews](docs/design/forge-reviews.md)
+- Force pushes of feature branches through review →
+  [feedback plan](docs/design/feedback-v0.8.md#force-pushes-through-review)
