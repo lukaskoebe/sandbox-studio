@@ -212,6 +212,9 @@ func Supervise(ctx context.Context, log *slog.Logger, self string, lock *os.File
 			log.Warn("opening a temporary directory to everyone", "dir", dir, "err", err)
 		}
 	}
+	if err := clearBuildTemp("/tmp", buildTemp, 0); err != nil {
+		log.Warn("clearing the image build's temporary files", "err", err)
+	}
 	// A home that can't be seeded still works, without some of the image's dotfiles.
 	if err := prepareHome(); err != nil {
 		log.Warn("seeding the home disk", "err", err)
@@ -311,6 +314,31 @@ func (s service) run(ctx context.Context, log *slog.Logger, out io.Writer, minBa
 		}
 		backoff = min(backoff*2, 30*time.Second)
 	}
+}
+
+// buildTemp are the directories in /tmp that installing the harnesses as root leaves in
+// images before v0.8.1. The agent's harness writes there and fails on a root-owned one.
+var buildTemp = []string{"opencode"}
+
+// clearBuildTemp removes each named directory in tmp that owner (root) owns. One the agent
+// made itself is left alone; a symlink is never followed.
+func clearBuildTemp(tmp string, names []string, owner uint32) error {
+	var errs []error
+	for _, name := range names {
+		path := filepath.Join(tmp, name)
+		st, err := os.Lstat(path)
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				errs = append(errs, err)
+			}
+			continue
+		}
+		if !st.IsDir() || st.Sys().(*syscall.Stat_t).Uid != owner {
+			continue
+		}
+		errs = append(errs, os.RemoveAll(path))
+	}
+	return errors.Join(errs...)
 }
 
 // prepareDisks gives the owned disks, which microsandbox mounts root-owned, the ownership

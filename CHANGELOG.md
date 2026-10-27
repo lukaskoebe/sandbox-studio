@@ -35,6 +35,9 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   agent's first words, taking the place of its starting, set it off. The composer now ends on
   the right where the messages and tool calls do, and at the bottom where the computer's
   screen does.
+- **opencode** starts for the agent again in every sandbox. Installing it into the base
+  image as root left a root-owned `/tmp/opencode` behind that the agent couldn't write to;
+  the image no longer has it, and the guest removes it from older sandboxes at boot.
 - **Sidebar:** collapsed, it opens every teammate and Home again. The hidden section labels
   sat over the rows next to them and took their clicks.
 - **Forks and rebases** copy faster: the workspace and the home are compressed with zstd

@@ -72,7 +72,7 @@ RUN set -eu; \
         "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
         "@openai/codex@${CODEX_VERSION}"; \
     npm cache clean --force; \
-    rm -rf /root/.npm
+    rm -rf /root/.npm /tmp/opencode
 
 # The ACP adapters chats run (docs/design/chat-mode.md). --omit=optional skips their own
 # copies of the Claude Code and Codex binaries: CLAUDE_CODE_EXECUTABLE and CODEX_PATH point

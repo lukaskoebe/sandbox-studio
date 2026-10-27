@@ -174,3 +174,29 @@ func TestCappedLogStartsOver(t *testing.T) {
 		t.Fatalf("log = %q; want only the write after the cap", b)
 	}
 }
+
+func TestClearBuildTempRemovesOnlyTheOwnersDirectories(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "opencode", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), filepath.Join(tmp, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	uid := uint32(os.Getuid())
+	if err := clearBuildTemp(tmp, []string{"opencode", "linked", "missing"}, uid+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(tmp, "opencode")); err != nil {
+		t.Fatalf("another owner's directory was removed: %v", err)
+	}
+	if err := clearBuildTemp(tmp, []string{"opencode", "linked", "missing"}, uid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(tmp, "opencode")); !os.IsNotExist(err) {
+		t.Fatalf("the owner's directory is still there: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(tmp, "linked")); err != nil {
+		t.Fatalf("a symlink was removed: %v", err)
+	}
+}
