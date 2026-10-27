@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import {
   ArrowsLeftRightIcon,
   BrainIcon,
@@ -21,6 +22,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { CodeBlock } from "@/components/chat/markdown"
+import { Tokens, useDiffTokens } from "@/components/code-view"
 import type { components } from "@/lib/api/schema.gen"
 import type { ToolBody } from "@/lib/chats"
 import { cn } from "@/lib/utils"
@@ -159,7 +161,7 @@ function ToolContentView({ content: c }: { content: ToolContent }) {
   return null
 }
 
-/** A file change as removed and added lines. */
+/** A file change as removed and added lines, highlighted by the file's language. */
 export function Diff({
   path,
   oldText,
@@ -169,7 +171,21 @@ export function Diff({
   oldText?: string
   newText: string
 }) {
-  const rows = diffLines(oldText ?? "", newText)
+  const rows = useMemo(
+    () => diffLines(oldText ?? "", newText),
+    [oldText, newText]
+  )
+  const tokens = useDiffTokens(
+    useMemo(
+      () =>
+        rows.map((r) =>
+          path && r.op !== "…"
+            ? { text: r.op + r.text, file: path }
+            : { text: "" }
+        ),
+      [rows, path]
+    )
+  )
   const added = rows.filter((r) => r.op === "+").length
   const removed = rows.filter((r) => r.op === "-").length
   return (
@@ -195,13 +211,25 @@ export function Diff({
               key={i}
               className={cn(
                 "px-2",
-                r.op === "+" &&
-                  "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300",
-                r.op === "-" && "bg-destructive/10 text-destructive"
+                r.op === "+" && "bg-emerald-500/10",
+                r.op === "-" && "bg-destructive/10",
+                // A highlighted line keeps its syntax's colors.
+                !tokens.has(i) &&
+                  r.op === "+" &&
+                  "text-emerald-800 dark:text-emerald-300",
+                !tokens.has(i) && r.op === "-" && "text-destructive"
               )}
             >
-              <span className="select-none">{r.op} </span>
-              {r.text}
+              <span
+                className={cn(
+                  "select-none",
+                  r.op === "+" && "text-emerald-800 dark:text-emerald-300",
+                  r.op === "-" && "text-destructive"
+                )}
+              >
+                {r.op}{" "}
+              </span>
+              {tokens.has(i) ? <Tokens tokens={tokens.get(i)!} /> : r.text}
             </div>
           )
         )}

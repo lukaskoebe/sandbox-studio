@@ -72,6 +72,10 @@ test("a teammate's pull request review waits for approval and posts as edited", 
     "Validate against finalTotal(cart)."
   )
   await expect(sheet).toContainText("Posts as e2e-user")
+  // The diff is highlighted as TypeScript.
+  await expect(
+    sheet.locator(".tok-keyword", { hasText: "export" }).first()
+  ).toBeVisible()
   // Edit the draft: a comment instead, a longer summary, the attribution line.
   await sheet.getByRole("button", { name: "Comment", exact: true }).click()
   const summary = sheet.getByRole("textbox", { name: "Summary" })

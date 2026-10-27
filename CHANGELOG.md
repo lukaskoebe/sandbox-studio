@@ -19,6 +19,14 @@
   archive has `studio-app` next to `studio`, and `install.sh` and the updater install it
   too. Without it, without a display, or on Linux without WebKitGTK 4.1, `studio app` opens
   the browser and says why.
+- **Syntax highlighting** in Files, in a push's and a pull request's diff, and in the changes
+  of a chat, for the common languages: TypeScript and JavaScript, Python, Go, Rust, Java,
+  C and C++, PHP, Ruby, shell, SQL, HTML, CSS, JSON, YAML, TOML, Markdown, Dockerfiles and
+  more. Each language loads when a file of it first shows. Files shows line numbers too.
+- **Files keeps its place in the browser's history.** Each folder and file Files opens is a
+  step of its own, so Back (Alt+← or the mouse's back button) goes to the previous folder or
+  file instead of leaving the page, Forward comes back, and the address links to the file in
+  view.
 - **Checkpoints after every task.** A sandbox's checkpoint schedule can take one each time an
   agent finishes a message that changed files, as **After every task** under **Take
   checkpoints**. They are pruned like the scheduled ones: the newest 3 and the last of each

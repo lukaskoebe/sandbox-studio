@@ -344,3 +344,27 @@
     background: var(--border) padding-box;
   }
 }
+
+/* Syntax highlighting of code Studio shows (lib/highlight.ts), in the editors' colors. */
+@layer components {
+  .tok-comment {
+    color: var(--muted-foreground);
+    font-style: italic;
+  }
+  .tok-keyword {
+    color: var(--code-keyword);
+  }
+  .tok-string {
+    color: var(--code-string);
+  }
+  .tok-number,
+  .tok-operator {
+    color: var(--code-operator);
+  }
+  .tok-type {
+    color: var(--code-meta);
+  }
+  .tok-function {
+    color: var(--code-variable);
+  }
+}

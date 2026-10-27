@@ -1,7 +1,7 @@
 /**
  * The computer screen's state in the URL (docs/design/teammate-computer.md): which tab it shows,
- * which terminal session, which push review, and whether it is folded or takes the page. The
- * teammate's page and a plain sandbox's page read the same params.
+ * which terminal session, which push review, the folder or file Files shows, and whether it is
+ * folded or takes the page. The teammate's page and a plain sandbox's page read the same params.
  */
 export const screenTabs = ["terminal", "browser", "preview", "changes"] as const
 export type ScreenTab = (typeof screenTabs)[number]
@@ -13,6 +13,10 @@ export type ScreenSearch = {
   fold?: boolean
   /** The screen takes the page, and the conversation is a strip beside it. */
   full?: boolean
+  /** The folder Files shows, relative to /workspace. */
+  files?: string
+  /** The file Files shows; its folder is the one Files goes back to. */
+  file?: string
 }
 
 const text = (value: unknown) =>
@@ -26,9 +30,11 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
   const term = text(s.term) ?? text(s.terminal) ?? text(s.session)
   const review = text(s.review)
   const panel = text(s.panel)
+  const file = text(s.file)
+  const files = file ? undefined : text(s.files)
   const tab =
     screenTabs.find((t) => t === s.tab) ??
-    (review || panel === "files"
+    (review || panel === "files" || file || files
       ? "changes"
       : panel === "browser"
         ? "browser"
@@ -39,6 +45,8 @@ export function screenSearch(s: Record<string, unknown>): ScreenSearch {
     ...(tab ? { tab } : {}),
     ...(term ? { term } : {}),
     ...(review ? { review } : {}),
+    ...(files ? { files } : {}),
+    ...(file ? { file } : {}),
     ...(s.fold === true || s.fold === "1" || s.fold === 1
       ? { fold: true }
       : {}),

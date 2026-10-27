@@ -36,7 +36,8 @@ export function TeammatePage({
   teammate: Teammate
   search: TeammateSearch
   /** Changes the URL's search; a thread opened or left is a new history entry. */
-  onSearch: (change: SearchChange, push?: boolean) => void
+  /** With push the change is a step in the browser's history; "quiet" leaves out the transition. */
+  onSearch: (change: SearchChange, push?: boolean | "quiet") => void
 }) {
   const id = teammate.id
   const sandboxes = $api.useQuery(
@@ -93,7 +94,7 @@ export function TeammatePage({
   const full = wide && !folded && !!search.full
 
   const screen = (change: ScreenChange) => {
-    const { fold, full: enlarge, ...rest } = change
+    const { fold, full: enlarge, push, ...rest } = change
     // Folding and enlarging undo each other.
     if (fold !== undefined || enlarge !== undefined) {
       if (wide)
@@ -102,14 +103,23 @@ export function TeammatePage({
     }
     if (Object.keys(rest).length === 0) return
     if (!wide && rest.tab) setOverlay(true)
-    onSearch({
-      // Another computer starts on its own terminal and review, unless the change names them.
-      ...(rest.computer && rest.computer !== computer?.id
-        ? { term: undefined, review: undefined }
-        : {}),
-      ...rest,
-      ...(wide && rest.tab ? { fold: undefined } : {}),
-    })
+    onSearch(
+      {
+        // Another computer starts on its own terminal, review and place in Files, unless the
+        // change names them.
+        ...(rest.computer && rest.computer !== computer?.id
+          ? {
+              term: undefined,
+              review: undefined,
+              files: undefined,
+              file: undefined,
+            }
+          : {}),
+        ...rest,
+        ...(wide && rest.tab ? { fold: undefined } : {}),
+      },
+      push && "quiet"
+    )
   }
   const openThread = (chat: Chat) =>
     onSearch(

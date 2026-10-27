@@ -27,7 +27,7 @@ function Teammate() {
   })
   const teammate = teammates.data?.find((p) => p.id === id)
   if (!teammate) return null
-  const onSearch = (change: SearchChange, push = false) =>
+  const onSearch = (change: SearchChange, push: boolean | "quiet" = false) =>
     void navigate({
       search: (prev) =>
         teammateSearch(
@@ -38,7 +38,7 @@ function Teammate() {
           )
         ),
       replace: !push,
-      viewTransition: push,
+      viewTransition: push === true,
     })
   return (
     <>

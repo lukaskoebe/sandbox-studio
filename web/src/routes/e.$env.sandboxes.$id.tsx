@@ -150,7 +150,7 @@ function SandboxPage() {
       (teammates.data && !teammates.data.some((t) => t.id === s.teammateId))
   )
   const computers = plain.some((s) => s.id === sb.id) ? plain : [sb, ...plain]
-  const change = ({ computer, fold: _, ...rest }: ScreenChange) => {
+  const change = ({ computer, fold: _, push, ...rest }: ScreenChange) => {
     if (computer && computer !== id) {
       void navigate({
         to: "/e/$env/sandboxes/$id",
@@ -164,7 +164,7 @@ function SandboxPage() {
         ...screenSearch({ ...prev, ...rest }),
         ...fromSetup(prev),
       }),
-      replace: true,
+      replace: !push,
     })
   }
 

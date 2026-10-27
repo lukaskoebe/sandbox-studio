@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { CodeView } from "@/components/code-view"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -27,7 +28,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
@@ -627,12 +627,20 @@ function FileView({
           Can't show this file: {errorMessage(content.error)}
         </p>
       )}
-      {c && <FileBody file={c} name={name} />}
+      {c && <FileBody file={c} name={name} path={path} />}
     </div>
   )
 }
 
-function FileBody({ file: c, name }: { file: FileContent; name: string }) {
+function FileBody({
+  file: c,
+  name,
+  path,
+}: {
+  file: FileContent
+  name: string
+  path: string
+}) {
   const note = (text: string) => <p className="text-muted-foreground">{text}</p>
   if (c.unreadable)
     return note("This file is locked: not even your teammate can read it.")
@@ -653,15 +661,5 @@ function FileBody({ file: c, name }: { file: FileContent; name: string }) {
   }
   const text = decodeText(c.data)
   if (!text) return note("This file is empty.")
-  return (
-    <ScrollArea
-      className="rounded-md bg-muted/40 ring-1 ring-foreground/10"
-      viewportClassName="max-h-[70vh]"
-    >
-      <pre className="p-2 font-mono text-caption/[1.45] whitespace-pre">
-        {text}
-      </pre>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
-  )
+  return <CodeView path={path} text={text} />
 }

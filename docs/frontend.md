@@ -21,7 +21,10 @@ binary embeds (`//go:embed`) and serves at `/`.
 - Terminals: xterm.js, attached to tmux in the guest (mouse on). A drag selects in tmux, which
   copies with OSC 52; the terminal writes any OSC 52 clipboard to the browser's and refuses
   reads. Right-click opens Studio's Copy/Paste menu and never reaches tmux.
-- Editors: CodeMirror (YAML specs, Caddyfiles). Toasts: sonner.
+- Editors: CodeMirror (YAML specs, Caddyfiles). Code Studio only shows (Files, diffs) is
+  highlighted by Lezer's parsers without an editor (`src/lib/highlight.ts`): each language's
+  parser is its own chunk, loaded when a file of it first shows, and the tokens take the
+  `tok-*` classes in `styles.css`. Toasts: sonner.
 - Installable app: `public/manifest.webmanifest` (served as `application/manifest+json`)
   with the icons in `public/` (`icon.svg` is the source; the PNGs and `favicon.ico` are
   rendered from it, the maskable one without the rounded corners). There is no service

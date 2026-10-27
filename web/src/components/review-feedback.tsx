@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { ChatCircleTextIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tokens, useDiffTokens } from "@/components/code-view"
 import { textareaClass } from "@/components/memory-dialogs"
 import { $api, errorMessage } from "@/lib/api/client"
 import { harnessLabels } from "@/lib/teammates"
@@ -83,9 +84,12 @@ export function composeNote(
   return parts.join("\n\n")
 }
 
-function lineClass(line: string) {
+function lineClass(line: string, highlighted: boolean) {
   if (line.startsWith("+++") || line.startsWith("---"))
     return "text-muted-foreground"
+  // A highlighted line keeps its syntax's colors on the side's background.
+  if (highlighted && line.startsWith("+")) return "bg-emerald-500/10"
+  if (highlighted && line.startsWith("-")) return "bg-destructive/10"
   if (line.startsWith("+"))
     return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
   if (line.startsWith("-")) return "bg-destructive/10 text-destructive"
@@ -97,7 +101,7 @@ function lineClass(line: string) {
 }
 
 /**
- * A unified diff, colored line by line. With onComment, a line's button adds a comment under
+ * A unified diff, colored line by line and highlighted by each file's language. With onComment, a line's button adds a comment under
  * it, and the comments show where they were made.
  */
 export function UnifiedDiff({
@@ -120,8 +124,9 @@ export function UnifiedDiff({
 }) {
   const [editing, setEditing] = useState<number>()
   const [draft, setDraft] = useState("")
+  const lines = useMemo(() => parseDiff(diff), [diff])
+  const tokens = useDiffTokens(lines)
   if (!diff) return <p className="text-xs text-muted-foreground">No changes.</p>
-  const lines = parseDiff(diff)
   const save = () => {
     if (editing === undefined || !onComment) return
     const rest = comments.filter((c) => c.index !== editing)
@@ -139,13 +144,14 @@ export function UnifiedDiff({
         {lines.map((l, i) => {
           const comment = comments.find((c) => c.index === i)
           const where = l.file && `${l.file}:${l.line}`
+          const code = tokens.get(i)
           return (
             <div key={i} id={lineId?.(i)} className="scroll-mt-12">
               <div
                 className={cn(
                   "group relative px-2 whitespace-pre",
                   onComment && "pl-6",
-                  lineClass(l.text)
+                  lineClass(l.text, code !== undefined)
                 )}
               >
                 {onComment && l.line !== undefined && (
@@ -162,7 +168,22 @@ export function UnifiedDiff({
                     <ChatCircleTextIcon className="size-3" />
                   </button>
                 )}
-                {l.text || " "}
+                {code ? (
+                  <>
+                    <span
+                      className={cn(
+                        l.text[0] === "+" &&
+                          "text-emerald-700 dark:text-emerald-300",
+                        l.text[0] === "-" && "text-destructive"
+                      )}
+                    >
+                      {l.text[0]}
+                    </span>
+                    <Tokens tokens={code} />
+                  </>
+                ) : (
+                  l.text || " "
+                )}
               </div>
               {editing === i ? (
                 <div className="mx-2 my-1 grid gap-1.5 rounded-md bg-background p-2 font-sans whitespace-normal ring-1 ring-foreground/10">

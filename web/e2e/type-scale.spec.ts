@@ -94,8 +94,16 @@ test("every page's text is on the type scale, in both styles", async ({
 })
 
 test("Home's notices share one look", async ({ page, env }) => {
+  // The notifications notice shows while the browser hasn't been asked; Chrome's headless
+  // shell, which CI runs, says "denied" instead. The previews notice shows until another
+  // test answers it.
+  await page.addInitScript(() =>
+    Object.defineProperty(Notification, "permission", {
+      get: () => "default",
+      configurable: true,
+    })
+  )
   await page.goto(`/e/${env}`)
-  // The notifications and previews notices show until they are answered.
   const notices = page.locator('[data-slot="notice"]')
   await expect(notices.first()).toBeVisible()
   const looks = await notices.evaluateAll((els) =>

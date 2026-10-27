@@ -243,6 +243,16 @@ func (g *Guest) handle(st net.Conn) {
 		err = g.serveForwards(st, br)
 	case agentproto.KindACP:
 		err = g.serveACP(st, br)
+	case agentproto.KindFiles:
+		var req agentproto.FilesRequest
+		if err = agentproto.ReadJSONLine(br, &req); err == nil {
+			reply, berr := browse(req)
+			if berr != nil {
+				err = agentproto.WriteJSONLine(st, agentproto.Error{Error: berr.Error()})
+			} else {
+				err = agentproto.WriteJSONLine(st, reply)
+			}
+		}
 	case agentproto.KindPaste:
 		var req agentproto.UploadRequest
 		if err = agentproto.ReadJSONLine(br, &req); err == nil {

@@ -28,6 +28,9 @@ export function ChangesView({
   reviews,
   review,
   onReview,
+  files = "",
+  file,
+  onFiles,
   thread,
 }: {
   env: string
@@ -37,6 +40,12 @@ export function ChangesView({
   /** The review a link names. */
   review?: string
   onReview: (id: string | undefined) => void
+  /** The folder Files shows, from the URL; "" or undefined for /workspace. */
+  files?: string
+  /** The file Files shows, from the URL. */
+  file?: string
+  /** Moves Files to a folder or file: a step in the browser's history. */
+  onFiles: (dir: string, file?: string) => void
   thread?: {
     chat: Chat
     turns: ChatTurn[]
@@ -54,6 +63,13 @@ export function ChangesView({
     [thread?.turns]
   )
   const [picked, setPicked] = useState<View>()
+  // A move in Files, or Back to an earlier place in it, shows Files.
+  const place = file ?? `${files}/`
+  const [shownPlace, setShownPlace] = useState(place)
+  if (shownPlace !== place) {
+    setShownPlace(place)
+    if (picked?.kind !== "files") setPicked({ kind: "files" })
+  }
   const view: View =
     review && reviews.some((a) => a.id === review)
       ? { kind: "review", id: review }
@@ -62,9 +78,11 @@ export function ChangesView({
           : picked) ??
         (reviews[0]
           ? { kind: "review", id: reviews[0].id }
-          : changedTurns.length > 0
-            ? { kind: "changes" }
-            : { kind: "files" }))
+          : file || files
+            ? { kind: "files" }
+            : changedTurns.length > 0
+              ? { kind: "changes" }
+              : { kind: "files" }))
   const pick = (v: View) => {
     setPicked(v)
     onReview(v.kind === "review" ? v.id : undefined)
@@ -72,9 +90,6 @@ export function ChangesView({
   // The tab decides the review in view, so the floating stack leaves its card out.
   useClaimApprovals(view.kind === "review" ? [view.id] : [])
 
-  const [where, setWhere] = useState<{ dir: string; file?: string }>({
-    dir: "",
-  })
   const turn =
     changedTurns.find((t) => t.id === thread?.turnId) ?? changedTurns.at(0)
   const changed = useMemo(
@@ -173,9 +188,9 @@ export function ChangesView({
           <FilesPanel
             env={env}
             sandboxId={sb.id}
-            dir={where.dir}
-            file={where.file}
-            onOpen={(dir, file) => setWhere({ dir, file })}
+            dir={file ? file.split("/").slice(0, -1).join("/") : files}
+            file={file}
+            onOpen={onFiles}
             changed={changed}
           />
         )}

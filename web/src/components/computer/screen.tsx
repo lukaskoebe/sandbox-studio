@@ -52,8 +52,14 @@ import { usePreviewSetting } from "@/lib/preview-setting"
 import { useTerminalTheme } from "@/lib/theme"
 import { cn, formatAge } from "@/lib/utils"
 
-/** What a screen change asks of the page: another tab, session, review, size or computer. */
-export type ScreenChange = Partial<ScreenSearch> & { computer?: string }
+/**
+ * What a screen change asks of the page: another tab, session, review, place in Files, size or
+ * computer. With push it is a step of its own in the browser's history, as a move in Files is.
+ */
+export type ScreenChange = Partial<ScreenSearch> & {
+  computer?: string
+  push?: boolean
+}
 
 const tabMeta: Record<ScreenTab, { label: string; icon: Icon }> = {
   terminal: { label: "Terminal", icon: TerminalWindowIcon },
@@ -350,6 +356,11 @@ export function ComputerScreen({
                   reviews={reviews}
                   review={search.review}
                   onReview={(review) => onChange({ review })}
+                  files={search.files}
+                  file={search.file}
+                  onFiles={(dir, file) =>
+                    onChange({ files: dir || undefined, file, push: true })
+                  }
                   thread={thread}
                 />
               )}
