@@ -68,7 +68,8 @@ test("a collapsed sidebar opens Home and every teammate", async ({
   await page.goto(`/e/${env}/sandboxes/${id}`)
   const sidebar = page.locator('[data-slot="sidebar"]')
   await expect(sidebar).toHaveAttribute("data-state", "expanded")
-  await page.keyboard.press("Control+b")
+  // The rail, not Ctrl+B: the screen's terminal takes the shortcut once it has focus.
+  await page.locator('[data-slot="sidebar-rail"]').click()
   await expect(sidebar).toHaveAttribute("data-state", "collapsed")
 
   // The groups' hidden labels sit over the rows above them, and must not take their clicks.
