@@ -519,7 +519,11 @@ export function Terminal({
       return
     }
     fitRef.current?.fit()
-    termRef.current?.focus()
+    // A box being typed in elsewhere on the page, such as the chat's, keeps the keys.
+    const typing = document.activeElement?.closest(
+      "input, textarea, [contenteditable='true']"
+    )
+    if (!typing || container.current?.contains(typing)) termRef.current?.focus()
   }, [active])
 
   return (

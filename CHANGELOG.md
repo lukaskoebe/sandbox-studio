@@ -6,6 +6,8 @@
   the workspace at the same time, but a VM runs one such command at a time, so the copy
   failed with "runtime has an active or pending run" and the sandbox stayed as it was. They
   copy one after the other again, still compressed with zstd.
+- **The terminal keeps to itself.** When it connects after the page opens, it no longer takes
+  the keys from a box you are typing in, such as the chat's.
 - **Text sizes** follow one scale across every page: 14px for the titles of pages, dialogs
   and cards, 13px for the titles of rows and sections, 12px for body text, notices and
   messages, 11px for captions and 10px for badges. Queued messages read at the chat's size
