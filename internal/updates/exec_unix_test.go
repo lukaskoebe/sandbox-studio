@@ -18,9 +18,9 @@ const restartHelper = "STUDIO_TEST_RESTART_DIR"
 
 func TestMain(m *testing.M) {
 	if dir := os.Getenv(restartHelper); dir != "" {
-		os.WriteFile(filepath.Join(dir, "helper.pid"), []byte(strconv.Itoa(os.Getpid())), 0o600)
+		_ = os.WriteFile(filepath.Join(dir, "helper.pid"), []byte(strconv.Itoa(os.Getpid())), 0o600)
 		err := Restart(filepath.Join(dir, "updates"), []string{"-no-browser"}, slog.New(slog.DiscardHandler))
-		os.WriteFile(filepath.Join(dir, "helper.err"), []byte(err.Error()), 0o600)
+		_ = os.WriteFile(filepath.Join(dir, "helper.err"), []byte(err.Error()), 0o600)
 		os.Exit(1)
 	}
 	os.Exit(m.Run())

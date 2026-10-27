@@ -810,7 +810,7 @@ func (m *Manager) markStarted(ctx context.Context, rec store.Sandbox) store.Sand
 
 func (m *Manager) withAgent(v View) View {
 	v.CheckpointRestoreSupported = m.Runtime.CheckpointRestoreSupported()
-	v.BaseVersion, v.BaseOutdated = v.Sandbox.BaseVersion, m.BaseOutdated(v.Sandbox.BaseImage)
+	v.BaseVersion, v.BaseOutdated = v.Sandbox.BaseVersion, m.BaseOutdated(v.BaseImage)
 	if hello, ok := m.Hub.Connected(v.ID); ok && v.Status.IsRunning() {
 		v.Agent = &AgentInfo{Version: hello.Version, Arch: hello.Arch}
 	}
