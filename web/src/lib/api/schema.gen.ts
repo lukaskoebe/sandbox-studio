@@ -1506,7 +1506,7 @@ export interface paths {
         get: operations["getCheckpointSchedule"];
         /**
          * Take checkpoints on a schedule
-         * @description Studio takes a checkpoint every everyHours while the sandbox runs, or once after it stopped, and deletes the older ones it took: it keeps the newest three and the newest of each of the seven days before. Checkpoints taken by hand, or renamed, are never deleted. Turning the schedule off keeps the checkpoints it took.
+         * @description Studio takes a checkpoint every everyHours while the sandbox runs, or once after it stopped, or with afterTasks after every agent turn that changed files. It deletes the older ones it took: it keeps the newest three and the newest of each of the seven days before. Checkpoints taken by hand, or renamed, are never deleted. Turning the schedule off keeps the checkpoints it took.
          */
         put: operations["setCheckpointSchedule"];
         post?: never;
@@ -3231,9 +3231,11 @@ export interface components {
             state: "creating" | "ready" | "deleting";
         };
         CheckpointSchedule: {
+            /** @description A checkpoint is taken after every agent turn that changed files, instead of every few hours */
+            afterTasks: boolean;
             /**
              * Format: int64
-             * @description Hours between scheduled checkpoints; 0 when the schedule is off
+             * @description Hours between scheduled checkpoints; 0 when the schedule is off or runs after every task
              */
             everyHours: number;
             /** @description Why the last scheduled checkpoint was not taken, if it wasn't */
@@ -5470,9 +5472,11 @@ export interface components {
             writes: number;
         };
         SetCheckpointScheduleInBody: {
+            /** @description Take a checkpoint after every agent turn that changed files instead, with everyHours 0 */
+            afterTasks?: boolean;
             /**
              * Format: int64
-             * @description Hours between scheduled checkpoints; 0 turns the schedule off
+             * @description Hours between scheduled checkpoints; 0 turns the schedule off, unless afterTasks
              * @enum {integer}
              */
             everyHours: 0 | 1 | 4 | 12 | 24;

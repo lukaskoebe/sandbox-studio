@@ -62,17 +62,18 @@ func (s *Service) snapshot(ctx context.Context, c store.Chat, t store.ChatTurn) 
 }
 
 // changes snapshots the workspace after turn t and stores what the turn changed, then
-// drops the snapshots of turns too old to undo.
-func (s *Service) changes(ctx context.Context, c store.Chat, t store.ChatTurn) {
+// drops the snapshots of turns too old to undo. It says whether the turn changed files, or
+// may have: true when there was no snapshot to compare.
+func (s *Service) changes(ctx context.Context, c store.Chat, t store.ChatTurn) bool {
 	if t.Snapshot == "" {
-		return
+		return true
 	}
 	ctx, cancel := context.WithTimeout(ctx, snapshotTimeout)
 	defer cancel()
 	reply, err := s.Guest.Snapshot(ctx, c.SandboxID, agentproto.SnapshotRequest{Op: agentproto.SnapshotTake, ID: afterID(t.ID), Base: t.Snapshot})
 	if err != nil {
 		s.log().Warn("chat: snapshot after the turn", "chat", c.ID, "err", err)
-		return
+		return true
 	}
 	s.forget(ctx, c, reply.Dropped)
 	raw, _ := json.Marshal(TurnChanges{Files: orEmpty(reply.Changes), More: reply.More})
@@ -82,6 +83,7 @@ func (s *Service) changes(ctx context.Context, c store.Chat, t store.ChatTurn) {
 	if err := s.collect(ctx, c.EnvironmentID, c.SandboxID); err != nil {
 		s.log().Warn("chat: collect snapshots", "sandbox", c.SandboxID, "err", err)
 	}
+	return len(reply.Changes) > 0 || reply.More > 0
 }
 
 func orEmpty[T any](s []T) []T {

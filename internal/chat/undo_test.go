@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp/acptest"
@@ -115,5 +117,25 @@ func TestSnapshotFailureKeepsTheTurn(t *testing.T) {
 	log, _ := f.s.Get(context.Background(), f.sb.EnvironmentID, f.chat.ID)
 	if log.Turns[0].Undoable || log.Turns[0].Changes != nil || log.Turns[0].StopReason != "end_turn" {
 		t.Fatalf("turn %+v", log.Turns[0])
+	}
+}
+
+func TestTaskDoneOnlyAfterChanges(t *testing.T) {
+	f := newFixture(t, &acptest.Agent{})
+	var mu sync.Mutex
+	var done []string
+	f.s.OnTaskDone = func(sandboxID string) {
+		mu.Lock()
+		defer mu.Unlock()
+		done = append(done, sandboxID)
+	}
+	f.g.ws = map[string]string{"a": "1"}
+	f.g.turnEdits = []map[string]string{{"a": "2"}, {}}
+	f.wait(t, f.send(t, "change a").ID)
+	f.wait(t, f.send(t, "just answer").ID)
+	mu.Lock()
+	defer mu.Unlock()
+	if !slices.Equal(done, []string{f.sb.ID}) {
+		t.Fatalf("tasks done %v; want one, for the turn that changed a file", done)
 	}
 }

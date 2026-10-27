@@ -12,6 +12,10 @@
   instead of larger, Home's notices (notifications, previews, a newer base) share one
   padding and size, and text without a size of its own is no longer the browser's 16px. An
   end-to-end test checks every page in both styles.
+- **Checkpoints after every task.** A sandbox's checkpoint schedule can take one each time an
+  agent finishes a message that changed files, as **After every task** under **Take
+  checkpoints**. They are pruned like the scheduled ones: the newest 3 and the last of each
+  day for a week.
 
 ## v0.9.0 — 2026-10-27
 

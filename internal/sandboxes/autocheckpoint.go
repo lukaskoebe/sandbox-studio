@@ -15,7 +15,7 @@ import (
 var CheckpointScheduleHours = []int{0, 1, 4, 12, 24}
 
 // ErrCheckpointSchedule means a schedule interval is not one of CheckpointScheduleHours.
-var ErrCheckpointSchedule = errors.New("a checkpoint schedule runs every 1, 4, 12 or 24 hours, or 0 to turn it off")
+var ErrCheckpointSchedule = errors.New("a checkpoint schedule runs every 1, 4, 12 or 24 hours or after every task, or 0 to turn it off")
 
 // Scheduled checkpoints the schedule keeps: the newest few, and the newest of each day
 // before today for a week. Every checkpoint holds a full copy of the sandbox's disks, so
@@ -36,17 +36,17 @@ func (m *Manager) CheckpointSchedule(ctx context.Context, envID, id string) (sto
 	return m.Store.CheckpointSchedule(ctx, envID, id)
 }
 
-// SetCheckpointSchedule sets a sandbox's checkpoint schedule. Turning it off keeps the
-// checkpoints it took.
-func (m *Manager) SetCheckpointSchedule(ctx context.Context, envID, id string, everyHours int) (store.CheckpointSchedule, error) {
-	if !slices.Contains(CheckpointScheduleHours, everyHours) {
+// SetCheckpointSchedule sets a sandbox's checkpoint schedule: every few hours, or after every
+// task when afterTasks, with everyHours 0. Turning it off keeps the checkpoints it took.
+func (m *Manager) SetCheckpointSchedule(ctx context.Context, envID, id string, everyHours int, afterTasks bool) (store.CheckpointSchedule, error) {
+	if !slices.Contains(CheckpointScheduleHours, everyHours) || afterTasks && everyHours != 0 {
 		return store.CheckpointSchedule{}, ErrCheckpointSchedule
 	}
 	if _, err := m.PublicSandbox(ctx, envID, id); err != nil {
 		return store.CheckpointSchedule{}, err
 	}
 	defer m.publish(envID, id)
-	if err := m.Store.SetCheckpointSchedule(ctx, envID, id, everyHours); err != nil {
+	if err := m.Store.SetCheckpointSchedule(ctx, envID, id, everyHours, afterTasks); err != nil {
 		return store.CheckpointSchedule{}, err
 	}
 	m.autoFailed.Delete(id)
@@ -57,6 +57,17 @@ func (m *Manager) SetCheckpointSchedule(ctx context.Context, envID, id string, e
 		}
 	}
 	return m.Store.CheckpointSchedule(ctx, envID, id)
+}
+
+// TaskDone tells the checkpoint schedules that an agent finished a task in the sandbox that
+// changed its files: a schedule that runs after every task takes a checkpoint now, or, while
+// another operation runs, on the next minute. Studio forgets it when it stops.
+func (m *Manager) TaskDone(sandboxID string) {
+	m.tasksDone.Store(sandboxID, time.Now())
+	select {
+	case m.scheduleKick() <- struct{}{}:
+	default:
+	}
 }
 
 // scheduleKick wakes RunCheckpointSchedules before its next tick.
@@ -99,7 +110,8 @@ func (m *Manager) runCheckpointSchedules(ctx context.Context, now time.Time) {
 
 // scheduledCheckpoint takes a sandbox's checkpoint if one is due and deletes the scheduled
 // ones the schedule no longer keeps. A stopped sandbox gets one only if it ran since the
-// last, so its disks may have changed; a suspended one waits until it resumes.
+// last, so its disks may have changed; a suspended one waits until it resumes. After every
+// task, one is due when a task ended since the last (TaskDone), running or stopped.
 func (m *Manager) scheduledCheckpoint(ctx context.Context, cs store.CheckpointSchedule, now time.Time) {
 	if failed, ok := m.autoFailed.Load(cs.SandboxID); ok && now.Sub(failed.(time.Time)) < autoCheckpointRetry {
 		return
@@ -118,7 +130,12 @@ func (m *Manager) scheduledCheckpoint(ctx context.Context, cs store.CheckpointSc
 			last = &checkpoints[i]
 		}
 	}
-	if last != nil && now.Sub(last.CreatedAt) < time.Duration(cs.EveryHours)*time.Hour {
+	done, _ := m.tasksDone.Load(cs.SandboxID)
+	if cs.AfterTasks {
+		if done == nil || last != nil && !done.(time.Time).After(last.CreatedAt) {
+			return
+		}
+	} else if last != nil && now.Sub(last.CreatedAt) < time.Duration(cs.EveryHours)*time.Hour {
 		return
 	}
 	status, err := m.Runtime.Status(ctx, VMName(sb))
@@ -128,7 +145,7 @@ func (m *Manager) scheduledCheckpoint(ctx context.Context, cs store.CheckpointSc
 	switch status {
 	case runtime.StatusRunning:
 	case runtime.StatusStopped, runtime.StatusCrashed:
-		if last != nil && (sb.StartedAt == nil || !sb.StartedAt.After(last.CreatedAt)) {
+		if !cs.AfterTasks && last != nil && (sb.StartedAt == nil || !sb.StartedAt.After(last.CreatedAt)) {
 			return
 		}
 	default:
@@ -145,6 +162,9 @@ func (m *Manager) scheduledCheckpoint(ctx context.Context, cs store.CheckpointSc
 		return
 	}
 	m.autoFailed.Delete(cs.SandboxID)
+	if done != nil {
+		m.tasksDone.CompareAndDelete(cs.SandboxID, done) // A task that ended since gets one of its own.
+	}
 	m.setScheduleNote(ctx, cs, "")
 	m.pruneAutoCheckpoints(ctx, cs, now)
 }

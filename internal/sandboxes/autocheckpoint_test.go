@@ -12,11 +12,11 @@ import (
 
 func TestCheckpointScheduleTakesDueCheckpoints(t *testing.T) {
 	f := newCheckpointFixture(t)
-	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 2); !errors.Is(err, ErrCheckpointSchedule) {
+	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 2, false); !errors.Is(err, ErrCheckpointSchedule) {
 		t.Fatalf("SetCheckpointSchedule(2) = %v; want ErrCheckpointSchedule", err)
 	}
 	manual := f.createReadyCheckpoint(t, "mine")
-	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 1); err != nil {
+	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 1, false); err != nil {
 		t.Fatal(err)
 	}
 	autos := func() []store.Checkpoint {
@@ -62,7 +62,7 @@ func TestCheckpointScheduleTakesDueCheckpoints(t *testing.T) {
 		t.Fatalf("the note stayed after a checkpoint was taken: %q", cs.Note)
 	}
 
-	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 0); err != nil {
+	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	f.manager.runCheckpointSchedules(f.ctx, now.Add(5*time.Hour))
@@ -71,6 +71,58 @@ func TestCheckpointScheduleTakesDueCheckpoints(t *testing.T) {
 	}
 	if _, err := f.store.Checkpoint(f.ctx, f.env.ID, f.sandbox.ID, manual.ID); err != nil {
 		t.Fatalf("the user's checkpoint: %v", err)
+	}
+}
+
+func TestCheckpointScheduleAfterTasks(t *testing.T) {
+	f := newCheckpointFixture(t)
+	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 4, true); !errors.Is(err, ErrCheckpointSchedule) {
+		t.Fatalf("SetCheckpointSchedule(4, after tasks) = %v; want ErrCheckpointSchedule", err)
+	}
+	if _, err := f.manager.SetCheckpointSchedule(f.ctx, f.env.ID, f.sandbox.ID, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	autos := func() int {
+		t.Helper()
+		all, err := f.store.Checkpoints(f.ctx, f.env.ID, f.sandbox.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(slices.DeleteFunc(all, func(cp store.Checkpoint) bool { return !cp.Auto }))
+	}
+
+	now := time.Now()
+	f.manager.runCheckpointSchedules(f.ctx, now.Add(25*time.Hour))
+	if n := autos(); n != 0 {
+		t.Fatalf("%d checkpoints before any task; want none", n)
+	}
+	f.runtime.setStatus(VMName(f.sandbox), runtime.StatusRunning)
+	f.manager.TaskDone(f.sandbox.ID)
+	f.manager.runCheckpointSchedules(f.ctx, now)
+	if n := autos(); n != 1 {
+		t.Fatalf("%d checkpoints after a task; want 1", n)
+	}
+	f.manager.runCheckpointSchedules(f.ctx, now.Add(25*time.Hour))
+	if n := autos(); n != 1 {
+		t.Fatalf("%d checkpoints without another task; want 1", n)
+	}
+
+	// A task that ends while another operation holds the sandbox gets its checkpoint later,
+	// even after the sandbox stopped.
+	f.manager.TaskDone(f.sandbox.ID)
+	unlock, err := f.manager.tryMutation(f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.manager.runCheckpointSchedules(f.ctx, now)
+	unlock()
+	if n := autos(); n != 1 {
+		t.Fatalf("%d checkpoints while the sandbox was busy; want 1", n)
+	}
+	f.runtime.setStatus(VMName(f.sandbox), runtime.StatusStopped)
+	f.manager.runCheckpointSchedules(f.ctx, now.Add(time.Minute))
+	if n := autos(); n != 2 {
+		t.Fatalf("%d checkpoints after the sandbox was free again; want 2", n)
 	}
 }
 

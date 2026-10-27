@@ -111,6 +111,9 @@ type Service struct {
 	// OnIdle, when set, is told that a chat became idle again: a turn ended, or the chat came
 	// back from the terminal. Memory extracts the new turns once the chat stays idle.
 	OnIdle func(envID, chatID string)
+	// OnTaskDone, when set, is told that a turn ended that changed the sandbox's files, or may
+	// have. A checkpoint schedule that runs after every task takes one then.
+	OnTaskDone func(sandboxID string)
 
 	mu    sync.Mutex
 	live  map[string]*live
@@ -1187,7 +1190,9 @@ func (l *live) end(r *run, resp acp.PromptResponse, err error) {
 	if _, err := l.s.Store.EndChatTurn(ctx, l.chatID, r.turn.ID, reason, raw); err != nil && !errors.Is(err, store.ErrNotFound) {
 		l.s.log().Warn("chat: end turn", "chat", l.chatID, "err", err)
 	}
-	l.s.changes(ctx, c, r.turn)
+	if l.s.changes(ctx, c, r.turn) && l.s.OnTaskDone != nil {
+		l.s.OnTaskDone(c.SandboxID)
+	}
 	l.s.retitle(c, title)
 	l.s.unlock(c, store.ChatRunning)
 	close(r.done)

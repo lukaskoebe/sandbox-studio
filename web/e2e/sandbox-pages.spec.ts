@@ -410,4 +410,19 @@ test("a checkpoint schedule takes a checkpoint", async ({ page, api, env }) => {
   await expect(
     section.getByRole("combobox", { name: "Take checkpoints" })
   ).toContainText("Every 4 hours")
+
+  // After every task, it waits for an agent to change files.
+  await section.getByRole("combobox", { name: "Take checkpoints" }).click()
+  await page.getByRole("option", { name: "After every task" }).click()
+  await expect(
+    section.getByText(/when an agent finishes a task that changed files/)
+  ).toBeVisible()
+  await expect
+    .poll(() =>
+      api.json(
+        "GET",
+        `/api/environments/${env}/sandboxes/${id}/checkpoint-schedule`
+      )
+    )
+    .toMatchObject({ everyHours: 0, afterTasks: true })
 })

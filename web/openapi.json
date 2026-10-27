@@ -1037,8 +1037,12 @@
       "CheckpointSchedule": {
         "additionalProperties": false,
         "properties": {
+          "afterTasks": {
+            "description": "A checkpoint is taken after every agent turn that changed files, instead of every few hours",
+            "type": "boolean"
+          },
           "everyHours": {
-            "description": "Hours between scheduled checkpoints; 0 when the schedule is off",
+            "description": "Hours between scheduled checkpoints; 0 when the schedule is off or runs after every task",
             "format": "int64",
             "type": "integer"
           },
@@ -1048,7 +1052,8 @@
           }
         },
         "required": [
-          "everyHours"
+          "everyHours",
+          "afterTasks"
         ],
         "type": "object"
       },
@@ -7660,8 +7665,12 @@
       "SetCheckpointScheduleInBody": {
         "additionalProperties": false,
         "properties": {
+          "afterTasks": {
+            "description": "Take a checkpoint after every agent turn that changed files instead, with everyHours 0",
+            "type": "boolean"
+          },
           "everyHours": {
-            "description": "Hours between scheduled checkpoints; 0 turns the schedule off",
+            "description": "Hours between scheduled checkpoints; 0 turns the schedule off, unless afterTasks",
             "enum": [
               0,
               1,
@@ -15719,7 +15728,7 @@
         ]
       },
       "put": {
-        "description": "Studio takes a checkpoint every everyHours while the sandbox runs, or once after it stopped, and deletes the older ones it took: it keeps the newest three and the newest of each of the seven days before. Checkpoints taken by hand, or renamed, are never deleted. Turning the schedule off keeps the checkpoints it took.",
+        "description": "Studio takes a checkpoint every everyHours while the sandbox runs, or once after it stopped, or with afterTasks after every agent turn that changed files. It deletes the older ones it took: it keeps the newest three and the newest of each of the seven days before. Checkpoints taken by hand, or renamed, are never deleted. Turning the schedule off keeps the checkpoints it took.",
         "operationId": "setCheckpointSchedule",
         "parameters": [
           {

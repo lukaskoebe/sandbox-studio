@@ -221,10 +221,10 @@ func TestCheckpointSchedules(t *testing.T) {
 	if cs, err := s.CheckpointSchedule(ctx, env.ID, sb.ID); err != nil || cs.EveryHours != 0 {
 		t.Fatalf("no schedule: %+v %v", cs, err)
 	}
-	if err := s.SetCheckpointSchedule(ctx, other.ID, sb.ID, 4); !errors.Is(err, ErrNotFound) {
+	if err := s.SetCheckpointSchedule(ctx, other.ID, sb.ID, 4, false); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("schedule in another environment: %v", err)
 	}
-	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 4); err != nil {
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 4, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetCheckpointScheduleNote(ctx, env.ID, sb.ID, "the sandbox is suspended"); err != nil {
@@ -234,11 +234,27 @@ func TestCheckpointSchedules(t *testing.T) {
 		t.Fatalf("schedules %+v %v", all, err)
 	}
 	// Changing the interval forgets the note.
-	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 24); err != nil {
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 24, false); err != nil {
 		t.Fatal(err)
 	}
 	if cs, _ := s.CheckpointSchedule(ctx, env.ID, sb.ID); cs.EveryHours != 24 || cs.Note != "" {
 		t.Fatalf("changed schedule %+v", cs)
+	}
+	// After every task, the hours go.
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 4, true); err != nil {
+		t.Fatal(err)
+	}
+	if cs, _ := s.CheckpointSchedule(ctx, env.ID, sb.ID); cs.EveryHours != 0 || !cs.AfterTasks {
+		t.Fatalf("after every task %+v", cs)
+	}
+	if all, _ := s.CheckpointSchedules(ctx); len(all) != 1 || !all[0].AfterTasks {
+		t.Fatalf("after every task, listed %+v", all)
+	}
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 24, false); err != nil {
+		t.Fatal(err)
+	}
+	if cs, _ := s.CheckpointSchedule(ctx, env.ID, sb.ID); cs.EveryHours != 24 || cs.AfterTasks {
+		t.Fatalf("back to daily %+v", cs)
 	}
 
 	auto, err := s.CreateAutoCheckpoint(ctx, env.ID, sb.ID, "Auto 1")
@@ -258,13 +274,13 @@ func TestCheckpointSchedules(t *testing.T) {
 		t.Fatal("a renamed checkpoint is still the schedule's")
 	}
 
-	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 0); err != nil {
+	if err := s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	if all, _ := s.CheckpointSchedules(ctx); len(all) != 0 {
 		t.Fatalf("schedule off, still listed: %+v", all)
 	}
-	_ = s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 1)
+	_ = s.SetCheckpointSchedule(ctx, env.ID, sb.ID, 1, false)
 	if err := s.DeleteSandbox(ctx, env.ID, sb.ID); err != nil {
 		t.Fatal(err)
 	}

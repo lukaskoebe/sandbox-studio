@@ -230,14 +230,22 @@ So `memoryBytes` follows the guest's own use, not the host's, but it is not exac
 ### Scheduled checkpoints
 
 A sandbox can take checkpoints on a schedule, off by default
-(`GET`/`PUT .../checkpoint-schedule` with `{"everyHours"}`: 0, 1, 4, 12 or 24). The table
-`checkpoint_schedules` holds one row per sandbox with a schedule;
+(`GET`/`PUT .../checkpoint-schedule` with `{"everyHours"}`: 0, 1, 4, 12 or 24, or
+`{"everyHours": 0, "afterTasks": true}` for one after every task). The table
+`checkpoint_schedules` holds one row per sandbox with a schedule (`after_tasks` with
+`every_hours` 0, or hours alone);
 `Manager.RunCheckpointSchedules` checks them every minute, and setting a schedule wakes it
 at once, so the first checkpoint is taken right away.
 
 - A checkpoint is due when the schedule's newest one (`checkpoints.auto`) is `everyHours`
   old. A running sandbox gets one then. A stopped one gets one only if it started since the
   last, as its disks can't have changed otherwise; a suspended one waits.
+- After every task, one is due when a chat turn that changed files ended since the newest:
+  `chat.Service.OnTaskDone` calls `Manager.TaskDone` when the turn's undo snapshot found
+  changes, or there was none to compare, and that wakes the schedule. Running or stopped,
+  the sandbox gets it; a suspended one waits. A terminal turn has no snapshot and takes none.
+  The time of the newest task is kept in memory, so a task that ended just before Studio
+  stopped gets none.
 - It is named `Auto YYYY-MM-DD HH:MM` in local time and records no history event, since it
   is deleted again.
 - After each new one the schedule prunes its own: it keeps the newest 3 and the newest of each

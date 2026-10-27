@@ -77,6 +77,7 @@ type Manager struct {
 
 	configuring sync.Map // sandbox ID → chan struct{}, see Configure
 	autoFailed  sync.Map // sandbox ID → when its scheduled checkpoint last failed, see scheduledCheckpoint
+	tasksDone   sync.Map // sandbox ID → when its newest task that changed files ended, see TaskDone
 	kickOnce    sync.Once
 	kick        chan struct{} // see scheduleKick
 	harness     harnessConfigs

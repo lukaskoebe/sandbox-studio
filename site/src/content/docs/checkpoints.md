@@ -21,6 +21,8 @@ Each checkpoint holds a full copy of the sandbox's disks, so it takes about as m
 
 Under **Take checkpoints**, choose **Every hour**, **Every 4 hours**, **Every 12 hours** or **Daily**. It is **Off** by default. Studio takes the first checkpoint right away, then one each interval while the sandbox runs. A stopped sandbox gets one only if it ran since the last, and a suspended one waits until it resumes.
 
+Choose **After every task** instead to take one each time an agent finishes a message that changed files, in any chat on the sandbox. A message that only answered a question takes none, and neither does work in a terminal. If the sandbox is busy with another operation, the checkpoint follows a minute later.
+
 Scheduled checkpoints are named after the time they were taken and marked **auto**. Studio keeps the newest three and the last of each day for a week, and deletes older ones it took, so a sandbox has at most ten. It never deletes the checkpoints you saved. To keep a scheduled checkpoint, rename it on the **History** line; it is then yours.
 
 If a scheduled checkpoint can't be taken, the section says why, and Studio tries again 15 minutes later. Turning the schedule **Off** keeps the checkpoints it took.

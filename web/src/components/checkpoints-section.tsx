@@ -296,8 +296,10 @@ export function CheckpointsSection({
 type EveryHours =
   components["schemas"]["SetCheckpointScheduleInBody"]["everyHours"]
 
+/** The schedule as one choice: a number of hours, or "tasks" for after every task. */
 const scheduleOptions: Record<string, string> = {
   "0": "Off",
+  tasks: "After every task",
   "1": "Every hour",
   "4": "Every 4 hours",
   "12": "Every 12 hours",
@@ -305,8 +307,8 @@ const scheduleOptions: Record<string, string> = {
 }
 
 /**
- * How often Studio checkpoints the sandbox on its own, and which of those it keeps. The
- * note says why the last one wasn't taken.
+ * How often Studio checkpoints the sandbox on its own, or after every task an agent finishes,
+ * and which of those it keeps. The note says why the last one wasn't taken.
  */
 function CheckpointSchedule({
   env,
@@ -339,9 +341,8 @@ function CheckpointSchedule({
         }),
     }
   )
-  const every = set.isPending
-    ? set.variables.body.everyHours
-    : (schedule.data?.everyHours ?? 0)
+  const body = set.isPending ? set.variables.body : schedule.data
+  const choice = body?.afterTasks ? "tasks" : String(body?.everyHours ?? 0)
 
   return (
     <div className="grid gap-1 text-xs">
@@ -350,14 +351,17 @@ function CheckpointSchedule({
           Take checkpoints
         </span>
         <Select
-          value={String(every)}
+          value={choice}
           disabled={schedule.isPending}
           items={scheduleOptions}
           onValueChange={(v) =>
             v &&
             set.mutate({
               ...path,
-              body: { everyHours: Number(v) as EveryHours },
+              body:
+                v === "tasks"
+                  ? { everyHours: 0, afterTasks: true }
+                  : { everyHours: Number(v) as EveryHours },
             })
           }
         >
@@ -378,14 +382,16 @@ function CheckpointSchedule({
         </Select>
         {set.isPending && <Spinner />}
       </div>
-      {every > 0 && (
+      {choice !== "0" && (
         <p className="text-muted-foreground">
-          Taken while the sandbox runs, or once after it stopped. Studio keeps
-          the newest 3 and the last of each day for a week; the ones you save
-          stay. Each holds a copy of the sandbox&apos;s disks.
+          {choice === "tasks"
+            ? "Taken when an agent finishes a task that changed files."
+            : "Taken while the sandbox runs, or once after it stopped."}{" "}
+          Studio keeps the newest 3 and the last of each day for a week; the
+          ones you save stay. Each holds a copy of the sandbox&apos;s disks.
         </p>
       )}
-      {every > 0 && schedule.data?.note && (
+      {choice !== "0" && schedule.data?.note && (
         <p className="text-destructive">
           The last one wasn&apos;t taken: {schedule.data.note}
         </p>
