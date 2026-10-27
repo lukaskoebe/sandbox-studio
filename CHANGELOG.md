@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.9.0 — 2026-10-27
 
 Fixes from the first days with v0.8.0, and what its users asked for: terminal sessions as
-tabs, a teammate's status that counts what runs in them, and long chats that load in pages.
+tabs, a teammate's status that counts what runs in them, long chats that load in pages,
+pull request reviews a teammate drafts and the user posts, and memory pages that link each
+other.
 
 - **Teammates** count what runs in their terminals. One works while an agent such as
   opencode prints in one of its terminals, and is idle with a ring instead of a dot while a
