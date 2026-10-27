@@ -7,8 +7,10 @@ import (
 	"strings"
 )
 
-// RebaseOperation records a move of a sandbox to another template. The catalog keeps
-// FromGeneration until CommitRebase adopts ToGeneration, the template and its resources.
+// RebaseOperation records a move of a sandbox to another template, or to the default image
+// when TemplateID is empty. The catalog keeps FromGeneration until CommitRebase adopts
+// ToGeneration, the template, its resources and BaseImage, the base the new VM runs, which
+// BaseVersion names when it is the default image.
 type RebaseOperation struct {
 	SandboxID      string
 	EnvironmentID  string
@@ -20,19 +22,24 @@ type RebaseOperation struct {
 	MaxMemoryMiB   int
 	WorkspaceMiB   int
 	DockerMiB      int
+	BaseImage      string
+	BaseVersion    string
 }
 
-const rebaseCols = "sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib"
+const rebaseCols = "sandbox_id, environment_id, IFNULL(template_id, ''), from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version"
+const rebaseInsertCols = "sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, base_image, base_version"
 
 func scanRebase(row interface{ Scan(...any) error }) (RebaseOperation, error) {
 	var op RebaseOperation
 	err := row.Scan(&op.SandboxID, &op.EnvironmentID, &op.TemplateID, &op.FromGeneration, &op.ToGeneration,
-		&op.CPUs, &op.MemoryMiB, &op.MaxMemoryMiB, &op.WorkspaceMiB, &op.DockerMiB)
+		&op.CPUs, &op.MemoryMiB, &op.MaxMemoryMiB, &op.WorkspaceMiB, &op.DockerMiB, &op.BaseImage, &op.BaseVersion)
 	return op, err
 }
 
 // BeginRebase records a rebase of op.SandboxID onto op.TemplateID, which must be ready
-// and in the same environment. It reserves the next generation and returns the record.
+// and in the same environment, or onto the default image op.BaseImage when TemplateID is
+// empty. A template's base replaces op's. It reserves the next generation and returns the
+// record.
 // It fails with ErrConflict while another rebase or a restore is pending.
 func (s *Store) BeginRebase(ctx context.Context, op RebaseOperation) (RebaseOperation, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -49,16 +56,19 @@ func (s *Store) BeginRebase(ctx context.Context, op RebaseOperation) (RebaseOper
 	if err != nil {
 		return RebaseOperation{}, err
 	}
-	var state string
-	err = tx.QueryRowContext(ctx, "SELECT state FROM templates WHERE environment_id = ? AND id = ?", op.EnvironmentID, op.TemplateID).Scan(&state)
-	if errors.Is(err, sql.ErrNoRows) {
-		return RebaseOperation{}, ErrNotFound
-	}
-	if err != nil {
-		return RebaseOperation{}, err
-	}
-	if state != TemplateStateReady {
-		return RebaseOperation{}, ErrConflict
+	if op.TemplateID != "" {
+		var state string
+		op.BaseVersion = ""
+		err = tx.QueryRowContext(ctx, "SELECT state, base_ref FROM templates WHERE environment_id = ? AND id = ?", op.EnvironmentID, op.TemplateID).Scan(&state, &op.BaseImage)
+		if errors.Is(err, sql.ErrNoRows) {
+			return RebaseOperation{}, ErrNotFound
+		}
+		if err != nil {
+			return RebaseOperation{}, err
+		}
+		if state != TemplateStateReady {
+			return RebaseOperation{}, ErrConflict
+		}
 	}
 	var pending int
 	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM restores WHERE sandbox_id = ?) OR EXISTS (SELECT 1 FROM rebases WHERE sandbox_id = ?)", op.SandboxID, op.SandboxID).Scan(&pending); err != nil {
@@ -68,9 +78,9 @@ func (s *Store) BeginRebase(ctx context.Context, op RebaseOperation) (RebaseOper
 		return RebaseOperation{}, ErrConflict
 	}
 	op.FromGeneration, op.ToGeneration = generation, generation+1
-	if _, err := tx.ExecContext(ctx, "INSERT INTO rebases ("+rebaseCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	if _, err := tx.ExecContext(ctx, "INSERT INTO rebases ("+rebaseInsertCols+") VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		op.SandboxID, op.EnvironmentID, op.TemplateID, op.FromGeneration, op.ToGeneration,
-		op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB); err != nil {
+		op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.BaseImage, op.BaseVersion); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return RebaseOperation{}, ErrConflict
 		}
@@ -100,7 +110,7 @@ func (s *Store) Rebases(ctx context.Context) ([]RebaseOperation, error) {
 	return out, rows.Err()
 }
 
-// CommitRebase switches the sandbox to the new generation, template and resources with a
+// CommitRebase switches the sandbox to the new generation, template, base and resources with a
 // compare-and-swap on the generation. Repeating it after it took effect is safe.
 func (s *Store) CommitRebase(ctx context.Context, op RebaseOperation) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -126,9 +136,9 @@ func (s *Store) CommitRebase(ctx context.Context, op RebaseOperation) error {
 	if err != nil {
 		return err
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE sandboxes SET generation = ?, template_id = ?, cpus = ?, memory_mib = ?, max_memory_mib = ?, workspace_mib = ?, docker_mib = ?
-		WHERE environment_id = ? AND id = ? AND generation = ?`,
-		op.ToGeneration, op.TemplateID, op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB,
+	res, err := tx.ExecContext(ctx, `UPDATE sandboxes SET generation = ?, template_id = NULLIF(?, ''), cpus = ?, memory_mib = ?, max_memory_mib = ?, workspace_mib = ?, docker_mib = ?,
+		base_image = ?, base_version = ? WHERE environment_id = ? AND id = ? AND generation = ?`,
+		op.ToGeneration, op.TemplateID, op.CPUs, op.MemoryMiB, op.MaxMemoryMiB, op.WorkspaceMiB, op.DockerMiB, op.BaseImage, op.BaseVersion,
 		op.EnvironmentID, op.SandboxID, op.FromGeneration)
 	if err != nil {
 		return err

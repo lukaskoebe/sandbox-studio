@@ -1802,8 +1802,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Move a sandbox onto another template
-         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.
+         * Move a sandbox onto another template or the current base image
+         * @description Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. Software installed outside /workspace and the home, such as apt packages, is lost. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.
          */
         post: operations["rebaseSandbox"];
         delete?: never;
@@ -2517,6 +2517,26 @@ export interface paths {
         get: operations["getTemplate"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/templates/{id}/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build a template again on the current base image
+         * @description Submits a build of the template's specification, as submitBuildJob does. On a newer base image it makes a new version of the template; sandboxes on the old version can then be rebased onto it.
+         */
+        post: operations["rebuildTemplate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4891,8 +4911,8 @@ export interface components {
             text: string;
         };
         RebaseInBody: {
-            /** @description A ready template in the same environment */
-            templateId: string;
+            /** @description A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources */
+            templateId?: string;
         };
         RejectedPayload: {
             /** @description The host that answered 401 */
@@ -4973,6 +4993,10 @@ export interface components {
         Resized: {
             agent?: components["schemas"]["AgentInfo"];
             applied: components["schemas"]["ResizeApplied"];
+            /** @description Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date */
+            baseOutdated?: boolean;
+            /** @description The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base */
+            baseVersion?: string;
             checkpointRestoreSupported: boolean;
             /** Format: int64 */
             cpus: number;
@@ -5632,6 +5656,8 @@ export interface components {
             turnId: string;
         };
         TemplateView: {
+            /** @description Whether the template is built on an older base image than new sandboxes get; rebuilding it (POST …/rebuild) makes a version on the current base */
+            baseOutdated?: boolean;
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
@@ -5928,6 +5954,10 @@ export interface components {
         };
         View: {
             agent?: components["schemas"]["AgentInfo"];
+            /** @description Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date */
+            baseOutdated?: boolean;
+            /** @description The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base */
+            baseVersion?: string;
             checkpointRestoreSupported: boolean;
             /** Format: int64 */
             cpus: number;
@@ -12375,6 +12405,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    rebuildTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Template ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildJobView"];
                 };
             };
             /** @description Error */

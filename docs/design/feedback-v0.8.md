@@ -215,6 +215,16 @@ can't move to the current default image. Nothing tells the user a sandbox is beh
 - **S:** the "predates" errors name Rebase. The rebase dialog lists what is lost: Docker data,
   software outside `/workspace` and the home, and running terminals.
 
+**Built** on `feedback-v0.8` ([which base a sandbox runs](../sandboxes.md#which-base-a-sandbox-runs)).
+A release pins the image by digest, so each sandbox keeps the reference and the release
+beside it (`base_image`, `base_version`); older sandboxes learn the reference from msb's
+catalog at startup. Templates keep their `base_ref`, compared with the default image. The
+rebase dialog follows the mockup: the current base first, then the templates, with the
+sandbox's template rebuilt on the current base picked when there is one. Home's notice links
+the release's notes on GitHub instead of saying per feature what needs a new base. "Created
+before network rules existed" still needs a recreate: a rebase keeps the sandbox's missing
+DNS port.
+
 ## Force pushes through review
 
 **Mockup F.** The mirror (`internal/gitreview/receive.go`) takes only branches. It refuses

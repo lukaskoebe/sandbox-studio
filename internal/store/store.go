@@ -272,12 +272,17 @@ type Sandbox struct {
 	// StartedAt is when the VM last started, nil before its first start after the column
 	// was added. It stays after a stop: show it only while the sandbox runs.
 	StartedAt *time.Time `json:"startedAt,omitempty"`
+	// BaseImage is the OCI reference of the base the VM was made from: its template's base, or
+	// the default image. BaseVersion is the Studio release that brought it, empty when unknown.
+	// Both are empty for sandboxes whose base isn't known yet.
+	BaseImage   string `json:"-"`
+	BaseVersion string `json:"-"`
 }
 
 // SandboxKindBrowser marks a teammate's browser VM (internal/browser).
 const SandboxKindBrowser = "browser"
 
-const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0), live_cpus, live_memory_mib"
+const sandboxCols = "id, environment_id, IFNULL(build_job_id, ''), IFNULL(template_id, ''), name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, IFNULL(teammate_id, ''), kind, IFNULL(forked_from_sandbox_id, ''), IFNULL(forked_from_generation, 0), IFNULL(forked_at, 0), IFNULL(started_at, 0), live_cpus, live_memory_mib, base_image, base_version"
 
 // firstDNSPort is where per-sandbox resolver ports start; each sandbox takes the lowest port no
 // other sandbox has and nothing on the host listens on.
@@ -287,7 +292,7 @@ func scanSandbox(row interface{ Scan(...any) error }) (Sandbox, error) {
 	var sb Sandbox
 	var created, forkedAt, startedAt int64
 	err := row.Scan(&sb.ID, &sb.EnvironmentID, &sb.BuildJobID, &sb.TemplateID, &sb.Name, &sb.Generation, &sb.CPUs, &sb.MemoryMiB, &sb.MaxMemoryMiB, &sb.WorkspaceMiB, &sb.DockerMiB, &created, &sb.DNSPort, &sb.TeammateID, &sb.Kind,
-		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt, &sb.LiveCPUs, &sb.LiveMemoryMiB)
+		&sb.ForkedFromID, &sb.ForkedFromGeneration, &forkedAt, &startedAt, &sb.LiveCPUs, &sb.LiveMemoryMiB, &sb.BaseImage, &sb.BaseVersion)
 	sb.CreatedAt = time.Unix(created, 0)
 	if forkedAt != 0 {
 		sb.ForkedAt = time.Unix(forkedAt, 0)
@@ -328,8 +333,10 @@ func insertSandbox(ctx context.Context, tx *sql.Tx, sb Sandbox) (Sandbox, error)
 	}
 	sb.BuildJobID = ""
 	if sb.TemplateID != "" {
+		// A template sandbox runs its template's base, whatever the caller says.
 		var state string
-		err := tx.QueryRowContext(ctx, "SELECT state FROM templates WHERE environment_id = ? AND id = ?", sb.EnvironmentID, sb.TemplateID).Scan(&state)
+		sb.BaseVersion = ""
+		err := tx.QueryRowContext(ctx, "SELECT state, base_ref FROM templates WHERE environment_id = ? AND id = ?", sb.EnvironmentID, sb.TemplateID).Scan(&state, &sb.BaseImage)
 		if errors.Is(err, sql.ErrNoRows) {
 			return sb, ErrNotFound
 		}
@@ -359,9 +366,9 @@ func insertSandbox(ctx context.Context, tx *sql.Tx, sb Sandbox) (Sandbox, error)
 		return sb, err
 	}
 	sb.DNSPort = port
-	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, teammate_id, kind, forked_from_sandbox_id, forked_from_generation, forked_at) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, 0))",
+	_, err = tx.ExecContext(ctx, "INSERT INTO sandboxes (id, environment_id, build_job_id, template_id, name, generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib, created_at, dns_port, teammate_id, kind, forked_from_sandbox_id, forked_from_generation, forked_at, base_image, base_version) VALUES (?, ?, NULL, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULLIF(?, ''), NULLIF(?, 0), NULLIF(?, 0), ?, ?)",
 		sb.ID, sb.EnvironmentID, sb.TemplateID, sb.Name, sb.Generation, sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB, sb.WorkspaceMiB, sb.DockerMiB, sb.CreatedAt.Unix(), sb.DNSPort, sb.TeammateID, sb.Kind,
-		sb.ForkedFromID, sb.ForkedFromGeneration, forkedAtUnix(sb.ForkedAt))
+		sb.ForkedFromID, sb.ForkedFromGeneration, forkedAtUnix(sb.ForkedAt), sb.BaseImage, sb.BaseVersion)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sb, fmt.Errorf("a sandbox named %q: %w", sb.Name, ErrExists)
 	}
@@ -485,6 +492,19 @@ func (s *Store) MarkSandboxStarted(ctx context.Context, envID, id string, at tim
 		return err
 	}
 	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetSandboxBase records the base image a sandbox runs, and the release that brought it, for a
+// sandbox made before Studio recorded them.
+func (s *Store) SetSandboxBase(ctx context.Context, envID, id, image, version string) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE sandboxes SET base_image = ?, base_version = ? WHERE environment_id = ? AND id = ?", image, version, envID, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
 	return nil

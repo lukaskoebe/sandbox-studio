@@ -49,6 +49,11 @@ export function shortTemplate(
   return templateId ? templateId.slice(0, 8) : "none"
 }
 
+/** The stack of a template's name: node-22+python-3.13 of node-22+python-3.13@2. */
+export function templateStack(name?: string) {
+  return name?.replace(/@\d+$/, "")
+}
+
 /** Whether a timestamp is set. The Go zero time (year 1) means it is not. */
 export function isSet(time: string): boolean {
   return Date.parse(time) > 0

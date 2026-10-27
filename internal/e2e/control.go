@@ -32,6 +32,10 @@ var Rejected func(ctx context.Context, sandboxID, host string, names []string) e
 // has (POST /api/e2e/chats/{id}/turns). Studio sets it.
 var SeedChat func(ctx context.Context, chatID string, count int) error
 
+// SetBase records the base image a sandbox runs and the release it came with, as an older
+// Studio would have (PUT /api/e2e/sandboxes/{id}/base). Studio sets it.
+var SetBase func(ctx context.Context, sandboxID, image, version string) error
+
 // Control returns the control API, which Studio mounts under ControlPrefix on its API mux:
 // it gets the same login and Host and Origin checks as the rest of the API. It exists only
 // in the e2e build.
@@ -65,6 +69,8 @@ var SeedChat func(ctx context.Context, chatID string, count int) error
 //	GET  /api/e2e/upstream/{repo...}      the upstream repository's branches
 //	POST /api/e2e/chats/{id}/turns        {"count": 45}: ended turns "Request n" and "Answer n"
 //	                                    added to the chat, straight into the store
+//	PUT  /api/e2e/sandboxes/{id}/base     {"image": "…:v0.7.0", "version": "v0.7.0"}: the base
+//	                                    image the sandbox's VM was made from, straight into the store
 func (r *Runtime) Control() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/e2e/chats/{id}/turns", func(w http.ResponseWriter, req *http.Request) {
@@ -76,6 +82,21 @@ func (r *Runtime) Control() http.Handler {
 			return
 		}
 		if err := SeedChat(req.Context(), req.PathValue("id"), body.Count); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("PUT /api/e2e/sandboxes/{id}/base", func(w http.ResponseWriter, req *http.Request) {
+		var body struct {
+			Image   string `json:"image"`
+			Version string `json:"version"`
+		}
+		if err := json.NewDecoder(io.LimitReader(req.Body, 4096)).Decode(&body); err != nil || body.Image == "" {
+			http.Error(w, "want {image, version}", http.StatusBadRequest)
+			return
+		}
+		if err := SetBase(req.Context(), req.PathValue("id"), body.Image, body.Version); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

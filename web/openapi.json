@@ -6115,14 +6115,10 @@
         "additionalProperties": false,
         "properties": {
           "templateId": {
-            "description": "A ready template in the same environment",
-            "minLength": 1,
+            "description": "A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources",
             "type": "string"
           }
         },
-        "required": [
-          "templateId"
-        ],
         "type": "object"
       },
       "RejectedPayload": {
@@ -6380,6 +6376,14 @@
           },
           "applied": {
             "$ref": "#/components/schemas/ResizeApplied"
+          },
+          "baseOutdated": {
+            "description": "Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date",
+            "type": "boolean"
+          },
+          "baseVersion": {
+            "description": "The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base",
+            "type": "string"
           },
           "checkpointRestoreSupported": {
             "type": "boolean"
@@ -8217,6 +8221,10 @@
       "TemplateView": {
         "additionalProperties": false,
         "properties": {
+          "baseOutdated": {
+            "description": "Whether the template is built on an older base image than new sandboxes get; rebuilding it (POST …/rebuild) makes a version on the current base",
+            "type": "boolean"
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -9060,6 +9068,14 @@
         "properties": {
           "agent": {
             "$ref": "#/components/schemas/AgentInfo"
+          },
+          "baseOutdated": {
+            "description": "Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date",
+            "type": "boolean"
+          },
+          "baseVersion": {
+            "description": "The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base",
+            "type": "string"
           },
           "checkpointRestoreSupported": {
             "type": "boolean"
@@ -16414,7 +16430,7 @@
     },
     "/api/environments/{env}/sandboxes/{id}/rebase": {
       "post": {
-        "description": "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.",
+        "description": "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. Software installed outside /workspace and the home, such as apt packages, is lost. Docker images, containers and volumes are lost. Tmux sessions end. A running sandbox is stopped for the copy and started again; a stopped one stays stopped. It returns at once in state creating, with the steps in progress; the copy runs in the background. If the rebase fails, the sandbox stays on its old template in the state it was in, and its progress names the step that failed until the next rebase or until it is dismissed (DELETE …/progress). With wait=true the answer comes once the rebase has ended.",
         "operationId": "rebaseSandbox",
         "parameters": [
           {
@@ -16480,7 +16496,7 @@
             "description": "Error"
           }
         },
-        "summary": "Move a sandbox onto another template",
+        "summary": "Move a sandbox onto another template or the current base image",
         "tags": [
           "sandboxes"
         ]
@@ -19500,6 +19516,61 @@
         },
         "tags": [
           "templates"
+        ]
+      }
+    },
+    "/api/environments/{env}/templates/{id}/rebuild": {
+      "post": {
+        "description": "Submits a build of the template's specification, as submitBuildJob does. On a newer base image it makes a new version of the template; sandboxes on the old version can then be rebased onto it.",
+        "operationId": "rebuildTemplate",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Template ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Template ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildJobView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Build a template again on the current base image",
+        "tags": [
+          "templates",
+          "builds"
         ]
       }
     },

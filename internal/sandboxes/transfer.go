@@ -201,6 +201,8 @@ func (m *Manager) fork(ctx context.Context, envID, id, name string, recordBase b
 		CPUs: sb.CPUs, MemoryMiB: sb.MemoryMiB, MaxMemoryMiB: sb.MaxMemoryMiB,
 		WorkspaceMiB: sb.WorkspaceMiB, DockerMiB: sb.DockerMiB,
 		ForkedFromID: sb.ID, ForkedFromGeneration: sb.Generation,
+		// A fork without a template is made from the default image, not its source's.
+		BaseImage: m.BaseImage, BaseVersion: m.BaseVersion,
 	})
 	if err != nil {
 		return View{}, err

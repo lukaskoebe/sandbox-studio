@@ -35,6 +35,13 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   agent's first words, taking the place of its starting, set it off. The composer now ends on
   the right where the messages and tool calls do, and at the bottom where the computer's
   screen does.
+- **Base images:** a sandbox made from an older release's base image says so. Its computer's
+  menu has a dot and **Built on an older base** with the release it came from and a
+  **Rebase…** button, and Home lists such sandboxes after an update until you dismiss the
+  notice. A rebase can now go onto the current base image, keeping the sandbox's resources,
+  and a template built on an older base has **Rebuild on the current base** in Settings →
+  Templates; the rebase dialog then picks the rebuilt template. The dialog lists what a rebase
+  keeps and what it loses, and the "image predates chats" errors say to rebase.
 - **opencode** starts for the agent again in every sandbox. Installing it into the base
   image as root left a root-owned `/tmp/opencode` behind that the agent couldn't write to;
   the image no longer has it, and the guest removes it from older sandboxes at boot.

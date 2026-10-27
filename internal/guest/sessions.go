@@ -178,7 +178,7 @@ func startHarness(run run, sleep func(time.Duration), req agentproto.StartSessio
 	// once with "command not found".
 	if _, err := run("bash", "-lc", `command -v -- "$1"`, "studio-session", req.Command[0]); err != nil {
 		return harnessError(fmt.Sprintf("%s is not installed in this sandbox: its image predates the agent tools. "+
-			"Rebuild the base image (make image) and create a new sandbox.", req.Harness))
+			"Rebase it onto the current base: Rebase in the computer menu keeps /workspace and the home.", req.Harness))
 	}
 	if out, err := run("tmux", startCommand(req)...); err != nil {
 		return fmt.Errorf("tmux: %s", strings.TrimSpace(string(out)))

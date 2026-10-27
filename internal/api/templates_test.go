@@ -258,3 +258,40 @@ func TestTemplateAPIProviderErrorsUseSafeMessages(t *testing.T) {
 		t.Fatalf("template-specific internal error exposed provider details: %v", unknown)
 	}
 }
+
+func TestRebuildTemplateSubmitsItsSpecAndSaysWhenItIsBehind(t *testing.T) {
+	h, s := newTestServer(t)
+	env := newEnvironment(t, s, "rebuild")
+	template := createReadyAPITemplate(t, s.Store, env.ID)
+	url := testOrigin + "/api/environments/" + env.ID + "/templates/" + template.ID
+	if rec := do(h, http.MethodPost, url+"/rebuild", ""); rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("rebuild without backend: got %d, want 503 (%s)", rec.Code, rec.Body)
+	}
+	builds := &apiBuildService{store: s.Store}
+	s.Builds = builds
+	rec := do(h, http.MethodPost, url+"/rebuild", "")
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("rebuild: got %d (%s)", rec.Code, rec.Body)
+	}
+	job := decode[BuildJobView](t, rec)
+	// The source is the template's spec, which the worker parses as YAML.
+	spec, err := templatespec.ParseYAML([]byte(job.Source))
+	if err != nil {
+		t.Fatalf("the rebuild's source: %v", err)
+	}
+	if encoded, err := templatespec.CanonicalJSON(spec); err != nil || string(encoded) != template.Spec {
+		t.Fatalf("rebuild spec = %s, %v; want %s", encoded, err, template.Spec)
+	}
+	if rec := do(h, http.MethodPost, testOrigin+"/api/environments/"+env.ID+"/templates/missing/rebuild", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("rebuild of a missing template: got %d (%s)", rec.Code, rec.Body)
+	}
+
+	s.Sandboxes = &sandboxes.Manager{BaseImage: "private-base-reference"}
+	if got := decode[TemplateView](t, do(h, http.MethodGet, url, "")); got.BaseOutdated {
+		t.Fatalf("a template on the current base is outdated: %+v", got)
+	}
+	s.Sandboxes.BaseImage = "newer-base"
+	if got := decode[TemplateView](t, do(h, http.MethodGet, url, "")); !got.BaseOutdated {
+		t.Fatalf("a template on an older base isn't outdated: %+v", got)
+	}
+}

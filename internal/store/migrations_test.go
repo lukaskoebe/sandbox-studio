@@ -749,3 +749,61 @@ func TestMigrateOpenAIModelID(t *testing.T) {
 		}
 	}
 }
+
+// Migration 050 gives template sandboxes and pending rebases their template's base, and lets
+// a rebase go onto the default image, which has no template.
+func TestMigrateBaseImages(t *testing.T) {
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "file::memory:?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	s := &Store{db: db}
+	t.Cleanup(func() { s.Close() })
+	if err := s.migrateTo(ctx, 49); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`INSERT INTO environments (id, name, created_at) VALUES ('env', 'Work', 1)`,
+		`INSERT INTO templates (id, environment_id, cache_key, spec, base_ref, base_digest, platform, exporter_version, state, created_at)
+		 VALUES ('tpl', 'env', 'key', '{}', 'ghcr.io/x/base@sha256:old', 'sha256:old', 'linux/amd64', 2, 'ready', 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at) VALUES ('plain', 'env', 'api', 1, 512, 1024, 0, 1)`,
+		`INSERT INTO sandboxes (id, environment_id, name, cpus, memory_mib, workspace_mib, docker_mib, created_at, template_id) VALUES ('node', 'env', 'web', 1, 512, 1024, 0, 1, 'tpl')`,
+		`INSERT INTO rebases (sandbox_id, environment_id, template_id, from_generation, to_generation, cpus, memory_mib, max_memory_mib, workspace_mib, docker_mib)
+		 VALUES ('plain', 'env', 'tpl', 1, 2, 1, 512, 512, 1024, 0)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := s.migrateTo(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]string{"plain": "", "node": "ghcr.io/x/base@sha256:old"} {
+		if sb, err := s.Sandbox(ctx, "env", id); err != nil || sb.BaseImage != want {
+			t.Errorf("%s's base after migrating: %q, %v; want %q", id, sb.BaseImage, err, want)
+		}
+	}
+	ops, err := s.Rebases(ctx)
+	if err != nil || len(ops) != 1 || ops[0].TemplateID != "tpl" || ops[0].BaseImage != "ghcr.io/x/base@sha256:old" {
+		t.Fatalf("rebases after migrating: %+v, %v", ops, err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE templates SET state = 'deleting' WHERE id = 'tpl'`); err == nil {
+		t.Fatal("a template a rebase names was marked deleting")
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM rebases`); err != nil {
+		t.Fatal(err)
+	}
+	op, err := s.BeginRebase(ctx, RebaseOperation{SandboxID: "plain", EnvironmentID: "env", CPUs: 1, MemoryMiB: 512, MaxMemoryMiB: 512, WorkspaceMiB: 1024,
+		BaseImage: "ghcr.io/x/base@sha256:new", BaseVersion: "v0.8.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CommitRebase(ctx, op); err != nil {
+		t.Fatal(err)
+	}
+	if sb, err := s.Sandbox(ctx, "env", "plain"); err != nil || sb.TemplateID != "" || sb.BaseImage != "ghcr.io/x/base@sha256:new" || sb.BaseVersion != "v0.8.1" || sb.Generation != 2 {
+		t.Fatalf("after a rebase onto the default image: %+v, %v", sb, err)
+	}
+}

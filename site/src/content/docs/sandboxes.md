@@ -41,13 +41,15 @@ The power button stops a running computer and starts one that is off; a computer
 | **Fork** | Copies the sandbox into a new one with the same template and resources, then starts it. `/workspace` and the home directory are copied; Docker images, containers and volumes are not, nor is what was installed elsewhere, such as apt packages and tools from `mise use -g`. The fork gets its own network approvals. |
 | **Connections** | Lists where the sandbox connects. |
 | **Resources** | Changes its CPUs and memory (see below). |
-| **Rebase** | Moves the sandbox onto another template (see below). |
+| **Rebase** | Moves the sandbox onto the current base image or another template (see below). |
 | **Export** | Saves a portable copy (see [Export a workspace](#export-a-workspace)). |
 | **Delete** | Permanently removes the sandbox and its disks. Export the sandbox first if you need a portable backup. |
 
 A running sandbox takes a change of CPUs or memory right away, up or down, while it fits the room the sandbox started with: twice its memory, and its CPUs plus as many again (at most 4 more). The dialog says per resource whether a value applies now or needs a restart. A change past that room waits for the next start, and the menu shows it, such as *2 CPU · 4 GiB · 12 GiB after restart*. **Save and restart** applies all of it now; programs and terminal sessions end, files stay. A stopped or suspended sandbox takes any change at its next start.
 
-Rebasing changes the template and carries over `/workspace` and the home directory; Docker data and terminal sessions are not carried over. The rebase runs in the background: the computer's screen shows its steps as for a new sandbox. If it fails, the sandbox stays on its old template and the page names the step that failed until you dismiss it. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
+Rebasing moves the sandbox onto the current base image, which is what new sandboxes get, or onto a ready template, and carries over `/workspace` and the home directory with your logins and harness sessions; Docker data, apt packages, tools from `mise use -g` and terminal sessions are not carried over.
+
+Each Studio release can bring a newer base image, with newer harnesses and chat adapters and Debian's security updates. A sandbox made from an older one says so: its computer's menu has a dot and a **Rebase…** button, and Home lists it until you dismiss the notice. A sandbox from a template is brought up to date by rebasing it onto its template rebuilt on the current base: **Settings → Templates** offers **Rebuild on the current base** for a template that is behind. The rebase runs in the background: the computer's screen shows its steps as for a new sandbox. If it fails, the sandbox stays on its old template and the page names the step that failed until you dismiss it. See [Templates](../templates/) and the [rebase guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/rebase.md).
 
 ## See a sandbox's history
 

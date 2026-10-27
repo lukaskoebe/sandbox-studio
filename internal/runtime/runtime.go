@@ -304,6 +304,19 @@ func (r *Runtime) StartForTransfer(ctx context.Context, name string) error {
 	return sb.Detach(ctx)
 }
 
+// ImageOf returns the OCI reference of the image a VM was made from, as msb's catalog has it.
+func (r *Runtime) ImageOf(ctx context.Context, name string) (string, error) {
+	h, err := msb.GetSandbox(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	cfg, err := h.Config()
+	if err != nil {
+		return "", err
+	}
+	return cfg.Image, nil
+}
+
 // Boot starts the services of a running sandbox that was created or started in
 // transfer mode.
 func (r *Runtime) Boot(ctx context.Context, name string) error {

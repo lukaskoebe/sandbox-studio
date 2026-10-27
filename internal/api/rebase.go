@@ -17,14 +17,15 @@ func (s *Server) registerTransfers(api huma.API) {
 		ID   string `path:"id" doc:"Sandbox ID"`
 		Wait bool   `query:"wait" doc:"Answer once the rebase has ended, with the rebased sandbox or why it failed, instead of at once"`
 		Body struct {
-			TemplateID string `json:"templateId" minLength:"1" doc:"A ready template in the same environment"`
+			TemplateID string `json:"templateId,omitempty" doc:"A ready template in the same environment; empty or absent for the default image, the base new sandboxes get, keeping the sandbox's resources"`
 		}
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "rebaseSandbox", Method: http.MethodPost,
 		Path: "/api/environments/{env}/sandboxes/{id}/rebase", Tags: []string{"sandboxes"},
-		Summary: "Move a sandbox onto another template",
-		Description: "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources. " +
+		Summary: "Move a sandbox onto another template or the current base image",
+		Description: "Copies /workspace and /home/agent into a new VM built from the template, with the template's resources, or from the default image with the sandbox's own. " +
+			"Software installed outside /workspace and the home, such as apt packages, is lost. " +
 			"Docker images, containers and volumes are lost. Tmux sessions end. " +
 			"A running sandbox is stopped for the copy and started again; a stopped one stays stopped. " +
 			"It returns at once in state creating, with the steps in progress; the copy runs in the background. " +

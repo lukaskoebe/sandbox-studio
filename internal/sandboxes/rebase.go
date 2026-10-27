@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lukaskoebe/sandbox-studio/internal/resources"
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// Rebase moves a sandbox onto another ready template in its environment. It copies the
-// workspace into a new VM generation built from the template, with a fresh Docker disk and
-// the template's resources. The home comes along when the template has a home disk: a
+// Rebase moves a sandbox onto another ready template in its environment, or onto the default
+// image, the base new sandboxes get, when templateID is empty. It copies the workspace into a
+// new VM generation built from the template, with a fresh Docker disk and the template's
+// resources; onto the default image the sandbox keeps its resources. The home comes along
+// when the target has a home disk, as the default image does: a
 // sandbox with one can't move to a legacy template, which has none. Docker state and tmux
 // sessions end. The sandbox keeps its identity and egress, and its checkpoints stay with
 // their generations.
@@ -53,9 +56,14 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if err != nil {
 		return View{}, err
 	}
-	resolved, err := m.templateResources(ctx, envID, templateID)
-	if err != nil {
-		return View{}, err
+	resolved := resources.Resources{
+		CPUs: int64(sb.CPUs), MemoryMiB: int64(sb.MemoryMiB), MaxMemoryMiB: int64(sb.MaxMemoryMiB),
+		WorkspaceMiB: int64(sb.WorkspaceMiB), DockerMiB: int64(sb.DockerMiB),
+	}
+	if templateID != "" {
+		if resolved, err = m.templateResources(ctx, envID, templateID); err != nil {
+			return View{}, err
+		}
 	}
 	// The home disk moves with the sandbox only onto a template that has one. A sandbox with
 	// a home disk is refused rather than losing its home.
@@ -77,9 +85,11 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 	if status != runtime.StatusRunning && status != runtime.StatusStopped {
 		return View{}, ErrLifecycleState
 	}
-	image, err := m.templateImage(ctx, envID, templateID)
-	if err != nil {
-		return View{}, err
+	var image *runtime.ImageSource // the default image
+	if templateID != "" {
+		if image, err = m.templateImage(ctx, envID, templateID); err != nil {
+			return View{}, err
+		}
 	}
 	wasRunning := status == runtime.StatusRunning
 	steps := rebaseStoppedSteps
@@ -94,6 +104,7 @@ func (m *Manager) Rebase(ctx context.Context, envID, id, templateID string) (Vie
 		SandboxID: sb.ID, EnvironmentID: envID, TemplateID: templateID,
 		CPUs: int(resolved.CPUs), MemoryMiB: int(resolved.MemoryMiB), MaxMemoryMiB: int(resolved.MaxMemoryMiB),
 		WorkspaceMiB: int(resolved.WorkspaceMiB), DockerMiB: int(resolved.DockerMiB),
+		BaseImage: m.BaseImage, BaseVersion: m.BaseVersion,
 	}
 	m.background(sb, transferTimeout, unlock, func(ctx context.Context) error {
 		return m.rebase(ctx, rt, sb, req, image, wasRunning, targetHome)
@@ -143,6 +154,7 @@ func (m *Manager) rebase(ctx context.Context, rt transferRuntime, sb store.Sandb
 
 func rebaseTarget(sb store.Sandbox, op store.RebaseOperation) store.Sandbox {
 	sb.Generation, sb.TemplateID = op.ToGeneration, op.TemplateID
+	sb.BaseImage, sb.BaseVersion = op.BaseImage, op.BaseVersion
 	sb.CPUs, sb.MemoryMiB, sb.MaxMemoryMiB = op.CPUs, op.MemoryMiB, op.MaxMemoryMiB
 	sb.WorkspaceMiB, sb.DockerMiB = op.WorkspaceMiB, op.DockerMiB
 	return sb

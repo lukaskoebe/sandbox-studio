@@ -111,7 +111,7 @@ func (a *Agent) serveACP(st net.Conn, br *bufio.Reader) error {
 	if _, err := a.run("bash", "-lc", `command -v -- "$1"`, "studio-acp", req.Command[0]); err != nil {
 		return agentproto.WriteJSONLine(st, agentproto.Error{Code: agentproto.CodeHarness,
 			Error: fmt.Sprintf("%s's chat adapter is not installed in this sandbox: its image predates chats. "+
-				"Rebuild the base image (make image) and create a new sandbox.", req.Harness)})
+				"Rebase it onto the current base: Rebase in the computer menu keeps /workspace and the home.", req.Harness)})
 	}
 	cmd := a.command("bash", acpArgs(req)...)
 	cmd.Dir = Workdir

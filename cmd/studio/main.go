@@ -430,6 +430,9 @@ func run(addr, image string, open bool, logPath string, log *slog.Logger) (err e
 		Log:       log,
 		Forget:    gitRemote.ForgetSandbox,
 		Bus:       bus,
+		// New sandboxes record the base they're made from; one on another base is outdated.
+		BaseImage:   image,
+		BaseVersion: version.Version,
 	}
 	hub.OnConnect = mgr.Configure
 	integs = append(integs, &sandboxinfo.Service{Store: st, Ports: hub.Ports, Level: engine.Level})

@@ -67,6 +67,10 @@ type Manager struct {
 	// Bus, if set, gets an events.TopicSandboxes notice whenever a sandbox changes: its
 	// lifecycle, checkpoints, rebases, forks or history.
 	Bus *events.Bus
+	// BaseImage is the default image new sandboxes get, the runtime's, and BaseVersion the
+	// Studio release that brought it. A sandbox on another base is outdated; empty knows none.
+	BaseImage   string
+	BaseVersion string
 
 	opsMu sync.Mutex
 	ops   map[string]*operation // sandbox ID → its create or fork; see progress.go
@@ -122,6 +126,8 @@ type View struct {
 	Progress                   *Progress      `json:"progress,omitempty" doc:"The create or fork that runs or failed"`
 	TemplateName               string         `json:"templateName,omitempty" doc:"The display name of the template the sandbox runs, such as node-22+python-3.13@2"`
 	ForkOf                     string         `json:"forkOf,omitempty" doc:"The ID of the sandbox this one was forked from, which it can be merged back into"`
+	BaseVersion                string         `json:"baseVersion,omitempty" doc:"The Studio release whose base image the sandbox runs, such as v0.6.1; absent when unknown or for a template's base"`
+	BaseOutdated               bool           `json:"baseOutdated,omitempty" doc:"Whether the sandbox runs an older base image than new sandboxes get; a rebase onto the current base, or onto its template rebuilt on it, brings it up to date"`
 }
 
 // AgentInfo describes a connected guest agent.
@@ -202,6 +208,7 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			}
 			delete(pendingRebases, sb.ID)
 		}
+		m.learnBase(ctx, sb)
 		if err := m.Hub.Listen(sb.ID, m.Paths.AgentSocket(sb.ID)); err != nil {
 			m.Log.Warn("agent listener", "sandbox", sb.ID, "err", err)
 		}
@@ -220,6 +227,24 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// learnBase records the base image of a sandbox made before Studio recorded it, from the
+// image its VM was made from. A template sandbox learnt its template's base in the migration.
+func (m *Manager) learnBase(ctx context.Context, sb store.Sandbox) {
+	images, ok := m.Runtime.(interface {
+		ImageOf(ctx context.Context, name string) (string, error)
+	})
+	if !ok || sb.BaseImage != "" || sb.TemplateID != "" || sb.Kind != "" {
+		return
+	}
+	image, err := images.ImageOf(ctx, VMName(sb))
+	if err == nil && image != "" {
+		err = m.Store.SetSandboxBase(ctx, sb.EnvironmentID, sb.ID, image, "")
+	}
+	if err != nil {
+		m.Log.Warn("sandbox base image", "sandbox", sb.ID, "err", err)
+	}
 }
 
 // Create records a new sandbox and returns it in state creating. Its VM is created and
@@ -785,10 +810,26 @@ func (m *Manager) markStarted(ctx context.Context, rec store.Sandbox) store.Sand
 
 func (m *Manager) withAgent(v View) View {
 	v.CheckpointRestoreSupported = m.Runtime.CheckpointRestoreSupported()
+	v.BaseVersion, v.BaseOutdated = v.Sandbox.BaseVersion, m.BaseOutdated(v.Sandbox.BaseImage)
 	if hello, ok := m.Hub.Connected(v.ID); ok && v.Status.IsRunning() {
 		v.Agent = &AgentInfo{Version: hello.Version, Arch: hello.Arch}
 	}
 	return m.withProgress(v)
+}
+
+// BaseOutdated is whether a sandbox or template on image runs an older base than new
+// sandboxes get. An unknown base, or an unknown current one, is never outdated.
+func (m *Manager) BaseOutdated(image string) bool {
+	return image != "" && m.BaseImage != "" && shortImage(image) != shortImage(m.BaseImage)
+}
+
+// shortImage drops the Docker Hub prefixes a catalog may add to a reference such as
+// sandbox-studio-base:dev.
+func shortImage(ref string) string {
+	for _, prefix := range []string{"docker.io/", "index.docker.io/", "library/"} {
+		ref = strings.TrimPrefix(ref, prefix)
+	}
+	return ref
 }
 
 func resolveResources(req CreateRequest) resources.Resources {

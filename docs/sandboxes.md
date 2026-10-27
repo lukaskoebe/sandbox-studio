@@ -459,6 +459,26 @@ registry while the image isn't cached, reading only the hosts of Docker's config
 credentials. Pulling anonymously by default needs an anonymous option in microsandbox's Go
 binding, which it doesn't have yet.
 
+### Which base a sandbox runs
+
+Each sandbox records the base image its VM was made from (`base_image`, an OCI reference)
+and the Studio release that brought it (`base_version`, from `version.Version`): a new
+sandbox, fork or import takes the default image and this release; a template sandbox, and a
+rebase onto a template, take the template's `base_ref` with no release. Sandboxes from
+before Studio recorded it learn their image at startup from msb's catalog
+(`Runtime.ImageOf`), with the release unknown. A release pins the image by digest, so the
+release is kept beside it instead of read from the tag.
+
+A sandbox or template whose base differs from the default image, Docker Hub prefixes aside,
+is `baseOutdated`. The computer's menu then has a dot on its trigger and a block with the
+release it came from and a Rebase button; Home lists such sandboxes until the notice is
+dismissed for this release. A template sandbox goes up to date by a rebase onto the current
+base, which drops the template's tools, or onto its template rebuilt on it: a template
+that is behind has **Rebuild on the current base** in Settings → Templates
+(`POST /api/environments/{env}/templates/{id}/rebuild`), which builds its spec again as the
+stack's next version. A sandbox created before network rules existed still needs to be
+created again: a rebase keeps its missing network.
+
 ### Terminal shell
 
 Terminals start bash unless **Settings → General → Terminal shell** says zsh. Studio sends

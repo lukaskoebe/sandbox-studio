@@ -8,6 +8,7 @@
 package e2e
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -44,6 +45,7 @@ type vm struct {
 	egress    runtime.Egress
 	size      runtime.Size // what the VM starts with
 	room      runtime.Size // what it booted with room for: twice the size it booted with
+	image     string       // the image it was made from
 }
 
 // NewRuntime returns a runtime without VMs.
@@ -78,7 +80,10 @@ func (r *Runtime) Create(_ context.Context, name string, spec runtime.Spec, sock
 	if _, ok := r.vms[name]; ok {
 		return errors.New("a VM named " + name + " already exists")
 	}
-	v := &vm{sandboxID: labels["studio.sandbox-id"], name: labels["studio.sandbox-name"], socket: socket, egress: spec.Egress, size: runtime.Size{CPUs: spec.CPUs, MemoryMiB: spec.MemoryMiB}}
+	v := &vm{sandboxID: labels["studio.sandbox-id"], name: labels["studio.sandbox-name"], socket: socket, egress: spec.Egress, size: runtime.Size{CPUs: spec.CPUs, MemoryMiB: spec.MemoryMiB}, image: cmp.Or(spec.BaseImage, r.Image)}
+	if spec.Image != nil {
+		v.image = spec.Image.Reference
+	}
 	r.vms[name] = v
 	r.bootLocked(v)
 	return nil
@@ -247,7 +252,18 @@ func (r *Runtime) RestoreCheckpoint(context.Context, string, string, string, run
 
 // The template build worker's side: jobs fail, as there is no image to build on.
 
-func (r *Runtime) BaseReference() string  { return r.Image }
+func (r *Runtime) BaseReference() string { return r.Image }
+
+// ImageOf returns the image a VM was made from, as msb's catalog would.
+func (r *Runtime) ImageOf(_ context.Context, name string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	v, ok := r.vms[name]
+	if !ok {
+		return "", errors.New("no VM named " + name)
+	}
+	return v.image, nil
+}
 func (r *Runtime) TargetPlatform() string { return "linux/" + goruntime.GOARCH }
 func (r *Runtime) PendingRun() bool       { return false }
 func (r *Runtime) PrepareTemplateBaseOwned(context.Context, runtime.BaseOwner) (templateimage.Base, error) {

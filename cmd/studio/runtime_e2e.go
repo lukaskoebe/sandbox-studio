@@ -106,6 +106,13 @@ func registerControl(mux *http.ServeMux, st *store.Store, engine *policy.Engine,
 		}
 		return nil
 	}
+	e2e.SetBase = func(ctx context.Context, sandboxID, image, version string) error {
+		sb, err := st.LookupSandbox(ctx, sandboxID)
+		if err != nil {
+			return err
+		}
+		return st.SetSandboxBase(ctx, sb.EnvironmentID, sb.ID, image, version)
+	}
 	fakeRuntime.Upstream = fakeUpstream
 	mux.Handle(e2e.ControlPrefix, fakeRuntime.Control())
 }

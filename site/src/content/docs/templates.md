@@ -42,4 +42,4 @@ After you submit a build, Studio runs the apt installs, language tool installs, 
 
 On **Settings → Templates**, open a ready build and choose **Create sandbox** on its sheet or its page. Studio boots a new sandbox using the template's root filesystem. The new sandbox has a fresh, empty `/workspace` and Docker disk, and a home directory seeded from the template; it does not inherit a previous sandbox's files or containers.
 
-Template builds and ready templates belong to one environment. A ready template can also be used when rebasing a sandbox. Rebase carries over `/workspace`, but drops Docker data and terminal sessions. See [Sandboxes](../sandboxes/).
+Template builds and ready templates belong to one environment. A ready template can also be used when rebasing a sandbox. Rebase carries over `/workspace`, but drops Docker data and terminal sessions. A template built on an older base image than this Studio's has **Rebuild on the current base**, which builds the same spec again as the template's next version. See [Sandboxes](../sandboxes/).

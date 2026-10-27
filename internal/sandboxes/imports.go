@@ -340,6 +340,7 @@ func (m *Manager) createImportRecord(ctx context.Context, imp store.SandboxImpor
 			EnvironmentID: imp.EnvironmentID, TemplateID: templateID, Name: candidate,
 			CPUs: int(res.CPUs), MemoryMiB: int(res.MemoryMiB), MaxMemoryMiB: int(res.MaxMemoryMiB),
 			WorkspaceMiB: int(res.WorkspaceMiB), DockerMiB: int(res.DockerMiB),
+			BaseImage: m.BaseImage, BaseVersion: m.BaseVersion,
 		})
 		if errors.Is(err, store.ErrExists) {
 			continue

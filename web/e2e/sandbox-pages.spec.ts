@@ -216,6 +216,59 @@ test("the computer's menu opens fork and rebase, and links the export", async ({
   await page.keyboard.press("Escape")
 })
 
+// A sandbox made by an older Studio runs that release's base image: its menu says so and
+// rebases it onto the current one, and Home lists it until the notice is dismissed.
+test("a computer on an older base says so and rebases onto the current one", async ({
+  page,
+  api,
+  env,
+}) => {
+  const name = sandboxName("old-base")
+  const id = await api.createSandbox(name)
+  // Once it is up: the creation's last event would carry the base it was made with.
+  const screen = await screenOf(page, env, id, name)
+  await api.json("PUT", `/api/e2e/sandboxes/${id}/base`, {
+    image: "ghcr.io/lukaskoebe/sandbox-studio-base:v0.7.0",
+    version: "v0.7.0",
+  })
+  await page.reload()
+  const more = screen.getByRole("button", { name: `More for ${name}` })
+  await expect(more).toHaveAttribute(
+    "title",
+    `More for ${name}: built on an older base`
+  )
+  await more.click()
+  await expect(page.getByText("Built on an older base")).toBeVisible()
+  await expect(
+    page.getByText("From v0.7.0. Rebase for the newer harness versions", {
+      exact: false,
+    })
+  ).toBeVisible()
+  await page.getByRole("button", { name: "Rebase…" }).click()
+  const dialog = page.getByRole("dialog", { name: `Rebase ${name}` })
+  await expect(
+    dialog.getByRole("radio", { name: "The current base image" })
+  ).toBeChecked()
+  await expect(dialog.getByText("Keeps its resources: 2 CPU")).toBeVisible()
+  const lost = dialog.getByRole("region", { name: "What the rebase changes" })
+  await expect(lost).toContainText("Docker images and volumes")
+  await expect(dialog.getByRole("button", { name: "Rebase" })).toBeEnabled()
+  await page.keyboard.press("Escape")
+  await expect(dialog).toBeHidden()
+
+  await page.goto(`/e/${env}`)
+  const notice = page.getByRole("region", { name: "Base image" })
+  await expect(notice.getByRole("link", { name })).toHaveAttribute(
+    "href",
+    `/e/${env}/sandboxes/${id}`
+  )
+  await notice.getByRole("button", { name: "Dismiss" }).click()
+  await expect(notice).toBeHidden()
+  await page.reload()
+  await expect(page.getByRole("heading").first()).toBeVisible()
+  await expect(notice).toBeHidden()
+})
+
 // Suspend and Resume are in the menu; the bezel's power button stops the computer.
 test("the screen suspends, resumes and stops a computer", async ({
   page,

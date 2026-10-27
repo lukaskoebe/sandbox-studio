@@ -26,5 +26,7 @@ func (m *Manager) createOwnedRecord(ctx context.Context, envID, name string, res
 		MaxMemoryMiB:  int(resolved.MaxMemoryMiB),
 		WorkspaceMiB:  int(resolved.WorkspaceMiB),
 		DockerMiB:     int(resolved.DockerMiB),
+		BaseImage:     m.BaseImage,
+		BaseVersion:   m.BaseVersion,
 	})
 }

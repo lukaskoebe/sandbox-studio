@@ -81,6 +81,7 @@ export function ComputerMenu({
   owner?: Teammate
 }) {
   const [dialog, setDialog] = useState<Dialog>()
+  const [menuOpen, setMenuOpen] = useState(false)
   const { path, suspend, resume, phase: p } = useSandboxLifecycle(env, sb)
   const building = sb.status === "creating" || sb.status === "failed"
   const available = sb.status === "running" || sb.status === "stopped"
@@ -121,19 +122,26 @@ export function ComputerMenu({
 
   return (
     <>
-      <DropdownMenu modal={false}>
+      <DropdownMenu modal={false} open={menuOpen} onOpenChange={setMenuOpen}>
         <DropdownMenuTrigger
           render={
             <Button
               variant="ghost"
               size="icon-sm"
               aria-label={`More for ${sb.name}`}
-              title={`More for ${sb.name}`}
-              className="text-muted-foreground hover:text-foreground"
+              title={
+                sb.baseOutdated
+                  ? `More for ${sb.name}: built on an older base`
+                  : `More for ${sb.name}`
+              }
+              className="relative text-muted-foreground hover:text-foreground"
             />
           }
         >
           <DotsThreeIcon weight="bold" />
+          {sb.baseOutdated && (
+            <span className="absolute top-1 right-1 size-1.5 bg-(--st-waiting)" />
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
           <div className="grid gap-0.5 px-2 pt-1.5 pb-2">
@@ -154,6 +162,29 @@ export function ComputerMenu({
             </span>
           </div>
           {running && usage.data && <Meters usage={usage.data} />}
+          {sb.baseOutdated && !building && (
+            <div className="mx-1 mb-1 grid gap-1 border border-(--st-waiting)/40 bg-(--st-waiting)/10 p-2.5">
+              <span className="font-mono text-[0.71875rem] font-semibold text-(--st-waiting-fg) dark:text-(--st-waiting)">
+                Built on an older base
+              </span>
+              <span className="text-[0.78125rem]">
+                {sb.baseVersion ? `From ${sb.baseVersion}. ` : ""}
+                Rebase for the newer harness versions and chat adapters, and
+                Debian&apos;s security updates.
+              </span>
+              <Button
+                size="sm"
+                className="mt-1 justify-self-start"
+                disabled={!available}
+                onClick={() => {
+                  setMenuOpen(false)
+                  setDialog("rebase")
+                }}
+              >
+                Rebase…
+              </Button>
+            </div>
+          )}
           {!building && (
             <>
               <DropdownMenuSeparator />
@@ -226,7 +257,7 @@ export function ComputerMenu({
                   disabled={!available}
                   title={
                     available
-                      ? "Move this computer onto another template"
+                      ? "Move this computer onto the current base or another template"
                       : "Only a running or stopped computer can be rebased"
                   }
                   onClick={() => setDialog("rebase")}

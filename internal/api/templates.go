@@ -23,6 +23,7 @@ type TemplateView struct {
 	Platform      string              `json:"platform"`
 	Resources     resources.Resources `json:"resources"`
 	CreatedAt     time.Time           `json:"createdAt"`
+	BaseOutdated  bool                `json:"baseOutdated,omitempty" doc:"Whether the template is built on an older base image than new sandboxes get; rebuilding it (POST …/rebuild) makes a version on the current base"`
 }
 
 type templatePath struct {
@@ -50,7 +51,7 @@ func (s *Server) registerTemplates(api huma.API) {
 			if template.State != store.TemplateStateReady {
 				continue
 			}
-			view, err := templateView(template, names[template.ID])
+			view, err := s.templateView(template, names[template.ID])
 			if err != nil {
 				return nil, templateAPIError(err)
 			}
@@ -73,8 +74,47 @@ func (s *Server) registerTemplates(api huma.API) {
 		if err != nil {
 			return nil, templateAPIError(err)
 		}
-		view, err := templateView(template, names[template.ID])
+		view, err := s.templateView(template, names[template.ID])
 		return &struct{ Body TemplateView }{view}, templateAPIError(err)
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "rebuildTemplate", Method: http.MethodPost, Path: "/api/environments/{env}/templates/{id}/rebuild", Tags: []string{"templates", "builds"},
+		DefaultStatus: http.StatusAccepted,
+		Summary:       "Build a template again on the current base image",
+		Description: "Submits a build of the template's specification, as submitBuildJob does. On a newer base image it makes a new version of the template; " +
+			"sandboxes on the old version can then be rebased onto it.",
+	}, func(ctx context.Context, in *templatePath) (*struct{ Body BuildJobView }, error) {
+		if err := s.checkBuildEnvironment(ctx, in.Env); err != nil {
+			return nil, err
+		}
+		template, err := s.Store.Template(ctx, in.Env, in.ID)
+		if err != nil {
+			return nil, templateAPIError(err)
+		}
+		if template.State != store.TemplateStateReady {
+			return nil, templateAPIError(store.ErrConflict)
+		}
+		if s.Builds == nil {
+			return nil, huma.Error503ServiceUnavailable("template builds are unavailable")
+		}
+		spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("template metadata is invalid")
+		}
+		source, err := templatespec.YAML(spec)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("template metadata is invalid")
+		}
+		job, _, err := s.Builds.Submit(ctx, in.Env, string(source))
+		if err != nil {
+			return nil, buildOperationError(err)
+		}
+		names, err := s.Store.TemplateNames(ctx, in.Env)
+		if err != nil {
+			return nil, buildOperationError(err)
+		}
+		return &struct{ Body BuildJobView }{publicBuildJob(job, names)}, nil
 	})
 
 	type createTemplateSandboxIn struct {
@@ -117,7 +157,7 @@ func templateAPIError(err error) error {
 	}
 }
 
-func templateView(template store.Template, name string) (TemplateView, error) {
+func (s *Server) templateView(template store.Template, name string) (TemplateView, error) {
 	spec, err := templatespec.ParseCanonicalJSON([]byte(template.Spec))
 	if err != nil {
 		return TemplateView{}, errors.New("template metadata is invalid")
@@ -125,5 +165,6 @@ func templateView(template store.Template, name string) (TemplateView, error) {
 	return TemplateView{
 		ID: template.ID, Name: name, EnvironmentID: template.EnvironmentID,
 		Platform: template.Platform, Resources: spec.Resources, CreatedAt: template.CreatedAt,
+		BaseOutdated: s.Sandboxes != nil && s.Sandboxes.BaseOutdated(template.BaseRef),
 	}, nil
 }

@@ -659,3 +659,83 @@ func TestRebaseHomeFailureRollsBack(t *testing.T) {
 		t.Fatalf("source is %s, want running again", status)
 	}
 }
+
+func TestRebaseOntoTheCurrentBaseKeepsResources(t *testing.T) {
+	f := newCheckpointFixture(t)
+	tf := newTransferFake(f)
+	f.manager.BaseImage, f.manager.BaseVersion = "sandbox-studio-base:new", "v0.8.1"
+	template := rebaseTemplate(t, f, rebaseResources)
+	tf.setWorkspace(VMName(f.sandbox), "files")
+	onTemplate, err := rebaseNow(f, f.sandbox.ID, template.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The template's base is another one than new sandboxes get.
+	if onTemplate.BaseOutdated != true || onTemplate.BaseImage != template.BaseRef {
+		t.Fatalf("on the template: %+v", onTemplate)
+	}
+
+	view, err := rebaseNow(f, f.sandbox.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.TemplateID != "" || view.BaseImage != "sandbox-studio-base:new" || view.BaseVersion != "v0.8.1" || view.BaseOutdated {
+		t.Fatalf("view = %+v", view)
+	}
+	if view.CPUs != 2 || view.MemoryMiB != 1024 || view.MaxMemoryMiB != 2048 || view.WorkspaceMiB != 4096 || view.DockerMiB != 2048 {
+		t.Fatalf("view resources = %+v", view.Sandbox)
+	}
+	target := VMName(view.Sandbox)
+	if spec := tf.specs[target]; spec.Image != nil || spec.HomeMiB != HomeMiB {
+		t.Fatalf("target spec = %+v", spec)
+	}
+	if tf.workspace(target) != "files" {
+		t.Fatalf("target workspace %q", tf.workspace(target))
+	}
+	events, err := f.store.SandboxEvents(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil || events[len(events)-1].Kind != store.EventRebase || events[len(events)-1].FromTemplateID != template.ID {
+		t.Fatalf("events = %+v, %v", events, err)
+	}
+}
+
+// imageRuntime knows the image each VM was made from, as msb's catalog does.
+type imageRuntime struct {
+	*fakeSandboxRuntime
+	images map[string]string
+}
+
+func (r imageRuntime) ImageOf(_ context.Context, name string) (string, error) {
+	return r.images[name], nil
+}
+
+func TestReconcileLearnsTheBaseOfOlderSandboxes(t *testing.T) {
+	f := newCheckpointFixture(t)
+	f.manager.BaseImage = "ghcr.io/lukaskoebe/sandbox-studio-base@sha256:new"
+	f.manager.Runtime = imageRuntime{f.runtime, map[string]string{VMName(f.sandbox): "ghcr.io/lukaskoebe/sandbox-studio-base@sha256:old"}}
+	if err := f.manager.Reconcile(f.ctx); err != nil {
+		t.Fatal(err)
+	}
+	view, err := f.manager.Get(f.ctx, f.env.ID, f.sandbox.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.BaseImage != "ghcr.io/lukaskoebe/sandbox-studio-base@sha256:old" || view.BaseVersion != "" || !view.BaseOutdated {
+		t.Fatalf("view = %+v", view)
+	}
+}
+
+func TestNewSandboxesRecordTheirBase(t *testing.T) {
+	f := newCheckpointFixture(t)
+	f.manager.BaseImage, f.manager.BaseVersion = "sandbox-studio-base:dev", "v0.8.1"
+	rec, err := f.manager.createOwnedRecord(f.ctx, f.env.ID, "fresh", rebaseResources, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.BaseImage != "sandbox-studio-base:dev" || rec.BaseVersion != "v0.8.1" {
+		t.Fatalf("record = %+v", rec)
+	}
+	// msb's catalog may name a Docker Hub image in full.
+	if f.manager.BaseOutdated("docker.io/library/sandbox-studio-base:dev") || !f.manager.BaseOutdated("sandbox-studio-base:v0.6.1") || f.manager.BaseOutdated("") {
+		t.Fatal("BaseOutdated compares the wrong references")
+	}
+}

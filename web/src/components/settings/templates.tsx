@@ -1,5 +1,7 @@
 import { useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
+import { useQueryClient } from "@tanstack/react-query"
+import { toast } from "sonner"
 import { ArrowClockwiseIcon, HammerIcon, PlusIcon } from "@phosphor-icons/react"
 import { BuildDialog } from "@/components/build-dialog"
 import { BuildJobSheet } from "@/components/build-job-sheet"
@@ -26,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { $api, errorMessage } from "@/lib/api/client"
+import { templateStack } from "@/lib/lineage"
 import { exampleTemplateSource } from "@/lib/template-spec-example"
 import { formatAge } from "@/lib/utils"
 
@@ -48,6 +51,46 @@ function BuildsWorkspace({ env }: { env: string }) {
     "/api/environments/{env}/builds",
     { params: { path: { env } } },
     { refetchInterval: 3000 }
+  )
+  const templates = $api.useQuery("get", "/api/environments/{env}/templates", {
+    params: { path: { env } },
+  })
+  const queryClient = useQueryClient()
+  const rebuild = $api.useMutation(
+    "post",
+    "/api/environments/{env}/templates/{id}/rebuild",
+    {
+      onSuccess: async (job) => {
+        await queryClient.invalidateQueries({
+          queryKey: ["get", "/api/environments/{env}/builds"],
+        })
+        setSelectedId(job.id)
+      },
+      onError: (error) =>
+        toast.error(`Could not rebuild the template: ${errorMessage(error)}`),
+    }
+  )
+  // A template on an older base offers a rebuild unless a version of it on the current base
+  // exists, or is being built.
+  const stacks = new Set(
+    (templates.data ?? [])
+      .filter((t) => !t.baseOutdated)
+      .map((t) => templateStack(t.name))
+  )
+  const building = new Set(
+    (builds.data ?? [])
+      .filter((job) => !["ready", "failed", "cancelled"].includes(job.status))
+      .map((job) => templateStack(job.templateName))
+  )
+  const behind = new Set(
+    (templates.data ?? [])
+      .filter(
+        (t) =>
+          t.baseOutdated &&
+          !stacks.has(templateStack(t.name)) &&
+          !building.has(templateStack(t.name))
+      )
+      .map((t) => t.id)
   )
 
   function openSubmission(source: string) {
@@ -170,7 +213,33 @@ function BuildsWorkspace({ env }: { env: string }) {
                               <BuildCleanupStatus job={job} />
                             </TableCell>
                             <TableCell>
-                              <div className="flex justify-end">
+                              <div className="flex justify-end gap-2">
+                                {job.templateId &&
+                                  behind.has(job.templateId) && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      title="The template is built on an older base image. Build it again on the current one, then rebase its sandboxes onto the new version."
+                                      disabled={rebuild.isPending}
+                                      onClick={() =>
+                                        job.templateId &&
+                                        rebuild.mutate({
+                                          params: {
+                                            path: { env, id: job.templateId },
+                                          },
+                                        })
+                                      }
+                                    >
+                                      {rebuild.isPending &&
+                                      rebuild.variables.params.path.id ===
+                                        job.templateId ? (
+                                        <Spinner />
+                                      ) : (
+                                        <ArrowClockwiseIcon />
+                                      )}
+                                      Rebuild on the current base
+                                    </Button>
+                                  )}
                                 <Button
                                   variant="outline"
                                   size="sm"

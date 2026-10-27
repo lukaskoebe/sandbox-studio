@@ -4,6 +4,7 @@ import {
   BellIcon,
   BroadcastIcon,
   PlusIcon,
+  StackIcon,
   UserPlusIcon,
   XIcon,
 } from "@phosphor-icons/react"
@@ -19,7 +20,7 @@ import { ColumnPage } from "@/components/column-page"
 import { TeammateAvatar } from "@/components/teammate-avatar"
 import { TeammateDialog } from "@/components/teammate-dialog"
 import { usePendingApprovals } from "@/hooks/use-pending-approvals"
-import { $api, type Approval } from "@/lib/api/client"
+import { $api, type Approval, type Sandbox } from "@/lib/api/client"
 import type { Chat } from "@/lib/chats"
 import { useClaimApprovals } from "@/lib/approval-claims"
 import { useNotificationPermission } from "@/lib/notifications"
@@ -74,6 +75,7 @@ function Home() {
       <SetupCard env={env} />
       <NotificationsBanner />
       <PreviewsNotice env={env} />
+      <BaseNotice env={env} sandboxes={sandboxes.data ?? []} />
       {empty ? (
         <GetStarted env={env} />
       ) : (
@@ -181,6 +183,84 @@ function PreviewsNotice({ env }: { env: string }) {
         title="Keep previews off"
         disabled={previews.pending}
         onClick={() => previews.setEnabled(false)}
+      >
+        <XIcon />
+      </Button>
+    </section>
+  )
+}
+
+const baseNoticeKey = "studio.base-notice"
+
+/**
+ * Says, after an update that brought a new base image, which sandboxes still run the old one
+ * (docs/sandboxes.md#base-images). Each name opens its computer, whose menu has Rebase.
+ * Dismissing it hides it until the next release.
+ */
+function BaseNotice({ env, sandboxes }: { env: string; sandboxes: Sandbox[] }) {
+  const updates = $api.useQuery("get", "/api/system/updates")
+  const current = updates.data?.current ?? ""
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(baseNoticeKey)
+    } catch {
+      return null
+    }
+  })
+  const outdated = sandboxes.filter((sb) => sb.baseOutdated)
+  if (outdated.length === 0 || !updates.data || dismissed === current)
+    return null
+  const dismiss = () => {
+    setDismissed(current)
+    try {
+      localStorage.setItem(baseNoticeKey, current)
+    } catch {
+      // The notice just shows again next time.
+    }
+  }
+  const release = /^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(current)
+  return (
+    <section
+      aria-label="Base image"
+      className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-(--radius) border border-(--st-waiting)/40 bg-(--st-waiting)/10 px-4 py-3"
+    >
+      <StackIcon className="size-4 shrink-0 text-(--st-waiting-fg) dark:text-(--st-waiting)" />
+      <p className="min-w-48 flex-1">
+        {release ? `${current} brings` : "Studio has"} a new base image.{" "}
+        <span className="font-medium">
+          {outdated.length} {outdated.length === 1 ? "sandbox" : "sandboxes"}
+        </span>{" "}
+        still {outdated.length === 1 ? "uses" : "use"} the old one:{" "}
+        {outdated.map((sb, i) => (
+          <span key={sb.id}>
+            {i > 0 && ", "}
+            <Link
+              to="/e/$env/sandboxes/$id"
+              params={{ env, id: sb.id }}
+              className="font-mono underline underline-offset-4"
+            >
+              {sb.name}
+            </Link>
+          </span>
+        ))}
+        . Rebase them from their computer&apos;s menu.
+      </p>
+      {release && (
+        <a
+          href={`https://github.com/lukaskoebe/sandbox-studio/releases/tag/${current}`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[0.8125rem] underline underline-offset-4"
+        >
+          What changed
+        </a>
+      )}
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label="Dismiss"
+        title="Dismiss until the next release"
+        onClick={dismiss}
       >
         <XIcon />
       </Button>

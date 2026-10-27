@@ -43,7 +43,12 @@ Both need a running or stopped sandbox; a suspended one is refused until it is r
 
 ## Rebase
 
-`POST /api/environments/{env}/sandboxes/{id}/rebase` with `{"templateId": "..."}`.
+`POST /api/environments/{env}/sandboxes/{id}/rebase` with `{"templateId": "..."}`, or
+without a template ID onto the current base image, which is what new sandboxes get. A rebase
+onto the base keeps the sandbox's resources; one from a template sandbox drops the template's
+tools. The rebase dialog offers the base first, then the ready templates, and picks the
+sandbox's template rebuilt on the current base when there is one
+([base images](sandboxes.md#which-base-a-sandbox-runs)).
 
 The request checks the template, the home disk and the sandbox's state, and answers at once
 with the sandbox in state `creating`. The rebase then runs in the background, holding the
@@ -54,17 +59,17 @@ closes once the request is accepted, and the sandbox page shows the steps. `?wai
 answers only once the rebase has ended, with the rebased sandbox or the error, as the
 request did before it ran in the background.
 
-1. Studio resolves the new template image. A failure here changes nothing and fails the
+1. Studio resolves the new template image, or takes the base image. A failure here changes nothing and fails the
    request.
 2. It writes a durable rebase record with generations `n` and `n+1`.
 3. It stops the source gracefully and starts it again in transfer mode.
 4. It creates generation `n+1` from the new template in transfer mode and copies the
    workspace and the home.
 5. It stops the source. A sandbox that was running is booted; a stopped one is stopped.
-6. One catalog update switches generation, template and resources.
+6. One catalog update switches generation, template, resources and the base it records.
 7. Studio removes the old VM and ends the record.
 
-A failed rebase leaves the sandbox on its old template, in its old status. Its view keeps
+A failed rebase leaves the sandbox on its old template and base, in its old status. Its view keeps
 `progress` with `operation: rebase`, `state: failed`, the step and the error: the workspace
 shows a note naming the failed step, with a Dismiss button
 (`DELETE /api/environments/{env}/sandboxes/{id}/progress`). The next rebase replaces
