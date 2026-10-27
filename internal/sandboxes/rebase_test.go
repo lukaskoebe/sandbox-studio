@@ -31,12 +31,13 @@ type transferFake struct {
 	labels     map[string]map[string]string
 	booted     map[string]bool
 	sockets    map[string]string
-	guestBoots bool // a booted VM's agent connects and answers, see answerGuest
+	guestBoots bool            // a booted VM's agent connects and answers, see answerGuest
+	busy       map[string]bool // VMs with a command running, as the runtime allows one per VM
 }
 
 func newTransferFake(f *checkpointFixture) *transferFake {
 	tf := &transferFake{fakeSandboxRuntime: f.runtime, workspaces: map[string][]byte{}, homes: map[string][]byte{}, specs: map[string]runtime.Spec{},
-		labels: map[string]map[string]string{}, booted: map[string]bool{}, sockets: map[string]string{}}
+		labels: map[string]map[string]string{}, booted: map[string]bool{}, sockets: map[string]string{}, busy: map[string]bool{}}
 	f.manager.Runtime = tf
 	f.manager.Templates = perTemplateResolver{}
 	return tf
@@ -85,9 +86,31 @@ func (f *transferFake) trees(tree runtime.Tree) (map[string][]byte, string) {
 	return f.workspaces, ""
 }
 
+// run takes the VM's one command slot as the runtime does, failing with ErrRunPending while
+// another command runs there. It holds the slot a moment, so commands that overlap do.
+func (f *transferFake) run(name string) (done func(), err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.busy[name] {
+		return nil, runtime.ErrRunPending
+	}
+	f.busy[name] = true
+	time.Sleep(5 * time.Millisecond)
+	return func() {
+		f.mu.Lock()
+		delete(f.busy, name)
+		f.mu.Unlock()
+	}, nil
+}
+
 func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, _ bool, w io.Writer) error {
 	trees, suffix := f.trees(tree)
 	f.record("export" + suffix + ":" + owned.Name)
+	done, err := f.run(owned.Name)
+	if err != nil {
+		return err
+	}
+	defer done()
 	if err := f.running(ctx, owned.Name); err != nil {
 		return err
 	}
@@ -97,13 +120,18 @@ func (f *transferFake) ExportTree(ctx context.Context, owned runtime.OwnedVM, tr
 	f.mu.Lock()
 	data := trees[owned.Name]
 	f.mu.Unlock()
-	_, err := w.Write(data)
+	_, err = w.Write(data)
 	return err
 }
 
 func (f *transferFake) ImportTree(ctx context.Context, owned runtime.OwnedVM, tree runtime.Tree, r io.Reader) error {
 	trees, suffix := f.trees(tree)
 	f.record("import" + suffix + ":" + owned.Name)
+	done, err := f.run(owned.Name)
+	if err != nil {
+		return err
+	}
+	defer done()
 	if err := f.running(ctx, owned.Name); err != nil {
 		return err
 	}

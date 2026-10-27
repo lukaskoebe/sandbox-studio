@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/runtime"
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
@@ -47,32 +46,18 @@ func (m *Manager) transfer() (transferRuntime, error) {
 	return rt, nil
 }
 
-// copyTrees copies the workspace of src into dst, and at the same time its home when dst
-// has a home disk (copyHome). A source without a home disk gives its root disk's home, which
-// is what a sandbox from a legacy template keeps there. The two disks are separate, so the
-// copies don't wait for each other; either one failing stops the other.
+// copyTrees copies the workspace of src into dst, then its home when dst has a home disk
+// (copyHome). A source without a home disk gives its root disk's home, which is what a
+// sandbox from a legacy template keeps there. The copies run one after the other: the
+// runtime runs one command per VM at a time, and a second gets runtime.ErrRunPending.
 func copyTrees(ctx context.Context, rt transferRuntime, src, dst runtime.OwnedVM, workspaceMiB int, copyHome bool) error {
+	if err := copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}); err != nil {
+		return err
+	}
 	if !copyHome {
-		return copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge})
+		return nil
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	// The copy that fails first is the cause; the other one then only sees the cancel.
-	var once sync.Once
-	var first error
-	fail := func(err error) {
-		if err != nil {
-			once.Do(func() { first = err; cancel() })
-		}
-	}
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		fail(copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: HomeMiB << 20, err: ErrHomeTooLarge}))
-	}()
-	fail(copyTree(ctx, rt, src, dst, runtime.TreeWorkspace, &limitWriter{left: int64(workspaceMiB) << 20, err: ErrWorkspaceTooLarge}))
-	<-done
-	return first
+	return copyTree(ctx, rt, src, dst, runtime.TreeHome, &limitWriter{left: HomeMiB << 20, err: ErrHomeTooLarge})
 }
 
 // copyTree streams a tree of src into the empty tree of dst. Both VMs must run. The
