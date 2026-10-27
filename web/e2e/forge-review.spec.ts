@@ -16,7 +16,7 @@ async function forgejo(api: Api, env: string) {
     baseUrl: `https://${host}`,
     token: "e2e-forge-token",
   })
-  return { name, repo: `${host}/team/app` }
+  return { name, repo: `${host}/acme/web` }
 }
 
 async function draftReview(api: Api, sb: string, forge: string) {
@@ -27,7 +27,7 @@ async function draftReview(api: Api, sb: string, forge: string) {
       method: "git_pull_request_review",
       params: {
         forge,
-        repository: "team/app",
+        repository: "acme/web",
         number: 1,
         verdict: "request_changes",
         summary: "The coupon is checked against the subtotal.",
@@ -59,9 +59,9 @@ test("a teammate's pull request review waits for approval and posts as edited", 
   await page.goto(`/e/${env}`)
   const card = approvals(page)
     .getByTestId("approval-card")
-    .filter({ hasText: "team/app#1" })
+    .filter({ hasText: "acme/web#1" })
   await expect(card).toContainText(
-    "Review team/app#1: request changes, 1 comment"
+    "Review acme/web#1: request changes, 1 comment"
   )
   await card.getByRole("button", { name: "Review" }).click()
 
@@ -106,7 +106,7 @@ test("a teammate's pull request review waits for approval and posts as edited", 
   // Activity links to the decided review, which says where it was posted.
   await page.goto(`/e/${env}/settings/activity?kind=git`)
   // Other tests in the environment review the same pull request.
-  const rows = page.getByRole("row").filter({ hasText: "team/app#1" })
+  const rows = page.getByRole("row").filter({ hasText: "acme/web#1" })
   await expect(
     rows.getByRole("link", { name: "Review posted" }).first()
   ).toBeVisible()
@@ -125,7 +125,7 @@ test("discarding a review posts nothing and keeps the note", async ({
   await page.goto(`/e/${env}`)
   const card = approvals(page)
     .getByTestId("approval-card")
-    .filter({ hasText: "team/app#1" })
+    .filter({ hasText: "acme/web#1" })
   await card.getByRole("button", { name: "Review" }).click()
   const sheet = page.getByRole("dialog")
   await sheet.getByRole("button", { name: "Discard…" }).click()
@@ -137,7 +137,7 @@ test("discarding a review posts nothing and keeps the note", async ({
 
   await page.goto(`/e/${env}/settings/activity?kind=git`)
   await expect(
-    page.getByRole("row").filter({ hasText: "team/app#1" }).filter({
+    page.getByRole("row").filter({ hasText: "acme/web#1" }).filter({
       hasText: "Discarded · Note: Not blocking; leave it to the author.",
     })
   ).toHaveCount(1)
