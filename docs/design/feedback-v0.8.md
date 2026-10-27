@@ -300,6 +300,29 @@ actions and single-instance locking.
 - The browser stays supported, and the server stays the product. The app is a window and a
   tray around it.
 
+**Spiked** on `feedback-v0.8` (`spikes/wails-app`, a module of its own). It builds on Linux
+with `-tags gtk3` against WebKitGTK 4.1 (this machine has no GTK4 or WebKitGTK 6.0 headers)
+and cross-builds for Windows without cgo, 17 MB. Its self-test, against an e2e Studio on
+Linux, found:
+
+- A login link works: the window ends on Studio with a session.
+- WebKitGTK resolves `*.localhost`: `wails-probe.localhost:<port>` reached Studio.
+- New windows: WebKitGTK opens none for `target="_blank"` or `window.open`. A shim routes them
+  through the webview's message handler to Go, which checks the page's origin and opens
+  the system browser. That works, but messages can arrive out of order, and
+  `OriginInfo.IsMainFrame` was false for the main frame, so the origin is the check.
+- `ExecJS` never runs on Studio's pages: it waits for Wails' own runtime, which only pages
+  Wails serves load. A window's `JS` option runs after each load on Linux, but WebView2 runs
+  it only for HTML windows. So the shim belongs in Studio's UI: when `window.chrome.webview`
+  or `window.webkit.messageHandlers.external` exists, open links through it.
+- The login cookie doesn't survive a restart: WebKitGTK keeps cookies in memory unless told
+  otherwise. Opening a fresh `studio login-url` link on every start is simpler than storing
+  cookies, and the app is the same binary.
+- Wails keeps the webview's caches in `~/.cache/<binary>` and `~/.local/share/<binary>`.
+
+Not checked yet: WebView2 on a Windows machine, macOS, the tray and notifications on screen
+(the self-test runs hidden). The plan above stands; the shim in the UI is new work for it.
+
 ## The updater
 
 **No mockup.** After installing an update, a Studio started in a terminal stopped. That
