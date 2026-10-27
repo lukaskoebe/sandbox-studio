@@ -36,7 +36,7 @@ export function CodeView({ path, text }: { path: string; text: string }) {
         className="py-2 font-mono text-caption/[1.45]"
       >
         {lines.map((l, i) => (
-          <div key={i} className="flex">
+          <div key={i} data-line={i + 1} className="flex">
             <span
               aria-hidden
               className="shrink-0 pr-3 pl-2 text-right text-muted-foreground/60 select-none"

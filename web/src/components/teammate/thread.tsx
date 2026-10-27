@@ -51,6 +51,7 @@ export function TeammateThread({
   computer,
   onBack,
   onShowChanges,
+  onOpenFile,
   onTerminal,
 }: {
   env: string
@@ -60,6 +61,7 @@ export function TeammateThread({
   computer?: string
   onBack: () => void
   onShowChanges: (turnId: string) => void
+  onOpenFile: (path: string) => void
   /** Shows the terminal session the thread was handed to. */
   onTerminal: (session: string) => void
 }) {
@@ -146,6 +148,7 @@ export function TeammateThread({
             chat={chat}
             log={log}
             onShowChanges={onShowChanges}
+            onOpenFile={onOpenFile}
           />
         </div>
       )}

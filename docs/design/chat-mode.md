@@ -193,6 +193,15 @@ visible thing, updated in place, not one row per chunk.
   `file:///attachments/<name>` URI, which needs the agent's `embeddedContext` prompt
   capability. Nothing is written into the workspace, so undo and the Changes panel never
   see them. At most 10 MiB per prompt.
+- Mentions: `@path` in the text, `@path:20-28` for lines, with `mentions[]` in the body
+  naming each file. Each becomes a `resource_link` to `file:///workspace/<path>` (with
+  `#L20-L28`), which every ACP agent takes, so the agent reads the file itself as it is
+  now; the Claude subscription shim names it in a text block. The user item keeps the
+  mentions, and the bubble shows them as links to Files. The composer's picker lists
+  `GET /sandboxes/{id}/files/index`: the guest's `files` stream with op `index`, which runs
+  `git ls-files --cached --others --exclude-standard` in each repository and walks other
+  folders past `node_modules` and the like, at most 20,000 paths, with `git status` for the
+  changed ones.
 - Only one prompt runs per chat. A prompt sent while a turn runs waits in the chat's queue
   (`queuePrompt`, `chat.Service.Enqueue`): when the turn ends, however it ends (Stop
   included), the next waiting prompt starts the next turn, one turn each, in order. ACP has

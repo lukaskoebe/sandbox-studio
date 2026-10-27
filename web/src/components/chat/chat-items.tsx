@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react"
 import type { Prompt } from "@/components/chat/composer"
 import { Markdown } from "@/components/chat/markdown"
+import { MentionedText } from "@/components/chat/mention-picker"
 import { PermissionCard } from "@/components/chat/permission-card"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QuestionCard } from "@/components/chat/question-card"
@@ -155,7 +156,9 @@ export function SendingMessage({ prompt }: { prompt: Prompt }) {
   }))
   return (
     <div className="grid justify-items-end gap-1">
-      <UserBubble u={{ text: prompt.text ?? "", attachments }} />
+      <UserBubble
+        u={{ text: prompt.text ?? "", attachments, mentions: prompt.mentions }}
+      />
       <span className="shimmer text-meta text-muted-foreground">Sending…</span>
     </div>
   )
@@ -189,7 +192,7 @@ function UserBubble({ u }: { u: NonNullable<ChatItem["user"]> }) {
         {u.text && (
           <Bubble align="end" variant="secondary">
             <BubbleContent className="whitespace-pre-wrap">
-              {u.text}
+              <MentionedText text={u.text} mentions={u.mentions ?? undefined} />
             </BubbleContent>
           </Bubble>
         )}

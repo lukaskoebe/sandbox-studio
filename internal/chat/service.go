@@ -407,6 +407,7 @@ type File struct {
 type Prompt struct {
 	Text        string
 	Attachments []File
+	Mentions    []Mention
 }
 
 // Send starts a turn with p, starting the chat's agent first if it isn't running. The
@@ -437,7 +438,7 @@ func (s *Service) Send(ctx context.Context, envID, chatID string, launch Launch,
 		var atts []Attachment
 		if blocks, atts, err = l.prompt(p); err == nil {
 			var t store.ChatTurn
-			if t, err = l.start(ctx, c, p.Text, atts, blocks); err == nil {
+			if t, err = l.start(ctx, c, UserBody{Text: p.Text, Attachments: atts, Mentions: p.Mentions}, blocks); err == nil {
 				return t, nil
 			}
 		}
@@ -1051,7 +1052,7 @@ func (s *Service) promptNotes(ctx context.Context, c store.Chat) (string, func()
 }
 
 // start opens a turn with the user's item and runs the prompt in the background.
-func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Attachment, blocks []acp.ContentBlock) (store.ChatTurn, error) {
+func (l *live) start(ctx context.Context, c store.Chat, user UserBody, blocks []acp.ContentBlock) (store.ChatTurn, error) {
 	note, sent, err := l.s.promptNotes(ctx, c)
 	if err != nil {
 		return store.ChatTurn{}, err
@@ -1069,11 +1070,11 @@ func (l *live) start(ctx context.Context, c store.Chat, text string, atts []Atta
 	l.turn = r
 	l.used = time.Now()
 	l.idle.Stop()
-	_, ch := r.f.add(KindUser, &UserBody{Text: text, Attachments: atts})
+	_, ch := r.f.add(KindUser, &user)
 	l.write(r, ch)
 	l.mu.Unlock()
 	if c.Title == "" {
-		l.s.retitle(c, titleOf(text, atts))
+		l.s.retitle(c, titleOf(user.Text, user.Attachments))
 	}
 	// Publish the turn before writing so early updates are retained. Cancel waits on
 	// promptSent, which preserves wire order without holding l.mu during the write.

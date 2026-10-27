@@ -4,6 +4,7 @@ package guest
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -25,6 +26,9 @@ func (a *Agent) files(st net.Conn, br *bufio.Reader) error {
 	var req agentproto.FilesRequest
 	if err := readBody(br, 64<<10, &req); err != nil {
 		return replyError(st, err)
+	}
+	if req.Op == agentproto.FilesIndex {
+		return agentproto.WriteJSONLine(st, index(context.Background(), Workdir, a.git))
 	}
 	reply, err := browse(Workdir, [2]int{int(a.user.uid), int(a.user.gid)}, req)
 	if err != nil {

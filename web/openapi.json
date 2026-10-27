@@ -2900,6 +2900,40 @@
         ],
         "type": "object"
       },
+      "FileIndex": {
+        "additionalProperties": false,
+        "properties": {
+          "changed": {
+            "description": "Those git reports changed or untracked",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "paths": {
+            "description": "Relative to /workspace",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "truncated": {
+            "description": "More than 20,000 paths",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paths",
+          "changed"
+        ],
+        "type": "object"
+      },
       "FileList": {
         "additionalProperties": false,
         "properties": {
@@ -4832,6 +4866,33 @@
         ],
         "type": "object"
       },
+      "Mention": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "description": "The last line mentioned; 0 for just start",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "path": {
+            "description": "Relative to /workspace, slash-separated",
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          },
+          "start": {
+            "description": "The first line mentioned; 0 for the whole file",
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
       "MergeView": {
         "additionalProperties": false,
         "properties": {
@@ -5750,6 +5811,17 @@
               "$ref": "#/components/schemas/PromptFile"
             },
             "maxItems": 20,
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "mentions": {
+            "description": "Files of the workspace the text names as @path; the agent gets a link to each",
+            "items": {
+              "$ref": "#/components/schemas/Mention"
+            },
+            "maxItems": 50,
             "type": [
               "array",
               "null"
@@ -9525,6 +9597,15 @@
           "attachments": {
             "items": {
               "$ref": "#/components/schemas/Attachment"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "mentions": {
+            "items": {
+              "$ref": "#/components/schemas/Mention"
             },
             "type": [
               "array",
@@ -16473,6 +16554,59 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FileContent"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "tags": [
+          "chats"
+        ]
+      }
+    },
+    "/api/environments/{env}/sandboxes/{id}/files/index": {
+      "get": {
+        "description": "The files of the sandbox's workspace that a chat message can mention: in a git repository the files git knows, tracked or untracked but not ignored, and the ones it reports changed; elsewhere every file, past the folders of dependencies and caches. At most 20,000 paths.",
+        "operationId": "indexFiles",
+        "parameters": [
+          {
+            "description": "Environment ID",
+            "in": "path",
+            "name": "env",
+            "required": true,
+            "schema": {
+              "description": "Environment ID",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sandbox ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "Sandbox ID",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileIndex"
                 }
               }
             },

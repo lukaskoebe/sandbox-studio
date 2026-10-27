@@ -3,6 +3,7 @@ package claudeacp
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/acp"
@@ -243,8 +244,9 @@ func titled(verb, arg string) string {
 }
 
 // claudeContent turns a prompt's ACP content into the content of a Claude Code user message.
-// Text stays text, images of the types the API takes are images, PDFs are documents, and
-// other embedded files are named in a text block that says they are not shown.
+// Text stays text, images of the types the API takes are images, PDFs are documents, a
+// mentioned file is named for the agent to read, and other embedded files are named in a
+// text block that says they are not shown.
 func claudeContent(blocks []acp.ContentBlock) ([]any, error) {
 	out := make([]any, 0, len(blocks))
 	for _, b := range blocks {
@@ -259,6 +261,9 @@ func claudeContent(blocks []acp.ContentBlock) ([]any, error) {
 			default:
 				out = append(out, map[string]any{"type": "text", "text": fmt.Sprintf("An image (%s) isn't shown: only PNG, JPEG, GIF and WebP reach the agent.", b.MimeType)})
 			}
+		case "resource_link":
+			// A file the user mentions; Claude Code reads it with its own tools.
+			out = append(out, map[string]any{"type": "text", "text": "Mentioned file: " + linkedFile(b.URI)})
 		case "resource":
 			var r struct {
 				URI      string  `json:"uri"`
@@ -281,6 +286,23 @@ func claudeContent(blocks []acp.ContentBlock) ([]any, error) {
 		}
 	}
 	return out, nil
+}
+
+// linkedFile is a resource link's file as the agent reads it: the path, and the lines a
+// #L20-L28 fragment names.
+func linkedFile(uri string) string {
+	u, err := url.Parse(uri)
+	if err != nil || u.Scheme != "file" {
+		return uri
+	}
+	from, to, _ := strings.Cut(strings.TrimPrefix(u.Fragment, "L"), "-L")
+	switch {
+	case to != "":
+		return fmt.Sprintf("%s, lines %s to %s", u.Path, from, to)
+	case from != "":
+		return fmt.Sprintf("%s, line %s", u.Path, from)
+	}
+	return u.Path
 }
 
 func firstNonEmpty(values ...string) string {

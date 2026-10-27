@@ -1663,6 +1663,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environments/{env}/sandboxes/{id}/files/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The files of the sandbox's workspace that a chat message can mention: in a git repository the files git knows, tracked or untracked but not ignored, and the ones it reports changed; elsewhere every file, past the folders of dependencies and caches. At most 20,000 paths. */
+        get: operations["indexFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments/{env}/sandboxes/{id}/fork": {
         parameters: {
             query?: never;
@@ -3905,6 +3922,14 @@ export interface components {
             /** @enum {string} */
             type: "file" | "dir" | "symlink" | "other";
         };
+        FileIndex: {
+            /** @description Those git reports changed or untracked */
+            changed: string[] | null;
+            /** @description Relative to /workspace */
+            paths: string[] | null;
+            /** @description More than 20,000 paths */
+            truncated?: boolean;
+        };
         FileList: {
             entries: components["schemas"]["FileEntry"][] | null;
             /** @description More than 1,000 entries */
@@ -4519,6 +4544,20 @@ export interface components {
             filename: string;
             markdown: string;
         };
+        Mention: {
+            /**
+             * Format: int64
+             * @description The last line mentioned; 0 for just start
+             */
+            end?: number;
+            /** @description Relative to /workspace, slash-separated */
+            path: string;
+            /**
+             * Format: int64
+             * @description The first line mentioned; 0 for the whole file
+             */
+            start?: number;
+        };
         MergeView: {
             /** @description The source's checkpoint taken before Accept */
             checkpointId?: string;
@@ -4786,6 +4825,8 @@ export interface components {
         PromptRequest: {
             /** @description At most 10 MiB in total */
             attachments?: components["schemas"]["PromptFile"][] | null;
+            /** @description Files of the workspace the text names as @path; the agent gets a link to each */
+            mentions?: components["schemas"]["Mention"][] | null;
             text?: string;
         };
         ProviderKind: {
@@ -6114,6 +6155,7 @@ export interface components {
         };
         UserBody: {
             attachments?: components["schemas"]["Attachment"][] | null;
+            mentions?: components["schemas"]["Mention"][] | null;
             text: string;
         };
         UtilityModel: {
@@ -10446,6 +10488,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FileContent"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    indexFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Sandbox ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileIndex"];
                 };
             };
             /** @description Error */

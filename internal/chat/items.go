@@ -40,6 +40,15 @@ const MaxBody = 256 << 10
 type UserBody struct {
 	Text        string       `json:"text"`
 	Attachments []Attachment `json:"attachments,omitempty"`
+	Mentions    []Mention    `json:"mentions,omitempty"`
+}
+
+// Mention is a file of the workspace the prompt names as @path, or @path:start-end for
+// some of its lines. The agent gets a link to it and reads it itself.
+type Mention struct {
+	Path  string `json:"path" minLength:"1" maxLength:"4096" doc:"Relative to /workspace, slash-separated"`
+	Start int    `json:"start,omitempty" minimum:"0" doc:"The first line mentioned; 0 for the whole file"`
+	End   int    `json:"end,omitempty" minimum:"0" doc:"The last line mentioned; 0 for just start"`
 }
 
 // Attachment describes a file sent with a prompt; its content goes to the agent only.
@@ -259,6 +268,10 @@ func encodeUserBody(body *UserBody) json.RawMessage {
 		}
 		if len(c.Attachments) != 0 {
 			c.Attachments = c.Attachments[:len(c.Attachments)/2]
+			continue
+		}
+		if len(c.Mentions) != 0 {
+			c.Mentions = c.Mentions[:len(c.Mentions)/2]
 			continue
 		}
 		if c.Text != "" {

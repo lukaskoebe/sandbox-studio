@@ -75,12 +75,18 @@ type FileChange struct {
 const (
 	FilesList = "list"
 	FilesRead = "read"
+	// FilesIndex lists the workspace's files for mentions in a chat: in a git repository the
+	// files git knows, tracked or untracked but not ignored; elsewhere every file, past the
+	// folders of dependencies and caches.
+	FilesIndex = "index"
 )
 
 // File limits.
 const (
 	MaxListEntries = 1000
 	MaxReadBytes   = 1 << 20
+	MaxIndexPaths  = 20000
+	MaxIndexBytes  = 1 << 20 // of the paths in all
 )
 
 // FilesRequest is the body of a KindFiles stream. Path is relative to /workspace,
@@ -103,6 +109,9 @@ type FilesReply struct {
 	// List.
 	Entries   []FileEntry `json:"entries,omitempty"`
 	Truncated bool        `json:"truncated,omitempty"`
+	// Index: the files' paths, and those git reports changed.
+	Paths   []string `json:"paths,omitempty"`
+	Changed []string `json:"changed,omitempty"`
 	// Read.
 	Size     int64  `json:"size,omitempty"`
 	MimeType string `json:"mimeType,omitempty"`

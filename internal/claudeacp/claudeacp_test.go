@@ -653,6 +653,8 @@ func TestClaudeContentMapsAttachments(t *testing.T) {
 		{Type: "image", MimeType: "image/png", Data: "AAAA"},
 		{Type: "image", MimeType: "image/svg+xml", Data: "AAAA"},
 		{Type: "resource", Resource: raw},
+		{Type: "resource_link", URI: "file:///workspace/web/coupon%20code.ts#L20-L28", Name: "coupon code.ts"},
+		{Type: "resource_link", URI: "file:///workspace/README.md", Name: "README.md"},
 	}
 	out, err := claudeContent(blocks)
 	if err != nil {
@@ -660,7 +662,8 @@ func TestClaudeContentMapsAttachments(t *testing.T) {
 	}
 	b, _ := json.Marshal(out)
 	s := string(b)
-	for _, want := range []string{`"type":"image"`, `"media_type":"image/png"`, "isn't shown", "Attached file file:///attachments/notes.txt"} {
+	for _, want := range []string{`"type":"image"`, `"media_type":"image/png"`, "isn't shown", "Attached file file:///attachments/notes.txt",
+		"Mentioned file: /workspace/web/coupon code.ts, lines 20 to 28", "Mentioned file: /workspace/README.md\""} {
 		if !strings.Contains(s, want) {
 			t.Errorf("content %s lacks %s", s, want)
 		}

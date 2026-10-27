@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -33,12 +34,13 @@ type PromptFile struct {
 
 // PromptRequest is what the user sends to a chat.
 type PromptRequest struct {
-	Text        string       `json:"text,omitempty" maxLength:"262144"`
-	Attachments []PromptFile `json:"attachments,omitempty" maxItems:"20" doc:"At most 10 MiB in total"`
+	Text        string         `json:"text,omitempty" maxLength:"262144"`
+	Attachments []PromptFile   `json:"attachments,omitempty" maxItems:"20" doc:"At most 10 MiB in total"`
+	Mentions    []chat.Mention `json:"mentions,omitempty" maxItems:"50" doc:"Files of the workspace the text names as @path; the agent gets a link to each"`
 }
 
 func (p PromptRequest) prompt() chat.Prompt {
-	out := chat.Prompt{Text: p.Text}
+	out := chat.Prompt{Text: p.Text, Mentions: p.Mentions}
 	for _, f := range p.Attachments {
 		out.Attachments = append(out.Attachments, chat.File{Name: f.Name, MimeType: f.MimeType, Data: f.Data})
 	}
@@ -326,6 +328,27 @@ func (s *Server) registerChats(api huma.API) {
 		return &struct{ Body FileList }{FileList{Entries: orEmpty(reply.Entries), Truncated: reply.Truncated}}, nil
 	})
 
+	type indexIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Sandbox ID"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "indexFiles", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/files/index", Tags: []string{"chats"},
+		Description: "The files of the sandbox's workspace that a chat message can mention: in a git repository the files git " +
+			"knows, tracked or untracked but not ignored, and the ones it reports changed; elsewhere every file, past the " +
+			"folders of dependencies and caches. At most 20,000 paths.",
+	}, func(ctx context.Context, in *indexIn) (*struct{ Body FileIndex }, error) {
+		r, err := s.workspaceFiles(ctx, in.Env, in.ID, agentproto.FilesRequest{Op: agentproto.FilesIndex})
+		if err != nil {
+			// A guest from before the index doesn't know the op.
+			if strings.Contains(err.Error(), "unknown files op") {
+				return nil, huma.Error409Conflict("restart the sandbox to mention its files: its agent is from an older Studio")
+			}
+			return nil, err
+		}
+		return &struct{ Body FileIndex }{FileIndex{Paths: orEmpty(r.Paths), Changed: orEmpty(r.Changed), Truncated: r.Truncated}}, nil
+	})
+
 	huma.Register(api, huma.Operation{
 		OperationID: "readFile", Method: http.MethodGet, Path: "/api/environments/{env}/sandboxes/{id}/files/content", Tags: []string{"chats"},
 		Description: "Reads a file of the sandbox's workspace: text and PNG, JPEG, GIF and WebP images of at most 1 MiB come " +
@@ -388,6 +411,13 @@ func (s *Server) chatLaunchFor(ctx context.Context, envID, chatID string) (chat.
 type FileList struct {
 	Entries   []agentproto.FileEntry `json:"entries"`
 	Truncated bool                   `json:"truncated,omitempty" doc:"More than 1,000 entries"`
+}
+
+// FileIndex is the files of a sandbox's workspace, for mentions.
+type FileIndex struct {
+	Paths     []string `json:"paths" doc:"Relative to /workspace"`
+	Changed   []string `json:"changed" doc:"Those git reports changed or untracked"`
+	Truncated bool     `json:"truncated,omitempty" doc:"More than 20,000 paths"`
 }
 
 // FileContent is a file of a sandbox's workspace.

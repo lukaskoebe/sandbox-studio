@@ -272,6 +272,8 @@ Not done yet:
   transcript replay.
 - Attachments: text files as text, PDFs as documents, PNG, JPEG, GIF and WebP as images, other
   files named in a text block.
+- Mentioned files (`resource_link`): named in a text block, "Mentioned file: /workspace/…,
+  lines 20 to 28", for Claude Code to read.
 
 The docs were checked, not a binary: the flags, the plugin layout and tool names, the
 stream-json fields and the transcript location come from the Claude Code docs at

@@ -19,6 +19,13 @@
   archive has `studio-app` next to `studio`, and `install.sh` and the updater install it
   too. Without it, without a display, or on Linux without WebKitGTK 4.1, `studio app` opens
   the browser and says why.
+- **@ mentions a file.** Typing @ in a chat's box lists the sandbox's workspace files,
+  names that match first and the ones Git reports changed marked; Enter adds one, Tab goes
+  into a folder, and `:20-28` after it mentions those lines. In a repository the list is
+  what Git knows, without its ignored files. The agent gets the text as written, with
+  `@path:20-28`, and a link to each file to read itself; in the sent message each file
+  opens in Files. Files has **@** at the top of a file to mention it, or its selected lines,
+  in the chat beside it. A sandbox started by an older Studio needs a restart for the list.
 - **Syntax highlighting** in Files, in a push's and a pull request's diff, and in the changes
   of a chat, for the common languages: TypeScript and JavaScript, Python, Go, Rust, Java,
   C and C++, PHP, Ruby, shell, SQL, HTML, CSS, JSON, YAML, TOML, Markdown, Dockerfiles and

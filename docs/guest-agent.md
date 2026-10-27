@@ -33,7 +33,7 @@ Stream kinds:
 | `start-session` | host → guest | a harness TUI in a detached tmux session |
 | `run` | host → guest | one command as the agent user, from an allowlist (`claude`, `codex`, `tmux`, `cat`, `git`): CLI logins, review feedback typed into an agent's terminal, repositories cloned into `/workspace` |
 | `acp` | host → guest | stdin/stdout of an ACP agent process (chats) |
-| `snapshot`, `files` | host → guest | chat turn snapshots and the file browser's listings and reads |
+| `snapshot`, `files` | host → guest | chat turn snapshots, and the file browser's listings and reads and the workspace's index for mentions in a chat (`git ls-files` as the agent user in a repository) |
 | `upload` | host → guest | a file streamed into a folder of `/workspace` (see [uploads](#uploads)) |
 | `browser` | host → guest | agent-browser commands in a browser VM |
 | `forwards` | host → guest | the loopback ports a browser VM forwards to its driving sandbox ([browser](browser.md#localhost)) |

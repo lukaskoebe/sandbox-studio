@@ -884,6 +884,11 @@ function NewThread({
         error={problem}
         placeholder={placeholder}
         attachments={mode === "message"}
+        mentionsIn={
+          mode === "message" && computer
+            ? { env, sandbox: computer.id }
+            : undefined
+        }
         className={cn(
           "rounded-xl",
           mode === "teach" && "border-(--acc-memory)/60",

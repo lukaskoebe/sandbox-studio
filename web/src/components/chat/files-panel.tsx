@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState, useSyncExternalStore } from "react"
 import {
   ArrowClockwiseIcon,
   ArrowLeftIcon,
+  AtIcon,
   DotsThreeIcon,
   DownloadSimpleIcon,
   FileIcon,
@@ -36,6 +37,12 @@ import {
   uploadWorkspaceFile,
   type UploadConflict,
 } from "@/lib/workspace-upload"
+import {
+  canMentionIn,
+  mentionInChat,
+  watchMentionTargets,
+  type Mention,
+} from "@/lib/mentions"
 import { cn, formatBytes } from "@/lib/utils"
 
 type FileEntry = components["schemas"]["FileEntry"]
@@ -574,6 +581,16 @@ function FileView({
   const { refetch } = content
   const name = path.split("/").at(-1) ?? path
   const c = content.data
+  const canMention = useSyncExternalStore(watchMentionTargets, () =>
+    canMentionIn(sandboxId)
+  )
+  const body = useRef<HTMLDivElement>(null)
+  const mention = () => {
+    const m: Mention = { path }
+    const lines = selectedLines(body.current)
+    if (lines) [m.start, m.end] = lines[0] === lines[1] ? [lines[0], 0] : lines
+    mentionInChat(sandboxId, m)
+  }
 
   return (
     <div className="grid min-w-0 content-start gap-2">
@@ -612,6 +629,19 @@ function FileView({
             <DownloadSimpleIcon />
           </Button>
         )}
+        {canMention && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            title="Mention in chat: the lines selected, or the file"
+            aria-label="Mention in chat"
+            // The selection stays for the lines.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={mention}
+          >
+            <AtIcon />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -627,9 +657,27 @@ function FileView({
           Can't show this file: {errorMessage(content.error)}
         </p>
       )}
-      {c && <FileBody file={c} name={name} path={path} />}
+      <div ref={body} className="grid min-w-0">
+        {c && <FileBody file={c} name={name} path={path} />}
+      </div>
     </div>
   )
+}
+
+/** The first and last line of a selection within el's code, if it has one. */
+function selectedLines(el: HTMLElement | null): [number, number] | undefined {
+  const sel = window.getSelection()
+  if (!el || !sel || sel.isCollapsed || sel.rangeCount === 0) return
+  const line = (n: Node | null) => {
+    const e = n instanceof Element ? n : n?.parentElement
+    const l = e?.closest<HTMLElement>("[data-line]")
+    return l && el.contains(l) ? Number(l.dataset.line) : undefined
+  }
+  const range = sel.getRangeAt(0)
+  const a = line(range.startContainer)
+  const b = line(range.endContainer)
+  if (a === undefined || b === undefined) return
+  return [Math.min(a, b), Math.max(a, b)]
 }
 
 function FileBody({

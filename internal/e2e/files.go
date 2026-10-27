@@ -75,6 +75,13 @@ func browse(req agentproto.FilesRequest) (agentproto.FilesReply, error) {
 			return strings.Compare(a.Name, b.Name)
 		})
 		return reply, nil
+	case agentproto.FilesIndex:
+		reply := agentproto.FilesReply{Changed: []string{"web/src/checkout/coupon.ts"}}
+		for p := range workspace {
+			reply.Paths = append(reply.Paths, p)
+		}
+		slices.Sort(reply.Paths)
+		return reply, nil
 	case agentproto.FilesRead:
 		data, ok := workspace[name]
 		if !ok {

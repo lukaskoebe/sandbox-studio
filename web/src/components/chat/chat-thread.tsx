@@ -20,6 +20,7 @@ import {
 } from "@/components/chat/chat-items"
 import { Composer, type Prompt } from "@/components/chat/composer"
 import { PreviewSandbox } from "@/components/chat/markdown"
+import { OpenWorkspaceFile } from "@/components/chat/mention-picker"
 import { PlanCard } from "@/components/chat/plan-card"
 import { QueuedPrompts } from "@/components/chat/queued-prompts"
 import { TurnFooter } from "@/components/chat/turn-footer"
@@ -75,11 +76,14 @@ export function ChatThread({
   chat,
   log,
   onShowChanges,
+  onOpenFile,
 }: {
   env: string
   chat: Chat
   log: ReturnType<typeof useChat>
   onShowChanges: (turnId: string) => void
+  /** Opens a file a message mentions beside the chat; without, mentions link to the sandbox. */
+  onOpenFile?: (path: string) => void
 }) {
   const teammates = $api.useQuery("get", "/api/environments/{env}/teammates", {
     params: { path: { env } },
@@ -96,6 +100,7 @@ export function ChatThread({
       teammateName={teammateName}
       label={(t) => requestLabel(log.items, t)}
       onShowChanges={onShowChanges}
+      onOpenFile={onOpenFile}
       earlier={log.earlier}
       loadingEarlier={log.loadingEarlier}
       onLoadEarlier={log.loadEarlier}
@@ -112,6 +117,7 @@ function ChatLog({
   teammateName,
   label,
   onShowChanges,
+  onOpenFile,
   earlier,
   loadingEarlier,
   onLoadEarlier,
@@ -124,6 +130,7 @@ function ChatLog({
   teammateName: string
   label: (t: ChatTurn) => string
   onShowChanges: (turnId: string) => void
+  onOpenFile?: (path: string) => void
   /** The turns whose items aren't loaded yet. */
   earlier: ChatTurn[]
   loadingEarlier: boolean
@@ -173,121 +180,123 @@ function ChatLog({
 
   return (
     <PreviewSandbox.Provider value={previews}>
-      <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <MessageScroller className="min-h-0 flex-1">
-            <MessageScrollerViewport
-              aria-label="Messages"
-              preserveScrollOnPrepend
-            >
-              {/* Outside the content: the scroller takes every child of it for a message, and
+      <OpenWorkspaceFile.Provider value={onOpenFile ?? null}>
+        <MessageScrollerProvider defaultScrollPosition="end" autoScroll>
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <MessageScroller className="min-h-0 flex-1">
+              <MessageScrollerViewport
+                aria-label="Messages"
+                preserveScrollOnPrepend
+              >
+                {/* Outside the content: the scroller takes every child of it for a message, and
                   keeps the reading place only when its first one moves down. */}
-              {earlier.length > 0 && (
-                <div className="mx-auto w-full max-w-3xl px-4 pt-4">
-                  <LoadEarlier
-                    turns={earlier}
-                    loading={loadingEarlier}
-                    onLoad={onLoadEarlier}
-                  />
-                </div>
-              )}
-              <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
-                {items.length === 0 && earlier.length === 0 && !sending && (
-                  <MessageScrollerItem className="m-auto">
-                    <Empty>
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <ChatCircleDotsIcon />
-                        </EmptyMedia>
-                        <EmptyTitle>Nothing here yet</EmptyTitle>
-                        <EmptyDescription>
-                          Say what {teammateName} should do.
-                        </EmptyDescription>
-                      </EmptyHeader>
-                    </Empty>
-                  </MessageScrollerItem>
+                {earlier.length > 0 && (
+                  <div className="mx-auto w-full max-w-3xl px-4 pt-4">
+                    <LoadEarlier
+                      turns={earlier}
+                      loading={loadingEarlier}
+                      onLoad={onLoadEarlier}
+                    />
+                  </div>
                 )}
-                {items.map((item, i) => {
-                  const turn = turnById.get(item.turnId)
-                  const lastOfTurn = items.at(i + 1)?.turnId !== item.turnId
-                  const footer =
-                    lastOfTurn &&
-                    turn?.endedAt &&
-                    (changeCount(turn) > 0 || turnUsage(turn))
-                      ? turn
-                      : undefined
-                  // The note that changes were undone belongs to the undone turn but
-                  // stays readable.
-                  const dim =
-                    turn?.undoneAt &&
-                    !(item.kind === "marker" && item.marker?.kind === "undo")
-                  if (item.id === pinned?.id) return null
-                  return (
-                    <Fragment key={item.id}>
-                      <MessageScrollerItem
-                        messageId={item.id}
-                        scrollAnchor={item.id === lastUser}
-                        className={cn(dim && "opacity-50")}
-                        title={turn?.undoneAt ? "Undone" : undefined}
-                      >
-                        <ChatItemView
-                          item={item}
-                          ctx={{
-                            env,
-                            chatId: chat.id,
-                            teammateName,
-                            live: item.id === liveId,
-                          }}
-                        />
-                      </MessageScrollerItem>
-                      {footer && (
+                <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 p-4">
+                  {items.length === 0 && earlier.length === 0 && !sending && (
+                    <MessageScrollerItem className="m-auto">
+                      <Empty>
+                        <EmptyHeader>
+                          <EmptyMedia variant="icon">
+                            <ChatCircleDotsIcon />
+                          </EmptyMedia>
+                          <EmptyTitle>Nothing here yet</EmptyTitle>
+                          <EmptyDescription>
+                            Say what {teammateName} should do.
+                          </EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
+                    </MessageScrollerItem>
+                  )}
+                  {items.map((item, i) => {
+                    const turn = turnById.get(item.turnId)
+                    const lastOfTurn = items.at(i + 1)?.turnId !== item.turnId
+                    const footer =
+                      lastOfTurn &&
+                      turn?.endedAt &&
+                      (changeCount(turn) > 0 || turnUsage(turn))
+                        ? turn
+                        : undefined
+                    // The note that changes were undone belongs to the undone turn but
+                    // stays readable.
+                    const dim =
+                      turn?.undoneAt &&
+                      !(item.kind === "marker" && item.marker?.kind === "undo")
+                    if (item.id === pinned?.id) return null
+                    return (
+                      <Fragment key={item.id}>
                         <MessageScrollerItem
-                          className={cn(footer.undoneAt && "opacity-50")}
+                          messageId={item.id}
+                          scrollAnchor={item.id === lastUser}
+                          className={cn(dim && "opacity-50")}
+                          title={turn?.undoneAt ? "Undone" : undefined}
                         >
-                          <TurnFooter
-                            env={env}
-                            chat={chat}
-                            turn={footer}
-                            turns={turns}
-                            label={label}
-                            onShowChanges={onShowChanges}
+                          <ChatItemView
+                            item={item}
+                            ctx={{
+                              env,
+                              chatId: chat.id,
+                              teammateName,
+                              live: item.id === liveId,
+                            }}
                           />
                         </MessageScrollerItem>
-                      )}
-                    </Fragment>
-                  )
-                })}
-                {sending && (
-                  <MessageScrollerItem key={sending.key} scrollAnchor>
-                    <SendingMessage prompt={sending.prompt} />
-                  </MessageScrollerItem>
-                )}
-                {running && !liveId && !sending && (
-                  <MessageScrollerItem>
-                    <p className="shimmer text-xs text-muted-foreground">
-                      {teammateName} is starting…
-                    </p>
-                  </MessageScrollerItem>
-                )}
-              </MessageScrollerContent>
-            </MessageScrollerViewport>
-            <MessageScrollerButton />
-          </MessageScroller>
-          <ComposerDock className="grid max-w-3xl gap-2">
-            {pinned?.plan && (
-              <PlanCard entries={pinned.plan.entries ?? []} live />
-            )}
-            <ChatComposer
-              env={env}
-              chat={chat}
-              queued={queued}
-              teammateName={teammateName}
-              onSending={onSending}
-              onSent={() => setSending((s) => s && { ...s, sent: true })}
-            />
-          </ComposerDock>
-        </div>
-      </MessageScrollerProvider>
+                        {footer && (
+                          <MessageScrollerItem
+                            className={cn(footer.undoneAt && "opacity-50")}
+                          >
+                            <TurnFooter
+                              env={env}
+                              chat={chat}
+                              turn={footer}
+                              turns={turns}
+                              label={label}
+                              onShowChanges={onShowChanges}
+                            />
+                          </MessageScrollerItem>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                  {sending && (
+                    <MessageScrollerItem key={sending.key} scrollAnchor>
+                      <SendingMessage prompt={sending.prompt} />
+                    </MessageScrollerItem>
+                  )}
+                  {running && !liveId && !sending && (
+                    <MessageScrollerItem>
+                      <p className="shimmer text-xs text-muted-foreground">
+                        {teammateName} is starting…
+                      </p>
+                    </MessageScrollerItem>
+                  )}
+                </MessageScrollerContent>
+              </MessageScrollerViewport>
+              <MessageScrollerButton />
+            </MessageScroller>
+            <ComposerDock className="grid max-w-3xl gap-2">
+              {pinned?.plan && (
+                <PlanCard entries={pinned.plan.entries ?? []} live />
+              )}
+              <ChatComposer
+                env={env}
+                chat={chat}
+                queued={queued}
+                teammateName={teammateName}
+                onSending={onSending}
+                onSent={() => setSending((s) => s && { ...s, sent: true })}
+              />
+            </ComposerDock>
+          </div>
+        </MessageScrollerProvider>
+      </OpenWorkspaceFile.Provider>
     </PreviewSandbox.Provider>
   )
 }
@@ -497,6 +506,7 @@ function ChatComposer({
         error={error}
         autoFocus
         insert={insert}
+        mentionsIn={{ env, sandbox: chat.sandboxId }}
         placeholder={
           chat.state === "running"
             ? `Steer ${teammateName}: this goes once the current turn ends`

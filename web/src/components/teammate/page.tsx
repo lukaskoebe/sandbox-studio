@@ -202,6 +202,15 @@ export function TeammatePage({
             onTerminal={(term) =>
               screen({ tab: "terminal", term, computer: thread?.sandboxId })
             }
+            onOpenFile={(file) =>
+              screen({
+                tab: "changes",
+                file,
+                files: undefined,
+                computer: thread?.sandboxId,
+                push: true,
+              })
+            }
           />
         ) : (
           <TeammateHome

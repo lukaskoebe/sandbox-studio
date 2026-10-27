@@ -171,7 +171,13 @@ function NewChatPage() {
                 )}
               </div>
             )}
-            <Composer key={sandbox.id} onSend={send} autoFocus error={error} />
+            <Composer
+              key={sandbox.id}
+              onSend={send}
+              autoFocus
+              error={error}
+              mentionsIn={{ env, sandbox: sandbox.id }}
+            />
           </>
         )}
       </div>
