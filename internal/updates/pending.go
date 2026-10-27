@@ -205,9 +205,8 @@ func (r Resume) Watchdog(served <-chan struct{}, log *slog.Logger) {
 		case <-time.After(healthWait):
 			p = rollback(p, fmt.Sprintf("Studio %s didn't serve within %s", p.To, healthWait), log)
 			if p.InPlace {
-				if err := startOldInPlace(p, os.Args[1:], log); err != nil {
-					log.Error("the old Studio didn't start again", "err", err)
-				}
+				err := startOldInPlace(p, os.Args[1:], log)
+				log.Error("the old Studio didn't start again", "err", err)
 			}
 			os.Exit(ExitRestart)
 		}
