@@ -96,6 +96,7 @@ func (s *Server) Register(mux *http.ServeMux) huma.API {
 	s.registerTemplates(api)
 	s.registerCheckpoints(api)
 	s.registerReviewFeedback(api)
+	s.registerReviewHead(api)
 	s.registerOpenPullRequest(api)
 	s.registerTransfers(api)
 	s.registerMerges(api)

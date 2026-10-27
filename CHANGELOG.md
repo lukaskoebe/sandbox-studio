@@ -28,6 +28,12 @@ tabs, a teammate's status that counts what runs in them, and long chats that loa
   history, lists the commits it drops with the new ones that replace them, and only
   **Force-push** (`F` in the terminal app) approves it; Studio pushes with a lease on the
   commit you reviewed. The default branch still takes only fast-forward pushes.
+- **Pull request reviews:** an agent can review a pull request on GitHub or
+  Forgejo/Gitea/Codeberg and drafts its verdict, summary and line comments for you. The draft
+  waits on Home beside the diff, where you change the verdict, edit, drop or add comments,
+  see whether the pull request moved since the agent read it, and **Post review** posts it as
+  your account; **Discard…** tells the agent your note instead. A line saying the teammate
+  wrote it is optional and off by default.
 - **Long chats** open on their last 40 turns, and load the earlier ones from a row above them,
   which also loads when you scroll up to it. They open faster and scroll lighter.
 - **Chats:** sending a message no longer jumps a long chat back to its first message. The

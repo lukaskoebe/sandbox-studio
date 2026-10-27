@@ -117,7 +117,7 @@ export interface paths {
         put?: never;
         /**
          * Send review feedback to the agent
-         * @description Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.
+         * @description Tells an agent in the approval's sandbox how its push or pull request was reviewed, or what became of its review of a pull request, with the note: as a prompt in one of its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and submitted. A plain shell takes no feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.
          */
         post: operations["sendReviewFeedback"];
         delete?: never;
@@ -157,6 +157,26 @@ export interface paths {
         put?: never;
         /** @description Undoes a decision the AI reviewer made: its rule is deleted, and the request is asked about from then on. Other decisions can't be reverted. */
         post: operations["revertApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments/{env}/approvals/{id}/review-head": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where a reviewed pull request is now
+         * @description Asks the forge for the pull request's head, and counts the commits pushed to it since the teammate drafted the review.
+         */
+        get: operations["getReviewHead"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2939,6 +2959,8 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             environmentId: string;
+            /** @description A teammate's review draft of a pull request, and what became of it */
+            forgeReview?: components["schemas"]["ReviewDetail"];
             /** @description Set for git.push and git.pr approvals */
             git?: components["schemas"]["GitDetail"];
             /** @description git in a sandbox wants credentials for a host no forge covers */
@@ -3490,7 +3512,7 @@ export interface components {
         };
         DecideInBody: {
             /**
-             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request
+             * @description For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it
              * @enum {string}
              */
             action: "allow" | "deny" | "dismiss" | "allow_once" | "deny_once" | "allow_site" | "allow_session";
@@ -3517,6 +3539,8 @@ export interface components {
             pullRequest?: components["schemas"]["PullRequestStruct"];
             /** @description For browser.action: allow (or deny) the action on the origin from now on */
             remember?: boolean;
+            /** @description For git.review approved with allow: the review as edited, which Studio posts. Omitted posts the draft as it is */
+            review?: components["schemas"]["ReviewEditIn"];
             /**
              * @description Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment
              * @default environment
@@ -4115,6 +4139,32 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        GitReview: {
+            approvalId: string;
+            /** Format: date-time */
+            createdAt: string;
+            environmentId: string;
+            forgeId: string;
+            forgeName: string;
+            /** @description The pull request's head commit the draft was written against */
+            headSha: string;
+            id: string;
+            /** @description The user's note on discarding it */
+            note?: string;
+            /** Format: int64 */
+            number: number;
+            owner: string;
+            repo: string;
+            /** @description Why posting failed, or how it was posted */
+            result?: string;
+            sandboxId: string;
+            /** @enum {string} */
+            state: "pending" | "posted" | "discarded" | "failed" | "superseded";
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description The posted review's web URL */
+            url?: string;
+        };
         GoBrowserInBody: {
             /** @description An ephemeral session's ID; empty for the persistent profile */
             session?: string;
@@ -4525,6 +4575,38 @@ export interface components {
             /** @description The pull request's title; empty keeps the proposed one */
             title?: string;
         };
+        PRBranch: {
+            ref: string;
+            sha: string;
+        };
+        PRComment: {
+            author: string;
+            body: string;
+            /** Format: date-time */
+            when: string;
+        };
+        PRCommit: {
+            author: string;
+            sha: string;
+            subject: string;
+        };
+        PRFile: {
+            /** Format: int64 */
+            additions: number;
+            /** Format: int64 */
+            deletions: number;
+            path: string;
+            /** @description added, modified, removed, renamed and so on, as the forge says */
+            status: string;
+        };
+        PRReview: {
+            author: string;
+            body?: string;
+            /** @description As the forge says, such as APPROVED, REQUEST_CHANGES or COMMENTED */
+            state: string;
+            /** Format: date-time */
+            when: string;
+        };
         Page: {
             /** @description A core page, loaded into every session of the scope */
             alwaysLoad: boolean;
@@ -4770,6 +4852,27 @@ export interface components {
             /** @description Branch with the changes */
             head: string;
             title: string;
+        };
+        PullRequestInfo: {
+            author: string;
+            base: components["schemas"]["PRBranch"];
+            body?: string;
+            comments: components["schemas"]["PRComment"][] | null;
+            commits: components["schemas"]["PRCommit"][] | null;
+            files: components["schemas"]["PRFile"][] | null;
+            head: components["schemas"]["PRBranch"];
+            merged?: boolean;
+            /** @description The pull request has more commits than listed */
+            moreCommits?: boolean;
+            /** @description The pull request changes more files than listed */
+            moreFiles?: boolean;
+            /** Format: int64 */
+            number: number;
+            reviews: components["schemas"]["PRReview"][] | null;
+            /** @description open or closed */
+            state: string;
+            title: string;
+            url?: string;
         };
         PullRequestStruct: {
             /** @description Open the review's pull request along with the push; false pushes without one */
@@ -5075,6 +5178,79 @@ export interface components {
             memoryMiB: number;
             /** Format: int64 */
             workspaceMiB: number;
+        };
+        ReviewComment: {
+            body: string;
+            /** Format: int64 */
+            line: number;
+            path: string;
+            /**
+             * @description new: a line added or kept, numbered in the new file; old: a removed line, numbered in the old file
+             * @enum {string}
+             */
+            side: "new" | "old";
+        };
+        ReviewDetail: {
+            draft: components["schemas"]["ReviewDraft"];
+            review: components["schemas"]["GitReview"];
+        };
+        ReviewDraft: {
+            /** @description The forge account the review posts as: the user's token's */
+            account?: string;
+            /** @description The posted review ends with the line saying the teammate wrote it */
+            attribution?: boolean;
+            comments: components["schemas"]["ReviewComment"][] | null;
+            /** @description The pull request's unified diff at HeadSHA */
+            diff: string;
+            diffTruncated?: boolean;
+            forge: string;
+            /** @description The forge's host, which the review posts to */
+            forgeHost: string;
+            /** @description The account opened the pull request, so the forge takes a verdict only as a comment */
+            ownPullRequest?: boolean;
+            owner: string;
+            pullRequest: components["schemas"]["PullRequestInfo"];
+            repo: string;
+            /** @description The sandbox's name */
+            sandbox: string;
+            summary: string;
+            /** @description The teammate owning the sandbox; empty for unowned sandboxes */
+            teammate?: string;
+            /** @enum {string} */
+            verdict: "comment" | "approve" | "request_changes";
+        };
+        ReviewEditCommentIn: {
+            body: string;
+            /** Format: int64 */
+            line: number;
+            path: string;
+            /**
+             * @description new (default): an added or kept line, numbered in the new file; old: a removed line
+             * @enum {string}
+             */
+            side?: "new" | "old";
+        };
+        ReviewEditIn: {
+            /** @description End the review with "Review by <teammate> (agent)" */
+            attribution?: boolean;
+            comments: components["schemas"]["ReviewEditCommentIn"][] | null;
+            summary: string;
+            /** @enum {string} */
+            verdict: "comment" | "approve" | "request_changes";
+        };
+        ReviewHead: {
+            merged?: boolean;
+            /**
+             * Format: int64
+             * @description Commits on top of the one the draft was written against, 0 when they could not be counted
+             */
+            newCommits: number;
+            /** @description The draft's commit is no longer in the pull request: its branch was rewritten */
+            rewritten?: boolean;
+            /** @description The pull request's head commit now */
+            sha: string;
+            /** @description open or closed */
+            state: string;
         };
         ReviewerView: {
             /** @description Whether the assisted level asks the AI reviewer; without a utility model it asks the user, as guarded does */
@@ -6300,7 +6476,7 @@ export interface operations {
             path: {
                 /** @description Environment ID */
                 env: string;
-                /** @description Approval ID of a git push or pull request */
+                /** @description Approval ID of a git push, pull request or review */
                 id: string;
             };
             cookie?: never;
@@ -6390,6 +6566,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    getReviewHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Environment ID */
+                env: string;
+                /** @description Approval ID of a git.review */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewHead"];
                 };
             };
             /** @description Error */

@@ -12,12 +12,16 @@ import (
 	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
-// Tools are the MCP tools of the git remote. They answer from Studio's records of the
-// calling sandbox's pushes and never ask a forge.
+// Tools are the MCP tools of the git remote. The push and pull request tools answer from
+// Studio's records of the calling sandbox's pushes and never ask a forge; the review tools
+// read pull requests from it.
 func (s *Service) Tools() []integrations.Tool {
 	return []integrations.Tool{
 		{Def: agentcall.GitPushStatusTool, Handle: s.toolPushStatus},
 		{Def: agentcall.GitPullRequestStatusTool, Handle: s.toolPullRequestStatus},
+		{Def: agentcall.GitPullRequestReadTool, Handle: s.toolPullRequestRead},
+		{Def: agentcall.GitPullRequestReviewTool, Handle: s.toolPullRequestReview},
+		{Def: agentcall.GitReviewStatusTool, Handle: s.toolReviewStatus},
 		// Not an MCP tool: the guest's git credential helper calls it.
 		{Def: agentcall.GitCredentialCall, Handle: s.credential},
 	}

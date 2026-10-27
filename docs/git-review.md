@@ -370,6 +370,61 @@ an agent at once, in the sandbox's chat or terminal it works in.
 - Once sent, the push is marked delivered and notified, so its next fetch and prompt don't
   tell the agent again.
 
+## Pull request reviews
+
+An agent can review a pull request on a forge with an API (Forgejo, Gitea, Codeberg or
+GitHub; GitLab is refused for now). It reads with `git_pull_request_read` and git, and drafts
+the review with `git_pull_request_review`. Nothing reaches the forge until the user posts
+the draft, as the forge's token's account.
+
+- **Reading.** `git_pull_request_read(repository, number, forge?)` answers the pull
+  request's title, description, author, branches, commits (up to 50), changed files with line
+  counts (up to 50), and the reviews and comments so far, from the forge with the forge's
+  token. The diff is left out: `git fetch origin pull/<n>/head` works through the virtual
+  remote, since fetches go to the forge as they are. `forge` is needed only when the
+  environment has more than one forge with an API.
+- **Drafting.** `git_pull_request_review(repository, number, verdict, summary, comments,
+  forge?)` takes a verdict (`comment`, `approve`, `request_changes`), a summary (needed
+  unless approving) and up to 50 line comments `{path, line, side, body}`, where side `new`
+  (the default) is an added or kept line numbered in the new file and `old` a removed line.
+  Studio reads the pull request and its diff (up to `MaxDiff`), refuses a comment on a line
+  the diff doesn't show, asks the forge for the token's account, and creates a `git.review`
+  approval with the subject `<forge>/<owner>/<repo>#<n>` and a `git_reviews` row
+  (migration 051) holding the head commit the draft was written against. The agent gets
+  "awaiting approval" at once. A newer draft for the same pull request from the same sandbox
+  supersedes one still waiting.
+- **The review** (`ForgeReview` in `web/src/components/forge-review.tsx`, in the same sheet,
+  review page and Git tab as a push) shows the pull request, a link to it on the forge, the
+  verdict as a toggle, the summary, the diff with the draft's comments on their lines, and a
+  footer: "Posts as <account> on <host> · N comments", **Discard…** and **Post review**.
+  Everything is editable while it waits; comments are edited or dropped in place and new ones
+  added with a line's comment button. `GET …/approvals/{id}/review-head` asks the forge
+  whether the pull request moved since the draft: "2 new commits since Ada read it", "Its
+  branch was rewritten", merged or closed.
+- **Posting.** Allow with `review: {verdict, summary, comments, attribution}` in the decide
+  body posts the edited review (without it, the draft as it is): Forgejo's
+  `POST /repos/{o}/{r}/pulls/{n}/reviews` with `APPROVED`, `REQUEST_CHANGES` or `COMMENT`
+  and `new_position`/`old_position`, GitHub's with `APPROVE`, `REQUEST_CHANGES` or `COMMENT`
+  and `line` with side `RIGHT`/`LEFT`, both pinned to the reviewed head with `commit_id`. The
+  approval's payload is updated to what was posted. A forge refuses a verdict from the pull
+  request's own author, so when the token's account opened it the review posts as a comment
+  that starts with **Approved.** or **Changes requested.**, and the review says so.
+- **Attribution.** "End with “Review by Ada (agent)”" appends that line (or "Review by an
+  agent in <sandbox>" for a sandbox without a teammate). It is off by default and the web
+  remembers the choice per teammate in the browser.
+- **Discarding.** Deny with a note discards the draft and keeps the note; dismiss closes it
+  without an answer.
+- **The agent learns** the outcome from `git_pull_request_review_status(repository, number,
+  forge?)` (awaiting approval, posted with its URL, discarded with the note, superseded, or
+  failed with the forge's answer), from the next prompt's note ("What became of your pull
+  request reviews"), or right away when the user picks a chat or terminal under **Send to**
+  in the Discard popover: `ReviewFeedback` writes "I posted it; it is at <url>." or "I
+  discarded it; nothing was posted." and the note.
+- **Not yet:** accounts of their own for teammates (so a review posts as the teammate, and
+  a verdict on the user's own pull request isn't turned into a comment), Studio noticing
+  review requests for a teammate, and GitLab merge requests
+  ([forge-reviews.md](design/forge-reviews.md)).
+
 ## Integration interface
 
 `internal/integrations` holds a minimal compiled-in interface:
@@ -395,8 +450,10 @@ type Integration interface {
 - **Jobs.** `Set.RunJobs` runs each job every `Every` until Studio stops; a failed run is
   logged. No integration has a job yet.
 
-Git review serves two tools, both answered from Studio's records of the calling sandbox's
-pushes and never from a forge:
+Git review serves five tools: the two below, answered from Studio's records of the calling
+sandbox's pushes and never from a forge, and the three of [pull request
+reviews](#pull-request-reviews).
+
 
 - `git_push_status(limit?)`: the sandbox's recent pushes, newest first, with their state
   (`pending`, `pushed`, `rejected`, `failed`, `superseded`), the forge's result and the

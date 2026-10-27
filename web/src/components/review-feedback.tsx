@@ -106,6 +106,7 @@ export function UnifiedDiff({
   onComment,
   fill,
   lineId,
+  commentLabel,
 }: {
   diff: string
   comments?: LineComment[]
@@ -114,6 +115,8 @@ export function UnifiedDiff({
   fill?: boolean
   /** The element ID of line i, for a list of comments that jumps to them. */
   lineId?: (i: number) => string
+  /** Who wrote the comments, above each one, such as "Ada's draft". */
+  commentLabel?: string
 }) {
   const [editing, setEditing] = useState<number>()
   const [draft, setDraft] = useState("")
@@ -206,6 +209,11 @@ export function UnifiedDiff({
                         setDraft(comment.text)
                       }}
                     >
+                      {commentLabel && (
+                        <span className="block text-[0.6875rem] text-muted-foreground">
+                          {commentLabel} · line {l.line}
+                        </span>
+                      )}
                       {comment.text}
                     </button>
                     {onComment && (

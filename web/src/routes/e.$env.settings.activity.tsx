@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { ForgeReviewOutcome } from "@/components/forge-review"
 import { GitOutcome } from "@/components/git-review"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
@@ -171,7 +172,11 @@ function ActivitySettings() {
                     </span>
                   </TableCell>
                   <TableCell className="max-w-72 text-muted-foreground">
-                    {a.git ? (
+                    {a.forgeReview ? (
+                      <div className="whitespace-normal">
+                        <ForgeReviewOutcome review={a.forgeReview.review} />
+                      </div>
+                    ) : a.git ? (
                       <div className="whitespace-normal">
                         <GitOutcome git={a.git} />
                       </div>
@@ -206,19 +211,20 @@ function Details({ text }: { text?: string }) {
 /** The kind of a decision and what it was about; a push links to its review. */
 function What({ approval: a }: { approval: Approval }) {
   const kind = approvalKind(a)
-  const what = a.git ? (
-    <Link
-      to="/e/$env/git/reviews/$id"
-      params={{ env: a.environmentId, id: a.id }}
-      className="block max-w-96 truncate underline-offset-4 hover:underline"
-    >
-      {gitSummary(a)}
-    </Link>
-  ) : a.network ? (
-    <Ident>{hostPort(a.network.host, a.network.port)}</Ident>
-  ) : (
-    <span className="block max-w-96 truncate">{kind.summary(a)}</span>
-  )
+  const what =
+    a.git || a.forgeReview ? (
+      <Link
+        to="/e/$env/git/reviews/$id"
+        params={{ env: a.environmentId, id: a.id }}
+        className="block max-w-96 truncate underline-offset-4 hover:underline"
+      >
+        {gitSummary(a)}
+      </Link>
+    ) : a.network ? (
+      <Ident>{hostPort(a.network.host, a.network.port)}</Ident>
+    ) : (
+      <span className="block max-w-96 truncate">{kind.summary(a)}</span>
+    )
   return (
     <div className="flex items-center gap-2">
       <KindChip area={kind.area} icon={kind.icon}>

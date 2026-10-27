@@ -32,6 +32,11 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CountPill } from "@/components/count-pill"
+import {
+  ForgeReview,
+  ForgeReviewSummary,
+  forgeReviewDescription,
+} from "@/components/forge-review"
 import { Ident } from "@/components/ident"
 import { KindChip } from "@/components/kind-chip"
 import { SectionHeader } from "@/components/section-header"
@@ -61,7 +66,7 @@ import { formatAge } from "@/lib/utils"
 type Action = "allow" | "deny" | "dismiss"
 
 export function isGitApproval(a: Approval) {
-  return a.kind === "git.push" || a.kind === "git.pr"
+  return a.kind === "git.push" || a.kind === "git.pr" || a.kind === "git.review"
 }
 
 function short(sha: string) {
@@ -188,6 +193,11 @@ type Tab = "changes" | "commits" | "comments"
  * shows its text. While pending, a footer that stays in view holds the decision.
  */
 export function GitReview({ approval }: { approval: Approval }) {
+  if (approval.kind === "git.review") return <ForgeReview approval={approval} />
+  return <PushReview approval={approval} />
+}
+
+function PushReview({ approval }: { approval: Approval }) {
   const git = approval.git
   const [note, setNote] = useState("")
   const [comments, setComments] = useState<LineComment[]>([])
@@ -703,6 +713,7 @@ function Rewrite({ review: rv }: { review: NonNullable<GitDetail["review"]> }) {
 
 /** What reviewing a git approval decides, under its title. */
 export function gitReviewDescription(approval: Approval) {
+  if (approval.kind === "git.review") return forgeReviewDescription(approval)
   const git = approval.git
   if (git?.pullRequest)
     return "The push was approved and is on the forge. Approving opens this pull request."
@@ -785,6 +796,8 @@ export function GitApprovalSummary({
   approval: Approval
   onReview: () => void
 }) {
+  if (approval.kind === "git.review")
+    return <ForgeReviewSummary approval={approval} onReview={onReview} />
   const rv = approval.git?.review
   return (
     <div className="flex items-center gap-2 text-xs">

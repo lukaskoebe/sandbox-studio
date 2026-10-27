@@ -40,6 +40,26 @@ type Decision struct {
 	PullRequest *PullRequestChoice
 	// Force approves a git.push that rewrites its branch, which allow alone doesn't.
 	Force bool
+	// Review, for a git.review approved with allow, is the review as the user edited it.
+	// Nil posts the draft as it is.
+	Review *ReviewEdit
+}
+
+// ReviewEdit is a pull request review as the user posts it.
+type ReviewEdit struct {
+	Verdict  string // comment, approve or request_changes
+	Summary  string
+	Comments []ReviewEditComment
+	// Attribution ends the review with "Review by <teammate> (agent)".
+	Attribution bool
+}
+
+// ReviewEditComment is a comment on one line of the pull request's diff.
+type ReviewEditComment struct {
+	Path string
+	Line int
+	Side string // new or old
+	Body string
 }
 
 // PullRequestChoice is whether a push opens its pull request, and under what title.

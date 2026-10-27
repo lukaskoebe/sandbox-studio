@@ -9,6 +9,7 @@ import (
 
 	"github.com/lukaskoebe/sandbox-studio/internal/chat"
 	"github.com/lukaskoebe/sandbox-studio/internal/gitreview"
+	"github.com/lukaskoebe/sandbox-studio/internal/store"
 )
 
 // FeedbackOut says how review feedback went to the agent.
@@ -20,7 +21,7 @@ type FeedbackOut struct {
 func (s *Server) registerReviewFeedback(api huma.API) {
 	type feedbackIn struct {
 		Env  string `path:"env" doc:"Environment ID"`
-		ID   string `path:"id" doc:"Approval ID of a git push or pull request"`
+		ID   string `path:"id" doc:"Approval ID of a git push, pull request or review"`
 		Body struct {
 			Note     string `json:"note,omitempty" maxLength:"8000" doc:"The reviewer's comments, line comments included"`
 			Chat     string `json:"chat,omitempty" doc:"A chat of the approval's sandbox to send the feedback to"`
@@ -31,7 +32,7 @@ func (s *Server) registerReviewFeedback(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "sendReviewFeedback", Method: http.MethodPost, Path: "/api/environments/{env}/approvals/{id}/feedback", Tags: []string{"git"},
 		Summary: "Send review feedback to the agent",
-		Description: "Tells an agent in the approval's sandbox how its push or pull request was reviewed, with the note: as a prompt in one of " +
+		Description: "Tells an agent in the approval's sandbox how its push or pull request was reviewed, or what became of its review of a pull request, with the note: as a prompt in one of " +
 			"its chats (after the running turn, if one runs), as the first prompt of a new chat, or pasted into an agent's terminal and " +
 			"submitted. A plain shell takes no " +
 			"feedback, since the text would run as commands. Once sent, the push's next fetch and next prompt don't repeat it.",
@@ -46,11 +47,18 @@ func (s *Server) registerReviewFeedback(api huma.API) {
 		if err != nil {
 			return nil, apiError(err)
 		}
-		push, text, err := s.Git.Feedback(ctx, in.Env, in.ID, in.Body.Note)
+		var text string
+		var sent func()
+		if approval.Kind == gitreview.KindReview {
+			text, sent, err = s.Git.ReviewFeedback(ctx, in.Env, in.ID, in.Body.Note)
+		} else {
+			var push store.GitPush
+			push, text, err = s.Git.Feedback(ctx, in.Env, in.ID, in.Body.Note)
+			sent = func() { s.Git.FeedbackSent(context.WithoutCancel(ctx), push) }
+		}
 		if err != nil {
 			return nil, apiError(err)
 		}
-		sent := func() { s.Git.FeedbackSent(context.WithoutCancel(ctx), push) }
 
 		if in.Body.Terminal != "" {
 			if err := s.Sandboxes.SendToAgent(ctx, in.Env, approval.SandboxID, in.Body.Terminal, text); err != nil {
@@ -96,6 +104,27 @@ func (s *Server) registerReviewFeedback(api huma.API) {
 		}
 		queued, err := chats.Queue(context.WithoutCancel(ctx), in.Env, c.ID, launch, chat.Prompt{Text: text}, sent)
 		return &struct{ Body FeedbackOut }{FeedbackOut{Queued: queued}}, apiError(err)
+	})
+}
+
+func (s *Server) registerReviewHead(api huma.API) {
+	type headIn struct {
+		Env string `path:"env" doc:"Environment ID"`
+		ID  string `path:"id" doc:"Approval ID of a git.review"`
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "getReviewHead", Method: http.MethodGet, Path: "/api/environments/{env}/approvals/{id}/review-head", Tags: []string{"git"},
+		Summary:     "Where a reviewed pull request is now",
+		Description: "Asks the forge for the pull request's head, and counts the commits pushed to it since the teammate drafted the review.",
+	}, func(ctx context.Context, in *headIn) (*struct{ Body gitreview.ReviewHead }, error) {
+		if s.Git == nil {
+			return nil, huma.Error503ServiceUnavailable("git review is not available")
+		}
+		h, err := s.Git.ReviewHead(ctx, in.Env, in.ID)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return nil, huma.Error502BadGateway(err.Error())
+		}
+		return &struct{ Body gitreview.ReviewHead }{h}, apiError(err)
 	})
 }
 

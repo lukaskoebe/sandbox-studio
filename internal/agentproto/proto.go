@@ -244,6 +244,12 @@ const (
 	// MethodGitPushStatus and MethodGitPullRequestStatus are the git tools (docs/git-review.md).
 	MethodGitPushStatus        = "git_push_status"
 	MethodGitPullRequestStatus = "git_pull_request_status"
+	// MethodGitPullRequestRead, MethodGitPullRequestReview and MethodGitReviewStatus read a
+	// pull request on a forge and draft a review of it, which the user approves before Studio
+	// posts it (docs/git-review.md#pull-request-reviews).
+	MethodGitPullRequestRead   = "git_pull_request_read"
+	MethodGitPullRequestReview = "git_pull_request_review"
+	MethodGitReviewStatus      = "git_pull_request_review_status"
 	// MethodGitCredential is git's credential helper in the sandbox asking about a host. It
 	// is no MCP tool, and Studio answers it with a hint, never a credential.
 	MethodGitCredential = "git_credential"

@@ -67,6 +67,7 @@ var SetBase func(ctx context.Context, sandboxID, image, version string) error
 //	PUT  /api/e2e/upstream/{repo...}      (re)creates the upstream bare repository <host>/<path> with
 //	                                    one commit on main, and lists its branches
 //	GET  /api/e2e/upstream/{repo...}      the upstream repository's branches
+//	GET  /api/e2e/reviews                 the reviews posted to the upstream's pull requests
 //	POST /api/e2e/chats/{id}/turns        {"count": 45}: ended turns "Request n" and "Answer n"
 //	                                    added to the chat, straight into the store
 //	PUT  /api/e2e/sandboxes/{id}/base     {"image": "…:v0.7.0", "version": "v0.7.0"}: the base
@@ -134,6 +135,13 @@ func (r *Runtime) Control() http.Handler {
 	})
 	mux.HandleFunc("GET /api/e2e/upstream/{repo...}", func(w http.ResponseWriter, req *http.Request) {
 		upstream(w, req, r.Upstream.Branches)
+	})
+	mux.HandleFunc("GET /api/e2e/reviews", func(w http.ResponseWriter, req *http.Request) {
+		if r.Upstream == nil {
+			http.Error(w, "no upstream", http.StatusNotImplemented)
+			return
+		}
+		writeJSON(w, http.StatusOK, r.Upstream.Reviews())
 	})
 	mux.HandleFunc("GET /api/e2e/sandboxes/{id}", func(w http.ResponseWriter, req *http.Request) {
 		g, ok := r.Guest(req.PathValue("id"))

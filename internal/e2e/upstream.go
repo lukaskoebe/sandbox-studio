@@ -33,14 +33,19 @@ import (
 // Upstream stands in for the forges: every HTTPS request Studio's git remote makes to a forge
 // reaches it, whatever the host. It serves git smart HTTP from bare repositories on disk,
 // <Dir>/<host>/<path>.git, which the tests create through the control API. It ignores
-// credentials and has no forge API, so forges of kind https suit it.
+// credentials. Its forge API is a Forgejo's pull request 1 on every repository (pulls.go);
+// forges of kind https suit the rest.
 type Upstream struct {
 	Dir string
 
-	once sync.Once
-	srv  *httptest.Server
-	mu   sync.Mutex // one request at a time: pushes rewrite refs
+	once  sync.Once
+	srv   *httptest.Server
+	mu    sync.Mutex // one request at a time: pushes rewrite refs
+	pulls pulls
 }
+
+// Reviews are the reviews posted to the upstream's pull requests, oldest first.
+func (u *Upstream) Reviews() []PostedReview { return u.pulls.reviews() }
 
 // NewUpstream returns an upstream that keeps its repositories under dir.
 func NewUpstream(dir string) *Upstream { return &Upstream{Dir: dir} }
@@ -191,6 +196,9 @@ func (u *Upstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"object":"list","data":[{"id":"e2e-coder"},{"id":"e2e-chat"}]}`)
+		return
+	}
+	if u.pulls.serve(w, r) {
 		return
 	}
 	prefix, rest, ok := strings.Cut(r.URL.Path, ".git/")

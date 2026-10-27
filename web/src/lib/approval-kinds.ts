@@ -42,8 +42,28 @@ export function isNetworkApproval(a: Approval): boolean {
   return a.kind === "network" || a.kind === "network.request"
 }
 
+type ReviewDraft = NonNullable<Approval["forgeReview"]>["draft"]
+
+export const verdictLabels: Record<ReviewDraft["verdict"], string> = {
+  comment: "Comment",
+  approve: "Approve",
+  request_changes: "Request changes",
+}
+
+/** The pull request a review draft is of, as owner/repo#number. */
+export function pullRequestName(d: ReviewDraft) {
+  return `${d.owner}/${d.repo}#${d.pullRequest.number}`
+}
+
+export function plural(n: number, one: string) {
+  return `${n} ${n === 1 ? one : `${one}s`}`
+}
+
 /** What a git approval asks for. */
 export function gitSummary(a: Approval): string {
+  const d = a.forgeReview?.draft
+  if (d)
+    return `Review ${pullRequestName(d)}: ${verdictLabels[d.verdict].toLowerCase()}, ${plural(d.comments?.length ?? 0, "comment")}`
   const git = a.git
   if (!git) return a.subject
   const where = [git.push.forgeName, git.push.owner, git.push.repo]
@@ -86,6 +106,13 @@ const kinds: Record<string, ApprovalKind> = {
   },
   "git.pr": {
     title: "Pull request",
+    summary: gitSummary,
+    icon: GitPullRequestIcon,
+    area: "git",
+    page: "/e/$env",
+  },
+  "git.review": {
+    title: "Pull request review",
     summary: gitSummary,
     icon: GitPullRequestIcon,
     area: "git",

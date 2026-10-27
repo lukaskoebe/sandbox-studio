@@ -115,6 +115,14 @@ who will merge it. Changing that is a separate decision.
    a local Studio can't be reached from the forge. M.
 5. GitLab. M.
 
+**Built** on `feedback-v0.8` ([pull request reviews](../git-review.md#pull-request-reviews)):
+phases 1 and 3, and the attribution line of phase 2, off by default and remembered per
+teammate in the browser. The mirror needs nothing: `git fetch origin pull/<n>/head` already
+goes to the forge. The review also asks the forge whether the pull request moved since the
+draft ("1 new commit since Ada read it"). Not yet: teammate accounts (so until then a verdict
+on the user's own pull request posts as a comment that starts with it), review requests as
+tasks, and GitLab.
+
 ## Open questions
 
 - Whether a review should also run the tests: the teammate can, in its sandbox, and say so in

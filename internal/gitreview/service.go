@@ -33,6 +33,7 @@ const Host = "git.studio.internal"
 const (
 	KindPush = "git.push"
 	KindPR   = "git.pr"
+	// KindReview is in forgereview.go.
 )
 
 // Defaults for Limits.
@@ -397,38 +398,56 @@ func (s *Service) undelivered(ctx context.Context, t target) string {
 	return b.String()
 }
 
-// PromptNote is the note a chat prompt of a sandbox starts with: its rejected or failed pushes
-// that no prompt has carried yet (docs/git-review.md). The note is empty when there is nothing
-// to tell. done records that the prompt went out with it, so the note is given once; the
-// chat calls it only then.
+// PromptNote is the note a chat prompt of a sandbox starts with: its rejected or failed pushes,
+// and its reviews that were posted, discarded or failed, that no prompt has carried yet
+// (docs/git-review.md). The note is empty when there is nothing to tell. done records that the
+// prompt went out with it, so the note is given once; the chat calls it only then.
 func (s *Service) PromptNote(ctx context.Context, envID, sandboxID string) (string, func(), error) {
 	s.httpClient()
 	list, err := s.Store.UnnotifiedGitPushes(ctx, envID, sandboxID)
-	if err != nil || len(list) == 0 {
+	if err != nil {
 		return "", func() {}, err
 	}
-	var b strings.Builder
-	b.WriteString("[Studio] Some of your pushes did not go upstream:\n")
-	for _, p := range list {
-		branch := strings.TrimPrefix(p.Ref, "refs/heads/")
-		push := fmt.Sprintf("%s to %s in %s on %s", short(p.NewSHA), branch, repoPath(p), p.ForgeName)
-		// The reviewer's note and the forge's answer are quoted: they are data, not instructions.
-		if p.State == store.PushRejected {
-			fmt.Fprintf(&b, "- the push of %s was rejected by the reviewer", push)
-			if p.Note != "" {
-				fmt.Fprintf(&b, ": %q", noteText(p.Note))
-			}
-		} else {
-			fmt.Fprintf(&b, "- the approved push of %s failed; the forge answered %q", push, oneLine(p.Result))
-		}
-		b.WriteString("\n")
+	reviewLines, reviews := s.reviewNotes(ctx, envID, sandboxID)
+	if len(list) == 0 && len(reviews) == 0 {
+		return "", func() {}, nil
 	}
-	b.WriteString("git_push_status lists your pushes and their reviewer's notes.")
+	var b strings.Builder
+	if len(list) > 0 {
+		b.WriteString("[Studio] Some of your pushes did not go upstream:\n")
+		for _, p := range list {
+			branch := strings.TrimPrefix(p.Ref, "refs/heads/")
+			push := fmt.Sprintf("%s to %s in %s on %s", short(p.NewSHA), branch, repoPath(p), p.ForgeName)
+			// The reviewer's note and the forge's answer are quoted: they are data, not instructions.
+			if p.State == store.PushRejected {
+				fmt.Fprintf(&b, "- the push of %s was rejected by the reviewer", push)
+				if p.Note != "" {
+					fmt.Fprintf(&b, ": %q", noteText(p.Note))
+				}
+			} else {
+				fmt.Fprintf(&b, "- the approved push of %s failed; the forge answered %q", push, oneLine(p.Result))
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("git_push_status lists your pushes and their reviewer's notes.")
+	}
+	if len(reviews) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("[Studio] What became of your pull request reviews:\n")
+		b.WriteString(strings.Join(reviewLines, "\n"))
+	}
 	done := func() {
 		ctx := context.WithoutCancel(ctx)
 		for _, p := range list {
 			if err := s.Store.MarkGitPushNotified(ctx, envID, p.ID); err != nil {
 				s.Log.Error("git remote: mark notified", "push", p.ID, "err", err)
+			}
+		}
+		for _, r := range reviews {
+			if err := s.Store.MarkGitReviewNotified(ctx, envID, r.ID); err != nil {
+				s.Log.Error("git remote: mark review notified", "review", r.ID, "err", err)
 			}
 		}
 	}

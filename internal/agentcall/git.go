@@ -32,8 +32,49 @@ var GitPullRequestStatusTool = Tool{agentproto.MethodGitPullRequestStatus,
 		"repository": str("owner/repo on that forge, when you pushed the branch to more than one", "maxLength", 300),
 	})}
 
+// The review tools read a pull request on a forge and draft a review of it. Nothing reaches the
+// forge until the user approves the draft.
+var pullRequestRef = map[string]any{
+	"forge":      str("The forge's name, the segment after git.studio.internal/ in the remote's URL; optional when the environment has one forge with an API", "maxLength", 32),
+	"repository": str("owner/repo on that forge", "maxLength", 300),
+	"number":     map[string]any{"type": "integer", "minimum": 1, "description": "The pull request's number"},
+}
+
+// GitPullRequestReadTool reads a pull request through Studio, which holds the forge's token.
+var GitPullRequestReadTool = Tool{agentproto.MethodGitPullRequestRead,
+	"A pull request on a Forgejo, Gitea or GitHub forge: its title, description, author, branches and commits, the changed files " +
+		"with their line counts, and the reviews and comments so far. Diffs are left out: read the code with git, as " +
+		"`git fetch origin pull/<number>/head` fetches the pull request's head through the git remote.",
+	obj([]string{"repository", "number"}, pullRequestRef)}
+
+// GitPullRequestReviewTool drafts a review; the user edits, posts or discards it.
+var GitPullRequestReviewTool = Tool{agentproto.MethodGitPullRequestReview,
+	"Drafts a review of a pull request: a verdict, a summary and comments on lines of its diff. Nothing is posted yet: the user " +
+		"sees the draft beside the diff, can edit it, and posts or discards it. The call answers at once with \"awaiting approval\"; " +
+		"git_pull_request_review_status says what became of it. A comment must be on a line the diff shows, as added or kept (side new) " +
+		"or removed (side old). A new draft for the same pull request replaces one still waiting.",
+	obj([]string{"repository", "number", "verdict", "summary"}, map[string]any{
+		"forge":      pullRequestRef["forge"],
+		"repository": pullRequestRef["repository"],
+		"number":     pullRequestRef["number"],
+		"verdict":    map[string]any{"type": "string", "enum": []string{"comment", "approve", "request_changes"}},
+		"summary":    str("The review's body, in Markdown", "maxLength", 20000),
+		"comments": map[string]any{"type": "array", "maxItems": 50, "items": obj([]string{"path", "line", "body"}, map[string]any{
+			"path": str("The file's path in the pull request", "maxLength", 500),
+			"line": map[string]any{"type": "integer", "minimum": 1, "description": "The line's number in the new file, or in the old one for side old"},
+			"side": map[string]any{"type": "string", "enum": []string{"new", "old"}, "description": "Default new"},
+			"body": str("The comment, in Markdown", "maxLength", 5000),
+		})},
+	})}
+
+// GitReviewStatusTool reports what became of the newest review drafted for a pull request.
+var GitReviewStatusTool = Tool{agentproto.MethodGitReviewStatus,
+	"Your newest review draft of a pull request, from Studio's records: awaiting approval, posted (with its URL), discarded " +
+		"(with the user's note, if any), replaced by a newer draft, or failed (with the forge's answer).",
+	obj([]string{"repository", "number"}, pullRequestRef)}
+
 func init() {
-	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool)
+	Tools = append(Tools, GitPushStatusTool, GitPullRequestStatusTool, GitPullRequestReadTool, GitPullRequestReviewTool, GitReviewStatusTool)
 }
 
 // GitCredentialCall routes the git credential helper's question to gitreview. It stays out

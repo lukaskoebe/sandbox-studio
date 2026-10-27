@@ -36,6 +36,14 @@ To tell the agent what to change, comment on lines of the diff with the comment 
 
 GitHub, GitLab and Forgejo/Gitea forges can also request approval to open a pull request (a merge request on GitLab) after a reviewed push to a non-default branch. Other HTTPS, SSH and local forges do not provide pull-request proposals.
 
+## Pull request reviews
+
+An agent can review a pull request on a GitHub or Forgejo/Gitea/Codeberg forge: it reads the pull request and its code, then drafts a review with a verdict (**Comment**, **Approve** or **Request changes**), a summary and comments on lines of the diff. The draft waits on Home like a push, for example "Review acme/web#42: request changes, 3 comments". Nothing reaches the forge until you post it.
+
+The review shows the pull request with a link to it on the forge, the verdict, the summary and the diff with the draft's comments on their lines. You can change all of it: switch the verdict, rewrite the summary, edit or remove a comment, and add your own with a line's comment button. If the pull request moved since the agent read it, the review says so, such as "1 new commit since Ada read it". **Post review** posts it with the forge's token, so it appears as yours; the footer names the account and the host. A forge does not take a verdict from the pull request's author, so on a pull request you opened the review posts as a comment that starts with the verdict. Tick **End with “Review by Ada (agent)”** to say who wrote it; it is off by default and remembered per teammate in your browser.
+
+**Discard…** drops the draft and tells the agent your note, at once in one of its chats or terminals if you pick one, and otherwise with its next prompt. Agents can also ask Studio what became of a draft.
+
 If a host is not configured as a forge, access follows normal network rules and is not staged for Git review. Do not assume every arbitrary Git remote receives review protection.
 
 See the [Git review guide](https://github.com/lukaskoebe/sandbox-studio/blob/main/docs/git-review.md) for supported forge details and the SSH host-key flow.

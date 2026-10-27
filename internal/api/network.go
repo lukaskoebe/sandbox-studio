@@ -46,6 +46,8 @@ type ApprovalView struct {
 	// Teammate is set for network approvals from a sandbox that a teammate owns.
 	Teammate *ApprovalTeammate    `json:"teammate,omitempty"`
 	Git      *gitreview.GitDetail `json:"git,omitempty" doc:"Set for git.push and git.pr approvals"`
+	// ForgeReview is set for git.review approvals.
+	ForgeReview *gitreview.ReviewDetail `json:"forgeReview,omitempty" doc:"A teammate's review draft of a pull request, and what became of it"`
 	// MemoryShare is set for memory.share approvals.
 	MemoryShare *agentmem.SharePayload `json:"memoryShare,omitempty" doc:"A teammate's proposal for shared memory"`
 	// MemoryConflict is set for memory.conflict approvals.
@@ -75,6 +77,10 @@ func (s *Server) approvalView(ctx context.Context, a store.Approval) ApprovalVie
 	case gitreview.KindPush, gitreview.KindPR:
 		if s.Git != nil {
 			v.Git, _ = s.Git.GitDetail(ctx, a)
+		}
+	case gitreview.KindReview:
+		if s.Git != nil {
+			v.ForgeReview, _ = s.Git.ReviewDetail(ctx, a)
 		}
 	case agentmem.ApprovalKind:
 		var p agentmem.SharePayload
@@ -494,7 +500,7 @@ func (s *Server) registerNetwork(api huma.API) {
 		Env  string `path:"env" doc:"Environment ID"`
 		ID   string `path:"id" doc:"Approval ID"`
 		Body struct {
-			Action      string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once,allow_site,allow_session" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request"`
+			Action      string     `json:"action" enum:"allow,deny,dismiss,allow_once,deny_once,allow_site,allow_session" doc:"For network requests allow or deny creates a rule; allow_once and deny_once answer only the held connections of this request, without a rule; allow_site, for a browser navigation to a new site, allows the site for the browser session without a rule; allow_session, for a browser's request, allows the hosts host covers in that browser until its VM stops, without a rule; dismiss only closes the request. For git.push, allow pushes upstream; for git.pr, allow opens the pull request; for git.review, allow posts the review and deny discards it"`
 			Host        string     `json:"host,omitempty" doc:"Host pattern the rule covers; empty means the requested host"`
 			Ports       []int      `json:"ports,omitempty" minimum:"1" maximum:"65535" doc:"Ports the rule covers; omitted means the default ports for the request, empty means any port"`
 			Scope       string     `json:"scope,omitempty" enum:"sandbox,teammate,environment" default:"environment" doc:"Whether the rule covers only the requesting sandbox, the sandboxes of its teammate, or the environment"`
@@ -508,7 +514,8 @@ func (s *Server) registerNetwork(api huma.API) {
 				Open  bool   `json:"open" doc:"Open the review's pull request along with the push; false pushes without one"`
 				Title string `json:"title,omitempty" maxLength:"200" doc:"The pull request's title; empty keeps the proposed one"`
 			} `json:"pullRequest,omitempty" doc:"For git.push approved with allow, when the review offers a pull request: whether to open it now. Omitted, the pull request waits for a git.pr approval"`
-			Force bool `json:"force,omitempty" doc:"For git.push approved with allow: approve a push whose review is forced, which rewrites the branch and drops commits. allow without it is refused for such a push"`
+			Force  bool          `json:"force,omitempty" doc:"For git.push approved with allow: approve a push whose review is forced, which rewrites the branch and drops commits. allow without it is refused for such a push"`
+			Review *ReviewEditIn `json:"review,omitempty" doc:"For git.review approved with allow: the review as edited, which Studio posts. Omitted posts the draft as it is"`
 		}
 	}
 	huma.Register(api, huma.Operation{
@@ -517,6 +524,12 @@ func (s *Server) registerNetwork(api huma.API) {
 		id := integrations.Decision{Action: in.Body.Action, Note: strings.TrimSpace(in.Body.Note), Remember: in.Body.Remember, Force: in.Body.Force}
 		if pr := in.Body.PullRequest; pr != nil {
 			id.PullRequest = &integrations.PullRequestChoice{Open: pr.Open, Title: pr.Title}
+		}
+		if rv := in.Body.Review; rv != nil {
+			id.Review = &integrations.ReviewEdit{Verdict: rv.Verdict, Summary: rv.Summary, Attribution: rv.Attribution}
+			for _, c := range rv.Comments {
+				id.Review.Comments = append(id.Review.Comments, integrations.ReviewEditComment{Path: c.Path, Line: c.Line, Side: c.Side, Body: c.Body})
+			}
 		}
 		if a, ok, err := s.decideIntegration(ctx, in.Env, in.ID, id); ok || err != nil {
 			if err != nil {
@@ -870,4 +883,20 @@ func (s *Server) streamEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// ReviewEditIn is a pull request review as the user edited it before posting.
+type ReviewEditIn struct {
+	Verdict     string                `json:"verdict" enum:"comment,approve,request_changes"`
+	Summary     string                `json:"summary" maxLength:"20000"`
+	Comments    []ReviewEditCommentIn `json:"comments" maxItems:"50"`
+	Attribution bool                  `json:"attribution,omitempty" doc:"End the review with \"Review by <teammate> (agent)\""`
+}
+
+// ReviewEditCommentIn is one line comment of a ReviewEditIn.
+type ReviewEditCommentIn struct {
+	Path string `json:"path" maxLength:"500"`
+	Line int    `json:"line" minimum:"1"`
+	Side string `json:"side,omitempty" enum:"new,old" doc:"new (default): an added or kept line, numbered in the new file; old: a removed line"`
+	Body string `json:"body" maxLength:"5000"`
 }
