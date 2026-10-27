@@ -1,33 +1,25 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"errors"
 	"flag"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/lukaskoebe/sandbox-studio/internal/autostart"
+	"github.com/lukaskoebe/sandbox-studio/internal/launcher"
 	"github.com/lukaskoebe/sandbox-studio/internal/paths"
 	"golang.org/x/sys/windows"
 )
 
 //go:embed studio.ico
 var studioIcon []byte
-
-const (
-	createNewProcessGroup  = 0x00000200
-	createNoWindow         = 0x08000000
-	createBreakawayFromJob = 0x01000000
-)
 
 // The menu's items.
 const (
@@ -63,18 +55,20 @@ func main() {
 	// One tray per user: a second start opens Studio and leaves.
 	name, _ := windows.UTF16PtrFromString(`Local\SandboxStudioTray`)
 	mutex, err := windows.CreateMutex(nil, false, name)
-	l := &launcher{
-		addr:    *addr,
-		serving: httpServing(*addr),
-		start:   func() (<-chan error, error) { return startServer(studio, *addr) },
-		studio:  func(ctx context.Context, args ...string) (string, error) { return runStudio(ctx, studio, args...) },
-		open:    openBrowser,
-		poll:    time.Second,
+	l := &launcher.Launcher{
+		Addr:    *addr,
+		Serving: launcher.HTTPServing(*addr),
+		Start:   func() (<-chan error, error) { return launcher.StartServer(studio, *addr) },
+		Studio: func(ctx context.Context, args ...string) (string, error) {
+			return launcher.RunStudio(ctx, studio, args...)
+		},
+		Open: openBrowser,
+		Poll: time.Second,
 	}
 	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
-		ctx, cancel := context.WithTimeout(context.Background(), startWait)
+		ctx, cancel := context.WithTimeout(context.Background(), launcher.StartWait)
 		defer cancel()
-		if err := l.openStudio(ctx); err != nil {
+		if err := l.OpenStudio(ctx); err != nil {
 			messageBox(err.Error(), true)
 		}
 		return
@@ -83,7 +77,7 @@ func main() {
 		defer func() { _ = windows.CloseHandle(mutex) }()
 	}
 
-	t, err := newTray(studioIcon, tip(stateStarting, *addr))
+	t, err := newTray(studioIcon, tip(launcher.Starting, *addr))
 	if err != nil {
 		messageBox("Sandbox Studio can't add its icon to the taskbar: "+err.Error(), true)
 		os.Exit(1)
@@ -106,7 +100,7 @@ func main() {
 
 // trayApp is the tray's state: what Studio does, and the action running, if any.
 type trayApp struct {
-	l      *launcher
+	l      *launcher.Launcher
 	t      *tray
 	studio string
 	addr   string
@@ -114,11 +108,11 @@ type trayApp struct {
 	cancel context.CancelFunc
 
 	mu    sync.Mutex
-	state state
+	state launcher.State
 	busy  bool // a start or a quit runs
 }
 
-func (a *trayApp) set(s state) {
+func (a *trayApp) set(s launcher.State) {
 	a.mu.Lock()
 	a.state = s
 	a.mu.Unlock()
@@ -127,7 +121,7 @@ func (a *trayApp) set(s state) {
 
 // watch follows Studio's state, except while a start or a quit decides it.
 func (a *trayApp) watch() {
-	a.l.watch(a.ctx, func(s state) {
+	a.l.Watch(a.ctx, func(s launcher.State) {
 		a.mu.Lock()
 		busy := a.busy
 		a.mu.Unlock()
@@ -138,7 +132,7 @@ func (a *trayApp) watch() {
 }
 
 // action runs one start or quit at a time; it reports false if another runs.
-func (a *trayApp) action(during state, f func() error) bool {
+func (a *trayApp) action(during launcher.State, f func() error) bool {
 	a.mu.Lock()
 	if a.busy {
 		a.mu.Unlock()
@@ -146,16 +140,16 @@ func (a *trayApp) action(during state, f func() error) bool {
 	}
 	a.busy = true
 	a.mu.Unlock()
-	if !a.l.serving(a.ctx) || during == stateStopping {
+	if !a.l.Serving(a.ctx) || during == launcher.Stopping {
 		a.set(during)
 	}
 	err := f()
 	a.mu.Lock()
 	a.busy = false
 	a.mu.Unlock()
-	s := stateStopped
-	if a.l.serving(a.ctx) {
-		s = stateRunning
+	s := launcher.Stopped
+	if a.l.Serving(a.ctx) {
+		s = launcher.Running
 	}
 	a.set(s)
 	if err != nil && a.ctx.Err() == nil {
@@ -165,11 +159,11 @@ func (a *trayApp) action(during state, f func() error) bool {
 }
 
 func (a *trayApp) ensure() {
-	a.action(stateStarting, func() error { return a.l.ensure(a.ctx) })
+	a.action(launcher.Starting, func() error { return a.l.Ensure(a.ctx) })
 }
 
 func (a *trayApp) openStudio() {
-	a.action(stateStarting, func() error { return a.l.openStudio(a.ctx) })
+	a.action(launcher.Starting, func() error { return a.l.OpenStudio(a.ctx) })
 }
 
 func (a *trayApp) menu() []menuItem {
@@ -177,7 +171,7 @@ func (a *trayApp) menu() []menuItem {
 	s, busy := a.state, a.busy
 	a.mu.Unlock()
 	open := "Open Studio"
-	if s == stateStopped {
+	if s == launcher.Stopped {
 		open = "Start Studio"
 	}
 	items := []menuItem{
@@ -207,10 +201,10 @@ func (a *trayApp) choose(id int) {
 // quit stops Studio, then the tray. Sandboxes keep running.
 func (a *trayApp) quit() {
 	var err error
-	if !a.action(stateStopping, func() error {
+	if !a.action(launcher.Stopping, func() error {
 		ctx, cancel := context.WithTimeout(a.ctx, 2*time.Minute)
 		defer cancel()
-		err = a.l.quit(ctx)
+		err = a.l.Quit(ctx)
 		return err
 	}) {
 		return
@@ -270,41 +264,6 @@ func fileExists(path string) bool {
 	return err == nil && info.Mode().IsRegular()
 }
 
-// startServer starts studio.exe with a console of its own that has no window: the
-// programs Studio runs share that console instead of each opening a window. It runs outside
-// the tray's job, so that it outlives the tray.
-func startServer(studio, addr string) (<-chan error, error) {
-	cmd := exec.Command(studio, "-addr", addr, "-no-browser")
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow | createNewProcessGroup | createBreakawayFromJob, HideWindow: true}
-	if err := cmd.Start(); err != nil {
-		// A job that forbids breakaway.
-		cmd = exec.Command(studio, "-addr", addr, "-no-browser")
-		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow | createNewProcessGroup, HideWindow: true}
-		if err := cmd.Start(); err != nil {
-			return nil, err
-		}
-	}
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
-	return exited, nil
-}
-
-// runStudio runs a short studio.exe command without a window and returns its output.
-func runStudio(ctx context.Context, studio string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, studio, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow, HideWindow: true}
-	var out, errOut bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errOut
-	if err := cmd.Run(); err != nil {
-		msg := bytes.TrimSpace(append(out.Bytes(), errOut.Bytes()...))
-		if len(msg) > 0 {
-			return "", fmt.Errorf("%s", msg)
-		}
-		return "", err
-	}
-	return out.String(), nil
-}
-
 // openBrowser opens url in the default browser. Unlike `cmd /c start`, rundll32 passes the
 // link on whole: no shell parses its & or #.
 func openBrowser(url string) error {
@@ -317,13 +276,13 @@ func openBrowser(url string) error {
 }
 
 // tip is the tray icon's tooltip for a state.
-func tip(s state, addr string) string {
+func tip(s launcher.State, addr string) string {
 	switch s {
-	case stateStarting:
+	case launcher.Starting:
 		return "Sandbox Studio is starting…"
-	case stateRunning:
+	case launcher.Running:
 		return "Sandbox Studio runs on http://" + addr
-	case stateStopping:
+	case launcher.Stopping:
 		return "Sandbox Studio is stopping…"
 	}
 	return "Sandbox Studio isn't running"

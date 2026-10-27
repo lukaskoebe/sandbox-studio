@@ -258,14 +258,15 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 	if err := extract(archivePath, name+"/"+exeName, newExe); err != nil {
 		return fmt.Errorf("unpack %s: %w", archive, err)
 	}
-	// The Windows tray launcher next to studio.exe comes along when the archive has it.
-	var tray, newTray string
-	if goos == "windows" {
-		if t := filepath.Join(exeDir, trayName); fileExists(t) {
-			nt := filepath.Join(exeDir, ".studiow-"+rel.Tag+".new.exe")
-			if err := extract(archivePath, name+"/"+trayName, nt); err == nil {
-				tray, newTray = t, nt
-				defer os.Remove(newTray)
+	// The programs installed next to studio come along when the archive has them.
+	type companion struct{ path, next string }
+	var companions []companion
+	for _, c := range companionNames(goos) {
+		if p := filepath.Join(exeDir, c); fileExists(p) {
+			next := filepath.Join(exeDir, "."+c+"-"+rel.Tag+".new")
+			if err := extract(archivePath, name+"/"+c, next); err == nil {
+				companions = append(companions, companion{p, next})
+				defer os.Remove(next)
 			}
 		}
 	}
@@ -302,11 +303,11 @@ func (in *Installer) install(ctx context.Context, rel Release) error {
 		}
 		return fmt.Errorf("record the install: %w", err)
 	}
-	if tray != "" {
-		// The running tray keeps its old binary until it starts again; a rollback leaves the
-		// new tray, which only starts and stops studio.exe.
-		if err := swap(tray, newTray, oldExe(tray)); err != nil {
-			in.log().Warn("updating the tray launcher", "err", err)
+	for _, c := range companions {
+		// A running tray or app keeps its old binary until it starts again; a rollback leaves
+		// the new one, which only starts, shows and stops studio.
+		if err := swap(c.path, c.next, oldExe(c.path)); err != nil {
+			in.log().Warn("updating "+filepath.Base(c.path), "err", err)
 		}
 	}
 	in.log().Info("restarting into the Studio update", "version", rel.Tag)
@@ -468,8 +469,14 @@ func checkVersion(ctx context.Context, exe, tag string) error {
 }
 
 // oldExe is where the replaced binary stays until the new one serves.
-// trayName is the Windows tray launcher (cmd/studiow), installed next to studio.exe.
-const trayName = "studiow.exe"
+// companionNames are the programs a release installs next to studio: the Studio app
+// (cmd/studio-app) and, on Windows, the tray launcher (cmd/studiow).
+func companionNames(goos string) []string {
+	if goos == "windows" {
+		return []string{"studiow.exe", "studio-app.exe"}
+	}
+	return []string{"studio-app"}
+}
 
 func fileExists(path string) bool {
 	info, err := os.Stat(path)

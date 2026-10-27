@@ -6,9 +6,11 @@ import { AuthGate } from "./components/auth-gate"
 import { bootstrapAuth } from "./lib/auth"
 import { createRouter } from "./router"
 import { initTheme } from "./lib/theme"
+import { installAppLinks } from "./lib/desktop"
 import "./styles.css"
 
 initTheme()
+installAppLinks()
 
 // Consume and scrub a launch token before constructing anything that can mount
 // route loaders. The promise also exchanges it before checking the cookie.

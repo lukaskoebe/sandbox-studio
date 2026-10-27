@@ -1,4 +1,4 @@
-package main
+package launcher
 
 import (
 	"context"
@@ -20,11 +20,11 @@ type fakeStudio struct {
 	opened   []string
 }
 
-func (f *fakeStudio) launcher() *launcher {
-	return &launcher{
-		addr:    "127.0.0.1:7878",
-		serving: func(context.Context) bool { return f.serving.Load() },
-		start: func() (<-chan error, error) {
+func (f *fakeStudio) launcher() *Launcher {
+	return &Launcher{
+		Addr:    "127.0.0.1:7878",
+		Serving: func(context.Context) bool { return f.serving.Load() },
+		Start: func() (<-chan error, error) {
 			f.starts.Add(1)
 			if f.exit != nil {
 				return f.exit, nil
@@ -35,7 +35,7 @@ func (f *fakeStudio) launcher() *launcher {
 			}()
 			return make(chan error), nil
 		},
-		studio: func(_ context.Context, args ...string) (string, error) {
+		Studio: func(_ context.Context, args ...string) (string, error) {
 			f.commands = append(f.commands, strings.Join(args, " "))
 			switch args[len(args)-1] {
 			case "login-url":
@@ -45,24 +45,24 @@ func (f *fakeStudio) launcher() *launcher {
 			}
 			return "", nil
 		},
-		open: func(url string) error { f.opened = append(f.opened, url); return nil },
-		poll: 5 * time.Millisecond,
+		Open: func(url string) error { f.opened = append(f.opened, url); return nil },
+		Poll: 5 * time.Millisecond,
 	}
 }
 
 func TestOpenStartsStudioOnceAndOpensALoginLink(t *testing.T) {
 	f := &fakeStudio{}
 	l := f.launcher()
-	if err := l.openStudio(context.Background()); err != nil {
+	if err := l.OpenStudio(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := l.openStudio(context.Background()); err != nil {
+	if err := l.OpenStudio(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if f.starts.Load() != 1 || len(f.opened) != 2 || f.opened[0] != "http://127.0.0.1:7878/#studio-login=t" {
 		t.Fatalf("starts %d, opened %v", f.starts.Load(), f.opened)
 	}
-	if err := l.quit(context.Background()); err != nil || f.serving.Load() || f.commands[len(f.commands)-1] != "-addr 127.0.0.1:7878 quit" {
+	if err := l.Quit(context.Background()); err != nil || f.serving.Load() || f.commands[len(f.commands)-1] != "-addr 127.0.0.1:7878 quit" {
 		t.Fatalf("quit: %v, commands %v", err, f.commands)
 	}
 }
@@ -70,7 +70,7 @@ func TestOpenStartsStudioOnceAndOpensALoginLink(t *testing.T) {
 func TestEnsureReportsAStudioThatExits(t *testing.T) {
 	f := &fakeStudio{exit: make(chan error, 1)}
 	f.exit <- errors.New("exit status 1")
-	err := f.launcher().ensure(context.Background())
+	err := f.launcher().Ensure(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "exit status 1") {
 		t.Fatalf("ensure = %v", err)
 	}
@@ -81,15 +81,15 @@ func TestWatchReportsChanges(t *testing.T) {
 	l := f.launcher()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	states := make(chan state, 4)
-	go l.watch(ctx, func(s state) { states <- s })
-	if s := <-states; s != stateStopped {
-		t.Fatalf("first state %v", s)
+	states := make(chan State, 4)
+	go l.Watch(ctx, func(s State) { states <- s })
+	if s := <-states; s != Stopped {
+		t.Fatalf("first State %v", s)
 	}
 	f.serving.Store(true)
 	select {
 	case s := <-states:
-		if s != stateRunning {
+		if s != Running {
 			t.Fatalf("then %v", s)
 		}
 	case <-time.After(5 * time.Second):
@@ -106,12 +106,12 @@ func TestHTTPServing(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	defer srv.Close()
-	if !httpServing(strings.TrimPrefix(srv.URL, "http://"))(context.Background()) {
+	if !HTTPServing(strings.TrimPrefix(srv.URL, "http://"))(context.Background()) {
 		t.Fatal("a Studio wasn't seen")
 	}
 	other := httptest.NewServer(http.NotFoundHandler())
 	defer other.Close()
-	if httpServing(strings.TrimPrefix(other.URL, "http://"))(context.Background()) {
+	if HTTPServing(strings.TrimPrefix(other.URL, "http://"))(context.Background()) {
 		t.Fatal("another server counted as Studio")
 	}
 }

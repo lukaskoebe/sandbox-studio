@@ -28,6 +28,7 @@ data locations, repository layout, security model, testing and conventions.
 | [Memory](memory.md) | store, search, embeddings, hooks and tools, extraction, consolidation | `internal/memory`, `internal/agentmem` |
 | [Browser broker](browser.md) | browser VM, tools, policy, redaction, credentials, live view | `internal/browser` |
 | [Git review](git-review.md) | forges, virtual remote, staged pushes, PRs, integration interface | `internal/gitreview` |
+| [The Studio app](app.md) | `studio app`: the Wails window, tray and notifications, the page's messages, building | `cmd/studio-app`, `internal/launcher` |
 | [Release](release.md) | cutting a release | `.github/workflows/release.yml` |
 | [Updates](updates.md) | the update check and automatic installs: verification, swap, restart, rollback | `internal/updates` |
 

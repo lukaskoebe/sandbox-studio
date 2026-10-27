@@ -82,6 +82,8 @@ var serverCommands = []cli.ServerCommand{
 		Detail: "status is the default. It writes a systemd user unit on Linux, a LaunchAgent on macOS\nand a Run key value on Windows, which take effect at the next login."},
 	{Name: "restore-msb-db", Args: "[-replace] [file]", Summary: "Rebuild microsandbox's database from one a repair moved aside.",
 		Detail: "When Studio finds microsandbox's database damaged, it moves it aside to\nmsb.db.broken-<time> and rebuilds it from the rows it can read. If it could read none,\nmicrosandbox starts empty and its sandboxes can't start. This rebuilds the database from\nfile, by default the newest one moved aside, and keeps the one in place aside in turn.\nQuit Studio first. It refuses while the database in place knows sandboxes, unless -replace."},
+	{Name: "app", Summary: "Open Studio in its app window, or in the browser without the app.",
+		Detail: "It starts studio-app from next to studio, which starts Studio if it isn't running. Without\nthe app, or when it can't start, such as without WebKitGTK on Linux, Studio opens in the\nbrowser instead. The app's log is logs/studio-app.log in the data directory."},
 	{Name: "login-url", Summary: "Print a one-time login link for the running Studio."},
 	{Name: "version", Summary: "Print Studio's version and its base image."},
 	{Name: "openapi", Summary: "Print the OpenAPI document of Studio's HTTP API."},
@@ -128,6 +130,8 @@ func main() {
 		os.Exit(runDoctor(os.Stdout, *addr, *image))
 	case "quit":
 		os.Exit(runQuit(context.Background(), os.Stdout, *addr))
+	case "app":
+		os.Exit(runApp(context.Background(), os.Stdout, *addr))
 	case "autostart":
 		os.Exit(runAutostart(os.Stdout, flag.Args()[1:]))
 	case "restore-msb-db":

@@ -1,5 +1,6 @@
 import { toast } from "sonner"
 import { errorMessage, fetchClient } from "@/lib/api/client"
+import { inApp, openExternal } from "@/lib/desktop"
 
 /** Preview URLs live on *.localhost, which only resolves on the machine running Studio. */
 export const onStudioMachine = ["localhost", "127.0.0.1", "[::1]"].includes(
@@ -66,6 +67,17 @@ export async function openPreviewTab(
   fresh = false,
   path?: string
 ) {
+  if (inApp) {
+    // The app opens no windows of its own; the system browser gets the login link.
+    try {
+      openExternal(await previewLoginURL(env, id, port, { fresh, path }))
+    } catch (error) {
+      toast.error("Could not open preview", {
+        description: errorMessage(error),
+      })
+    }
+    return
+  }
   let popup: Window | null = null
   try {
     popup = window.open("about:blank", "_blank")

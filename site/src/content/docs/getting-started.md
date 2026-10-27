@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/lukaskoebe/sandbox-studio/main/inst
 
 The script downloads the latest release for your platform, checks it against the release's `checksums.txt` (and its build provenance, when the GitHub CLI `gh` is installed and signed in), and installs `studio` to `~/.local/bin` without sudo. If that directory is not on your `PATH`, it prints the line to add to your shell profile. It then checks KVM or Hypervisor.framework access and tells you what to fix; it never installs other software. Set `SANDBOX_STUDIO_VERSION` (for example `v0.3.4`) to pick a release and `SANDBOX_STUDIO_INSTALL_DIR` to change the directory.
 
-On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains the `studio` executable (`studio.exe` on Windows); put it anywhere on your `PATH`. The Windows archive also has `studiow.exe`, the tray launcher; keep it in the same folder as `studio.exe`.
+On Windows, or to install by hand, download the archive for your platform from [GitHub Releases](https://github.com/lukaskoebe/sandbox-studio/releases) and verify it against `checksums.txt`. Each archive contains the `studio` executable (`studio.exe` on Windows); put it anywhere on your `PATH`. Next to it is `studio-app`, the [Studio app](#studio-in-a-window-of-its-own), and in the Windows archive also `studiow.exe`, the tray launcher; keep them in the same folder as `studio`.
 
 ### Build from source
 
@@ -62,8 +62,6 @@ This is the sign-in for your local Studio app. It does not sign an agent into an
 
 Studio listens on loopback, so other computers on your network cannot open its UI. The UI and the sandbox services stay on the machine running Studio.
 
-To give Studio a window and a dock or taskbar icon of its own, install it as an app: in Chrome or Edge, choose **Install Sandbox Studio** in the address bar or the browser menu; in Safari, choose **File → Add to Dock**. The app shows the number of approvals waiting on its icon. It belongs to the address you installed it from, so keep Studio on the same port.
-
 Studio is square by default, with titles, buttons and labels in mono. For a soft, rounded look in sans, set **Style** to **Quiet** under **Settings → General**. Each browser keeps its own style, as it does light or dark, which you pick at the bottom of the sidebar.
 
 To start Studio when you log in, turn on **Start at login** under **Settings → General**, or run `studio autostart enable`. It is off by default.
@@ -73,6 +71,18 @@ Studio checks GitHub for a newer release once a day and shows it under **Setting
 On a first start, Studio opens a guided setup at `/setup`. It checks the host, adds an AI provider, accepts a default teammate, connects a git forge if you have one, picks a network security level, and creates a first sandbox. Each step can be skipped. Until the setup is complete or dismissed, Home shows a card with the steps still open, and you can resume the setup from there.
 
 ![The guided setup with the host check done](../../assets/screenshots/setup.jpg)
+
+### Studio in a window of its own
+
+```sh
+studio app
+```
+
+`studio app` opens Studio in a window of its own, with an icon in the tray or menu bar and the system's notifications. It starts Studio in the background if it isn't running, and leaves it running when you close the app, so the browser keeps working beside it. The tray menu has **Open Studio**, **Open in browser**, **Close the app** and **Quit Studio**, which stops Studio too; your sandboxes keep running. Links to other sites, sign-ins and previews open in your browser.
+
+On Linux the app needs GTK 3 and WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Debian and Ubuntu, `webkit2gtk4.1` on Fedora). Without them, or without a display, `studio app` opens Studio in your browser instead and says why. The install script puts `studio-app` next to `studio`.
+
+Or install Studio as a web app: in Chrome or Edge, choose **Install Sandbox Studio** in the address bar or the browser menu; in Safari, choose **File → Add to Dock**. The web app shows the number of approvals waiting on its icon. It belongs to the address you installed it from, so keep Studio on the same port.
 
 ## Prepare your first agent
 

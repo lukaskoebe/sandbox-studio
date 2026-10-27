@@ -55,6 +55,7 @@ Unlike the commands above, these work without a running Studio, except `login-ur
 | `studio doctor` | Checks that this machine can run Studio and says how to fix what can't. Exits 1 if a check fails. |
 | `studio login-url` | Prints a fresh one-time login link for the running Studio. |
 | `studio tui` | Opens the [terminal UI](../tui/). |
+| `studio app` | Opens Studio in [a window of its own](../getting-started/#studio-in-a-window-of-its-own), starting Studio if it isn't running. Without the app or a display it opens the browser. |
 | `studio quit` | Stops the running Studio, as Ctrl-C in its window does, and waits until it has. Sandboxes keep running. |
 | `studio autostart enable`, `disable`, `status` | Starts Studio when you log in, or stops doing so. It takes effect at the next login. |
 | `studio restore-msb-db [-replace] [file]` | Rebuilds microsandbox's database from one Studio moved aside as damaged. Quit Studio first. See [Troubleshooting](../troubleshooting/#a-sandbox-says-microsandbox-lost-its-vm). |

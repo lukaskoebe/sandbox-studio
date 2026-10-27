@@ -427,7 +427,7 @@ func TestVerifyBundlesOfARealRelease(t *testing.T) {
 	}
 }
 
-// On Windows the tray launcher next to studio.exe is replaced along with it.
+// On Windows the tray launcher and the app next to studio.exe are replaced along with it.
 func TestInstallReplacesTheTrayLauncher(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake release's studio is a shell script")
@@ -437,8 +437,9 @@ func TestInstallReplacesTheTrayLauncher(t *testing.T) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	for file, body := range map[string]string{
-		"studio.exe":  "#!/bin/sh\necho \"studio " + tag + "\"\necho \"base image: x\"\n",
-		"studiow.exe": "new tray",
+		"studio.exe":     "#!/bin/sh\necho \"studio " + tag + "\"\necho \"base image: x\"\n",
+		"studiow.exe":    "new tray",
+		"studio-app.exe": "new app",
 	} {
 		h := &zip.FileHeader{Name: name + "/" + file, Method: zip.Deflate}
 		h.SetMode(0o755)
@@ -474,6 +475,10 @@ func TestInstallReplacesTheTrayLauncher(t *testing.T) {
 	if err := os.WriteFile(tray, []byte("old tray"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	app := filepath.Join(filepath.Dir(f.exe), "studio-app.exe")
+	if err := os.WriteFile(app, []byte("old app"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	f.in.Exe, f.in.GOOS, f.in.GOARCH = exe, "windows", "amd64"
 	base := "https://github.com/" + Repository + "/releases/download/" + tag + "/"
 	f.in.Start(Release{Tag: tag, Assets: []Asset{{Name: name + ".zip", URL: base + name + ".zip"}, {Name: "checksums.txt", URL: base + "checksums.txt"}}})
@@ -487,6 +492,9 @@ func TestInstallReplacesTheTrayLauncher(t *testing.T) {
 	}
 	if got := read(t, filepath.Join(filepath.Dir(exe), "studiow.old.exe")); got != "old tray" {
 		t.Errorf("the old tray is %q", got)
+	}
+	if got := read(t, app); got != "new app" {
+		t.Errorf("the app is %q", got)
 	}
 	if got := read(t, exe); !strings.Contains(got, "studio "+tag) {
 		t.Errorf("the binary is %q", got)

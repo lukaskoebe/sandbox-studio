@@ -133,6 +133,14 @@ install_binary() {
 	cp "$bin" "$dir/.studio.$$"
 	mv -f "$dir/.studio.$$" "$dir/studio"
 	say "Installed $(printf '%s' "$out" | head -n 1) to $dir/studio."
+	# The app, Studio in a window of its own (studio app), goes next to it.
+	app="$tmp/x/${asset%.tar.gz}/studio-app"
+	if [ -f "$app" ] && [ ! -L "$app" ]; then
+		chmod 755 "$app"
+		cp "$app" "$dir/.studio-app.$$"
+		mv -f "$dir/.studio-app.$$" "$dir/studio-app"
+		say "Installed the app to $dir/studio-app."
+	fi
 }
 
 check_path() {
@@ -223,6 +231,9 @@ main() {
 	fi
 	say "  studio doctor   # check this host in detail"
 	say "  studio          # start Studio; it prints a one-time login link for http://127.0.0.1:7878"
+	if [ -f "$dir/studio-app" ]; then
+		say "  studio app      # or open Studio in its own window; it starts Studio if it must"
+	fi
 }
 
 # Everything runs from here, so a download cut short in `curl | sh` executes nothing.

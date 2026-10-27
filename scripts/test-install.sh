@@ -29,6 +29,7 @@ for platform in linux_amd64 linux_arm64 darwin_arm64; do
 	mkdir -p "$tmp/build/$name"
 	printf '#!/bin/sh\necho "studio %s"\n' "$version" >"$tmp/build/$name/studio"
 	chmod 755 "$tmp/build/$name/studio"
+	printf '#!/bin/sh\necho "studio-app %s"\n' "$version" >"$tmp/build/$name/studio-app"
 	tar -czf "$release/$name.tar.gz" -C "$tmp/build" "$name"
 	printf '%s  %s\n' "$(sha256 "$release/$name.tar.gz")" "$name.tar.gz" >>"$release/checksums.txt"
 done
@@ -54,6 +55,7 @@ run_install "$tmp/good" || {
 }
 [ "$("$tmp/good/studio")" = "studio $version" ] || fail "installed studio does not run"
 grep -q 'Checksum OK' "$tmp/out" || fail "no checksum confirmation in the output"
+[ "$("$tmp/good/studio-app")" = "studio-app $version" ] || fail "the app was not installed next to studio"
 echo "ok: good release installs"
 
 # A tampered checksum fails and installs nothing.

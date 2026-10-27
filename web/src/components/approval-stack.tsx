@@ -51,6 +51,7 @@ import {
   isNetworkApproval,
 } from "@/lib/approval-kinds"
 import { cn, formatAge } from "@/lib/utils"
+import { appNotifies, notifyApp } from "@/lib/desktop"
 
 /** Cards the open stack lists; the rest are one link away. */
 const maxCards = 3
@@ -404,10 +405,12 @@ function notify(a: Approval) {
     const kind = approvalKind(a)
     const source = approvalSource(a)
     const summary = kind.summary(a)
-    const n = new Notification(kind.title, {
-      body: source ? `${source}: ${summary}` : summary,
-      tag: a.id,
-    })
+    const body = source ? `${source}: ${summary}` : summary
+    if (appNotifies) {
+      notifyApp({ id: a.id, title: kind.title, body })
+      return
+    }
+    const n = new Notification(kind.title, { body, tag: a.id })
     n.onclick = () => {
       window.focus()
       n.close()

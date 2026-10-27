@@ -8,7 +8,7 @@ TAGS := nobadger,nomysql,nopgx
 # pipefail in the image recipes needs bash.
 SHELL := bash
 
-.PHONY: all web build agent api test lint e2e e2e-bin dev clean image image-browser
+.PHONY: all web build app agent api test lint e2e e2e-bin dev clean image image-browser
 
 all: web build
 
@@ -17,6 +17,12 @@ web:
 
 build: agent
 	go build -tags "$(TAGS)" -ldflags "$(LDFLAGS)" -o bin/studio ./cmd/studio
+
+# The app (cmd/studio-app, docs/app.md), a module of its own next to bin/studio. On Linux it
+# needs GTK3 and WebKitGTK 4.1 (libgtk-3-dev libwebkit2gtk-4.1-dev).
+APP_TAGS := $(if $(filter Linux,$(shell uname -s)),gtk3)
+app:
+	cd cmd/studio-app && go build -tags "$(APP_TAGS)" -ldflags "-s -w -X main.version=$(VERSION)" -o ../../bin/studio-app .
 
 # The guest agent always targets Linux; both architectures are embedded in the host binary.
 agent:

@@ -300,7 +300,8 @@ actions and single-instance locking.
 - The browser stays supported, and the server stays the product. The app is a window and a
   tray around it.
 
-**Spiked** on `feedback-v0.8` (`spikes/wails-app`, a module of its own). It builds on Linux
+**Spiked** on `feedback-v0.8` (`spikes/wails-app`, a module of its own; since v0.9.1 it is
+`cmd/studio-app`, see [the Studio app](../app.md)). It builds on Linux
 with `-tags gtk3` against WebKitGTK 4.1 (this machine has no GTK4 or WebKitGTK 6.0 headers)
 and cross-builds for Windows without cgo, 17 MB. Its self-test, against an e2e Studio on
 Linux, found:

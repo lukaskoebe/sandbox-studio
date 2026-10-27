@@ -1,9 +1,14 @@
 import { useSyncExternalStore } from "react"
+import { appNotifies } from "@/lib/desktop"
 
 export type Permission = NotificationPermission | "unsupported"
 
-/** Whether the browser lets Studio notify, or can't at all. */
+/**
+ * Whether the browser lets Studio notify, or can't at all. The Studio app notifies through
+ * the system, which asks the user itself.
+ */
 export function notificationPermission(): Permission {
+  if (appNotifies) return "granted"
   return typeof Notification === "undefined"
     ? "unsupported"
     : Notification.permission

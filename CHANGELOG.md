@@ -12,6 +12,13 @@
   instead of larger, Home's notices (notifications, previews, a newer base) share one
   padding and size, and text without a size of its own is no longer the browser's 16px. An
   end-to-end test checks every page in both styles.
+- **The Studio app.** `studio app` opens Studio in a window of its own, with a tray icon and
+  the system's notifications, on Linux, macOS and Windows. It starts Studio in the background
+  when it isn't running and leaves it running when the app closes, so the browser keeps
+  working beside it. Links to other sites, sign-ins and previews open in the browser. Each
+  archive has `studio-app` next to `studio`, and `install.sh` and the updater install it
+  too. Without it, without a display, or on Linux without WebKitGTK 4.1, `studio app` opens
+  the browser and says why.
 - **Checkpoints after every task.** A sandbox's checkpoint schedule can take one each time an
   agent finishes a message that changed files, as **After every task** under **Take
   checkpoints**. They are pruned like the scheduled ones: the newest 3 and the last of each
