@@ -1,7 +1,7 @@
 import { expect, sandboxName, test } from "./fixtures"
 
 // Every e2e computer's /workspace has the same few files (internal/e2e/files.go).
-test("Files highlights a file, and Back and Forward step through the places it showed", async ({
+test("Files highlights a file, shows the tree beside it, goes to a file by name, and Back and Forward step through the places it showed", async ({
   page,
   api,
   env,
@@ -40,13 +40,58 @@ test("Files highlights a file, and Back and Forward step through the places it s
   await page.goForward()
   await expect(code).toContainText("applyCoupon")
 
-  // A place in Files is a link: it opens there again, and Back returns to it from its folder.
+  // A place in Files is a link: it opens there again, and Back returns to it from a folder of
+  // its path.
   await page.reload()
   await expect(code).toContainText("applyCoupon")
-  await screen.getByTitle("Back to the folder").click()
+  await screen
+    .getByRole("navigation", { name: "Path" })
+    .getByRole("button", { name: "checkout" })
+    .click()
   await expect(row("coupon.ts")).toBeVisible()
   await page.goBack()
   await expect(code).toContainText("applyCoupon")
+
+  // The tree beside the file has opened to it. A file opens from the tree, whose folders stay
+  // open; the keys move through it.
+  const tree = screen.getByRole("tree", { name: "Workspace" })
+  const item = (n: string) =>
+    tree.getByRole("treeitem", { name: new RegExp(`^${n}( |$)`) })
+  await expect(item("coupon\\.ts")).toHaveAttribute("aria-selected", "true")
+  await expect(item("checkout")).toHaveAttribute("aria-expanded", "true")
+  await item("README\\.md").click()
+  await expect(code).toContainText("shop with coupons")
+  await expect(item("checkout")).toHaveAttribute("aria-expanded", "true")
+  await item("README\\.md").press("Home")
+  await expect(item("web")).toBeFocused()
+  await page.keyboard.press("ArrowLeft")
+  await expect(item("web")).toHaveAttribute("aria-expanded", "false")
+  await expect(item("checkout")).toHaveCount(0)
+  await page.keyboard.press("ArrowRight")
+  await expect(item("checkout")).toHaveAttribute("aria-expanded", "true")
+
+  // Go to file: / from anywhere in Files, then the best match opens.
+  await page.keyboard.press("/")
+  const find = screen.getByRole("combobox", { name: "Go to file" })
+  await expect(find).toBeFocused()
+  await find.pressSequentially("coup")
+  await expect(
+    screen
+      .getByRole("listbox", { name: "Files to go to" })
+      .getByRole("option")
+      .first()
+  ).toContainText("coupon.ts")
+  await find.press("Enter")
+  await expect(page).toHaveURL(/file=web%2Fsrc%2Fcheckout%2Fcoupon\.ts/)
+  await expect(code).toContainText("applyCoupon")
+
+  // On a phone the tree opens over the file and closes once a file is picked.
+  await page.setViewportSize({ width: 390, height: 800 })
+  await expect(tree).toBeHidden()
+  await screen.getByRole("button", { name: "Show the tree" }).click()
+  await item("README\\.md").click()
+  await expect(tree).toBeHidden()
+  await expect(code).toContainText("shop with coupons")
 
   // Go files are Go, Markdown is Markdown.
   await page.goto(`/e/${env}/sandboxes/${id}?tab=changes&file=main.go`)

@@ -286,3 +286,38 @@ export function highlightLines(text: string, parser?: Parser): Token[][] {
   }
   return lines
 }
+
+const languageNames: Record<string, string> = {
+  js: "JavaScript",
+  ts: "TypeScript",
+  tsx: "TypeScript",
+  json: "JSON",
+  python: "Python",
+  go: "Go",
+  rust: "Rust",
+  java: "Java",
+  cpp: "C/C++",
+  php: "PHP",
+  css: "CSS",
+  html: "HTML",
+  xml: "XML",
+  markdown: "Markdown",
+  yaml: "YAML",
+  shell: "Shell",
+  toml: "TOML",
+  dockerfile: "Dockerfile",
+  ruby: "Ruby",
+  sql: "SQL",
+  lua: "Lua",
+  swift: "Swift",
+  kotlin: "Kotlin",
+  csharp: "C#",
+  scala: "Scala",
+  properties: "Properties",
+}
+
+/** The name of a file's language, as Files shows it, or undefined for plain text. */
+export function languageName(path: string) {
+  const lang = languageOf(path)
+  return lang ? languageNames[lang] : undefined
+}

@@ -26,6 +26,11 @@
   `@path:20-28`, and a link to each file to read itself; in the sent message each file
   opens in Files. Files has **@** at the top of a file to mention it, or its selected lines,
   in the chat beside it. A sandbox started by an older Studio needs a restart for the list.
+- **Files has a tree.** The workspace's folders open in place beside the folder or file shown,
+  and stay open as you move about; the path above links each folder, and **Go to file**
+  (or **/**) opens a file or folder by its name. The arrow keys move through the tree. In a
+  narrow panel the tree opens over the file and closes once you pick one; on a wide one it
+  can be hidden.
 - **Syntax highlighting** in Files, in a push's and a pull request's diff, and in the changes
   of a chat, for the common languages: TypeScript and JavaScript, Python, Go, Rust, Java,
   C and C++, PHP, Ruby, shell, SQL, HTML, CSS, JSON, YAML, TOML, Markdown, Dockerfiles and

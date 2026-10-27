@@ -163,38 +163,41 @@ export function ChangesView({
           Files
         </button>
       </div>
-      <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
-        {approval ? (
-          <div className="grid gap-3 text-xs">
-            <p className="text-xs text-muted-foreground">
-              {gitReviewDescription(approval)}
+      {!approval && view.kind === "files" ? (
+        <FilesPanel
+          env={env}
+          sandboxId={sb.id}
+          dir={file ? file.split("/").slice(0, -1).join("/") : files}
+          file={file}
+          onOpen={onFiles}
+          changed={changed}
+          className="p-3 md:p-4"
+        />
+      ) : (
+        <ScrollArea className="min-h-0 flex-1" viewportClassName="p-3 md:p-4">
+          {approval ? (
+            <div className="grid gap-3 text-xs">
+              <p className="text-xs text-muted-foreground">
+                {gitReviewDescription(approval)}
+              </p>
+              <GitReview key={approval.id} approval={approval} />
+            </div>
+          ) : view.kind === "changes" && thread ? (
+            <ChangesPanel
+              env={env}
+              chatId={thread.chat.id}
+              turns={changedTurns}
+              turnId={turn?.id}
+              onTurnChange={thread.onTurn}
+              label={(t) => requestLabel(thread.items, t)}
+            />
+          ) : view.kind === "changes" ? (
+            <p className="py-6 text-center text-xs text-muted-foreground">
+              Open a thread to see what it changed.
             </p>
-            <GitReview key={approval.id} approval={approval} />
-          </div>
-        ) : view.kind === "changes" && thread ? (
-          <ChangesPanel
-            env={env}
-            chatId={thread.chat.id}
-            turns={changedTurns}
-            turnId={turn?.id}
-            onTurnChange={thread.onTurn}
-            label={(t) => requestLabel(thread.items, t)}
-          />
-        ) : view.kind === "changes" ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">
-            Open a thread to see what it changed.
-          </p>
-        ) : (
-          <FilesPanel
-            env={env}
-            sandboxId={sb.id}
-            dir={file ? file.split("/").slice(0, -1).join("/") : files}
-            file={file}
-            onOpen={onFiles}
-            changed={changed}
-          />
-        )}
-      </ScrollArea>
+          ) : null}
+        </ScrollArea>
+      )}
     </div>
   )
 }

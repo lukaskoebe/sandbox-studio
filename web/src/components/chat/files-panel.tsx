@@ -1,13 +1,20 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from "react"
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type RefObject,
+} from "react"
 import {
   ArrowClockwiseIcon,
-  ArrowLeftIcon,
   AtIcon,
   DotsThreeIcon,
   DownloadSimpleIcon,
   FileIcon,
   FolderIcon,
   LinkSimpleIcon,
+  SidebarSimpleIcon,
   UploadSimpleIcon,
 } from "@phosphor-icons/react"
 import {
@@ -21,6 +28,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { CodeView } from "@/components/code-view"
+import { ancestors, FilesTree, GoToFile } from "@/components/chat/files-tree"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -29,9 +37,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Progress } from "@/components/ui/progress"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Spinner } from "@/components/ui/spinner"
 import { $api, errorMessage } from "@/lib/api/client"
 import type { components } from "@/lib/api/schema.gen"
+import { languageName } from "@/lib/highlight"
 import {
   maxUploadBytes,
   uploadWorkspaceFile,
@@ -53,8 +63,10 @@ function join(dir: string, name: string) {
 }
 
 /**
- * A browser of the sandbox's /workspace: one folder at a time, a viewer for text files and
- * images, and uploads into the folder shown. Files the selected request changed are marked.
+ * A browser of the sandbox's /workspace, as mock K draws it: the tree beside the folder or
+ * file shown, the path above them, and Go to file. Below 640px the tree opens over the file
+ * and closes once one is picked. Folders opened in the tree stay open while Files moves about.
+ * The folder shown takes uploads; files the selected request changed are marked.
  */
 export function FilesPanel({
   env,
@@ -63,6 +75,7 @@ export function FilesPanel({
   file,
   onOpen,
   changed,
+  className,
 }: {
   env: string
   sandboxId: string
@@ -73,22 +86,230 @@ export function FilesPanel({
   onOpen: (dir: string, file?: string) => void
   /** Paths the selected request changed. */
   changed: Set<string>
+  className?: string
 }) {
-  return file ? (
-    <FileView
-      env={env}
-      sandboxId={sandboxId}
-      path={file}
-      onBack={() => onOpen(dir)}
-    />
-  ) : (
-    <FolderView
-      env={env}
-      sandboxId={sandboxId}
-      dir={dir}
-      onOpen={onOpen}
-      changed={changed}
-    />
+  const root = useRef<HTMLDivElement>(null)
+  const find = useRef<HTMLInputElement>(null)
+  const narrow = useNarrow(root)
+  const [hidden, setHidden] = useState(treeHidden)
+  const [over, setOver] = useState(false)
+  const tree = narrow ? over : !hidden
+  const place = file ?? dir
+
+  // The tree opens to the place shown, and keeps what else was opened.
+  const [expanded, setExpanded] = useState(() => new Set(ancestors(dir)))
+  const [shown, setShown] = useState(dir)
+  if (shown !== dir) {
+    setShown(dir)
+    setExpanded((prev) => new Set([...prev, ...ancestors(dir)]))
+  }
+  const toggle = (d: string, open: boolean) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (open) next.add(d)
+      else next.delete(d)
+      return next
+    })
+  const open = (d: string, f?: string) => {
+    if (f && narrow) setOver(false)
+    onOpen(d, f)
+  }
+  const showTree = (show: boolean) => {
+    if (narrow) return setOver(show)
+    setHidden(!show)
+    try {
+      localStorage.setItem(treeKey, show ? "shown" : "hidden")
+    } catch {
+      // The choice lasts until the page closes.
+    }
+  }
+
+  return (
+    <div
+      ref={root}
+      className={cn("flex min-h-0 min-w-0 flex-1 flex-col gap-2", className)}
+      onKeyDown={(e) => {
+        const t = e.target as HTMLElement
+        if (e.key === "/" && !t.closest("input, textarea, [contenteditable]")) {
+          e.preventDefault()
+          find.current?.focus()
+        } else if (e.key === "Escape" && narrow && over) setOver(false)
+      }}
+    >
+      <div className="flex min-w-0 items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-pressed={tree}
+          className="aria-pressed:bg-muted"
+          aria-label={tree ? "Hide the tree" : "Show the tree"}
+          title={tree ? "Hide the tree" : "Show the tree"}
+          onClick={() => showTree(!tree)}
+        >
+          <SidebarSimpleIcon />
+        </Button>
+        <PathCrumbs
+          dir={dir}
+          file={file}
+          short={narrow}
+          changed={changed}
+          onOpen={open}
+        />
+        <GoToFile
+          ref={find}
+          env={env}
+          sandboxId={sandboxId}
+          onOpen={open}
+          className={narrow ? "w-32" : "w-56"}
+        />
+      </div>
+      <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-md ring-1 ring-foreground/10">
+        {tree && (
+          <>
+            {narrow && (
+              <button
+                type="button"
+                aria-label="Close the tree"
+                tabIndex={-1}
+                className="absolute inset-0 z-10 bg-background/50"
+                onClick={() => setOver(false)}
+              />
+            )}
+            <ScrollArea
+              className={cn(
+                "border-r bg-background",
+                narrow
+                  ? "absolute inset-y-0 left-0 z-20 w-[min(250px,85%)] shadow-md"
+                  : "w-[250px] shrink-0"
+              )}
+              viewportClassName="py-1"
+            >
+              <FilesTree
+                env={env}
+                sandboxId={sandboxId}
+                place={place}
+                expanded={expanded}
+                onToggle={toggle}
+                onOpen={open}
+                changed={changed}
+              />
+            </ScrollArea>
+          </>
+        )}
+        <ScrollArea className="min-w-0 flex-1" viewportClassName="p-2.5">
+          {file ? (
+            <FileView
+              env={env}
+              sandboxId={sandboxId}
+              path={file}
+              changed={changed.has(file)}
+            />
+          ) : (
+            <FolderView
+              env={env}
+              sandboxId={sandboxId}
+              dir={dir}
+              onOpen={open}
+              changed={changed}
+            />
+          )}
+        </ScrollArea>
+      </div>
+    </div>
+  )
+}
+
+const treeKey = "studio.files.tree"
+
+function treeHidden() {
+  try {
+    return localStorage.getItem(treeKey) === "hidden"
+  } catch {
+    return false
+  }
+}
+
+/** Whether the element is narrower than 640px, as the tree then opens over the file. */
+function useNarrow(el: RefObject<HTMLElement | null>) {
+  const [narrow, setNarrow] = useState(false)
+  useLayoutEffect(() => {
+    const node = el.current
+    if (!node) return
+    const measure = () => setNarrow(node.clientWidth < 640)
+    measure()
+    const seen = new ResizeObserver(measure)
+    seen.observe(node)
+    return () => seen.disconnect()
+  }, [el])
+  return narrow
+}
+
+/**
+ * The path of the place shown, each folder a link to it and the place itself in bold. When
+ * narrow, the place alone.
+ */
+function PathCrumbs({
+  dir,
+  file,
+  short,
+  changed,
+  onOpen,
+}: {
+  dir: string
+  file?: string
+  short: boolean
+  changed: Set<string>
+  onOpen: (dir: string) => void
+}) {
+  const parts = [
+    "workspace",
+    ...((file ?? dir) ? (file ?? dir).split("/") : []),
+  ]
+  const last = parts.length - 1
+  const mark = file !== undefined && changed.has(file)
+  return (
+    <nav
+      aria-label="Path"
+      title={`/${parts.join("/")}`}
+      className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden font-mono text-caption whitespace-nowrap"
+    >
+      {parts.map((p, i) => {
+        if (short && i < last) return null
+        const sep = i > 0 && !short && (
+          <span className="text-muted-foreground">/</span>
+        )
+        if (i === last)
+          return (
+            <span key={i} className="flex min-w-0 items-center gap-0.5">
+              {sep}
+              <span
+                aria-current="page"
+                className="min-w-0 truncate px-1 font-semibold"
+              >
+                {p}
+              </span>
+              {mark && (
+                <span
+                  className="size-1.5 shrink-0 rounded-full bg-amber-500"
+                  aria-label="changed"
+                />
+              )}
+            </span>
+          )
+        return (
+          <span key={i} className="flex min-w-0 shrink items-center gap-0.5">
+            {sep}
+            <button
+              type="button"
+              className="max-w-[16ch] truncate rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => onOpen(parts.slice(1, i + 1).join("/"))}
+            >
+              {p}
+            </button>
+          </span>
+        )
+      })}
+    </nav>
   )
 }
 
@@ -336,8 +557,6 @@ function FolderView({
     return out
   }, [changed, dir])
 
-  const crumbs = dir ? dir.split("/") : []
-
   return (
     <div
       className="relative grid min-w-0 content-start gap-2"
@@ -364,30 +583,13 @@ function FolderView({
         </div>
       )}
       <div className="flex min-w-0 items-center gap-1">
-        <nav
-          aria-label="Folder"
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 font-mono text-caption"
-        >
-          <button
-            type="button"
-            className="rounded px-1 hover:bg-muted"
-            onClick={() => onOpen("")}
-          >
-            workspace
-          </button>
-          {crumbs.map((c, i) => (
-            <span key={i} className="flex min-w-0 items-center gap-0.5">
-              <span className="text-muted-foreground">/</span>
-              <button
-                type="button"
-                className="truncate rounded px-1 hover:bg-muted"
-                onClick={() => onOpen(crumbs.slice(0, i + 1).join("/"))}
-              >
-                {c}
-              </button>
-            </span>
-          ))}
-        </nav>
+        <span className="min-w-0 truncate font-mono text-xs font-semibold">
+          {dir.split("/").at(-1) || "workspace"}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
+          {list.isSuccess &&
+            `${entries.length.toLocaleString()} ${entries.length === 1 ? "item" : "items"}`}
+        </span>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -566,12 +768,12 @@ function FileView({
   env,
   sandboxId,
   path,
-  onBack,
+  changed,
 }: {
   env: string
   sandboxId: string
   path: string
-  onBack: () => void
+  changed: boolean
 }) {
   const content = $api.useQuery(
     "get",
@@ -595,25 +797,21 @@ function FileView({
   return (
     <div className="grid min-w-0 content-start gap-2">
       <div className="flex min-w-0 items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Back to the folder"
-          onClick={onBack}
-        >
-          <ArrowLeftIcon />
-        </Button>
         <span
-          className="min-w-0 flex-1 truncate font-mono text-caption"
-          title={path}
+          className={cn(
+            "min-w-0 truncate font-mono text-xs font-semibold",
+            changed && "text-amber-700 dark:text-amber-400"
+          )}
+          title={changed ? "Changed by the selected message" : undefined}
         >
-          {path}
+          {name}
         </span>
-        {c && (
-          <span className="shrink-0 text-caption text-muted-foreground">
-            {formatBytes(c.size)}
-          </span>
-        )}
+        <span className="min-w-0 flex-1 truncate text-caption text-muted-foreground">
+          {c &&
+            [languageName(path), formatBytes(c.size)]
+              .filter(Boolean)
+              .join(" · ")}
+        </span>
         {c?.data && (
           <Button
             variant="ghost"

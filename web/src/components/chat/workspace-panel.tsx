@@ -185,16 +185,15 @@ export function WorkspaceTabs({
         </ScrollArea>
       </TabsContent>
       <TabsContent value="files" className="flex min-h-0 flex-col">
-        <ScrollArea className="min-h-0 flex-1" viewportClassName="px-3 pb-3">
-          <FilesPanel
-            env={env}
-            sandboxId={sandboxId}
-            dir={where.dir}
-            file={where.file}
-            onOpen={(dir, file) => setWhere({ dir, file })}
-            changed={changed}
-          />
-        </ScrollArea>
+        <FilesPanel
+          env={env}
+          sandboxId={sandboxId}
+          dir={where.dir}
+          file={where.file}
+          onOpen={(dir, file) => setWhere({ dir, file })}
+          changed={changed}
+          className="px-3 pb-3"
+        />
       </TabsContent>
       {previews && (
         <TabsContent
